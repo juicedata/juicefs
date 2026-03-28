@@ -4666,59 +4666,13 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 			sessions = append(sessions, &DumpedSustained{sid, inodes})
 		}
 	}
-	dirQuotas := make(map[Ino]*DumpedQuota)
-	for k, v := range m.rdb.HGetAll(ctx, m.dirQuotaKey()).Val() {
-		inode, err := strconv.ParseUint(k, 10, 64)
-		if err != nil {
-			logger.Warnf("parse inode: %s: %v", k, err)
-			continue
-		}
-		if len(v) != 16 {
-			logger.Warnf("invalid quota string: %s", hex.EncodeToString([]byte(v)))
-			continue
-		}
-		var quota DumpedQuota
-		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
-		dirQuotas[Ino(inode)] = &quota
+	dirQuotasRaw := m.loadDumpQuotas(ctx, m.dirQuotaKey(), "inode", false)
+	dirQuotas := make(map[Ino]*DumpedQuota, len(dirQuotasRaw))
+	for ino, quota := range dirQuotasRaw {
+		dirQuotas[Ino(ino)] = quota
 	}
-
-	userQuotas := make(map[uint64]*DumpedQuota)
-	for k, v := range m.rdb.HGetAll(ctx, m.userQuotaKey()).Val() {
-		uid, err := strconv.ParseUint(k, 10, 64)
-		if err != nil {
-			logger.Warnf("parse uid: %s: %v", k, err)
-			continue
-		}
-		if len(v) != 16 {
-			logger.Warnf("invalid user quota string: %s", hex.EncodeToString([]byte(v)))
-			continue
-		}
-		var quota DumpedQuota
-		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
-		if quota.MaxSpace == -1 && quota.MaxInodes == -1 {
-			continue
-		}
-		userQuotas[uid] = &quota
-	}
-
-	groupQuotas := make(map[uint64]*DumpedQuota)
-	for k, v := range m.rdb.HGetAll(ctx, m.groupQuotaKey()).Val() {
-		gid, err := strconv.ParseUint(k, 10, 64)
-		if err != nil {
-			logger.Warnf("parse gid: %s: %v", k, err)
-			continue
-		}
-		if len(v) != 16 {
-			logger.Warnf("invalid group quota string: %s", hex.EncodeToString([]byte(v)))
-			continue
-		}
-		var quota DumpedQuota
-		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
-		if quota.MaxSpace == -1 && quota.MaxInodes == -1 {
-			continue
-		}
-		groupQuotas[gid] = &quota
-	}
+	userQuotas := m.loadDumpQuotas(ctx, m.userQuotaKey(), "uid", true)
+	groupQuotas := m.loadDumpQuotas(ctx, m.groupQuotaKey(), "gid", true)
 
 	dm := &DumpedMeta{
 		Setting: *m.getFormat(),
@@ -4928,7 +4882,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
-	m.loadDumpedQuotas(ctx, dm.Quotas, dm.UserQuotas, dm.GroupQuotas)
+	m.loadDumpedQuotas(ctx, dm.dumpedQuotasToIQuota())
 	if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
 		format := dm.Setting
 		m.Lock()
@@ -5009,6 +4963,28 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	}
 	_, err = p.Exec(ctx)
 	return err
+}
+
+func (m *redisMeta) loadDumpQuotas(ctx Context, quotaKey, keyType string, skipUnlimited bool) map[uint64]*DumpedQuota {
+	quotas := make(map[uint64]*DumpedQuota)
+	for k, v := range m.rdb.HGetAll(ctx, quotaKey).Val() {
+		id, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			logger.Warnf("parse %s: %s: %v", keyType, k, err)
+			continue
+		}
+		if len(v) != 16 {
+			logger.Warnf("invalid %s quota string: %s", keyType, hex.EncodeToString([]byte(v)))
+			continue
+		}
+		var quota DumpedQuota
+		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
+		if skipUnlimited && quota.MaxSpace == -1 && quota.MaxInodes == -1 {
+			continue
+		}
+		quotas[id] = &quota
+	}
+	return quotas
 }
 
 func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, originAttr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {

@@ -4121,37 +4121,8 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 		return nil, nil, nil, err
 	}
 
-	dirQuotas := make(map[uint64]*Quota)
-	userQuotas := make(map[uint64]*Quota)
-	groupQuotas := make(map[uint64]*Quota)
-
-	// Load directory quotas
-	for _, q := range dirQuotasList {
-		quota := &Quota{
-			MaxSpace:   q.MaxSpace,
-			MaxInodes:  q.MaxInodes,
-			UsedSpace:  q.UsedSpace,
-			UsedInodes: q.UsedInodes,
-		}
-		dirQuotas[uint64(q.Inode)] = quota
-	}
-
-	// Load user and group quotas
-	for _, q := range userGroupQuotasList {
-		quota := &Quota{
-			MaxSpace:   q.MaxSpace,
-			MaxInodes:  q.MaxInodes,
-			UsedSpace:  q.UsedSpace,
-			UsedInodes: q.UsedInodes,
-		}
-
-		switch q.Qtype {
-		case UserQuotaType:
-			userQuotas[q.Qkey] = quota
-		case GroupQuotaType:
-			groupQuotas[q.Qkey] = quota
-		}
-	}
+	dirQuotas := buildDirQuotas(dirQuotasList)
+	userQuotas, groupQuotas := buildUserGroupQuotas(userGroupQuotasList)
 
 	return dirQuotas, userQuotas, groupQuotas, nil
 }
@@ -4672,34 +4643,12 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		if err := s.Find(&dirQuotaRows); err != nil {
 			return err
 		}
-		dirQuotas := make(map[Ino]*DumpedQuota, len(dirQuotaRows))
-		for _, q := range dirQuotaRows {
-			dirQuotas[Ino(q.Inode)] = &DumpedQuota{MaxSpace: q.MaxSpace, MaxInodes: q.MaxInodes, UsedSpace: q.UsedSpace, UsedInodes: q.UsedInodes}
-		}
-
-		var userQuotaRows []userGroupQuota
-		if err := s.Where("qtype = ?", UserQuotaType).Find(&userQuotaRows); err != nil {
+		dirQuotas := buildDumpedDirQuotas(dirQuotaRows)
+		var userGroupQuotaRows []userGroupQuota
+		if err := s.In("qtype", UserQuotaType, GroupQuotaType).Find(&userGroupQuotaRows); err != nil {
 			return err
 		}
-		userQuotas := make(map[uint64]*DumpedQuota, len(userQuotaRows))
-		for _, q := range userQuotaRows {
-			if q.MaxSpace == -1 && q.MaxInodes == -1 {
-				continue
-			}
-			userQuotas[q.Qkey] = &DumpedQuota{MaxSpace: q.MaxSpace, MaxInodes: q.MaxInodes, UsedSpace: q.UsedSpace, UsedInodes: q.UsedInodes}
-		}
-
-		var groupQuotaRows []userGroupQuota
-		if err := s.Where("qtype = ?", GroupQuotaType).Find(&groupQuotaRows); err != nil {
-			return err
-		}
-		groupQuotas := make(map[uint64]*DumpedQuota, len(groupQuotaRows))
-		for _, q := range groupQuotaRows {
-			if q.MaxSpace == -1 && q.MaxInodes == -1 {
-				continue
-			}
-			groupQuotas[q.Qkey] = &DumpedQuota{MaxSpace: q.MaxSpace, MaxInodes: q.MaxInodes, UsedSpace: q.UsedSpace, UsedInodes: q.UsedInodes}
-		}
+		userQuotas, groupQuotas := buildDumpedUserGroupQuotas(userGroupQuotaRows, true)
 
 		dm := DumpedMeta{
 			Setting:     *m.getFormat(),
@@ -4776,6 +4725,61 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		progress.Done()
 		return bw.Flush()
 	})
+}
+
+func buildDumpedDirQuotas(rows []dirQuota) map[Ino]*DumpedQuota {
+	quotas := make(map[Ino]*DumpedQuota, len(rows))
+	for _, q := range rows {
+		quotas[Ino(q.Inode)] = buildDumpedQuota(q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes)
+	}
+	return quotas
+}
+
+func buildDirQuotas(rows []dirQuota) map[uint64]*Quota {
+	quotas := make(map[uint64]*Quota, len(rows))
+	for _, q := range rows {
+		quotas[uint64(q.Inode)] = buildQuota(q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes)
+	}
+	return quotas
+}
+
+func buildUserGroupQuotas(rows []userGroupQuota) (map[uint64]*Quota, map[uint64]*Quota) {
+	userQuotas := make(map[uint64]*Quota, len(rows))
+	groupQuotas := make(map[uint64]*Quota, len(rows))
+	for _, q := range rows {
+		switch q.Qtype {
+		case UserQuotaType:
+			userQuotas[q.Qkey] = buildQuota(q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes)
+		case GroupQuotaType:
+			groupQuotas[q.Qkey] = buildQuota(q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes)
+		}
+	}
+	return userQuotas, groupQuotas
+}
+
+func buildDumpedUserGroupQuotas(rows []userGroupQuota, skipUnlimited bool) (map[uint64]*DumpedQuota, map[uint64]*DumpedQuota) {
+	userQuotas := make(map[uint64]*DumpedQuota, len(rows))
+	groupQuotas := make(map[uint64]*DumpedQuota, len(rows))
+	for _, q := range rows {
+		if skipUnlimited && q.MaxSpace == -1 && q.MaxInodes == -1 {
+			continue
+		}
+		switch q.Qtype {
+		case UserQuotaType:
+			userQuotas[q.Qkey] = buildDumpedQuota(q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes)
+		case GroupQuotaType:
+			groupQuotas[q.Qkey] = buildDumpedQuota(q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes)
+		}
+	}
+	return userQuotas, groupQuotas
+}
+
+func buildQuota(maxSpace, maxInodes, usedSpace, usedInodes int64) *Quota {
+	return &Quota{MaxSpace: maxSpace, MaxInodes: maxInodes, UsedSpace: usedSpace, UsedInodes: usedInodes}
+}
+
+func buildDumpedQuota(maxSpace, maxInodes, usedSpace, usedInodes int64) *DumpedQuota {
+	return &DumpedQuota{MaxSpace: maxSpace, MaxInodes: maxInodes, UsedSpace: usedSpace, UsedInodes: usedInodes}
 }
 
 func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uint32) {
@@ -4928,7 +4932,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.loadDumpedQuotas(Background(), dm.Quotas, dm.UserQuotas, dm.GroupQuotas)
+	m.loadDumpedQuotas(Background(), dm.dumpedQuotasToIQuota())
 	if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
 		// set format before ScanUserGroupUsage, because it needs m.fmt
 		format := dm.Setting

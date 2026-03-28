@@ -315,41 +315,75 @@ func (m *redisMeta) dumpACL(ctx Context, opt *DumpOption, ch chan<- *dumpedResul
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Acls: acls}})
 }
 
-func (m *redisMeta) dumpUGQuotas(ctx Context, quotas *[]*pb.Quota, quotaType int, quotaKey, usedInodesKey, usedSpaceKey string) error {
-	label := "user"
-	if quotaType == GroupQuotaType {
-		label = "group"
-	}
-
+func (m *redisMeta) dumpQuotas(ctx Context, quotas *[]*pb.Quota, qtype uint32) error {
 	quotaMap := make(map[uint64]*pb.Quota)
-	vals, err := m.rdb.HGetAll(ctx, quotaKey).Result()
+	quotaKeys, _ := m.getQuotaKeys(qtype)
+	vals, err := m.rdb.HGetAll(ctx, quotaKeys.usedInodesKey).Result()
 	if err != nil {
-		return fmt.Errorf("get %sQuotaKey err: %w", label, err)
+		return fmt.Errorf("get %s err: %w", quotaKeys.usedInodesKey, err)
 	}
 	for k, v := range vals {
 		id, err := strconv.ParseUint(k, 10, 64)
 		if err != nil {
-			logger.Warnf("parse %s quota id: %s: %v", label, k, err)
+			logger.Warnf("parse used inodes %s: %s: %v", qtype, k, err)
 			continue
 		}
-		if len(v) != 16 {
-			logger.Warnf("invalid %s quota string: %s", label, hex.EncodeToString([]byte(v)))
+		usedInodes, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			logger.Warnf("invalid usedInodes for %s %s: %s", qtype, k, v)
 			continue
 		}
-		space, inodes := m.parseQuota([]byte(v))
+
+		usedSpace, err := m.rdb.HGet(ctx, quotaKeys.usedSpaceKey, k).Int64()
+		if err != nil && err != redis.Nil {
+			return err
+		}
+
+		var maxSpace, maxInodes int64 = -1, -1
+		if buf, err := m.rdb.HGet(ctx, quotaKeys.quotaKey, k).Bytes(); err == nil {
+			if len(buf) != 16 {
+				logger.Warnf("invalid quota value for %s %s: len=%d", qtype, k, len(buf))
+				continue
+			}
+			maxSpace, maxInodes = m.parseQuota(buf)
+		} else if err != redis.Nil {
+			return err
+		}
+
 		quotaMap[id] = &pb.Quota{
-			Type:      uint32(quotaType),
-			Key:       id,
-			MaxSpace:  space,
-			MaxInodes: inodes,
+			Type:       uint32(qtype),
+			Key:        id,
+			MaxSpace:   maxSpace,
+			MaxInodes:  maxInodes,
+			UsedSpace:  usedSpace,
+			UsedInodes: usedInodes,
 		}
 	}
 
-	if err := m.loadUsage(ctx, quotaMap, usedInodesKey, label, "inodes", func(q *pb.Quota, v int64) { q.UsedInodes = v }); err != nil {
-		return err
+	vals, err = m.rdb.HGetAll(ctx, quotaKeys.quotaKey).Result()
+	if err != nil {
+		return fmt.Errorf("get %s err: %w", quotaKeys.quotaKey, err)
 	}
-	if err := m.loadUsage(ctx, quotaMap, usedSpaceKey, label, "space", func(q *pb.Quota, v int64) { q.UsedSpace = v }); err != nil {
-		return err
+	for k, v := range vals {
+		id, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			logger.Warnf("parse %s quota id: %s: %v", qtype, k, err)
+			continue
+		}
+		if _, ok := quotaMap[id]; ok {
+			continue
+		}
+		if len(v) != 16 {
+			logger.Warnf("invalid %s quota string: %s", qtype, hex.EncodeToString([]byte(v)))
+			continue
+		}
+		maxSpace, maxInodes := m.parseQuota([]byte(v))
+		quotaMap[id] = &pb.Quota{
+			Type:      uint32(qtype),
+			Key:       id,
+			MaxSpace:  maxSpace,
+			MaxInodes: maxInodes,
+		}
 	}
 
 	for _, q := range quotaMap {
@@ -358,103 +392,17 @@ func (m *redisMeta) dumpUGQuotas(ctx Context, quotas *[]*pb.Quota, quotaType int
 	return nil
 }
 
-func (m *redisMeta) loadUsage(ctx Context, quotaMap map[uint64]*pb.Quota, key, label, usageType string, setter func(*pb.Quota, int64)) error {
-	vals, err := m.rdb.HGetAll(ctx, key).Result()
-	if err != nil {
-		return fmt.Errorf("get %sQuotaUsed%sKey err: %w", label, usageType, err)
-	}
-	for k, v := range vals {
-		id, err := strconv.ParseUint(k, 10, 64)
-		if err != nil {
-			logger.Warnf("parse used %s %s: %s: %v", usageType, label, k, err)
-			continue
-		}
-		if q, ok := quotaMap[id]; !ok {
-			logger.Warnf("%s quota for used %s not found: %d", label, usageType, id)
-		} else {
-			val, err := strconv.ParseInt(v, 10, 64)
-			if err != nil {
-				logger.Warnf("parse used %s %s: %s: %v", usageType, label, k, err)
-				continue
-			}
-			setter(q, val)
-		}
-	}
-	return nil
-}
-
 func (m *redisMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	quotas := make([]*pb.Quota, 0, 128)
-
-	dirQuotas := make(map[Ino]*pb.Quota)
-	vals, err := m.rdb.HGetAll(ctx, m.dirQuotaKey()).Result()
-	if err != nil {
-		return fmt.Errorf("get dirQuotaKey err: %w", err)
-	}
-	for k, v := range vals {
-		inode, err := strconv.ParseUint(k, 10, 64)
-		if err != nil {
-			logger.Warnf("parse quota inode: %s: %v", k, err)
-			continue
-		}
-		if len(v) != 16 {
-			logger.Warnf("invalid quota string: %s", hex.EncodeToString([]byte(v)))
-			continue
-		}
-		space, inodes := m.parseQuota([]byte(v))
-		dirQuotas[Ino(inode)] = &pb.Quota{
-			Inode:     inode,
-			Type:      uint32(DirQuotaType),
-			Key:       inode,
-			MaxSpace:  space,
-			MaxInodes: inodes,
-		}
-	}
-
-	vals, err = m.rdb.HGetAll(ctx, m.dirQuotaUsedInodesKey()).Result()
-	if err != nil {
-		return fmt.Errorf("get dirQuotaUsedInodesKey err: %w", err)
-	}
-	for k, v := range vals {
-		inode, err := strconv.ParseUint(k, 10, 64)
-		if err != nil {
-			logger.Warnf("parse used inodes inode: %s: %v", k, err)
-			continue
-		}
-		if q, ok := dirQuotas[Ino(inode)]; !ok {
-			logger.Warnf("quota for used inodes not found: %d", inode)
-		} else {
-			q.UsedInodes, _ = strconv.ParseInt(v, 10, 64)
-		}
-	}
-
-	vals, err = m.rdb.HGetAll(ctx, m.dirQuotaUsedSpaceKey()).Result()
-	if err != nil {
-		return fmt.Errorf("get dirQuotaUsedSpaceKey err: %w", err)
-	}
-	for k, v := range vals {
-		inode, err := strconv.ParseUint(k, 10, 64)
-		if err != nil {
-			logger.Warnf("parse used space inode: %s: %v", k, err)
-			continue
-		}
-		if q, ok := dirQuotas[Ino(inode)]; !ok {
-			logger.Warnf("quota for used space not found: %d", inode)
-		} else {
-			q.UsedSpace, _ = strconv.ParseInt(v, 10, 64)
-		}
-	}
-
-	for _, q := range dirQuotas {
-		quotas = append(quotas, q)
-	}
-	if err := m.dumpUGQuotas(ctx, &quotas, UserQuotaType, m.userQuotaKey(), m.userQuotaUsedInodesKey(), m.userQuotaUsedSpaceKey()); err != nil {
+	if err := m.dumpQuotas(ctx, &quotas, DirQuotaType); err != nil {
 		return err
 	}
-	if err := m.dumpUGQuotas(ctx, &quotas, GroupQuotaType, m.groupQuotaKey(), m.groupQuotaUsedInodesKey(), m.groupQuotaUsedSpaceKey()); err != nil {
+	if err := m.dumpQuotas(ctx, &quotas, UserQuotaType); err != nil {
 		return err
 	}
-
+	if err := m.dumpQuotas(ctx, &quotas, GroupQuotaType); err != nil {
+		return err
+	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Quotas: quotas}})
 }
 

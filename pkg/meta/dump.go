@@ -359,23 +359,24 @@ func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	return bw, nil
 }
 
-func (m *baseMeta) loadDumpedQuotas(ctx Context, dirQuotas map[Ino]*DumpedQuota, userQuotas, groupQuotas map[uint64]*DumpedQuota) {
-	for inode, q := range dirQuotas {
-		if _, err := m.en.doSetQuota(ctx, DirQuotaType, uint64(inode), &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}); err != nil {
-			logger.Warnf("reset dir quota of %d: %s", inode, err)
-			continue
-		}
+func (dm *DumpedMeta) dumpedQuotasToIQuota() []*iQuota {
+	quotas := make([]*iQuota, 0, len(dm.Quotas)+len(dm.UserQuotas)+len(dm.GroupQuotas))
+	for inode, q := range dm.Quotas {
+		quotas = append(quotas, &iQuota{DirQuotaType, uint64(inode), &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}})
 	}
-	for uid, q := range userQuotas {
-		if _, err := m.en.doSetQuota(ctx, UserQuotaType, uid, &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}); err != nil {
-			logger.Warnf("reset user quota of %d: %s", uid, err)
-			continue
-		}
+	for uid, q := range dm.UserQuotas {
+		quotas = append(quotas, &iQuota{UserQuotaType, uid, &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}})
 	}
-	for gid, q := range groupQuotas {
-		if _, err := m.en.doSetQuota(ctx, GroupQuotaType, gid, &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}); err != nil {
-			logger.Warnf("reset group quota of %d: %s", gid, err)
-			continue
+	for gid, q := range dm.GroupQuotas {
+		quotas = append(quotas, &iQuota{GroupQuotaType, gid, &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}})
+	}
+	return quotas
+}
+
+func (m *baseMeta) loadDumpedQuotas(ctx Context, quotas []*iQuota) {
+	for _, q := range quotas {
+		if _, err := m.en.doSetQuota(ctx, q.qtype, q.qkey, q.quota); err != nil {
+			logger.Warnf("reset quota (type=%d, key=%d): %s", q.qtype, q.qkey, err)
 		}
 	}
 }
