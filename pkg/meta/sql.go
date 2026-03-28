@@ -4934,7 +4934,6 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 	m.loadDumpedQuotas(Background(), dm.dumpedQuotasToIQuota())
 	if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
-		// set format before ScanUserGroupUsage, because it needs m.fmt
 		format := dm.Setting
 		m.Lock()
 		m.fmt = &format
