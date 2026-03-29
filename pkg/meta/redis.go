@@ -4666,13 +4666,13 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 			sessions = append(sessions, &DumpedSustained{sid, inodes})
 		}
 	}
-	dirQuotasRaw := m.loadDumpQuotas(ctx, m.dirQuotaKey(), "inode", false)
+	dirQuotasRaw := m.loadQuotasForDump(ctx, m.dirQuotaKey())
 	dirQuotas := make(map[Ino]*DumpedQuota, len(dirQuotasRaw))
 	for ino, quota := range dirQuotasRaw {
 		dirQuotas[Ino(ino)] = quota
 	}
-	userQuotas := m.loadDumpQuotas(ctx, m.userQuotaKey(), "uid", true)
-	groupQuotas := m.loadDumpQuotas(ctx, m.groupQuotaKey(), "gid", true)
+	userQuotas := m.loadQuotasForDump(ctx, m.userQuotaKey())
+	groupQuotas := m.loadQuotasForDump(ctx, m.groupQuotaKey())
 
 	dm := &DumpedMeta{
 		Setting: *m.getFormat(),
@@ -4965,23 +4965,20 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	return err
 }
 
-func (m *redisMeta) loadDumpQuotas(ctx Context, quotaKey, keyType string, skipUnlimited bool) map[uint64]*DumpedQuota {
+func (m *redisMeta) loadQuotasForDump(ctx Context, quotaKey string) map[uint64]*DumpedQuota {
 	quotas := make(map[uint64]*DumpedQuota)
 	for k, v := range m.rdb.HGetAll(ctx, quotaKey).Val() {
 		id, err := strconv.ParseUint(k, 10, 64)
 		if err != nil {
-			logger.Warnf("parse %s: %s: %v", keyType, k, err)
+			logger.Warnf("parse %d: %s: %v", id, k, err)
 			continue
 		}
 		if len(v) != 16 {
-			logger.Warnf("invalid %s quota string: %s", keyType, hex.EncodeToString([]byte(v)))
+			logger.Warnf("invalid %d quota string: %s", id, hex.EncodeToString([]byte(v)))
 			continue
 		}
 		var quota DumpedQuota
 		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
-		if skipUnlimited && quota.MaxSpace == -1 && quota.MaxInodes == -1 {
-			continue
-		}
 		quotas[id] = &quota
 	}
 	return quotas

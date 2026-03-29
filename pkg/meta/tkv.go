@@ -3749,17 +3749,47 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		sessions = append(sessions, &DumpedSustained{k, v})
 	}
 
-	dirQuotas, err := m.scanDirDumpQuotas(ctx)
+	// Fetch dir quotas
+	pairs, err := m.scanValues(ctx, m.fmtKey("QD"), -1, func(k, v []byte) bool {
+		return len(k) == 10 && len(v) == 32
+	})
 	if err != nil {
 		return err
 	}
-	userQuotas, err := m.scanUGDumpQuotas(ctx, "QU")
-	if err != nil {
-		return err
+	dirQuotas := make(map[Ino]*DumpedQuota, len(pairs))
+	for k, v := range pairs {
+		q := m.parseQuota(v)
+		dirQuotas[m.decodeInode([]byte(k[2:]))] = &DumpedQuota{
+			MaxSpace:   q.MaxSpace,
+			MaxInodes:  q.MaxInodes,
+			UsedSpace:  q.UsedSpace,
+			UsedInodes: q.UsedInodes,
+		}
 	}
-	groupQuotas, err := m.scanUGDumpQuotas(ctx, "QG")
-	if err != nil {
-		return err
+
+	// Fetch user and group quotas
+	ugQuotas := make(map[string]map[uint64]*DumpedQuota)
+	for _, prefix := range []string{"QU", "QG"} {
+		pairs, err := m.scanValues(ctx, m.fmtKey(prefix), -1, func(k, v []byte) bool {
+			return len(k) == 10 && len(v) == 32
+		})
+		if err != nil {
+			return err
+		}
+		quotas := make(map[uint64]*DumpedQuota, len(pairs))
+		for k, v := range pairs {
+			q := m.parseQuota(v)
+			if q.MaxSpace == -1 && q.MaxInodes == -1 {
+				continue
+			}
+			quotas[binary.BigEndian.Uint64([]byte(k[2:]))] = &DumpedQuota{
+				MaxSpace:   q.MaxSpace,
+				MaxInodes:  q.MaxInodes,
+				UsedSpace:  q.UsedSpace,
+				UsedInodes: q.UsedInodes,
+			}
+		}
+		ugQuotas[prefix] = quotas
 	}
 
 	dm := DumpedMeta{
@@ -3775,8 +3805,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		Sustained:   sessions,
 		DelFiles:    dels,
 		Quotas:      dirQuotas,
-		UserQuotas:  userQuotas,
-		GroupQuotas: groupQuotas,
+		UserQuotas:  ugQuotas["QU"],
+		GroupQuotas: ugQuotas["QG"],
 	}
 	if root != RootInode {
 		dm.UserQuotas = nil

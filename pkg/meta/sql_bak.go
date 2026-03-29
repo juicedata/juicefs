@@ -423,7 +423,6 @@ func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 
 func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	quotas := make([]*pb.Quota, 0, 128)
-
 	var dirRows []dirQuota
 	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Find(&dirRows)
@@ -441,39 +440,23 @@ func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 			UsedInodes: q.UsedInodes,
 		})
 	}
-
-	var userRows []userGroupQuota
-	if err := m.execTxn(ctx, func(s *xorm.Session) error {
-		return s.Where("qtype = ?", UserQuotaType).Find(&userRows)
-	}); err != nil {
-		return err
-	}
-	for _, q := range userRows {
-		quotas = append(quotas, &pb.Quota{
-			Type:       uint32(UserQuotaType),
-			Key:        q.Qkey,
-			MaxSpace:   q.MaxSpace,
-			MaxInodes:  q.MaxInodes,
-			UsedSpace:  q.UsedSpace,
-			UsedInodes: q.UsedInodes,
-		})
-	}
-
-	var groupRows []userGroupQuota
-	if err := m.execTxn(ctx, func(s *xorm.Session) error {
-		return s.Where("qtype = ?", GroupQuotaType).Find(&groupRows)
-	}); err != nil {
-		return err
-	}
-	for _, q := range groupRows {
-		quotas = append(quotas, &pb.Quota{
-			Type:       uint32(GroupQuotaType),
-			Key:        q.Qkey,
-			MaxSpace:   q.MaxSpace,
-			MaxInodes:  q.MaxInodes,
-			UsedSpace:  q.UsedSpace,
-			UsedInodes: q.UsedInodes,
-		})
+	for _, qtype := range []uint32{UserQuotaType, GroupQuotaType} {
+		var rows []userGroupQuota
+		if err := m.execTxn(ctx, func(s *xorm.Session) error {
+			return s.Where("qtype = ?", qtype).Find(&rows)
+		}); err != nil {
+			return err
+		}
+		for _, q := range rows {
+			quotas = append(quotas, &pb.Quota{
+				Type:       uint32(qtype),
+				Key:        q.Qkey,
+				MaxSpace:   q.MaxSpace,
+				MaxInodes:  q.MaxInodes,
+				UsedSpace:  q.UsedSpace,
+				UsedInodes: q.UsedInodes,
+			})
+		}
 	}
 
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Quotas: quotas}})
