@@ -325,12 +325,12 @@ func (m *redisMeta) dumpQuotas(ctx Context, quotas *[]*pb.Quota, qtype uint32) e
 	for k, v := range vals {
 		id, err := strconv.ParseUint(k, 10, 64)
 		if err != nil {
-			logger.Warnf("parse used inodes %s: %s: %v", qtype, k, err)
+			logger.Warnf("parse used inodes %d: %s: %v", qtype, k, err)
 			continue
 		}
 		usedInodes, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			logger.Warnf("invalid usedInodes for %s %s: %s", qtype, k, v)
+			logger.Warnf("invalid usedInodes for %d %s: %s", qtype, k, v)
 			continue
 		}
 
@@ -342,7 +342,7 @@ func (m *redisMeta) dumpQuotas(ctx Context, quotas *[]*pb.Quota, qtype uint32) e
 		var maxSpace, maxInodes int64 = -1, -1
 		if buf, err := m.rdb.HGet(ctx, quotaKeys.quotaKey, k).Bytes(); err == nil {
 			if len(buf) != 16 {
-				logger.Warnf("invalid quota value for %s %s: len=%d", qtype, k, len(buf))
+				logger.Warnf("invalid quota value for %d %s: len=%d", qtype, k, len(buf))
 				continue
 			}
 			maxSpace, maxInodes = m.parseQuota(buf)
@@ -367,14 +367,14 @@ func (m *redisMeta) dumpQuotas(ctx Context, quotas *[]*pb.Quota, qtype uint32) e
 	for k, v := range vals {
 		id, err := strconv.ParseUint(k, 10, 64)
 		if err != nil {
-			logger.Warnf("parse %s quota id: %s: %v", qtype, k, err)
+			logger.Warnf("parse %d quota id: %s: %v", qtype, k, err)
 			continue
 		}
 		if _, ok := quotaMap[id]; ok {
 			continue
 		}
 		if len(v) != 16 {
-			logger.Warnf("invalid %s quota string: %s", qtype, hex.EncodeToString([]byte(v)))
+			logger.Warnf("invalid %d quota string: %s", qtype, hex.EncodeToString([]byte(v)))
 			continue
 		}
 		maxSpace, maxInodes := m.parseQuota([]byte(v))

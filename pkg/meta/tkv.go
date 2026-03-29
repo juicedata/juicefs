@@ -3859,7 +3859,12 @@ func (m *kvMeta) scanDirDumpQuotas(ctx Context) (map[Ino]*DumpedQuota, error) {
 	quotas := make(map[Ino]*DumpedQuota, len(pairs))
 	for k, v := range pairs {
 		q := m.parseQuota(v)
-		quotas[m.decodeInode([]byte(k[2:]))] = buildDumpedQuota(q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes)
+		quotas[m.decodeInode([]byte(k[2:]))] = &DumpedQuota{
+			MaxSpace:   q.MaxSpace,
+			MaxInodes:  q.MaxInodes,
+			UsedSpace:  q.UsedSpace,
+			UsedInodes: q.UsedInodes,
+		}
 	}
 	return quotas, nil
 }
@@ -3877,7 +3882,12 @@ func (m *kvMeta) scanUGDumpQuotas(ctx Context, prefix string) (map[uint64]*Dumpe
 		if q.MaxSpace == -1 && q.MaxInodes == -1 {
 			continue
 		}
-		quotas[binary.BigEndian.Uint64([]byte(k[2:]))] = buildDumpedQuota(q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes)
+		quotas[binary.BigEndian.Uint64([]byte(k[2:]))] = &DumpedQuota{
+			MaxSpace:   q.MaxSpace,
+			MaxInodes:  q.MaxInodes,
+			UsedSpace:  q.UsedSpace,
+			UsedInodes: q.UsedInodes,
+		}
 	}
 	return quotas, nil
 }
