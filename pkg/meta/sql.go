@@ -4933,16 +4933,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.loadDumpedQuotas(Background(), dm.dumpedQuotasToIQuota())
-	if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
-		format := dm.Setting
-		m.Lock()
-		m.fmt = &format
-		m.Unlock()
-		if err := m.ScanUserGroupUsage(Background()); err != nil {
-			logger.Warnf("rebuild user/group quota usage failed: %v", err)
-		}
-	}
+	m.loadDumpedQuotas(Background(), dm)
 	if err = m.loadDumpedACLs(Background()); err != nil {
 		return err
 	}

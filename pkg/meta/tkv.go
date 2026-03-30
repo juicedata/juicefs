@@ -4012,16 +4012,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	// update nlinks and parents for hardlinks
 	st := make(map[Ino]int64)
 	defer func() {
-		m.loadDumpedQuotas(Background(), dm.dumpedQuotasToIQuota())
-		if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
-			format := dm.Setting
-			m.Lock()
-			m.fmt = &format
-			m.Unlock()
-			if err := m.ScanUserGroupUsage(Background()); err != nil {
-				logger.Warnf("rebuild user/group quota usage failed: %v", err)
-			}
-		}
+		m.loadDumpedQuotas(Background(), dm)
 	}()
 	return m.txn(Background(), func(tx *kvTxn) error {
 		for i, ps := range parents {

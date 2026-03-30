@@ -4882,16 +4882,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
-	m.loadDumpedQuotas(ctx, dm.dumpedQuotasToIQuota())
-	if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
-		format := dm.Setting
-		m.Lock()
-		m.fmt = &format
-		m.Unlock()
-		if err := m.ScanUserGroupUsage(ctx); err != nil {
-			logger.Warnf("rebuild user/group quota usage failed: %v", err)
-		}
-	}
+	m.loadDumpedQuotas(Background(), dm)
 	if err = m.loadDumpedACLs(ctx); err != nil {
 		return err
 	}
