@@ -411,7 +411,6 @@ func (m *kvMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 
 		tx.scan(m.fmtKey("QD"), nextKey(m.fmtKey("QD")), false, func(k, v []byte) bool {
 			q := &pb.Quota{}
-			q.Inode = uint64(m.decodeInode([]byte(k)[2:])) // 兼容旧 reader
 			q.Type = uint32(DirQuotaType)
 			q.Key = uint64(m.decodeInode([]byte(k)[2:]))
 			b := utils.FromBuffer(v)
@@ -595,20 +594,16 @@ func (m *kvMeta) loadQuota(ctx Context, msg proto.Message, pairs *[]*pair) {
 		b.Put64(uint64(q.UsedInodes))
 
 		var key []byte
-		if q.Type == 0 && q.Key == 0 {
-			key = m.dirQuotaKey(Ino(q.Inode))
-		} else {
-			switch q.Type {
-			case uint32(DirQuotaType):
-				key = m.dirQuotaKey(Ino(q.Key))
-			case uint32(UserQuotaType):
-				key = m.userQuotaKey(q.Key)
-			case uint32(GroupQuotaType):
-				key = m.groupQuotaKey(q.Key)
-			default:
-				logger.Warnf("unknown quota type: %d", q.Type)
-				continue
-			}
+		switch q.Type {
+		case uint32(DirQuotaType):
+			key = m.dirQuotaKey(Ino(q.Key))
+		case uint32(UserQuotaType):
+			key = m.userQuotaKey(q.Key)
+		case uint32(GroupQuotaType):
+			key = m.groupQuotaKey(q.Key)
+		default:
+			logger.Warnf("unknown quota type: %d", q.Type)
+			continue
 		}
 		*pairs = append(*pairs, &pair{key, b.Bytes()})
 	}

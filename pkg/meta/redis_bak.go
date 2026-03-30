@@ -902,38 +902,15 @@ func (m *redisMeta) loadXattrs(ctx Context, msg proto.Message) error {
 func (m *redisMeta) loadQuota(ctx Context, msg proto.Message) error {
 	pipe := m.rdb.Pipeline()
 	for _, pq := range msg.(*pb.Batch).Quotas {
-		var quotaKey, usedInodesKey, usedSpaceKey string
-		var idKey string
-
-		if pq.Type == 0 && pq.Key == 0 {
-			idKey = Ino(pq.Inode).String()
-			quotaKey = m.dirQuotaKey()
-			usedInodesKey = m.dirQuotaUsedInodesKey()
-			usedSpaceKey = m.dirQuotaUsedSpaceKey()
-		} else {
-			idKey = strconv.FormatUint(pq.Key, 10)
-			switch pq.Type {
-			case uint32(DirQuotaType):
-				quotaKey = m.dirQuotaKey()
-				usedInodesKey = m.dirQuotaUsedInodesKey()
-				usedSpaceKey = m.dirQuotaUsedSpaceKey()
-			case uint32(UserQuotaType):
-				quotaKey = m.userQuotaKey()
-				usedInodesKey = m.userQuotaUsedInodesKey()
-				usedSpaceKey = m.userQuotaUsedSpaceKey()
-			case uint32(GroupQuotaType):
-				quotaKey = m.groupQuotaKey()
-				usedInodesKey = m.groupQuotaUsedInodesKey()
-				usedSpaceKey = m.groupQuotaUsedSpaceKey()
-			default:
-				logger.Warnf("unknown quota type: %d", pq.Type)
-				continue
-			}
+		quotaKeys, err := m.getQuotaKeys(pq.Type)
+		if err != nil {
+			logger.Warnf("%v", err)
+			continue
 		}
-
-		pipe.HSet(ctx, quotaKey, idKey, m.packQuota(pq.MaxSpace, pq.MaxInodes))
-		pipe.HSet(ctx, usedInodesKey, idKey, pq.UsedInodes)
-		pipe.HSet(ctx, usedSpaceKey, idKey, pq.UsedSpace)
+		idKey := strconv.FormatUint(pq.Key, 10)
+		pipe.HSet(ctx, quotaKeys.quotaKey, idKey, m.packQuota(pq.MaxSpace, pq.MaxInodes))
+		pipe.HSet(ctx, quotaKeys.usedInodesKey, idKey, pq.UsedInodes)
+		pipe.HSet(ctx, quotaKeys.usedSpaceKey, idKey, pq.UsedSpace)
 		if pipe.Len() >= redisPipeLimit {
 			if err := execPipe(ctx, pipe); err != nil {
 				return err

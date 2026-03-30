@@ -431,7 +431,6 @@ func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 	}
 	for _, q := range dirRows {
 		quotas = append(quotas, &pb.Quota{
-			Inode:      uint64(q.Inode),
 			Type:       uint32(DirQuotaType),
 			Key:        uint64(q.Inode),
 			MaxSpace:   q.MaxSpace,
@@ -744,45 +743,35 @@ func (m *dbMeta) loadQuota(ctx Context, msg proto.Message) error {
 	groupRows := make([]interface{}, 0, len(quotas))
 
 	for _, q := range quotas {
-		if q.Type == 0 && q.Key == 0 {
+		switch q.Type {
+		case uint32(DirQuotaType):
 			dirRows = append(dirRows, &dirQuota{
-				Inode:      Ino(q.Inode),
+				Inode:      Ino(q.Key),
 				MaxSpace:   q.MaxSpace,
 				MaxInodes:  q.MaxInodes,
 				UsedSpace:  q.UsedSpace,
 				UsedInodes: q.UsedInodes,
 			})
-		} else {
-			switch q.Type {
-			case uint32(DirQuotaType):
-				dirRows = append(dirRows, &dirQuota{
-					Inode:      Ino(q.Key),
-					MaxSpace:   q.MaxSpace,
-					MaxInodes:  q.MaxInodes,
-					UsedSpace:  q.UsedSpace,
-					UsedInodes: q.UsedInodes,
-				})
-			case uint32(UserQuotaType):
-				userRows = append(userRows, &userGroupQuota{
-					Qtype:      UserQuotaType,
-					Qkey:       q.Key,
-					MaxSpace:   q.MaxSpace,
-					MaxInodes:  q.MaxInodes,
-					UsedSpace:  q.UsedSpace,
-					UsedInodes: q.UsedInodes,
-				})
-			case uint32(GroupQuotaType):
-				groupRows = append(groupRows, &userGroupQuota{
-					Qtype:      GroupQuotaType,
-					Qkey:       q.Key,
-					MaxSpace:   q.MaxSpace,
-					MaxInodes:  q.MaxInodes,
-					UsedSpace:  q.UsedSpace,
-					UsedInodes: q.UsedInodes,
-				})
-			default:
-				logger.Warnf("unknown quota type: %d", q.Type)
-			}
+		case uint32(UserQuotaType):
+			userRows = append(userRows, &userGroupQuota{
+				Qtype:      UserQuotaType,
+				Qkey:       q.Key,
+				MaxSpace:   q.MaxSpace,
+				MaxInodes:  q.MaxInodes,
+				UsedSpace:  q.UsedSpace,
+				UsedInodes: q.UsedInodes,
+			})
+		case uint32(GroupQuotaType):
+			groupRows = append(groupRows, &userGroupQuota{
+				Qtype:      GroupQuotaType,
+				Qkey:       q.Key,
+				MaxSpace:   q.MaxSpace,
+				MaxInodes:  q.MaxInodes,
+				UsedSpace:  q.UsedSpace,
+				UsedInodes: q.UsedInodes,
+			})
+		default:
+			logger.Warnf("unknown quota type: %d", q.Type)
 		}
 	}
 
