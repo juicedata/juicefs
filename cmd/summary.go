@@ -103,11 +103,11 @@ func summary(ctx *cli.Context) error {
 	dspin := progress.AddDoubleSpinner(path)
 	dpath, err := filepath.Abs(path)
 	if err != nil {
-		logger.Fatalf("abs of %s: %s", path, err)
+		logger.Fatalf("abs of %q: %s", path, err)
 	}
 	inode, err := utils.GetFileInode(dpath)
 	if err != nil {
-		logger.Fatalf("lookup inode for %s: %s", path, err)
+		logger.Fatalf("lookup inode for %q: %s", path, err)
 	}
 	if inode < uint64(meta.RootInode) {
 		logger.Fatalf("inode number shouldn't be less than %d", meta.RootInode)

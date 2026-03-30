@@ -141,10 +141,10 @@ func setTier(ctx *cli.Context) error {
 	}
 	oldTier := format.Tiers[attr.Tier]
 	if attr.Tier == uint8(id) {
-		logger.Infof("storage class of %s is already %d(%s), no change needed", path, id, oldTier.GetHumanSc())
+		logger.Infof("storage class of %q is already %d(%s), no change needed", path, id, oldTier.GetHumanSc())
 		return nil
 	}
-	logger.Infof("set storage tier of %s from %d(%s) to %d(%s)", path, attr.Tier, oldTier.GetHumanSc(), id, newTier.GetHumanSc())
+	logger.Infof("set storage tier of %q from %d(%s) to %d(%s)", path, attr.Tier, oldTier.GetHumanSc(), id, newTier.GetHumanSc())
 
 	blob, err := createStorage(*format)
 	if err != nil {
@@ -177,7 +177,7 @@ func setTier(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	logger.Infof("storage tier of %s is set to %d(%s)", path, id, newTier.GetHumanSc())
+	logger.Infof("storage tier of %q is set to %d(%s)", path, id, newTier.GetHumanSc())
 	return nil
 }
 

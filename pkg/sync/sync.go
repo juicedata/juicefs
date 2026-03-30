@@ -1417,14 +1417,14 @@ func parseIncludeRules(args []string) (rules []rule) {
 		}
 		if l-1 > i && (a == "-include" || a == "-exclude") {
 			if _, err := path.Match(args[i+1], "xxxx"); err != nil {
-				logger.Warnf("ignore invalid pattern: %s %s", a, args[i+1])
+				logger.Warnf("ignore invalid pattern: %q %q", a, args[i+1])
 				continue
 			}
 			rules = append(rules, parseRule(a, args[i+1]))
 		} else if strings.HasPrefix(a, "-include=") || strings.HasPrefix(a, "-exclude=") {
 			if s := strings.Split(a, "="); len(s) == 2 && s[1] != "" {
 				if _, err := path.Match(s[1], "xxxx"); err != nil {
-					logger.Warnf("ignore invalid pattern: %s", a)
+					logger.Warnf("ignore invalid pattern: %q", a)
 					continue
 				}
 				rules = append(rules, parseRule(s[0], s[1]))
@@ -2168,7 +2168,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			}
 			launchWorker(addr, config, &wg)
 		}
-		logger.Infof("Syncing from %s to %s", src, dst)
+		logger.Infof("Syncing from %q to %q", src, dst)
 		if config.Start != "" {
 			logger.Infof("first key: %q", config.Start)
 		}

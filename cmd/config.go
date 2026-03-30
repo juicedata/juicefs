@@ -204,7 +204,7 @@ func config(ctx *cli.Context) error {
 					if p, err := filepath.Abs(new); err == nil {
 						new = p + "/"
 					} else {
-						logger.Fatalf("Failed to get absolute path of %s: %s", new, err)
+						logger.Fatalf("Failed to get absolute path of %q: %s", new, err)
 					}
 				}
 				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Bucket, new))

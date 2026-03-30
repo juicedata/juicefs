@@ -97,12 +97,12 @@ func info(ctx *cli.Context) error {
 		} else {
 			d, err = filepath.Abs(path)
 			if err != nil {
-				logger.Fatalf("abs of %s: %s", path, err)
+				logger.Fatalf("abs of %q: %s", path, err)
 			}
 			inode, err = utils.GetFileInode(d)
 		}
 		if err != nil {
-			logger.Errorf("lookup inode for %s: %s", path, err)
+			logger.Errorf("lookup inode for %q: %s", path, err)
 			continue
 		}
 		if inode < uint64(meta.RootInode) {
@@ -110,7 +110,7 @@ func info(ctx *cli.Context) error {
 		}
 		f, err := openController(d)
 		if err != nil {
-			logger.Errorf("Open control file for %s: %s", d, err)
+			logger.Errorf("Open control file for %q: %s", d, err)
 			continue
 		}
 
@@ -251,7 +251,7 @@ func ltypeToString(t uint32) string {
 func legacyInfo(d, path string, inode uint64, recursive, raw uint8) {
 	f, err := openController(d)
 	if err != nil {
-		logger.Errorf("Open control file for %s: %s", d, err)
+		logger.Errorf("Open control file for %q: %s", d, err)
 		return
 	}
 	defer f.Close()

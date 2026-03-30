@@ -294,15 +294,15 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			rpath := filepath.Join("/tmp", filepath.Base(path))
 			cmd := exec.Command("rsync", "-a", "-e", "ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no", path, host+":"+rpath)
 			output, err := cmd.CombinedOutput()
-			logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
+			logger.Debugf("exec: %q,err: %s", cmd.String(), string(output))
 			if err != nil {
 				// fallback to scp
 				cmd = exec.Command("scp", "-o", "StrictHostKeyChecking=no", "-o", "PasswordAuthentication=no", path, host+":"+rpath)
 				output, err = cmd.CombinedOutput()
-				logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
+				logger.Debugf("exec: %q,err: %s", cmd.String(), string(output))
 			}
 			if err != nil {
-				logger.Errorf("copy itself to %s: %s", host, err)
+				logger.Errorf("copy itself to %q: %s", host, err)
 				return
 			}
 			// launch itself
@@ -332,7 +332,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			for i, s := range printEnv {
 				argsBk[i+1] = s
 			}
-			logger.Debugf("launch worker command args: [ssh, %s]", strings.Join(shellescape.EscapeArgs(argsBk), ", "))
+			logger.Debugf("launch worker command args: [ssh, %q]", strings.Join(shellescape.EscapeArgs(argsBk), ", "))
 			cmd = exec.Command("ssh", shellescape.EscapeArgs(args)...)
 			cmd.Stdin = os.Stdin
 			stderr, err := cmd.StderrPipe()
@@ -341,10 +341,10 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 			err = cmd.Start()
 			if err != nil {
-				logger.Errorf("start itself at %s: %s", host, err)
+				logger.Errorf("start itself at %q: %s", host, err)
 				return
 			}
-			logger.Infof("launch a worker on %s", host)
+			logger.Infof("launch a worker on %q", host)
 			var finished = make(chan struct{})
 			var logRe = regexp.MustCompile(`^.*<([A-Z]+)>: (.*)`)
 			go func() {
@@ -368,20 +368,20 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 
 					switch level {
 					case "ERROR":
-						logger.Errorf("[%s] %s", host, content)
+						logger.Errorf("[%q] %s", host, content)
 					case "WARNING":
-						logger.Warnf("[%s] %s", host, content)
+						logger.Warnf("[%q] %s", host, content)
 					case "DEBUG":
-						logger.Debugf("[%s] %s", host, content)
+						logger.Debugf("[%q] %s", host, content)
 					default:
-						logger.Infof("[%s] %s", host, content)
+						logger.Infof("[%q] %s", host, content)
 					}
 				}
 			}()
 			err = cmd.Wait()
 			<-finished
 			if err != nil {
-				logger.Errorf("%s: %s", host, err)
+				logger.Errorf("%q: %s", host, err)
 			}
 		}(host)
 	}

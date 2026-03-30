@@ -168,7 +168,7 @@ func dump(ctx *cli.Context) error {
 		if dst == "" {
 			dst = "STDOUT"
 		}
-		logger.Infof("Dump metadata into %s succeed", dst)
+		logger.Infof("Dump metadata into %q succeed", dst)
 	}
 	return err
 }

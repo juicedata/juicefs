@@ -165,13 +165,13 @@ func NewConfigFromCli(c *cli.Context) *Config {
 	if c.IsSet("start-time") {
 		startTime, err = cast.ToTimeInDefaultLocationE(c.String("start-time"), time.Local)
 		if err != nil {
-			logger.Fatalf("failed to parse start time: %v", err)
+			logger.Fatalf("failed to parse start time %q: %v", c.String("start-time"), err)
 		}
 	}
 	if c.IsSet("end-time") {
 		endTime, err = cast.ToTimeInDefaultLocationE(c.String("end-time"), time.Local)
 		if err != nil {
-			logger.Fatalf("failed to parse end time: %v", err)
+			logger.Fatalf("failed to parse end time %q: %v", c.String("end-time"), err)
 		}
 	}
 	cfg := &Config{

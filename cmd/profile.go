@@ -373,16 +373,16 @@ func profile(ctx *cli.Context) error {
 	logPath := ctx.Args().First()
 	st, err := os.Stat(logPath)
 	if err != nil {
-		logger.Fatalf("Failed to stat path %s: %s", logPath, err)
+		logger.Fatalf("Failed to stat path %q: %s", logPath, err)
 	}
 	var replay bool
 	if st.IsDir() { // mount point
 		inode, err := utils.GetFileInode(logPath)
 		if err != nil {
-			logger.Fatalf("Failed to lookup inode for %s: %s", logPath, err)
+			logger.Fatalf("Failed to lookup inode for %q: %s", logPath, err)
 		}
 		if inode != uint64(meta.RootInode) {
-			logger.Fatalf("Path %s is not a mount point!", logPath)
+			logger.Fatalf("Path %q is not a mount point!", logPath)
 		}
 		if p := filepath.Join(logPath, ".jfs.accesslog"); utils.Exists(p) {
 			logPath = p
@@ -398,7 +398,7 @@ func profile(ctx *cli.Context) error {
 	}
 	file, err := os.Open(logPath)
 	if err != nil {
-		logger.Fatalf("Failed to open log file %s: %s", logPath, err)
+		logger.Fatalf("Failed to open log file %q: %s", logPath, err)
 	}
 	defer file.Close()
 

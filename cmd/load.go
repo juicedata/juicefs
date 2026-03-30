@@ -163,7 +163,7 @@ func convert(path string, key, algo string) (string, error) {
 
 	nPath := path[:strings.LastIndex(path, ".")]
 	if utils.Exists(nPath) {
-		logger.Infof("plain backup %s already exists, skip conversion", nPath)
+		logger.Infof("plain backup %q already exists, skip conversion", nPath)
 		return nPath, nil
 	}
 
@@ -182,7 +182,7 @@ func convert(path string, key, algo string) (string, error) {
 	if _, err = io.Copy(w, r); err != nil {
 		return "", fmt.Errorf("failed to convert %s to %s: %w", path, nPath, err)
 	}
-	logger.Infof("converted backup %s to %s", path, nPath)
+	logger.Infof("converted backup %q to %q", path, nPath)
 	return nPath, nil
 }
 
@@ -252,12 +252,12 @@ func load(ctx *cli.Context) error {
 	} else {
 		return err
 	}
-	logger.Infof("load metadata from %s succeed", src)
+	logger.Infof("load metadata from %q succeed", src)
 	return nil
 }
 
 func statBak(ctx *cli.Context, path string) error {
-	logger.Infof("load backup from %s", path)
+	logger.Infof("load backup from %q", path)
 	fp, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("failed to open file %s: %w", path, err)

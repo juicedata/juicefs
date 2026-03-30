@@ -118,13 +118,13 @@ func (bc *benchCase) writeFiles(index int) {
 		fname := filepath.Join(bc.bm.tmpdir, fmt.Sprintf("%s.%d.%d", bc.name, index, i))
 		fp, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
-			logger.Fatalf("Failed to open file %s: %s", fname, err)
+			logger.Fatalf("Failed to open file %q: %s", fname, err)
 		}
 		buf := make([]byte, bc.bsize)
 		utils.RandRead(buf)
 		for j := 0; j < bc.bcount; j++ {
 			if _, err = fp.Write(buf); err != nil {
-				logger.Fatalf("Failed to write file %s: %s", fname, err)
+				logger.Fatalf("Failed to write file %q: %s", fname, err)
 			}
 			bc.wbar.Increment()
 		}
@@ -137,12 +137,12 @@ func (bc *benchCase) readFiles(index int) {
 		fname := filepath.Join(bc.bm.tmpdir, fmt.Sprintf("%s.%d.%d", bc.name, index, i))
 		fp, err := os.Open(fname)
 		if err != nil {
-			logger.Fatalf("Failed to open file %s: %s", fname, err)
+			logger.Fatalf("Failed to open file %q: %s", fname, err)
 		}
 		buf := make([]byte, bc.bsize)
 		for j := 0; j < bc.bcount; j++ {
 			if n, err := fp.Read(buf); err != nil || n != bc.bsize {
-				logger.Fatalf("Failed to read file %s: %d %s", fname, n, err)
+				logger.Fatalf("Failed to read file %q: %d %s", fname, n, err)
 			}
 			bc.rbar.Increment()
 		}
@@ -154,7 +154,7 @@ func (bc *benchCase) statFiles(index int) {
 	for i := 0; i < bc.fcount; i++ {
 		fname := filepath.Join(bc.bm.tmpdir, fmt.Sprintf("%s.%d.%d", bc.name, index, i))
 		if _, err := os.Stat(fname); err != nil {
-			logger.Fatalf("Failed to stat file %s: %s", fname, err)
+			logger.Fatalf("Failed to stat file %q: %s", fname, err)
 		}
 		bc.sbar.Increment()
 	}
@@ -314,7 +314,7 @@ func bench(ctx *cli.Context) error {
 	}
 	tmpdir, err := filepath.Abs(ctx.Args().First())
 	if err != nil {
-		logger.Fatalf("Failed to get absolute path of %s: %s", ctx.Args().First(), err)
+		logger.Fatalf("Failed to get absolute path of %q: %s", ctx.Args().First(), err)
 	}
 	bigSize := utils.ParseBytes(ctx, "big-file-size", 'M')
 	smallSize := utils.ParseBytes(ctx, "small-file-size", 'K')
@@ -342,7 +342,7 @@ func bench(ctx *cli.Context) error {
 	/* --- Prepare --- */
 	if _, err := os.Stat(bm.tmpdir); os.IsNotExist(err) {
 		if err = os.MkdirAll(bm.tmpdir, 0777); err != nil {
-			logger.Fatalf("Failed to create %s: %s", bm.tmpdir, err)
+			logger.Fatalf("Failed to create %q: %s", bm.tmpdir, err)
 		}
 	}
 	mp, _ := findMountpoint(bm.tmpdir)
@@ -430,11 +430,11 @@ func bench(ctx *cli.Context) error {
 	/* --- Clean-up --- */
 	if runtime.GOOS == "windows" {
 		if err := exec.Command("cmd", "/C", "rd", "/s", "/q", bm.tmpdir).Run(); err != nil {
-			logger.Warnf("Failed to cleanup %s: %s", bm.tmpdir, err)
+			logger.Warnf("Failed to cleanup %q: %s", bm.tmpdir, err)
 		}
 	} else {
 		if err := exec.Command("rm", "-rf", bm.tmpdir).Run(); err != nil {
-			logger.Warnf("Failed to cleanup %s: %s", bm.tmpdir, err)
+			logger.Warnf("Failed to cleanup %q: %s", bm.tmpdir, err)
 		}
 	}
 

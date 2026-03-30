@@ -166,7 +166,7 @@ func objbench(ctx *cli.Context) error {
 		}
 		var err error
 		if endpoint, err = filepath.Abs(endpoint); err != nil {
-			logger.Fatalf("invalid path: %s", err)
+			logger.Fatalf("invalid path %q: %s", endpoint, err)
 		}
 	}
 	var blobOrigin object.ObjectStorage
@@ -186,7 +186,7 @@ func objbench(ctx *cli.Context) error {
 	storageClass := ctx.String("storage-class")
 	if os, ok := blob.(object.SupportStorageClass); ok && storageClass != "" {
 		if err := os.SetStorageClass(storageClass); err != nil {
-			logger.Fatalf("set storageClass %s failed: %v", storageClass, err)
+			logger.Fatalf("set storageClass %q failed: %v", storageClass, err)
 		}
 	}
 	defer func() {

@@ -94,11 +94,11 @@ func fsck(ctx *cli.Context) error {
 	path := ctx.String("path")
 	repairDirMode, err := strconv.ParseUint(ctx.String("repair-dir-mode"), 8, 16) // base 8 (octal), 16-bit result
 	if err != nil {
-		logger.Fatalf("invalid repair-dir-mode: %s", err)
+		logger.Fatalf("invalid repair-dir-mode %q: %s", ctx.String("repair-dir-mode"), err)
 	}
 	if path != "" {
 		if !strings.HasPrefix(path, "/") {
-			logger.Fatalf("File path should be the absolute path within JuiceFS")
+			logger.Fatalf("file path %q should be the absolute path within JuiceFS", path)
 		}
 		err := m.Check(c, path, &meta.CheckOpt{
 			Repair:        ctx.Bool("repair"),

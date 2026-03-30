@@ -70,19 +70,19 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 			_ = m.CloseSession()
 		}()
 	}
-	logger.Infof("restore files in %s ...", hour)
+	logger.Infof("restore files in %q ...", hour)
 	ctx := meta.Background()
 	var parent meta.Ino
 	var attr meta.Attr
 	err := m.Lookup(ctx, meta.TrashInode, hour, &parent, &attr, false)
 	if err != 0 {
-		logger.Errorf("lookup %s: %s", hour, err)
+		logger.Errorf("lookup %q: %s", hour, err)
 		return
 	}
 	var entries []*meta.Entry
 	err = m.Readdir(meta.Background(), parent, 0, &entries)
 	if err != 0 {
-		logger.Errorf("list %s: %s", hour, err)
+		logger.Errorf("list %q: %s", hour, err)
 		return
 	}
 	entries = entries[2:]
@@ -142,7 +142,7 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 	skipped.Done()
 	restored.Done()
 	p.Done()
-	logger.Infof("restored %d files in %s", restored.Current(), hour)
+	logger.Infof("restored %d files in %q", restored.Current(), hour)
 	for dst, count := range restoredTo {
 		logger.Infof("restored %d files to %q", count, strings.Join(m.GetPaths(ctx, dst), ", "))
 	}

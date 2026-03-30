@@ -86,7 +86,7 @@ func exposeMetrics(c *cli.Context, registerer prometheus.Registerer, registry *p
 	// default set
 	ip, port, err := net.SplitHostPort(c.String("metrics"))
 	if err != nil {
-		logger.Fatalf("metrics format error: %v", err)
+		logger.Fatalf("metrics format error %q: %v", c.String("metrics"), err)
 	}
 	go metric.UpdateMetrics(registerer)
 	http.Handle("/metrics", promhttp.HandlerFor(
@@ -114,7 +114,7 @@ func exposeMetrics(c *cli.Context, registerer prometheus.Registerer, registry *p
 	if err != nil {
 		// Don't try other ports on metrics set but listen failed
 		if c.IsSet("metrics") {
-			logger.Errorf("listen on %s:%s failed: %v", ip, port, err)
+			logger.Errorf("listen on %q:%q failed: %v", ip, port, err)
 			return ""
 		}
 		// Listen port on 0 will auto listen on a free port
@@ -132,7 +132,7 @@ func exposeMetrics(c *cli.Context, registerer prometheus.Registerer, registry *p
 	}()
 
 	metricsAddr := ln.Addr().String()
-	logger.Infof("Prometheus metrics listening on %s", metricsAddr)
+	logger.Infof("Prometheus metrics listening on %q", metricsAddr)
 	return metricsAddr
 }
 
@@ -147,10 +147,10 @@ func wrapRegister(c *cli.Context, mp, name string) (prometheus.Registerer, *prom
 		for _, kv := range strings.Split(c.String("custom-labels"), ";") {
 			splited := strings.Split(kv, ":")
 			if len(splited) != 2 {
-				logger.Fatalf("invalid label format: %s", kv)
+				logger.Fatalf("invalid label format: %q", kv)
 			}
 			if utils.StringContains([]string{"mp", "vol_name", "instance"}, splited[0]) {
-				logger.Warnf("overriding reserved label: %s", splited[0])
+				logger.Warnf("overriding reserved label: %q", splited[0])
 			}
 			commonLabels[splited[0]] = splited[1]
 		}
@@ -192,13 +192,13 @@ func relPathToAbs(ss []string) []string {
 			if h, err := os.UserHomeDir(); err == nil {
 				ss[i] = filepath.Join(h, d[1:])
 			} else {
-				logger.Fatalf("Expand user home dir of %s: %s", d, err)
+				logger.Fatalf("Expand user home dir of %q: %s", d, err)
 			}
 		} else {
 			if ad, err := filepath.Abs(d); err == nil {
 				ss[i] = ad
 			} else {
-				logger.Fatalf("Find absolute path of %s: %s", d, err)
+				logger.Fatalf("Find absolute path of %q: %s", d, err)
 			}
 		}
 	}
@@ -288,7 +288,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 	if c.IsSet("umask") {
 		umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
 		if err != nil {
-			logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
+			logger.Fatalf("invalid umask %q: %s", c.String("umask"), err)
 		}
 		cfg.UMask = uint16(umask)
 	}
@@ -336,7 +336,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 
 	atimeMode := c.String("atime-mode")
 	if atimeMode != meta.RelAtime && atimeMode != meta.StrictAtime && atimeMode != meta.NoAtime {
-		logger.Warnf("unknown atime-mode \"%s\", changed to %s", atimeMode, meta.NoAtime)
+		logger.Warnf("unknown atime-mode %q, changed to %q", atimeMode, meta.NoAtime)
 		atimeMode = meta.NoAtime
 	}
 	conf.AtimeMode = atimeMode
@@ -356,7 +356,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	cm, err := strconv.ParseUint(c.String("cache-mode"), 8, 32)
 	if err != nil {
-		logger.Warnf("Invalid cache-mode %s, using default value 0600", c.String("cache-mode"))
+		logger.Warnf("Invalid cache-mode %q, using default value 0600", c.String("cache-mode"))
 		cm = 0600
 	}
 	chunkConf := &chunk.Config{
@@ -462,7 +462,7 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 		}
 		old := &holder.fmt
 		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken || new.StorageClass != old.StorageClass {
-			logger.Infof("found new configuration: storage=%s bucket=%s ak=%s storageClass=%s", new.Storage, new.Bucket, new.AccessKey, new.StorageClass)
+			logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q", new.Storage, new.Bucket, new.AccessKey, new.StorageClass)
 
 			newBlob, err := createStorage(*new)
 			if err != nil {
@@ -552,7 +552,7 @@ func mount(c *cli.Context) error {
 			return err
 		}, time.Second*3)
 		if err != nil {
-			logger.Fatalf("abs %s: %s", mp, err)
+			logger.Fatalf("abs %q: %s", mp, err)
 		}
 		if mp == "/" {
 			logger.Fatalf("should not mount on the root directory")
@@ -570,7 +570,7 @@ func mount(c *cli.Context) error {
 					logger.Warnf("failed to update fstab: %s", e2)
 				}
 				if e1 == nil && e2 == nil {
-					logger.Infof("Successfully updated fstab, now you can mount with `mount %s`", mp)
+					logger.Infof("Successfully updated fstab, now you can mount with `mount %q`", mp)
 				}
 			}
 		}
@@ -680,6 +680,6 @@ func mount(c *cli.Context) error {
 	}
 	err = metaCli.CloseSession()
 	object.Shutdown(blob)
-	logger.Infof("The juicefs mount process exit successfully, mountpoint: %s", metaConf.MountPoint)
+	logger.Infof("The juicefs mount process exit successfully, mountpoint: %q", metaConf.MountPoint)
 	return err
 }

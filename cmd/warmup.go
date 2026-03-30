@@ -210,13 +210,13 @@ func warmup(ctx *cli.Context) error {
 		if abs, err := filepath.Abs(p); err == nil {
 			paths = append(paths, abs)
 		} else {
-			logger.Fatalf("Failed to get absolute path of %s: %s", p, err)
+			logger.Fatalf("Failed to get absolute path of %q: %s", p, err)
 		}
 	}
 	if fname := ctx.String("file"); fname != "" {
 		fd, err := os.Open(fname)
 		if err != nil {
-			logger.Fatalf("Failed to open file %s: %s", fname, err)
+			logger.Fatalf("Failed to open file %q: %s", fname, err)
 		}
 		defer fd.Close()
 		scanner := bufio.NewScanner(fd)
@@ -225,12 +225,12 @@ func warmup(ctx *cli.Context) error {
 				if abs, e := filepath.Abs(p); e == nil {
 					paths = append(paths, abs)
 				} else {
-					logger.Warnf("Skipped path %s because it fails to get absolute path: %s", p, e)
+					logger.Warnf("Skipped path %q because it fails to get absolute path: %s", p, e)
 				}
 			}
 		}
 		if err = scanner.Err(); err != nil {
-			logger.Fatalf("Reading file %s failed with error: %s", fname, err)
+			logger.Fatalf("Reading file %q failed with error: %s", fname, err)
 		}
 	}
 	if len(paths) == 0 {
@@ -250,7 +250,7 @@ func warmup(ctx *cli.Context) error {
 	for ; mp != "/"; mp = filepath.Dir(mp) {
 		inode, err := utils.GetFileInode(mp)
 		if err != nil {
-			logger.Fatalf("lookup inode for %s: %s", mp, err)
+			logger.Fatalf("lookup inode for %q: %s", mp, err)
 		}
 		if inode == uint64(meta.RootInode) {
 			break
@@ -280,14 +280,14 @@ func warmup(ctx *cli.Context) error {
 		if mp == "/" {
 			inode, err := utils.GetFileInode(path)
 			if err != nil {
-				logger.Errorf("lookup inode for %s: %s", mp, err)
+				logger.Errorf("lookup inode for %q: %s", mp, err)
 				continue
 			}
 			batch = append(batch, fmt.Sprintf("inode:%d", inode))
 		} else if strings.HasPrefix(path, mp) {
 			batch = append(batch, path[start:])
 		} else {
-			logger.Errorf("Path %s is not under mount point %s", path, mp)
+			logger.Errorf("Path %q is not under mount point %q", path, mp)
 			continue
 		}
 		if len(batch) >= batchMax {

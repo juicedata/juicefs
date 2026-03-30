@@ -165,7 +165,7 @@ func gateway(c *cli.Context) error {
 
 	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
 	if err != nil {
-		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
+		logger.Fatalf("invalid umask %q: %s", c.String("umask"), err)
 	}
 	bucket := c.String("bucket-name")
 	if bucket == "" {
@@ -258,7 +258,7 @@ func initForSvc(c *cli.Context, mp string, svcType, metaUrl, listenAddr string) 
 		logger.Fatalf("load setting: %s", err)
 	}
 	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
-		logger.Fatalf("Chroot to %s: %s", metaConf.Subdir, st)
+		logger.Fatalf("Chroot to %q: %s", metaConf.Subdir, st)
 	}
 	registerer, registry := wrapRegister(c, svcType, format.Name)
 

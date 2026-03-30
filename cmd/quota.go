@@ -134,7 +134,7 @@ func quota(c *cli.Context) error {
 	case "check":
 		cmd = meta.QuotaCheck
 	default:
-		logger.Fatalf("Invalid quota command: %s", c.Command.Name)
+		logger.Fatalf("Invalid quota command: %q", c.Command.Name)
 	}
 
 	var uid, gid uint32
@@ -143,10 +143,10 @@ func quota(c *cli.Context) error {
 	validateID := func(name string) uint32 {
 		id := c.Uint64(name)
 		if id == 0 {
-			logger.Fatalf("Invalid --%s: 0 is not allowed", name)
+			logger.Fatalf("Invalid --%q: 0 is not allowed", name)
 		}
 		if id > math.MaxUint32 {
-			logger.Fatalf("Invalid --%s: %d exceeds maximum value %d", name, id, math.MaxUint32)
+			logger.Fatalf("Invalid --%q: %d exceeds maximum value %d", name, id, math.MaxUint32)
 		}
 		return uint32(id)
 	}

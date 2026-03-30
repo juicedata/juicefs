@@ -253,7 +253,7 @@ func (m *CheckpointManager) ValidateConfig(current *Config) bool {
 
 	// Must match fields
 	if old.Start != current.Start || old.End != current.End {
-		logger.Warnf("Checkpoint config mismatch: start/end, old: %v/%v, current: %v/%v", old.Start, old.End, current.Start, current.End)
+		logger.Warnf("Checkpoint config mismatch: start/end, old: %q/%q, current: %q/%q", old.Start, old.End, current.Start, current.End)
 		return false
 	}
 
@@ -291,7 +291,7 @@ func (m *CheckpointManager) ValidateConfig(current *Config) bool {
 	}
 
 	if old.FilesFrom != current.FilesFrom {
-		logger.Warnf("Checkpoint config mismatch: files-from, old: %v, current: %v", old.FilesFrom, current.FilesFrom)
+		logger.Warnf("Checkpoint config mismatch: files-from, old: %q, current: %q", old.FilesFrom, current.FilesFrom)
 		return false
 	}
 
