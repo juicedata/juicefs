@@ -351,13 +351,12 @@ func config(ctx *cli.Context) error {
 
 	if !ctx.Bool("force") {
 		yes := ctx.Bool("yes")
-		if storage || tier {
+		if storage || (tier && newSc != "") {
 			blob, err := createStorage(*format)
 			if err != nil {
 				return err
 			}
-			ctx := context.WithValue(context.Background(), object.TierKey{}, newTierID)
-			if err = test(ctx, blob); err != nil {
+			if err = test(context.WithValue(context.Background(), object.TierKey{}, newTierID), blob); err != nil {
 				return err
 			}
 		}
