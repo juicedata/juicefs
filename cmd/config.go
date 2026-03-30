@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -350,12 +351,13 @@ func config(ctx *cli.Context) error {
 
 	if !ctx.Bool("force") {
 		yes := ctx.Bool("yes")
-		if storage {
+		if storage || tier {
 			blob, err := createStorage(*format)
 			if err != nil {
 				return err
 			}
-			if err = test(blob); err != nil {
+			ctx := context.WithValue(context.Background(), object.TierKey{}, newTierID)
+			if err = test(ctx, blob); err != nil {
 				return err
 			}
 		}

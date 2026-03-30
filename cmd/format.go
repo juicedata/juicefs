@@ -323,8 +323,7 @@ func randSeq(n int) string {
 	return string(b)
 }
 
-func doTesting(store object.ObjectStorage, key string, data []byte) error {
-	ctx := context.Background()
+func doTesting(ctx context.Context, store object.ObjectStorage, key string, data []byte) error {
 	if err := store.Put(ctx, key, bytes.NewReader(data)); err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "denied") {
 			return fmt.Errorf("Failed to put: %s", err)
@@ -362,14 +361,14 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 	return nil
 }
 
-func test(store object.ObjectStorage) error {
+func test(ctx context.Context, store object.ObjectStorage) error {
 	key := "testing/" + randSeq(10)
 	data := make([]byte, 100)
 	utils.RandRead(data)
 	nRetry := 3
 	var err error
 	for i := 0; i < nRetry; i++ {
-		err = doTesting(store, key, data)
+		err = doTesting(ctx, store, key, data)
 		if err == nil {
 			break
 		}
@@ -546,7 +545,7 @@ func format(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" {
-		if err := test(blob); err != nil {
+		if err := test(context.Background(), blob); err != nil {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
 		if create {
