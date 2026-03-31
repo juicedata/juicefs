@@ -47,7 +47,7 @@ test_total_inodes(){
     # Disable heartbeat for redis to avoid race condition
     # See: https://github.com/juicedata/juicefs/issues/6714
     if [[ "$META" == redis* ]]; then
-        ./juicefs mount -d $META_URL /jfs --heartbeat 0
+        ./juicefs mount -d $META_URL /jfs --heartbeat 10000
     else
         ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     fi
