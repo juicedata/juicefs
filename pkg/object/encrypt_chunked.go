@@ -19,62 +19,32 @@ package object
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
+	"os"
+	"time"
 )
 
 const (
 	defaultChunkSize = 8 << 20 // 8 MiB
-	encMagic         = "JENC"
-	encVersion       = 1
-	encHeaderSize    = 4 + 2 + 4 // magic + version + chunk_size
 )
 
 // chunkedEncrypted is an ObjectStorage wrapper that encrypts data in streaming chunked.
 // Chunked encryption format:
-// [4 bytes: magic "JENC"][2 bytes: version=1][4 bytes: chunk_size]
 // [4 bytes: chunk0_len][chunk0_ciphertext]
 // [4 bytes: chunk1_len][chunk1_ciphertext]
 // ...
 type chunkedEncrypted struct {
 	ObjectStorage
-	enc       Encryptor
-	chunkSize int
+	enc Encryptor
 }
 
 func NewChunkedEncrypted(o ObjectStorage, enc Encryptor) ObjectStorage {
-	return &chunkedEncrypted{o, enc, defaultChunkSize}
+	return &chunkedEncrypted{o, enc}
 }
 
 func (e *chunkedEncrypted) String() string {
 	return fmt.Sprintf("%s(encrypted-chunked)", e.ObjectStorage)
-}
-
-func encodeHeader(chunkSize int) []byte {
-	buf := make([]byte, encHeaderSize)
-	copy(buf[:4], encMagic)
-	binary.BigEndian.PutUint16(buf[4:6], encVersion)
-	binary.BigEndian.PutUint32(buf[6:10], uint32(chunkSize))
-	return buf
-}
-
-func decodeHeader(data []byte) (chunkSize int, err error) {
-	if len(data) < encHeaderSize {
-		return 0, errors.New("encrypted data too short for header")
-	}
-	if string(data[:4]) != encMagic {
-		return 0, errors.New("invalid encryption magic")
-	}
-	ver := binary.BigEndian.Uint16(data[4:6])
-	if ver != encVersion {
-		return 0, fmt.Errorf("unsupported encryption version: %d", ver)
-	}
-	chunkSize = int(binary.BigEndian.Uint32(data[6:10]))
-	if chunkSize <= 0 {
-		return 0, fmt.Errorf("invalid chunk size: %d", chunkSize)
-	}
-	return chunkSize, nil
 }
 
 func (e *chunkedEncrypted) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
@@ -82,23 +52,9 @@ func (e *chunkedEncrypted) Get(ctx context.Context, key string, off, limit int64
 	if err != nil {
 		return nil, err
 	}
-
-	header := make([]byte, encHeaderSize)
-	if _, err := io.ReadFull(r, header); err != nil {
-		r.Close()
-		return nil, fmt.Errorf("Decrypt: read header: %s", err)
-	}
-	_, err = decodeHeader(header)
-	if err != nil {
-		r.Close()
-		return nil, fmt.Errorf("Decrypt: %s", err)
-	}
 	dr := &chunkDecryptReader{r: r, enc: e.enc}
 	if off > 0 {
-		if _, err := io.CopyN(io.Discard, dr, off); err != nil && err != io.EOF {
-			dr.Close()
-			return nil, err
-		}
+		return nil, notSupported
 	}
 	if limit >= 0 {
 		return &limitedReadCloser{
@@ -115,9 +71,10 @@ type limitedReadCloser struct {
 }
 
 type chunkDecryptReader struct {
-	r   io.ReadCloser
-	enc Encryptor
-	buf []byte
+	r         io.ReadCloser
+	enc       Encryptor
+	buf       []byte
+	cipherBuf []byte
 }
 
 func (r *chunkDecryptReader) Read(p []byte) (int, error) {
@@ -134,7 +91,10 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 		return 0, err
 	}
 	chunkLen := int(binary.BigEndian.Uint32(lenBuf[:]))
-	ciphertext := make([]byte, chunkLen)
+	if cap(r.cipherBuf) < chunkLen {
+		r.cipherBuf = make([]byte, chunkLen)
+	}
+	ciphertext := r.cipherBuf[:chunkLen]
 	if _, err := io.ReadFull(r.r, ciphertext); err != nil {
 		return 0, fmt.Errorf("Decrypt: read chunk: %s", err)
 	}
@@ -152,50 +112,109 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 func (r *chunkDecryptReader) Close() error { return r.r.Close() }
 
 func (e *chunkedEncrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	pr, pw := io.Pipe()
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- e.ObjectStorage.Put(ctx, key, pr, getters...)
-	}()
-
-	writeErr := e.encryptStream(in, pw)
-	if writeErr != nil {
-		pw.CloseWithError(writeErr)
-		<-errCh
-		return writeErr
+	f, err := os.CreateTemp("", "jenc")
+	if err != nil {
+		return fmt.Errorf("Encrypt: create temp file: %s", err)
 	}
-	pw.Close()
-	return <-errCh
-}
+	_ = os.Remove(f.Name())
+	defer f.Close()
 
-func (e *chunkedEncrypted) encryptStream(in io.Reader, w io.Writer) error {
-	if _, err := w.Write(encodeHeader(e.chunkSize)); err != nil {
-		return err
-	}
-	buf := make([]byte, e.chunkSize)
+	plain := make([]byte, defaultChunkSize)
 	lenBuf := make([]byte, 4)
 	for {
-		n, readErr := io.ReadFull(in, buf)
+		n, readErr := io.ReadFull(in, plain)
 		if n > 0 {
-			ciphertext, err := e.enc.Encrypt(buf[:n])
-			if err != nil {
-				return err
+			ciphertext, encErr := e.enc.Encrypt(plain[:n])
+			if encErr != nil {
+				return encErr
 			}
 			binary.BigEndian.PutUint32(lenBuf, uint32(len(ciphertext)))
-			if _, err := w.Write(lenBuf); err != nil {
+			if _, err := f.Write(lenBuf); err != nil {
 				return err
 			}
-			if _, err := w.Write(ciphertext); err != nil {
+			if _, err := f.Write(ciphertext); err != nil {
 				return err
 			}
 		}
 		if readErr != nil {
 			if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
-				return nil
+				break
 			}
 			return readErr
 		}
 	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	return e.ObjectStorage.Put(ctx, key, f, getters...)
+}
+
+func (e *chunkedEncrypted) Chmod(path string, mode os.FileMode) error {
+	if fs, ok := e.ObjectStorage.(FileSystem); ok {
+		return fs.Chmod(path, mode)
+	}
+	return notSupported
+}
+
+func (e *chunkedEncrypted) Chown(path, owner, group string) error {
+	if fs, ok := e.ObjectStorage.(FileSystem); ok {
+		return fs.Chown(path, owner, group)
+	}
+	return notSupported
+}
+
+func (e *chunkedEncrypted) Chtimes(path string, mtime time.Time) error {
+	if fs, ok := e.ObjectStorage.(FileSystem); ok {
+		return fs.Chtimes(path, mtime)
+	}
+	return notSupported
+}
+
+func encryptChunk(enc Encryptor, plaintext []byte) ([]byte, error) {
+	ciphertext, err := enc.Encrypt(plaintext)
+	if err != nil {
+		return nil, err
+	}
+	buf := make([]byte, 4+len(ciphertext))
+	binary.BigEndian.PutUint32(buf[:4], uint32(len(ciphertext)))
+	copy(buf[4:], ciphertext)
+	return buf, nil
+}
+
+func (e *chunkedEncrypted) Limits() Limits {
+	l := e.ObjectStorage.Limits()
+	l.IsSupportUploadPartCopy = false
+	l.IsNotSupportRangeRead = true
+	return l
+}
+
+func (e *chunkedEncrypted) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
+	return e.ObjectStorage.CreateMultipartUpload(ctx, key)
+}
+
+func (e *chunkedEncrypted) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
+	chunk, err := encryptChunk(e.enc, body)
+	if err != nil {
+		return nil, err
+	}
+	return e.ObjectStorage.UploadPart(ctx, key, uploadID, num, chunk)
+}
+
+func (e *chunkedEncrypted) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	return nil, notSupported
+}
+
+func (e *chunkedEncrypted) AbortUpload(ctx context.Context, key string, uploadID string) {
+	e.ObjectStorage.AbortUpload(ctx, key, uploadID)
+}
+
+func (e *chunkedEncrypted) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
+	return e.ObjectStorage.CompleteUpload(ctx, key, uploadID, parts)
+}
+
+func (e *chunkedEncrypted) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
+	return e.ObjectStorage.ListUploads(ctx, marker)
 }
 
 var _ ObjectStorage = (*chunkedEncrypted)(nil)
+var _ FileSystem = (*chunkedEncrypted)(nil)
