@@ -145,12 +145,7 @@ func setTier(ctx *cli.Context) error {
 		logger.Fatal("only file and directory are supported to set storage tier")
 	}
 	oldTier := format.Tiers[attr.Tier]
-	if !ctx.Bool("force") && attr.Tier == uint8(id) {
-		logger.Infof("storage class of %q is already %d(%s), no change needed", path, id, oldTier.GetHumanSc())
-		return nil
-	}
 	logger.Infof("set storage tier of %q from %d(%s) to %d(%s)", path, attr.Tier, oldTier.GetHumanSc(), id, newTier.GetHumanSc())
-
 	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
@@ -170,12 +165,12 @@ func setTier(ctx *cli.Context) error {
 	}
 	switch attr.Typ {
 	case meta.TypeFile:
-		err = visitEntry(m, format, objectFunc, metaFunc, ino, attr.Length)
+		err = visitEntry(m, format, objectFunc, metaFunc, ino, attr.Length, int(id), ctx.Bool("force"))
 	case meta.TypeDirectory:
 		if err = metaFunc(ino); err != nil {
 			return err
 		}
-		err = visitDir(m, format, objectFunc, metaFunc, ino, ctx.Bool("recursive"))
+		err = visitDir(m, format, objectFunc, metaFunc, ino, ctx.Bool("recursive"), int(id), ctx.Bool("force"))
 	default:
 		logger.Fatal("only file and directory are supported to set storage tier")
 	}
@@ -217,15 +212,15 @@ func objRestore(ctx *cli.Context) error {
 		return blob.Restore(context.Background(), key)
 	}
 	if attr.Typ == meta.TypeFile {
-		err = visitEntry(m, format, objectFunc, nil, ino, attr.Length)
+		err = visitEntry(m, format, objectFunc, nil, ino, attr.Length, -1, false)
 	}
 	if attr.Typ == meta.TypeDirectory {
-		err = visitDir(m, format, objectFunc, nil, ino, ctx.Bool("recursive"))
+		err = visitDir(m, format, objectFunc, nil, ino, ctx.Bool("recursive"), -1, false)
 	}
 	return err
 }
 
-func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, recursive bool) error {
+func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, recursive bool, dstTierID int, force bool) error {
 	handler, errno := m.NewDirHandler(meta.Background(), ino, true, nil)
 	if errno != 0 {
 		return errno
@@ -244,13 +239,13 @@ func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) erro
 				continue
 			}
 			if e.Attr.Typ == meta.TypeDirectory || e.Attr.Typ == meta.TypeFile {
-				err := visitEntry(m, format, objectFunc, metaFunc, e.Inode, e.Attr.Length)
+				err := visitEntry(m, format, objectFunc, metaFunc, e.Inode, e.Attr.Length, dstTierID, force)
 				if err != nil {
 					return err
 				}
 			}
 			if e.Attr.Typ == meta.TypeDirectory && recursive {
-				err := visitDir(m, format, objectFunc, metaFunc, e.Inode, recursive)
+				err := visitDir(m, format, objectFunc, metaFunc, e.Inode, recursive, dstTierID, force)
 				if err != nil {
 					return err
 				}
@@ -279,7 +274,15 @@ func getObjKeys(m meta.Meta, format *meta.Format, ino meta.Ino, length uint64) [
 	return objs
 }
 
-func visitEntry(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, length uint64) error {
+func visitEntry(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, length uint64, dstTierID int, force bool) error {
+	attr := meta.Attr{}
+	if eno := m.GetAttr(meta.Background(), ino, &attr); eno != 0 {
+		return eno
+	}
+	if dstTierID != -1 && int(attr.Tier) == dstTierID && !force {
+		logger.Debugf("storage tier of ino %d is already %d, no change needed", ino, dstTierID)
+		return nil
+	}
 	objs := getObjKeys(m, format, ino, length)
 	if objectFunc != nil {
 		for _, obj := range objs {
