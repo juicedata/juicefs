@@ -44,7 +44,13 @@ test_total_capacity()
 test_total_inodes(){
     prepare_test
     ./juicefs format $META_URL myjfs --inodes 1000
-    ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
+    # Disable heartbeat for redis to avoid race condition
+    # See: https://github.com/juicedata/juicefs/issues/6714
+    if [[ "$META" == redis* ]]; then
+        ./juicefs mount -d $META_URL /jfs --heartbeat 0
+    else
+        ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
+    fi
     set +x
     for i in {1..1000}; do
         echo $i | tee /jfs/test$i > /dev/null
@@ -54,6 +60,9 @@ test_total_inodes(){
     echo a | tee /jfs/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep "No space left on device" error.log
     ./juicefs config $META_URL --inodes 2000
+    # Remount with heartbeat to reload config
+    ./juicefs umount /jfs
+    ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     set +x
     for i in {1001..2000}; do
