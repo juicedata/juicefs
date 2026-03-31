@@ -167,9 +167,7 @@ func (q *bosclient) Copy(ctx context.Context, dst, src string) error {
 	if sc == "" {
 		sc = api.STORAGE_CLASS_STANDARD
 	}
-	var args *api.CopyObjectArgs
-	args = &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: sc}}
-	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, args)
+	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: sc}})
 	return err
 }
 
