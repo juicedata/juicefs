@@ -4933,7 +4933,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.loadDumpedQuotas(Background(), dm)
+	defer m.loadDumpedQuotas(Background(), dm)
 	if err = m.loadDumpedACLs(Background()); err != nil {
 		return err
 	}

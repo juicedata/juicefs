@@ -4882,7 +4882,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
-	m.loadDumpedQuotas(Background(), dm)
+	defer m.loadDumpedQuotas(Background(), dm)
 	if err = m.loadDumpedACLs(ctx); err != nil {
 		return err
 	}

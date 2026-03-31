@@ -4011,9 +4011,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 	// update nlinks and parents for hardlinks
 	st := make(map[Ino]int64)
-	defer func() {
-		m.loadDumpedQuotas(Background(), dm)
-	}()
+	defer m.loadDumpedQuotas(Background(), dm)
 	return m.txn(Background(), func(tx *kvTxn) error {
 		for i, ps := range parents {
 			if len(ps) > 1 {
