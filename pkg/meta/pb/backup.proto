@@ -46,11 +46,12 @@ message Xattr {
 }
 
 message Quota {
-  uint64 inode = 1;
+  uint64 key = 1;
   int64 maxSpace = 2;
   int64 maxInodes = 3;
   int64 usedSpace = 4;
   int64 usedInodes = 5;
+  uint32 type = 6;
 }
 
 message Stat {
