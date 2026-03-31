@@ -33,6 +33,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/pkg/errors"
 
 	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
@@ -76,13 +77,7 @@ func (s *obsClient) Create(ctx context.Context) error {
 	}
 	return err
 }
-func getStorageClassStr(sc obs.StorageClassType) string {
-	if sc == "" {
-		return string(obs.StorageClassStandard)
-	} else {
-		return string(sc)
-	}
-}
+
 func (s *obsClient) Head(ctx context.Context, key string) (Object, error) {
 	params := &obs.GetObjectMetadataInput{
 		Bucket: s.bucket,
@@ -101,7 +96,7 @@ func (s *obsClient) Head(ctx context.Context, key string) (Object, error) {
 		r.ContentLength,
 		r.LastModified,
 		strings.HasSuffix(key, "/"),
-		getStorageClassStr(r.StorageClass),
+		getOrDefaultScValue(string(r.StorageClass), string(types.StorageClassStandard)),
 		r.Restore,
 	}, nil
 }
@@ -120,7 +115,7 @@ func (s *obsClient) Get(ctx context.Context, key string, off, limit int64, gette
 	}
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(resp.RequestId).SetStorageClass(getStorageClassStr(resp.StorageClass))
+		attrs.SetRequestID(resp.RequestId).SetStorageClass(getOrDefaultScValue(string(resp.StorageClass), string(obs.StorageClassStandard)))
 	}
 	if err != nil {
 		return nil, err
@@ -177,18 +172,22 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	}
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(resp.RequestId).SetStorageClass(getStorageClassStr(resp.StorageClass))
+		attrs.SetRequestID(resp.RequestId).SetStorageClass(getOrDefaultScValue(string(resp.StorageClass), string(obs.StorageClassStandard)))
 	}
 	return err
 }
 
 func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
+	sc := s.GetStorageClass(ctx)
+	if sc == "" {
+		sc = string(obs.StorageClassStandard)
+	}
 	params := &obs.CopyObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = dst
 	params.CopySourceBucket = s.bucket
 	params.CopySourceKey = src
-	params.StorageClass = obs.StorageClassType(s.sc)
+	params.StorageClass = obs.StorageClassType(sc)
 	_, err := s.c.CopyObject(params)
 	return err
 }

@@ -114,7 +114,7 @@ func (s *s3client) Head(ctx context.Context, key string) (Object, error) {
 		*r.ContentLength,
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
-		string(r.StorageClass),
+		getOrDefaultScValue(string(r.StorageClass), string(types.StorageClassStandard)),
 		aws.ToString(r.Restore),
 	}, nil
 }
@@ -267,7 +267,7 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 			*o.Size,
 			*o.LastModified,
 			strings.HasSuffix(oKey, "/"),
-			string(o.StorageClass),
+			getOrDefaultScValue(string(o.StorageClass), string(types.ObjectStorageClassStandard)),
 			"",
 		}
 	}

@@ -161,10 +161,12 @@ func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 }
 
 func (c *COS) Copy(ctx context.Context, dst, src string) error {
-	var opt cos.ObjectCopyOptions
-	if c.sc != "" {
-		opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{XCosStorageClass: c.sc}
+	sc := c.GetStorageClass(ctx)
+	if sc == "" {
+		sc = "STANDARD"
 	}
+	var opt cos.ObjectCopyOptions
+	opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{XCosStorageClass: sc}
 	source := fmt.Sprintf("%s/%s", c.endpoint, src)
 	_, _, err := c.c.Object.Copy(ctx, dst, source, &opt)
 	return err
