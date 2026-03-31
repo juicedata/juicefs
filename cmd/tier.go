@@ -177,11 +177,7 @@ func setTier(ctx *cli.Context) error {
 	default:
 		logger.Fatal("only file and directory are supported to set storage tier")
 	}
-	if err != nil {
-		return err
-	}
-	logger.Infof("storage tier of %q is set to %d(%s)", path, id, newTier.GetHumanSc())
-	return nil
+	return err
 }
 
 func objRestore(ctx *cli.Context) error {
