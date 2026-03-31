@@ -120,7 +120,11 @@ func (b *wasb) Copy(ctx context.Context, dst, src string) error {
 	if id, ok := ctx.Value(TierKey{}).(uint8); ok && src == dst {
 		blobClient := b.azblobCli.ServiceClient().NewContainerClient(b.cName).NewBlobClient(src)
 		if t, ok := b.tiers[id]; ok {
-			if _, err := blobClient.SetTier(ctx, *str2Tier(t.Sc), &blob2.SetTierOptions{}); err != nil {
+			tier := str2Tier(t.Sc)
+			if tier == nil {
+				return fmt.Errorf("tierID:%d not found for %s", id, src)
+			}
+			if _, err := blobClient.SetTier(ctx, *tier, &blob2.SetTierOptions{}); err != nil {
 				return err
 			}
 		} else {
@@ -214,7 +218,6 @@ func (b *wasb) SetStorageClass(sc string) error {
 
 // Restore Azure does not support restoring to a temporary read-only state; it can only directly permanently change the tier.
 func (b *wasb) Restore(ctx context.Context, key string) error {
-	logger.Infof("Azure does not support restoring to a temporary read-only state; it can only directly permanently change the tier.")
 	return notSupported
 }
 
