@@ -180,6 +180,38 @@ func checkMeta(t *testing.T, m Meta) {
 		t.Fatalf("expected: %v, but got: %v", expectedQuota, *quota)
 	}
 
+	userQuota, err := m.(engine).doGetQuota(ctx, UserQuotaType, 501)
+	if err != nil {
+		t.Fatalf("get user quota: %s", err)
+	}
+	if userQuota == nil {
+		t.Fatalf("get user quota: nil")
+	}
+	expectedUserQuota := Quota{
+		MaxSpace:  1099511627776,
+		MaxInodes: 1000000,
+	}
+	if userQuota.MaxSpace != expectedUserQuota.MaxSpace || userQuota.MaxInodes != expectedUserQuota.MaxInodes {
+		t.Fatalf("user quota: expected maxSpace=%d, maxInodes=%d, but got maxSpace=%d, maxInodes=%d",
+			expectedUserQuota.MaxSpace, expectedUserQuota.MaxInodes, userQuota.MaxSpace, userQuota.MaxInodes)
+	}
+
+	groupQuota, err := m.(engine).doGetQuota(ctx, GroupQuotaType, 20)
+	if err != nil {
+		t.Fatalf("get group quota: %s", err)
+	}
+	if groupQuota == nil {
+		t.Fatalf("get group quota: nil")
+	}
+	expectedGroupQuota := Quota{
+		MaxSpace:  2199023255552,
+		MaxInodes: 2000000,
+	}
+	if groupQuota.MaxSpace != expectedGroupQuota.MaxSpace || groupQuota.MaxInodes != expectedGroupQuota.MaxInodes {
+		t.Fatalf("group quota: expected maxSpace=%d, maxInodes=%d, but got maxSpace=%d, maxInodes=%d",
+			expectedGroupQuota.MaxSpace, expectedGroupQuota.MaxInodes, groupQuota.MaxSpace, groupQuota.MaxInodes)
+	}
+
 	attr := &Attr{}
 	if st := m.GetAttr(ctx, 2, attr); st != 0 {
 		t.Fatalf("getattr: %s", st)

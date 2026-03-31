@@ -820,7 +820,7 @@ run_dump_load_uid_gid_case(){
     run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/dumpq/gid_pre bs=512M count=1"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
 
-    ./juicefs dump --log-level error $META_URL --fast > dump.json
+    ./juicefs dump --log-level error $META_URL dump.json --fast
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json
@@ -835,8 +835,8 @@ run_dump_load_uid_gid_case(){
     run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/dumpq/gid_post bs=1G count=1" 2>error.log \
         && echo "gid capacity quota should be enforced after dump/load" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "gid quota not preserved by dump/load" && exit 1)
-
-    run_as_user_cmd "$TEST_USER_1" "for i in \$(seq 1 100); do touch /jfs/dumpq/uid_inode_post_\$i; done"
+    ./juicefs rmr /jfs/dumpq/uid_post --skip-trash
+    run_as_user_cmd "$TEST_USER_1" "for i in \$(seq 1 99); do touch /jfs/dumpq/uid_inode_post_\$i; done"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_1" "touch /jfs/dumpq/uid_inode_overflow" 2>error.log \
         && echo "uid inode quota should be enforced after dump/load" && exit 1 || true
@@ -1119,11 +1119,9 @@ test_user_group_membership_quota(){
             return 0
         fi
     done
-
     NEW_GROUP="jfs-grpmem-${RANDOM}"
     groupadd "$NEW_GROUP" || { echo "cannot create test group, skipping"; return 0; }
     NEW_GID=$(getent group "$NEW_GROUP" | cut -d: -f3)
-
     cleanup_group() {
         gpasswd -d "$TEST_USER_1" "$NEW_GROUP" 2>/dev/null || true
         groupdel "$NEW_GROUP" 2>/dev/null || true
@@ -1140,10 +1138,8 @@ test_user_group_membership_quota(){
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     file_gid=$(stat -c %g /jfs/grpmem/file1)
     [[ "$file_gid" != "$NEW_GID" ]] && echo "file in setgid dir should inherit group $NEW_GID, got $file_gid" && exit 1 || true
-
     run_as_user_cmd "$TEST_USER_1" "touch /jfs/grpmem/file2"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
-
     run_as_user_cmd "$TEST_USER_1" "touch /jfs/grpmem/file3" 2>error.log \
         && echo "gid inode quota should block file creation in setgid dir" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "gid quota via setgid dir not enforced" && exit 1)

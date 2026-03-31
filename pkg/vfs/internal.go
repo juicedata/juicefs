@@ -488,6 +488,12 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 					logger.Warnf("get restore status of %s: %s", lastObjKey, err)
 				} else {
 					info.RestoreStatus = objInfo.Status()
+					if info.TierID != 0 && objInfo.StorageClass() != info.TierStr {
+						info.TierStr = fmt.Sprintf("expected(%s),actual(%s)", info.TierStr, objInfo.StorageClass())
+					}
+					if info.TierID == 0 {
+						info.TierStr = fmt.Sprintf("actual(%s)", objInfo.StorageClass())
+					}
 				}
 			}
 
