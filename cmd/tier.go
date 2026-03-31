@@ -167,7 +167,7 @@ func setTier(ctx *cli.Context) error {
 	case meta.TypeFile:
 		err = visitEntry(m, format, objectFunc, metaFunc, ino, attr.Length, int(id), ctx.Bool("force"))
 	case meta.TypeDirectory:
-		if err = visitDir(m, format, objectFunc, metaFunc, ino, ctx.Bool("recursive")); err != nil {
+		if err = visitDir(m, format, objectFunc, metaFunc, ino, ctx.Bool("recursive"), int(id), ctx.Bool("force")); err != nil {
 			return err
 		}
 		if err = metaFunc(ino); err != nil {
@@ -242,14 +242,14 @@ func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) erro
 				continue
 			}
 			if e.Attr.Typ == meta.TypeFile {
-				err := visitEntry(m, format, objectFunc, metaFunc, e.Inode, e.Attr.Length)
+				err := visitEntry(m, format, objectFunc, metaFunc, e.Inode, e.Attr.Length, dstTierID, force)
 				if err != nil {
 					return err
 				}
 			}
 			if e.Attr.Typ == meta.TypeDirectory {
 				if recursive {
-					if err := visitDir(m, format, objectFunc, metaFunc, e.Inode, recursive); err != nil {
+					if err := visitDir(m, format, objectFunc, metaFunc, e.Inode, recursive, dstTierID, force); err != nil {
 						return err
 					}
 				}
