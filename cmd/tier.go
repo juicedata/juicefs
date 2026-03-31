@@ -165,7 +165,7 @@ func setTier(ctx *cli.Context) error {
 	}
 	switch attr.Typ {
 	case meta.TypeFile:
-		err = visitEntry(m, format, objectFunc, metaFunc, ino, attr.Length, int(id), ctx.Bool("force"))
+		err = visitEntry(m, format, objectFunc, metaFunc, ino, attr, int(id), ctx.Bool("force"))
 	case meta.TypeDirectory:
 		if err = visitDir(m, format, objectFunc, metaFunc, ino, ctx.Bool("recursive"), int(id), ctx.Bool("force")); err != nil {
 			return err
@@ -211,7 +211,7 @@ func objRestore(ctx *cli.Context) error {
 		return blob.Restore(context.Background(), key)
 	}
 	if attr.Typ == meta.TypeFile {
-		err = visitEntry(m, format, objectFunc, nil, ino, attr.Length, -1, false)
+		err = visitEntry(m, format, objectFunc, nil, ino, attr, -1, false)
 	}
 	if attr.Typ == meta.TypeDirectory {
 		err = visitDir(m, format, objectFunc, nil, ino, ctx.Bool("recursive"), -1, false)
@@ -238,7 +238,7 @@ func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) erro
 				continue
 			}
 			if e.Attr.Typ == meta.TypeFile {
-				err := visitEntry(m, format, objectFunc, metaFunc, e.Inode, e.Attr.Length, dstTierID, force)
+				err := visitEntry(m, format, objectFunc, metaFunc, e.Inode, *e.Attr, dstTierID, force)
 				if err != nil {
 					return err
 				}
@@ -279,16 +279,12 @@ func getObjKeys(m meta.Meta, format *meta.Format, ino meta.Ino, length uint64) [
 	return objs
 }
 
-func visitEntry(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, length uint64, dstTierID int, force bool) error {
-	attr := meta.Attr{}
-	if eno := m.GetAttr(meta.Background(), ino, &attr); eno != 0 {
-		return eno
-	}
+func visitEntry(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, attr meta.Attr, dstTierID int, force bool) error {
 	if dstTierID != -1 && int(attr.Tier) == dstTierID && !force {
 		logger.Debugf("storage tier of ino %d is already %d, no change needed", ino, dstTierID)
 		return nil
 	}
-	objs := getObjKeys(m, format, ino, length)
+	objs := getObjKeys(m, format, ino, attr.Length)
 	if objectFunc != nil {
 		for _, obj := range objs {
 			err := objectFunc(obj)
