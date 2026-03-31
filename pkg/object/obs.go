@@ -33,7 +33,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/pkg/errors"
 
 	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
@@ -96,7 +95,7 @@ func (s *obsClient) Head(ctx context.Context, key string) (Object, error) {
 		r.ContentLength,
 		r.LastModified,
 		strings.HasSuffix(key, "/"),
-		getOrDefaultScValue(string(r.StorageClass), string(types.StorageClassStandard)),
+		getOrDefaultScValue(string(r.StorageClass), string(obs.StorageClassStandard)),
 		r.Restore,
 	}, nil
 }
@@ -178,10 +177,7 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 }
 
 func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
-	sc := s.GetStorageClass(ctx)
-	if sc == "" {
-		sc = string(obs.StorageClassStandard)
-	}
+	sc := getOrDefaultScValue(s.GetStorageClass(ctx), string(obs.StorageClassStandard))
 	params := &obs.CopyObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = dst

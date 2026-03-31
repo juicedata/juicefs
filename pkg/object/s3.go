@@ -194,10 +194,7 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
-	sc := s.GetStorageClass(ctx)
-	if sc == "" {
-		sc = string(types.StorageClassStandard)
-	}
+	sc := getOrDefaultScValue(s.GetStorageClass(ctx), string(types.StorageClassStandard))
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,

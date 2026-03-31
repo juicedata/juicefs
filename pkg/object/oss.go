@@ -171,10 +171,7 @@ func (o *ossClient) Restore(ctx context.Context, key string) error {
 }
 
 func (o *ossClient) Copy(ctx context.Context, dst, src string) error {
-	sc := o.GetStorageClass(ctx)
-	if sc == "" {
-		sc = string(oss.StorageClassStandard)
-	}
+	sc := getOrDefaultScValue(o.GetStorageClass(ctx), string(oss.StorageClassStandard))
 	var req = &oss.CopyObjectRequest{
 		SourceBucket: &o.bucket,
 		Bucket:       &o.bucket,

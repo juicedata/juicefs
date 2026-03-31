@@ -277,10 +277,7 @@ func (t *tosClient) ListUploads(ctx context.Context, marker string) ([]*PendingP
 }
 
 func (t *tosClient) Copy(ctx context.Context, dst, src string) error {
-	sc := t.GetStorageClass(ctx)
-	if sc == "" {
-		sc = string(enum.StorageClassStandard)
-	}
+	sc := getOrDefaultScValue(t.GetStorageClass(ctx), string(enum.StorageClassStandard))
 	_, err := t.client.CopyObject(ctx, &tos.CopyObjectInput{
 		SrcBucket:    t.bucket,
 		Bucket:       t.bucket,
