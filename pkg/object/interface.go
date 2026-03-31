@@ -70,7 +70,6 @@ type PendingPart struct {
 type Limits struct {
 	IsSupportMultipartUpload bool
 	IsSupportUploadPartCopy  bool
-	IsNotSupportRangeRead    bool
 	MinPartSize              int
 	MaxPartSize              int64
 	MaxPartCount             int

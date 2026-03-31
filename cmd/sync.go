@@ -496,6 +496,9 @@ func wrapSyncEncryptedStore(store object.ObjectStorage, keyPath, passphraseEnv, 
 		return nil, fmt.Errorf("create %sor: %w", mode, err)
 	}
 
+	if algo == object.SM4GCM {
+		return object.NewEncrypted(store, encryptor), nil
+	}
 	return object.NewChunkedEncrypted(store, encryptor), nil
 }
 

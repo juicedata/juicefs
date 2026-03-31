@@ -624,7 +624,7 @@ func inMap(obj object.ObjectStorage, m map[string]struct{}) bool {
 }
 
 func doCopySingle(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
-	if size > maxBlock && !src.Limits().IsNotSupportRangeRead && !inMap(dst, readInMem) && !inMap(src, fastStreamRead) {
+	if size > maxBlock && !inMap(dst, readInMem) && !inMap(src, fastStreamRead) {
 		var err error
 		var in io.Reader
 		downer := newParallelDownloader(src, key, size, downloadBufSize, concurrent)
