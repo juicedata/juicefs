@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -153,6 +154,7 @@ func setTier(ctx *cli.Context) error {
 
 	metaFunc := func(ino meta.Ino) error {
 		if eno := m.SetAttr(meta.Background(), ino, meta.SetAttrTier, 0, &meta.Attr{Tier: newTier.ID}); eno != 0 {
+			logger.Errorf("set tier for inode %d tierID:%d failed: %s", ino, newTier.ID, eno)
 			return eno
 		}
 		return nil
@@ -161,11 +163,17 @@ func setTier(ctx *cli.Context) error {
 	objectFunc := func(key string) error {
 		fullPath := format.Name + "/" + key
 		ctx := context.WithValue(context.Background(), object.TierKey{}, uint8(id))
-		return blob.Copy(ctx, fullPath, fullPath)
+		if err := blob.Copy(ctx, fullPath, fullPath); err != nil {
+			if _, err2 := blob.Head(context.Background(), key); os.IsNotExist(err2) {
+				return nil
+			}
+			return err
+		}
+		return nil
 	}
-	checkFunc := func(oriTier uint8) bool {
+	checkFunc := func(ino meta.Ino, oriTier uint8) bool {
 		if id == uint(oriTier) && !ctx.Bool("force") {
-			logger.Debugf("storage tier is already %d, no change needed", oriTier)
+			logger.Debugf("inode:%d storage tier is already %d, no change needed", ino, oriTier)
 			return true
 		}
 		return false
@@ -228,7 +236,7 @@ func objRestore(ctx *cli.Context) error {
 	return err
 }
 
-func visitDir(m meta.Meta, format *meta.Format, ino meta.Ino, recursive bool, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, checkFunc func(oriTier uint8) bool) error {
+func visitDir(m meta.Meta, format *meta.Format, ino meta.Ino, recursive bool, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, checkFunc func(ino meta.Ino, oriTier uint8) bool) error {
 	handler, errno := m.NewDirHandler(meta.Background(), ino, true, nil)
 	if errno != 0 {
 		return errno
@@ -287,17 +295,19 @@ func getObjKeys(m meta.Meta, format *meta.Format, ino meta.Ino, length uint64) [
 	}
 	return objs
 }
-func visitEntry(m meta.Meta, format *meta.Format, ino meta.Ino, attr meta.Attr, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, checkFunc func(oriTier uint8) bool) error {
-	if checkFunc != nil && checkFunc(attr.Tier) {
+func visitEntry(m meta.Meta, format *meta.Format, ino meta.Ino, attr meta.Attr, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, checkFunc func(ino meta.Ino, oriTier uint8) bool) error {
+	if checkFunc != nil && checkFunc(ino, attr.Tier) {
 		return nil
 	}
 	objs := getObjKeys(m, format, ino, attr.Length)
 	if objectFunc != nil {
-		for _, obj := range objs {
-			err := objectFunc(obj)
-			if err != nil {
-				logger.Errorf("apply objectFunc failed %s: %s", obj, err)
-				return err
+		for _, key := range objs {
+			if key != "" {
+				err := objectFunc(key)
+				if err != nil {
+					logger.Errorf("apply object action failed in inode:%d key:%s: err:%s", ino, key, err)
+					return err
+				}
 			}
 		}
 	}
