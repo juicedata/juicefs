@@ -85,7 +85,7 @@ jobs:
           chmod +x random-test
       
       - name: Test Tier
-        timeout-minutes: 10
+        timeout-minutes: 20
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}

@@ -114,6 +114,30 @@ setup_tier_volume()
     ./juicefs config "$META_URL" --tier-id 3 --tier-sc GLACIER_IR -y
 }
 
+setup_tier_volume_writeback()
+{
+    local upload_delay=${1:-10s}
+    prepare_test
+    recreate_aws_bucket_once
+    local format_cmd=(
+        ./juicefs format "$META_URL" myjfs
+        --storage s3
+        --bucket "$AWS_BUCKET_URL"
+        --access-key "$AWS_ACCESS_KEY_VALUE"
+        --secret-key "$AWS_SECRET_KEY_VALUE"
+        --trash-days 0
+    )
+    [[ -n "$AWS_SESSION_TOKEN_VALUE" ]] && format_cmd+=(--session-token "$AWS_SESSION_TOKEN_VALUE")
+
+    "${format_cmd[@]}"
+    ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s \
+        --writeback --upload-delay "$upload_delay"
+
+    ./juicefs config "$META_URL" --tier-id 1 --tier-sc STANDARD_IA -y
+    ./juicefs config "$META_URL" --tier-id 2 --tier-sc INTELLIGENT_TIERING -y
+    ./juicefs config "$META_URL" --tier-id 3 --tier-sc GLACIER_IR -y
+}
+
 get_tier_token()
 {
     local path=$1
@@ -196,6 +220,16 @@ assert_config_tier_sc_fail()
         echo "<FATAL>: expect config failure but succeeded, id=$id storage-class=$sc"
         exit 1
     fi
+}
+
+assert_tier_set_fail()
+{
+    # Expect tier set to fail (e.g. chunks not uploaded to S3 yet in writeback mode)
+    if ./juicefs tier set "$@" 2>&1; then
+        echo "<FATAL>: tier set should have failed but succeeded: $*"
+        exit 1
+    fi
+    echo "tier set failed as expected: $*"
 }
 
 assert_tier_list_storage_class()
@@ -296,11 +330,7 @@ assert_info_no_empty_object_name()
     local path=$1
     local info_out=/tmp/tier_info_check.log
     ./juicefs info "$path" | tee "$info_out"
-    # Detect rows in the objects table where objectName column is blank.
-    # Bug example:
-    #   |  0 | myjfs/chunks/0/9/9248_0_2 |  2 |  0 |  2 |  0 |
-    #   |  0 |                           |  0 |  2 | 5722 |  2 |
-    # The second row has empty objectName which indicates a chunk info corruption.
+
     if awk -F'|' '
         /^[[:space:]]*\|/ && NF >= 7 {
             idx = $2; name = $3
@@ -384,26 +414,72 @@ test_tier_dir_recursive_and_non_recursive()
     mkdir -p /jfs/dir_case
     git clone --depth 1 https://github.com/juicedata/juicefs.git /jfs/dir_case/juicefs
 
+    # Phase 1: non-recursive set — only the directory itself changes
     tier_set_no_err "$META_URL" --id 1 /dir_case/juicefs
     assert_tier_id /jfs/dir_case/juicefs 1
     assert_tier_id /jfs/dir_case/juicefs/cmd 0
     assert_tier_id /jfs/dir_case/juicefs/pkg 0
     assert_tier_id /jfs/dir_case/juicefs/docs 0
+    assert_tier_id /jfs/dir_case/juicefs/.git 0
     assert_tier_id /jfs/dir_case/juicefs/README.md 0
     assert_tier_id /jfs/dir_case/juicefs/go.mod 0
     assert_tier_id /jfs/dir_case/juicefs/Makefile 0
 
+    # Phase 2: set different tiers on different subdirectories
+    tier_set_no_err "$META_URL" --id 1 /dir_case/juicefs/cmd -r       # STANDARD_IA
+    tier_set_no_err "$META_URL" --id 2 /dir_case/juicefs/pkg -r       # INTELLIGENT_TIERING
+    tier_set_no_err "$META_URL" --id 3 /dir_case/juicefs/docs -r      # GLACIER_IR
+    tier_set_no_err "$META_URL" --id 1 /dir_case/juicefs/.git -r      # hidden dir: STANDARD_IA
+
+    assert_tier_id /jfs/dir_case/juicefs/cmd 1
+    assert_tier_sc /jfs/dir_case/juicefs/cmd STANDARD_IA
+    assert_tier_id /jfs/dir_case/juicefs/pkg 2
+    assert_tier_sc /jfs/dir_case/juicefs/pkg INTELLIGENT_TIERING
+    assert_tier_id /jfs/dir_case/juicefs/docs 3
+    assert_tier_sc /jfs/dir_case/juicefs/docs GLACIER_IR
+    assert_tier_id /jfs/dir_case/juicefs/.git 1
+    assert_tier_sc /jfs/dir_case/juicefs/.git STANDARD_IA
+
+    # Verify files inside each subtree inherited the correct tier
+    assert_tier_id /jfs/dir_case/juicefs/README.md 0   # root-level file still tier 0
+    assert_tier_id /jfs/dir_case/juicefs/go.mod 0
+    # Sample a file from .git to confirm hidden dir was set
+    local git_file
+    git_file=$(find /jfs/dir_case/juicefs/.git -maxdepth 2 -type f | head -n 1)
+    if [[ -n "$git_file" ]]; then
+        assert_tier_id "$git_file" 1
+        assert_tier_sc "$git_file" STANDARD_IA
+    fi
+
+    # Sample files from pkg and docs
+    local pkg_file
+    pkg_file=$(find /jfs/dir_case/juicefs/pkg -maxdepth 2 -type f | head -n 1)
+    if [[ -n "$pkg_file" ]]; then
+        assert_tier_id "$pkg_file" 2
+        assert_tier_sc "$pkg_file" INTELLIGENT_TIERING
+        assert_object_storage_class_by_path "$pkg_file" INTELLIGENT_TIERING
+    fi
+
+    # Phase 3: recursive set on the top-level dir overrides everything to tier 2
     tier_set_no_err "$META_URL" --id 2 /dir_case/juicefs -r
     assert_tier_id /jfs/dir_case/juicefs 2
     assert_tier_id /jfs/dir_case/juicefs/cmd 2
     assert_tier_id /jfs/dir_case/juicefs/pkg 2
     assert_tier_id /jfs/dir_case/juicefs/docs 2
+    assert_tier_id /jfs/dir_case/juicefs/.git 2
     assert_tier_id /jfs/dir_case/juicefs/README.md 2
     assert_tier_id /jfs/dir_case/juicefs/go.mod 2
     assert_tier_id /jfs/dir_case/juicefs/Makefile 2
+    assert_tier_sc /jfs/dir_case/juicefs/.git INTELLIGENT_TIERING
     assert_object_storage_class_by_path /jfs/dir_case/juicefs/README.md INTELLIGENT_TIERING
     assert_object_storage_class_by_path /jfs/dir_case/juicefs/go.mod INTELLIGENT_TIERING
     assert_object_storage_class_by_path /jfs/dir_case/juicefs/Makefile INTELLIGENT_TIERING
+
+    # Verify .git files also got overridden
+    if [[ -n "$git_file" ]]; then
+        assert_tier_id "$git_file" 2
+        assert_tier_sc "$git_file" INTELLIGENT_TIERING
+    fi
 }
 
 test_tier_clone_after_dir_set()
@@ -574,30 +650,37 @@ test_tier_mixed_tree_reapply_after_mapping_change()
 test_tier_glacier_deep_archive_restore()
 {
     setup_tier_volume
+    mkdir -p /jfs/archive_case/glacier /jfs/archive_case/deep
+    echo "glacierdata1" > /jfs/archive_case/glacier/a.txt
+    echo "glacierdata2" > /jfs/archive_case/glacier/b.txt
+    echo "deepdata1" > /jfs/archive_case/deep/c.txt
+    echo "deepdata2" > /jfs/archive_case/deep/d.txt
 
-    mkdir -p /jfs/archive_case/sub
-    echo "archivedata1" > /jfs/archive_case/a.txt
-    echo "archivedata2" > /jfs/archive_case/sub/b.txt
-
+    # --- Part 1: GLACIER (tier-id 3) ---
     ./juicefs config "$META_URL" --tier-id 3 --tier-sc GLACIER -y
     sleep 5
-    tier_set_no_err "$META_URL" --id 3 /archive_case -r
-    assert_tier_id /jfs/archive_case/a.txt 3
-    assert_tier_sc /jfs/archive_case/a.txt GLACIER
-    assert_object_storage_class_by_path /jfs/archive_case/a.txt GLACIER
+    tier_set_no_err "$META_URL" --id 3 /archive_case/glacier -r
+    assert_tier_id /jfs/archive_case/glacier/a.txt 3
+    assert_tier_sc /jfs/archive_case/glacier/a.txt GLACIER
+    assert_object_storage_class_by_path /jfs/archive_case/glacier/a.txt GLACIER
+    assert_tier_id /jfs/archive_case/glacier/b.txt 3
+    assert_tier_sc /jfs/archive_case/glacier/b.txt GLACIER
 
-    # GLACIER objects are not directly readable, so restore first.
-    ./juicefs tier restore "$META_URL" /archive_case -r
+    # GLACIER objects are not directly readable; issue restore (async, takes hours)
+    ./juicefs tier restore "$META_URL" /archive_case/glacier -r
 
-    ./juicefs config "$META_URL" --tier-id 3 --tier-sc DEEP_ARCHIVE -y
+
+    ./juicefs config "$META_URL" --tier-id 2 --tier-sc DEEP_ARCHIVE -y
     sleep 5
-    tier_set_no_err "$META_URL" --id 3 /archive_case/sub/b.txt
-    assert_tier_id /jfs/archive_case/sub/b.txt 3
-    assert_tier_sc /jfs/archive_case/sub/b.txt DEEP_ARCHIVE
-    assert_object_storage_class_by_path /jfs/archive_case/sub/b.txt DEEP_ARCHIVE
+    tier_set_no_err "$META_URL" --id 2 /archive_case/deep -r
+    assert_tier_id /jfs/archive_case/deep/c.txt 2
+    assert_tier_sc /jfs/archive_case/deep/c.txt DEEP_ARCHIVE
+    assert_object_storage_class_by_path /jfs/archive_case/deep/c.txt DEEP_ARCHIVE
+    assert_tier_id /jfs/archive_case/deep/d.txt 2
+    assert_tier_sc /jfs/archive_case/deep/d.txt DEEP_ARCHIVE
 
-    # DEEP_ARCHIVE objects are not directly readable, so restore first.
-    ./juicefs tier restore "$META_URL" /archive_case/sub/b.txt
+    # DEEP_ARCHIVE objects are not directly readable; issue restore (async, takes hours)
+    ./juicefs tier restore "$META_URL" /archive_case/deep -r
 }
 
 test_tier_overwrite_after_recursive_set()
@@ -621,26 +704,26 @@ test_tier_overwrite_after_recursive_set()
     assert_object_storage_class_by_path /jfs/ow_case/sub1/f2.bin STANDARD_IA
 
     # Scenario A: short echo overwrite (original 64KB -> 6 bytes)
+    # Tier id/sc should stay unchanged after overwrite.
     echo "short" > /jfs/ow_case/f1.bin
     sleep 2
-    assert_tier_id /jfs/ow_case/f1.bin 0
+    assert_tier_id /jfs/ow_case/f1.bin 1
+    assert_tier_sc /jfs/ow_case/f1.bin STANDARD_IA
     assert_info_no_empty_object_name /jfs/ow_case/f1.bin
     local content
     content=$(cat /jfs/ow_case/f1.bin)
     [[ "$content" == "short" ]] || { echo "<FATAL>: f1.bin content mismatch after short overwrite, got='$content'"; exit 1; }
 
-    # Scenario B: long dd overwrite (original 4MB -> 8MB)
+    # Scenario B: long overwrite should also keep the original tier id/sc.
     dd if=/dev/urandom of=/jfs/ow_case/sub1/f2.bin bs=1M count=8 status=none
     sleep 2
-    assert_tier_id /jfs/ow_case/sub1/f2.bin 0
+    assert_tier_id /jfs/ow_case/sub1/f2.bin 1
+    assert_tier_sc /jfs/ow_case/sub1/f2.bin STANDARD_IA
     assert_info_no_empty_object_name /jfs/ow_case/sub1/f2.bin
+    assert_object_storage_class_by_path /jfs/ow_case/sub1/f2.bin STANDARD_IA
     cat /jfs/ow_case/sub1/f2.bin > /dev/null
-
-    # Untouched file should still have tier 1
     assert_tier_id /jfs/ow_case/sub1/sub2/f3.bin 1
     assert_tier_sc /jfs/ow_case/sub1/sub2/f3.bin STANDARD_IA
-
-    # Directories should still have tier 1 (not affected by file overwrite)
     assert_tier_id /jfs/ow_case 1
     assert_tier_id /jfs/ow_case/sub1 1
     assert_tier_id /jfs/ow_case/sub1/sub2 1
@@ -692,37 +775,54 @@ test_tier_overwrite_roundtrip()
 {
     setup_tier_volume
 
-    mkdir -p /jfs/rt_case
-    dd if=/dev/urandom of=/jfs/rt_case/file.bin bs=1M count=4 status=none
+    mkdir -p /jfs/rt_case/parent
+    dd if=/dev/urandom of=/jfs/rt_case/parent/file.bin bs=1M count=4 status=none
+    dd if=/dev/urandom of=/jfs/rt_case/parent/sibling.bin bs=1M count=4 status=none
 
-    # Cycle 1: set tier 1 -> short overwrite -> verify tier resets to 0
-    tier_set_no_err "$META_URL" --id 1 /rt_case/file.bin
-    assert_tier_id /jfs/rt_case/file.bin 1
-    assert_tier_sc /jfs/rt_case/file.bin STANDARD_IA
-    assert_object_storage_class_by_path /jfs/rt_case/file.bin STANDARD_IA
+    tier_set_no_err "$META_URL" --id 1 /rt_case/parent -r
+    tier_set_no_err "$META_URL" --id 2 /rt_case/parent/file.bin
+    assert_tier_id /jfs/rt_case/parent 1
+    assert_tier_sc /jfs/rt_case/parent STANDARD_IA
+    assert_tier_id /jfs/rt_case/parent/sibling.bin 1
+    assert_tier_sc /jfs/rt_case/parent/sibling.bin STANDARD_IA
+    assert_tier_id /jfs/rt_case/parent/file.bin 2
+    assert_tier_sc /jfs/rt_case/parent/file.bin INTELLIGENT_TIERING
+    assert_object_storage_class_by_path /jfs/rt_case/parent/file.bin INTELLIGENT_TIERING
 
-    echo "cycle1" > /jfs/rt_case/file.bin
+    # Cycle 1: short overwrite should keep file.bin on tier 2.
+    echo "cycle1" > /jfs/rt_case/parent/file.bin
     sleep 2
-    assert_tier_id /jfs/rt_case/file.bin 0
-    assert_info_no_empty_object_name /jfs/rt_case/file.bin
-    [[ "$(cat /jfs/rt_case/file.bin)" == "cycle1" ]] || { echo "<FATAL>: content mismatch after cycle1 overwrite"; exit 1; }
+    assert_tier_id /jfs/rt_case/parent/file.bin 2
+    assert_tier_sc /jfs/rt_case/parent/file.bin INTELLIGENT_TIERING
+    assert_tier_id /jfs/rt_case/parent 1
+    assert_tier_sc /jfs/rt_case/parent STANDARD_IA
+    assert_tier_id /jfs/rt_case/parent/sibling.bin 1
+    assert_tier_sc /jfs/rt_case/parent/sibling.bin STANDARD_IA
+    assert_info_no_empty_object_name /jfs/rt_case/parent/file.bin
+    [[ "$(cat /jfs/rt_case/parent/file.bin)" == "cycle1" ]] || { echo "<FATAL>: content mismatch after cycle1 overwrite"; exit 1; }
 
-    # Cycle 2: set tier 2 -> long dd overwrite -> verify tier resets to 0
-    tier_set_no_err "$META_URL" --id 2 /rt_case/file.bin
-    assert_tier_id /jfs/rt_case/file.bin 2
-    assert_tier_sc /jfs/rt_case/file.bin INTELLIGENT_TIERING
-    assert_object_storage_class_by_path /jfs/rt_case/file.bin INTELLIGENT_TIERING
-
-    dd if=/dev/urandom of=/jfs/rt_case/file.bin bs=1M count=8 status=none
+    # Cycle 2: long overwrite should still keep file.bin on tier 2.
+    dd if=/dev/urandom of=/jfs/rt_case/parent/file.bin bs=1M count=8 status=none
     sleep 2
-    assert_tier_id /jfs/rt_case/file.bin 0
-    assert_info_no_empty_object_name /jfs/rt_case/file.bin
+    assert_tier_id /jfs/rt_case/parent/file.bin 2
+    assert_tier_sc /jfs/rt_case/parent/file.bin INTELLIGENT_TIERING
+    assert_info_no_empty_object_name /jfs/rt_case/parent/file.bin
+    assert_object_storage_class_by_path /jfs/rt_case/parent/file.bin INTELLIGENT_TIERING
 
-    # Cycle 3: set tier 3 -> verify (final state, no overwrite)
-    tier_set_no_err "$META_URL" --id 3 /rt_case/file.bin
-    assert_tier_id /jfs/rt_case/file.bin 3
-    assert_tier_sc /jfs/rt_case/file.bin GLACIER_IR
-    assert_object_storage_class_by_path /jfs/rt_case/file.bin GLACIER_IR
+    # Cycle 3: change file.bin to tier 3 and verify a subsequent overwrite still keeps tier 3.
+    tier_set_no_err "$META_URL" --id 3 /rt_case/parent/file.bin
+    assert_tier_id /jfs/rt_case/parent/file.bin 3
+    assert_tier_sc /jfs/rt_case/parent/file.bin GLACIER_IR
+    assert_object_storage_class_by_path /jfs/rt_case/parent/file.bin GLACIER_IR
+
+    echo "cycle3" > /jfs/rt_case/parent/file.bin
+    sleep 2
+    assert_tier_id /jfs/rt_case/parent/file.bin 3
+    assert_tier_sc /jfs/rt_case/parent/file.bin GLACIER_IR
+    assert_tier_id /jfs/rt_case/parent 1
+    assert_tier_sc /jfs/rt_case/parent STANDARD_IA
+    assert_info_no_empty_object_name /jfs/rt_case/parent/file.bin
+    [[ "$(cat /jfs/rt_case/parent/file.bin)" == "cycle3" ]] || { echo "<FATAL>: content mismatch after cycle3 overwrite"; exit 1; }
 }
 
 test_tier_truncate_and_append_after_set()
@@ -732,14 +832,15 @@ test_tier_truncate_and_append_after_set()
     mkdir -p /jfs/ta_case
     dd if=/dev/urandom of=/jfs/ta_case/file.bin bs=1M count=4 status=none
 
-    # Truncate to 0 bytes after tier set -> tier should reset to 0
+    # Truncate to 0 bytes after tier set -> tier should stay unchanged
     tier_set_no_err "$META_URL" --id 1 /ta_case/file.bin
     assert_tier_id /jfs/ta_case/file.bin 1
     assert_tier_sc /jfs/ta_case/file.bin STANDARD_IA
 
     : > /jfs/ta_case/file.bin
     sleep 2
-    assert_tier_id /jfs/ta_case/file.bin 0
+    assert_tier_id /jfs/ta_case/file.bin 1
+    assert_tier_sc /jfs/ta_case/file.bin STANDARD_IA
 
     # Rewrite and set tier again, then append
     dd if=/dev/urandom of=/jfs/ta_case/file.bin bs=1M count=2 status=none
@@ -748,11 +849,13 @@ test_tier_truncate_and_append_after_set()
     assert_tier_sc /jfs/ta_case/file.bin INTELLIGENT_TIERING
     assert_object_storage_class_by_path /jfs/ta_case/file.bin INTELLIGENT_TIERING
 
-    # Append 2MB to the tiered 2MB file -> tier should reset to 0
+    # Append 2MB to the tiered 2MB file -> tier should stay unchanged
     dd if=/dev/urandom bs=1M count=2 status=none >> /jfs/ta_case/file.bin
     sleep 2
-    assert_tier_id /jfs/ta_case/file.bin 0
+    assert_tier_id /jfs/ta_case/file.bin 2
+    assert_tier_sc /jfs/ta_case/file.bin INTELLIGENT_TIERING
     assert_info_no_empty_object_name /jfs/ta_case/file.bin
+    assert_object_storage_class_by_path /jfs/ta_case/file.bin INTELLIGENT_TIERING
     local actual_size
     actual_size=$(stat -c%s /jfs/ta_case/file.bin 2>/dev/null || stat -f%z /jfs/ta_case/file.bin)
     [[ "$actual_size" -eq $((4 * 1024 * 1024)) ]] || {
@@ -787,11 +890,14 @@ test_tier_mixed_tree_partial_overwrite()
     dd if=/dev/urandom of=/jfs/pt_case/a/b/deep.bin bs=1M count=4 status=none    # long overwrite in middle
     sleep 2
 
-    # Overwritten files should reset to tier 0 with correct chunk info
-    assert_tier_id /jfs/pt_case/root.bin 0
-    assert_tier_id /jfs/pt_case/a/b/deep.bin 0
+    # Overwritten files should keep their original tier 1 with correct chunk info
+    assert_tier_id /jfs/pt_case/root.bin 1
+    assert_tier_id /jfs/pt_case/a/b/deep.bin 1
+    assert_tier_sc /jfs/pt_case/root.bin STANDARD_IA
+    assert_tier_sc /jfs/pt_case/a/b/deep.bin STANDARD_IA
     assert_info_no_empty_object_name /jfs/pt_case/root.bin
     assert_info_no_empty_object_name /jfs/pt_case/a/b/deep.bin
+    assert_object_storage_class_by_path /jfs/pt_case/a/b/deep.bin STANDARD_IA
 
     # Untouched files should still have tier 1
     assert_tier_id /jfs/pt_case/a/mid.bin 1
@@ -800,7 +906,7 @@ test_tier_mixed_tree_partial_overwrite()
     assert_tier_sc /jfs/pt_case/a/mid.bin STANDARD_IA
     assert_tier_sc /jfs/pt_case/a/b/c/leaf.bin STANDARD_IA
 
-    # Re-set entire tree to tier 2 recursively (mix of tier-0 and tier-1 files all become tier-2)
+    # Re-set entire tree to tier 2 recursively (all files become tier 2)
     tier_set_no_err "$META_URL" --id 2 /pt_case -r
     for f in root.bin a/mid.bin a/b/deep.bin a/b/c/leaf.bin a/b/c/small.txt; do
         assert_tier_id "/jfs/pt_case/$f" 2
@@ -810,9 +916,238 @@ test_tier_mixed_tree_partial_overwrite()
     assert_object_storage_class_by_path /jfs/pt_case/a/b/deep.bin INTELLIGENT_TIERING
     assert_object_storage_class_by_path /jfs/pt_case/a/b/c/leaf.bin INTELLIGENT_TIERING
 
-    # Newly created file after recursive set should have default tier 0
+    # Newly created file after recursive set should inherit parent dir's tier
     dd if=/dev/urandom of=/jfs/pt_case/a/b/new_after_set.bin bs=1M count=1 status=none
-    assert_tier_id /jfs/pt_case/a/b/new_after_set.bin 0
+    assert_tier_id /jfs/pt_case/a/b/new_after_set.bin 2
+    assert_tier_sc /jfs/pt_case/a/b/new_after_set.bin INTELLIGENT_TIERING
+}
+
+test_tier_writeback_set_before_upload()
+{
+    # Writeback mode with long upload delay: chunks not yet uploaded to S3.
+    # tier set on a file whose chunks are still in local cache should FAIL.
+    # After flush + upload, tier set should succeed.
+    setup_tier_volume_writeback 300s
+
+    mkdir -p /jfs/wb_pre
+    dd if=/dev/urandom of=/jfs/wb_pre/f1.bin bs=1M count=8 status=none
+    dd if=/dev/urandom of=/jfs/wb_pre/f2.bin bs=1M count=4 status=none
+
+    # Tier set should FAIL because chunks have not been uploaded to S3 yet
+    assert_tier_set_fail "$META_URL" --id 1 /wb_pre/f1.bin
+    assert_tier_set_fail "$META_URL" --id 2 /wb_pre/f2.bin
+
+    # Tier id should still be 0 (set failed)
+    assert_tier_id /jfs/wb_pre/f1.bin 0
+    assert_tier_id /jfs/wb_pre/f2.bin 0
+
+    # Data should be readable from local cache even before S3 upload
+    cat /jfs/wb_pre/f1.bin >/dev/null
+    cat /jfs/wb_pre/f2.bin >/dev/null
+    ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s --writeback
+    sleep 5
+    # Now chunks are on S3, tier set should succeed
+    tier_set_no_err "$META_URL" --id 1 /wb_pre/f1.bin
+    tier_set_no_err "$META_URL" --id 2 /wb_pre/f2.bin
+    assert_tier_id /jfs/wb_pre/f1.bin 1
+    assert_tier_id /jfs/wb_pre/f2.bin 2
+    assert_tier_sc /jfs/wb_pre/f1.bin STANDARD_IA
+    assert_tier_sc /jfs/wb_pre/f2.bin INTELLIGENT_TIERING
+
+    # Verify S3 objects have the correct storage class
+    assert_object_storage_class_by_path /jfs/wb_pre/f1.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/wb_pre/f2.bin INTELLIGENT_TIERING
+
+    # Verify data integrity
+    cat /jfs/wb_pre/f1.bin >/dev/null
+    cat /jfs/wb_pre/f2.bin >/dev/null
+}
+
+test_tier_writeback_write_then_set()
+{
+    # Writeback mode with short upload delay: data is uploaded first (as STANDARD),
+    # then tier set changes storage class via S3 CopyObject.
+    setup_tier_volume_writeback 5s
+
+    mkdir -p /jfs/wb_post
+    dd if=/dev/urandom of=/jfs/wb_post/f1.bin bs=1M count=8 status=none
+
+    # Wait for auto-upload to complete (5s upload-delay + buffer)
+    sleep 15
+
+    # Data should now be on S3 with default storage class (STANDARD)
+    assert_object_storage_class_by_path /jfs/wb_post/f1.bin STANDARD
+
+    # Now set tier — triggers S3 CopyObject to change storage class
+    tier_set_no_err "$META_URL" --id 1 /wb_post/f1.bin
+    assert_tier_id /jfs/wb_post/f1.bin 1
+    assert_tier_sc /jfs/wb_post/f1.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/wb_post/f1.bin STANDARD_IA
+
+    cat /jfs/wb_post/f1.bin >/dev/null
+}
+
+test_tier_writeback_mixed_ops()
+{
+    # Writeback mode: mixed operations including tier inheritance from parent dir,
+    # tier-set failure when chunks not yet uploaded, and flush correctness.
+    setup_tier_volume_writeback 5s
+
+    mkdir -p /jfs/wb_mix
+
+    # --- Scenario A: set tier on dir, write new file -> inherits parent tier ---
+    tier_set_no_err "$META_URL" --id 1 /wb_mix
+    assert_tier_id /jfs/wb_mix 1
+    dd if=/dev/urandom of=/jfs/wb_mix/inherit.bin bs=1M count=4 status=none
+    # New file should inherit parent dir's tier
+    assert_tier_id /jfs/wb_mix/inherit.bin 1
+    assert_tier_sc /jfs/wb_mix/inherit.bin STANDARD_IA
+
+    # --- Scenario B: tier set fails while chunks still in cache (just written) ---
+    dd if=/dev/urandom of=/jfs/wb_mix/not_yet.bin bs=1M count=4 status=none
+    # Immediately try to change tier — chunks likely not uploaded yet
+    assert_tier_set_fail "$META_URL" --id 2 /wb_mix/not_yet.bin
+    # File keeps inherited tier from parent
+    assert_tier_id /jfs/wb_mix/not_yet.bin 1
+
+    # Wait for upload-delay to pass + some buffer so chunks are flushed
+    sleep 15
+
+    # --- Scenario C: after upload, tier set should succeed ---
+    tier_set_no_err "$META_URL" --id 2 /wb_mix/not_yet.bin
+    assert_tier_id /jfs/wb_mix/not_yet.bin 2
+    assert_tier_sc /jfs/wb_mix/not_yet.bin INTELLIGENT_TIERING
+    assert_object_storage_class_by_path /jfs/wb_mix/not_yet.bin INTELLIGENT_TIERING
+
+    # --- Scenario D: overwrite tiered file -> tier id/sc should stay unchanged ---
+    echo "overwritten" > /jfs/wb_mix/inherit.bin
+    sleep 2
+    # After overwrite, tier should still be the same as before overwrite.
+    assert_tier_id /jfs/wb_mix/inherit.bin 1
+    assert_tier_sc /jfs/wb_mix/inherit.bin STANDARD_IA
+
+    # --- Scenario E: write, wait for upload, set tier, append -> tier id/sc should stay unchanged ---
+    dd if=/dev/urandom of=/jfs/wb_mix/append.bin bs=1M count=2 status=none
+    sleep 15
+    tier_set_no_err "$META_URL" --id 2 /wb_mix/append.bin
+    assert_tier_id /jfs/wb_mix/append.bin 2
+    assert_tier_sc /jfs/wb_mix/append.bin INTELLIGENT_TIERING
+    dd if=/dev/urandom bs=1M count=1 status=none >> /jfs/wb_mix/append.bin
+    sleep 2
+    # Append keeps the original tier metadata
+    assert_tier_id /jfs/wb_mix/append.bin 2
+    assert_tier_sc /jfs/wb_mix/append.bin INTELLIGENT_TIERING
+
+    # --- Scenario F: write, wait for upload, set tier, keep unchanged ---
+    dd if=/dev/urandom of=/jfs/wb_mix/keep.bin bs=1M count=4 status=none
+    sleep 15
+    tier_set_no_err "$META_URL" --id 1 /wb_mix/keep.bin
+    assert_tier_id /jfs/wb_mix/keep.bin 1
+    assert_tier_sc /jfs/wb_mix/keep.bin STANDARD_IA
+
+    # --- Scenario G: two files, wait upload, different tiers ---
+    dd if=/dev/urandom of=/jfs/wb_mix/t1.bin bs=1M count=4 status=none
+    dd if=/dev/urandom of=/jfs/wb_mix/t2.bin bs=1M count=4 status=none
+    sleep 15
+    tier_set_no_err "$META_URL" --id 1 /wb_mix/t1.bin
+    tier_set_no_err "$META_URL" --id 2 /wb_mix/t2.bin
+    assert_tier_id /jfs/wb_mix/t1.bin 1
+    assert_tier_id /jfs/wb_mix/t2.bin 2
+
+    # Flush everything via umount + remount
+    ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s --writeback
+
+    # keep.bin: tier 1, S3 class correct
+    assert_tier_id /jfs/wb_mix/keep.bin 1
+    assert_tier_sc /jfs/wb_mix/keep.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/wb_mix/keep.bin STANDARD_IA
+
+    # append.bin should still keep tier 2 after append + flush
+    assert_tier_id /jfs/wb_mix/append.bin 2
+    assert_tier_sc /jfs/wb_mix/append.bin INTELLIGENT_TIERING
+    assert_object_storage_class_by_path /jfs/wb_mix/append.bin INTELLIGENT_TIERING
+
+    # t1.bin: tier 1, t2.bin: tier 2
+    assert_tier_id /jfs/wb_mix/t1.bin 1
+    assert_tier_sc /jfs/wb_mix/t1.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/wb_mix/t1.bin STANDARD_IA
+    assert_tier_id /jfs/wb_mix/t2.bin 2
+    assert_tier_sc /jfs/wb_mix/t2.bin INTELLIGENT_TIERING
+    assert_object_storage_class_by_path /jfs/wb_mix/t2.bin INTELLIGENT_TIERING
+
+    # Data integrity
+    [[ "$(cat /jfs/wb_mix/inherit.bin)" == "overwritten" ]] || { echo "<FATAL>: inherit.bin content mismatch after writeback flush"; exit 1; }
+    cat /jfs/wb_mix/keep.bin >/dev/null
+    cat /jfs/wb_mix/append.bin >/dev/null
+    cat /jfs/wb_mix/t1.bin >/dev/null
+    cat /jfs/wb_mix/t2.bin >/dev/null
+}
+
+test_tier_remount_during_large_write()
+{
+    # Simulate rolling upgrade: remount the mount process while a large file
+    # is being written. Pre-existing tiered files should retain tier info.
+    setup_tier_volume
+
+    mkdir -p /jfs/remount_case/sub
+
+    # Create pre-existing files and set their tier
+    for i in $(seq 1 5); do
+        dd if=/dev/urandom of=/jfs/remount_case/sub/pre_${i}.bin bs=1M count=20 status=none
+    done
+    tier_set_no_err "$META_URL" --id 1 /remount_case -r
+    for i in $(seq 1 5); do
+        assert_tier_id /jfs/remount_case/sub/pre_${i}.bin 1
+    done
+    assert_tier_sc /jfs/remount_case/sub/pre_1.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/remount_case/sub/pre_1.bin STANDARD_IA
+
+    # Start writing a 1G file in background
+    dd if=/dev/urandom of=/jfs/remount_case/sub/big.bin bs=1M count=1024 status=none 2>/tmp/dd_big.log &
+    local dd_pid=$!
+
+    # Wait for some data to be written
+    sleep 5
+    echo "dd is running, pid=$dd_pid"
+    ls -lh /jfs/remount_case/sub/big.bin 2>/dev/null || true
+
+    echo "=== beginning remount during write ==="
+    ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s
+    echo "=== remount complete ==="
+
+    # Background dd should have failed due to mount interruption
+    wait "$dd_pid" 2>/dev/null || true
+
+    # Pre-existing files should still have tier 1 and correct S3 class
+    for i in $(seq 1 5); do
+        assert_tier_id /jfs/remount_case/sub/pre_${i}.bin 1
+        assert_tier_sc /jfs/remount_case/sub/pre_${i}.bin STANDARD_IA
+    done
+    assert_object_storage_class_by_path /jfs/remount_case/sub/pre_1.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/remount_case/sub/pre_3.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/remount_case/sub/pre_5.bin STANDARD_IA
+
+    # Directory should still have tier 1
+    assert_tier_id /jfs/remount_case 1
+    assert_tier_id /jfs/remount_case/sub 1
+
+    # big.bin: if it exists, its committed chunks should be valid
+    if [[ -f /jfs/remount_case/sub/big.bin ]]; then
+        local big_size
+        big_size=$(stat -c%s /jfs/remount_case/sub/big.bin 2>/dev/null || stat -f%z /jfs/remount_case/sub/big.bin)
+        echo "big.bin exists after remount, size=$big_size"
+        assert_info_no_empty_object_name /jfs/remount_case/sub/big.bin
+        cat /jfs/remount_case/sub/big.bin >/dev/null
+    fi
+
+    # Pre-existing files data should still be readable
+    for i in $(seq 1 5); do
+        cat /jfs/remount_case/sub/pre_${i}.bin >/dev/null
+    done
+    dd if=/dev/urandom of=/jfs/remount_case/sub/after.bin bs=1M count=10 status=none
+    assert_tier_id /jfs/remount_case/sub/after.bin 1
+    assert_tier_sc /jfs/remount_case/sub/after.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/remount_case/sub/after.bin STANDARD_IA
 }
 
 init_aws_bucket
