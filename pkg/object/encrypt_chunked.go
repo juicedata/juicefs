@@ -27,139 +27,50 @@ import (
 )
 
 const (
-	defaultPlainChunkSize = 8 << 20 // 8 MiB plaintext per chunk
-	fileHeaderSize        = 8       // 4B magic + 4B plainChunkSize
-	fileMagic             = "JENC"
+	plainChunkSize    = 1 << 20                                              // 1 MiB plaintext per chunk
+	chunkSafetyMargin = 300                                                  // reserved headroom for ciphertext expansion
+	chunkHeaderSize   = 4                                                    // bytes used to store ct_len per chunk
+	encChunkSize      = plainChunkSize + chunkHeaderSize + chunkSafetyMargin // on-disk bytes per chunk
 )
 
-// chunkedEncrypted is an ObjectStorage wrapper that encrypts data in fixed-size
-// aligned chunks, supporting range reads.
+// chunkedEncrypted is an ObjectStorage wrapper that encrypts data in fixed-size chunks.
 //
-// File format:
-//
-//	[4B magic][4B plainChunkSize]  ← 8-byte file header
-//	[4B ciphertext_len][ciphertext]  ← chunk 0
-//	[4B ciphertext_len][ciphertext]  ← chunk 1
-//	...
-//
-// Encrypted offset of plaintext chunk N = fileHeaderSize + N * encChunkSize.
-// All full chunks have identical byte size: 4 + plainChunkSize + encOverhead.
+//	[chunkHeaderSize bytes: ct_len][ciphertext][zeros] <- each chunk is padded to len(plain)+chunkSafetyMargin bytes
 type chunkedEncrypted struct {
 	ObjectStorage
-	enc            Encryptor
-	encOverhead    int
-	plainChunkSize int
-	encChunkSize   int64 // = 4 + plainChunkSize + encOverhead
+	enc Encryptor
 }
 
 func NewChunkedEncrypted(o ObjectStorage, enc Encryptor) ObjectStorage {
-	overhead := calcEncryptOverhead(enc)
-	pcs := choosePlainChunkSize(o.Limits(), overhead)
-	return &chunkedEncrypted{
-		ObjectStorage:  o,
-		enc:            enc,
-		encOverhead:    overhead,
-		plainChunkSize: pcs,
-		encChunkSize:   int64(4 + pcs + overhead),
-	}
-}
-
-func calcEncryptOverhead(enc Encryptor) int {
-	ct, err := enc.Encrypt(make([]byte, 1024))
-	if err != nil {
-		panic(fmt.Sprintf("encrypt_chunked: trial encryption failed: %v", err))
-	}
-	return len(ct) - 1024
-}
-
-func choosePlainChunkSize(limits Limits, encOverhead int) int {
-	pcs := defaultPlainChunkSize
-	if limits.MaxPartSize > 0 {
-		// Encrypted chunk = 4 + pcs + encOverhead must fit in one part.
-		maxPlain := int(limits.MaxPartSize) - 4 - encOverhead
-		if maxPlain < pcs {
-			pcs = maxPlain
-		}
-	}
-	if pcs < 1<<20 {
-		pcs = 1 << 20 // 1 MiB minimum
-	}
-	return pcs
-}
-
-func (e *chunkedEncrypted) writeFileHeader(w io.Writer) error {
-	var hdr [fileHeaderSize]byte
-	copy(hdr[:4], fileMagic)
-	binary.BigEndian.PutUint32(hdr[4:8], uint32(e.plainChunkSize))
-	_, err := w.Write(hdr[:])
-	return err
-}
-
-func readFileHeader(r io.Reader, encOverhead int) (pcs int, ecs int64, err error) {
-	var hdr [fileHeaderSize]byte
-	if _, err = io.ReadFull(r, hdr[:]); err != nil {
-		return 0, 0, fmt.Errorf("read encrypted file header: %w", err)
-	}
-	if string(hdr[:4]) != fileMagic {
-		return 0, 0, fmt.Errorf("invalid encrypted file magic: %q", string(hdr[:4]))
-	}
-	pcs = int(binary.BigEndian.Uint32(hdr[4:8]))
-	return pcs, int64(4 + pcs + encOverhead), nil
+	return &chunkedEncrypted{ObjectStorage: o, enc: enc}
 }
 
 func (e *chunkedEncrypted) String() string {
 	return fmt.Sprintf("%s(encrypted-chunked)", e.ObjectStorage)
 }
 
-// calcPlainSize computes the plaintext size from the total encrypted file size.
+// calcPlainSize computes the exact plaintext size from the total encrypted file size.
 func (e *chunkedEncrypted) calcPlainSize(encSize int64) int64 {
-	if encSize <= fileHeaderSize {
+	if encSize <= 0 {
 		return 0
 	}
-	dataSize := encSize - fileHeaderSize
-	fullChunks := dataSize / e.encChunkSize
-	remainder := dataSize % e.encChunkSize
-
-	plainSize := fullChunks * int64(e.plainChunkSize)
-	if remainder > 0 {
-		if lastPlain := remainder - 4 - int64(e.encOverhead); lastPlain > 0 {
-			plainSize += lastPlain
-		}
+	fullChunks := encSize / encChunkSize
+	remainder := encSize % encChunkSize
+	plainSize := fullChunks * plainChunkSize
+	if remainder > chunkHeaderSize+chunkSafetyMargin {
+		plainSize += remainder - (chunkHeaderSize + chunkSafetyMargin)
 	}
 	return plainSize
 }
 
-// Range read mapping:
-//   - Read the 8-byte file header first to get the plainChunkSize written at upload time.
-//   - startChunk = off / pcs
-//   - encOff     = fileHeaderSize + startChunk * encChunkSize
-//   - encLimit   = (endChunk - startChunk + 1) * encChunkSize  (whole chunks, chunk-aligned)
-//   - skips the leading (off % pcs) bytes
 func (e *chunkedEncrypted) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	pcs := int64(e.plainChunkSize)
-	ecs := e.encChunkSize
-
-	if off > 0 || limit > 0 {
-		hdrReader, err := e.ObjectStorage.Get(ctx, key, 0, int64(fileHeaderSize), getters...)
-		if err != nil {
-			return nil, err
-		}
-		var parsedPcs int
-		parsedPcs, ecs, err = readFileHeader(hdrReader, e.encOverhead)
-		hdrReader.Close()
-		if err != nil {
-			return nil, err
-		}
-		pcs = int64(parsedPcs)
-	}
-
-	startChunk := off / pcs
-	encOff := int64(fileHeaderSize) + startChunk*ecs
+	startChunk := off / plainChunkSize
+	encOff := startChunk * encChunkSize
 
 	var encLimit int64 = -1
 	if limit > 0 {
-		endChunk := (off + limit - 1) / pcs
-		encLimit = (endChunk - startChunk + 1) * ecs
+		endChunk := (off + limit - 1) / plainChunkSize
+		encLimit = (endChunk - startChunk + 1) * encChunkSize
 	}
 
 	r, err := e.ObjectStorage.Get(ctx, key, encOff, encLimit, getters...)
@@ -168,9 +79,10 @@ func (e *chunkedEncrypted) Get(ctx context.Context, key string, off, limit int64
 	}
 
 	dr := &chunkDecryptReader{
-		r:    r,
-		enc:  e.enc,
-		skip: off - startChunk*pcs,
+		r:        r,
+		enc:      e.enc,
+		chunkBuf: make([]byte, encChunkSize),
+		skip:     off - startChunk*plainChunkSize,
 	}
 	if limit > 0 {
 		return &limitedReadCloser{io.LimitReader(dr, limit), dr}, nil
@@ -184,11 +96,11 @@ type limitedReadCloser struct {
 }
 
 type chunkDecryptReader struct {
-	r         io.ReadCloser
-	enc       Encryptor
-	buf       []byte
-	cipherBuf []byte
-	skip      int64
+	r        io.ReadCloser
+	enc      Encryptor
+	buf      []byte
+	chunkBuf []byte
+	skip     int64
 }
 
 func (r *chunkDecryptReader) Read(p []byte) (int, error) {
@@ -198,40 +110,33 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 		return n, nil
 	}
 
-	// Read 4-byte ciphertext length header.
-	var header [4]byte
-	if _, err := io.ReadFull(r.r, header[:]); err != nil {
-		if err == io.ErrUnexpectedEOF {
-			return 0, fmt.Errorf("Decrypt: truncated chunk header")
-		}
-		return 0, err // io.EOF propagates naturally
-	}
-	chunkLen := binary.BigEndian.Uint32(header[:])
-
-	// Read ciphertext.
-	if int(chunkLen) > cap(r.cipherBuf) {
-		r.cipherBuf = make([]byte, chunkLen)
-	}
-	ct := r.cipherBuf[:chunkLen]
-	if _, err := io.ReadFull(r.r, ct); err != nil {
-		return 0, fmt.Errorf("Decrypt: read chunk: %s", err)
+	n, err := io.ReadFull(r.r, r.chunkBuf)
+	chunk := r.chunkBuf[:n]
+	if err == io.ErrUnexpectedEOF {
+		err = nil
+	} else if err != nil {
+		return 0, err
 	}
 
-	plain, err := r.enc.Decrypt(ct)
-	if err != nil {
-		return 0, fmt.Errorf("Decrypt: %s", err)
+	if len(chunk) < chunkHeaderSize {
+		return 0, fmt.Errorf("Decrypt: truncated chunk header")
+	}
+	ctLen := int(binary.BigEndian.Uint32(chunk[:chunkHeaderSize]))
+	if chunkHeaderSize+ctLen > len(chunk) {
+		return 0, fmt.Errorf("Decrypt: chunk data truncated: need %d, have %d", chunkHeaderSize+ctLen, len(chunk))
+	}
+
+	plain, decErr := r.enc.Decrypt(chunk[chunkHeaderSize : chunkHeaderSize+ctLen])
+	if decErr != nil {
+		return 0, fmt.Errorf("Decrypt: %s", decErr)
 	}
 
 	if r.skip > 0 {
-		if r.skip >= int64(len(plain)) {
-			r.skip -= int64(len(plain))
-			return 0, nil
-		}
 		plain = plain[r.skip:]
 		r.skip = 0
 	}
 
-	n := copy(p, plain)
+	n = copy(p, plain)
 	if n < len(plain) {
 		r.buf = plain[n:]
 	}
@@ -240,18 +145,31 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 
 func (r *chunkDecryptReader) Close() error { return r.r.Close() }
 
+// encryptAndWriteChunk encrypts plain and writes [ct_len][ct][zeros].
+// The ciphertext section is always padded to len(plain)+chunkSafetyMargin
 func (e *chunkedEncrypted) encryptAndWriteChunk(w io.Writer, plain []byte) error {
 	ct, err := e.enc.Encrypt(plain)
 	if err != nil {
 		return err
 	}
-	var header [4]byte
+	fixedCtLen := len(plain) + chunkSafetyMargin
+	if len(ct) > fixedCtLen {
+		return fmt.Errorf("encrypt_chunked: ciphertext %d exceeds capacity %d", len(ct), fixedCtLen)
+	}
+	var header [chunkHeaderSize]byte
 	binary.BigEndian.PutUint32(header[:], uint32(len(ct)))
 	if _, err := w.Write(header[:]); err != nil {
 		return err
 	}
-	_, err = w.Write(ct)
-	return err
+	if _, err := w.Write(ct); err != nil {
+		return err
+	}
+	if pad := fixedCtLen - len(ct); pad > 0 {
+		if _, err := w.Write(make([]byte, pad)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (e *chunkedEncrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
@@ -262,11 +180,7 @@ func (e *chunkedEncrypted) Put(ctx context.Context, key string, in io.Reader, ge
 	_ = os.Remove(f.Name())
 	defer f.Close()
 
-	if err := e.writeFileHeader(f); err != nil {
-		return err
-	}
-
-	buf := make([]byte, e.plainChunkSize)
+	buf := make([]byte, plainChunkSize)
 	for {
 		n, readErr := io.ReadFull(in, buf)
 		if n > 0 {
@@ -360,34 +274,10 @@ func (e *chunkedEncrypted) Chtimes(path string, mtime time.Time) error {
 	return notSupported
 }
 
-func (e *chunkedEncrypted) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
-	limits := e.ObjectStorage.Limits()
-	// Non-first parts must satisfy MinPartSize.
-	if limits.MinPartSize > 0 && e.encChunkSize < int64(limits.MinPartSize) {
-		return nil, notSupported
-	}
-	// First part = fileHeaderSize + encChunkSize; must not exceed MaxPartSize.
-	if limits.MaxPartSize > 0 && int64(fileHeaderSize)+e.encChunkSize > limits.MaxPartSize {
-		return nil, notSupported
-	}
-	upload, err := e.ObjectStorage.CreateMultipartUpload(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	upload.MinPartSize = e.plainChunkSize
-	return upload, nil
-}
-
 func (e *chunkedEncrypted) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
 	var buf bytes.Buffer
-	if num == 1 {
-		if err := e.writeFileHeader(&buf); err != nil {
-			return nil, err
-		}
-	}
-
 	for len(body) > 0 {
-		n := e.plainChunkSize
+		n := plainChunkSize
 		if n > len(body) {
 			n = len(body)
 		}
@@ -401,18 +291,6 @@ func (e *chunkedEncrypted) UploadPart(ctx context.Context, key string, uploadID 
 
 func (e *chunkedEncrypted) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	return nil, notSupported
-}
-
-func (e *chunkedEncrypted) AbortUpload(ctx context.Context, key string, uploadID string) {
-	e.ObjectStorage.AbortUpload(ctx, key, uploadID)
-}
-
-func (e *chunkedEncrypted) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
-	return e.ObjectStorage.CompleteUpload(ctx, key, uploadID, parts)
-}
-
-func (e *chunkedEncrypted) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
-	return e.ObjectStorage.ListUploads(ctx, marker)
 }
 
 var _ ObjectStorage = (*chunkedEncrypted)(nil)

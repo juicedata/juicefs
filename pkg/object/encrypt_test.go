@@ -305,27 +305,6 @@ func BenchmarkDataEncryptor(b *testing.B) {
 	}
 }
 
-func TestCalcEncryptOverhead(t *testing.T) {
-	cases := []struct {
-		algo string
-	}{
-		{AES256GCM_RSA},
-		{CHACHA20_RSA},
-	}
-	for _, c := range cases {
-		t.Run(c.algo, func(t *testing.T) {
-			enc, err := NewDataEncryptor(NewKeyEncryptor(rsaKey), c.algo)
-			require.NoError(t, err)
-			overhead := calcEncryptOverhead(enc)
-			for _, size := range []int{1, 100, 1024, 20 << 10} {
-				ct, err := enc.Encrypt(make([]byte, size))
-				require.NoError(t, err)
-				require.Equal(t, overhead, len(ct)-size,
-					"encrypt overhead must be constant (got %d for size %d, expected %d)", len(ct)-size, size, overhead)
-			}
-		})
-	}
-}
 
 func TestEncryptedStore(t *testing.T) {
 	ctx := context.Background()
