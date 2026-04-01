@@ -795,7 +795,7 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 			}
 
 			uid, gid := uint64(e.Attr.Uid), uint64(e.Attr.Gid)
-			if (uid == 0 || gid == 0) && e.Attr.Typ == TypeFile {
+			if uid == 0 && gid == 0 && e.Attr.Typ == TypeFile {
 				continue
 			}
 
@@ -832,10 +832,14 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 				}
 			}
 
-			userUsage[uid].Size += uint64(space)
-			userUsage[uid].Files += uint64(inodes)
-			groupUsage[gid].Size += uint64(space)
-			groupUsage[gid].Files += uint64(inodes)
+			if uid != 0 {
+				userUsage[uid].Size += uint64(space)
+				userUsage[uid].Files += uint64(inodes)
+			}
+			if gid != 0 {
+				groupUsage[gid].Size += uint64(space)
+				groupUsage[gid].Files += uint64(inodes)
+			}
 
 		}
 	}
