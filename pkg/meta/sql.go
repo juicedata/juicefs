@@ -4021,11 +4021,11 @@ func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 
 func updateQuotaFields(quota *Quota, exist bool, maxSpace, maxInodes *int64, usedSpace, usedInodes *int64) []string {
 	updateColumns := make([]string, 0, 4)
-	if quota.MaxSpace >= 0 {
+	if quota.MaxSpace >= 0 || !exist {
 		*maxSpace = quota.MaxSpace
 		updateColumns = append(updateColumns, "max_space")
 	}
-	if quota.MaxInodes >= 0 {
+	if quota.MaxInodes >= 0 || !exist {
 		*maxInodes = quota.MaxInodes
 		updateColumns = append(updateColumns, "max_inodes")
 	}
@@ -4071,10 +4071,6 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				return e
 			}
 			created = !exist
-			if !exist {
-				origin.MaxSpace = -1
-				origin.MaxInodes = -1
-			}
 			updateColumns := updateQuotaFields(quota, exist, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
 			if exist {
 				_, e = s.Cols(updateColumns...).Update(origin, &userGroupQuota{Qtype: qtype, Qkey: key})
