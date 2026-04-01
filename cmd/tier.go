@@ -163,12 +163,19 @@ func setTier(ctx *cli.Context) error {
 		ctx := context.WithValue(context.Background(), object.TierKey{}, uint8(id))
 		return blob.Copy(ctx, fullPath, fullPath)
 	}
+	checkFunc := func(oriTier uint8) bool {
+		if id == uint(oriTier) && !ctx.Bool("force") {
+			logger.Debugf("storage tier of ino %d is already %d, no change needed", ino, oriTier)
+			return true
+		}
+		return false
+	}
 	switch attr.Typ {
 	case meta.TypeFile:
-		err = visitEntry(m, format, objectFunc, metaFunc, ino, attr, int(id), ctx.Bool("force"))
+		err = visitEntry(m, format, ino, attr, objectFunc, metaFunc, checkFunc)
 	case meta.TypeDirectory:
 		if ctx.Bool("recursive") {
-			if err = visitDir(m, format, objectFunc, metaFunc, ino, ctx.Bool("recursive"), int(id), ctx.Bool("force")); err != nil {
+			if err = visitDir(m, format, ino, ctx.Bool("recursive"), objectFunc, metaFunc, checkFunc); err != nil {
 				return err
 			}
 		}
@@ -213,15 +220,15 @@ func objRestore(ctx *cli.Context) error {
 		return blob.Restore(context.Background(), key)
 	}
 	if attr.Typ == meta.TypeFile {
-		err = visitEntry(m, format, objectFunc, nil, ino, attr, -1, false)
+		err = visitEntry(m, format, ino, attr, objectFunc, nil, nil)
 	}
 	if attr.Typ == meta.TypeDirectory {
-		err = visitDir(m, format, objectFunc, nil, ino, ctx.Bool("recursive"), -1, false)
+		err = visitDir(m, format, ino, ctx.Bool("recursive"), objectFunc, nil, nil)
 	}
 	return err
 }
 
-func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, recursive bool, dstTierID int, force bool) error {
+func visitDir(m meta.Meta, format *meta.Format, ino meta.Ino, recursive bool, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, checkFunc func(oriTier uint8) bool) error {
 	handler, errno := m.NewDirHandler(meta.Background(), ino, true, nil)
 	if errno != 0 {
 		return errno
@@ -240,14 +247,14 @@ func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) erro
 				continue
 			}
 			if e.Attr.Typ == meta.TypeFile {
-				err := visitEntry(m, format, objectFunc, metaFunc, e.Inode, *e.Attr, dstTierID, force)
+				err := visitEntry(m, format, e.Inode, *e.Attr, objectFunc, metaFunc, checkFunc)
 				if err != nil {
 					return err
 				}
 			}
 			if e.Attr.Typ == meta.TypeDirectory {
 				if recursive {
-					if err := visitDir(m, format, objectFunc, metaFunc, e.Inode, recursive, dstTierID, force); err != nil {
+					if err := visitDir(m, format, e.Inode, recursive, objectFunc, metaFunc, checkFunc); err != nil {
 						return err
 					}
 				}
@@ -280,10 +287,8 @@ func getObjKeys(m meta.Meta, format *meta.Format, ino meta.Ino, length uint64) [
 	}
 	return objs
 }
-
-func visitEntry(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, attr meta.Attr, dstTierID int, force bool) error {
-	if dstTierID != -1 && int(attr.Tier) == dstTierID && !force {
-		logger.Debugf("storage tier of ino %d is already %d, no change needed", ino, dstTierID)
+func visitEntry(m meta.Meta, format *meta.Format, ino meta.Ino, attr meta.Attr, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, checkFunc func(oriTier uint8) bool) error {
+	if checkFunc != nil && checkFunc(attr.Tier) {
 		return nil
 	}
 	objs := getObjKeys(m, format, ino, attr.Length)
