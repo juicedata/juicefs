@@ -114,7 +114,7 @@ func (s *s3client) Head(ctx context.Context, key string) (Object, error) {
 		*r.ContentLength,
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
-		string(r.StorageClass),
+		getOrDefaultScValue(string(r.StorageClass), string(types.StorageClassStandard)),
 		aws.ToString(r.Restore),
 	}, nil
 }
@@ -194,7 +194,7 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
-	sc := s.GetStorageClass(ctx)
+	sc := getOrDefaultScValue(s.GetStorageClass(ctx), string(types.StorageClassStandard))
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,
@@ -264,7 +264,7 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 			*o.Size,
 			*o.LastModified,
 			strings.HasSuffix(oKey, "/"),
-			string(o.StorageClass),
+			getOrDefaultScValue(string(o.StorageClass), string(types.ObjectStorageClassStandard)),
 			"",
 		}
 	}

@@ -114,7 +114,24 @@ func (b *wasb) Put(ctx context.Context, key string, data io.Reader, getters ...A
 }
 
 func (b *wasb) Copy(ctx context.Context, dst, src string) error {
-	// fixme: copy should support change object tier
+	// If a tier ID is provided in the context and the source and destination are the same,
+	// we interpret this as a request to change the storage class (tier) of the existing blob without copying.
+	// In this case, we call SetTier on the blob client instead of performing a copy operation.
+	if id, ok := ctx.Value(TierKey{}).(uint8); ok && src == dst {
+		blobClient := b.azblobCli.ServiceClient().NewContainerClient(b.cName).NewBlobClient(src)
+		if t, ok := b.tiers[id]; ok {
+			tier := str2Tier(t.Sc)
+			if tier == nil {
+				return fmt.Errorf("tierID:%d not found for %s", id, src)
+			}
+			if _, err := blobClient.SetTier(ctx, *tier, &blob2.SetTierOptions{}); err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("invalid tier id: %d", id)
+		}
+		return nil
+	}
 	dstCli := b.container.NewBlobClient(dst)
 	srcCli := b.container.NewBlobClient(src)
 	options := &blob2.CopyFromURLOptions{}

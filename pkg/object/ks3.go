@@ -153,15 +153,14 @@ func (s *ks3) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 	return err
 }
 func (s *ks3) Copy(ctx context.Context, dst, src string) error {
+	sc := getOrDefaultScValue(s.GetStorageClass(ctx), s3.StorageClassStandard)
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
 		Key:        &dst,
 		CopySource: &src,
 	}
-	if s.sc != "" {
-		params.StorageClass = aws.String(s.sc)
-	}
+	params.StorageClass = aws.String(sc)
 	_, err := s.s3.CopyObjectWithContext(ctx, params)
 	return err
 }

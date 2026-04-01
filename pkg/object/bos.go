@@ -163,11 +163,8 @@ func (q *bosclient) Restore(ctx context.Context, key string) error {
 }
 
 func (q *bosclient) Copy(ctx context.Context, dst, src string) error {
-	var args *api.CopyObjectArgs
-	if q.sc != "" {
-		args = &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: q.sc}}
-	}
-	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, args)
+	sc := getOrDefaultScValue(q.GetStorageClass(ctx), api.STORAGE_CLASS_STANDARD)
+	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: sc}})
 	return err
 }
 

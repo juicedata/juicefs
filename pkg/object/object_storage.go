@@ -415,3 +415,10 @@ func NewTiers() Tiers {
 	t[0] = Tier{}
 	return t
 }
+
+func getOrDefaultScValue(v, defaultValue string) string {
+	if v == "" {
+		return defaultValue
+	}
+	return v
+}

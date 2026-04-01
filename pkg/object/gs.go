@@ -148,13 +148,12 @@ func (g *gs) Put(ctx context.Context, key string, data io.Reader, getters ...Att
 }
 
 func (g *gs) Copy(ctx context.Context, dst, src string) error {
+	sc := getOrDefaultScValue(g.GetStorageClass(ctx), DefaultStorageClass)
 	client := g.getClient()
 	srcObj := client.Bucket(g.bucket).Object(src)
 	dstObj := client.Bucket(g.bucket).Object(dst)
 	copier := dstObj.CopierFrom(srcObj)
-	if g.sc != "" {
-		copier.StorageClass = g.sc
-	}
+	copier.StorageClass = sc
 	_, err := copier.Run(ctx)
 	return err
 }

@@ -138,15 +138,14 @@ func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...A
 }
 
 func (s *ibmcos) Copy(ctx context.Context, dst, src string) error {
+	sc := getOrDefaultScValue(s.GetStorageClass(ctx), DefaultStorageClass)
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
 		Key:        &dst,
 		CopySource: &src,
 	}
-	if s.sc != "" {
-		params.SetStorageClass(s.sc)
-	}
+	params.SetStorageClass(sc)
 	_, err := s.s3.CopyObjectWithContext(ctx, params)
 	return err
 }

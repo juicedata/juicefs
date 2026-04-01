@@ -341,6 +341,10 @@ func doTesting(ctx context.Context, store object.ObjectStorage, key string, data
 			return fmt.Errorf("Failed to put: %s", err)
 		}
 	}
+	// GLACIER storage class doesn't allow read after write
+	if _, ok := ctx.Value(object.TierKey{}).(uint8); ok {
+		return nil
+	}
 	p, err := store.Get(ctx, key, 0, -1)
 	if err != nil {
 		return fmt.Errorf("Failed to get: %s", err)

@@ -176,12 +176,11 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (q *qingstor) Copy(ctx context.Context, dst, src string) error {
+	sc := getOrDefaultScValue(q.GetStorageClass(ctx), DefaultStorageClass)
 	source := fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, src)
 	input := &qs.PutObjectInput{
-		XQSCopySource: &source,
-	}
-	if q.sc != "" {
-		input.XQSStorageClass = &q.sc
+		XQSCopySource:   &source,
+		XQSStorageClass: &sc,
 	}
 	out, err := q.bucket.PutObjectWithContext(ctx, dst, input)
 	if err != nil {
