@@ -483,8 +483,14 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 				}
 			}
 			if len(info.Objects) > 0 {
+				var lastObjKey string
 				for i := len(info.Objects) - 1; i >= 0; i-- {
-					lastObjKey := strings.TrimPrefix(info.Objects[i].Key, v.Conf.Format.Name+"/")
+					if info.Objects[i].Key != "" {
+						lastObjKey = strings.TrimPrefix(info.Objects[i].Key, v.Conf.Format.Name+"/")
+						break
+					}
+				}
+				if lastObjKey != "" {
 					if objInfo, err := v.Store.BlobStorage().Head(context.Background(), lastObjKey); err == nil {
 						info.RestoreStatus = objInfo.Status()
 						if info.TierID != 0 && objInfo.StorageClass() != info.TierStr {
@@ -493,7 +499,8 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 						if info.TierID == 0 {
 							info.TierStr = fmt.Sprintf("actual(%s)", objInfo.StorageClass())
 						}
-						break
+					} else {
+						logger.Warnf("Failed to get object info: %s", err)
 					}
 				}
 			}
