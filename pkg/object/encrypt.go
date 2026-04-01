@@ -34,6 +34,7 @@ import (
 
 	"github.com/emmansun/gmsm/pkcs8"
 	"github.com/emmansun/gmsm/sm2"
+	"github.com/emmansun/gmsm/sm3"
 	"github.com/emmansun/gmsm/sm4"
 	"golang.org/x/crypto/chacha20poly1305"
 )
@@ -175,7 +176,7 @@ const (
 	SM4GCM        = "sm4gcm"
 )
 
-func NewDataEncryptor(keyEncryptor Encryptor, algo string) (Encryptor, error) {
+func NewDataEncryptor(keyEncryptor Encryptor, algo string) (*dataEncryptor, error) {
 	switch algo {
 	case "", AES256GCM_RSA:
 		aead := func(key []byte) (cipher.AEAD, error) {
@@ -201,6 +202,25 @@ func NewDataEncryptor(keyEncryptor Encryptor, algo string) (Encryptor, error) {
 		return &dataEncryptor{keyEncryptor, 16, aead}, nil
 	}
 	return nil, fmt.Errorf("unsupport cipher: %s", algo)
+}
+
+func asn1TLVLen(contentLen int) int {
+	return asn1HeaderLen(contentLen) + contentLen
+}
+
+func asn1HeaderLen(contentLen int) int {
+	return 1 + asn1LenLen(contentLen)
+}
+
+func asn1LenLen(contentLen int) int {
+	n := 1
+	for v := contentLen; v > 255; v >>= 8 {
+		n++
+	}
+	if contentLen < 128 {
+		return 1
+	}
+	return 1 + n
 }
 
 func (e *dataEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
@@ -258,6 +278,35 @@ func (e *dataEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 		return nil, err
 	}
 	return aead.Open(ciphertext[:0], nonce, ciphertext, nil)
+}
+
+// MaxOverhead returns the maximum number of extra bytes that Encrypt can add.
+// Layout is:
+//
+//	2 bytes wrapped-key length
+//	1 byte nonce length
+//	wrapped encrypted data key
+//	nonce
+//	AEAD tag
+func (e *dataEncryptor) MaxOverhead() int {
+	aead, err := e.aead(make([]byte, e.keyLen))
+	if err != nil {
+		panic(err)
+	}
+	var wrappedKeyLen int
+	switch ke := e.keyEncryptor.(type) {
+	case *rsaEncryptor:
+		wrappedKeyLen = ke.privKey.Size()
+	case *sm2Encryptor:
+		coordLen := (ke.privKey.Curve.Params().BitSize + 7) / 8
+		intLen := asn1TLVLen(coordLen + 1)
+		c3Len := asn1TLVLen(sm3.Size)
+		c2Len := asn1TLVLen(e.keyLen)
+		wrappedKeyLen = asn1TLVLen(intLen + intLen + c3Len + c2Len)
+	default:
+		panic(fmt.Sprintf("unsupported key encryptor %T", e.keyEncryptor))
+	}
+	return 2 + 1 + wrappedKeyLen + aead.NonceSize() + aead.Overhead()
 }
 
 type encrypted struct {

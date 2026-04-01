@@ -22,29 +22,38 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"os"
-	"time"
 )
 
 const (
-	plainChunkSize    = 1 << 20                                              // 1 MiB plaintext per chunk
-	chunkSafetyMargin = 300                                                  // reserved headroom for ciphertext expansion
-	chunkHeaderSize   = 4                                                    // bytes used to store ct_len per chunk
-	encChunkSize      = plainChunkSize + chunkHeaderSize + chunkSafetyMargin // on-disk bytes per chunk
+	plainChunkSize  = 1 << 20 // 1 MiB plaintext per chunk
+	chunkHeaderSize = 4       // bytes used to store ct_len per chunk
 )
 
 // chunkedEncrypted is an ObjectStorage wrapper that encrypts data in fixed-size chunks.
 //
-//	[chunkHeaderSize bytes: ct_len][ciphertext][zeros] <- each chunk is padded to len(plain)+chunkSafetyMargin bytes
+//	[chunkHeaderSize bytes: ct_len][ciphertext][zeros] <- each chunk is padded to len(plain)+overhead bytes
 type chunkedEncrypted struct {
 	ObjectStorage
-	enc Encryptor
+	enc *dataEncryptor
+
+	overhead     int
+	encChunkSize int64
 }
 
-func NewChunkedEncrypted(o ObjectStorage, enc Encryptor) ObjectStorage {
-	ce := &chunkedEncrypted{ObjectStorage: o, enc: enc}
+func NewChunkedEncrypted(o ObjectStorage, enc *dataEncryptor) ObjectStorage {
+	overhead := enc.MaxOverhead()
+	ce := &chunkedEncrypted{
+		ObjectStorage: o,
+		enc:           enc,
+		overhead:      overhead,
+		encChunkSize:  plainChunkSize + chunkHeaderSize + int64(overhead),
+	}
 	if fs, ok := o.(FileSystem); ok {
-		return &chunkedEncryptedFS{chunkedEncrypted: ce, fs: fs}
+		cefs := &chunkedEncryptedFS{chunkedEncrypted: ce, FileSystem: fs}
+		if symlink, ok := o.(SupportSymlink); ok {
+			return &chunkedEncryptedFSSymlink{chunkedEncryptedFS: cefs, SupportSymlink: symlink}
+		}
+		return cefs
 	}
 	return ce
 }
@@ -58,23 +67,23 @@ func (e *chunkedEncrypted) calcPlainSize(encSize int64) int64 {
 	if encSize <= 0 {
 		return 0
 	}
-	fullChunks := encSize / encChunkSize
-	remainder := encSize % encChunkSize
+	fullChunks := encSize / e.encChunkSize
+	remainder := encSize % e.encChunkSize
 	plainSize := fullChunks * plainChunkSize
-	if remainder > chunkHeaderSize+chunkSafetyMargin {
-		plainSize += remainder - (chunkHeaderSize + chunkSafetyMargin)
+	if remainder > chunkHeaderSize+int64(e.overhead) {
+		plainSize += remainder - (chunkHeaderSize + int64(e.overhead))
 	}
 	return plainSize
 }
 
 func (e *chunkedEncrypted) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	startChunk := off / plainChunkSize
-	encOff := startChunk * encChunkSize
+	encOff := startChunk * e.encChunkSize
 
 	var encLimit int64 = -1
 	if limit > 0 {
 		endChunk := (off + limit - 1) / plainChunkSize
-		encLimit = (endChunk - startChunk + 1) * encChunkSize
+		encLimit = (endChunk - startChunk + 1) * e.encChunkSize
 	}
 
 	r, err := e.ObjectStorage.Get(ctx, key, encOff, encLimit, getters...)
@@ -85,7 +94,7 @@ func (e *chunkedEncrypted) Get(ctx context.Context, key string, off, limit int64
 	dr := &chunkDecryptReader{
 		r:        r,
 		enc:      e.enc,
-		chunkBuf: make([]byte, encChunkSize),
+		chunkBuf: make([]byte, e.encChunkSize),
 		skip:     off - startChunk*plainChunkSize,
 	}
 	if limit > 0 {
@@ -101,7 +110,7 @@ type limitedReadCloser struct {
 
 type chunkDecryptReader struct {
 	r        io.ReadCloser
-	enc      Encryptor
+	enc      *dataEncryptor
 	buf      []byte
 	chunkBuf []byte
 	skip     int64
@@ -152,13 +161,13 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 func (r *chunkDecryptReader) Close() error { return r.r.Close() }
 
 // encryptAndWriteChunk encrypts plain and writes [ct_len][ct][zeros].
-// The ciphertext section is always padded to len(plain)+chunkSafetyMargin
+// The ciphertext section is always padded to len(plain)+overhead.
 func (e *chunkedEncrypted) encryptAndWriteChunk(w io.Writer, plain []byte) error {
 	ct, err := e.enc.Encrypt(plain)
 	if err != nil {
 		return err
 	}
-	fixedCtLen := len(plain) + chunkSafetyMargin
+	fixedCtLen := len(plain) + e.overhead
 	if len(ct) > fixedCtLen {
 		return fmt.Errorf("encrypt_chunked: ciphertext %d exceeds capacity %d", len(ct), fixedCtLen)
 	}
@@ -179,32 +188,31 @@ func (e *chunkedEncrypted) encryptAndWriteChunk(w io.Writer, plain []byte) error
 }
 
 func (e *chunkedEncrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	f, err := os.CreateTemp("", "jenc")
-	if err != nil {
-		return fmt.Errorf("Encrypt: create temp file: %s", err)
-	}
-	_ = os.Remove(f.Name())
-	defer f.Close()
-
-	buf := make([]byte, plainChunkSize)
-	for {
-		n, readErr := io.ReadFull(in, buf)
-		if n > 0 {
-			if err := e.encryptAndWriteChunk(f, buf[:n]); err != nil {
-				return err
+	pr, pw := io.Pipe()
+	go func() {
+		plain := make([]byte, plainChunkSize)
+		for {
+			n, readErr := io.ReadFull(in, plain)
+			if n > 0 {
+				if err := e.encryptAndWriteChunk(pw, plain[:n]); err != nil {
+					pw.CloseWithError(err)
+					return
+				}
 			}
-		}
-		if readErr != nil {
 			if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
-				break
+				pw.Close()
+				return
+			} else if readErr != nil {
+				pw.CloseWithError(readErr)
+				return
 			}
-			return readErr
 		}
+	}()
+	err := e.ObjectStorage.Put(ctx, key, pr, getters...)
+	if err != nil {
+		pr.CloseWithError(err)
 	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	return e.ObjectStorage.Put(ctx, key, f, getters...)
+	return err
 }
 
 type sizedObj struct {
@@ -214,12 +222,26 @@ type sizedObj struct {
 
 func (o *sizedObj) Size() int64 { return o.size }
 
+type sizedFile struct {
+	File
+	size int64
+}
+
+func (o *sizedFile) Size() int64 { return o.size }
+
+func withSize(o Object, size int64) Object {
+	if f, ok := o.(File); ok {
+		return &sizedFile{File: f, size: size}
+	}
+	return &sizedObj{Object: o, size: size}
+}
+
 func (e *chunkedEncrypted) Head(ctx context.Context, key string) (Object, error) {
 	o, err := e.ObjectStorage.Head(ctx, key)
 	if err != nil {
 		return nil, err
 	}
-	return &sizedObj{o, e.calcPlainSize(o.Size())}, nil
+	return withSize(o, e.calcPlainSize(o.Size())), nil
 }
 
 func (e *chunkedEncrypted) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
@@ -229,7 +251,7 @@ func (e *chunkedEncrypted) List(ctx context.Context, prefix, startAfter, token, 
 	}
 	for i, o := range objs {
 		if !o.IsDir() {
-			objs[i] = &sizedObj{o, e.calcPlainSize(o.Size())}
+			objs[i] = withSize(o, e.calcPlainSize(o.Size()))
 		}
 	}
 	return objs, hasMore, nextToken, nil
@@ -245,7 +267,7 @@ func (e *chunkedEncrypted) ListAll(ctx context.Context, prefix, marker string, f
 		defer close(out)
 		for o := range ch {
 			if o != nil && !o.IsDir() {
-				o = &sizedObj{o, e.calcPlainSize(o.Size())}
+				o = withSize(o, e.calcPlainSize(o.Size()))
 			}
 			out <- o
 		}
@@ -295,19 +317,14 @@ var _ ObjectStorage = (*chunkedEncrypted)(nil)
 
 type chunkedEncryptedFS struct {
 	*chunkedEncrypted
-	fs FileSystem
-}
-
-func (e *chunkedEncryptedFS) Chmod(path string, mode os.FileMode) error {
-	return e.fs.Chmod(path, mode)
-}
-
-func (e *chunkedEncryptedFS) Chown(path, owner, group string) error {
-	return e.fs.Chown(path, owner, group)
-}
-
-func (e *chunkedEncryptedFS) Chtimes(path string, mtime time.Time) error {
-	return e.fs.Chtimes(path, mtime)
+	FileSystem
 }
 
 var _ FileSystem = (*chunkedEncryptedFS)(nil)
+
+type chunkedEncryptedFSSymlink struct {
+	*chunkedEncryptedFS
+	SupportSymlink
+}
+
+var _ SupportSymlink = (*chunkedEncryptedFSSymlink)(nil)

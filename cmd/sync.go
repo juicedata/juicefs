@@ -537,14 +537,6 @@ func doSync(c *cli.Context) error {
 		object.Shutdown(dst)
 	}()
 	algo := c.String("encrypt-algo")
-	src, err = wrapSyncEncryptedStore(src, c.String("decrypt-rsa-key"), "JFS_DECRYPT_RSA_PASSPHRASE", "decrypt", algo)
-	if err != nil {
-		return err
-	}
-	dst, err = wrapSyncEncryptedStore(dst, c.String("encrypt-rsa-key"), "JFS_ENCRYPT_RSA_PASSPHRASE", "encrypt", algo)
-	if err != nil {
-		return err
-	}
 	if config.StorageClass != "" {
 		if os, ok := dst.(object.SupportStorageClass); ok {
 			err := os.SetStorageClass(config.StorageClass)
@@ -552,6 +544,14 @@ func doSync(c *cli.Context) error {
 				logger.Errorf("set storage class %s: %s", config.StorageClass, err)
 			}
 		}
+	}
+	src, err = wrapSyncEncryptedStore(src, c.String("decrypt-rsa-key"), "JFS_DECRYPT_RSA_PASSPHRASE", "decrypt", algo)
+	if err != nil {
+		return err
+	}
+	dst, err = wrapSyncEncryptedStore(dst, c.String("encrypt-rsa-key"), "JFS_ENCRYPT_RSA_PASSPHRASE", "encrypt", algo)
+	if err != nil {
+		return err
 	}
 
 	if config.Manager == "" && !config.Dry {
