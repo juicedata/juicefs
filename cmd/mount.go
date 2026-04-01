@@ -27,6 +27,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -461,9 +462,8 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 			patch(new)
 		}
 		old := &holder.fmt
-		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken || new.StorageClass != old.StorageClass {
-			logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q", new.Storage, new.Bucket, new.AccessKey, new.StorageClass)
-
+		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken || new.StorageClass != old.StorageClass || !reflect.DeepEqual(new.Tiers, old.Tiers) {
+			logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q tiers=%v", new.Storage, new.Bucket, new.AccessKey, new.StorageClass, new.Tiers)
 			newBlob, err := createStorage(*new)
 			if err != nil {
 				logger.Warnf("object storage: %s", err)
