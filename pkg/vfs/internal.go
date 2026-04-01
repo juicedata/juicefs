@@ -500,7 +500,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 							info.TierStr = fmt.Sprintf("actual(%s)", objInfo.StorageClass())
 						}
 					} else {
-						logger.Warnf("Failed to get object info: %s", err)
+						logger.Warnf("Failed to get object info by Head for key %q (get restore status): %v", lastObjKey, err)
 					}
 				}
 			}
