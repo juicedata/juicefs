@@ -42,7 +42,11 @@ type chunkedEncrypted struct {
 }
 
 func NewChunkedEncrypted(o ObjectStorage, enc Encryptor) ObjectStorage {
-	return &chunkedEncrypted{ObjectStorage: o, enc: enc}
+	ce := &chunkedEncrypted{ObjectStorage: o, enc: enc}
+	if fs, ok := o.(FileSystem); ok {
+		return &chunkedEncryptedFS{chunkedEncrypted: ce, fs: fs}
+	}
+	return ce
 }
 
 func (e *chunkedEncrypted) String() string {
@@ -112,9 +116,7 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 
 	n, err := io.ReadFull(r.r, r.chunkBuf)
 	chunk := r.chunkBuf[:n]
-	if err == io.ErrUnexpectedEOF {
-		err = nil
-	} else if err != nil {
+	if err != io.ErrUnexpectedEOF && err != nil {
 		return 0, err
 	}
 
@@ -132,8 +134,12 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 	}
 
 	if r.skip > 0 {
-		plain = plain[r.skip:]
+		skip := r.skip
 		r.skip = 0
+		if skip >= int64(len(plain)) {
+			return 0, io.EOF
+		}
+		plain = plain[skip:]
 	}
 
 	n = copy(p, plain)
@@ -253,27 +259,6 @@ func (e *chunkedEncrypted) Limits() Limits {
 	return l
 }
 
-func (e *chunkedEncrypted) Chmod(path string, mode os.FileMode) error {
-	if fs, ok := e.ObjectStorage.(FileSystem); ok {
-		return fs.Chmod(path, mode)
-	}
-	return notSupported
-}
-
-func (e *chunkedEncrypted) Chown(path, owner, group string) error {
-	if fs, ok := e.ObjectStorage.(FileSystem); ok {
-		return fs.Chown(path, owner, group)
-	}
-	return notSupported
-}
-
-func (e *chunkedEncrypted) Chtimes(path string, mtime time.Time) error {
-	if fs, ok := e.ObjectStorage.(FileSystem); ok {
-		return fs.Chtimes(path, mtime)
-	}
-	return notSupported
-}
-
 func (e *chunkedEncrypted) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
 	var buf bytes.Buffer
 	for len(body) > 0 {
@@ -293,5 +278,36 @@ func (e *chunkedEncrypted) UploadPartCopy(ctx context.Context, key string, uploa
 	return nil, notSupported
 }
 
+func (e *chunkedEncrypted) SetTier(init Tiers) {
+	if o, ok := e.ObjectStorage.(SupportTier); ok {
+		o.SetTier(init)
+	}
+}
+
+func (e *chunkedEncrypted) GetStorageClass(ctx context.Context) string {
+	if o, ok := e.ObjectStorage.(SupportTier); ok {
+		return o.GetStorageClass(ctx)
+	}
+	return ""
+}
+
 var _ ObjectStorage = (*chunkedEncrypted)(nil)
-var _ FileSystem = (*chunkedEncrypted)(nil)
+
+type chunkedEncryptedFS struct {
+	*chunkedEncrypted
+	fs FileSystem
+}
+
+func (e *chunkedEncryptedFS) Chmod(path string, mode os.FileMode) error {
+	return e.fs.Chmod(path, mode)
+}
+
+func (e *chunkedEncryptedFS) Chown(path, owner, group string) error {
+	return e.fs.Chown(path, owner, group)
+}
+
+func (e *chunkedEncryptedFS) Chtimes(path string, mtime time.Time) error {
+	return e.fs.Chtimes(path, mtime)
+}
+
+var _ FileSystem = (*chunkedEncryptedFS)(nil)
