@@ -317,7 +317,7 @@ func TestCalcEncryptOverhead(t *testing.T) {
 			enc, err := NewDataEncryptor(NewKeyEncryptor(rsaKey), c.algo)
 			require.NoError(t, err)
 			overhead := calcEncryptOverhead(enc)
-			for _, size := range []int{1, 100, 1024, plainChunkSize} {
+			for _, size := range []int{1, 100, 1024, 20 << 10} {
 				ct, err := enc.Encrypt(make([]byte, size))
 				require.NoError(t, err)
 				require.Equal(t, overhead, len(ct)-size,
