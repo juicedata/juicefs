@@ -4882,7 +4882,6 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
-	defer m.loadDumpedQuotas(Background(), dm)
 	if err = m.loadDumpedACLs(ctx); err != nil {
 		return err
 	}
@@ -4953,6 +4952,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 		}
 	}
 	_, err = p.Exec(ctx)
+	m.loadDumpedQuotas(ctx, dm)
 	return err
 }
 

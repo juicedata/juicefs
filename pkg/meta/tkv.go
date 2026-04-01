@@ -3780,8 +3780,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		for k, v := range pairs {
 			q := m.parseQuota(v)
 			if q.MaxSpace == -1 && q.MaxInodes == -1 {
-				continue
-			}
+                continue
+            }
 			quotas[binary.BigEndian.Uint64([]byte(k[2:]))] = &DumpedQuota{
 				MaxSpace:   q.MaxSpace,
 				MaxInodes:  q.MaxInodes,
@@ -4011,8 +4011,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 	// update nlinks and parents for hardlinks
 	st := make(map[Ino]int64)
-	defer m.loadDumpedQuotas(Background(), dm)
-	return m.txn(Background(), func(tx *kvTxn) error {
+	err = m.txn(Background(), func(tx *kvTxn) error {
 		for i, ps := range parents {
 			if len(ps) > 1 {
 				a := tx.get(m.inodeKey(i))
@@ -4033,6 +4032,8 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		}
 		return nil
 	})
+	m.loadDumpedQuotas(Background(), dm)
+	return err
 }
 
 func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, originAttr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
