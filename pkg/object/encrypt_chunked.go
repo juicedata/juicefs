@@ -160,59 +160,71 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 
 func (r *chunkDecryptReader) Close() error { return r.r.Close() }
 
-// encryptAndWriteChunk encrypts plain and writes [ct_len][ct][zeros].
-// The ciphertext section is always padded to len(plain)+overhead.
-func (e *chunkedEncrypted) encryptAndWriteChunk(w io.Writer, plain []byte) error {
-	ct, err := e.enc.Encrypt(plain)
-	if err != nil {
-		return err
+type chunkEncryptReader struct {
+	r        io.Reader
+	enc      *dataEncryptor
+	overhead int
+	plain    []byte
+	buf      []byte
+	done     bool
+}
+
+func (e *chunkedEncrypted) newChunkEncryptReader(r io.Reader) *chunkEncryptReader {
+	return &chunkEncryptReader{
+		r:        r,
+		enc:      e.enc,
+		overhead: e.overhead,
+		plain:    make([]byte, plainChunkSize),
 	}
-	fixedCtLen := len(plain) + e.overhead
-	if len(ct) > fixedCtLen {
-		return fmt.Errorf("encrypt_chunked: ciphertext %d exceeds capacity %d", len(ct), fixedCtLen)
+}
+
+func (cr *chunkEncryptReader) Read(p []byte) (int, error) {
+	if len(cr.buf) > 0 {
+		n := copy(p, cr.buf)
+		cr.buf = cr.buf[n:]
+		return n, nil
 	}
-	var header [chunkHeaderSize]byte
-	binary.BigEndian.PutUint32(header[:], uint32(len(ct)))
-	if _, err := w.Write(header[:]); err != nil {
-		return err
+	if cr.done {
+		return 0, io.EOF
 	}
-	if _, err := w.Write(ct); err != nil {
-		return err
-	}
-	if pad := fixedCtLen - len(ct); pad > 0 {
-		if _, err := w.Write(make([]byte, pad)); err != nil {
-			return err
+
+	n, readErr := io.ReadFull(cr.r, cr.plain)
+	if n == 0 {
+		if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
+			cr.done = true
+			return 0, io.EOF
 		}
+		return 0, readErr
 	}
-	return nil
+
+	ct, err := cr.enc.Encrypt(cr.plain[:n])
+	if err != nil {
+		return 0, err
+	}
+	fixedCtLen := n + cr.overhead
+	if len(ct) > fixedCtLen {
+		return 0, fmt.Errorf("encrypt_chunked: ciphertext %d exceeds capacity %d", len(ct), fixedCtLen)
+	}
+
+	chunk := make([]byte, chunkHeaderSize+fixedCtLen)
+	binary.BigEndian.PutUint32(chunk[:chunkHeaderSize], uint32(len(ct)))
+	copy(chunk[chunkHeaderSize:], ct)
+
+	copied := copy(p, chunk)
+	if copied < len(chunk) {
+		cr.buf = chunk[copied:]
+	}
+
+	if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
+		cr.done = true
+	} else if readErr != nil {
+		return copied, readErr
+	}
+	return copied, nil
 }
 
 func (e *chunkedEncrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	pr, pw := io.Pipe()
-	go func() {
-		plain := make([]byte, plainChunkSize)
-		for {
-			n, readErr := io.ReadFull(in, plain)
-			if n > 0 {
-				if err := e.encryptAndWriteChunk(pw, plain[:n]); err != nil {
-					pw.CloseWithError(err)
-					return
-				}
-			}
-			if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
-				pw.Close()
-				return
-			} else if readErr != nil {
-				pw.CloseWithError(readErr)
-				return
-			}
-		}
-	}()
-	err := e.ObjectStorage.Put(ctx, key, pr, getters...)
-	if err != nil {
-		pr.CloseWithError(err)
-	}
-	return err
+	return e.ObjectStorage.Put(ctx, key, e.newChunkEncryptReader(in), getters...)
 }
 
 type sizedObj struct {
@@ -282,18 +294,11 @@ func (e *chunkedEncrypted) Limits() Limits {
 }
 
 func (e *chunkedEncrypted) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
-	var buf bytes.Buffer
-	for len(body) > 0 {
-		n := plainChunkSize
-		if n > len(body) {
-			n = len(body)
-		}
-		if err := e.encryptAndWriteChunk(&buf, body[:n]); err != nil {
-			return nil, err
-		}
-		body = body[n:]
+	data, err := io.ReadAll(e.newChunkEncryptReader(bytes.NewReader(body)))
+	if err != nil {
+		return nil, err
 	}
-	return e.ObjectStorage.UploadPart(ctx, key, uploadID, num, buf.Bytes())
+	return e.ObjectStorage.UploadPart(ctx, key, uploadID, num, data)
 }
 
 func (e *chunkedEncrypted) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
