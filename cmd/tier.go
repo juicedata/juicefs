@@ -86,7 +86,7 @@ $ juicefs tier restore redis://localhost /dir1`,
 			&cli.BoolFlag{
 				Name:    "force",
 				Aliases: []string{"f"},
-				Usage:   "force the setting of the storage tier, even if it is the same as the current storage tier",
+				Usage:   "force rewriting objects to the tier's current storage class (useful after --tier-sc config changes), even when the tier id is unchanged",
 			},
 		},
 	}
