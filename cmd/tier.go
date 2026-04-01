@@ -168,7 +168,7 @@ func setTier(ctx *cli.Context) error {
 		err = visitEntry(m, format, objectFunc, metaFunc, ino, attr, int(id), ctx.Bool("force"))
 	case meta.TypeDirectory:
 		if ctx.Bool("recursive") {
-			if err = visitDir(m, format, objectFunc, metaFunc, ino, ctx.Bool("recursive")); err != nil {
+			if err = visitDir(m, format, objectFunc, metaFunc, ino, ctx.Bool("recursive"), int(id), ctx.Bool("force")); err != nil {
 				return err
 			}
 		}
