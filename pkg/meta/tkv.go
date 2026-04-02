@@ -3105,6 +3105,10 @@ func (m *kvMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 }
 
 func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
+	if (qtype == UserQuotaType || qtype == GroupQuotaType) && key == 0 {
+		logger.Warn("set user/group quota key should not be 0")
+		return false, nil
+	}
 	quotaKey, err := m.getQuotaKey(qtype, key)
 	if err != nil {
 		return false, err
