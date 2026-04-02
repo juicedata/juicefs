@@ -52,8 +52,8 @@ func NewChunkedEncrypted(o ObjectStorage, enc *dataEncryptor) ObjectStorage {
 		overhead:      overhead,
 		encChunkSize:  encChunkSize,
 	}
-	ce.plainPool = sync.Pool{New: func() any { return make([]byte, plainChunkSize) }}
-	ce.encChunkPool = sync.Pool{New: func() any { return make([]byte, encChunkSize) }}
+	ce.plainPool = sync.Pool{New: func() any { buf := make([]byte, plainChunkSize); return &buf }}
+	ce.encChunkPool = sync.Pool{New: func() any { buf := make([]byte, encChunkSize); return &buf }}
 	if fs, ok := o.(FileSystem); ok {
 		cefs := &chunkedEncryptedFS{chunkedEncrypted: ce, FileSystem: fs}
 		if symlink, ok := o.(SupportSymlink); ok {
@@ -129,11 +129,11 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 		return n, nil
 	}
 
-	chunkBuf := r.pool.Get().([]byte)
+	chunkBuf := r.pool.Get().(*[]byte)
 	defer r.pool.Put(chunkBuf)
 
-	n, err := io.ReadFull(r.r, chunkBuf)
-	chunk := chunkBuf[:n]
+	n, err := io.ReadFull(r.r, *chunkBuf)
+	chunk := (*chunkBuf)[:n]
 	if err != io.ErrUnexpectedEOF && err != nil {
 		return 0, err
 	}
@@ -197,10 +197,10 @@ func (cr *chunkEncryptReader) Read(p []byte) (int, error) {
 		return 0, io.EOF
 	}
 
-	plain := cr.pool.Get().([]byte)
+	plain := cr.pool.Get().(*[]byte)
 	defer cr.pool.Put(plain)
 
-	n, readErr := io.ReadFull(cr.r, plain)
+	n, readErr := io.ReadFull(cr.r, *plain)
 	if n == 0 {
 		if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
 			cr.done = true
@@ -209,7 +209,7 @@ func (cr *chunkEncryptReader) Read(p []byte) (int, error) {
 		return 0, readErr
 	}
 
-	ct, err := cr.enc.Encrypt(plain[:n])
+	ct, err := cr.enc.Encrypt((*plain)[:n])
 	if err != nil {
 		return 0, err
 	}
