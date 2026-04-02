@@ -795,7 +795,7 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 			}
 
 			uid, gid := uint64(e.Attr.Uid), uint64(e.Attr.Gid)
-			if uid == 0 && gid == 0 && e.Attr.Typ == TypeFile {
+			if uid == 0 && gid == 0 && e.Attr.Typ != TypeDirectory {
 				continue
 			}
 
