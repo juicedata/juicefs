@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -163,13 +162,7 @@ func setTier(ctx *cli.Context) error {
 	objectFunc := func(key string) error {
 		fullPath := format.Name + "/" + key
 		ctx := context.WithValue(context.Background(), object.TierKey{}, uint8(id))
-		if err := blob.Copy(ctx, fullPath, fullPath); err != nil {
-			if _, err2 := blob.Head(context.Background(), key); os.IsNotExist(err2) {
-				return nil
-			}
-			return err
-		}
-		return nil
+		return blob.Copy(ctx, fullPath, fullPath)
 	}
 	checkFunc := func(ino meta.Ino, oriTier uint8) bool {
 		if id == uint(oriTier) && !ctx.Bool("force") {
