@@ -142,7 +142,7 @@ func quota(c *cli.Context) error {
 	var qtype uint32
 	validateID := func(name string) uint32 {
 		id := c.Uint64(name)
-		if id == 0 && name == "uid"{
+		if id == 0 && name == "uid" {
 			logger.Fatalf("Invalid --uid: 0 is not allowed")
 		}
 		if id > math.MaxUint32 {

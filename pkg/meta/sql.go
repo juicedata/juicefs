@@ -4073,7 +4073,7 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 			created = !exist
 			updateColumns := updateQuotaFields(quota, exist, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
 			if exist {
-				_, e = s.Cols(updateColumns...).Update(origin, &userGroupQuota{Qtype: qtype, Qkey: key})
+				_, e = s.Exec(m.sqlConv("update user_group_quota set max_space=?,max_inodes=?,used_space=?,used_inodes=? where qtype=? AND qkey=?"), origin.MaxSpace, origin.MaxInodes, origin.UsedSpace, origin.UsedInodes, qtype, key)
 			} else {
 				e = mustInsert(s, origin)
 			}
@@ -4096,9 +4096,7 @@ func (m *dbMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 			_, e := s.Delete(&dirQuota{Inode: Ino(key)})
 			return e
 		} else {
-			_, e := s.Cols("max_space", "max_inodes").
-				Update(&userGroupQuota{MaxSpace: -1, MaxInodes: -1},
-					&userGroupQuota{Qtype: qtype, Qkey: key})
+			_, e := s.Exec(m.sqlConv("update user_group_quota set max_space=-1,max_inodes=-1 where qtype=? AND qkey=?"), qtype, key)
 			return e
 		}
 	})
