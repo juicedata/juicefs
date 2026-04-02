@@ -153,7 +153,6 @@ func setTier(ctx *cli.Context) error {
 
 	metaFunc := func(ino meta.Ino) error {
 		if eno := m.SetAttr(meta.Background(), ino, meta.SetAttrTier, 0, &meta.Attr{Tier: newTier.ID}); eno != 0 {
-			logger.Errorf("set tier for inode %d tierID:%d failed: %s", ino, newTier.ID, eno)
 			return eno
 		}
 		return nil
@@ -181,6 +180,7 @@ func setTier(ctx *cli.Context) error {
 			}
 		}
 		if err = metaFunc(ino); err != nil {
+			logger.Errorf("set tier for inode %d tierID:%d failed: %s", ino, newTier.ID, eno)
 			return err
 		}
 
@@ -305,7 +305,10 @@ func visitEntry(m meta.Meta, format *meta.Format, ino meta.Ino, attr meta.Attr, 
 		}
 	}
 	if metaFunc != nil {
-		return metaFunc(ino)
+		if err := metaFunc(ino); err != nil {
+			logger.Errorf("set tier for inode %d failed: %s", ino, err)
+			return err
+		}
 	}
 	return nil
 }
