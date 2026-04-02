@@ -1787,8 +1787,8 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	st := m.en.doBatchClone(ctx, srcParent, dstParent, entries, cmode, cumask, &r)
 	if st == 0 {
 		m.en.updateStats(r.space, r.inodes)
+		m.updateDirStat(ctx, dstParent, r.length, r.space, r.inodes)
 		m.updateDirQuota(ctx, dstParent, r.space, r.inodes)
-		// TODO
 		for _, q := range r.deltas {
 			m.updateUserGroupStat(ctx, q.Uid, q.Gid, q.Space, q.Inodes)
 		}

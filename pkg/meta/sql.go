@@ -5243,7 +5243,9 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			}
 
 			entrySpace := align4K(sn.Length)
-			result.length += int64(sn.Length)
+			if sn.Type == TypeFile {
+				result.length += int64(sn.Length)
+			}
 			result.space += entrySpace
 			result.inodes++
 			result.deltas.add(&ugQuotaDelta{

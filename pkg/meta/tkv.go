@@ -4177,8 +4177,198 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 }
 
 func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno {
-	// TODO: Implement batch clone for TKV backend
-	return syscall.ENOTSUP
+	if len(entries) == 0 {
+		return 0
+	}
+
+	type cloneInfo struct {
+		srcIno Ino
+		dstIno Ino
+		name   string
+	}
+
+	cloneInfos := make([]*cloneInfo, len(entries))
+	srcInodes := make([]Ino, 0, len(entries))
+	srcInodeSet := make(map[Ino]struct{}, len(entries))
+	for i, e := range entries {
+		dstIno, err := m.nextInode()
+		if err != nil {
+			return errno(err)
+		}
+		cloneInfos[i] = &cloneInfo{srcIno: e.Inode, dstIno: dstIno, name: string(e.Name)}
+		if _, exists := srcInodeSet[e.Inode]; !exists {
+			srcInodeSet[e.Inode] = struct{}{}
+			srcInodes = append(srcInodes, e.Inode)
+		}
+	}
+
+	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		now := time.Now()
+		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
+
+		// validate destination parent
+		pa := tx.get(m.inodeKey(dstParent))
+		if pa == nil {
+			return syscall.ENOENT
+		}
+		var pattr Attr
+		m.parseAttr(pa, &pattr)
+		if pattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if (pattr.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+		if eno := m.Access(ctx, dstParent, MODE_MASK_W|MODE_MASK_X, &pattr); eno != 0 {
+			return eno
+		}
+
+		// batch fetch all source inodes
+		srcKeys := make([][]byte, len(srcInodes))
+		for i, ino := range srcInodes {
+			srcKeys[i] = m.inodeKey(ino)
+		}
+		srcVals := tx.gets(srcKeys...)
+		srcNodeMap := make(map[Ino][]byte, len(srcInodes))
+		for i, ino := range srcInodes {
+			if srcVals[i] == nil {
+				return syscall.ENOENT
+			}
+			srcNodeMap[ino] = srcVals[i]
+		}
+
+		type fileCloneInfo struct {
+			srcIno Ino
+			dstIno Ino
+			length uint64
+		}
+		type symlinkCloneInfo struct {
+			srcIno Ino
+			dstIno Ino
+		}
+		fileClones := make([]fileCloneInfo, 0)
+		symlinkClones := make([]symlinkCloneInfo, 0)
+
+		for _, info := range cloneInfos {
+			sv, ok := srcNodeMap[info.srcIno]
+			if !ok {
+				return syscall.ENOENT
+			}
+			var attr Attr
+			m.parseAttr(sv, &attr)
+			if attr.Typ == TypeDirectory {
+				return syscall.EINVAL
+			}
+			if eno := m.Access(ctx, info.srcIno, MODE_MASK_R, &attr); eno != 0 {
+				return eno
+			}
+
+			attr.Parent = dstParent
+			if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+				attr.Uid = ctx.Uid()
+				attr.Gid = ctx.Gid()
+				attr.Mode &= ^cumask
+				attr.Atime = now.Unix()
+				attr.Mtime = now.Unix()
+				attr.Ctime = now.Unix()
+				attr.Atimensec = uint32(now.Nanosecond())
+				attr.Mtimensec = uint32(now.Nanosecond())
+				attr.Ctimensec = uint32(now.Nanosecond())
+			}
+			if attr.Typ == TypeFile && attr.Nlink > 1 {
+				attr.Nlink = 1
+			}
+
+			// check entry does not exist
+			if tx.get(m.entryKey(dstParent, info.name)) != nil {
+				return syscall.EEXIST
+			}
+			if m.conf.CaseInsensi {
+				if e := m.resolveCase(ctx, dstParent, info.name); e != nil {
+					return syscall.EEXIST
+				}
+			}
+
+			// write destination inode and entry
+			tx.set(m.inodeKey(info.dstIno), m.marshal(&attr))
+			tx.set(m.entryKey(dstParent, info.name), m.packEntry(attr.Typ, info.dstIno))
+
+			switch attr.Typ {
+			case TypeFile:
+				if attr.Length > 0 {
+					fileClones = append(fileClones, fileCloneInfo{srcIno: info.srcIno, dstIno: info.dstIno, length: attr.Length})
+				}
+			case TypeSymlink:
+				symlinkClones = append(symlinkClones, symlinkCloneInfo{srcIno: info.srcIno, dstIno: info.dstIno})
+			}
+
+			// copy xattrs
+			prefix := m.xattrKey(info.srcIno, "")
+			tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
+				tx.set(m.xattrKey(info.dstIno, string(k[len(prefix):])), v)
+				return true
+			})
+
+			entrySpace := align4K(attr.Length)
+			if attr.Typ == TypeFile {
+				result.length += int64(attr.Length)
+			}
+			result.space += entrySpace
+			result.inodes++
+			result.deltas.add(&ugQuotaDelta{
+				Uid:    attr.Uid,
+				Gid:    attr.Gid,
+				Space:  entrySpace,
+				Inodes: 1,
+			})
+		}
+
+		// copy file chunks and update slice refs
+		refCounts := make(map[string]int) // sliceKey -> delta
+		for _, fc := range fileClones {
+			tx.scan(m.chunkKey(fc.srcIno, 0), m.chunkKey(fc.srcIno, uint32(fc.length/ChunkSize)+1),
+				false, func(k, v []byte) bool {
+					// extract chunk index from key
+					indx := binary.BigEndian.Uint32(k[len(k)-4:])
+					tx.set(m.chunkKey(fc.dstIno, indx), v)
+					for _, s := range readSliceBuf(v) {
+						if s.id > 0 {
+							refCounts[string(m.sliceKey(s.id, s.size))]++
+						}
+					}
+					return true
+				})
+		}
+		if len(refCounts) > 0 {
+			refKeys := make([][]byte, 0, len(refCounts))
+			for k := range refCounts {
+				refKeys = append(refKeys, []byte(k))
+			}
+			refs := tx.gets(refKeys...)
+			for i, k := range refKeys {
+				tx.set(k, packCounter(parseCounter(refs[i])+int64(refCounts[string(k)])))
+			}
+		}
+
+		// copy symlinks
+		for _, sc := range symlinkClones {
+			target := tx.get(m.symKey(sc.srcIno))
+			if target == nil {
+				return syscall.ENOENT
+			}
+			tx.set(m.symKey(sc.dstIno), target)
+		}
+
+		// update parent directory timestamps
+		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+			pattr.Mtime = now.Unix()
+			pattr.Mtimensec = uint32(now.Nanosecond())
+			pattr.Ctime = now.Unix()
+			pattr.Ctimensec = uint32(now.Nanosecond())
+			tx.set(m.inodeKey(dstParent), m.marshal(&pattr))
+		}
+		return nil
+	}, dstParent))
 }
 
 func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string) syscall.Errno {
