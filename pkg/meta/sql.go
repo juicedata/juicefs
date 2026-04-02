@@ -4005,7 +4005,7 @@ func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 			return e
 		} else {
 			q := &userGroupQuota{Qtype: qtype, Qkey: key}
-			ok, e := s.Get(q)
+			ok, e := s.MustCols("qkey").Get(q)
 			if e == nil && ok {
 				quota = &Quota{
 					MaxSpace:   q.MaxSpace,
@@ -4065,12 +4065,8 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 			}
 			return e
 		} else if qtype == UserQuotaType || qtype == GroupQuotaType {
-			if key == 0 {
-				logger.Warn("set quota key should not be 0")
-				return nil
-			}
 			origin := &userGroupQuota{Qtype: qtype, Qkey: key}
-			exist, e := s.ForUpdate().Get(origin)
+			exist, e := s.ForUpdate().MustCols("qkey").Get(origin)
 			if e != nil {
 				return e
 			}

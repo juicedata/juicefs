@@ -4126,10 +4126,6 @@ func (m *redisMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, e
 }
 
 func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
-	if (qtype == UserQuotaType || qtype == GroupQuotaType) && key == 0 {
-		logger.Warn("set user/group quota key should not be 0")
-		return false, nil
-	}
 	config, err := m.getQuotaKeys(qtype)
 	if err != nil {
 		return false, err
