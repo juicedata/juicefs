@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sync"
 )
 
 const (
@@ -38,16 +39,21 @@ type chunkedEncrypted struct {
 
 	overhead     int
 	encChunkSize int64
+
+	plainPool, encChunkPool sync.Pool // plainChunkSize/encChunkSize buffers
 }
 
 func NewChunkedEncrypted(o ObjectStorage, enc *dataEncryptor) ObjectStorage {
 	overhead := enc.MaxOverhead()
+	encChunkSize := plainChunkSize + chunkHeaderSize + int64(overhead)
 	ce := &chunkedEncrypted{
 		ObjectStorage: o,
 		enc:           enc,
 		overhead:      overhead,
-		encChunkSize:  plainChunkSize + chunkHeaderSize + int64(overhead),
+		encChunkSize:  encChunkSize,
 	}
+	ce.plainPool = sync.Pool{New: func() any { return make([]byte, plainChunkSize) }}
+	ce.encChunkPool = sync.Pool{New: func() any { return make([]byte, encChunkSize) }}
 	if fs, ok := o.(FileSystem); ok {
 		cefs := &chunkedEncryptedFS{chunkedEncrypted: ce, FileSystem: fs}
 		if symlink, ok := o.(SupportSymlink); ok {
@@ -92,10 +98,10 @@ func (e *chunkedEncrypted) Get(ctx context.Context, key string, off, limit int64
 	}
 
 	dr := &chunkDecryptReader{
-		r:        r,
-		enc:      e.enc,
-		chunkBuf: make([]byte, e.encChunkSize),
-		skip:     off - startChunk*plainChunkSize,
+		r:    r,
+		enc:  e.enc,
+		pool: &e.encChunkPool,
+		skip: off - startChunk*plainChunkSize,
 	}
 	if limit > 0 {
 		return &limitedReadCloser{io.LimitReader(dr, limit), dr}, nil
@@ -109,11 +115,11 @@ type limitedReadCloser struct {
 }
 
 type chunkDecryptReader struct {
-	r        io.ReadCloser
-	enc      *dataEncryptor
-	buf      []byte
-	chunkBuf []byte
-	skip     int64
+	r    io.ReadCloser
+	enc  *dataEncryptor
+	buf  []byte
+	pool *sync.Pool
+	skip int64
 }
 
 func (r *chunkDecryptReader) Read(p []byte) (int, error) {
@@ -123,8 +129,11 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 		return n, nil
 	}
 
-	n, err := io.ReadFull(r.r, r.chunkBuf)
-	chunk := r.chunkBuf[:n]
+	chunkBuf := r.pool.Get().([]byte)
+	defer r.pool.Put(chunkBuf)
+
+	n, err := io.ReadFull(r.r, chunkBuf)
+	chunk := chunkBuf[:n]
 	if err != io.ErrUnexpectedEOF && err != nil {
 		return 0, err
 	}
@@ -164,7 +173,7 @@ type chunkEncryptReader struct {
 	r        io.Reader
 	enc      *dataEncryptor
 	overhead int
-	plain    []byte
+	pool     *sync.Pool
 	buf      []byte
 	done     bool
 }
@@ -174,7 +183,7 @@ func (e *chunkedEncrypted) newChunkEncryptReader(r io.Reader) *chunkEncryptReade
 		r:        r,
 		enc:      e.enc,
 		overhead: e.overhead,
-		plain:    make([]byte, plainChunkSize),
+		pool:     &e.plainPool,
 	}
 }
 
@@ -188,7 +197,10 @@ func (cr *chunkEncryptReader) Read(p []byte) (int, error) {
 		return 0, io.EOF
 	}
 
-	n, readErr := io.ReadFull(cr.r, cr.plain)
+	plain := cr.pool.Get().([]byte)
+	defer cr.pool.Put(plain)
+
+	n, readErr := io.ReadFull(cr.r, plain)
 	if n == 0 {
 		if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
 			cr.done = true
@@ -197,7 +209,7 @@ func (cr *chunkEncryptReader) Read(p []byte) (int, error) {
 		return 0, readErr
 	}
 
-	ct, err := cr.enc.Encrypt(cr.plain[:n])
+	ct, err := cr.enc.Encrypt(plain[:n])
 	if err != nil {
 		return 0, err
 	}
