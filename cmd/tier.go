@@ -180,7 +180,7 @@ func setTier(ctx *cli.Context) error {
 			}
 		}
 		if err = metaFunc(ino); err != nil {
-			logger.Errorf("set tier for inode %d tierID:%d failed: %s", ino, newTier.ID, eno)
+			logger.Errorf("set tier for inode %d tierID:%d failed: %v", ino, newTier.ID, err)
 			return err
 		}
 
@@ -298,7 +298,7 @@ func visitEntry(m meta.Meta, format *meta.Format, ino meta.Ino, attr meta.Attr, 
 			if key != "" {
 				err := objectFunc(key)
 				if err != nil {
-					logger.Errorf("apply object action failed in inode:%d key:%s: err:%s", ino, key, err)
+					logger.Errorf("apply object action failed in inode:%d key:%v: err:%s", ino, key, err)
 					return err
 				}
 			}
@@ -306,7 +306,7 @@ func visitEntry(m meta.Meta, format *meta.Format, ino meta.Ino, attr meta.Attr, 
 	}
 	if metaFunc != nil {
 		if err := metaFunc(ino); err != nil {
-			logger.Errorf("set tier for inode %d failed: %s", ino, err)
+			logger.Errorf("set tier for inode %d failed: %v", ino, err)
 			return err
 		}
 	}
