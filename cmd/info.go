@@ -207,7 +207,9 @@ func info(ctx *cli.Context) error {
 				})
 				chunkOffset += uint64(o.Len)
 			}
-			printResult(results, 1, false)
+			if len(results) > 1 {
+				printResult(results, 1, false)
+			}
 		}
 		if len(resp.FLocks) > 0 {
 			fmt.Println(" flocks:")
