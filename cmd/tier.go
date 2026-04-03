@@ -152,7 +152,10 @@ func setTier(ctx *cli.Context) error {
 	}
 
 	metaFunc := func(ino meta.Ino) error {
-		return m.SetAttr(meta.Background(), ino, meta.SetAttrTier, 0, &meta.Attr{Tier: newTier.ID})
+		if eno := m.SetAttr(meta.Background(), ino, meta.SetAttrTier, 0, &meta.Attr{Tier: newTier.ID}); eno != 0 {
+			return eno
+		}
+		return nil
 	}
 
 	objectFunc := func(key string) error {
