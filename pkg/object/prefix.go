@@ -73,12 +73,23 @@ func (p *withPrefix) Create() error {
 	return p.os.Create()
 }
 
+type withSys interface {
+	Sys() any
+}
+
 type withFile struct {
 	File
 	key string
 }
 
 func (f *withFile) Key() string { return f.key }
+
+func (f *withFile) Sys() any {
+	if s, ok := f.File.(withSys); ok {
+		return s.Sys()
+	}
+	return nil
+}
 
 type withObj struct {
 	Object
