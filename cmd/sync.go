@@ -292,6 +292,11 @@ func syncStorageFlags() []cli.Flag {
 			Value: object.AES256GCM_RSA,
 			Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa, sm4gcm)",
 		},
+		&cli.StringFlag{
+			Name:  "decrypt-algo",
+			Value: object.AES256GCM_RSA,
+			Usage: "decrypt algorithm (aes256gcm-rsa, chacha20-rsa, sm4gcm)",
+		},
 	})
 }
 
@@ -536,7 +541,6 @@ func doSync(c *cli.Context) error {
 		object.Shutdown(src)
 		object.Shutdown(dst)
 	}()
-	algo := c.String("encrypt-algo")
 	if config.StorageClass != "" {
 		if os, ok := dst.(object.SupportStorageClass); ok {
 			err := os.SetStorageClass(config.StorageClass)
@@ -545,11 +549,11 @@ func doSync(c *cli.Context) error {
 			}
 		}
 	}
-	src, err = wrapSyncEncryptedStore(src, c.String("decrypt-rsa-key"), "JFS_DECRYPT_RSA_PASSPHRASE", "decrypt", algo)
+	src, err = wrapSyncEncryptedStore(src, c.String("decrypt-rsa-key"), "JFS_DECRYPT_RSA_PASSPHRASE", "decrypt", c.String("decrypt-algo"))
 	if err != nil {
 		return err
 	}
-	dst, err = wrapSyncEncryptedStore(dst, c.String("encrypt-rsa-key"), "JFS_ENCRYPT_RSA_PASSPHRASE", "encrypt", algo)
+	dst, err = wrapSyncEncryptedStore(dst, c.String("encrypt-rsa-key"), "JFS_ENCRYPT_RSA_PASSPHRASE", "encrypt", c.String("encrypt-algo"))
 	if err != nil {
 		return err
 	}
