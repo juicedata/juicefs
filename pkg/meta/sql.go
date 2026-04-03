@@ -350,14 +350,8 @@ func (m *dbMeta) initStatement() {
 		fmt.Sprintf("update %schunk_ref set refs=refs-1 where chunkid=? AND size=?", m.tablePrefix)
 	m.statement["update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"] =
 		fmt.Sprintf("update %sdir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?", m.tablePrefix)
-	m.statement["update dir_quota set max_space=?,max_inodes=?,used_space=?,used_inodes=? where inode=?"] =
-		fmt.Sprintf("update %sdir_quota set max_space=?,max_inodes=?,used_space=?,used_inodes=? where inode=?", m.tablePrefix)
 	m.statement["update user_group_quota set used_space=used_space+?, used_inodes=used_inodes+? where qtype=? and qkey=?"] =
 		fmt.Sprintf("update %suser_group_quota set used_space=used_space+?, used_inodes=used_inodes+? where qtype=? and qkey=?", m.tablePrefix)
-	m.statement["update user_group_quota set max_space=?,max_inodes=?,used_space=?,used_inodes=? where qtype=? AND qkey=?"] =
-		fmt.Sprintf("update %suser_group_quota set max_space=?,max_inodes=?,used_space=?,used_inodes=? where qtype=? AND qkey=?", m.tablePrefix)
-	m.statement["update user_group_quota set max_space=-1,max_inodes=-1 where qtype=? AND qkey=?"] =
-		fmt.Sprintf("update %suser_group_quota set max_space=-1,max_inodes=-1 where qtype=? AND qkey=?", m.tablePrefix)
 
 	m.statement[`
 			 INSERT INTO chunk (inode, indx, slices)
@@ -4025,23 +4019,32 @@ func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 	return quota, err
 }
 
-func fillQuotaFields(quota *Quota, exist bool, maxSpace, maxInodes, usedSpace, usedInodes *int64) {
+func updateQuotaFields(quota *Quota, exist bool, maxSpace, maxInodes *int64, usedSpace, usedInodes *int64) []string {
+	updateColumns := make([]string, 0, 4)
 	if quota.MaxSpace >= 0 || !exist {
 		*maxSpace = quota.MaxSpace
+		updateColumns = append(updateColumns, "max_space")
 	}
 	if quota.MaxInodes >= 0 || !exist {
 		*maxInodes = quota.MaxInodes
+		updateColumns = append(updateColumns, "max_inodes")
 	}
 	if quota.UsedSpace >= 0 {
 		*usedSpace = quota.UsedSpace
+		updateColumns = append(updateColumns, "used_space")
 	} else if !exist {
 		*usedSpace = 0
+		updateColumns = append(updateColumns, "used_space")
 	}
 	if quota.UsedInodes >= 0 {
 		*usedInodes = quota.UsedInodes
+		updateColumns = append(updateColumns, "used_inodes")
 	} else if !exist {
 		*usedInodes = 0
+		updateColumns = append(updateColumns, "used_inodes")
 	}
+
+	return updateColumns
 }
 
 func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
@@ -4054,9 +4057,9 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				return e
 			}
 			created = !exist
-			fillQuotaFields(quota, exist, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
+			updateColumns := updateQuotaFields(quota, exist, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
 			if exist {
-				_, e = s.Exec(m.sqlConv("update dir_quota set max_space=?,max_inodes=?,used_space=?,used_inodes=? where inode=?"), origin.MaxSpace, origin.MaxInodes, origin.UsedSpace, origin.UsedInodes, int64(key))
+				_, e = s.Cols(updateColumns...).Where("inode = ?", Ino(key)).Update(origin)
 			} else {
 				e = mustInsert(s, origin)
 			}
@@ -4068,9 +4071,9 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				return e
 			}
 			created = !exist
-			fillQuotaFields(quota, exist, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
+			updateColumns := updateQuotaFields(quota, exist, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
 			if exist {
-				_, e = s.Exec(m.sqlConv("update user_group_quota set max_space=?,max_inodes=?,used_space=?,used_inodes=? where qtype=? AND qkey=?"), origin.MaxSpace, origin.MaxInodes, origin.UsedSpace, origin.UsedInodes, qtype, key)
+				_, e = s.Cols(updateColumns...).Where("qtype = ? AND qkey = ?", qtype, key).Update(origin)
 			} else {
 				e = mustInsert(s, origin)
 			}
@@ -4093,7 +4096,7 @@ func (m *dbMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 			_, e := s.Delete(&dirQuota{Inode: Ino(key)})
 			return e
 		} else {
-			_, e := s.Exec(m.sqlConv("update user_group_quota set max_space=-1,max_inodes=-1 where qtype=? AND qkey=?"), qtype, key)
+			_, e := s.Cols("max_space", "max_inodes").Where("qtype = ? AND qkey = ?", qtype, key).Update(&userGroupQuota{MaxSpace: -1, MaxInodes: -1})
 			return e
 		}
 	})
@@ -4193,9 +4196,7 @@ func (m *dbMeta) cleanUgUsage(ctx Context, qtype uint32) error {
 	}
 
 	return m.txn(func(s *xorm.Session) error {
-		_, err := s.Cols("used_space", "used_inodes").
-			Update(&userGroupQuota{UsedSpace: 0, UsedInodes: 0},
-				&userGroupQuota{Qtype: qtype})
+		_, err := s.Cols("used_space", "used_inodes").Where("qtype = ?", qtype).Update(&userGroupQuota{UsedSpace: 0, UsedInodes: 0})
 		return err
 	})
 }
