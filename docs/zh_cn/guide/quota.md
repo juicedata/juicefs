@@ -238,6 +238,89 @@ JuiceFS:myjfs     400   314    86   79% /mnt/jfs
 当挂载的子目录没有设置配额，JuiceFS 会逐级往上查询知道找到最近的目录配额再返回给 `df`。如果有多级父目录均设置目录配额，JuiceFS 会在计算后返回最小的可用容量和 inode 数量。
 :::
 
+## 用户与组配额 {#user-and-group-quota}
+
+除了目录配额，JuiceFS 还支持按 UID（用户）和 GID（组）设置存储配额。用户配额和组配额同样是硬限制，超限写入会返回 `EDQUOT`（Disk quota exceeded）错误。
+
+与目录配额不同，用户/组配额不依赖目录层级，而是按文件和目录的属主信息（UID/GID）统计和限制。
+
+:::tip 提示
+用户/组配额是基于 UID/GID 的数字 ID 进行统计，不依赖用户名和组名。你可以使用 `id` 命令查看具体 UID/GID。
+:::
+
+### 设置用户配额
+
+可以通过 `--uid` 指定用户，为其设置容量和 inode 配额。例如将 UID 为 `1000` 的用户限制为 `2 GiB` 和 `200` 个 inode：
+
+```shell
+$ juicefs quota set $METAURL --uid 1000 --capacity 2 --inodes 200
++---------+---------+---------+------+--------+-------+-------+
+| User ID |   Size  |   Used  | Use% | Inodes | IUsed | IUse% |
++---------+---------+---------+------+--------+-------+-------+
+|     1000| 2.0 GiB | 1.6 MiB |   0% |    200 |    12 |    6% |
++---------+---------+---------+------+--------+-------+-------+
+```
+
+查询和删除用户配额：
+
+```shell
+juicefs quota get $METAURL --uid 1000
+juicefs quota delete $METAURL --uid 1000
+```
+
+### 设置组配额
+
+可以通过 `--gid` 指定组，为其设置容量和 inode 配额。例如将 GID 为 `100` 的组限制为 `5 GiB` 和 `500` 个 inode：
+
+```shell
+$ juicefs quota set $METAURL --gid 100 --capacity 5 --inodes 500
++----------+---------+---------+------+--------+-------+-------+
+| Group ID |   Size  |   Used  | Use% | Inodes | IUsed | IUse% |
++----------+---------+---------+------+--------+-------+-------+
+|      100 | 5.0 GiB | 3.2 MiB |   0% |    500 |    21 |    4% |
++----------+---------+---------+------+--------+-------+-------+
+```
+
+查询和删除组配额：
+
+```shell
+juicefs quota get $METAURL --gid 100
+juicefs quota delete $METAURL --gid 100
+```
+
+### 列出所有配额
+
+使用 `juicefs quota list $METAURL` 可以同时列出目录、用户和组的配额。输出中会通过 `uid:<id>` / `gid:<id>` 标识用户和组配额。
+
+### 一致性检查与修复
+
+和目录配额一样，用户/组配额也可能因为异常退出等原因出现用量偏差。可用 `check` 子命令检查并修复。
+
+检查所有用户和组配额：
+
+```shell
+juicefs quota check $METAURL
+```
+
+仅检查某个用户或组：
+
+```shell
+juicefs quota check $METAURL --uid 1000
+juicefs quota check $METAURL --gid 100
+```
+
+发现不一致后，使用 `--repair` 执行修复：
+
+```shell
+juicefs quota check $METAURL --repair
+```
+
+### 统计口径说明
+
+用户/组配额统计以写入后对象的属主 UID/GID 为准，而不是以“发起操作的客户端账号”直接计费。
+
+例如，在启用了 `setgid` 的目录下创建文件时，文件 GID 可能会继承父目录组，此时会消耗继承后的组配额。
+
 ### 用量检查与修复 {#usage-check-and-fix}
 
 由于目录用量的更新是滞后且异步的，在异常情况下可能会发生丢失（比如客户端意外退出）。我们可以使用 `juicefs quota check $METAURL --path $DIR` 命令进行检查或修复：
