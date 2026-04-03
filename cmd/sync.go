@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	_ "net/http/pprof"
@@ -270,6 +271,19 @@ func syncStorageFlags() []cli.Flag {
 			Name:  "traffic-control-url",
 			Usage: "the url of the traffic control",
 		},
+		&cli.StringFlag{
+			Name:  "encrypt-rsa-key",
+			Usage: "path to RSA private key (PEM) for encrypting destination",
+		},
+		&cli.StringFlag{
+			Name:  "decrypt-rsa-key",
+			Usage: "path to RSA private key (PEM) for decrypting source",
+		},
+		&cli.StringFlag{
+			Name:  "encrypt-algo",
+			Value: object.AES256GCM_RSA,
+			Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
+		},
 	})
 }
 
@@ -456,6 +470,27 @@ func isS3PathType(endpoint string) bool {
 	return regexp.MustCompile(pattern).MatchString(endpoint)
 }
 
+func wrapSyncEncryptedStore(store object.ObjectStorage, keyPath, passphraseEnv, mode, algo string) (object.ObjectStorage, error) {
+	if keyPath == "" {
+		return store, nil
+	}
+
+	privKey, err := object.ParseRsaPrivateKeyFromPath(keyPath, os.Getenv(passphraseEnv))
+	if err != nil {
+		if errors.Is(err, object.ErrKeyNeedPasswd) {
+			logger.Fatalf("%s key is password protected, please set %s environment variable", mode, passphraseEnv)
+		}
+		return nil, fmt.Errorf("load %s key: %w", mode, err)
+	}
+
+	encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), algo)
+	if err != nil {
+		return nil, fmt.Errorf("create %sor: %w", mode, err)
+	}
+
+	return object.NewChunkedEncrypted(store, encryptor), nil
+}
+
 func doSync(c *cli.Context) error {
 	setup(c, 2)
 	if c.IsSet("include") && !c.IsSet("exclude") {
@@ -493,6 +528,7 @@ func doSync(c *cli.Context) error {
 		object.Shutdown(src)
 		object.Shutdown(dst)
 	}()
+	algo := c.String("encrypt-algo")
 	if config.StorageClass != "" {
 		if os, ok := dst.(object.SupportStorageClass); ok {
 			err := os.SetStorageClass(config.StorageClass)
@@ -500,6 +536,14 @@ func doSync(c *cli.Context) error {
 				logger.Errorf("set storage class %s: %s", config.StorageClass, err)
 			}
 		}
+	}
+	src, err = wrapSyncEncryptedStore(src, c.String("decrypt-rsa-key"), "JFS_DECRYPT_RSA_PASSPHRASE", "decrypt", algo)
+	if err != nil {
+		return err
+	}
+	dst, err = wrapSyncEncryptedStore(dst, c.String("encrypt-rsa-key"), "JFS_ENCRYPT_RSA_PASSPHRASE", "encrypt", algo)
+	if err != nil {
+		return err
 	}
 
 	if config.Manager == "" && !config.Dry {
