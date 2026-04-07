@@ -6,7 +6,7 @@ description: JuiceFS is open source software and the code is contributed and mai
 
 ## Guidelines
 
-- Before starting work on a feature or bug fix, search GitHub or reach out to us via GitHub or Slack, make sure no one else is already working on it and we'll ask you to open a GitHub issue if necessary.
+- Before starting work on a feature or bug fix, search GitHub or reach out to us via GitHub or Discord, make sure no one else is already working on it and we'll ask you to open a GitHub issue if necessary.
 - Before contributing, use the GitHub issue to discuss the feature and reach an agreement with the core developers.
 - For major feature updates, write a design document to help the community understand your motivation and solution.
 - Find issues with the label ["kind/good-first-issue"](https://github.com/juicedata/juicefs/labels/kind%2Fgood-first-issue) or ["kind/help-wanted"](https://github.com/juicedata/juicefs/labels/kind%2Fhelp-wanted).

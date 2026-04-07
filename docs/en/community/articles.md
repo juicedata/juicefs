@@ -171,4 +171,4 @@ Feel free to contribute by creating a branch in this repository on GitHub. Add t
 
 ### Social media
 
-You can join the official JuiceFS [Slack channel](https://go.juicefs.com/slack). There, you can get in touch with any staff member to discuss your contribution.
+You can join the official JuiceFS [Discord channel](https://go.juicefs.com/discord). There, you can get in touch with any staff member to discuss your contribution.
