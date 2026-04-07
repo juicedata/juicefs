@@ -39,10 +39,6 @@ No, while JuiceFS supports using local disks or SFTP as the underlying storage, 
 
 Yes, There is also a [best practice document](administration/metadata/redis_best_practices.md) for Redis as the JuiceFS metadata engine for reference.
 
-### Why did I delete files but user/group quota usage did not decrease?
-
-You may have trash enabled. Files in trash still consume user/group quota usage.
-
 ## Object Storage Related Questions
 
 ### Why doesn't JuiceFS support XXX object storage?

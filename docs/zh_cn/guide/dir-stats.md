@@ -5,6 +5,10 @@ sidebar_position: 5
 
 JuiceFS 在 v1.1.0 开始支持目录用量统计并在文件系统格式化时默认开启，旧版本 volume 迁移到新版本后默认关闭（需要[手动开启](#enable-directory-stats)）。目录用量统计可以加速 `quota`、`info` 和 `summary` 等子命令，但由于客户端会异步更新统计信息，启用后也会带来少量开销。
 
+:::tip 提示
+由于用量统计需要挂载客户端支持，请确保除所有可写入客户端已升级到 v1.1.0 以上版本再启用此特性。
+:::
+
 ## 启用目录用量统计 {#enable-directory-stats}
 
 运行 `juicefs config $URL --dir-stats` 来启用目录统计，启用以后，使用 `juicefs config $URL` 命令确认生效：
