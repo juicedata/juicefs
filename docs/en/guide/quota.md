@@ -358,18 +358,18 @@ This section summarizes the accounting rules of JuiceFS usage across three dimen
 
 For all three dimensions, regular files are accounted by file length, aligned to 4 KiB, and consume 1 inode.
 
-2. Hard-linked files
+1. Hard-linked files
 
 The key difference is whether accounting deduplicates by inode:
 
 - Global usage and user/group usage deduplicate by inode: creating a hard link only creates another directory entry, not a new file entity.
 - Directory usage accumulates by directory entries in the tree: creating a hard link under a directory increases usage for that directory and its ancestors.
 
-3. Directories and other non-regular files
+1. Directories and other non-regular files
 
 Directories, symlinks, and other non-regular files mainly consume inodes. Space usage is treated as 4 KiB by default.
 
-4. Trash files
+1. Trash files
 
 With trash enabled, delete is usually a move-to-trash operation instead of immediate physical deletion:
 
