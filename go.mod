@@ -11,7 +11,7 @@ require (
 	github.com/DataDog/zstd v1.5.6
 	github.com/IBM/ibm-cos-sdk-go v1.12.1
 	github.com/agiledragon/gomonkey/v2 v2.6.0
-	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.2.1
+	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.4.1
 	github.com/aliyun/credentials-go v1.4.5
 	github.com/apple/foundationdb/bindings/go v0.0.0-20211207225159-47b9a81d1c10
 	github.com/aws/aws-sdk-go-v2 v1.36.1
