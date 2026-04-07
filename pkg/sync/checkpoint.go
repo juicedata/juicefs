@@ -474,6 +474,14 @@ func (m *CheckpointManager) RegisterChildPrefix(childPrefix string, listDepth in
 	state.Unlock()
 }
 
+func (m *CheckpointManager) Stop() {
+	select {
+	case <-m.stopChan:
+	default:
+		close(m.stopChan)
+	}
+}
+
 // DeleteCheckpoint removes the checkpoint file from storage.
 func (m *CheckpointManager) DeleteCheckpoint() error {
 	return m.dst.Delete(ctx, m.checkpointKey)
@@ -511,7 +519,7 @@ func (m *CheckpointManager) SaveOnSignal() {
 	go func() {
 		<-sigChan
 		logger.Infof("Received signal, saving checkpoint...")
-		close(m.stopChan)
+		m.Stop()
 
 		if err := m.Save(m.checkpoint); err != nil {
 			logger.Errorf("Failed to save checkpoint on signal: %v", err)
