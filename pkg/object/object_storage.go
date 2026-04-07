@@ -422,26 +422,3 @@ func getOrDefaultScValue(v, defaultValue string) string {
 	}
 	return v
 }
-
-func toString(p *string) (v string) {
-	if p == nil {
-		return v
-	}
-
-	return *p
-}
-func toInt64(p *int64) (v int64) {
-	if p == nil {
-		return v
-	}
-
-	return *p
-}
-
-func toTime(p *time.Time) (v time.Time) {
-	if p == nil {
-		return v
-	}
-
-	return *p
-}
