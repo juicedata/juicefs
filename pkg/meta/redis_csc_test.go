@@ -11,7 +11,7 @@ import (
 )
 
 func mockRedisCSCMeta(t *testing.T) *redisMeta {
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/10?client-cache=true", testConfig())
+	m, err := newRedisMeta("redis", "127.0.0.1:6379/10?client-cache=true&prefix=cache:", testConfig())
 	require.NoError(t, err, "failed to create redis meta")
 	require.Equal(t, "redis", m.Name(), "meta name should be redis")
 	return m.(*redisMeta)

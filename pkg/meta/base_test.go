@@ -119,6 +119,28 @@ func TestRedisCluster(t *testing.T) { // skip mutate
 	testMeta(t, m)
 }
 
+func TestRedisKeyPrefix(t *testing.T) {
+	cases := []struct {
+		name     string
+		prefix   string
+		db       int
+		cluster  bool
+		expected string
+	}{
+		{"standalone db", "", 3, false, ""},
+		{"cluster db", "", 3, true, "{3}"},
+		{"standalone explicit prefix", "tenantA", 0, false, "tenantA"},
+		{"cluster explicit prefix", "tenantA", 0, true, "{tenantA}"},
+		{"cluster explicit hash tag", "{tenantA}", 0, true, "{tenantA}"},
+		{"cluster explicit prefix with suffix", "{tenantA}:meta", 0, true, "{tenantA}:meta"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.expected, redisKeyPrefix(tc.prefix, tc.db, tc.cluster))
+		})
+	}
+}
+
 func testMeta(t *testing.T, m Meta) {
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)

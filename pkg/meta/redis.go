@@ -119,6 +119,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	readTimeout := query.duration("read-timeout", "read_timeout", time.Second*30)
 	writeTimeout := query.duration("write-timeout", "write_timeout", time.Second*5)
 	routeRead := query.pop("route-read")
+	explicitPrefix := query.pop("prefix")
 	skipVerify := query.pop("insecure-skip-verify")
 	certFile := query.pop("tls-cert-file")
 	keyFile := query.pop("tls-key-file")
@@ -272,8 +273,11 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 				}
 			}
 			rdb = redis.NewClusterClient(&copt)
-			prefix = fmt.Sprintf("{%d}", opt.DB)
+			prefix = redisKeyPrefix(explicitPrefix, opt.DB, true)
 		}
+	}
+	if prefix == "" && explicitPrefix != "" {
+		prefix = explicitPrefix
 	}
 
 	m := &redisMeta{
@@ -291,6 +295,24 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	m.en = m
 	m.checkServerConfig()
 	return m, nil
+}
+
+func redisKeyPrefix(explicitPrefix string, db int, cluster bool) string {
+	if explicitPrefix == "" {
+		if cluster {
+			return fmt.Sprintf("{%d}", db)
+		}
+		return ""
+	}
+	if !cluster {
+		return explicitPrefix
+	}
+	if start := strings.IndexByte(explicitPrefix, '{'); start >= 0 {
+		if end := strings.IndexByte(explicitPrefix[start+1:], '}'); end >= 0 {
+			return explicitPrefix
+		}
+	}
+	return fmt.Sprintf("{%s}", explicitPrefix)
 }
 
 func (m *redisMeta) Shutdown() error {
@@ -830,7 +852,7 @@ func (m *redisMeta) doSyncVolumeStat(ctx Context) error {
 	}
 
 	var inoKeys []string
-	if err := m.scan(ctx, m.prefix+"session*", func(keys []string) error {
+	if err := m.scan(ctx, "session*", func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
 			key := keys[i]
 			if key == "sessions" {

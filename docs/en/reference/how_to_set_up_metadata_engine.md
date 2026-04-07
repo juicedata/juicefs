@@ -32,12 +32,13 @@ When you need to migrate between two types of metadata engines, you can use this
 JuiceFS requires Redis version 4.0 and above. Redis Cluster is also supported, but in order to avoid transactions across different Redis instances, JuiceFS puts all metadata for one file system on a single Redis instance.
 
 :::tip Redis Cluster Key Prefix
-When using Redis Cluster, the database number in the URL is used as a **key prefix** rather than for actual database selection (since Redis Cluster only supports database 0). The prefix format is `{N}` (e.g., `{1}`, `{2}`), which uses Redis hash tags to ensure all keys for one volume are routed to the same slot. This allows multiple JuiceFS file systems to share a single Redis Cluster:
+When using Redis Cluster, the database number in the URL is used as a **key prefix** rather than for actual database selection (since Redis Cluster only supports database 0). The prefix format is `{N}` (e.g., `{1}`, `{2}`), which uses Redis hash tags to ensure all keys for one volume are routed to the same slot. You can also set an explicit prefix using `?prefix=<value>`; JuiceFS will hash-tag it automatically in cluster mode. This allows multiple JuiceFS file systems to share a single Redis Cluster:
 
 ```shell
 # Different volumes use different DB numbers as key prefixes
 juicefs format redis://cluster:6379/1 volume1   # keys prefixed with {1}
 juicefs format redis://cluster:6379/2 volume2   # keys prefixed with {2}
+juicefs format 'redis://cluster:6379/0?prefix=tenantA' volume3   # keys prefixed with {tenantA}
 ```
 
 You can verify the keys in Redis Cluster using:
@@ -77,6 +78,7 @@ Where `[]` enclosed are optional and the rest are mandatory.
 - `<username>` is introduced after Redis 6.0 and can be ignored if there is no username, but the `:` colon in front of the password needs to be kept, e.g. `redis://:<password>@<host>:6379/1`.
 - The default port number on which Redis listens is `6379`, which can be left blank if the default port number is not changed, e.g. `redis://:<password>@<host>/1`.
 - Redis supports multiple [logical databases](https://redis.io/commands/select), please replace `<db>` with the actual database number used.
+- To prefix all JuiceFS metadata keys within a Redis database, add `?prefix=<value>` to the metadata URL. In Redis Cluster, the prefix is automatically converted into a Redis hash tag so all keys stay in one slot. Avoid Redis glob metacharacters such as `*`, `?`, and `[` in custom prefixes.
 - If you need to connect to Redis Sentinel, the format will be slightly different, refer to [Redis Best Practices](../administration/metadata/redis_best_practices.md#high-availability) for details.
 - If username / password contains special characters, use single quote to avoid unexpected shell interpretations, or use the `REDIS_PASSWORD` environment.
 
