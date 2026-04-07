@@ -846,7 +846,11 @@ func (m *kvMeta) txn(ctx Context, f func(tx *kvTxn) error, inodes ...Ino) error 
 		method  txMethod
 	)
 
-	for i := 0; i < 50; i++ {
+	maxRetry := 50
+	if val := ctx.Value(txMaxRetryKey{}); val != nil {
+		maxRetry = val.(int)
+	}
+	for i := 0; i < maxRetry; i++ {
 		if ctx.Canceled() {
 			logger.Warnf("Transaction %s interrupted after %s, tried %d, inodes: %v", method.name(ctx), time.Since(start), i+1, inodes)
 			return syscall.EINTR
@@ -866,7 +870,7 @@ func (m *kvMeta) txn(ctx Context, f func(tx *kvTxn) error, inodes ...Ino) error 
 		}
 		return err
 	}
-	logger.Warnf("Already tried 50 times, returning: %s", lastErr)
+	logger.Warnf("Already tried %d times, returning: %s", maxRetry, lastErr)
 	return lastErr
 }
 
@@ -4202,7 +4206,7 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		}
 	}
 
-	return errno(m.txn(ctx, func(tx *kvTxn) error {
+	return errno(m.txn(ctx.WithValue(txMaxRetryKey{}, 1), func(tx *kvTxn) error {
 		now := time.Now()
 		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
@@ -4359,14 +4363,6 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			tx.set(m.symKey(sc.dstIno), target)
 		}
 
-		// update parent directory timestamps
-		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-			pattr.Mtime = now.Unix()
-			pattr.Mtimensec = uint32(now.Nanosecond())
-			pattr.Ctime = now.Unix()
-			pattr.Ctimensec = uint32(now.Nanosecond())
-			tx.set(m.inodeKey(dstParent), m.marshal(&pattr))
-		}
 		return nil
 	}, dstParent))
 }

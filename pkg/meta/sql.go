@@ -5176,8 +5176,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		nowNano := time.Now().UnixNano()
 		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
-		pn, err := m.validateCloneTarget(ctx, s, dstParent)
-		if err != nil {
+		if _, err := m.validateCloneTarget(ctx, s, dstParent); err != nil {
 			return err
 		}
 
@@ -5375,14 +5374,6 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			return err
 		}
 
-		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-			pn.setMtime(nowNano)
-			pn.setCtime(nowNano)
-			if _, err := s.Cols("mtime", "ctime", "mtimensec", "ctimensec").
-				Update(&pn, &node{Inode: dstParent}); err != nil {
-				return err
-			}
-		}
 		return nil
 	})
 	if err != nil {
