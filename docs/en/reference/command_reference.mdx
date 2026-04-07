@@ -258,7 +258,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
-Manage directory quotas
+Manage directory, user, and group quotas
 
 #### Synopsis
 
@@ -268,16 +268,29 @@ juicefs quota command [command options] META-URL
 # Set quota to a directory
 juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
 
+# Set quota for a user
+juicefs quota set redis://localhost --uid 1000 --capacity 2 --inodes 200
+
+# Set quota for a group
+juicefs quota set redis://localhost --gid 100 --capacity 5 --inodes 500
+
 # Get quota of a directory
 juicefs quota get redis://localhost --path /dir1
 
-# List all directory quotas
+# Get quota of a user/group
+juicefs quota get redis://localhost --uid 1000
+juicefs quota get redis://localhost --gid 100
+
+# List all quotas
 juicefs quota list redis://localhost
 
 # Delete quota of a directory
 juicefs quota delete redis://localhost --path /dir1
 
 # Check quota consistency of a directory
+juicefs quota check redis://localhost --path /dir1
+
+# Check quota consistency of users/groups
 juicefs quota check redis://localhost
 ```
 
@@ -286,9 +299,12 @@ juicefs quota check redis://localhost
 |Items|Description|
 |-|-|
 |`META-URL`|Database URL for metadata storage, see "[JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md)" for details.|
-|`--path value`|full path of the directory within the volume|
-|`--capacity value`|hard quota of the directory limiting its usage of space in GiB (default: 0)|
-|`--inodes value`|hard quota of the directory limiting its number of inodes (default: 0)|
+|`--path value`|full path of the directory within the volume (for directory quota)|
+|`--uid value`|user ID (for user quota)|
+|`--gid value`|group ID (for group quota)|
+|`--create`|create the directory automatically if it does not exist (directory quota only)|
+|`--capacity value`|hard space quota in GiB (default: 0)|
+|`--inodes value`|hard inode quota (default: 0)|
 |`--repair`|repair inconsistent quota (default: false)|
 |`--strict`|calculate total usage of directory in strict mode (NOTE: may be slow for huge directory) (default: false)|
 

@@ -6,10 +6,6 @@ description: Learn how to enable, check, and troubleshoot directory statistics i
 
 From JuiceFS v1.1.0, the directory statistics feature is enabled by default when formatting a new volume. For existing volumes, this feature is disabled by default and must be enabled manually. The directory statistics feature accelerates the `quota`, `info` and `summary` subcommands, but it comes with a minor performance cost.
 
-:::tip
-Directory statistics rely on the mount process. Ensure all writable mount processes are upgraded to v1.1.0 before enabling this feature.
-:::
-
 ## Enable directory statistics {#enable-directory-stats}
 
 Run `juicefs config $URL --dir-stats` to enable directory statistics. After that, run `juicefs config $URL` to confirm the change:

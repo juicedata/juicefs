@@ -238,6 +238,89 @@ JuiceFS:myjfs     400   314    86   79% /mnt/jfs
 When there is no quota set for the mounted subdirectory, JuiceFS will query up to find the nearest directory quota and return it to `df`. If directory quotas are set for multiple levels of parent directories, JuiceFS will return the minimum available capacity and number of inodes after calculation.
 :::
 
+## User and group quota {#user-and-group-quota}
+
+In addition to directory quotas, JuiceFS also supports quotas by UID (user) and GID (group). User and group quotas are also hard limits. Writes beyond limit return `EDQUOT` (Disk quota exceeded).
+
+Unlike directory quotas, user/group quotas are not based on directory hierarchy. They are accounted and enforced by ownership metadata (UID/GID) of files and directories.
+
+:::tip
+User/group quotas are tracked by numeric UID/GID, not usernames or group names. You can use the `id` command to check actual UID/GID values.
+:::
+
+### Set user quota
+
+Use `--uid` to set quota for a user. For example, limit UID `1000` to `2 GiB` and `200` inodes:
+
+```shell
+$ juicefs quota set $METAURL --uid 1000 --capacity 2 --inodes 200
++---------+---------+---------+------+--------+-------+-------+
+| User ID |   Size  |   Used  | Use% | Inodes | IUsed | IUse% |
++---------+---------+---------+------+--------+-------+-------+
+|     1000| 2.0 GiB | 1.6 MiB |   0% |    200 |    12 |    6% |
++---------+---------+---------+------+--------+-------+-------+
+```
+
+Query and delete user quota:
+
+```shell
+juicefs quota get $METAURL --uid 1000
+juicefs quota delete $METAURL --uid 1000
+```
+
+### Set group quota
+
+Use `--gid` to set quota for a group. For example, limit GID `100` to `5 GiB` and `500` inodes:
+
+```shell
+$ juicefs quota set $METAURL --gid 100 --capacity 5 --inodes 500
++----------+---------+---------+------+--------+-------+-------+
+| Group ID |   Size  |   Used  | Use% | Inodes | IUsed | IUse% |
++----------+---------+---------+------+--------+-------+-------+
+|      100 | 5.0 GiB | 3.2 MiB |   0% |    500 |    21 |    4% |
++----------+---------+---------+------+--------+-------+-------+
+```
+
+Query and delete group quota:
+
+```shell
+juicefs quota get $METAURL --gid 100
+juicefs quota delete $METAURL --gid 100
+```
+
+### List all quotas
+
+Use `juicefs quota list $METAURL` to list directory, user, and group quotas together. User/group items are marked as `uid:<id>` / `gid:<id>` in output.
+
+### Consistency check and repair
+
+Like directory quotas, user/group quotas can become inconsistent after abnormal exits. Use the `check` subcommand to verify and repair.
+
+Check all user/group quotas:
+
+```shell
+juicefs quota check $METAURL
+```
+
+Check one user or one group:
+
+```shell
+juicefs quota check $METAURL --uid 1000
+juicefs quota check $METAURL --gid 100
+```
+
+Repair after inconsistency is found:
+
+```shell
+juicefs quota check $METAURL --repair
+```
+
+### Accounting scope
+
+User/group quota usage is accounted by the final UID/GID ownership of objects after write, instead of billing directly by the client account that initiated the operation.
+
+For example, when creating files under a directory with `setgid`, file GID can inherit from the parent directory, and the inherited group quota will be consumed.
+
 ### Usage check and fix {#usage-check-and-fix}
 
 Since directory usage updates are laggy and asynchronous, loss may occur under unusual circumstances (such as a client exiting unexpectedly). We can use the `juicefs quota check $METAURL --path $DIR` command to check or fix it:
@@ -251,6 +334,47 @@ $ juicefs quota check $METAURL --path /test
 | /test | 10 GiB | 1.6 MiB |   0% |  1,000 |   314 |   31% |
 +-------+--------+---------+------+--------+-------+-------+
 ```
+
+## Usage accounting scope
+
+This section summarizes the accounting rules of JuiceFS usage across three dimensions:
+
+- Global usage: file-system-level total usage (file system quota usage).
+- Directory usage: directory quota usage (`juicefs quota --path ...` and related directory stats from `summary`/`info`).
+- User/group usage: user and group quota usage (`--uid` / `--gid`).
+
+### Core differences
+
+| Object type | Global usage | Directory usage | User/group usage |
+| --- | --- | --- | --- |
+| Regular file | Counted by file data size (aligned to 4 KiB) | Counted in directory tree (aligned to 4 KiB) | Counted by file owner UID/GID (aligned to 4 KiB) |
+| Hard-linked file | Counted once per inode; creating extra links does not duplicate usage | Each directory entry is counted in its directory scope (same inode can appear repeatedly in directory usage) | Counted once per inode; creating extra links does not duplicate usage |
+| Directory and other file types | Counted as inode usage; space uses metadata minimum granularity (effectively 4 KiB) | Counted as inode usage; space uses metadata minimum granularity (effectively 4 KiB) | Counted as inode usage; space uses metadata minimum granularity (effectively 4 KiB) |
+| Trash files | Still counted after moving to trash; released only after real trash cleanup | Removed from original tree, so no longer counted in original/ancestor directory usage; quota on trash directories is not supported | Still counted to original owner UID/GID after moving to trash; released only after real trash cleanup |
+
+### Details
+
+1. Regular files
+
+For all three dimensions, regular files are accounted by file length, aligned to 4 KiB, and consume 1 inode.
+
+2. Hard-linked files
+
+The key difference is whether accounting deduplicates by inode:
+
+- Global usage and user/group usage deduplicate by inode: creating a hard link only creates another directory entry, not a new file entity.
+- Directory usage accumulates by directory entries in the tree: creating a hard link under a directory increases usage for that directory and its ancestors.
+
+3. Directories and other non-regular files
+
+Directories, symlinks, and other non-regular files mainly consume inodes. Space usage is treated as 4 KiB by default.
+
+4. Trash files
+
+With trash enabled, delete is usually a move-to-trash operation instead of immediate physical deletion:
+
+- For global usage and user/group usage: usage is not released immediately after moving to trash; it decreases only after trash cleanup.
+- For directory usage: once entries are moved out of the original directory tree, usage on original directory quotas decreases; quota on trash directories is not supported currently.
 
 When the directory usage is correct, the current directory quota usage will be output; if it fails, the error log will be output:
 
