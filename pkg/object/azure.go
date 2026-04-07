@@ -70,14 +70,17 @@ func (b *wasb) Head(ctx context.Context, key string) (Object, error) {
 		}
 		return nil, err
 	}
-
+	var status string
+	if properties.ArchiveStatus != nil {
+		status = *properties.ArchiveStatus
+	}
 	return &obj{
 		key,
 		*properties.ContentLength,
 		*properties.LastModified,
 		strings.HasSuffix(key, "/"),
 		*properties.AccessTier,
-		*properties.ArchiveStatus,
+		status,
 	}, nil
 }
 
