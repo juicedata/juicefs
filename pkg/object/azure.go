@@ -70,17 +70,13 @@ func (b *wasb) Head(ctx context.Context, key string) (Object, error) {
 		}
 		return nil, err
 	}
-	var status string
-	if properties.ArchiveStatus != nil {
-		status = *properties.ArchiveStatus
-	}
 	return &obj{
 		key,
-		*properties.ContentLength,
-		*properties.LastModified,
+		toInt64(properties.ContentLength),
+		toTime(properties.LastModified),
 		strings.HasSuffix(key, "/"),
-		*properties.AccessTier,
-		status,
+		toString(properties.AccessTier),
+		toString(properties.ArchiveStatus),
 	}, nil
 }
 
@@ -196,13 +192,16 @@ func (b *wasb) List(ctx context.Context, prefix, startAfter, token, delimiter st
 		if *blob.Name <= startAfter {
 			continue
 		}
-		mtime := blob.Properties.LastModified
+		var accessTier string
+		if blob.Properties.AccessTier != nil {
+			accessTier = string(*blob.Properties.AccessTier)
+		}
 		objs = append(objs, &obj{
 			*blob.Name,
-			*blob.Properties.ContentLength,
-			*mtime,
+			toInt64(blob.Properties.ContentLength),
+			toTime(blob.Properties.LastModified),
 			strings.HasSuffix(*blob.Name, "/"),
-			string(*blob.Properties.AccessTier),
+			accessTier,
 			"",
 		})
 	}
