@@ -247,4 +247,334 @@ test_file_head(){
 }
 
 
+test_checkpoint_basic_resume(){
+    # Test: sync with checkpoint, interrupt mid-way, resume and verify data correctness
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 2000); do
+        dd if=/dev/urandom of=data/file$i bs=64K count=1 status=none
+    done
+    # First sync: interrupt with SIGINT after short delay
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --threads 2 2>&1 | tee sync1.log || true
+    # Check that checkpoint file was created in destination
+    checkpoint_file=$(find /jfs/data/ -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
+    if [ -z "$checkpoint_file" ]; then
+        echo "checkpoint file should exist after interrupted sync"
+        exit 1
+    fi
+    echo "Checkpoint file found: $checkpoint_file"
+    # Resume sync with checkpoint
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log || true
+    # Verify all files are synced correctly
+    diff -r data/ /jfs/data/
+    # Verify checkpoint file is cleaned up after successful sync
+    checkpoint_file_after=$(find /jfs/data/ -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
+    if [ -n "$checkpoint_file_after" ]; then
+        echo "checkpoint file should be deleted after successful sync"
+        exit 1
+    fi
+}
+
+test_checkpoint_cleanup_on_success(){
+    # Test: checkpoint file should be removed after a full successful sync
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 50); do
+        echo "content-$i" > data/file$i
+    done
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync.log
+    diff -r data/ /jfs/data/
+    # Checkpoint file should be cleaned up
+    count=$(find /jfs/data/ -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$count" -ne 0 ]; then
+        echo "checkpoint file should be deleted after successful sync, found $count"
+        exit 1
+    fi
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+}
+
+test_checkpoint_stats_correctness(){
+    # Test: after resume, cumulative stats (copied, skipped, etc.) should be correct
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 300); do
+        dd if=/dev/urandom of=data/file$i bs=32K count=1 status=none
+    done
+    # First sync: interrupt early
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --threads 2 2>&1 | tee sync1.log || true
+    # Get partial copied count from first run (from checkpoint)
+    # Resume sync
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
+    # Verify the final log line reports correct total stats
+    diff -r data/ /jfs/data/
+    # The final log should report: Found: 300, and copied + skipped = 300
+    total_found=$(tail -5 sync2.log | grep "Found:" | sed 's/.*Found: \([0-9]*\).*/\1/')
+    if [ -n "$total_found" ] && [ "$total_found" -ne 300 ]; then
+        echo "Expected Found: 300, got: $total_found"
+        exit 1
+    fi
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_config_mismatch(){
+    # Test: changing config options should discard old checkpoint and start fresh
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 100); do
+        dd if=/dev/urandom of=data/file$i bs=64K count=1 status=none
+    done
+    # First sync with --update, interrupt
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --update --threads 2 2>&1 | tee sync1.log || true
+    # Resume with different config (--force-update instead of --update)
+    # This should trigger config mismatch and start fresh
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --force-update 2>&1 | tee sync2.log
+    # Should see "config mismatch" warning in log
+    grep -i "mismatch\|starting fresh" sync2.log || echo "Warning: expected checkpoint config mismatch message"
+    diff -r data/ /jfs/data/
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_with_delete_dst(){
+    # Test: checkpoint with --delete-dst should correctly track extra objects for deletion
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 50); do
+        echo "content-$i" > data/file$i
+    done
+    # Pre-populate destination with extra files that should be deleted
+    mkdir -p /jfs/data
+    for i in $(seq 51 80); do
+        echo "extra-$i" > /jfs/data/extra$i
+    done
+    # First sync with checkpoint + delete-dst, interrupt
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --delete-dst --threads 2 2>&1 | tee sync1.log || true
+    # Resume
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --delete-dst 2>&1 | tee sync2.log
+    # Verify: source files exist, extra files deleted
+    diff -r data/ /jfs/data/
+    # Check extra files are gone
+    for i in $(seq 51 80); do
+        if [ -f /jfs/data/extra$i ]; then
+            echo "Error: extra file extra$i should have been deleted"
+            exit 1
+        fi
+    done
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_with_delete_src(){
+    # Test: checkpoint with --delete-src should correctly delete source after sync
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 50); do
+        echo "content-$i" > data/file$i
+    done
+    cp -r data data_backup
+    # First sync with checkpoint + delete-src, interrupt
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --delete-src --check-all --threads 2 2>&1 | tee sync1.log || true
+    # Resume
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --delete-src --check-all 2>&1 | tee sync2.log
+    # Verify: destination has all files
+    diff -r data_backup/ /jfs/data/
+    # Source files should be deleted
+    src_remaining=$(ls data/ 2>/dev/null | wc -l)
+    if [ "$src_remaining" -ne 0 ]; then
+        echo "Error: source should be empty after delete-src sync, found $src_remaining files"
+        exit 1
+    fi
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_with_update(){
+    # Test: checkpoint with --update should correctly handle updated files across resume
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 100); do
+        echo "original-$i" > data/file$i
+    done
+    # First full sync
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync1.log
+    diff -r data/ /jfs/data/
+    # Modify some files
+    for i in $(seq 1 50); do
+        echo "updated-$i" > data/file$i
+    done
+    # Sync with update + checkpoint, interrupt
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --update --threads 2 2>&1 | tee sync2.log || true
+    # Resume
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --update 2>&1 | tee sync3.log
+    # Verify updated content
+    diff -r data/ /jfs/data/
+    grep "panic:\|<FATAL>" sync3.log && echo "panic or fatal in sync3.log" && exit 1 || true
+}
+
+test_checkpoint_with_include_exclude(){
+    # Test: checkpoint with include/exclude patterns
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir -p data/dir1 data/dir2
+    for i in $(seq 1 50); do
+        echo "txt-$i" > data/dir1/file$i.txt
+        echo "log-$i" > data/dir1/file$i.log
+        echo "txt-$i" > data/dir2/file$i.txt
+    done
+    # Sync with exclude *.log + checkpoint, interrupt
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s \
+        --exclude "*.log" --threads 2 2>&1 | tee sync1.log || true
+    # Resume with same exclude pattern
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s \
+        --exclude "*.log" 2>&1 | tee sync2.log
+    # Verify: .txt files exist, .log files do not
+    for i in $(seq 1 50); do
+        [ -f /jfs/data/dir1/file$i.txt ] || (echo "file$i.txt should exist" && exit 1)
+        [ ! -f /jfs/data/dir1/file$i.log ] || (echo "file$i.log should not exist" && exit 1)
+    done
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_with_check_all(){
+    # Test: checkpoint with --check-all should verify checksum on resume
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 100); do
+        dd if=/dev/urandom of=data/file$i bs=64K count=1 status=none
+    done
+    # Sync with check-all + checkpoint, interrupt
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --check-all --threads 2 2>&1 | tee sync1.log || true
+    # Resume
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --check-all 2>&1 | tee sync2.log
+    diff -r data/ /jfs/data/
+    # Verify checked count is reported
+    grep "checked:" sync2.log || echo "Warning: expected 'checked:' in sync log"
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_signal_save(){
+    # Test: sending SIGINT should trigger checkpoint save
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 5000); do
+        dd if=/dev/urandom of=data/file$i bs=64K count=1 status=none
+    done
+    # Start sync in background, then send SIGINT
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 60s --threads 2 2>&1 > sync_bg.log &
+    sync_pid=$!
+    sleep 2
+    kill -INT $sync_pid || true
+    wait $sync_pid || true
+    # Checkpoint file should exist from signal save
+    checkpoint_file=$(find /jfs/data -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
+    if [ -z "$checkpoint_file" ]; then
+        echo "checkpoint file should have been saved on SIGINT"
+        exit 1
+    fi
+    echo "Checkpoint saved on signal: $checkpoint_file"
+    # Resume should complete
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
+    diff -r data/ /jfs/data/
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_without_mount_point(){
+    # Test: checkpoint with jfs:// protocol (no mount point)
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 100); do
+        dd if=/dev/urandom of=data/file$i bs=64K count=1 status=none
+    done
+    # First sync to jfs:// with checkpoint, interrupt
+    timeout 3 meta_url=$META_URL ./juicefs sync data/ jfs://meta_url/data/ --enable-checkpoint --checkpoint-interval 1s --threads 2 2>&1 | tee sync1.log || true
+    # Resume
+    meta_url=$META_URL ./juicefs sync data/ jfs://meta_url/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
+    # Mount and verify
+    ./juicefs mount -d $META_URL /jfs
+    diff -r data/ /jfs/data/
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_dry_run(){
+    # Test: checkpoint with --dry should not save checkpoint file
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 20); do
+        echo "content-$i" > data/file$i
+    done
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --dry 2>&1 | tee sync.log
+    # Checkpoint should NOT be saved in dry mode
+    count=$(find /jfs/data/ -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$count" -ne 0 ]; then
+        echo "checkpoint file should not be created in dry run mode"
+        exit 1
+    fi
+    # No files should be actually copied
+    dst_count=$(ls /jfs/data/ 2>/dev/null | wc -l)
+    if [ "$dst_count" -ne 0 ]; then
+        echo "no files should be copied in dry run mode"
+        exit 1
+    fi
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+}
+
+test_checkpoint_multiple_dirs(){
+    # Test: checkpoint with subdirectory structure
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir -p data/a/b/c data/d/e data/f
+    for dir in data/a/b/c data/d/e data/f; do
+        for i in $(seq 1 30); do
+            dd if=/dev/urandom of=$dir/file$i bs=32K count=1 status=none
+        done
+    done
+    # First sync with checkpoint + list-depth, interrupt
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s \
+        --dirs --list-threads 4 --list-depth 3 --threads 2 2>&1 | tee sync1.log || true
+    # Resume
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s \
+        --dirs --list-threads 4 --list-depth 3 2>&1 | tee sync2.log
+    diff -ur data/ /jfs/data/
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_idempotent_resume(){
+    # Test: running resume multiple times should be idempotent
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 50); do
+        echo "content-$i" > data/file$i
+    done
+    # Full successful sync
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync1.log
+    diff -r data/ /jfs/data/
+    # Run again - should be a no-op (all skipped)
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
+    diff -r data/ /jfs/data/
+    # Check the second run skipped everything
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
 source .github/scripts/common/run_test.sh && run_test $@

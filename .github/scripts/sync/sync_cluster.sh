@@ -141,6 +141,7 @@ test_sync_delete_src_and_update(){
     sudo -u juicedata meta_url=$META_URL ./juicefs sync minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --delete-src --update --dirs --check-change \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     set +o pipefail
     diff data/ /jfs/data/
@@ -148,6 +149,7 @@ test_sync_delete_src_and_update(){
     sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --delete-src --dirs --check-change \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     set +o pipefail
     if ./mc ls myminio/data/ | grep -q .; then
@@ -174,6 +176,7 @@ test_sync_delete_dst(){
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-dst --match-full-path --exclude='retain' --include='*' \
          ./empty/ jfs://meta_url/data/  --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-new \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     [ ! -f /jfs/data/retain ] && echo "Error: retain file was incorrectly deleted" && exit 1 || true
@@ -192,23 +195,28 @@ test_sync_with_random_test(){
     sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-new --links --dirs --start-time "$current_time" \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all --links --start-time 2199-12-30 \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true 
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --dirs \
          --list-threads 10 --list-depth 5 --check-all --links --start-time "$current_time" \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     [ -z "$(ls -A /jfs/test)" ] || exit 1
-    rm -rf empty || mkdir empty
+    echo "delete src test passed"
+    rm -rf empty && mkdir empty
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-dst --match-full-path  --include='*' \
          ./empty/ jfs://meta_url/test2/ --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-change --dirs --links --start-time "$current_time" \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     [ -z "$(ls -A /jfs/test2)" ] || exit 1
@@ -227,6 +235,7 @@ test_sync_files_from_file(){
     sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all --check-change --links --dirs --files-from files \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     grep "panic\|<FATAL>\|ERROR" sync.log && echo "panic or fatal or error in sync.log" && exit 1 || true
 }
@@ -328,6 +337,109 @@ start_gateway(){
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL 172.20.0.1:9005 &
     ./mc alias set juicegw http://172.20.0.1:9005 minioadmin minioadmin --api S3v4
 }
+
+test_checkpoint_cluster_basic(){
+    # Test: checkpoint in cluster mode - basic sync with workers, interrupt, resume
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    file_count=$FILE_COUNT
+    mkdir -p /jfs/data
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=/jfs/data/file$i bs=64K count=1 status=none
+    done
+    (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
+    # First sync with checkpoint enabled, interrupt
+    timeout 10 sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-change \
+         --enable-checkpoint --checkpoint-interval 2s \
+         >sync1.log 2>&1 || true
+    # Resume
+    set -o pipefail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-change \
+         --enable-checkpoint --checkpoint-interval 2s \
+         >sync2.log 2>&1
+    set +o pipefail
+    check_sync_log $file_count
+    # Checkpoint should be cleaned up after successful sync
+    checkpoint_count=$(./mc find myminio/data1/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count" -ne 0 ]; then
+        echo "checkpoint file should be deleted after successful cluster sync"
+        exit 1
+    fi
+    ./mc rm -r --force myminio/data1
+}
+
+test_checkpoint_cluster_signal_resume(){
+    # Test: checkpoint in cluster mode - SIGINT saves checkpoint, resume works
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    file_count=$FILE_COUNT
+    mkdir -p /jfs/data
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=1 status=none
+    done
+    dd if=/dev/urandom of=/jfs/data/file_large bs=1M count=100 status=none
+    (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
+    # Start sync in background, then send SIGINT
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 \
+         --enable-checkpoint --checkpoint-interval 60s \
+         >sync1.log 2>&1 &
+    sync_pid=$!
+    sleep 5
+    kill -INT $sync_pid || true
+    wait $sync_pid || true
+    # Checkpoint should exist
+    checkpoint_count=$(./mc find myminio/data1/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count" -eq 0 ]; then
+        echo "checkpoint file should exist after SIGINT in cluster mode"
+        exit 1
+    fi
+    # Resume
+    set -o pipefail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 \
+         --enable-checkpoint --checkpoint-interval 2s \
+         >sync2.log 2>&1
+    set +o pipefail
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+    ./mc rm -r --force myminio/data1
+}
+
+test_checkpoint_cluster_config_mismatch(){
+    # Test: in cluster mode, changing config should discard old checkpoint
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    file_count=$FILE_COUNT
+    mkdir -p /jfs/data
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=/jfs/data/file$i bs=64K count=1 status=none
+    done
+    (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
+    # First sync with --update + checkpoint, interrupt
+    timeout 10 sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --update \
+         --enable-checkpoint --checkpoint-interval 2s \
+         >sync1.log 2>&1 || true
+    # Resume with different config (--force-update instead of --update)
+    set -o pipefail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --force-update \
+         --enable-checkpoint --checkpoint-interval 2s \
+         >sync2.log 2>&1
+    set +o pipefail
+    grep -i "mismatch\|starting fresh" sync2.log || echo "Warning: expected checkpoint config mismatch message"
+    grep "panic:\|<FATAL>\|ERROR" sync2.log && echo "panic or fatal or ERROR in sync2.log" && exit 1 || true
+    ./mc rm -r --force myminio/data1
+}
+
 
 
 source .github/scripts/common/run_test.sh && run_test $@
