@@ -19,7 +19,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.59
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.72.3
 	github.com/aws/smithy-go v1.22.2
-	github.com/baidubce/bce-sdk-go v0.9.221
+	github.com/baidubce/bce-sdk-go v0.9.263
 	github.com/bytedance/mockey v1.2.14
 	github.com/ceph/go-ceph v0.18.0
 	github.com/charlievieth/fastwalk v1.0.14
