@@ -68,7 +68,7 @@ require (
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.62.0
 	github.com/prometheus/prometheus v0.54.1
-	github.com/qingstor/qingstor-sdk-go/v4 v4.4.0
+	github.com/qingstor/qingstor-sdk-go/v4 v4.4.1
 	github.com/qiniu/go-sdk/v7 v7.25.2
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/sirupsen/logrus v1.9.3
