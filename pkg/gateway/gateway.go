@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/ncw/swift/v2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/google/uuid"
@@ -60,15 +61,16 @@ var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
 
 type Config struct {
-	MultiBucket bool
-	Bucket      string
-	KeepEtag    bool
-	Umask       uint16
-	ObjTag      bool
-	ObjMeta     bool
-	HeadDir     bool
-	HideDir     bool
-	ReadOnly    bool
+	MultiBucket    bool
+	Bucket         string
+	KeepEtag       bool
+	Umask          uint16
+	ObjTag         bool
+	ObjMeta        bool
+	HeadDir        bool
+	HideDir        bool
+	ReadOnly       bool
+	UseMetaModTime bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -388,7 +390,7 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 				}
 				info = &minio.ObjectInfo{
 					Bucket:   bucket,
-					ModTime:  fi.ModTime(),
+					ModTime:  n.getObjModTimeByPath(n.path(bucket, object), fi.ModTime()),
 					Size:     size,
 					IsDir:    fi.IsDir(),
 					AccTime:  fi.ModTime(),
@@ -414,7 +416,7 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 			info = &minio.ObjectInfo{
 				Bucket:   bucket,
 				Name:     fi.Name(),
-				ModTime:  fi.ModTime(),
+				ModTime:  n.getObjModTimeByPath(n.path(bucket, object), fi.ModTime()),
 				Size:     fi.Size(),
 				IsDir:    fi.IsDir(),
 				AccTime:  fi.ModTime(),
@@ -677,7 +679,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		Bucket:      dstBucket,
 		Name:        dstObject,
 		ETag:        string(etag),
-		ModTime:     fi.ModTime(),
+		ModTime:     n.getObjModTime(srcInfo.UserDefined, fi.ModTime()),
 		Size:        fi.Size(),
 		IsDir:       fi.IsDir(),
 		AccTime:     fi.ModTime(),
@@ -748,7 +750,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ModTime:     fi.ModTime(),
+		ModTime:     n.getObjModTime(objMeta, fi.ModTime()),
 		Size:        size,
 		IsDir:       fi.IsDir(),
 		AccTime:     fi.ModTime(),
@@ -902,7 +904,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 		Bucket:      bucket,
 		Name:        object,
 		ETag:        etag,
-		ModTime:     fi.ModTime(),
+		ModTime:     n.getObjModTime(opts.UserDefined, fi.ModTime()),
 		Size:        fi.Size(),
 		IsDir:       fi.IsDir(),
 		AccTime:     fi.ModTime(),
@@ -948,6 +950,7 @@ const s3Tags = "s3-tags"
 // S3 object metadata
 const s3Meta = "s3-meta"
 const amzMeta = "x-amz-meta-"
+const metaMtime = amzMeta + "mtime"
 
 var s3UserControlledSystemMeta = []string{
 	"cache-control",
@@ -970,6 +973,35 @@ func (n *jfsObjects) getObjMeta(p string) (objMeta map[string]string, err error)
 		objMeta = make(map[string]string)
 	}
 	return objMeta, nil
+}
+
+func (n *jfsObjects) getObjModTime(objMeta map[string]string, fileModTime time.Time) (modTime time.Time) {
+	if !n.gConf.UseMetaModTime {
+		return fileModTime
+	}
+	modTimeString, ok := objMeta[metaMtime]
+	if !ok || len(modTimeString) == 0 {
+		return fileModTime
+	} else {
+		modTime, err := swift.FloatStringToTime(modTimeString)
+		if err != nil {
+			logger.Errorf("parse object metadata time error, value: %s errors: %s", modTimeString, err)
+			return fileModTime
+		} else {
+			return modTime
+		}
+	}
+}
+
+func (n *jfsObjects) getObjModTimeByPath(p string, fileModTime time.Time) (modTime time.Time) {
+	if !n.gConf.UseMetaModTime {
+		return fileModTime
+	}
+	objMeta, err := n.getObjMeta(p)
+	if err != nil {
+		return fileModTime
+	}
+	return n.getObjModTime(objMeta, fileModTime)
 }
 
 func (n *jfsObjects) setObjMeta(p string, metadata map[string]string) error {
@@ -1313,7 +1345,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		Bucket:      bucket,
 		Name:        object,
 		ETag:        s3MD5,
-		ModTime:     fi.ModTime(),
+		ModTime:     n.getObjModTime(objMeta, fi.ModTime()),
 		Size:        fi.Size(),
 		IsDir:       fi.IsDir(),
 		AccTime:     fi.ModTime(),
