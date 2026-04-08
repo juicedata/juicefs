@@ -2202,6 +2202,10 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 	wg.Wait()
 
+	if checkpointMgr != nil {
+		checkpointMgr.Stop()
+	}
+
 	if config.Manager == "" {
 		delayDelFunc := func(storage object.ObjectStorage, keys []string) {
 			if len(keys) > 0 {
@@ -2222,6 +2226,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}()
 		delWg.Add(1)
 		go func() {
+			if checkpointMgr != nil && config.DeleteDst {
+				dstDelayDel = append(dstDelayDel, checkpointMgr.checkpointKey)
+			}
 			delayDelFunc(dst, dstDelayDel)
 			delWg.Done()
 		}()
