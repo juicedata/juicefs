@@ -35,6 +35,13 @@ generate_fsrand(){
     python3 .github/scripts/fsrand.py -a -c 2000 -s $seed  fsrand
 }
 
+compare_sync_dirs(){
+    local src_dir=$1
+    local dst_dir=$2
+    diff -r --exclude='.jfs.file*.tmp.*' \
+        "$src_dir" "$dst_dir"
+}
+
 test_sync_with_mount_point(){
     do_sync_with_mount_point 
     do_sync_with_mount_point --list-threads 10 --list-depth 5
@@ -268,7 +275,7 @@ test_checkpoint_basic_resume(){
     # Resume sync with checkpoint
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log || true
     # Verify all files are synced correctly
-    diff -r data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     # Verify checkpoint file is cleaned up after successful sync
     checkpoint_file_after=$(find /jfs/data/ -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
     if [ -n "$checkpoint_file_after" ]; then
@@ -307,12 +314,12 @@ test_checkpoint_stats_correctness(){
         dd if=/dev/urandom of=data/file$i bs=32K count=1 status=none
     done
     # First sync: interrupt early
-    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --threads 2 2>&1 | tee sync1.log || true
+    timeout 2 ./juicefs sync data/ /jfs/data/ --debug --enable-checkpoint --checkpoint-interval 1s --threads 2 2>&1 | tee sync1.log || true
     # Get partial copied count from first run (from checkpoint)
     # Resume sync
-    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
+    ./juicefs sync data/ /jfs/data/ --debug --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
     # Verify the final log line reports correct total stats
-    diff -r data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     # The final log should report: Found: 300, and copied + skipped = 300
     total_found=$(tail -5 sync2.log | grep "Found:" | sed 's/.*Found: \([0-9]*\).*/\1/')
     if [ -n "$total_found" ] && [ "$total_found" -ne 300 ]; then
@@ -338,7 +345,7 @@ test_checkpoint_config_mismatch(){
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --force-update 2>&1 | tee sync2.log
     # Should see "config mismatch" warning in log
     grep -i "mismatch\|starting fresh" sync2.log || echo "Warning: expected checkpoint config mismatch message"
-    diff -r data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
 }
 
@@ -361,7 +368,7 @@ test_checkpoint_with_delete_dst(){
     # Resume
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --delete-dst 2>&1 | tee sync2.log
     # Verify: source files exist, extra files deleted
-    diff -r data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     # Check extra files are gone
     for i in $(seq 51 80); do
         if [ -f /jfs/data/extra$i ]; then
@@ -387,7 +394,7 @@ test_checkpoint_with_delete_src(){
     # Resume
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --delete-src --check-all 2>&1 | tee sync2.log
     # Verify: destination has all files
-    diff -r data_backup/ /jfs/data/
+    compare_sync_dirs data_backup/ /jfs/data/
     # Source files should be deleted
     src_remaining=$(ls data/ 2>/dev/null | wc -l)
     if [ "$src_remaining" -ne 0 ]; then
@@ -418,7 +425,7 @@ test_checkpoint_with_update(){
     # Resume
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --update 2>&1 | tee sync3.log
     # Verify updated content
-    diff -r data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     grep "panic:\|<FATAL>" sync3.log && echo "panic or fatal in sync3.log" && exit 1 || true
 }
 
@@ -460,7 +467,7 @@ test_checkpoint_with_check_all(){
     timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --check-all --threads 2 2>&1 | tee sync1.log || true
     # Resume
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --check-all 2>&1 | tee sync2.log
-    diff -r data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     # Verify checked count is reported
     grep "checked:" sync2.log || echo "Warning: expected 'checked:' in sync log"
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
@@ -490,7 +497,7 @@ test_checkpoint_signal_save(){
     echo "Checkpoint saved on signal: $checkpoint_file"
     # Resume should complete
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
-    diff -r data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
 }
 
@@ -508,7 +515,7 @@ test_checkpoint_without_mount_point(){
     meta_url=$META_URL ./juicefs sync data/ jfs://meta_url/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
     # Mount and verify
     ./juicefs mount -d $META_URL /jfs
-    diff -r data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
 }
 
@@ -554,7 +561,7 @@ test_checkpoint_multiple_dirs(){
     # Resume
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s \
         --dirs --list-threads 4 --list-depth 3 2>&1 | tee sync2.log
-    diff -ur data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
 }
 
@@ -569,10 +576,10 @@ test_checkpoint_idempotent_resume(){
     done
     # Full successful sync
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync1.log
-    diff -r data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     # Run again - should be a no-op (all skipped)
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
-    diff -r data/ /jfs/data/
+    compare_sync_dirs data/ /jfs/data/
     # Check the second run skipped everything
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
 }

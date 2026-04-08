@@ -349,18 +349,18 @@ test_checkpoint_cluster_basic(){
     done
     (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
     # First sync with checkpoint enabled, interrupt
-    timeout 10 sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+    timeout 3 sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-change \
          --enable-checkpoint --checkpoint-interval 2s \
-         >sync1.log 2>&1 || true
+         >sync.log 2>&1 || true
     # Resume
     set -o pipefail
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-change \
          --enable-checkpoint --checkpoint-interval 2s \
-         >sync2.log 2>&1
+         >>sync.log 2>&1
     set +o pipefail
     check_sync_log $file_count
     # Checkpoint should be cleaned up after successful sync
@@ -376,22 +376,31 @@ test_checkpoint_cluster_signal_resume(){
     # Test: checkpoint in cluster mode - SIGINT saves checkpoint, resume works
     prepare_test
     ./juicefs mount -d $META_URL /jfs
+    mkdir -p /jfs/data
     file_count=$FILE_COUNT
     mkdir -p /jfs/data
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=1 status=none
     done
-    dd if=/dev/urandom of=/jfs/data/file_large bs=1M count=100 status=none
+    ./random-test runOp -baseDir /jfs/data -files 50000 -ops 500000 -threads 50 -dirSize 100 -duration 20s -createOp 30,uniform \
+    -deleteOp 5,end --linkOp 10,uniform --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform
     (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
     # Start sync in background, then send SIGINT
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 \
+         --list-threads 2 --list-depth 2 \
          --enable-checkpoint --checkpoint-interval 60s \
          >sync1.log 2>&1 &
     sync_pid=$!
-    sleep 5
-    kill -INT $sync_pid || true
+    sleep 1
+    juicefs_pid=""
+    for _ in $(seq 1 5); do
+        juicefs_pid=$(ps -o pid= --ppid "$sync_pid" | head -n 1 | tr -d ' ')
+        [ -n "$juicefs_pid" ] && break
+        sleep 1
+    done
+    [ -z "$juicefs_pid" ] && echo "failed to find juicefs sync child process" && exit 1
+    kill -INT "$juicefs_pid" || true
     wait $sync_pid || true
     # Checkpoint should exist
     checkpoint_count=$(./mc find myminio/data1/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)

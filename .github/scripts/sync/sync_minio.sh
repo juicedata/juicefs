@@ -167,6 +167,7 @@ test_checkpoint_minio_basic(){
         --list-threads 100 --list-depth 10 \
         --enable-checkpoint --checkpoint-interval 2s \
         >sync1.log 2>&1 || true
+    cat sync1.log
     # Checkpoint file should exist in destination
     checkpoint_count=$(./mc find myminio/myjfs/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
     if [ "$checkpoint_count" -eq 0 ]; then
@@ -178,6 +179,7 @@ test_checkpoint_minio_basic(){
         --list-threads 100 --list-depth 10 \
         --enable-checkpoint --checkpoint-interval 2s \
         >sync2.log 2>&1
+    cat sync2.log
     count1=$(./mc ls -r juicegw/myjfs/ | grep -v ".juicefs-sync-checkpoint" | wc -l)
     count2=$(./mc ls -r myminio/myjfs/ | grep -v ".juicefs-sync-checkpoint" | wc -l)
     [ $count1 -eq $count2 ] || (echo "file count mismatch: $count1 vs $count2" && exit 1)
