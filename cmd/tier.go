@@ -159,6 +159,12 @@ func setTier(ctx *cli.Context) error {
 	}
 
 	objectFunc := func(key string) error {
+		if head, err := blob.Head(context.Background(), key); err == nil {
+			if newTier.Sc == head.StorageClass() {
+				return nil
+			}
+		}
+
 		fullPath := format.Name + "/" + key
 		ctx := context.WithValue(context.Background(), object.TierKey{}, uint8(id))
 		return blob.Copy(ctx, fullPath, fullPath)
