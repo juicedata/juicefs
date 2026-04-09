@@ -242,7 +242,7 @@ When there is no quota set for the mounted subdirectory, JuiceFS will query up t
 
 In addition to directory quotas, JuiceFS supports quotas by UID (user) and GID (group). These are also hard limits. Writes that exceed the limit return `EDQUOT` (disk quota exceeded).
 
-Unlike directory quotas, user/group quotas are not based on directory hierarchy. They are accounted and enforced by ownership metadata (UID/GID) of files and directories.
+Unlike directory quotas, user/group quotas are not based on the directory hierarchy. They are accounted and enforced by the ownership metadata (UID/GID) of files and directories.
 
 :::tip
 User/group quotas are tracked by numeric UID/GID, not usernames or group names. You can use the `id` command to check actual UID/GID values.
