@@ -62,7 +62,7 @@ require (
 	github.com/oliverisaac/shellescape v0.0.0-20220131224704-1b6c6b87b668
 	github.com/pingcap/log v1.1.1-0.20221110025148-ca232912c9f3
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/sftp v1.13.5
+	github.com/pkg/sftp v1.13.10
 	github.com/pkg/xattr v0.4.9
 	github.com/prometheus/client_golang v1.21.1
 	github.com/prometheus/client_model v0.6.1
