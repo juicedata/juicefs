@@ -1045,6 +1045,64 @@ func TestNameString(t *testing.T) {
 	}
 }
 
+func TestListAllWithDelimiterDeepStart(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name     string
+		root     string
+		keys     []string
+		start    string
+		expected []string
+	}{
+		{
+			name:     "TrailingSlashRoot",
+			root:     t.TempDir() + "/",
+			keys:     []string{"a/b/1", "a/b/2", "a/b/3", "z"},
+			start:    "a/b/2",
+			expected: []string{"a/b/2", "a/b/3", "z"},
+		},
+		{
+			name:     "NoTrailingSlashRoot",
+			root:     t.TempDir(),
+			keys:     []string{"/a/b/1", "/a/b/2", "/a/b/3", "/z"},
+			start:    "/a/b/2",
+			expected: []string{"/a/b/2", "/a/b/3", "/z"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := CreateStorage("file", tc.root, "", "", "")
+			if err != nil {
+				t.Fatalf("create storage: %s", err)
+			}
+
+			for _, key := range tc.keys {
+				if err := s.Put(ctx, key, bytes.NewReader([]byte(key))); err != nil {
+					t.Fatalf("put %s: %s", key, err)
+				}
+			}
+
+			ch, err := ListAllWithDelimiter(ctx, s, "", tc.start, "", true)
+			if err != nil {
+				t.Fatalf("list all with delimiter: %s", err)
+			}
+
+			var got []string
+			for obj := range ch {
+				if obj == nil {
+					t.Fatal("list all with delimiter returned nil object")
+				}
+				got = append(got, obj.Key())
+			}
+
+			if !reflect.DeepEqual(got, tc.expected) {
+				t.Fatalf("unexpected keys: got %v, want %v", got, tc.expected)
+			}
+		})
+	}
+}
+
 func TestEtcd(t *testing.T) { //skip mutate
 	if os.Getenv("ETCD_ADDR") == "" {
 		t.SkipNow()
