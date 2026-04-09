@@ -70,7 +70,7 @@ require (
 	github.com/prometheus/prometheus v0.54.1
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.1
 	github.com/qiniu/go-sdk/v7 v7.26.8
-	github.com/redis/go-redis/v9 v9.16.0
+	github.com/redis/go-redis/v9 v9.18.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/smartystreets/goconvey v1.7.2
 	github.com/spf13/cast v1.7.1
