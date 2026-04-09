@@ -25,6 +25,7 @@ import (
 	"maps"
 	"os"
 	"os/signal"
+	"path"
 	"slices"
 	"strings"
 	"sync"
@@ -181,8 +182,40 @@ func (m *CheckpointManager) isCheckpointKey(key string) bool {
 	return m != nil && key == m.checkpointKey
 }
 
+func checkpointTmpPrefix(key string) string {
+	name := path.Base(key)
+	if len(name) > 200 {
+		name = name[:200]
+	}
+	prefix := ".jfs." + name + ".tmp."
+	dir := path.Dir(key)
+	if dir == "." {
+		return prefix
+	}
+	return path.Join(dir, prefix)
+}
+
+func (m *CheckpointManager) cleanupCheckpointTmp() {
+	tmpPrefix := checkpointTmpPrefix(m.checkpointKey)
+	objs, err := ListAll(m.dst, tmpPrefix, "", "", true)
+	if err != nil {
+		logger.Warnf("Failed to list checkpoint tmp files with prefix %q: %v", tmpPrefix, err)
+		return
+	}
+	for obj := range objs {
+		if obj == nil {
+			logger.Warnf("Listing checkpoint tmp files with prefix %q failed", tmpPrefix)
+			return
+		}
+		if err := m.dst.Delete(ctx, obj.Key()); err != nil {
+			logger.Warnf("Failed to delete checkpoint tmp file %q: %v", obj.Key(), err)
+		}
+	}
+}
+
 // Load loads checkpoint from object storage
 func (m *CheckpointManager) Load() (*Checkpoint, error) {
+	go m.cleanupCheckpointTmp()
 	obj, err := m.dst.Get(ctx, m.checkpointKey, 0, -1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get checkpoint: %w", err)
