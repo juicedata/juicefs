@@ -69,7 +69,7 @@ require (
 	github.com/prometheus/common v0.62.0
 	github.com/prometheus/prometheus v0.54.1
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.1
-	github.com/qiniu/go-sdk/v7 v7.25.2
+	github.com/qiniu/go-sdk/v7 v7.26.8
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/smartystreets/goconvey v1.7.2
@@ -99,7 +99,7 @@ require (
 	golang.org/x/term v0.40.0
 	golang.org/x/text v0.34.0
 	google.golang.org/api v0.210.0
-	google.golang.org/protobuf v1.36.3
+	google.golang.org/protobuf v1.36.6
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
 	pgregory.net/rapid v0.5.3
 	xorm.io/xorm v1.0.7
