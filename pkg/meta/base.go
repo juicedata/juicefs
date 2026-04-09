@@ -1870,6 +1870,8 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	tinode := new(Ino)
 	tattr := new(Attr)
 	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, tinode, attr, tattr)
+	// 打印rename的所有参数，包括inode和tinode，需要显式显示是否flag中含有RenameExchange
+	fmt.Printf("Rename: parentSrc=%d, nameSrc=%s, parentDst=%d, nameDst=%s, flags=%d, inode=%d, attr=%v, tinode=%d, tattr=%v, isExchange=%v\n", parentSrc, nameSrc, parentDst, nameDst, flags, *inode, attr, *tinode, tattr, flags&RenameExchange != 0)
 	if st == 0 {
 		var diffLength uint64
 		if attr.Typ == TypeDirectory {

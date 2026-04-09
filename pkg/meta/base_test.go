@@ -3325,6 +3325,7 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 		m.FlushSession()
 		statBefore, _ := m.GetDirStat(ctx, dir1)
 
+		fmt.Printf("dir1 = %d, file1Inode = %d, file2Inode = %d\n", dir1, file1Inode, file2Inode)
 		// rename with overwrite (file2 goes to trash)
 		if st := m.Rename(ctx, dir1, "trash_file1", dir1, "trash_file2", 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("rename with trash enabled: %s", st)
@@ -3343,6 +3344,13 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 			t.Fatalf("Test trash overwrite: getattr overwritten inode %d: %s", file2Inode, st)
 		} else if st == 0 && overwritten.Parent <= TrashInode {
 			t.Fatalf("Test trash overwrite: overwritten inode %d should be moved to trash or deleted, parent=%d", file2Inode, overwritten.Parent)
+			entries := make([]*Entry, 0)
+			if st := m.Readdir(ctx, dir1, 0, &entries); st != 0 {
+				t.Fatalf("Test trash overwrite: readdir dir1: %s", st)
+			}
+			for _, e := range entries {
+				fmt.Printf("inode=%d, name=%s\n", e.Inode, e.Name)
+			}
 		}
 		t.Logf("Test trash overwrite passed")
 	}
