@@ -188,15 +188,38 @@ test_sync_with_random_test(){
     mkdir /jfs/test || true
     mkdir /jfs/test2 || true
     current_time=$(date -d "1 minute ago" "+%Y-%m-%d %H:%M:%S")
-    ./random-test runOp -baseDir /jfs/test -files 100000 -ops 1000000 -threads 50 -dirSize 100 -duration 30s -createOp 30,uniform \
+    ./random-test runOp -baseDir /jfs/test -files 100000 -ops 1000000 -threads 50 -dirSize 100 -duration 60s -createOp 30,uniform \
     -deleteOp 5,end --linkOp 10,uniform --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform
     chmod -R 777 /jfs/test
     chmod -R 777 /jfs/test2
+    run_id=1
+    for sig in INT KILL INT; do
+        sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-new --links --dirs --start-time "$current_time" \
+         --enable-checkpoint --checkpoint-interval 2s \
+         >sync.log 2>&1 &
+        sync_pid=$!
+        sleep 2
+        signal_cluster_sync_child "$sync_pid" "$sig"
+        wait "$sync_pid" || true
+        # Clean up stale worker processes (especially after SIGKILL which can't gracefully shutdown workers)
+        sudo -u juicedata ssh -o ConnectTimeout=3 juicedata@172.20.0.2 "pkill -9 -f 'juicefs'" 2>/dev/null || true
+        sudo -u juicedata ssh -o ConnectTimeout=3 juicedata@172.20.0.3 "pkill -9 -f 'juicefs'" 2>/dev/null || true
+        sleep 1
+        checkpoint_count=$(find /jfs/test2 -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+        if [ "$checkpoint_count" -eq 0 ]; then
+            echo "checkpoint file should exist after interrupted cluster sync run $run_id"
+            exit 1
+        fi
+        run_id=$((run_id + 1))
+    done
     sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-new --links --dirs --start-time "$current_time" \
          --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
+    diff -ur --no-dereference --exclude='.jfs.file*.tmp.*' /jfs/test /jfs/test2
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
@@ -324,6 +347,19 @@ check_sync_log(){
     fi
 }
 
+signal_cluster_sync_child(){
+    local sync_pid=$1
+    local signal=$2
+    local juicefs_pid=""
+    for _ in $(seq 1 5); do
+        juicefs_pid=$(ps -o pid= --ppid "$sync_pid" | head -n 1 | tr -d ' ')
+        [ -n "$juicefs_pid" ] && break
+        sleep 1
+    done
+    [ -z "$juicefs_pid" ] && echo "failed to find juicefs sync child process" && exit 1
+    kill -$signal "$juicefs_pid" || true
+}
+
 prepare_test(){
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
@@ -393,14 +429,7 @@ test_checkpoint_cluster_signal_resume(){
          >sync1.log 2>&1 &
     sync_pid=$!
     sleep 1
-    juicefs_pid=""
-    for _ in $(seq 1 5); do
-        juicefs_pid=$(ps -o pid= --ppid "$sync_pid" | head -n 1 | tr -d ' ')
-        [ -n "$juicefs_pid" ] && break
-        sleep 1
-    done
-    [ -z "$juicefs_pid" ] && echo "failed to find juicefs sync child process" && exit 1
-    kill -INT "$juicefs_pid" || true
+    signal_cluster_sync_child "$sync_pid" INT
     wait $sync_pid || true
     # Checkpoint should exist
     checkpoint_count=$(./mc find myminio/data1/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
@@ -448,7 +477,6 @@ test_checkpoint_cluster_config_mismatch(){
     grep "panic:\|<FATAL>\|ERROR" sync2.log && echo "panic or fatal or ERROR in sync2.log" && exit 1 || true
     ./mc rm -r --force myminio/data1
 }
-
 
 
 source .github/scripts/common/run_test.sh && run_test $@

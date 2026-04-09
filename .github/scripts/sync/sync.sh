@@ -317,6 +317,7 @@ test_checkpoint_stats_correctness(){
     timeout 2 ./juicefs sync data/ /jfs/data/ --debug --enable-checkpoint --checkpoint-interval 1s --threads 2 2>&1 | tee sync1.log || true
     # Get partial copied count from first run (from checkpoint)
     # Resume sync
+    sleep 2
     ./juicefs sync data/ /jfs/data/ --debug --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
     # Verify the final log line reports correct total stats
     compare_sync_dirs data/ /jfs/data/
@@ -488,6 +489,8 @@ test_checkpoint_signal_save(){
     sleep 2
     kill -INT $sync_pid || true
     wait $sync_pid || true
+
+    rm data/file1
     # Checkpoint file should exist from signal save
     checkpoint_file=$(find /jfs/data -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
     if [ -z "$checkpoint_file" ]; then
@@ -497,8 +500,30 @@ test_checkpoint_signal_save(){
     echo "Checkpoint saved on signal: $checkpoint_file"
     # Resume should complete
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log
-    compare_sync_dirs data/ /jfs/data/
+    diff -r --exclude='.jfs.file*.tmp.*' --exclude='*file1' data/ /jfs/data/
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_multiple_interruptions_resume(){
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    # depth 5, dirs 3, files 20 => ~364 dirs x 20 files = ~7300 files (deep enough for delimiter bug #6865)
+    ./juicefs mdtest $META_URL /mdtest_src --depth 5 --dirs 3 --files 20 --threads 10
+    sync_opts="--enable-checkpoint --checkpoint-interval 1s --threads 20 --list-threads 8 --list-depth 5 --dirs --check-change"
+    run_id=1
+    for sig in INT KILL INT; do
+        meta_url=$META_URL ./juicefs sync jfs://meta_url/mdtest_src/ jfs://meta_url/data/ $sync_opts > "sync${run_id}.log" 2>&1 &
+        sync_pid=$!
+        sleep 2
+        kill -$sig "$sync_pid" || true
+        wait "$sync_pid" || true
+        echo "=== sync run $run_id (signal $sig) ===" && tail -3 "sync${run_id}.log"
+        run_id=$((run_id + 1))
+    done
+    meta_url=$META_URL ./juicefs sync jfs://meta_url/mdtest_src/ jfs://meta_url/data/ $sync_opts 2>&1 | tee sync_final.log
+    compare_sync_dirs /jfs/mdtest_src/ /jfs/data/
+    grep "panic:\|<FATAL>" sync_final.log && echo "panic or fatal in sync_final.log" && exit 1 || true
 }
 
 test_checkpoint_without_mount_point(){
