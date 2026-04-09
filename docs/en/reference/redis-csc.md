@@ -68,7 +68,7 @@ BCAST mode provides the simplest implementation while ensuring cache coherence a
 
 ## Performance Considerations
 
-1. The default 12800 cache size should be sufficient for most workloads
+1. The default 12800 cache size should be sufficient for most workloads (12800 entries each for attr and entry caches)
 2. For very large filesystems with millions of files, you may benefit from increasing the cache size
 3. The cache is most effective for metadata-heavy workloads with many repeated operations
 4. For very write-heavy workloads, consider disabling CSC as invalidation traffic may offset benefits
