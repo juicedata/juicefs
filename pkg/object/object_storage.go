@@ -207,8 +207,8 @@ func (l *listThread) reset() {
 
 func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
 	marker := start
-	if start != "" {
-		remaining := strings.TrimPrefix(start, prefix)
+	if start != "" && strings.HasPrefix(start, prefix) {
+		remaining := start[len(prefix):]
 		if idx := strings.Index(remaining, "/"); idx >= 0 {
 			marker = prefix + remaining[:idx]
 		}
