@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v3
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - uses: actions/checkout@v3
       - name: golangci-lint
@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ["1.24", "1.25", "1.26"]
+        version: ["1.25", "1.26"]
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
