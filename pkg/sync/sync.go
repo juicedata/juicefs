@@ -2254,19 +2254,19 @@ func initSyncMetrics(config *Config) {
 				Name: "excluded_bytes",
 				Help: "Excluded bytes",
 			}, func() float64 {
-				return float64(copied.Current())
+				return float64(excludedBytes.Current())
 			}),
 			prometheus.NewCounterFunc(prometheus.CounterOpts{
 				Name: "extra",
 				Help: "Extra objects",
 			}, func() float64 {
-				return float64(excluded.Current())
+				return float64(extra.Current())
 			}),
 			prometheus.NewCounterFunc(prometheus.CounterOpts{
 				Name: "extra_bytes",
 				Help: "Extra bytes",
 			}, func() float64 {
-				return float64(copied.Current())
+				return float64(extraBytes.Current())
 			}),
 			prometheus.NewCounterFunc(prometheus.CounterOpts{
 				Name: "handled",
