@@ -1111,7 +1111,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			}
 		}
 
-		trackCheckpointCompletion(key, taskErr != nil, checkpointMgr, config)
+		trackCheckpointCompletion(key, taskErr, checkpointMgr, config)
 		incrHandled(1)
 		done()
 	}
