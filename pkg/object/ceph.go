@@ -31,6 +31,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ceph/go-ceph/rados"
 )
@@ -224,6 +225,22 @@ func (c *ceph) ListAll(_ context.Context, prefix, marker string, followLink bool
 	}
 	defer iter.Close()
 
+	var objs = make(chan Object, 1000)
+	if v := os.Getenv("JFS_OBJECT_NO_ORDER"); v == "1" || v == "true" {
+		go func() {
+			defer close(objs)
+			for iter.Next() {
+				key := iter.Value()
+				if key == "" || key <= marker || !strings.HasPrefix(key, prefix) {
+					continue
+				}
+				objs <- &obj{key, 0, time.Time{}, key[len(key)-1] == '/', ""}
+			}
+			c.release(ctx)
+		}()
+		return objs, nil
+	}
+
 	// FIXME: this will be really slow for many objects
 	keys := make([]string, 0, 1000)
 	for iter.Next() {
@@ -237,7 +254,6 @@ func (c *ceph) ListAll(_ context.Context, prefix, marker string, followLink bool
 	sort.Strings(keys)
 	c.release(ctx)
 
-	var objs = make(chan Object, 1000)
 	var concurrent = 20
 	ms := make([]sync.Mutex, concurrent)
 	conds := make([]*sync.Cond, concurrent)
