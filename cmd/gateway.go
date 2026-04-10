@@ -92,7 +92,7 @@ func cmdGateway() *cli.Command {
 		},
 		&cli.BoolFlag{
 			Name:  "use-meta-mtime",
-			Usage: "use modtime from object metadata",
+			Usage: "use modtime from object metadata (requires --object-meta)",
 		},
 		&cli.BoolFlag{
 			Name:  "head-dir",
