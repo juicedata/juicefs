@@ -1135,7 +1135,11 @@ func (store *cachedStore) scanDelayedStaging() {
 	for _, item := range store.pendingKeys {
 		store.pendingMutex.Unlock()
 		if item.ts.Before(cutoff) && item.uploading.CompareAndSwap(false, true) {
-			store.pendingCh <- item
+			select {
+			case store.pendingCh <- item:
+			default:
+				item.uploading.Store(false) // channel full; next scan will retry
+			}
 		}
 		store.pendingMutex.Lock()
 	}
