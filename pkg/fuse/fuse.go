@@ -534,6 +534,14 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		v.InvalidateEntry = func(parent Ino, name string) syscall.Errno {
 			return syscall.Errno(fssrv.EntryNotify(uint64(parent), name))
 		}
+		v.InvalidateInode = func(ino Ino) syscall.Errno {
+			return syscall.Errno(fssrv.InodeNotify(uint64(ino), -1, 0))
+		}
+	} else if runtime.GOOS == "darwin" {
+		v.InvalidateInode = func(ino Ino) syscall.Errno {
+			go fssrv.InodeNotify(uint64(ino), -1, 0)
+			return 0
+		}
 	}
 
 	fsserv = fssrv

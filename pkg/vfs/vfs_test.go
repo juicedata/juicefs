@@ -1161,3 +1161,34 @@ func testReaddir(t *testing.T, metaUri string, dirNum int, offset int) {
 	entriesTwo := readAll(ctx, parent, fh, offset)
 	require.True(t, reflect.DeepEqual(entriesOne, entriesTwo))
 }
+
+func TestInvalidateInodeOnWriteRelease(t *testing.T) {
+	v, _ := createTestVFS(nil, "")
+	ctx := NewLogContext(meta.Background())
+
+	var invalidated []Ino
+	v.InvalidateInode = func(ino Ino) syscall.Errno {
+		invalidated = append(invalidated, ino)
+		return 0
+	}
+
+	// Create and write a file, then release the write handle.
+	fe, fh, e := v.Create(ctx, 1, "f", 0644, 0, syscall.O_RDWR)
+	require.Equal(t, syscall.Errno(0), e)
+	ino := fe.Inode
+
+	require.Equal(t, syscall.Errno(0), v.Write(ctx, ino, []byte("hello"), 0, fh))
+	require.Empty(t, invalidated, "InvalidateInode must not fire before Release")
+
+	v.Release(ctx, ino, fh)
+	require.Equal(t, []Ino{ino}, invalidated,
+		"InvalidateInode must fire exactly once after releasing a write handle")
+
+	// Releasing a read-only handle must not trigger InvalidateInode.
+	_, fhRO, e := v.Open(ctx, ino, syscall.O_RDONLY)
+	require.Equal(t, syscall.Errno(0), e)
+	before := len(invalidated)
+	v.Release(ctx, ino, fhRO)
+	require.Equal(t, before, len(invalidated),
+		"InvalidateInode must not fire when releasing a read-only handle")
+}

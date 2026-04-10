@@ -673,6 +673,9 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 			if f.writer != nil {
 				_ = f.writer.Flush(ctx)
 				v.invalidateAttr(ino)
+				if v.InvalidateInode != nil {
+					_ = v.InvalidateInode(ino)
+				}
 			}
 			if locks&1 != 0 {
 				_ = v.Meta.Flock(ctx, ino, fowner^fh, F_UNLCK, false)
@@ -1226,6 +1229,7 @@ type VFS struct {
 	Meta            meta.Meta
 	Store           chunk.ChunkStore
 	InvalidateEntry func(parent meta.Ino, name string) syscall.Errno
+	InvalidateInode func(ino meta.Ino) syscall.Errno
 	UpdateFormat    func(*meta.Format)
 	reader          DataReader
 	writer          DataWriter
