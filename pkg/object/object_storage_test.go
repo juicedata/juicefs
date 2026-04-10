@@ -1188,6 +1188,18 @@ func TestCifs(t *testing.T) { //skip mutate
 // 	testStorage(t, bunny)
 // }
 
+func TestStorj(t *testing.T) { //skip mutate
+	if os.Getenv("STORJ_ACCESS_GRANT") == "" || os.Getenv("STORJ_BUCKET") == "" {
+		t.SkipNow()
+	}
+	s, err := newStorj(os.Getenv("STORJ_BUCKET"), os.Getenv("STORJ_ACCESS_GRANT"), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testStorage(t, s)
+}
+
+
 func TestMain(m *testing.M) {
 	if envFile := os.Getenv("JUICEFS_ENV_FILE_FOR_TEST"); envFile != "" {
 		// schema: S3 AWS_ENDPOINT=xxxxx

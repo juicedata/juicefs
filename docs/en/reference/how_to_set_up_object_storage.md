@@ -160,7 +160,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [DigitalOcean Spaces](#digitalocean-spaces)                 | `space`    |
 | [Wasabi](#wasabi)                                           | `wasabi`   |
 | [Telnyx Cloud Storage](#telnyx)                             | `s3`       |
-| [Storj DCS](#storj-dcs)                                     | `s3`       |
+| [Storj](#storj)                                             | `storj`    |
 | [Vultr Object Storage](#vultr-object-storage)               | `s3`       |
 | [Cloudflare R2](#r2)                                        | `s3`       |
 | [Bunny Storage](#bunny)                                     | `bunny`    |
@@ -461,24 +461,23 @@ juicefs format \
 
 Available regional endpoints are [here](https://developers.telnyx.com/docs/cloud-storage/api-endpoints).
 
-### Storj DCS
+### Storj
 
-Please refer to [this document](https://docs.storj.io/api-reference/s3-compatible-gateway) to learn how to create access key and secret key.
+Storj provides a native Uplink integration. Use `storj` as the `--storage` option and generate a [Storj Access Grant](https://storj.dev/learn/concepts/access/access-grants).
 
-Storj DCS is an S3-compatible storage, using `s3` for option `--storage`. The setting format of the option `--bucket` is `https://gateway.<region>.storjshare.io/<bucket>`, and please replace `<region>` with the corresponding region code you need. There are currently three available regions: `us1`, `ap1` and `eu1`. For example:
+Pass the access grant via `--access-key` and the bucket name via `--bucket`:
 
 ```shell
 juicefs format \
-    --storage s3 \
-    --bucket https://gateway.<region>.storjshare.io/<bucket> \
-    --access-key <your-access-key> \
-    --secret-key <your-sceret-key> \
+    --storage storj \
+    --bucket <bucket-name> \
+    --access-key <your-access-grant> \
     ... \
     myjfs
 ```
 
-:::caution
-Storj DCS [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API is not fully S3 compatible (result list is not sorted), so some features of JuiceFS do not work. For example, `juicefs gc`, `juicefs fsck`, `juicefs sync`, `juicefs destroy`. And when using `juicefs mount`, you need to disable [automatic-backup](../administration/metadata_dump_load.md#backup-automatically) function by adding `--backup-meta 0`.
+:::note
+Because encryption happens before upload and the keys never leave your client, Storj already provides the same protection that JuiceFS' own encryption would offer. Because of this, adding [JuiceFS encryption at rest](https://juicefs.com/docs/community/security/encryption/#enable-data-encryption-at-rest) using `--encrypt-rsa-key` on top would result in double-encrypting every block: first by JuiceFS (RSA key-wrap + AES) and then again by the uplink library (AES-GCM). The result is the same security, but with measurably higher CPU usage on every read and write. For more information, check [Storj encryption documentation](https://storj.dev/learn/concepts/access/encryption-and-keys).
 :::
 
 ### Vultr Object Storage
