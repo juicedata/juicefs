@@ -236,8 +236,7 @@ func formatSize(bytes int64) string {
 	return fmt.Sprintf("%.2f %siB", v, units[z])
 }
 
-// ListAll on all the keys that starts at marker from object storage.
-func ListAll(store object.ObjectStorage, prefix, start, end string, followLink bool) (<-chan object.Object, error) {
+func listAll(store object.ObjectStorage, prefix, start, end string, followLink, includeStart bool) (<-chan object.Object, error) {
 	startTime := time.Now()
 	logger.Debugf("Iterating objects from %s with prefix %s start %q", store, prefix, start)
 
@@ -245,7 +244,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 
 	// As the result of object storage's List method doesn't include the marker key,
 	// we try List the marker key separately.
-	if start != "" && strings.HasPrefix(start, prefix) {
+	if includeStart && start != "" && strings.HasPrefix(start, prefix) {
 		if obj, err := store.Head(ctx, start); err == nil {
 			logger.Debugf("Found start key: %s from %s in %s", start, store, time.Since(startTime))
 			out <- obj
@@ -333,6 +332,11 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 		close(out)
 	}()
 	return out, nil
+}
+
+// ListAll on all the keys that starts at marker from object storage.
+func ListAll(store object.ObjectStorage, prefix, start, end string, followLink bool) (<-chan object.Object, error) {
+	return listAll(store, prefix, start, end, followLink, true)
 }
 
 var bufPool = sync.Pool{
@@ -1234,11 +1238,13 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
 	startAfter := start
+	includeStart := true
 	if lastKey := checkpointMgr.GetLastListedKey(prefix); lastKey != "" {
 		startAfter = lastKey
+		includeStart = false
 	}
 
-	srckeys, err := ListAll(src, prefix, startAfter, end, !config.Links)
+	srckeys, err := listAll(src, prefix, startAfter, end, !config.Links, includeStart)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", src, err)
 	}
@@ -1249,7 +1255,7 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 		close(t)
 		dstkeys = t
 	} else {
-		dstkeys, err = ListAll(dst, prefix, startAfter, end, !config.Links)
+		dstkeys, err = listAll(dst, prefix, startAfter, end, !config.Links, includeStart)
 		if err != nil {
 			return fmt.Errorf("list %s: %s", dst, err)
 		}
