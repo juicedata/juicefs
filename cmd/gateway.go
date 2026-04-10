@@ -183,6 +183,9 @@ func gateway(c *cli.Context) error {
 		}
 	}
 	readonly := c.Bool("read-only")
+	if c.Bool("use-meta-mtime") && !c.Bool("object-meta") {
+		logger.Fatalf("--use-meta-mtime requires --object-meta to be enabled")
+	}
 	jfsGateway, err = jfsgateway.NewJFSGateway(
 		jfs,
 		conf,

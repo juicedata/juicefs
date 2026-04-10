@@ -37,7 +37,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/ncw/swift/v2"
+	"github.com/spf13/cast"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/google/uuid"
@@ -979,11 +979,23 @@ func (n *jfsObjects) getObjModTime(objMeta map[string]string, fileModTime time.T
 	if !n.gConf.UseMetaModTime {
 		return fileModTime
 	}
+	if objMeta == nil {
+		return fileModTime
+	}
 	modTimeString, ok := objMeta[metaMtime]
+	if !ok || len(modTimeString) == 0 {
+		for k, v := range objMeta {
+			if strings.EqualFold(k, metaMtime) && len(v) > 0 {
+				modTimeString = v
+				ok = true
+				break
+			}
+		}
+	}
 	if !ok || len(modTimeString) == 0 {
 		return fileModTime
 	} else {
-		modTime, err := swift.FloatStringToTime(modTimeString)
+		modTime, err := cast.StringToDate(modTimeString)
 		if err != nil {
 			logger.Errorf("parse object metadata time error, value: %s errors: %s", modTimeString, err)
 			return fileModTime

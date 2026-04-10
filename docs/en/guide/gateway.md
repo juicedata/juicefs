@@ -177,6 +177,16 @@ Object tags are not supported by default, but you can use `--object-tag` to enab
 
 Object metadata is not supported by default, but you can use `--object-meta` to enable it. Refer to the [documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html) for usage.
 
+### Use metadata modification time <VersionAdd>1.4</VersionAdd>
+
+By default, the modification time (mtime) of objects is determined by the file system. You can use `--use-meta-mtime` to use the modification time from object metadata instead. This option requires `--object-meta` to be enabled.
+
+```shell
+juicefs gateway redis://localhost:6379/1 localhost:9000 --object-meta --use-meta-mtime
+```
+
+When enabled, the object's modification time will be read from and written to the object metadata, allowing you to preserve the original timestamps of files when transferring them through S3 Gateway.
+
 ### Enable virtual host-style requests
 
 By default, JuiceFS S3 Gateway supports path-style requests in the format of `http://mydomain.com/bucket/object`. The `MINIO_DOMAIN` environment variable is used to enable virtual host-style requests. If the request's `Host` header information matches `(.+).mydomain.com`, the matched pattern `$1` is used as the bucket, and the path is used as the object.

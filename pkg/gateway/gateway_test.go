@@ -100,3 +100,78 @@ func TestGatewayLock(t *testing.T) {
 	rwLocker.RUnlock()
 
 }
+
+func TestGetObjModTime(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	fileModTime := now.Add(-time.Hour)
+	mtimeStr := now.Format(time.RFC3339)
+
+	tests := []struct {
+		name     string
+		objMeta  map[string]string
+		expected time.Time
+	}{
+		{
+			name:     "nil metadata returns fileModTime",
+			objMeta:  nil,
+			expected: fileModTime,
+		},
+		{
+			name:     "empty metadata returns fileModTime",
+			objMeta:  map[string]string{},
+			expected: fileModTime,
+		},
+		{
+			name:     "missing mtime key returns fileModTime",
+			objMeta:  map[string]string{"x-amz-meta-other": "value"},
+			expected: fileModTime,
+		},
+		{
+			name:     "empty mtime value returns fileModTime",
+			objMeta:  map[string]string{"x-amz-meta-mtime": ""},
+			expected: fileModTime,
+		},
+		{
+			name:     "lowercase mtime key works",
+			objMeta:  map[string]string{"x-amz-meta-mtime": mtimeStr},
+			expected: now,
+		},
+		{
+			name:     "uppercase mtime key works (case-insensitive)",
+			objMeta:  map[string]string{"X-AMZ-META-MTIME": mtimeStr},
+			expected: now,
+		},
+		{
+			name:     "mixed case mtime key works",
+			objMeta:  map[string]string{"X-Amz-Meta-Mtime": mtimeStr},
+			expected: now,
+		},
+		{
+			name:     "invalid mtime format returns fileModTime",
+			objMeta:  map[string]string{"x-amz-meta-mtime": "invalid-time"},
+			expected: fileModTime,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			jfsObj := &jfsObjects{gConf: &Config{UseMetaModTime: true}}
+			result := jfsObj.getObjModTime(tt.objMeta, fileModTime)
+			if !result.Equal(tt.expected) {
+				t.Errorf("getObjModTime() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetObjModTimeDisabled(t *testing.T) {
+	fileModTime := time.Now()
+	jfsObj := &jfsObjects{gConf: &Config{UseMetaModTime: false}}
+
+	objMeta := map[string]string{"x-amz-meta-mtime": time.Now().Format(time.RFC3339)}
+	result := jfsObj.getObjModTime(objMeta, fileModTime)
+
+	if !result.Equal(fileModTime) {
+		t.Errorf("getObjModTime() should return fileModTime when UseMetaModTime is false, got %v", result)
+	}
+}

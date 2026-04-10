@@ -197,6 +197,16 @@ s3-etag="d2fde576f44a6601b73201234b491904"
 
 默认不支持对象元数据，可以通过 `--object-meta` 开启，[参考文档](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html)
 
+### 使用元数据中的修改时间 <VersionAdd>1.4</VersionAdd>
+
+默认情况下，对象的修改时间（mtime）由文件系统决定。可以通过 `--use-meta-mtime` 选项使用对象元数据中的修改时间。该选项需要与 `--object-meta` 一起使用。
+
+```shell
+juicefs gateway redis://localhost:6379/1 localhost:9000 --object-meta --use-meta-mtime
+```
+
+启用后，对象的修改时间将从对象元数据中读取并写入，这样在通过 S3 网关传输文件时可以保留原始的时间戳。
+
 ### 启用虚拟主机风格请求
 
 默认情况下，S3 网关支持格式为 `http://mydomain.com/bucket/object` 的路径类型请求。`MINIO_DOMAIN` 环境变量被用来启用虚拟主机类型请求。如果请求的 `Host` 头信息匹配 `(.+).mydomain.com`，则匹配的模式 `$1` 被用作 bucket，并且路径被用作 object.
