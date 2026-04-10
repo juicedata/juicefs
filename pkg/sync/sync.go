@@ -2067,9 +2067,14 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			stats.Skipped = skipped.Current()
 			stats.SkippedBytes = skippedBytes.Current()
 			stats.Handled = handled.Current()
-			if failed != nil {
-				stats.Failed = failed.Current()
+			stats.Failed = 0
+			checkpointMgr.checkpoint.RLock()
+			for _, state := range checkpointMgr.checkpoint.PrefixState {
+				state.RLock()
+				stats.Failed += int64(len(state.FailedKeys))
+				state.RUnlock()
 			}
+			checkpointMgr.checkpoint.RUnlock()
 		}
 	}
 
@@ -2125,9 +2130,6 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if !config.Dry {
 		failed = progress.AddCountSpinner("Failed objects")
-		if checkpoint != nil {
-			failed.SetCurrent(checkpoint.Stats.Failed)
-		}
 		if config.MaxFailure > 0 {
 			go func() {
 				for {
