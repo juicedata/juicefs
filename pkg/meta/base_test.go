@@ -3331,7 +3331,6 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 			t.Fatalf("rename with trash enabled: %s", st)
 		}
 
-		time.Sleep(500 * time.Millisecond)
 		statAfter, _ := m.GetDirStat(ctx, dir1)
 
 		// with trash: deleted file doesn't reduce inode count, only goes to trash
@@ -3369,7 +3368,6 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 			t.Fatalf("rename cross_trash1 to cross_trash2 (overwrite with trash): %s", st)
 		}
 
-		time.Sleep(500 * time.Millisecond)
 		stat1After, _ := m.GetDirStat(ctx, dir1)
 		stat2After, _ := m.GetDirStat(ctx, dir2)
 
@@ -5319,7 +5317,6 @@ func testQuotaUsageStatistics(t *testing.T, m Meta, ctx Context, parent Ino, uid
 	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", gid), GroupQuotaType, map[string]*Quota{fmt.Sprintf("%d", gid): {MaxSpace: 2 << 30, MaxInodes: 20}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set group quota for gid %d: %s", gid, err)
 	}
-
 	time.Sleep(time.Second * 2)
 
 	qs := make(map[string]*Quota)
@@ -5438,7 +5435,6 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(100 * time.Millisecond)
 
 	qs := make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
@@ -5463,7 +5459,6 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(100 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
@@ -5515,7 +5510,6 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(100 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
@@ -5605,7 +5599,6 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs := make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
@@ -5639,7 +5632,6 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
@@ -5691,7 +5683,6 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
@@ -5736,7 +5727,6 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
@@ -5799,7 +5789,6 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
@@ -5843,7 +5832,6 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
@@ -5914,7 +5902,6 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
@@ -5948,7 +5935,6 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
