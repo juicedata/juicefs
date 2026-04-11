@@ -123,6 +123,17 @@ function get_duration() {
     echo $(( (end_time - start_time) / 1000000 ))
 }
 
+function http_time_offset() {
+    python3 - "$1" <<'PY'
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
+import sys
+
+offset = int(sys.argv[1])
+print(format_datetime(datetime.now(timezone.utc) + timedelta(seconds=offset), usegmt=True))
+PY
+}
+
 function log_success() {
     function=$(python -c 'import sys,json; print(json.dumps(sys.stdin.read()))' <<<"$2")
     printf '{"name": "awscli", "duration": %d, "function": %s, "status": "PASS"}\n' "$1" "$function"
@@ -510,8 +521,8 @@ function test_list_objects() {
           test_function=${function}
           out=$($function)
           rv=$?
-          output=$(echo "$out")
-          if [ $rv -eq 0 ] && [ "$output" != "" ]; then
+          entry_count=$(echo "$out" | jq '((.Contents // []) | length) + ((.CommonPrefixes // []) | length)')
+          if [ $rv -eq 0 ] && [ "$entry_count" != "0" ]; then
               rv=1
               # since rv is 0, command passed, but didn't return expected value. In this case set the output
               out="list-objects with prefix is dir failed"
@@ -2163,6 +2174,219 @@ function test_object_tagging(){
     fi
     return $rv
 }
+function test_conditional_requests() {
+    start_time=$(get_time)
+
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+    test_function="test_conditional_requests"
+
+    key="conditional.txt"
+    copy_key="conditional-copy.txt"
+    target_key="conditional-target.txt"
+    multipart_key="conditional-multipart.txt"
+    download_path="/tmp/conditional-get-$$"
+    multipart_file="/tmp/conditional-multipart-$$.json"
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key ${key}"
+        out=$($function 2>&1)
+        rv=$?
+        etag=$(echo "$out" | jq -r .ETag)
+    else
+        out="${bucket_name}"
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key ${key} ${download_path} --if-match ${etag}"
+        out=$($function 2>&1)
+        rv=$?
+        rm -f "${download_path}"
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key ${key} ${download_path} --if-match does-not-match"
+        out=$($function 2>&1)
+        status=$?
+        rm -f "${download_path}"
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for mismatched If-Match, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key ${key} ${download_path} --if-none-match ${etag}"
+        out=$($function 2>&1)
+        status=$?
+        rm -f "${download_path}"
+        if [ $status -eq 0 ] || [[ "$out" != *"304"* && "$out" != *"Not Modified"* ]]; then
+            rv=1
+            out="expected 304/Not Modified for matching If-None-Match, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        future_time=$(http_time_offset 3600)
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key ${key} ${download_path} --if-modified-since '${future_time}'"
+        out=$(eval "$function" 2>&1)
+        status=$?
+        rm -f "${download_path}"
+        if [ $status -eq 0 ] || [[ "$out" != *"304"* && "$out" != *"Not Modified"* ]]; then
+            rv=1
+            out="expected 304/Not Modified for future If-Modified-Since, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        past_time=$(http_time_offset -3600)
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key ${key} ${download_path} --if-unmodified-since '${past_time}'"
+        out=$(eval "$function" 2>&1)
+        status=$?
+        rm -f "${download_path}"
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for stale If-Unmodified-Since, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key create-only.txt --if-none-match '*'"
+        out=$(eval "$function" 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key ${key} --if-none-match '*'"
+        out=$(eval "$function" 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for existing object create-only PUT, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-33-kB --bucket ${bucket_name} --key ${key} --if-match ${etag}"
+        out=$($function 2>&1)
+        rv=$?
+        etag=$(echo "$out" | jq -r .ETag)
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --key ${copy_key} --copy-source ${bucket_name}/${key} --copy-source-if-match ${etag}"
+        out=$($function 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --key conditional-copy-fail.txt --copy-source ${bucket_name}/${key} --copy-source-if-match does-not-match"
+        out=$($function 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for copy source If-Match, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key ${target_key}"
+        out=$($function 2>&1)
+        rv=$?
+        target_etag=$(echo "$out" | jq -r .ETag)
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --key ${target_key} --copy-source ${bucket_name}/${key} --if-none-match '*'"
+        out=$(eval "$function" 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for target If-None-Match copy, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --key ${target_key} --copy-source ${bucket_name}/${key} --if-match ${target_etag}"
+        out=$($function 2>&1)
+        rv=$?
+        target_etag=$(echo "$out" | jq -r .CopyObjectResult.ETag)
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api delete-object --bucket ${bucket_name} --key ${target_key} --if-match does-not-match"
+        out=$($function 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for delete If-Match, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api delete-object --bucket ${bucket_name} --key ${target_key} --if-match ${target_etag}"
+        out=$($function 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key ${multipart_key}"
+        out=$($function 2>&1)
+        rv=$?
+        multipart_etag=$(echo "$out" | jq -r .ETag)
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api create-multipart-upload --bucket ${bucket_name} --key ${multipart_key}"
+        out=$($function 2>&1)
+        rv=$?
+        upload_id=$(echo "$out" | jq -r .UploadId)
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api upload-part --bucket ${bucket_name} --key ${multipart_key} --body ${MINT_DATA_DIR}/datafile-5243880-b --upload-id ${upload_id} --part-number 1"
+        out=$($function 2>&1)
+        rv=$?
+        part_etag=$(echo "$out" | jq -r .ETag)
+        echo "{\"Parts\":[{\"ETag\":${part_etag},\"PartNumber\":1}]}" > "${multipart_file}"
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api complete-multipart-upload --multipart-upload file://${multipart_file} --bucket ${bucket_name} --key ${multipart_key} --upload-id ${upload_id} --if-none-match '*'"
+        out=$(eval "$function" 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for complete-multipart-upload If-None-Match, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api complete-multipart-upload --multipart-upload file://${multipart_file} --bucket ${bucket_name} --key ${multipart_key} --upload-id ${upload_id} --if-match ${multipart_etag}"
+        out=$($function 2>&1)
+        rv=$?
+    fi
+
+    rm -f "${download_path}" "${multipart_file}"
+
+    if [ $rv -eq 0 ]; then
+        function="delete_bucket"
+        out=$(delete_bucket "${bucket_name}")
+        rv=$?
+    else
+        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+    fi
+
+    if [ $rv -eq 0 ]; then
+        log_success "$(get_duration "$start_time")" "${test_function}"
+    else
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+    fi
+
+    return $rv
+}
+
 # main handler for all the tests.
 main() {
     # Success tests
@@ -2194,6 +2418,7 @@ main() {
     # test_worm_bucket && \
     # test_legal_hold
     test_get_object_error &&  \
+    test_conditional_requests && \
     test_object_tagging
     return $?
 }
