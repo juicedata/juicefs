@@ -245,12 +245,12 @@ In addition to directory quotas, JuiceFS supports quotas by UID (user) and GID (
 Unlike directory quotas, user/group quotas are not based on the directory hierarchy. They are accounted and enforced by the ownership metadata (UID/GID) of files and directories.
 
 :::tip
-User/group quotas are tracked by numeric UID/GID, not usernames or group names. You can use the `id` command to check actual UID/GID values.
+User/group quotas are tracked by numeric UID/GID, not by usernames or group names. You can use the `id` command to check the actual values of UID/GID.
 :::
 
 ### Set user quota
 
-Use `--uid` to set quota for a user. For example, limit UID `1000` to `2 GiB` and `200` inodes:
+Use `--uid` to set a quota for a user. For example, limit UID `1000` to `2 GiB` and `200` inodes:
 
 ```shell
 $ juicefs quota set $METAURL --uid 1000 --capacity 2 --inodes 200
@@ -261,7 +261,7 @@ $ juicefs quota set $METAURL --uid 1000 --capacity 2 --inodes 200
 +---------+---------+---------+------+--------+-------+-------+
 ```
 
-Query and delete user quota:
+Query and delete a user quota:
 
 ```shell
 juicefs quota get $METAURL --uid 1000
@@ -270,7 +270,7 @@ juicefs quota delete $METAURL --uid 1000
 
 ### Set group quota
 
-Use `--gid` to set quota for a group. For example, limit GID `100` to `5 GiB` and `500` inodes:
+Use `--gid` to set a quota for a group. For example, limit GID `100` to `5 GiB` and `500` inodes:
 
 ```shell
 $ juicefs quota set $METAURL --gid 100 --capacity 5 --inodes 500
