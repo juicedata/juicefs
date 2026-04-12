@@ -7,8 +7,8 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -80,12 +80,14 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 		return
 	}
 	var entries []*meta.Entry
-	err = m.Readdir(meta.Background(), parent, 0, &entries)
+	err = m.Readdir(ctx, parent, 0, &entries)
 	if err != 0 {
 		logger.Errorf("list %q: %s", hour, err)
 		return
 	}
-	entries = entries[2:]
+	if len(entries) >= 2 {
+		entries = entries[2:]
+	}
 	// to avoid conflict
 	rand.Shuffle(len(entries), func(i, j int) {
 		entries[i], entries[j] = entries[j], entries[i]
@@ -102,11 +104,17 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 
 	todo := make(chan *meta.Entry, 1000)
 	p := utils.NewProgress(false)
-	restored := p.AddCountBar("restored", int64(len(entries)))
-	skipped := p.AddCountSpinner("skipped")
+	successLabel := "rebuilt"
+	if putBack {
+		successLabel = "restored"
+	}
+	done := p.AddCountBar(successLabel, int64(len(entries)))
+	var skipped *utils.Bar
+	if !putBack {
+		skipped = p.AddCountSpinner("need-put-back")
+	}
+	conflict := p.AddCountSpinner("conflicts")
 	failed := p.AddCountSpinner("failed")
-	var mu sync.Mutex
-	restoredTo := make(map[meta.Ino]int)
 	var wg sync.WaitGroup
 	for i := 0; i < threads; i++ {
 		wg.Add(1)
@@ -114,17 +122,31 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 			defer wg.Done()
 			for e := range todo {
 				ps := bytes.SplitN(e.Name, []byte("-"), 3)
-				dst, _ := strconv.Atoi(string(ps[0]))
-				if putBack || parents[meta.Ino(dst)] {
-					err = m.Rename(ctx, parent, string(e.Name), meta.Ino(dst), string(ps[2]), meta.RenameNoReplace|meta.RenameRestore, nil, nil)
-					if err != 0 {
-						logger.Warnf("restore %s: %s", string(e.Name), err)
+				if len(ps) != 3 {
+					logger.Warnf("restore %s: invalid trash entry", string(e.Name))
+					failed.Increment()
+					continue
+				}
+				dst, parseErr := strconv.Atoi(string(ps[0]))
+				if parseErr != nil {
+					logger.Warnf("restore %s: %v", string(e.Name), parseErr)
+					failed.Increment()
+					continue
+				}
+				dstParent := meta.Ino(dst)
+				dstName := string(ps[2])
+				shouldRestore := putBack || parents[dstParent]
+				if shouldRestore {
+					st := m.Rename(ctx, parent, string(e.Name), dstParent, dstName, meta.RenameNoReplace|meta.RenameRestore, nil, nil)
+					switch st {
+					case 0:
+						done.Increment()
+					case syscall.EEXIST:
+						logger.Warnf("restore %s: target already exists", string(e.Name))
+						conflict.Increment()
+					default:
+						logger.Warnf("restore %s: %s", string(e.Name), st)
 						failed.Increment()
-					} else {
-						restored.Increment()
-						mu.Lock()
-						restoredTo[meta.Ino(dst)] += 1
-						mu.Unlock()
 					}
 				} else {
 					skipped.Increment()
@@ -139,11 +161,10 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 	close(todo)
 	wg.Wait()
 	failed.Done()
-	skipped.Done()
-	restored.Done()
-	p.Done()
-	logger.Infof("restored %d files in %q", restored.Current(), hour)
-	for dst, count := range restoredTo {
-		logger.Infof("restored %d files to %q", count, strings.Join(m.GetPaths(ctx, dst), ", "))
+	conflict.Done()
+	if skipped != nil {
+		skipped.Done()
 	}
+	done.Done()
+	p.Done()
 }
