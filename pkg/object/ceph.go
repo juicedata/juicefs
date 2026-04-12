@@ -223,7 +223,6 @@ func (c *ceph) ListAll(_ context.Context, prefix, marker string, followLink bool
 		ctx.Destroy()
 		return nil, err
 	}
-	defer iter.Close()
 
 	var objs = make(chan Object, 1000)
 	if v := os.Getenv("JFS_OBJECT_NO_ORDER"); v == "1" || v == "true" {
@@ -236,6 +235,7 @@ func (c *ceph) ListAll(_ context.Context, prefix, marker string, followLink bool
 				}
 				objs <- &obj{key, 0, time.Time{}, key[len(key)-1] == '/', ""}
 			}
+			iter.Close()
 			c.release(ctx)
 		}()
 		return objs, nil
@@ -250,9 +250,10 @@ func (c *ceph) ListAll(_ context.Context, prefix, marker string, followLink bool
 		}
 		keys = append(keys, key)
 	}
+	iter.Close()
+	c.release(ctx)
 	// the keys are not ordered, sort them first
 	sort.Strings(keys)
-	c.release(ctx)
 
 	var concurrent = 20
 	ms := make([]sync.Mutex, concurrent)
