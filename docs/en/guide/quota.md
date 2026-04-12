@@ -281,7 +281,7 @@ $ juicefs quota set $METAURL --gid 100 --capacity 5 --inodes 500
 +----------+---------+---------+------+--------+-------+-------+
 ```
 
-Query and delete group quota:
+Query and delete a group quota:
 
 ```shell
 juicefs quota get $METAURL --gid 100
@@ -290,11 +290,11 @@ juicefs quota delete $METAURL --gid 100
 
 ### List all quotas
 
-Use `juicefs quota list $METAURL` to list directory, user, and group quotas together. User/group items are marked as `uid:<id>` / `gid:<id>` in output.
+Use `juicefs quota list $METAURL` to list directory, user, and group quotas together. In the output, user and group quotas are marked as `uid:<id>` and `gid:<id>` respectively.
 
 ### Consistency check and repair
 
-Like directory quotas, user/group quotas can become inconsistent after abnormal exits. Use the `check` subcommand to verify and repair.
+Like directory quotas, user/group quotas can become inconsistent after abnormal exits. Use the `check` subcommand to verify and repair them.
 
 Check all user/group quotas:
 
@@ -302,14 +302,14 @@ Check all user/group quotas:
 juicefs quota check $METAURL
 ```
 
-Check one user or one group:
+Check a specific user or group:
 
 ```shell
 juicefs quota check $METAURL --uid 1000
 juicefs quota check $METAURL --gid 100
 ```
 
-Repair after inconsistency is found:
+Once an inconsistency is detected, run the check with `--repair` to fix it:
 
 ```shell
 juicefs quota check $METAURL --repair
@@ -317,9 +317,9 @@ juicefs quota check $METAURL --repair
 
 ### Accounting scope
 
-User/group quota usage is accounted by the final UID/GID ownership of objects after write, instead of billing directly by the client account that initiated the operation.
+User/group quota usage is accounted based on the final UID/GID ownership of objects after the write operation, rather than billing directly against the client account that initiated the operation.
 
-For example, when creating files under a directory with `setgid`, file GID can inherit from the parent directory, and the inherited group quota will be consumed.
+For example, when creating files under a directory with `setgid`, the file's GID can inherit from the parent directory, and the inherited group quota is consumed.
 
 ### Usage check and fix {#usage-check-and-fix}
 
@@ -339,8 +339,8 @@ $ juicefs quota check $METAURL --path /test
 
 This section summarizes the accounting rules of JuiceFS usage across three dimensions:
 
-- Global usage: file-system-level total usage (file system quota usage).
-- Directory usage: directory quota usage (`juicefs quota --path ...` and related directory stats from `summary`/`info`).
+- Global usage: total usage at the file system level (file system quota usage).
+- Directory usage: directory quota usage (`juicefs quota --path ...` and related directory statistics from `summary`/`info`).
 - User/group usage: user and group quota usage (`--uid` / `--gid`).
 
 ### Core differences
@@ -350,31 +350,31 @@ This section summarizes the accounting rules of JuiceFS usage across three dimen
 | Regular file | Counted by file data size (aligned to 4 KiB) | Counted in directory tree (aligned to 4 KiB) | Counted by file owner UID/GID (aligned to 4 KiB) |
 | Hard-linked file | Counted once per inode; creating extra links does not duplicate usage | Each directory entry is counted in its directory scope (same inode can appear repeatedly in directory usage) | Counted once per inode; creating extra links does not duplicate usage |
 | Directory and other file types | Counted as inode usage; space uses metadata minimum granularity (effectively 4 KiB) | Counted as inode usage; space uses metadata minimum granularity (effectively 4 KiB) | Counted as inode usage; space uses metadata minimum granularity (effectively 4 KiB) |
-| Trash files | Still counted after moving to trash; released only after real trash cleanup | Removed from original tree, so no longer counted in original/ancestor directory usage; quota on trash directories is not supported | Still counted to original owner UID/GID after moving to trash; released only after real trash cleanup |
+| Trash files | Still counted after moving to trash; released only after real trash cleanup | Removed from the original tree, so no longer counted in original/ancestor directory usage; quotas on trash directories are not supported | Still counted to original owner UID/GID after moving to trash; released only after actual trash cleanup |
 
 ### Details
 
-1. Regular files
+- Regular files
 
-For all three dimensions, regular files are accounted by file length, aligned to 4 KiB, and consume 1 inode.
+  For all three dimensions, regular files are accounted by their file length, aligned to 4 KiB, and each consumes one inode.
 
-1. Hard-linked files
+- Hard-linked files
 
-The key difference is whether accounting deduplicates by inode:
+  The key difference is whether accounting deduplicates by inode:
 
-- Global usage and user/group usage deduplicate by inode: creating a hard link only creates another directory entry, not a new file entity.
-- Directory usage accumulates by directory entries in the tree: creating a hard link under a directory increases usage for that directory and its ancestors.
+  - Global usage and user/group usage: deduplicate by inode. Creating a hard link only adds a directory entry; no new file entity is created.
+  - Directory usage: accumulates by directory entries in the tree. Creating a hard link under a directory increases usage for that directory and its ancestors.
 
-1. Directories and other non-regular files
+- Directories and other non-regular files
 
-Directories, symlinks, and other non-regular files mainly consume inodes. Space usage is treated as 4 KiB by default.
+  Directories, symlinks, and other non-regular files mainly consume inodes. Their space usage is treated as 4 KiB by default.
 
-1. Trash files
+- Trash files
 
-With trash enabled, delete is usually a move-to-trash operation instead of immediate physical deletion:
+  When the trash feature is enabled, deleting a file usually moves it to the trash instead of performing immediate physical deletion.
 
-- For global usage and user/group usage: usage is not released immediately after moving to trash; it decreases only after trash cleanup.
-- For directory usage: once entries are moved out of the original directory tree, usage on original directory quotas decreases; quota on trash directories is not supported currently.
+  - For global usage and user/group usage: usage is not released immediately after moving to trash; it decreases only after trash cleanup.
+  - For directory usage: once entries are moved out of the original directory tree, usage on original directory quotas decreases. Quotas on trash directories are not currently supported.
 
 When the directory usage is correct, the current directory quota usage will be output; if it fails, the error log will be output:
 
