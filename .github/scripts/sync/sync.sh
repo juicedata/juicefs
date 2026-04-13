@@ -609,4 +609,39 @@ test_checkpoint_idempotent_resume(){
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
 }
 
+test_checkpoint_save_on_check_change_failure(){
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 2000); do
+        dd if=/dev/urandom of=data/file$i bs=64K count=1 status=none
+    done
+    # Background process continuously modifies source files to trigger check-change
+    (while true; do
+        for i in $(seq 1 300); do
+            echo "m" >> data/file$i 2>/dev/null
+        done
+    done) &
+    modifier_pid=$!
+    # Sync with --check-change should fail because source files keep changing
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 60s \
+        --check-change --threads 2 > sync1.log 2>&1 || true
+    kill $modifier_pid 2>/dev/null
+    wait $modifier_pid 2>/dev/null || true
+    # Verify check-change failure was reported
+    grep -i "changed during sync\|failed to handle" sync1.log || (echo "expected check-change failure" && exit 1)
+    # Key assertion: checkpoint file must exist after failure (issue #6890)
+    checkpoint_file=$(find /jfs/data -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
+    if [ -z "$checkpoint_file" ]; then
+        echo "FAIL: checkpoint should be saved when sync fails (issue #6890)"
+        exit 1
+    fi
+    echo "Checkpoint correctly saved on check-change failure: $checkpoint_file"
+    # Resume sync (source no longer changing) should complete successfully
+    rm /jfs/data/.juicefs-sync-checkpoint*
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 10s --check-change 2>&1 | tee sync2.log
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
 source .github/scripts/common/run_test.sh && run_test $@
