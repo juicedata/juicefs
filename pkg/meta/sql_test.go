@@ -18,11 +18,13 @@
 package meta
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"path"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSQLiteClient(t *testing.T) {
@@ -31,6 +33,93 @@ func TestSQLiteClient(t *testing.T) {
 		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
+}
+
+func TestSQLiteOpenCacheStaleAfterRenameWithTrash(t *testing.T) {
+	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-open-cache-stale.db"), testConfig())
+	if err != nil || m.Name() != "sqlite3" {
+		t.Fatalf("create meta: %s", err)
+	}
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+
+	format := testFormat()
+	format.TrashDays = 1
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init with trash: %v", err)
+	}
+	defer func() {
+		if err := m.Init(testFormat(), false); err != nil {
+			t.Fatalf("init default format: %v", err)
+		}
+	}()
+
+	base := m.getBase()
+	oldOpenCache := base.conf.OpenCache
+	oldExpire := base.of.expire
+	base.conf.OpenCache = 30 * time.Second
+	base.of.expire = 30 * time.Second
+	defer func() {
+		base.conf.OpenCache = oldOpenCache
+		base.of.expire = oldExpire
+	}()
+
+	ctx := Background()
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	var dir, file1, file2 Ino
+	var attr Attr
+	if st := m.Mkdir(ctx, RootInode, "cache_repro_dir", 0755, 022, 0, &dir, &attr); st != 0 {
+		t.Fatalf("mkdir cache_repro_dir: %s", st)
+	}
+	defer m.Rmdir(ctx, RootInode, "cache_repro_dir")
+
+	if st := m.Create(ctx, dir, "cache_file1", 0644, 022, 0, &file1, &attr); st != 0 {
+		t.Fatalf("create cache_file1: %s", st)
+	}
+	if st := m.Create(ctx, dir, "cache_file2", 0644, 022, 0, &file2, &attr); st != 0 {
+		t.Fatalf("create cache_file2: %s", st)
+	}
+
+	var before Attr
+	if st := m.GetAttr(ctx, file2, &before); st != 0 {
+		t.Fatalf("getattr before rename: %s", st)
+	}
+	if before.Parent != dir {
+		t.Fatalf("unexpected parent before rename, got %d, want %d", before.Parent, dir)
+	}
+
+	if st := m.Rename(ctx, dir, "cache_file1", dir, "cache_file2", 0, &file1, &attr); st != 0 {
+		t.Fatalf("rename overwrite with trash: %s", st)
+	}
+
+	// GetAttr should still return the stale parent when open cache is not invalidated.
+	var stale Attr
+	if st := m.GetAttr(ctx, file2, &stale); st != 0 {
+		t.Fatalf("getattr stale check: %s", st)
+	}
+	fmt.Printf("stale.Parent = %d\n", stale.Parent)
+	if stale.Parent != dir {
+		t.Fatalf("expected stale parent from open cache, got %d, want %d", stale.Parent, dir)
+	}
+
+	base.of.InvalidateChunk(file2, invalidateAttrOnly)
+
+	var after Attr
+	if st := m.GetAttr(ctx, file2, &after); st != 0 {
+		t.Fatalf("getattr after cache invalidation: %s", st)
+	}
+	fmt.Printf("after.Parent = %d\n", after.Parent)
+	if after.Parent <= TrashInode {
+		t.Fatalf("expect parent moved to trash after invalidation, got %d", after.Parent)
+	}
+	if stale.Parent != after.Parent {
+		t.Fatalf("expected stale parent to match before invalidation, got %d, want %d", stale.Parent, after.Parent)
+	}
 }
 
 func TestMySQLClient(t *testing.T) { //skip mutate
