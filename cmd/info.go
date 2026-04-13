@@ -97,12 +97,12 @@ func info(ctx *cli.Context) error {
 		} else {
 			d, err = filepath.Abs(path)
 			if err != nil {
-				logger.Fatalf("abs of %s: %s", path, err)
+				logger.Fatalf("abs of %q: %s", path, err)
 			}
 			inode, err = utils.GetFileInode(d)
 		}
 		if err != nil {
-			logger.Errorf("lookup inode for %s: %s", path, err)
+			logger.Errorf("lookup inode for %q: %s", path, err)
 			continue
 		}
 		if inode < uint64(meta.RootInode) {
@@ -110,7 +110,7 @@ func info(ctx *cli.Context) error {
 		}
 		f, err := openController(d)
 		if err != nil {
-			logger.Errorf("Open control file for %s: %s", d, err)
+			logger.Errorf("Open control file for %q: %s", d, err)
 			continue
 		}
 
@@ -163,6 +163,10 @@ func info(ctx *cli.Context) error {
 				fmt.Printf("\t%s\n", p)
 			}
 		}
+		fmt.Printf("   tier: %d->%s\n", resp.TierID, resp.TierStr)
+		if resp.RestoreStatus != "" {
+			fmt.Printf("   restore status: %s\n", resp.RestoreStatus)
+		}
 		if len(resp.Chunks) > 0 {
 			fmt.Println(" chunks:")
 			results := make([][]string, 0, 1+len(resp.Chunks))
@@ -187,6 +191,11 @@ func info(ctx *cli.Context) error {
 				if lastChunk != o.ChunkIndex {
 					chunkOffset = 0
 				}
+				pos := chunkOffset + o.ChunkIndex*meta.ChunkSize
+				if pos+uint64(o.Len) > resp.Summary.Length {
+					logger.Debugf("skip object %+v", o)
+					break
+				}
 				lastChunk = o.ChunkIndex
 				results = append(results, []string{
 					strconv.FormatUint(o.ChunkIndex, 10),
@@ -194,11 +203,13 @@ func info(ctx *cli.Context) error {
 					strconv.FormatUint(uint64(o.Size), 10),
 					strconv.FormatUint(uint64(o.Off), 10),
 					strconv.FormatUint(uint64(o.Len), 10),
-					strconv.FormatUint(chunkOffset+o.ChunkIndex*meta.ChunkSize, 10),
+					strconv.FormatUint(pos, 10),
 				})
 				chunkOffset += uint64(o.Len)
 			}
-			printResult(results, 1, false)
+			if len(results) > 1 {
+				printResult(results, 1, false)
+			}
 		}
 		if len(resp.FLocks) > 0 {
 			fmt.Println(" flocks:")
@@ -247,7 +258,7 @@ func ltypeToString(t uint32) string {
 func legacyInfo(d, path string, inode uint64, recursive, raw uint8) {
 	f, err := openController(d)
 	if err != nil {
-		logger.Errorf("Open control file for %s: %s", d, err)
+		logger.Errorf("Open control file for %q: %s", d, err)
 		return
 	}
 	defer f.Close()

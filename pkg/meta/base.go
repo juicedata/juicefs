@@ -36,6 +36,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pkg/errors"
@@ -108,6 +109,7 @@ type engine interface {
 	doDelQuota(ctx Context, qtype uint32, key uint64) error
 	doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error)
 	doFlushQuotas(ctx Context, quotas []*iQuota) error
+	cleanUgUsage(ctx Context, qtype uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno
@@ -716,6 +718,10 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 			return nil, fmt.Errorf("check version: %s", err)
 		}
 	}
+	if format.Tiers == nil {
+		format.Tiers = object.NewTiers()
+	}
+	format.Tiers[0] = object.Tier{}
 	m.Lock()
 	m.fmt = format
 	m.Unlock()
@@ -1250,6 +1256,7 @@ func (attr *Attr) reset() {
 	attr.Parent = 0
 	attr.AccessACL = aclAPI.None
 	attr.DefaultACL = aclAPI.None
+	attr.Tier = 0
 	attr.Full = false
 }
 
@@ -1301,8 +1308,25 @@ func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 	}
 }
 
-func (r *baseMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
-	return syscall.ENOTSUP
+func (r *baseMeta) Resolve(ctx Context, parent Ino, dpath string, inode *Ino, attr *Attr, force bool) syscall.Errno {
+	if !force {
+		return syscall.ENOTSUP
+	}
+	*inode = RootInode
+	for dpath != "" {
+		ps := strings.SplitN(dpath, "/", 2)
+		if ps[0] != "" {
+			r := r.en.doLookup(ctx, *inode, ps[0], inode, attr)
+			if r != 0 {
+				return r
+			}
+		}
+		if len(ps) == 1 {
+			break
+		}
+		dpath = ps[1]
+	}
+	return 0
 }
 
 func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
@@ -1475,6 +1499,40 @@ func (m *baseMeta) allocateInodes() (freeID, error) {
 	return freeID{next: uint64(v) - inodeBatch, maxid: uint64(v)}, nil
 }
 
+func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parentMode uint16) uint32 {
+	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+		return parentGid
+	}
+	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
+		return parentGid
+	}
+	return ctx.Gid()
+}
+
+func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, parentMode, childMode uint16) uint16 {
+	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+		return childMode
+	}
+	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
+		if _type == TypeDirectory {
+			childMode |= 02000
+		} else if childMode&02010 == 02010 && ctx.Uid() != 0 {
+			found := false
+			for _, g := range ctx.Gids() {
+				if g == parentGid {
+					found = true
+					break
+				}
+			}
+			if !found {
+				childMode &= ^uint16(02000)
+			}
+		}
+		return childMode
+	}
+	return childMode
+}
+
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
 	if _type < TypeFile || _type > TypeSocket {
 		return syscall.EINVAL
@@ -1498,10 +1556,10 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	defer m.timeit("Mknod", time.Now())
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
-	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), ctx.Gid(), parent); err != 0 {
+	// check group quota in transaction
+	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
 		return err
 	}
-
 	ino, err := m.nextInode()
 	if err != nil {
 		return errno(err)
@@ -1752,8 +1810,8 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	st := m.en.doBatchClone(ctx, srcParent, dstParent, entries, cmode, cumask, &r)
 	if st == 0 {
 		m.en.updateStats(r.space, r.inodes)
+		m.updateDirStat(ctx, dstParent, r.length, r.space, r.inodes)
 		m.updateDirQuota(ctx, dstParent, r.space, r.inodes)
-		// TODO
 		for _, q := range r.deltas {
 			m.updateUserGroupStat(ctx, q.Uid, q.Gid, q.Space, q.Inodes)
 		}
@@ -1856,18 +1914,32 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			}
 		}
-		if *tinode > 0 && flags != RenameExchange {
+		if *tinode > 0 {
 			diffLength = 0
 			if tattr.Typ == TypeDirectory {
 				m.parentMu.Lock()
-				delete(m.dirParents, *tinode)
+				if flags == RenameExchange {
+					if parentSrc != parentDst {
+						m.dirParents[*tinode] = parentSrc
+					}
+				} else {
+					delete(m.dirParents, *tinode)
+				}
 				m.parentMu.Unlock()
-			} else if attr.Typ == TypeFile {
-				diffLength = tattr.Length
+			} else if tattr.Typ == TypeFile {
+				diffLength = uint64(tattr.Length)
 			}
-			m.updateDirStat(ctx, parentDst, -int64(diffLength), -align4K(diffLength), -1)
-			if quotaDst > 0 {
-				m.updateDirQuota(ctx, parentDst, -align4K(diffLength), -1)
+			if parentSrc != parentDst || flags != RenameExchange {
+				m.updateDirStat(ctx, parentDst, -int64(diffLength), -align4K(diffLength), -1)
+				if quotaDst > 0 {
+					m.updateDirQuota(ctx, parentDst, -align4K(diffLength), -1)
+				}
+			}
+			if parentSrc != parentDst && flags == RenameExchange {
+				m.updateDirStat(ctx, parentSrc, int64(diffLength), align4K(diffLength), 1)
+				if quotaSrc > 0 {
+					m.updateDirQuota(ctx, parentSrc, align4K(diffLength), 1)
+				}
 			}
 		}
 	}
@@ -1996,7 +2068,11 @@ func (m *baseMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (s
 	*slices = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *slices)
 	if !m.conf.ReadOnly && (len(ss) >= 5 || len(*slices) >= 5) {
-		go m.compactChunk(inode, indx, false, false)
+		tierID := -1
+		if f != nil {
+			tierID = int(f.attr.Tier)
+		}
+		go m.compactChunk(inode, indx, false, false, tierID)
 	}
 	return 0
 }
@@ -2049,9 +2125,9 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
 		if numSlices%100 == 99 || numSlices > 350 {
 			if numSlices < maxSlices {
-				go m.compactChunk(inode, indx, false, false)
+				go m.compactChunk(inode, indx, false, false, int(attr.Tier))
 			} else {
-				m.compactChunk(inode, indx, true, false)
+				m.compactChunk(inode, indx, true, false, int(attr.Tier))
 			}
 		}
 	}
@@ -2622,7 +2698,7 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 		go func() {
 			for c := range ch {
 				logger.Debugf("Compacting chunk %d:%d (%d slices)", c.inode, c.indx, c.slices)
-				m.compactChunk(c.inode, c.indx, false, true)
+				m.compactChunk(c.inode, c.indx, false, true, -1)
 				bar.Increment()
 			}
 			wg.Done()
@@ -2639,7 +2715,7 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 	return 0
 }
 
-func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
+func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID int) {
 	// avoid too many or duplicated compaction
 	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
@@ -2700,7 +2776,14 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 		return
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(compacted), size)
-	err := m.newMsg(CompactChunk, slices, id)
+	if tierID == -1 {
+		var attr Attr
+		if eno := m.GetAttr(Background(), inode, &attr); eno != 0 {
+			return
+		}
+		tierID = int(attr.Tier)
+	}
+	err := m.newMsg(CompactChunk, slices, id, uint8(tierID))
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
 			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(compacted), err)
@@ -2736,7 +2819,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 		m.Lock()
 		delete(m.compacting, k)
 		m.Unlock()
-		m.compactChunk(inode, indx, once, force)
+		m.compactChunk(inode, indx, once, force, tierID)
 	}
 }
 
@@ -2746,7 +2829,6 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 		logger.Errorf("get attr error [inode %v]: %v", inode, st)
 		return st
 	}
-
 	var wg sync.WaitGroup
 	// compact
 	chunkChan := make(chan cchunk, 10000)
@@ -2755,7 +2837,7 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 		go func() {
 			defer wg.Done()
 			for c := range chunkChan {
-				m.compactChunk(c.inode, c.indx, false, true)
+				m.compactChunk(c.inode, c.indx, false, true, int(attr.Tier))
 				postFunc()
 				if ctx.Canceled() {
 					return
@@ -3493,6 +3575,10 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	}
 	if set&SetAttrFlag != 0 {
 		dirtyAttr.Flags = attr.Flags
+		changed = true
+	}
+	if set&SetAttrTier != 0 {
+		dirtyAttr.Tier = attr.Tier
 		changed = true
 	}
 	if !changed {

@@ -84,6 +84,16 @@ jobs:
           wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
           chmod +x random-test
       
+      - name: Test Tier
+        timeout-minutes: 20
+        env:
+          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
+          AWS_BUCKET: tiertest-${{ matrix.meta }}
+        run: |
+          sudo --preserve-env=AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_SESSION_TOKEN,AWS_REGION,AWS_DEFAULT_REGION,AWS_BUCKET \
+            META=${{matrix.meta}} .github/scripts/command/tier.sh
+
       - name: Test Mount
         timeout-minutes: 10
         run: |

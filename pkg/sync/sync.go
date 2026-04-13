@@ -263,7 +263,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 			close(out)
 		}()
 		return out, nil
-	} else if !errors.Is(err, utils.ENOTSUP) {
+	} else if !errors.Is(err, utils.ErrNotSUP) {
 		return nil, err
 	}
 
@@ -271,7 +271,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 
 	objs, hasMore, nextToken, err := store.List(ctx, prefix, marker, "", "", maxResults, followLink)
-	if errors.Is(err, utils.ENOTSUP) {
+	if errors.Is(err, utils.ErrNotSUP) {
 		return object.ListAllWithDelimiter(ctx, store, prefix, start, end, followLink)
 	}
 	if err != nil {
@@ -371,19 +371,21 @@ func try(n int, f func() error) (err error) {
 	return
 }
 
-func deleteObj(storage object.ObjectStorage, key string, dry bool) {
+func deleteObj(storage object.ObjectStorage, key string, dry bool) error {
 	if dry {
 		logger.Debugf("Will delete %s from %s", key, storage)
 		deleted.Increment()
-		return
+		return nil
 	}
 	start := time.Now()
 	if err := try(3, func() error { return storage.Delete(ctx, key) }); err == nil {
 		deleted.Increment()
 		logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
+		return nil
 	} else {
 		failed.Increment()
 		logger.Errorf("Failed to delete %s from %s in %s: %s", key, storage, time.Since(start), err)
+		return err
 	}
 }
 
@@ -936,7 +938,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 		var upload *object.MultipartUpload
 		if upload, err = dst.CreateMultipartUpload(ctx, key); err == nil {
 			srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
-		} else if err == utils.ENOTSUP {
+		} else if err == utils.ErrNotSUP {
 			err = try(3, func() (err error) {
 				srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
 				return
@@ -995,18 +997,20 @@ func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
 	}
 }
 
-func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Config) {
+func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager) {
 	for {
 		obj, done := fetchTask(tasks)
 		if obj == nil {
 			break
 		}
 		key := obj.Key()
+		var taskErr error
+
 		switch obj.Size() {
 		case markDeleteSrc:
-			deleteObj(src, key, config.Dry)
+			taskErr = deleteObj(src, key, config.Dry)
 		case markDeleteDst:
-			deleteObj(dst, key, config.Dry)
+			taskErr = deleteObj(dst, key, config.Dry)
 		case markCopyPerms:
 			if config.Dry {
 				logger.Debugf("Will copy permissions for %s", key)
@@ -1023,6 +1027,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			obj = withoutSize(obj)
 			if equal, err := checkSum(src, dst, key, nil, obj, config); err != nil {
 				failed.Increment()
+				taskErr = err
 				break
 			} else if equal {
 				if config.DeleteSrc {
@@ -1031,7 +1036,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 						srcDelayDel = append(srcDelayDel, key)
 						srcDelayDelMu.Unlock()
 					} else {
-						deleteObj(src, key, false)
+						taskErr = deleteObj(src, key, false)
 					}
 				} else if config.Perms && (!obj.IsSymlink() || !config.Links) {
 					if o, e := dst.Head(ctx, key); e == nil {
@@ -1045,6 +1050,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 					} else {
 						logger.Warnf("Failed to head object %s: %s", key, e)
 						failed.Increment()
+						taskErr = e
 					}
 				} else {
 					skipped.Increment()
@@ -1088,7 +1094,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			}
 			if err == nil {
 				if mc, ok := dst.(object.MtimeChanger); ok {
-					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ENOTSUP) {
+					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ErrNotSUP) {
 						logger.Warnf("Update mtime of %s: %s", key, err)
 					}
 				}
@@ -1101,8 +1107,11 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			} else {
 				failed.Increment()
 				logger.Errorf("Failed to copy object %s: %s", key, err)
+				taskErr = err
 			}
 		}
+
+		trackCheckpointCompletion(key, taskErr != nil, checkpointMgr, config)
 		incrHandled(1)
 		done()
 	}
@@ -1194,7 +1203,10 @@ var dstDelayDel []string
 var srcDelayDelMu sync.Mutex
 var srcDelayDel []string
 
-func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
+func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config, checkpointMgr *CheckpointManager, prefix string) bool {
+	if checkpointMgr.isCheckpointKey(dstobj.Key()) {
+		return false
+	}
 	incrTotal(1)
 	if !config.DeleteDst || !config.Dirs && dstobj.IsDir() || config.Limit == 0 {
 		logger.Debug("Ignore extra object", dstobj.Key())
@@ -1208,16 +1220,25 @@ func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config 
 		dstDelayDel = append(dstDelayDel, dstobj.Key())
 		dstDelayDelMu.Unlock()
 	} else {
-		tasks <- withSize(dstobj, markDeleteDst)
+		obj := withSize(dstobj, markDeleteDst)
+		if checkpointMgr != nil {
+			checkpointMgr.AddPendingKey(prefix, obj)
+		}
+		tasks <- obj
 	}
 	return config.Limit == 0
 }
 
-func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, config *Config) error {
+func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, config *Config, checkpointMgr *CheckpointManager) error {
 	start, end := config.Start, config.End
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
-	srckeys, err := ListAll(src, prefix, start, end, !config.Links)
+	startAfter := start
+	if lastKey := checkpointMgr.GetLastListedKey(prefix); lastKey != "" {
+		startAfter = lastKey
+	}
+
+	srckeys, err := ListAll(src, prefix, startAfter, end, !config.Links)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", src, err)
 	}
@@ -1228,15 +1249,15 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 		close(t)
 		dstkeys = t
 	} else {
-		dstkeys, err = ListAll(dst, prefix, start, end, !config.Links)
+		dstkeys, err = ListAll(dst, prefix, startAfter, end, !config.Links)
 		if err != nil {
 			return fmt.Errorf("list %s: %s", dst, err)
 		}
 	}
-	return produce(tasks, srckeys, dstkeys, config)
+	return produce(tasks, srckeys, dstkeys, config, checkpointMgr, prefix)
 }
 
-func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, config *Config) error {
+func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, config *Config, checkpointMgr *CheckpointManager, prefix string) (retErr error) {
 	srckeys = filter(srckeys, config.rules, config)
 	dstkeys = filter(dstkeys, config.rules, config)
 	var dstobj object.Object
@@ -1251,7 +1272,17 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		skip, skipBytes = 0, 0
 	}
 	defer flushProgress()
+
+	defer func() {
+		if checkpointMgr != nil && retErr == nil {
+			checkpointMgr.MarkListDone(prefix)
+		}
+	}()
+
 	skipIt := func(obj object.Object) {
+		if checkpointMgr != nil {
+			checkpointMgr.UpdateLastListedKey(prefix, obj)
+		}
 		skip++
 		skipBytes += obj.Size()
 		if skip > 100 || time.Since(lastUpdate) > time.Millisecond*100 {
@@ -1259,11 +1290,23 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			flushProgress()
 		}
 	}
+
+	sendTask := func(obj object.Object) {
+		if checkpointMgr != nil {
+			checkpointMgr.AddPendingKey(prefix, obj)
+		}
+		tasks <- obj
+	}
+
 	for obj := range srckeys {
 		if obj == nil {
 			return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
 		}
+
 		if !config.Dirs && obj.IsDir() {
+			if checkpointMgr != nil {
+				checkpointMgr.UpdateLastListedKey(prefix, obj)
+			}
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
@@ -1276,7 +1319,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		incrTotal(1)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
-			if handleExtraObject(tasks, dstobj, config) {
+			if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
 				return nil
 			}
 			dstobj = nil
@@ -1289,7 +1332,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				if obj.Key() <= dstobj.Key() {
 					break
 				}
-				if handleExtraObject(tasks, dstobj, config) {
+				if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
 					return nil
 				}
 				dstobj = nil
@@ -1302,7 +1345,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				skipIt(obj)
 				continue
 			}
-			tasks <- obj
+			sendTask(obj)
 		} else { // obj.key == dstobj.key
 			if config.IgnoreExisting {
 				skipIt(obj)
@@ -1312,21 +1355,24 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			if config.ForceUpdate ||
 				(config.Update && obj.Mtime().Unix() > dstobj.Mtime().Unix()) ||
 				(!config.Update && obj.Size() != dstobj.Size()) {
-				tasks <- obj
+				sendTask(obj)
 			} else if config.Update && obj.Mtime().Unix() < dstobj.Mtime().Unix() {
 				skipIt(obj)
 			} else if config.CheckAll { // two objects are likely the same
-				tasks <- withSize(obj, markChecksum)
+				sendTask(withSize(obj, markChecksum))
 			} else if config.DeleteSrc {
 				if obj.IsDir() {
+					if checkpointMgr != nil {
+						checkpointMgr.UpdateLastListedKey(prefix, obj)
+					}
 					srcDelayDelMu.Lock()
 					srcDelayDel = append(srcDelayDel, obj.Key())
 					srcDelayDelMu.Unlock()
 				} else {
-					tasks <- withSize(obj, markDeleteSrc)
+					sendTask(withSize(obj, markDeleteSrc))
 				}
 			} else if config.Perms && needCopyPerms(obj, dstobj) {
-				tasks <- withSize(obj, markCopyPerms)
+				sendTask(withSize(obj, markCopyPerms))
 			} else {
 				skipIt(obj)
 			}
@@ -1335,7 +1381,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 	}
 	if config.DeleteDst {
 		if dstobj != nil {
-			if handleExtraObject(tasks, dstobj, config) {
+			if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
 				return nil
 			}
 		}
@@ -1343,7 +1389,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			if dstobj == nil {
 				return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
 			}
-			if handleExtraObject(tasks, dstobj, config) {
+			if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
 				return nil
 			}
 		}
@@ -1358,7 +1404,7 @@ type rule struct {
 
 func parseRule(name, p string) rule {
 	if runtime.GOOS == "windows" {
-		p = strings.Replace(p, "\\", "/", -1)
+		p = strings.ReplaceAll(p, "\\", "/")
 	}
 	return rule{pattern: p, include: name == "-include"}
 }
@@ -1371,14 +1417,14 @@ func parseIncludeRules(args []string) (rules []rule) {
 		}
 		if l-1 > i && (a == "-include" || a == "-exclude") {
 			if _, err := path.Match(args[i+1], "xxxx"); err != nil {
-				logger.Warnf("ignore invalid pattern: %s %s", a, args[i+1])
+				logger.Warnf("ignore invalid pattern: %q %q", a, args[i+1])
 				continue
 			}
 			rules = append(rules, parseRule(a, args[i+1]))
 		} else if strings.HasPrefix(a, "-include=") || strings.HasPrefix(a, "-exclude=") {
 			if s := strings.Split(a, "="); len(s) == 2 && s[1] != "" {
 				if _, err := path.Match(s[1], "xxxx"); err != nil {
-					logger.Warnf("ignore invalid pattern: %s", a)
+					logger.Warnf("ignore invalid pattern: %q", a)
 					continue
 				}
 				rules = append(rules, parseRule(s[0], s[1]))
@@ -1574,12 +1620,12 @@ func matchLeveledPath(rules []rule, key string) bool {
 	return true
 }
 
-func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.Object, followLink bool) (chan object.Object, error) {
+func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.Object, followLink bool, startAfter string, onChildPrefix func(string)) (chan object.Object, error) {
 	var total []object.Object
 	var objs []object.Object
 	var err error
 	var nextToken string
-	var marker string
+	marker := startAfter
 	var hasMore bool
 	var thisListMaxResults int64 = maxResults
 	if strings.HasPrefix(store.String(), "file://") || strings.HasPrefix(store.String(), "nfs://") ||
@@ -1606,6 +1652,9 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 		for _, o := range total {
 			if o.IsDir() && o.Key() > prefix {
 				if cp != nil {
+					if onChildPrefix != nil {
+						onChildPrefix(o.Key())
+					}
 					cp <- o
 				}
 			} else {
@@ -1616,7 +1665,34 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 	return srckeys, nil
 }
 
-func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) error {
+// restorePrefixFromCheckpoint restores the pending keys of a prefix from checkpoint and restarts the producer if the listing of the prefix is not done.
+// It returns true if the prefix is restored from checkpoint, otherwise false.
+func restorePrefixFromCheckpoint(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, config *Config, checkpointMgr *CheckpointManager) bool {
+	objs, listDone, listDepth, found := checkpointMgr.RestorePrefix(prefix)
+	if !found {
+		return false
+	}
+	if objs == nil {
+		// Already restored by another goroutine (dedup)
+		return true
+	}
+
+	logger.Debugf("Restore prefix %q from checkpoint, restoreObjs: %d, listDone: %v", prefix, len(objs), listDone)
+	for _, obj := range objs {
+		incrTotal(1)
+		tasks <- obj
+	}
+
+	if !listDone {
+		if err := startProducer(tasks, src, dst, prefix, listDepth, config, checkpointMgr); err != nil {
+			logger.Errorf("Failed to restart producer for prefix %s: %v", prefix, err)
+			failed.Increment()
+		}
+	}
+	return true
+}
+
+func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager) error {
 	f, err := os.Open(config.FilesFrom)
 	if err != nil {
 		return fmt.Errorf("open %s: %s", config.FilesFrom, err)
@@ -1631,7 +1707,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 			defer wg.Done()
 			for key := range prefixs {
 				if !strings.HasSuffix(key, "/") {
-					if err := produceSingleObject(tasks, src, dst, key, config); err == nil {
+					if err := produceSingleObject(tasks, src, dst, key, config, checkpointMgr); err == nil {
 						listedPrefix.Increment()
 						continue
 					} else if errors.Is(err, errDirSuffix) {
@@ -1643,7 +1719,11 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 					}
 				}
 				logger.Debugf("start listing prefix %s", key)
-				err = startProducer(tasks, src, dst, key, config.ListDepth, config)
+				if restorePrefixFromCheckpoint(tasks, src, dst, key, config, checkpointMgr) {
+					listedPrefix.Increment()
+					continue
+				}
+				err = startProducer(tasks, src, dst, key, config.ListDepth, config, checkpointMgr)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", key, err)
 					failed.Increment()
@@ -1675,7 +1755,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 var errDirSuffix = errors.New("dir miss suffix '/'")
 var ignoreFiles int64
 
-func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
+func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config, checkpointMgr *CheckpointManager) error {
 	obj, err := src.Head(ctx, key)
 	if err != nil {
 		logger.Warnf("head %s from %s: %s", key, src, err)
@@ -1700,7 +1780,7 @@ func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStora
 		}
 		close(dstkeys)
 		logger.Debugf("produce single key %s", key)
-		_ = produce(tasks, srckeys, dstkeys, config)
+		_ = produce(tasks, srckeys, dstkeys, config, checkpointMgr, key)
 		return nil
 	} else {
 		logger.Warnf("head %s from %s: %s", key, dst, e)
@@ -1709,18 +1789,35 @@ func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStora
 	return err
 }
 
-func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
+func restoreFromCheckpoint(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager) error {
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, max(config.Threads, 1))
+	prefixes := checkpointMgr.ListPrefixes()
+	for _, prefix := range prefixes {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(prefix string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			restorePrefixFromCheckpoint(tasks, src, dst, prefix, config, checkpointMgr)
+		}(prefix)
+	}
+	wg.Wait()
+	return nil
+}
+
+func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config, checkpointMgr *CheckpointManager) error {
 	config.concurrentList <- 1
 	defer func() {
 		<-config.concurrentList
 	}()
 	if config.Limit == 1 && len(config.rules) == 0 {
-		if produceSingleObject(tasks, src, dst, prefix, config) == nil {
+		if produceSingleObject(tasks, src, dst, prefix, config, checkpointMgr) == nil {
 			return nil
 		}
 	}
 	if config.ListThreads <= 1 || listDepth <= 0 {
-		return startSingleProducer(tasks, src, dst, prefix, config)
+		return startSingleProducer(tasks, src, dst, prefix, config, checkpointMgr)
 	}
 
 	commonPrefix := make(chan object.Object, 1000)
@@ -1755,7 +1852,12 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			wg.Add(1)
 			go func(prefix string) {
 				defer wg.Done()
-				err := startProducer(tasks, src, dst, prefix, listDepth-1, config)
+				// In the produceFromList, only the top-level prefix from the file gets restored.
+				// Child prefixes in the checkpoint must be restored here, otherwise their pending/failed keys are lost.
+				if restorePrefixFromCheckpoint(tasks, src, dst, prefix, config, checkpointMgr) {
+					return
+				}
+				err := startProducer(tasks, src, dst, prefix, listDepth-1, config, checkpointMgr)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", prefix, err)
 					failed.Increment()
@@ -1764,9 +1866,22 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		}
 	}()
 
-	srckeys, err := listCommonPrefix(src, prefix, commonPrefix, !config.Links)
-	if err == utils.ENOTSUP {
-		return startSingleProducer(tasks, src, dst, prefix, config)
+	startAfter := checkpointMgr.GetLastListedKey(prefix)
+
+	var onChildPrefix func(string)
+	if checkpointMgr != nil {
+		onChildPrefix = func(key string) {
+			if (len(config.rules) == 0 || matchLeveledPath(config.rules, key)) &&
+				key >= config.Start &&
+				(config.End == "" || key <= config.End) {
+				checkpointMgr.RegisterChildPrefix(key, listDepth-1)
+			}
+		}
+	}
+
+	srckeys, err := listCommonPrefix(src, prefix, commonPrefix, !config.Links, startAfter, onChildPrefix)
+	if err == utils.ErrNotSUP {
+		return startSingleProducer(tasks, src, dst, prefix, config, checkpointMgr)
 	} else if err != nil {
 		return fmt.Errorf("list %s with delimiter: %s", src, err)
 	}
@@ -1780,15 +1895,15 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		close(t)
 		dstkeys = t
 	} else {
-		dstkeys, err = listCommonPrefix(dst, prefix, dcp, !config.Links)
-		if err == utils.ENOTSUP {
-			return startSingleProducer(tasks, src, dst, prefix, config)
+		dstkeys, err = listCommonPrefix(dst, prefix, dcp, !config.Links, startAfter, nil)
+		if err == utils.ErrNotSUP {
+			return startSingleProducer(tasks, src, dst, prefix, config, checkpointMgr)
 		} else if err != nil {
 			return fmt.Errorf("list %s with delimiter: %s", dst, err)
 		}
 	}
 	// sync returned objects
-	if err := produce(tasks, srckeys, dstkeys, config); err != nil {
+	if err := produce(tasks, srckeys, dstkeys, config, checkpointMgr, prefix); err != nil {
 		return err
 	}
 	// consume all the keys from dst
@@ -1804,6 +1919,50 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 
 // Sync syncs all the keys between to object storage
 func Sync(src, dst object.ObjectStorage, config *Config) error {
+	var checkpointMgr *CheckpointManager
+	var checkpoint *Checkpoint
+
+	if config.EnableCheckpoint && config.Manager == "" {
+		checkpointMgr = NewCheckpointManager(src, dst, config)
+		if ckpt, err := checkpointMgr.Load(); err == nil {
+			if checkpointMgr.ValidateConfig(config) {
+				if len(ckpt.PrefixState) > 0 || len(ckpt.SrcDelayDel) > 0 || len(ckpt.DstDelayDel) > 0 {
+					checkpoint = ckpt
+					config.Limit = ckpt.Config.Limit
+					ckpt.Config = config
+					if len(ckpt.SrcDelayDel) > 0 {
+						logger.Infof("Checkpoint has %d pending deletes in source", len(ckpt.SrcDelayDel))
+						srcDelayDelMu.Lock()
+						srcDelayDel = append([]string(nil), ckpt.SrcDelayDel...)
+						srcDelayDelMu.Unlock()
+					}
+					if len(ckpt.DstDelayDel) > 0 {
+						dstDelayDelMu.Lock()
+						dstDelayDel = append([]string(nil), ckpt.DstDelayDel...)
+						dstDelayDelMu.Unlock()
+					}
+					logger.Infof("Loaded checkpoint from %s", ckpt.UpdatedAt.Format(time.RFC3339))
+				} else {
+					logger.Infof("Loaded empty checkpoint, starting fresh")
+				}
+			} else {
+				logger.Warnf("Checkpoint config mismatch, starting fresh")
+				checkpointMgr.Reset(config)
+			}
+		} else {
+			if !errors.Is(err, os.ErrNotExist) {
+				logger.Warnf("Failed to load checkpoint: %v", err)
+			} else {
+				logger.Infof("No checkpoint found, starting fresh")
+			}
+		}
+
+		if checkpointMgr != nil {
+			checkpointMgr.StartPeriodicSave(config.CheckpointInterval)
+			checkpointMgr.SaveOnSignal()
+		}
+	}
+
 	if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
 		major, minor := utils.GetKernelVersion()
 		// copy_file_range() system call first appeared in Linux 4.5, and reworked in 5.3
@@ -1871,6 +2030,43 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		deleted = progress.AddCountSpinner("Deleted objects")
 	}
 
+	if checkpoint != nil {
+		copied.SetCurrent(checkpoint.Stats.Copied)
+		copiedBytes.SetCurrent(checkpoint.Stats.CopiedBytes)
+		if checked != nil {
+			checked.SetCurrent(checkpoint.Stats.Checked)
+			checkedBytes.SetCurrent(checkpoint.Stats.CheckedBytes)
+		}
+		if deleted != nil {
+			deleted.SetCurrent(checkpoint.Stats.Deleted)
+		}
+		skipped.SetCurrent(checkpoint.Stats.Skipped)
+		skippedBytes.SetCurrent(checkpoint.Stats.SkippedBytes)
+		// Restore handled bar: total = current = checkpoint value (scanned = handled)
+		handled.SetTotal(checkpoint.Stats.Handled)
+		handled.SetCurrent(checkpoint.Stats.Handled)
+	}
+
+	if checkpointMgr != nil {
+		checkpointMgr.statsUpdater = func(stats *CheckpointStats) {
+			stats.Copied = copied.Current()
+			stats.CopiedBytes = copiedBytes.Current()
+			if checked != nil {
+				stats.Checked = checked.Current()
+				stats.CheckedBytes = checkedBytes.Current()
+			}
+			if deleted != nil {
+				stats.Deleted = deleted.Current()
+			}
+			stats.Skipped = skipped.Current()
+			stats.SkippedBytes = skippedBytes.Current()
+			stats.Handled = handled.Current()
+			if failed != nil {
+				stats.Failed = failed.Current()
+			}
+		}
+	}
+
 	syncExitFunc := func() error {
 		if config.Manager == "" {
 			val := atomic.LoadInt64(&ignoreFiles)
@@ -1906,6 +2102,11 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current()-extra.Current())
 				}
 			}
+			if checkpointMgr != nil {
+				if e := checkpointMgr.DeleteCheckpoint(); e != nil {
+					logger.Warnf("Failed to delete checkpoint after completion: %v", e)
+				}
+			}
 		} else {
 			sendStats(config.Manager)
 			for len(srcDelayDel) > 0 {
@@ -1918,6 +2119,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if !config.Dry {
 		failed = progress.AddCountSpinner("Failed objects")
+		if checkpoint != nil {
+			failed.SetCurrent(checkpoint.Stats.Failed)
+		}
 		if config.MaxFailure > 0 {
 			go func() {
 				for {
@@ -1948,7 +2152,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			worker(tasks, src, dst, config)
+			worker(tasks, src, dst, config, checkpointMgr)
 		}()
 	}
 
@@ -1958,13 +2162,13 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if config.Manager == "" {
 		if len(config.Workers) > 0 {
-			addr, err := startManager(config, tasks)
+			addr, err := startManager(config, tasks, checkpointMgr)
 			if err != nil {
 				return err
 			}
 			launchWorker(addr, config, &wg)
 		}
-		logger.Infof("Syncing from %s to %s", src, dst)
+		logger.Infof("Syncing from %q to %q", src, dst)
 		if config.Start != "" {
 			logger.Infof("first key: %q", config.Start)
 		}
@@ -1972,11 +2176,14 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			logger.Infof("last key: %q", config.End)
 		}
 		config.concurrentList = make(chan int, config.ListThreads)
+
 		var err error
 		if config.FilesFrom != "" {
-			err = produceFromList(tasks, src, dst, config)
+			err = produceFromList(tasks, src, dst, config, checkpointMgr)
+		} else if checkpoint != nil {
+			err = restoreFromCheckpoint(tasks, src, dst, config, checkpointMgr)
 		} else {
-			err = startProducer(tasks, src, dst, "", config.ListDepth, config)
+			err = startProducer(tasks, src, dst, "", config.ListDepth, config, checkpointMgr)
 		}
 		if err != nil {
 			return err
@@ -1993,6 +2200,10 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 	wg.Wait()
 
+	if checkpointMgr != nil {
+		checkpointMgr.Stop()
+	}
+
 	if config.Manager == "" {
 		delayDelFunc := func(storage object.ObjectStorage, keys []string) {
 			if len(keys) > 0 {
@@ -2001,7 +2212,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			}
 			for i := len(keys) - 1; i >= 0; i-- {
 				incrHandled(1)
-				deleteObj(storage, keys[i], config.Dry)
+				_ = deleteObj(storage, keys[i], config.Dry)
 			}
 		}
 		delWg := sync.WaitGroup{}
@@ -2013,6 +2224,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}()
 		delWg.Add(1)
 		go func() {
+			if checkpointMgr != nil && config.DeleteDst {
+				dstDelayDel = append(dstDelayDel, checkpointMgr.checkpointKey)
+			}
 			delayDelFunc(dst, dstDelayDel)
 			delWg.Done()
 		}()
@@ -2040,19 +2254,19 @@ func initSyncMetrics(config *Config) {
 				Name: "excluded_bytes",
 				Help: "Excluded bytes",
 			}, func() float64 {
-				return float64(copied.Current())
+				return float64(excludedBytes.Current())
 			}),
 			prometheus.NewCounterFunc(prometheus.CounterOpts{
 				Name: "extra",
 				Help: "Extra objects",
 			}, func() float64 {
-				return float64(excluded.Current())
+				return float64(extra.Current())
 			}),
 			prometheus.NewCounterFunc(prometheus.CounterOpts{
 				Name: "extra_bytes",
 				Help: "Extra bytes",
 			}, func() float64 {
-				return float64(copied.Current())
+				return float64(extraBytes.Current())
 			}),
 			prometheus.NewCounterFunc(prometheus.CounterOpts{
 				Name: "handled",

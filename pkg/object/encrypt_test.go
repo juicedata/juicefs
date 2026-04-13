@@ -268,6 +268,76 @@ func TestDataEncryptor(t *testing.T) {
 	}
 }
 
+func TestEncryptorMaxOverhead(t *testing.T) {
+	rsa1024Key, err := rsa.GenerateKey(rand.Reader, 1024)
+	require.NoError(t, err)
+	rsa3072Key, err := rsa.GenerateKey(rand.Reader, 3072)
+	require.NoError(t, err)
+	rsa4096Key, err := rsa.GenerateKey(rand.Reader, 4096)
+	require.NoError(t, err)
+	sm2Key := genPrivateKey("sm2").(*sm2.PrivateKey)
+
+	rsa1024Data, err := NewDataEncryptor(NewRSAEncryptor(rsa1024Key), AES256GCM_RSA)
+	require.NoError(t, err)
+	rsa2048Data, err := NewDataEncryptor(NewRSAEncryptor(rsaKey), AES256GCM_RSA)
+	require.NoError(t, err)
+	rsa3072Data, err := NewDataEncryptor(NewRSAEncryptor(rsa3072Key), AES256GCM_RSA)
+	require.NoError(t, err)
+	rsa4096Data, err := NewDataEncryptor(NewRSAEncryptor(rsa4096Key), AES256GCM_RSA)
+	require.NoError(t, err)
+	sm2Data, err := NewDataEncryptor(NewSM2Encryptor(sm2Key), SM4GCM)
+	require.NoError(t, err)
+
+	cases := []struct {
+		name  string
+		enc   *dataEncryptor
+		sizes []int
+	}{
+		{
+			name:  "rsa_data_1024",
+			enc:   rsa1024Data,
+			sizes: []int{0, 1, 128, plainChunkSize},
+		},
+		{
+			name:  "rsa_data_2048",
+			enc:   rsa2048Data,
+			sizes: []int{0, 1, 128, plainChunkSize},
+		},
+		{
+			name:  "rsa_data_3072",
+			enc:   rsa3072Data,
+			sizes: []int{0, 128, plainChunkSize},
+		},
+		{
+			name:  "rsa_data_4096",
+			enc:   rsa4096Data,
+			sizes: []int{0, 128, plainChunkSize},
+		},
+		{
+			name:  "sm2_data_sm4",
+			enc:   sm2Data,
+			sizes: []int{0, 1, 128, plainChunkSize},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			for _, size := range c.sizes {
+				maxOverhead := c.enc.MaxOverhead()
+				t.Log(maxOverhead)
+				require.GreaterOrEqual(t, maxOverhead, 0)
+				data := bytes.Repeat([]byte{byte(size%251 + 1)}, size)
+				runs := 10
+				for i := 0; i < runs; i++ {
+					cipherText, err := c.enc.Encrypt(data)
+					require.NoError(t, err)
+					require.LessOrEqual(t, len(cipherText), len(data)+maxOverhead)
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkDataEncryptor(b *testing.B) {
 	cases := []struct {
 		name string

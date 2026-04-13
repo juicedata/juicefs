@@ -931,7 +931,7 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 	var attr = &Attr{}
 
 	if fs.conf.FastResolve {
-		err = fs.m.Resolve(ctx, 1, p, &inode, attr)
+		err = fs.m.Resolve(ctx, 1, p, &inode, attr, false)
 		if err == 0 {
 			fi = AttrToFileInfo(inode, attr)
 			p = strings.TrimRight(p, "/")
@@ -1139,10 +1139,10 @@ func (fs *FileSystem) Warmup(ctx meta.Context, paths []string, numthreads int, b
 	}
 }
 
-func (fs *FileSystem) HandleQuota(ctx meta.Context, path string, cmd uint8, capacity, inodes uint64, strict, repair, create bool) (qs map[string]*meta.Quota, err syscall.Errno) {
+func (fs *FileSystem) HandleQuota(ctx meta.Context, key string, cmd uint8, capacity, inodes uint64, strict, repair, create bool) (qs map[string]*meta.Quota, err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() {
-		fs.log(l, "QuotaCtl (%s,%d,%d,%d,%t,%t,%t): %s", path, cmd, capacity, inodes, create, repair, strict, errstr(err))
+		fs.log(l, "QuotaCtl (%s,%d,%d,%d,%t,%t,%t): %s", key, cmd, capacity, inodes, create, repair, strict, errstr(err))
 	}()
 	if cmd == meta.QuotaSet && capacity == 0 && inodes == 0 {
 		return nil, syscall.EINVAL
@@ -1156,10 +1156,31 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, path string, cmd uint8, capa
 		if inodes > 0 {
 			q.MaxInodes = int64(inodes)
 		}
-		qs[path] = q
+		qs[key] = q
 	}
 
-	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, 0, 0, qs, strict, repair, create); _err != nil {
+	var qtype uint32
+	var qkey string
+	if strings.HasPrefix(key, "uid:") {
+		qtype = meta.UserQuotaType
+		qkey = key[4:]
+	} else if strings.HasPrefix(key, "gid:") {
+		qtype = meta.GroupQuotaType
+		qkey = key[4:]
+	} else if key != "" {
+		qtype = meta.DirQuotaType
+		qkey = key
+	} else {
+		qkey = ""
+		if cmd == meta.QuotaList {
+			qtype = meta.AllQuotaType
+		} else if cmd == meta.QuotaCheck {
+			qtype = meta.UserQuotaType
+		} else {
+			return nil, syscall.EINVAL
+		}
+	}
+	if _err := fs.m.HandleQuota(meta.Background(), cmd, qkey, qtype, qs, strict, repair, create); _err != nil {
 		if strings.HasPrefix(_err.Error(), "no quota for inode") {
 			return qs, 0
 		}
@@ -1363,7 +1384,7 @@ func (f *File) Pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 
 func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err syscall.Errno) {
 	if f.wdata == nil {
-		f.wdata = f.fs.writer.Open(f.inode, uint64(f.info.Size()))
+		f.wdata = f.fs.writer.Open(f.inode, uint64(f.info.Size()), f.info.attr.Tier)
 	}
 	err = f.wdata.Write(ctx, uint64(offset), b)
 	if err != 0 {
@@ -1566,7 +1587,7 @@ func (f *File) GetQuota(ctx meta.Context) (quota *meta.Quota, err error) {
 		return quota, err
 	}
 	// get directory quota
-	err = f.fs.m.HandleQuota(ctx, meta.QuotaGet, f.path, 0, 0, qs, false, false, false)
+	err = f.fs.m.HandleQuota(ctx, meta.QuotaGet, f.path, meta.DirQuotaType, qs, false, false, false)
 	if err != nil {
 		return nil, err
 	}

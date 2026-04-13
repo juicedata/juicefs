@@ -45,7 +45,7 @@ const s3StorageClassHdr = "X-Amz-Storage-Class"
 type ks3 struct {
 	bucket string
 	s3     *s3.S3
-	sc     string
+	tierStorage
 }
 
 func (s *ks3) String() string {
@@ -96,6 +96,7 @@ func (s *ks3) Head(ctx context.Context, key string) (Object, error) {
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
 		sc,
+		*r.Restore,
 	}, nil
 }
 
@@ -140,26 +141,26 @@ func (s *ks3) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 		Body:        body,
 		ContentType: &mimeType,
 	}
-	if s.sc != "" {
-		params.StorageClass = aws.String(s.sc)
+	sc := s.GetStorageClass(ctx)
+	if sc != "" {
+		params.StorageClass = aws.String(sc)
 	}
 	resp, err := s.s3.PutObjectWithContext(ctx, params)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey])).SetStorageClass(s.sc)
+		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey])).SetStorageClass(sc)
 	}
 	return err
 }
 func (s *ks3) Copy(ctx context.Context, dst, src string) error {
+	sc := getOrDefaultScValue(s.GetStorageClass(ctx), s3.StorageClassStandard)
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
 		Key:        &dst,
 		CopySource: &src,
 	}
-	if s.sc != "" {
-		params.StorageClass = aws.String(s.sc)
-	}
+	params.StorageClass = aws.String(sc)
 	_, err := s.s3.CopyObjectWithContext(ctx, params)
 	return err
 }
@@ -203,7 +204,7 @@ func (s *ks3) List(ctx context.Context, prefix, start, token, delimiter string, 
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
-		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
+		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass, ""}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -211,7 +212,7 @@ func (s *ks3) List(ctx context.Context, prefix, start, token, delimiter string, 
 			if err != nil {
 				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -255,6 +256,17 @@ func (s *ks3) UploadPart(ctx context.Context, key string, uploadID string, num i
 		return nil, err
 	}
 	return &Part{Num: num, ETag: *resp.ETag}, nil
+}
+
+func (s *ks3) Restore(ctx context.Context, key string) error {
+	_, err := s.s3.RestoreObject(&s3.RestoreObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+		RestoreRequest: &s3.RestoreRequest{
+			Days: aws.Long(defaultRestoreDays),
+		},
+	})
+	return err
 }
 
 func (s *ks3) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {

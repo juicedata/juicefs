@@ -38,6 +38,7 @@ func (o *obj) Mtime() time.Time     { return o.mtime }
 func (o *obj) IsDir() bool          { return o.isDir }
 func (o *obj) IsSymlink() bool      { return o.isSymlink }
 func (o *obj) StorageClass() string { return "" }
+func (o *obj) Status() string       { return "" }
 
 type file struct {
 	obj
@@ -58,7 +59,7 @@ func TestCluster(t *testing.T) {
 	todo := make(chan object.Object, 100)
 	var conf Config
 	conf.Workers = []string{workerAddr}
-	addr, err := startManager(&conf, todo)
+	addr, err := startManager(&conf, todo, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

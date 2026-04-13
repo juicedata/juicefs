@@ -121,6 +121,7 @@ func (s *sqlStore) Head(ctx context.Context, key string) (Object, error) {
 		b.Modified,
 		strings.HasSuffix(key, "/"),
 		"",
+		"",
 	}, nil
 }
 

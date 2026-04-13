@@ -44,16 +44,22 @@ import (
 
 // Stat has the counters to represent the progress.
 type Stat struct {
-	Copied       int64    // the number of copied files
-	CopiedBytes  int64    // total amount of copied data in bytes
-	Checked      int64    // the number of checked files
-	CheckedBytes int64    // total amount of checked data in bytes
-	Deleted      int64    // the number of deleted files
-	Skipped      int64    // the number of files skipped
-	SkippedBytes int64    // total amount of skipped data in bytes
-	Failed       int64    // the number of files that fail to copy
-	DelayDelDir  []string // the directories that need to be deleted
+	Copied        int64    // the number of copied files
+	CopiedBytes   int64    // total amount of copied data in bytes
+	Checked       int64    // the number of checked files
+	CheckedBytes  int64    // total amount of checked data in bytes
+	Deleted       int64    // the number of deleted files
+	Skipped       int64    // the number of files skipped
+	SkippedBytes  int64    // total amount of skipped data in bytes
+	Failed        int64    // the number of files that fail to copy
+	DelayDelDir   []string // the directories that need to be deleted
+	CompletedKeys []string `json:"completed_keys,omitempty"` // checkpoint: keys completed by this worker
+	FailedKeys    []string `json:"failed_keys,omitempty"`    // checkpoint: keys failed by this worker
 }
+
+var completionMu sync.Mutex
+var completedKeysBuf []string
+var failedKeysBuf []string
 
 func updateStats(r *Stat) {
 	copied.IncrInt64(r.Copied)
@@ -105,6 +111,12 @@ func sendStats(addr string) {
 	r.DelayDelDir = srcDelayDel
 	srcDelayDel = make([]string, 0)
 	srcDelayDelMu.Unlock()
+	completionMu.Lock()
+	r.CompletedKeys = completedKeysBuf
+	r.FailedKeys = failedKeysBuf
+	completedKeysBuf = make([]string, 0)
+	failedKeysBuf = make([]string, 0)
+	completionMu.Unlock()
 	if checked != nil {
 		r.Checked = checked.Current()
 		r.CheckedBytes = checkedBytes.Current()
@@ -121,6 +133,10 @@ func sendStats(addr string) {
 		srcDelayDelMu.Lock()
 		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
 		srcDelayDelMu.Unlock()
+		completionMu.Lock()
+		completedKeysBuf = append(r.CompletedKeys, completedKeysBuf...)
+		failedKeysBuf = append(r.FailedKeys, failedKeysBuf...)
+		completionMu.Unlock()
 		if errors.Is(err, syscall.ECONNREFUSED) {
 			logger.Errorf("the management process has been stopped, so the worker process now exits")
 			os.Exit(1)
@@ -144,7 +160,7 @@ func sendStats(addr string) {
 	}
 }
 
-func startManager(config *Config, tasks <-chan object.Object) (string, error) {
+func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *CheckpointManager) (string, error) {
 	http.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []object.Object
 		var total int64
@@ -196,6 +212,14 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 		srcDelayDelMu.Lock()
 		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
 		srcDelayDelMu.Unlock()
+		if checkpointMgr != nil {
+			for _, key := range r.CompletedKeys {
+				checkpointMgr.MarkCompleted(key)
+			}
+			for _, key := range r.FailedKeys {
+				checkpointMgr.MarkFailed(key)
+			}
+		}
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})
@@ -270,15 +294,15 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			rpath := filepath.Join("/tmp", filepath.Base(path))
 			cmd := exec.Command("rsync", "-a", "-e", "ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no", path, host+":"+rpath)
 			output, err := cmd.CombinedOutput()
-			logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
+			logger.Debugf("exec: %q,err: %s", cmd.String(), string(output))
 			if err != nil {
 				// fallback to scp
 				cmd = exec.Command("scp", "-o", "StrictHostKeyChecking=no", "-o", "PasswordAuthentication=no", path, host+":"+rpath)
 				output, err = cmd.CombinedOutput()
-				logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
+				logger.Debugf("exec: %q,err: %s", cmd.String(), string(output))
 			}
 			if err != nil {
-				logger.Errorf("copy itself to %s: %s", host, err)
+				logger.Errorf("copy itself to %q: %s", host, err)
 				return
 			}
 			// launch itself
@@ -308,7 +332,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			for i, s := range printEnv {
 				argsBk[i+1] = s
 			}
-			logger.Debugf("launch worker command args: [ssh, %s]", strings.Join(shellescape.EscapeArgs(argsBk), ", "))
+			logger.Debugf("launch worker command args: [ssh, %q]", strings.Join(shellescape.EscapeArgs(argsBk), ", "))
 			cmd = exec.Command("ssh", shellescape.EscapeArgs(args)...)
 			cmd.Stdin = os.Stdin
 			stderr, err := cmd.StderrPipe()
@@ -317,10 +341,10 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 			err = cmd.Start()
 			if err != nil {
-				logger.Errorf("start itself at %s: %s", host, err)
+				logger.Errorf("start itself at %q: %s", host, err)
 				return
 			}
-			logger.Infof("launch a worker on %s", host)
+			logger.Infof("launch a worker on %q", host)
 			var finished = make(chan struct{})
 			var logRe = regexp.MustCompile(`^.*<([A-Z]+)>: (.*)`)
 			go func() {
@@ -344,20 +368,20 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 
 					switch level {
 					case "ERROR":
-						logger.Errorf("[%s] %s", host, content)
+						logger.Errorf("[%q] %s", host, content)
 					case "WARNING":
-						logger.Warnf("[%s] %s", host, content)
+						logger.Warnf("[%q] %s", host, content)
 					case "DEBUG":
-						logger.Debugf("[%s] %s", host, content)
+						logger.Debugf("[%q] %s", host, content)
 					default:
-						logger.Infof("[%s] %s", host, content)
+						logger.Infof("[%q] %s", host, content)
 					}
 				}
 			}()
 			err = cmd.Wait()
 			<-finished
 			if err != nil {
-				logger.Errorf("%s: %s", host, err)
+				logger.Errorf("%q: %s", host, err)
 			}
 		}(host)
 	}

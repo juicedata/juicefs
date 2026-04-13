@@ -73,6 +73,7 @@ type DumpedAttr struct {
 	Nlink     uint32 `json:"nlink"`
 	Length    uint64 `json:"length"`
 	Rdev      uint32 `json:"rdev,omitempty"`
+	Tier      uint8  `json:"tier,omitempty"`
 	full      bool
 }
 
@@ -331,13 +332,15 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 }
 
 type DumpedMeta struct {
-	Setting   Format
-	Counters  *DumpedCounters
-	Sustained []*DumpedSustained
-	DelFiles  []*DumpedDelFile
-	Quotas    map[Ino]*DumpedQuota `json:",omitempty"`
-	FSTree    *DumpedEntry         `json:",omitempty"`
-	Trash     *DumpedEntry         `json:",omitempty"`
+	Setting     Format
+	Counters    *DumpedCounters
+	Sustained   []*DumpedSustained
+	DelFiles    []*DumpedDelFile
+	Quotas      map[Ino]*DumpedQuota    `json:",omitempty"`
+	UserQuotas  map[uint64]*DumpedQuota `json:",omitempty"`
+	GroupQuotas map[uint64]*DumpedQuota `json:",omitempty"`
+	FSTree      *DumpedEntry            `json:",omitempty"`
+	Trash       *DumpedEntry            `json:",omitempty"`
 }
 
 func (dm *DumpedMeta) validate() error {
@@ -362,12 +365,30 @@ func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	return bw, nil
 }
 
-func (m *baseMeta) loadDumpedQuotas(ctx Context, quotas map[Ino]*DumpedQuota) {
-	// update quota
-	for inode, q := range quotas {
+func (m *baseMeta) loadDumpedQuotas(ctx Context, dm *DumpedMeta) {
+	for inode, q := range dm.Quotas {
 		if _, err := m.en.doSetQuota(ctx, DirQuotaType, uint64(inode), &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}); err != nil {
-			logger.Warnf("reset quota of %d: %s", inode, err)
-			continue
+			logger.Warnf("set dir quota (inode=%d): %s", inode, err)
+		}
+	}
+	for uid, q := range dm.UserQuotas {
+		if _, err := m.en.doSetQuota(ctx, UserQuotaType, uid, &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}); err != nil {
+			logger.Warnf("set user quota (uid=%d): %s", uid, err)
+		}
+	}
+	for gid, q := range dm.GroupQuotas {
+		if _, err := m.en.doSetQuota(ctx, GroupQuotaType, gid, &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}); err != nil {
+			logger.Warnf("set group quota (gid=%d): %s", gid, err)
+		}
+	}
+
+	if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
+		format := dm.Setting
+		m.Lock()
+		m.fmt = &format
+		m.Unlock()
+		if err := m.ScanUserGroupUsage(ctx); err != nil {
+			logger.Warnf("rebuild user/group quota usage failed: %v", err)
 		}
 	}
 }
@@ -393,6 +414,7 @@ func dumpAttr(a *Attr, d *DumpedAttr) {
 	} else {
 		d.Length = 0
 	}
+	d.Tier = a.Tier
 	d.full = a.Full
 }
 
@@ -411,6 +433,7 @@ func loadAttr(d *DumpedAttr) *Attr {
 		Ctimensec: d.Ctimensec,
 		Nlink:     d.Nlink,
 		Rdev:      d.Rdev,
+		Tier:      d.Tier,
 		Full:      true,
 	} // Length and Parent not set
 }
@@ -459,6 +482,10 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 			err = dec.Decode(&dm.DelFiles)
 		case "Quotas":
 			err = dec.Decode(&dm.Quotas)
+		case "UserQuotas":
+			err = dec.Decode(&dm.UserQuotas)
+		case "GroupQuotas":
+			err = dec.Decode(&dm.GroupQuotas)
 		case "FSTree":
 			_, err = decodeEntry(dec, 0, counters, parents, dm.Quotas, refs, bar, load, addChunk)
 		case "Trash":

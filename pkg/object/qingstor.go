@@ -41,7 +41,7 @@ import (
 
 type qingstor struct {
 	bucket *qs.Bucket
-	sc     string
+	tierStorage
 }
 
 func (q *qingstor) String() string {
@@ -79,6 +79,7 @@ func (q *qingstor) Head(ctx context.Context, key string) (Object, error) {
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
 		*r.XQSStorageClass,
+		"",
 	}, nil
 }
 
@@ -104,6 +105,9 @@ func (q *qingstor) Get(ctx context.Context, key string, off, limit int64, getter
 		return nil, err
 	}
 	return output.Body, nil
+}
+func (q *qingstor) Restore(ctx context.Context, key string) error {
+	return notSupported
 }
 
 func findLen(in io.Reader) (io.Reader, int64, error) {
@@ -152,13 +156,15 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 		ContentLength: &vlen,
 		ContentType:   &mimeType,
 	}
-	if q.sc != "" {
-		input.XQSStorageClass = &q.sc
+	sc := q.GetStorageClass(ctx)
+	if sc != "" {
+		// XQSStorageClass's available values: STANDARD, STANDARD_IA
+		input.XQSStorageClass = &sc
 	}
 	out, err := q.bucket.PutObjectWithContext(ctx, key, input)
 	if out != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(aws.ToString(out.RequestID)).SetStorageClass(q.sc)
+		attrs.SetRequestID(aws.ToString(out.RequestID)).SetStorageClass(sc)
 	}
 	if err != nil {
 		return err
@@ -170,12 +176,11 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (q *qingstor) Copy(ctx context.Context, dst, src string) error {
+	sc := getOrDefaultScValue(q.GetStorageClass(ctx), DefaultStorageClass)
 	source := fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, src)
 	input := &qs.PutObjectInput{
-		XQSCopySource: &source,
-	}
-	if q.sc != "" {
-		input.XQSStorageClass = &q.sc
+		XQSCopySource:   &source,
+		XQSStorageClass: &sc,
 	}
 	out, err := q.bucket.PutObjectWithContext(ctx, dst, input)
 	if err != nil {
@@ -223,11 +228,12 @@ func (q *qingstor) List(ctx context.Context, prefix, start, token, delimiter str
 			time.Unix(int64(*k.Modified), 0),
 			strings.HasSuffix(*k.Key, "/"),
 			*k.StorageClass,
+			"",
 		}
 	}
 	if delimiter != "" {
 		for _, p := range out.CommonPrefixes {
-			objs = append(objs, &obj{*p, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{*p, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

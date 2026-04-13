@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pkg/errors"
@@ -97,6 +99,23 @@ func configManagementFlags() []cli.Flag {
 			Name:  "changelog",
 			Usage: "enable changelog",
 		},
+		&cli.StringFlag{
+			Name:  "tier-sc",
+			Usage: "storage class for storage tier (e.g. STANDARD_IA for AWS S3)",
+		},
+		&cli.IntFlag{
+			Name:  "tier-id",
+			Usage: "tier id (1-3; 0 is reserved for default tier when unset)",
+			Action: func(ctx *cli.Context, v int) error {
+				if !ctx.IsSet("tier-id") {
+					return nil
+				}
+				if v <= 0 || v > 3 {
+					return fmt.Errorf("tier-id should be between 1 and 3")
+				}
+				return nil
+			},
+		},
 	})
 }
 
@@ -149,9 +168,14 @@ func config(ctx *cli.Context) error {
 
 	originDirStats := format.DirStats
 	originUGQuota := format.UserGroupQuota
-	var quota, storage, trash, clientVer bool
+	var quota, storage, trash, clientVer, tier bool
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
+	var newSc string
+	var newTierID uint8
+	var oldTier object.Tier
+	var findTier bool
+
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
@@ -185,7 +209,7 @@ func config(ctx *cli.Context) error {
 					if p, err := filepath.Abs(new); err == nil {
 						new = p + "/"
 					} else {
-						logger.Fatalf("Failed to get absolute path of %s: %s", new, err)
+						logger.Fatalf("Failed to get absolute path of %q: %s", new, err)
 					}
 				}
 				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Bucket, new))
@@ -301,6 +325,32 @@ func config(ctx *cli.Context) error {
 			format.KerbConf = readKerbConf(ctx.String(flag))
 			format.MinClientVersion = "1.4.0-A"
 			clientVer = true
+		case "tier-id":
+			if !ctx.IsSet("tier-sc") {
+				logger.Fatalf("missing required flag: --tier-sc")
+			}
+			newSc = ctx.String("tier-sc")
+			newTierID = uint8(ctx.Int(flag))
+			oldTier, findTier = format.Tiers[newTierID]
+			if newSc == "" {
+				if !findTier {
+					msg.WriteString(fmt.Sprintf("storage class for tier %d is not defined in the config", newTierID))
+					break
+				}
+				delete(format.Tiers, newTierID)
+				msg.WriteString(fmt.Sprintf("remove tier %d\n", newTierID))
+				tier = true
+				break
+			}
+			if findTier && oldTier.Sc == newSc {
+				break
+			}
+			msg.WriteString(fmt.Sprintf("set tier %d: %s\n", newTierID, newSc))
+			format.Tiers[newTierID] = object.Tier{
+				ID: newTierID,
+				Sc: newSc,
+			}
+			tier = true
 		}
 	}
 	if msg.Len() == 0 {
@@ -310,12 +360,12 @@ func config(ctx *cli.Context) error {
 
 	if !ctx.Bool("force") {
 		yes := ctx.Bool("yes")
-		if storage {
+		if storage || (tier && newSc != "") {
 			blob, err := createStorage(*format)
 			if err != nil {
 				return err
 			}
-			if err = test(blob); err != nil {
+			if err = test(context.WithValue(context.Background(), object.TierKey{}, newTierID), blob); err != nil {
 				return err
 			}
 		}
@@ -340,7 +390,7 @@ func config(ctx *cli.Context) error {
 		}
 		if originDirStats && !format.DirStats {
 			qs := make(map[string]*meta.Quota)
-			err := m.HandleQuota(meta.Background(), meta.QuotaList, "", 0, 0, qs, false, false, false)
+			err := m.HandleQuota(meta.Background(), meta.QuotaList, "", meta.DirQuotaType, qs, false, false, false)
 			if err != nil {
 				return errors.Wrap(err, "list quotas")
 			}
@@ -370,6 +420,14 @@ func config(ctx *cli.Context) error {
 				}
 				if warnMsg != "" {
 					fmt.Println(warnMsg)
+				}
+			}
+		}
+		if tier {
+			if findTier && oldTier.Sc != newSc {
+				fmt.Printf("existing tier will be overwritten: %s=>%s\n", oldTier.GetHumanSc(), newSc)
+				if !yes && !userConfirmed() {
+					return fmt.Errorf("Aborted.")
 				}
 			}
 		}

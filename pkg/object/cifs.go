@@ -350,7 +350,7 @@ func (c *cifsStore) Delete(ctx context.Context, key string, getters ...AttrGette
 func (c *cifsStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object {
 	owner, group := "nobody", "nobody"
 	ff := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
+		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), "", ""},
 		owner,
 		group,
 		fi.Mode(),

@@ -34,7 +34,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -1020,7 +1019,10 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 	return errno(err)
 }
 
-func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
+func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr, force bool) syscall.Errno {
+	if force {
+		return m.baseMeta.Resolve(ctx, parent, path, inode, attr, force)
+	}
 	if len(m.shaResolve) == 0 || m.conf.CaseInsensi || m.prefix != "" {
 		return syscall.ENOTSUP
 	}
@@ -1042,7 +1044,7 @@ func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 		}
 		m.parseAttr([]byte(returnedAttr), attr)
 	} else if st == syscall.EAGAIN {
-		return m.Resolve(ctx, parent, path, inode, attr)
+		return m.Resolve(ctx, parent, path, inode, attr, force)
 	}
 	return st
 }
@@ -1436,6 +1438,10 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return err
 		}
 		m.parseAttr(a, &pattr)
+		ihGid := m.inheritGid(ctx, _type, pattr.Gid, pattr.Mode)
+		if m.checkGroupQuota(ctx, uint64(ihGid), align4K(0), 1) {
+			return syscall.EDQUOT
+		}
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -1485,7 +1491,6 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				*inode = TrashInode + Ino(next)
 			}
 		}
-
 		mode &= 07777
 		if pattr.DefaultACL != aclAPI.None && _type != TypeSymlink {
 			// inherit default acl
@@ -1516,6 +1521,9 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			attr.Mode = mode & ^cumask
 		}
 
+		// inherit storage class
+		attr.Tier = pattr.Tier
+
 		var updateParent bool
 		now := time.Now()
 		if parent != TrashInode {
@@ -1537,24 +1545,8 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
-			attr.Gid = pattr.Gid
-		} else if runtime.GOOS == "linux" && pattr.Mode&02000 != 0 {
-			attr.Gid = pattr.Gid
-			if _type == TypeDirectory {
-				attr.Mode |= 02000
-			} else if attr.Mode&02010 == 02010 && ctx.Uid() != 0 {
-				var found bool
-				for _, gid := range ctx.Gids() {
-					if gid == pattr.Gid {
-						found = true
-					}
-				}
-				if !found {
-					attr.Mode &= ^uint16(02000)
-				}
-			}
-		}
+		attr.Gid = ihGid
+		attr.Mode = m.inheritMode(ctx, _type, pattr.Gid, pattr.Mode, attr.Mode)
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(*inode), m.marshal(attr), 0)
@@ -1771,6 +1763,10 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			if attr.Nlink > 0 {
 				pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 				if trash > 0 {
+					newSpace, newInode = align4K(0), 1
+					if _type == TypeFile {
+						newSpace = align4K(attr.Length)
+					}
 					pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name), buf)
 					if attr.Parent == 0 {
 						pipe.HIncrBy(ctx, m.parentKey(inode), trash.String(), 1)
@@ -1812,12 +1808,20 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 
 		return err
 	}, m.inodeKey(parent), m.entryKey(parent))
-	if err == nil && trash == 0 {
-		if _type == TypeFile && attr.Nlink == 0 {
-			m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
+	if err == nil {
+		if trash == 0 {
+			if _type == TypeFile && attr.Nlink == 0 {
+				m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
+			}
+			m.updateStats(newSpace, newInode)
+			m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, newInode)
+		} else {
+			if _type == TypeFile {
+				m.updateDirStat(ctx, trash, int64(attr.Length), newSpace, newInode)
+			} else {
+				m.updateDirStat(ctx, trash, 0, newSpace, newInode)
+			}
 		}
-		m.updateStats(newSpace, newInode)
-		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, newInode)
 	}
 	return errno(err)
 }
@@ -1825,12 +1829,6 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta *dirStat, skipCheckTrash ...bool) syscall.Errno {
 	if len(entries) == 0 {
 		return 0
-	}
-	var trash Ino
-	if len(skipCheckTrash) == 0 || !skipCheckTrash[0] {
-		if st := m.checkTrash(parent, &trash); st != 0 {
-			return st
-		}
 	}
 
 	type entryInfo struct {
@@ -1855,9 +1853,16 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 		}
 		batch := entries[:batchSize]
 		entries = entries[batchSize:]
+		var trash Ino
+		if len(skipCheckTrash) == 0 || !skipCheckTrash[0] {
+			if st := m.checkTrash(parent, &trash); st != 0 {
+				return st
+			}
+		}
 
 		var entryInfos []*entryInfo
 		var batchDirLength, batchDirSpace, batchDirInodes int64
+		var batchTrashLength, batchTrashSpace, batchTrashInodes int64
 		var batchFsSpace, batchFsInodes int64
 		var deltas ugQuotaDeltas
 		var delNodes map[Ino]*dNode
@@ -1865,6 +1870,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 
 		err := m.txn(ctx, func(tx *redis.Tx) error {
 			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
+			batchTrashLength, batchTrashSpace, batchTrashInodes = 0, 0, 0
 			batchFsSpace, batchFsInodes = 0, 0
 			deltas = make(ugQuotaDeltas)
 			delNodes = make(map[Ino]*dNode)
@@ -2120,6 +2126,13 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 						}
 						parentOps[key][info.trash.String()]++
 					}
+					if info.typ == TypeFile {
+						batchTrashLength += int64(info.attr.Length)
+						batchTrashSpace += align4K(info.attr.Length)
+					} else {
+						batchTrashSpace += align4K(0)
+					}
+					batchTrashInodes++
 				}
 				visited[info.inode] = true
 			}
@@ -2179,6 +2192,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 		delta.length += batchDirLength
 		delta.space += batchDirSpace
 		delta.inodes += batchDirInodes
+		if trash > 0 && (batchTrashSpace != 0 || batchTrashInodes != 0) {
+			m.updateDirStat(ctx, trash, batchTrashLength, batchTrashSpace, batchTrashInodes)
+		}
 		m.updateStats(batchFsSpace, batchFsInodes)
 		for _, q := range deltas {
 			m.updateUserGroupStat(ctx, q.Uid, q.Gid, q.Space, q.Inodes)
@@ -2298,9 +2314,13 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		})
 		return err
 	}, m.inodeKey(parent), m.entryKey(parent))
-	if err == nil && trash == 0 {
-		m.updateStats(-align4K(0), -1)
-		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, -align4K(0), -1)
+	if err == nil {
+		if trash == 0 {
+			m.updateStats(-align4K(0), -1)
+			m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, -align4K(0), -1)
+		} else {
+			m.updateDirStat(ctx, trash, 0, align4K(0), 1)
+		}
 	}
 	return errno(err)
 }
@@ -2547,6 +2567,10 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				pipe.HDel(ctx, m.entryKey(parentSrc), nameSrc)
 				if dino > 0 {
 					if trash > 0 {
+						newSpace, newInode = align4K(0), 1
+						if dtyp == TypeFile {
+							newSpace = align4K(tattr.Length)
+						}
 						pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
 						pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parentDst, dino, nameDst), dbuf)
 						if tattr.Parent == 0 {
@@ -2611,12 +2635,20 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		})
 		return err
 	}, keys...)
-	if err == nil && !exchange && trash == 0 {
-		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
-			m.fileDeleted(opened, false, dino, tattr.Length)
+	if err == nil && !exchange && dino > 0 {
+		if trash > 0 {
+			if dtyp == TypeFile {
+				m.updateDirStat(ctx, trash, int64(tattr.Length), newSpace, newInode)
+			} else {
+				m.updateDirStat(ctx, trash, 0, newSpace, newInode)
+			}
+		} else if trash == 0 {
+			if dtyp == TypeFile && tattr.Nlink == 0 {
+				m.fileDeleted(opened, false, dino, tattr.Length)
+			}
+			m.updateStats(newSpace, newInode)
+			m.updateUserGroupStat(ctx, tattr.Uid, tattr.Gid, newSpace, newInode)
 		}
-		m.updateStats(newSpace, newInode)
-		m.updateUserGroupStat(ctx, tattr.Uid, tattr.Gid, newSpace, newInode)
 	}
 	return errno(err)
 }
@@ -4430,6 +4462,27 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	return err
 }
 
+func (m *redisMeta) cleanUgUsage(ctx Context, qtype uint32) error {
+	if qtype != UserQuotaType && qtype != GroupQuotaType {
+		return fmt.Errorf("invalid quota type: %d", qtype)
+	}
+	config, err := m.getQuotaKeys(qtype)
+	if err != nil {
+		return err
+	}
+	return m.hscan(ctx, config.quotaKey, func(keys []string) error {
+		_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			for i := 0; i < len(keys); i += 2 {
+				key := keys[i]
+				pipe.HSet(ctx, config.usedSpaceKey, key, 0)
+				pipe.HSet(ctx, config.usedInodesKey, key, 0)
+			}
+			return nil
+		})
+		return err
+	})
+}
+
 func (m *redisMeta) checkServerConfig() {
 	rawInfo, err := m.rdb.Info(Background()).Result()
 	if err != nil {
@@ -4799,21 +4852,13 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 			sessions = append(sessions, &DumpedSustained{sid, inodes})
 		}
 	}
-	quotas := make(map[Ino]*DumpedQuota)
-	for k, v := range m.rdb.HGetAll(ctx, m.dirQuotaKey()).Val() {
-		inode, err := strconv.ParseUint(k, 10, 64)
-		if err != nil {
-			logger.Warnf("parse inode: %s: %v", k, err)
-			continue
-		}
-		if len(v) != 16 {
-			logger.Warnf("invalid quota string: %s", hex.EncodeToString([]byte(v)))
-			continue
-		}
-		var quota DumpedQuota
-		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
-		quotas[Ino(inode)] = &quota
+	dirQuotasRaw := m.loadQuotasForDump(ctx, m.dirQuotaKey())
+	dirQuotas := make(map[Ino]*DumpedQuota, len(dirQuotasRaw))
+	for ino, quota := range dirQuotasRaw {
+		dirQuotas[Ino(ino)] = quota
 	}
+	userQuotas := m.loadQuotasForDump(ctx, m.userQuotaKey())
+	groupQuotas := m.loadQuotasForDump(ctx, m.groupQuotaKey())
 
 	dm := &DumpedMeta{
 		Setting: *m.getFormat(),
@@ -4825,9 +4870,16 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 			NextSession: cs[4],
 			NextTrash:   cs[5],
 		},
-		Sustained: sessions,
-		DelFiles:  dels,
-		Quotas:    quotas,
+		Sustained:   sessions,
+		DelFiles:    dels,
+		Quotas:      dirQuotas,
+		UserQuotas:  userQuotas,
+		GroupQuotas: groupQuotas,
+	}
+	root = m.checkRoot(root)
+	if root != RootInode {
+		dm.UserQuotas = nil
+		dm.GroupQuotas = nil
 	}
 	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
@@ -4841,7 +4893,6 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	if err != nil {
 		return err
 	}
-	root = m.checkRoot(root)
 	progress := utils.NewProgress(false)
 	bar := progress.AddCountBar("Dumped entries", 1) // with root
 	useTotal := root == RootInode && !skipTrash
@@ -5017,7 +5068,6 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
-	m.loadDumpedQuotas(ctx, dm.Quotas)
 	if err = m.loadDumpedACLs(ctx); err != nil {
 		return err
 	}
@@ -5088,7 +5138,30 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 		}
 	}
 	_, err = p.Exec(ctx)
+	m.loadDumpedQuotas(ctx, dm)
 	return err
+}
+
+func (m *redisMeta) loadQuotasForDump(ctx Context, quotaKey string) map[uint64]*DumpedQuota {
+	quotas := make(map[uint64]*DumpedQuota)
+	for k, v := range m.rdb.HGetAll(ctx, quotaKey).Val() {
+		id, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			logger.Warnf("parse %d: %s: %v", id, k, err)
+			continue
+		}
+		if len(v) != 16 {
+			logger.Warnf("invalid %d quota string: %s", id, hex.EncodeToString([]byte(v)))
+			continue
+		}
+		var quota DumpedQuota
+		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
+		if quota.MaxSpace == -1 && quota.MaxInodes == -1 {
+			continue
+		}
+		quotas[id] = &quota
+	}
+	return quotas
 }
 
 func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, originAttr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {

@@ -82,6 +82,7 @@ func (t *tikv) Head(ctx context.Context, key string) (Object, error) {
 		time.Now(),
 		strings.HasSuffix(key, "/"),
 		"",
+		"",
 	}, err
 }
 
@@ -108,7 +109,7 @@ func (t *tikv) List(ctx context.Context, prefix, marker, token, delimiter string
 	mtime := time.Now()
 	for i, k := range keys {
 		// FIXME: mtime
-		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/"), ""}
+		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/"), "", ""}
 	}
 	return generateListResult(objs, limit)
 }

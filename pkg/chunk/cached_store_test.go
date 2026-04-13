@@ -29,12 +29,13 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
-	w := store.NewWriter(sliceId)
+	w := store.NewWriter(sliceId, 0)
 	buf := bytes.Repeat([]byte{0x41}, size)
 	if _, err := w.WriteAt(buf, 0); err != nil {
 		return err
@@ -43,7 +44,7 @@ func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
 }
 
 func testStore(t *testing.T, store ChunkStore) {
-	writer := store.NewWriter(1)
+	writer := store.NewWriter(1, 0)
 	data := []byte("hello world")
 	if n, err := writer.WriteAt(data, 0); n != 11 || err != nil {
 		t.Fatalf("write fail: %d %s", n, err)
@@ -224,7 +225,7 @@ func TestForceUpload(t *testing.T) {
 	}
 
 	// write to cache
-	w := store.NewWriter(1)
+	w := store.NewWriter(1, 0)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		t.Fatalf("write fail: %s", err)
 	}
@@ -237,7 +238,7 @@ func TestForceUpload(t *testing.T) {
 	}
 
 	// write to os
-	w = store.NewWriter(2)
+	w = store.NewWriter(2, 0)
 	w.SetWriteback(false)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		t.Fatalf("write fail: %s", err)
@@ -348,7 +349,7 @@ func BenchmarkCachedRead(b *testing.B) {
 	config := defaultConf
 	config.BlockSize = 4 << 20
 	store := NewCachedStore(blob, config, nil)
-	w := store.NewWriter(1)
+	w := store.NewWriter(1, 0)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		b.Fatalf("write fail: %s", err)
 	}
@@ -372,7 +373,7 @@ func BenchmarkUncachedRead(b *testing.B) {
 	config.BlockSize = 4 << 20
 	config.CacheSize = 0
 	store := NewCachedStore(blob, config, nil)
-	w := store.NewWriter(2)
+	w := store.NewWriter(2, 0)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		b.Fatalf("write fail: %s", err)
 	}
@@ -406,4 +407,99 @@ func TestStoreRetry(t *testing.T) {
 	defer p.Release()
 	cs.(*cachedStore).load(context.TODO(), "non", p, false, false) // wont retry
 	require.Equal(t, int32(1), s.cnt)
+}
+
+func TestOpenCacheFileReadsDataOnlyFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.data")
+	data := make([]byte, 64*1024)
+	utils.RandRead(data)
+
+	require.NoError(t, os.WriteFile(path, data, 0600))
+
+	cf, err := openCacheFile(path, len(data), CsFull)
+	require.NoError(t, err)
+	defer cf.Close()
+
+	got := make([]byte, len(data))
+	n, err := cf.ReadAt(got, 0)
+	require.NoError(t, err)
+	require.Equal(t, len(data), n)
+	require.Equal(t, data, got)
+
+	tier, err := cf.ReadTierID()
+	require.NoError(t, err)
+	require.Equal(t, uint8(0), tier)
+}
+
+func TestOpenCacheFileReadsChecksumAndTier(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.checksum.tier")
+	data := make([]byte, 64*1024)
+	utils.RandRead(data)
+
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	_, err = f.Write(data)
+	require.NoError(t, err)
+	_, err = f.Write(checksum(data))
+	require.NoError(t, err)
+	_, err = f.Write([]byte{2})
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	cf, err := openCacheFile(path, len(data), CsFull)
+	require.NoError(t, err)
+	defer cf.Close()
+
+	got := make([]byte, len(data))
+	n, err := cf.ReadAt(got, 0)
+	require.NoError(t, err)
+	require.Equal(t, len(data), n)
+	require.Equal(t, data, got)
+
+	tier, err := cf.ReadTierID()
+	require.NoError(t, err)
+	require.Equal(t, uint8(2), tier)
+}
+
+func TestOpenCacheFileRejectsUnexpectedSize(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.invalid")
+	data := make([]byte, 1024)
+	utils.RandRead(data)
+
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	_, err = f.Write(data)
+	require.NoError(t, err)
+	_, err = f.Write([]byte{0xAA, 0xBB})
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	_, err = openCacheFile(path, len(data), CsFull)
+	require.Error(t, err)
+}
+
+func TestReadTierIDReturnsZeroForInvalidTier(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.bad.tier")
+	data := make([]byte, 1024)
+	utils.RandRead(data)
+
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	_, err = f.Write(data)
+	require.NoError(t, err)
+	_, err = f.Write([]byte{9})
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	cf, err := openCacheFile(path, len(data), CsNone)
+	require.NoError(t, err)
+	defer cf.Close()
+
+	tier, err := cf.ReadTierID()
+	require.NoError(t, err)
+	require.Equal(t, uint8(0), tier)
 }

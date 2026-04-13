@@ -103,6 +103,7 @@ func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.File
 			fi.ModTime(),
 			fi.IsDir(),
 			"",
+			"",
 		},
 		owner,
 		group,
@@ -304,7 +305,7 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 			return nil, false, "", nil
 		}
 		if os.IsNotExist(err) {
-			logger.Warnf("skip %s: %s", dir, err)
+			logger.Debugf("skip %s: %s", dir, err)
 			return nil, false, "", nil
 		}
 		return nil, false, "", err
