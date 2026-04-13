@@ -3330,6 +3330,7 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 			t.Fatalf("rename with trash enabled: %s", st)
 		}
 
+		m.FlushSession()
 		statAfter, _ := m.GetDirStat(ctx, dir1)
 
 		// with trash: deleted file doesn't reduce inode count, only goes to trash
