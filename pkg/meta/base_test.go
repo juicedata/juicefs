@@ -3368,6 +3368,7 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 			t.Fatalf("rename cross_trash1 to cross_trash2 (overwrite with trash): %s", st)
 		}
 
+		m.FlushSession()
 		stat1After, _ := m.GetDirStat(ctx, dir1)
 		stat2After, _ := m.GetDirStat(ctx, dir2)
 
