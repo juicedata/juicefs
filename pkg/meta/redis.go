@@ -2401,10 +2401,10 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						if dtyp == TypeFile && tattr.Nlink == 0 && m.sid > 0 {
 							opened = m.of.IsOpen(dino)
 						}
-						defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 					} else if tattr.Parent > 0 {
 						tattr.Parent = trash
 					}
+					defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 				}
 			}
 			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {

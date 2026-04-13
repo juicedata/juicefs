@@ -2275,10 +2275,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if de.Type == TypeFile && dn.Nlink == 0 && m.sid > 0 {
 						opened = m.of.IsOpen(dn.Inode)
 					}
-					defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 				} else if dn.Parent > 0 {
 					dn.Parent = trash
 				}
+				defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 			}
 			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
 				return syscall.EACCES
