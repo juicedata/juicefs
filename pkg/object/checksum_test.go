@@ -77,7 +77,7 @@ func TestChecksumRead(t *testing.T) {
 			t.Fatalf("dont verify checksum when content length is -1")
 		}
 		if contentLength != -1 && (err == nil || err == io.EOF || !strings.HasPrefix(err.Error(), "verify checksum failed")) {
-			t.Fatalf("verify checksum should failed")
+			t.Fatalf("verify checksum should failed,err %s contentLength %d", err.Error(), contentLength)
 		}
 	}
 
