@@ -1,5 +1,5 @@
 #!/bin/bash -e
-REDIS_CSC_QUERY="client-cache=true&client-cache-size=500&client-cache-expire=60s&client-cache-preload=100"
+REDIS_CSC_QUERY="client-cache=false&client-cache-size=500&client-cache-expire=60s&client-cache-preload=100"
 
 retry() {
     local retries=5
