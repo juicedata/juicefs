@@ -2118,6 +2118,11 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 			if failed != nil {
 				if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
+					if checkpointMgr != nil {
+						if e := checkpointMgr.Save(checkpointMgr.checkpoint); e != nil {
+							logger.Warnf("Failed to save checkpoint after failure: %v", e)
+						}
+					}
 					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current()-extra.Current())
 				}
 			}
