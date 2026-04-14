@@ -656,12 +656,6 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64, calChks
 		if err == nil {
 			err = dst.Put(ctx, key, r)
 		}
-		if err != nil {
-			if _, e := src.Head(ctx, key); os.IsNotExist(e) {
-				logger.Debugf("Head src %s: %s", key, err)
-				err = utils.ErrSkipped
-			}
-		}
 		return r.chksum, err
 	}
 	return doCopySingle0(src, dst, key, size, calChksum)
@@ -956,16 +950,17 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 			}
 		}
 		if err != nil {
-			if _, e := src.Head(ctx, key); os.IsNotExist(e) {
-				logger.Debugf("Head src %s: %s", key, err)
-				err = utils.ErrSkipped
-				return 0, err
-			}
 		}
 	}
+
 	if err == nil {
 		logger.Debugf("Copied data of %s (%d bytes) in %s", key, size, time.Since(start))
 	} else {
+		if _, e := src.Head(ctx, key); os.IsNotExist(e) {
+			logger.Debugf("Head src %s: %s", key, err)
+			err = utils.ErrSkipped
+			return 0, err
+		}
 		logger.Errorf("Failed to copy data of %s in %s: %s", key, time.Since(start), err)
 	}
 	return srcChksum, err
