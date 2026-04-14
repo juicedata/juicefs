@@ -70,7 +70,7 @@ test_no_mount_point(){
 
 test_inplace(){
     prepare_test
-    ./juicefs mount $META_URL /tmp/jfs -d
+    ./juicefs mount $META_URL /tmp/jfs -d --attr-cache 0 --entry-cache 0 --dir-entry-cache 0
     sync_option1="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
     sync_option2="--dirs --perms --check-all --links --list-threads 10 --list-depth 5 --inplace"
     sudo -u $USER GOCOVERDIR=$GOCOVERDIR meta_url=$META_URL ./juicefs sync -v $SOURCE_DIR1 jfs://meta_url/fsrand1/ $sync_option1 2>&1| tee sync1.log || true
