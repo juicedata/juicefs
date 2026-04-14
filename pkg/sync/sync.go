@@ -949,8 +949,6 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 				srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
 			}
 		}
-		if err != nil {
-		}
 	}
 
 	if err == nil {
