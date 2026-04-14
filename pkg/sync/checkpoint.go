@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -565,9 +566,13 @@ func (m *CheckpointManager) SaveOnSignal() {
 	}()
 }
 
-func trackCheckpointCompletion(key string, failed bool, mgr *CheckpointManager, config *Config) {
+func trackCheckpointCompletion(key string, err error, mgr *CheckpointManager, config *Config) {
 	if !config.EnableCheckpoint {
 		return
+	}
+	failed := err != nil
+	if errors.Is(err, os.ErrNotExist) {
+		failed = false
 	}
 	if mgr != nil {
 		if failed {
