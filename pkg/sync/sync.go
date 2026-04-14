@@ -1434,18 +1434,9 @@ func parseIncludeRules(args []string) (rules []rule) {
 	return
 }
 
-func isJuiceFSTempKey(key string) bool {
-	name := path.Base(strings.TrimSuffix(key, "/"))
-	if !strings.HasPrefix(name, ".jfs.") {
-		return false
-	}
-	name = strings.TrimPrefix(name, ".jfs.")
-	return strings.HasSuffix(name, ".tmp") || strings.Contains(name, ".tmp.")
-}
-
 func filterKey(o object.Object, now time.Time, rules []rule, config *Config) bool {
 	var ok bool = true
-	if isJuiceFSTempKey(o.Key()) {
+	if object.IsJuiceFSTempKey(o.Key()) {
 		return false
 	}
 	if !o.IsDir() && !o.IsSymlink() {
