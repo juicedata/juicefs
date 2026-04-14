@@ -350,7 +350,7 @@ This section summarizes the accounting rules of JuiceFS usage across three dimen
 | Regular file | Counted by file data size (aligned to 4 KiB) | Counted in directory tree (aligned to 4 KiB) | Counted by file owner UID/GID (aligned to 4 KiB) |
 | Hard-linked file | Counted once per inode; creating extra links does not duplicate usage | Each directory entry is counted in its directory scope (same inode can appear repeatedly in directory usage) | Counted once per inode; creating extra links does not duplicate usage |
 | Directory and other file types | Counted as inode usage; space uses metadata minimum granularity (effectively 4 KiB) | Counted as inode usage; space uses metadata minimum granularity (effectively 4 KiB) | Counted as inode usage; space uses metadata minimum granularity (effectively 4 KiB) |
-| Trash files | Still counted after moving to trash; released only after real trash cleanup | Removed from the original tree, so no longer counted in original/ancestor directory usage; quotas on trash directories are not supported | Still counted to original owner UID/GID after moving to trash; released only after actual trash cleanup |
+| Trash files | Still counted after moving to trash; released only after real trash cleanup | Removed from the original tree, so no longer counted in original/ancestor directory usage; trash directories support real-time statistics, quotas are not supported | Still counted to original owner UID/GID after moving to trash; released only after actual trash cleanup |
 
 ### Details
 
@@ -374,7 +374,7 @@ This section summarizes the accounting rules of JuiceFS usage across three dimen
   When the trash feature is enabled, deleting a file usually moves it to the trash instead of performing immediate physical deletion.
 
   - For global usage and user/group usage: usage is not released immediately after moving to trash; it decreases only after trash cleanup.
-  - For directory usage: once entries are moved out of the original directory tree, usage on original directory quotas decreases. Quotas on trash directories are not currently supported.
+  - For directory usage: once entries are moved out of the original directory tree, usage on original directory quotas decreases. Trash directories support real-time statistics, but quotas are not currently supported.
 
 When the directory usage is correct, the current directory quota usage will be output; if it fails, the error log will be output:
 
