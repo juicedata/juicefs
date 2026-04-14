@@ -955,6 +955,13 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 				srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
 			}
 		}
+		if err != nil {
+			if _, e := src.Head(ctx, key); os.IsNotExist(e) {
+				logger.Debugf("Head src %s: %s", key, err)
+				err = utils.ErrSkipped
+				return 0, err
+			}
+		}
 	}
 	if err == nil {
 		logger.Debugf("Copied data of %s (%d bytes) in %s", key, size, time.Since(start))
