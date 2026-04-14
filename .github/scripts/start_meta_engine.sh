@@ -52,16 +52,25 @@ install_tikv(){
     timeout=60
     count=0
     while true; do
+        # Check if tiup playground process is still alive
+        if ! kill -0 $pid 2>/dev/null; then
+            echo "tiup playground process (pid=$pid) exited unexpectedly."
+            echo "=== tikv.log ==="
+            cat tikv.log || true
+            exit 1
+        fi
         echo 'head -1' > /tmp/head.txt
         lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt && exit_code=0 || exit_code=$?
         if [ $exit_code -eq 0 ]; then
-            echo "TiDB is running."
+            echo "TiKV is running."
             exit 0
         fi
         sleep 1
         count=$((count+1))
         if [ $count -eq $timeout ]; then
-            echo "TiDB failed to start within $timeout seconds."
+            echo "TiKV failed to start within $timeout seconds."
+            echo "=== tikv.log ==="
+            tail -50 tikv.log || true
             kill -9 $pid || true
             exit 1
         fi
