@@ -153,6 +153,7 @@ func testMeta(t *testing.T, m Meta) {
 	testCaseIncensiHardlinkRename(t, m)
 	testCheckAndRepair(t, m)
 	testDirStat(t, m)
+	testRenameOverwriteInvalidatesAttrCache(t, m)
 	testClone(t, m)
 	testACL(t, m)
 	base.conf.ReadOnly = true
@@ -2812,6 +2813,80 @@ func testDirStat(t *testing.T, m Meta) {
 	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, 0, 0)
+}
+
+func testRenameOverwriteInvalidatesAttrCache(t *testing.T, m Meta) {
+	format := testFormat()
+	format.TrashDays = 1
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init with trash: %v", err)
+	}
+	defer func() {
+		if err := m.Init(testFormat(), false); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+	}()
+
+	base := m.getBase()
+	openCache, expire := base.conf.OpenCache, base.of.expire
+	base.conf.OpenCache, base.of.expire = time.Minute, time.Minute
+	defer func() {
+		base.conf.OpenCache, base.of.expire = openCache, expire
+	}()
+
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	ctx := Background()
+	var dir1, dir2 Ino
+	if st := m.Mkdir(ctx, RootInode, "rename_cache_dir1", 0755, 022, 0, &dir1, nil); st != 0 {
+		t.Fatalf("mkdir rename_cache_dir1: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "rename_cache_dir2", 0755, 022, 0, &dir2, nil); st != 0 {
+		t.Fatalf("mkdir rename_cache_dir2: %s", st)
+	}
+	defer func() {
+		m.Rmdir(ctx, RootInode, "rename_cache_dir1")
+		m.Rmdir(ctx, RootInode, "rename_cache_dir2")
+		m.getBase().doCleanupTrash(ctx, format.TrashDays, true)
+	}()
+
+	check := func(parentSrc Ino, nameSrc string, parentDst Ino, nameDst string) {
+		var src, dst Ino
+		if st := m.Create(ctx, parentSrc, nameSrc, 0644, 022, 0, &src, nil); st != 0 {
+			t.Fatalf("create %s: %s", nameSrc, st)
+		}
+		if st := m.Create(ctx, parentDst, nameDst, 0644, 022, 0, &dst, nil); st != 0 {
+			t.Fatalf("create %s: %s", nameDst, st)
+		}
+		defer func() {
+			m.Close(ctx, src)
+			m.Close(ctx, dst)
+			m.Unlink(ctx, parentSrc, nameSrc)
+			m.Unlink(ctx, parentDst, nameDst)
+		}()
+
+		var attr Attr
+		if st := m.GetAttr(ctx, dst, &attr); st != 0 {
+			t.Fatalf("getattr %s before rename: %s", nameDst, st)
+		} else if attr.Parent != parentDst {
+			t.Fatalf("parent of %s before rename: got %d, want %d", nameDst, attr.Parent, parentDst)
+		}
+
+		if st := m.Rename(ctx, parentSrc, nameSrc, parentDst, nameDst, 0, &src, &attr); st != 0 {
+			t.Fatalf("rename %s over %s: %s", nameSrc, nameDst, st)
+		}
+		if st := m.GetAttr(ctx, dst, &attr); st != 0 {
+			t.Fatalf("getattr overwritten %s: %s", nameDst, st)
+		} else if attr.Parent <= TrashInode {
+			t.Fatalf("parent of overwritten %s is stale: %d", nameDst, attr.Parent)
+		}
+	}
+
+	check(dir1, "same_src", dir1, "same_dst")
+	check(dir1, "cross_src", dir2, "cross_dst")
 }
 
 func testClone(t *testing.T, m Meta) {
