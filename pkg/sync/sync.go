@@ -1442,9 +1442,6 @@ func parseIncludeRules(args []string) (rules []rule) {
 
 func filterKey(o object.Object, now time.Time, rules []rule, config *Config) bool {
 	var ok bool = true
-	if object.IsJuiceFSTempKey(o.Key()) {
-		return false
-	}
 	if !o.IsDir() && !o.IsSymlink() {
 		ok = o.Size() >= int64(config.MinSize) && o.Size() <= int64(config.MaxSize)
 		if ok && config.MaxAge > 0 {
