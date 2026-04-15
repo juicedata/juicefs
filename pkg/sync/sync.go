@@ -1934,6 +1934,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.EnableCheckpoint && config.Manager == "" {
 		checkpointMgr = NewCheckpointManager(src, dst, config)
 		if config.CheckpointForceReset {
+			if err := checkpointMgr.DeleteCheckpoint(); err != nil && !errors.Is(err, os.ErrNotExist) {
+				logger.Warnf("Failed to delete existing checkpoint: %v", err)
+			}
 			checkpointMgr.Reset(config)
 			logger.Infof("Force reset checkpoint, starting fresh")
 		} else if ckpt, err := checkpointMgr.Load(); err == nil {
