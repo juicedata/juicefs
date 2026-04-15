@@ -288,4 +288,103 @@ test_sync_encrypt_minio_to_jfs(){
     echo "test_sync_encrypt_minio_to_jfs passed"
 }
 
+# ---- sync global traffic control tests (minio) ----
+
+TC_PORT=12345
+TC_URL="http://localhost:${TC_PORT}/"
+TC_LOG="/tmp/tc_server.log"
+
+start_traffic_control_server(){
+    local bwlimit=${1:-0}
+    kill_traffic_control_server
+    python3 .github/scripts/traffic_control_server.py --port $TC_PORT --bwlimit $bwlimit --log $TC_LOG &
+    TC_PID=$!
+    sleep 1
+    if ! kill -0 $TC_PID 2>/dev/null; then
+        echo "FAIL: traffic control server failed to start"
+        exit 1
+    fi
+}
+
+kill_traffic_control_server(){
+    lsof -i :$TC_PORT -t 2>/dev/null | xargs -r kill -9 || true
+    sleep 0.5
+}
+
+check_tc_log(){
+    local min_requests=${1:-1}
+    [ ! -f $TC_LOG ] && echo "FAIL: TC log not found" && exit 1
+    local req_count=$(wc -l < $TC_LOG)
+    if [ "$req_count" -lt "$min_requests" ]; then
+        echo "FAIL: expected at least $min_requests TC requests, got $req_count"
+        cat $TC_LOG
+        exit 1
+    fi
+    echo "TC log: $req_count requests"
+}
+
+# Traffic control: JFS gateway -> minio with traffic control
+test_sync_traffic_control_minio(){
+    prepare_test
+    for i in $(seq 1 50); do
+        dd if=/dev/urandom of=/jfs/tc_file$i bs=10K count=1 status=none
+    done
+    dd if=/dev/urandom of=/jfs/tc_large bs=1M count=2 status=none
+    start_traffic_control_server 0
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --traffic-control-url $TC_URL >sync.log 2>&1
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    count1=$(./mc ls -r juicegw/myjfs/ | wc -l)
+    count2=$(./mc ls -r myminio/myjfs/ | wc -l)
+    [ "$count1" -eq "$count2" ] || (echo "FAIL: count mismatch $count1 vs $count2" && exit 1)
+    check_tc_log 1
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_minio passed"
+}
+
+# Traffic control with rate limit: minio -> JFS
+test_sync_traffic_control_minio_to_jfs(){
+    prepare_test
+    (./mc rb myminio/tcsrc > /dev/null 2>&1 --force || true) && ./mc mb myminio/tcsrc
+    for i in $(seq 1 20); do
+        dd if=/dev/urandom of=/tmp/tc_minio_file$i bs=50K count=1 status=none
+        ./mc cp /tmp/tc_minio_file$i myminio/tcsrc/file$i
+    done
+    start_traffic_control_server 0
+    meta_url=$META_URL ./juicefs sync minio://minioadmin:minioadmin@localhost:9000/tcsrc/ jfs://meta_url/tc_from_minio/ \
+        --traffic-control-url $TC_URL >sync.log 2>&1
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    dec_count=$(find /jfs/tc_from_minio -type f | wc -l)
+    [ "$dec_count" -eq 20 ] || (echo "FAIL: expected 20 files, got $dec_count" && exit 1)
+    for i in $(seq 1 20); do
+        cmp /tmp/tc_minio_file$i /jfs/tc_from_minio/file$i || (echo "FAIL: file$i mismatch" && exit 1)
+    done
+    check_tc_log 1
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_minio_to_jfs passed"
+}
+
+# Traffic control combined with encrypt/decrypt
+test_sync_traffic_control_encrypt(){
+    prepare_test
+    echo "tc encrypt test" > /jfs/tc_enc1.txt
+    dd if=/dev/urandom of=/jfs/tc_enc_large.bin bs=1M count=2 status=none
+    (./mc rb myminio/tcenc > /dev/null 2>&1 --force || true) && ./mc mb myminio/tcenc
+    start_traffic_control_server 0
+    # Encrypt with traffic control
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/tcenc/ \
+        --encrypt-rsa-key /tmp/sync-enc-nopass.pem --traffic-control-url $TC_URL >sync.log 2>&1
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in encrypt sync.log" && exit 1 || true
+    # Decrypt with traffic control
+    rm -rf /tmp/tc_enc_dec && mkdir -p /tmp/tc_enc_dec
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9000/tcenc/ /tmp/tc_enc_dec/ \
+        --decrypt-rsa-key /tmp/sync-enc-nopass.pem --traffic-control-url $TC_URL >sync.log 2>&1
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in decrypt sync.log" && exit 1 || true
+    [ "$(cat /tmp/tc_enc_dec/tc_enc1.txt)" = "tc encrypt test" ] || (echo "FAIL: decrypt mismatch" && exit 1)
+    cmp /jfs/tc_enc_large.bin /tmp/tc_enc_dec/tc_enc_large.bin || (echo "FAIL: large file mismatch" && exit 1)
+    check_tc_log 2
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_encrypt passed"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@

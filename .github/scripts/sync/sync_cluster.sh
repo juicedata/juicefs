@@ -550,4 +550,148 @@ test_sync_encrypt_cluster_update(){
 }
 
 
+# ---- sync global traffic control tests (cluster) ----
+
+TC_PORT=12345
+TC_URL="http://172.20.0.1:${TC_PORT}/"
+TC_LOG="/tmp/tc_server.log"
+
+start_traffic_control_server(){
+    local bwlimit=${1:-0}
+    kill_traffic_control_server
+    python3 .github/scripts/traffic_control_server.py --port $TC_PORT --bwlimit $bwlimit --log $TC_LOG &
+    TC_PID=$!
+    sleep 1
+    if ! kill -0 $TC_PID 2>/dev/null; then
+        echo "FAIL: traffic control server failed to start"
+        exit 1
+    fi
+}
+
+kill_traffic_control_server(){
+    lsof -i :$TC_PORT -t 2>/dev/null | xargs -r kill -9 || true
+    sleep 0.5
+}
+
+check_tc_log(){
+    local min_requests=${1:-1}
+    [ ! -f $TC_LOG ] && echo "FAIL: TC log not found" && exit 1
+    local req_count=$(wc -l < $TC_LOG)
+    if [ "$req_count" -lt "$min_requests" ]; then
+        echo "FAIL: expected at least $min_requests TC requests, got $req_count"
+        cat $TC_LOG
+        exit 1
+    fi
+    echo "TC log: $req_count requests"
+}
+
+# Traffic control: JFS -> JFS with distributed workers
+test_sync_traffic_control_cluster_basic(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    file_count=200
+    mkdir -p /jfs/data
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=/jfs/data/file$i bs=10K count=1 status=none
+    done
+    chmod -R 777 /jfs/data
+    start_traffic_control_server 0
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ jfs://meta_url/data2/ \
+        --traffic-control-url $TC_URL \
+        --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+        --list-threads 10 --list-depth 5 --check-new \
+        >sync.log 2>&1
+    cat sync.log
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    diff /jfs/data/ /jfs/data2/
+    check_tc_log 1
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_cluster_basic passed"
+}
+
+# Traffic control with bwlimit combined: JFS -> minio with cluster
+test_sync_traffic_control_cluster_with_bwlimit(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    file_count=100
+    mkdir -p /jfs/data
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=/jfs/data/file$i bs=50K count=1 status=none
+    done
+    chmod -R 777 /jfs/data
+    (./mc rb myminio/tcdata > /dev/null 2>&1 --force || true) && ./mc mb myminio/tcdata
+    start_traffic_control_server 0
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/tcdata/ \
+        --traffic-control-url $TC_URL --bwlimit 8192 \
+        --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+        --list-threads 10 --list-depth 5 \
+        >sync.log 2>&1
+    cat sync.log
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    enc_count=$(./mc ls -r myminio/tcdata/ | wc -l)
+    [ "$enc_count" -eq "$file_count" ] || (echo "FAIL: count mismatch enc=$enc_count expected=$file_count" && exit 1)
+    check_tc_log 1
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_cluster_with_bwlimit passed"
+}
+
+# Traffic control with rate-limited server in cluster mode
+test_sync_traffic_control_cluster_ratelimit(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    file_count=50
+    mkdir -p /jfs/data
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=/jfs/data/file$i bs=100K count=1 status=none
+    done
+    chmod -R 777 /jfs/data
+    # 1MB/s limit on the server side
+    start_traffic_control_server 1048576
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ jfs://meta_url/data2/ \
+        --traffic-control-url $TC_URL \
+        --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+        --list-threads 10 --list-depth 5 --check-new \
+        >sync.log 2>&1
+    cat sync.log
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    diff /jfs/data/ /jfs/data2/
+    check_tc_log 1
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_cluster_ratelimit passed"
+}
+
+# Traffic control with encrypt in cluster mode
+test_sync_traffic_control_cluster_encrypt(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    mkdir -p /jfs/data
+    for i in $(seq 1 30); do
+        dd if=/dev/urandom of=/jfs/data/file$i bs=10K count=1 status=none
+    done
+    chmod -R 777 /jfs/data
+    (./mc rb myminio/tcenc > /dev/null 2>&1 --force || true) && ./mc mb myminio/tcenc
+    start_traffic_control_server 0
+    # Encrypt with traffic control
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/tcenc/ \
+        --encrypt-rsa-key /tmp/sync-enc-nopass.pem --traffic-control-url $TC_URL \
+        --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+        --list-threads 10 --list-depth 5 \
+        >sync.log 2>&1
+    cat sync.log
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in encrypt sync.log" && exit 1 || true
+    # Decrypt with traffic control
+    chmod 777 /jfs
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/tcenc/ jfs://meta_url/decdata/ \
+        --decrypt-rsa-key /tmp/sync-enc-nopass.pem --traffic-control-url $TC_URL \
+        --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+        --list-threads 10 --list-depth 5 \
+        >sync.log 2>&1
+    cat sync.log
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in decrypt sync.log" && exit 1 || true
+    diff /jfs/data/ /jfs/decdata/ || (echo "FAIL: traffic control encrypt/decrypt data mismatch" && exit 1)
+    check_tc_log 2
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_cluster_encrypt passed"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@

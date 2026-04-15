@@ -513,4 +513,139 @@ test_sync_encrypt_dry_run(){
 }
 
 
+# ---- sync global traffic control tests ----
+
+TC_PORT=12345
+TC_URL="http://localhost:${TC_PORT}/"
+TC_LOG="/tmp/tc_server.log"
+
+start_traffic_control_server(){
+    local bwlimit=${1:-0}
+    kill_traffic_control_server
+    python3 .github/scripts/traffic_control_server.py --port $TC_PORT --bwlimit $bwlimit --log $TC_LOG &
+    TC_PID=$!
+    sleep 1
+    if ! kill -0 $TC_PID 2>/dev/null; then
+        echo "FAIL: traffic control server failed to start"
+        exit 1
+    fi
+}
+
+kill_traffic_control_server(){
+    lsof -i :$TC_PORT -t 2>/dev/null | xargs -r kill -9 || true
+    sleep 0.5
+}
+
+check_tc_log(){
+    local min_requests=${1:-1}
+    [ ! -f $TC_LOG ] && echo "FAIL: TC log not found" && exit 1
+    local req_count=$(wc -l < $TC_LOG)
+    if [ "$req_count" -lt "$min_requests" ]; then
+        echo "FAIL: expected at least $min_requests TC requests, got $req_count"
+        cat $TC_LOG
+        exit 1
+    fi
+    echo "TC log: $req_count requests"
+}
+
+# Basic traffic control: sync local dirs with --traffic-control-url
+test_sync_traffic_control_basic(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount $META_URL /jfs -d
+    rm -rf /tmp/tc_src && mkdir -p /tmp/tc_src
+    for i in $(seq 1 50); do
+        dd if=/dev/urandom of=/tmp/tc_src/file$i bs=10K count=1 status=none
+    done
+    start_traffic_control_server 0
+    ./juicefs sync /tmp/tc_src/ /jfs/tc_dst/ --traffic-control-url $TC_URL >sync.log 2>&1
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    diff /tmp/tc_src/ /jfs/tc_dst/
+    check_tc_log 1
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_basic passed"
+}
+
+# Traffic control with bwlimit (combined local + global limiting)
+test_sync_traffic_control_with_bwlimit(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount $META_URL /jfs -d
+    rm -rf /tmp/tc_src && mkdir -p /tmp/tc_src
+    for i in $(seq 1 20); do
+        dd if=/dev/urandom of=/tmp/tc_src/file$i bs=100K count=1 status=none
+    done
+    start_traffic_control_server 0
+    ./juicefs sync /tmp/tc_src/ /jfs/tc_dst/ --traffic-control-url $TC_URL --bwlimit 8192 >sync.log 2>&1
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    diff /tmp/tc_src/ /jfs/tc_dst/
+    check_tc_log 1
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_with_bwlimit passed"
+}
+
+# Traffic control with rate-limited server
+test_sync_traffic_control_ratelimit(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount $META_URL /jfs -d
+    rm -rf /tmp/tc_src && mkdir -p /tmp/tc_src
+    for i in $(seq 1 10); do
+        dd if=/dev/urandom of=/tmp/tc_src/file$i bs=100K count=1 status=none
+    done
+    # 500KB/s limit on the server side
+    start_traffic_control_server 512000
+    ./juicefs sync /tmp/tc_src/ /jfs/tc_dst/ --traffic-control-url $TC_URL >sync.log 2>&1
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    diff /tmp/tc_src/ /jfs/tc_dst/
+    check_tc_log 1
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_ratelimit passed"
+}
+
+# Traffic control with JFS source (without mount point) 
+test_sync_traffic_control_jfs_source(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount $META_URL /jfs -d
+    mkdir -p /jfs/data
+    for i in $(seq 1 30); do
+        dd if=/dev/urandom of=/jfs/data/file$i bs=10K count=1 status=none
+    done
+    rm -rf /tmp/tc_dec && mkdir -p /tmp/tc_dec
+    start_traffic_control_server 0
+    meta_url=$META_URL ./juicefs sync jfs://meta_url/data/ /tmp/tc_dec/ --traffic-control-url $TC_URL >sync.log 2>&1
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    diff /jfs/data/ /tmp/tc_dec/
+    check_tc_log 1
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_jfs_source passed"
+}
+
+# Traffic control with --update and --check-all
+test_sync_traffic_control_update(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount $META_URL /jfs -d
+    rm -rf /tmp/tc_src && mkdir -p /tmp/tc_src
+    for i in $(seq 1 20); do
+        echo "initial-$i" > /tmp/tc_src/file$i.txt
+    done
+    start_traffic_control_server 0
+    ./juicefs sync /tmp/tc_src/ /jfs/tc_dst/ --traffic-control-url $TC_URL >sync.log 2>&1
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    # Update some files
+    sleep 1
+    for i in $(seq 1 5); do
+        echo "updated-$i" > /tmp/tc_src/file$i.txt
+    done
+    ./juicefs sync /tmp/tc_src/ /jfs/tc_dst/ --traffic-control-url $TC_URL --update --check-all >sync.log 2>&1
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    [ "$(cat /jfs/tc_dst/file1.txt)" = "updated-1" ] || (echo "FAIL: file1 not updated" && exit 1)
+    [ "$(cat /jfs/tc_dst/file10.txt)" = "initial-10" ] || (echo "FAIL: file10 should not change" && exit 1)
+    check_tc_log 2
+    kill_traffic_control_server
+    echo "test_sync_traffic_control_update passed"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@
