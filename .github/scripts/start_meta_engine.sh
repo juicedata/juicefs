@@ -47,7 +47,7 @@ install_tikv(){
     fi
     echo tiup is $tiup
     echo $(whoami) $(pwd)
-    $tiup playground --mode tikv-slim > tikv.log 2>&1  &
+    $tiup playground 5.4.0 --mode tikv-slim > tikv.log 2>&1  &
     pid=$!
     timeout=60
     count=0
