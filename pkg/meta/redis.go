@@ -5099,8 +5099,7 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 		for _, e := range batch {
 			name := string(e.Name)
 			if _, ok := nameSet[name]; ok {
-				logger.Warnf("doBatchClone: duplicate name %q in batch, skipping", name)
-				continue
+				return syscall.EEXIST
 			}
 			nameSet[name] = struct{}{}
 			dstIno, err := m.nextInode()
