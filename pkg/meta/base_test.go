@@ -3320,7 +3320,7 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 		if st := m.Create(ctx, dir1, "trash_file2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create trash_file2: %s", st)
 		}
-		defer m.Unlink(ctx, dir1, "trash_file1")
+		defer m.Unlink(ctx, dir1, "trash_file2")
 
 		m.FlushSession()
 		statBefore, _ := m.GetDirStat(ctx, dir1)
@@ -3356,7 +3356,7 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 			t.Fatalf("create cross_trash2: %s", st)
 		}
 		defer func() {
-			m.Unlink(ctx, dir2, "cross_trash1")
+			m.Unlink(ctx, dir2, "cross_trash2")
 		}()
 
 		m.FlushSession()
