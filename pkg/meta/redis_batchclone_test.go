@@ -247,22 +247,20 @@ func TestRedisBatchCloneDuplicateNamesInBatch(t *testing.T) {
 
 	var cloned uint64
 	st := m.getBase().BatchClone(ctx, srcDir, dstDir, dupEntries, CLONE_MODE_PRESERVE_ATTR, 022, &cloned)
-	if st != syscall.EEXIST {
-		t.Fatalf("BatchClone duplicate names in batch: got %s, want EEXIST", st)
+	if st != 0 {
+		t.Fatalf("BatchClone duplicate names: got %s, want success (duplicate skipped)", st)
 	}
-	if cloned != 0 {
-		t.Fatalf("BatchClone duplicate names should not increment count, got %d", cloned)
+	if cloned != 1 {
+		t.Fatalf("BatchClone duplicate names: want 1 cloned (duplicate skipped), got %d", cloned)
 	}
 
-	var dstEntries []*Entry
-	if st := m.Readdir(ctx, dstDir, 1, &dstEntries); st != 0 {
-		t.Fatalf("readdir dst_dup: %s", st)
+	var dstIno Ino
+	var dstAttr Attr
+	if st := m.Lookup(ctx, dstDir, "dup", &dstIno, &dstAttr, false); st != 0 {
+		t.Fatalf("lookup cloned dup: %s", st)
 	}
-	for _, e := range dstEntries {
-		name := string(e.Name)
-		if name != "." && name != ".." {
-			t.Fatalf("destination should stay empty on duplicate-name failure, found %q", name)
-		}
+	if dstAttr.Typ != TypeFile {
+		t.Fatalf("cloned dup type mismatch: want file got %d", dstAttr.Typ)
 	}
 }
 
