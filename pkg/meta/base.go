@@ -292,7 +292,7 @@ type baseMeta struct {
 	dSliceMu sync.Mutex
 	dSliceWG sync.WaitGroup
 
-	dirStatsLock sync.Mutex
+	dirStatsLock sync.RWMutex
 	dirStats     map[Ino]dirStat
 
 	fsStatsLock sync.Mutex

@@ -167,14 +167,10 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 	}
 	if stat == nil {
 		stat, st = m.calcDirStat(ctx, inode)
-	}
-	if st == 0 && stat != nil {
-		// Merge any pending in-memory deltas that have not yet been flushed
-		// to the store. Without this, callers see a stale snapshot whenever
-		// updateDirStat has been called but the flush ticker hasn't fired yet.
-		m.dirStatsLock.Lock()
+	} else {
+		m.dirStatsLock.RLock()
 		pending := m.dirStats[inode]
-		m.dirStatsLock.Unlock()
+		m.dirStatsLock.RUnlock()
 		stat.length += pending.length
 		stat.space += pending.space
 		stat.inodes += pending.inodes
