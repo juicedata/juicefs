@@ -21,7 +21,7 @@ require (
 	github.com/aws/smithy-go v1.24.2
 	github.com/baidubce/bce-sdk-go v0.9.263
 	github.com/bytedance/mockey v1.2.14
-	github.com/ceph/go-ceph v0.18.0
+	github.com/ceph/go-ceph v0.38.0
 	github.com/charlievieth/fastwalk v1.0.14
 	github.com/cloudsoda/go-smb2 v0.0.0-20250228001242-d4c70e6251cc
 	github.com/colinmarc/hdfs/v2 v2.4.0
