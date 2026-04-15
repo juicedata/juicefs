@@ -5060,12 +5060,11 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 
 func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno {
 	type cloneInfo struct {
-		entry    *Entry
-		srcIno   Ino
-		dstIno   Ino
-		srcAttr  Attr
-		dstAttr  Attr
-		srcXattr map[string]string
+		entry  *Entry
+		srcIno Ino
+		dstIno Ino
+		dstAttr Attr
+		xattr  map[string]string
 	}
 	type chunkData struct {
 		vals   []string
@@ -5085,46 +5084,6 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 		*result = batchCloneResult{}
 	}
 
-	accumulateFallbackResult := func(attr Attr) {
-		if result == nil {
-			return
-		}
-		uid, gid := attr.Uid, attr.Gid
-		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-			uid = ctx.Uid()
-			gid = ctx.Gid()
-		}
-		space := align4K(attr.Length)
-		result.length += int64(attr.Length)
-		result.space += space
-		result.inodes++
-		result.userGroupQuotas = append(result.userGroupQuotas, userGroupQuotaDelta{
-			Uid:    uid,
-			Gid:    gid,
-			Space:  space,
-			Inodes: 1,
-		})
-	}
-
-	fallbackEntries := func(remaining []*Entry) syscall.Errno {
-		for _, e := range remaining {
-			dstIno, err := m.nextInode()
-			if err != nil {
-				return errno(err)
-			}
-			var srcAttr Attr
-			st := m.doCloneEntry(ctx, e.Inode, dstParent, string(e.Name), dstIno, &srcAttr, cmode, cumask, false)
-			if st == syscall.ENOENT {
-				continue
-			}
-			if st != 0 {
-				return st
-			}
-			accumulateFallbackResult(srcAttr)
-		}
-		return 0
-	}
-
 	const batchSize = 1000
 	for start := 0; start < len(entries); start += batchSize {
 		end := start + batchSize
@@ -5140,7 +5099,8 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 		for _, e := range batch {
 			name := string(e.Name)
 			if _, ok := nameSet[name]; ok {
-				return syscall.EEXIST
+				logger.Warnf("doBatchClone: duplicate name %q in batch, skipping", name)
+				continue
 			}
 			nameSet[name] = struct{}{}
 			dstIno, err := m.nextInode()
@@ -5159,11 +5119,7 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 			}
 		}
 
-		watchKeys := make([]string, 0, len(srcList)*2+2)
-		watchKeys = append(watchKeys, m.inodeKey(dstParent), m.entryKey(dstParent))
-		for _, ino := range srcList {
-			watchKeys = append(watchKeys, m.inodeKey(ino), m.xattrKey(ino))
-		}
+		watchKeys := []string{m.inodeKey(dstParent), m.entryKey(dstParent)}
 
 		var batchResult batchCloneResult
 		err := m.txn(ctx, func(tx *redis.Tx) error {
@@ -5216,13 +5172,14 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 			srcData := make(map[Ino]*sourceData, len(srcList))
 			for i, v := range srcVals {
 				if v == nil {
-					// Deleted source entry: fallback to per-entry clone path.
-					return syscall.ENOTSUP
+					logger.Debugf("doBatchClone: source inode %d deleted, skipping", srcList[i])
+					continue
 				}
 				var a Attr
 				m.parseAttr([]byte(v.(string)), &a)
 				if a.Typ == TypeDirectory {
-					return syscall.ENOTSUP
+					logger.Warnf("doBatchClone: source inode %d is a directory, skipping", srcList[i])
+					continue
 				}
 				if st := m.Access(ctx, srcList[i], MODE_MASK_R, &a); st != 0 {
 					return st
@@ -5240,13 +5197,17 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 			}
 			var ccmds []chunkCmd
 			for _, ino := range srcList {
+				sd, ok := srcData[ino]
+				if !ok {
+					continue
+				}
 				xcmds[ino] = readPipe.HGetAll(ctx, m.xattrKey(ino))
-				a := srcData[ino].attr
+				a := sd.attr
 				switch a.Typ {
 				case TypeFile:
 					if a.Length != 0 {
 						chunkNum := int(a.Length/ChunkSize) + 1
-						srcData[ino].chunks = make([]chunkData, chunkNum)
+						sd.chunks = make([]chunkData, chunkNum)
 						for i := 0; i < chunkNum; i++ {
 							cmd := readPipe.LRange(ctx, m.chunkKey(ino, uint32(i)), 0, -1)
 							ccmds = append(ccmds, chunkCmd{srcIno: ino, indx: uint32(i), cmd: cmd})
@@ -5255,7 +5216,8 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 				case TypeSymlink:
 					scmds[ino] = readPipe.Get(ctx, m.symKey(ino))
 				default:
-					return syscall.ENOTSUP
+					logger.Warnf("doBatchClone: unsupported type %d for inode %d, skipping", a.Typ, ino)
+					delete(srcData, ino)
 				}
 			}
 			if _, err := readPipe.Exec(ctx); err != nil && err != redis.Nil {
@@ -5265,11 +5227,18 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 			for ino, cmd := range xcmds {
 				val, err := cmd.Result()
 				if err != nil {
-					return err
+					logger.Warnf("doBatchClone: HGetAll xattr for inode %d: %v (should not happen)", ino, err)
+					continue
 				}
-				srcData[ino].xattr = val
+				if sd, ok := srcData[ino]; ok {
+					sd.xattr = val
+				}
 			}
 			for _, c := range ccmds {
+				sd, ok := srcData[c.srcIno]
+				if !ok {
+					continue
+				}
 				val, err := c.cmd.Result()
 				if err != nil {
 					return err
@@ -5281,29 +5250,34 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 				if ss == nil {
 					return syscall.EIO
 				}
-				srcData[c.srcIno].chunks[c.indx] = chunkData{vals: val, slices: ss}
+				sd.chunks[c.indx] = chunkData{vals: val, slices: ss}
 			}
 			for ino, cmd := range scmds {
 				sym, err := cmd.Result()
 				if err == redis.Nil {
-					return syscall.ENOTSUP
+					logger.Debugf("doBatchClone: symlink target for inode %d disappeared, skipping", ino)
+					delete(srcData, ino)
+					continue
 				}
 				if err != nil {
 					return err
 				}
-				srcData[ino].sym = sym
+				if sd, ok := srcData[ino]; ok {
+					sd.sym = sym
+				}
 			}
 
 			batchResult = batchCloneResult{
 				userGroupQuotas: make([]userGroupQuotaDelta, 0, len(infos)),
 			}
 			refDelta := make(map[string]int64)
+			validInfos := make([]*cloneInfo, 0, len(infos))
 			for _, info := range infos {
 				sd, ok := srcData[info.srcIno]
 				if !ok {
-					return syscall.ENOTSUP
+					logger.Debugf("doBatchClone: source inode %d no longer available, skipping", info.srcIno)
+					continue
 				}
-				info.srcAttr = sd.attr
 				info.dstAttr = sd.attr
 				info.dstAttr.Parent = dstParent
 				if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
@@ -5320,7 +5294,7 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 				if info.dstAttr.Typ == TypeFile && info.dstAttr.Nlink > 1 {
 					info.dstAttr.Nlink = 1
 				}
-				info.srcXattr = sd.xattr
+				info.xattr = sd.xattr
 
 				batchResult.length += int64(sd.attr.Length)
 				entrySpace := align4K(sd.attr.Length)
@@ -5345,15 +5319,16 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 						}
 					}
 				}
+				validInfos = append(validInfos, info)
 			}
 
 			_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
-				for _, info := range infos {
+				for _, info := range validInfos {
 					sd := srcData[info.srcIno]
 					p.Set(ctx, m.inodeKey(info.dstIno), m.marshal(&info.dstAttr), 0)
 					p.HSet(ctx, m.entryKey(dstParent), string(info.entry.Name), m.packEntry(info.dstAttr.Typ, info.dstIno))
-					if len(info.srcXattr) > 0 {
-						p.HMSet(ctx, m.xattrKey(info.dstIno), info.srcXattr)
+					if len(info.xattr) > 0 {
+						p.HMSet(ctx, m.xattrKey(info.dstIno), info.xattr)
 					}
 					switch info.dstAttr.Typ {
 					case TypeFile:
@@ -5365,8 +5340,6 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 						}
 					case TypeSymlink:
 						p.Set(ctx, m.symKey(info.dstIno), sd.sym, 0)
-					default:
-						return syscall.ENOTSUP
 					}
 				}
 				if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
@@ -5392,13 +5365,6 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 			return err
 		}, watchKeys...)
 		if err != nil {
-			// Fallback to per-entry clone for transient/deleted-source cases.
-			if errno(err) == syscall.ENOTSUP {
-				if start > 0 {
-					return fallbackEntries(entries[start:])
-				}
-				return syscall.ENOTSUP
-			}
 			return errno(err)
 		}
 

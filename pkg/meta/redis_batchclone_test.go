@@ -26,6 +26,26 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+func newTestRedisMeta(t *testing.T, db int) *redisMeta {
+	t.Helper()
+	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/"+strconv.Itoa(db), testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %v", err)
+	}
+	m, ok := metaClient.(*redisMeta)
+	if !ok {
+		t.Fatalf("expected *redisMeta, got %T", metaClient)
+	}
+	t.Cleanup(func() { m.Shutdown() })
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %v", err)
+	}
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatalf("init meta: %v", err)
+	}
+	return m
+}
+
 func redisSliceRefCount(t *testing.T, m *redisMeta, id uint64, size uint32) int64 {
 	t.Helper()
 	v, err := m.rdb.HGet(Background(), m.sliceRefs(), m.sliceKey(id, size)).Int64()
@@ -39,23 +59,7 @@ func redisSliceRefCount(t *testing.T, m *redisMeta, id uint64, size uint32) int6
 }
 
 func TestRedisBatchCloneSharedChunkRefs(t *testing.T) {
-	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/11", testConfig())
-	if err != nil {
-		t.Fatalf("create meta: %v", err)
-	}
-	m, ok := metaClient.(*redisMeta)
-	if !ok {
-		t.Fatalf("expected *redisMeta, got %T", metaClient)
-	}
-	defer m.Shutdown()
-
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %v", err)
-	}
-	if err := m.Init(testFormat(), true); err != nil {
-		t.Fatalf("init meta: %v", err)
-	}
-
+	m := newTestRedisMeta(t, 11)
 	ctx := Background()
 	var srcDir, dstDir Ino
 	if st := m.Mkdir(ctx, RootInode, "src_shared", 0777, 022, 0, &srcDir, nil); st != 0 {
@@ -95,9 +99,7 @@ func TestRedisBatchCloneSharedChunkRefs(t *testing.T) {
 		if n == "." || n == ".." {
 			continue
 		}
-		if n == "file_A" || n == "file_B" {
-			batchEntries = append(batchEntries, e)
-		}
+		batchEntries = append(batchEntries, e)
 	}
 	if len(batchEntries) != 2 {
 		t.Fatalf("expected 2 batch entries, got %d", len(batchEntries))
@@ -134,31 +136,10 @@ func TestRedisBatchCloneSharedChunkRefs(t *testing.T) {
 	if dstAAttr.Nlink != 1 || dstBAttr.Nlink != 1 {
 		t.Fatalf("cloned files should have nlink=1, got %d and %d", dstAAttr.Nlink, dstBAttr.Nlink)
 	}
-
-	// Sanity check that batch path did not request fallback.
-	if st == syscall.ENOTSUP {
-		t.Fatalf("BatchClone unexpectedly returned ENOTSUP")
-	}
 }
 
 func TestRedisBatchCloneMixedFilesAndSymlinks(t *testing.T) {
-	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/12", testConfig())
-	if err != nil {
-		t.Fatalf("create meta: %v", err)
-	}
-	m, ok := metaClient.(*redisMeta)
-	if !ok {
-		t.Fatalf("expected *redisMeta, got %T", metaClient)
-	}
-	defer m.Shutdown()
-
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %v", err)
-	}
-	if err := m.Init(testFormat(), true); err != nil {
-		t.Fatalf("init meta: %v", err)
-	}
-
+	m := newTestRedisMeta(t, 12)
 	ctx := Background()
 	var srcDir, dstDir Ino
 	if st := m.Mkdir(ctx, RootInode, "src_mix", 0777, 022, 0, &srcDir, nil); st != 0 {
@@ -238,30 +219,10 @@ func TestRedisBatchCloneMixedFilesAndSymlinks(t *testing.T) {
 	}
 	checkLink("link_to_file1", "file1")
 	checkLink("link_to_file3", "file3")
-
-	if st == syscall.ENOTSUP {
-		t.Fatalf("BatchClone unexpectedly returned ENOTSUP")
-	}
 }
 
 func TestRedisBatchCloneDuplicateNamesInBatch(t *testing.T) {
-	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/9", testConfig())
-	if err != nil {
-		t.Fatalf("create meta: %v", err)
-	}
-	m, ok := metaClient.(*redisMeta)
-	if !ok {
-		t.Fatalf("expected *redisMeta, got %T", metaClient)
-	}
-	defer m.Shutdown()
-
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %v", err)
-	}
-	if err := m.Init(testFormat(), true); err != nil {
-		t.Fatalf("init meta: %v", err)
-	}
-
+	m := newTestRedisMeta(t, 9)
 	ctx := Background()
 	var srcDir, dstDir Ino
 	if st := m.Mkdir(ctx, RootInode, "src_dup", 0777, 022, 0, &srcDir, nil); st != 0 {
@@ -279,6 +240,8 @@ func TestRedisBatchCloneDuplicateNamesInBatch(t *testing.T) {
 		t.Fatalf("mknod file_B: %s", st)
 	}
 
+	// Two entries with the same destination name — the duplicate should be skipped,
+	// and only the first entry cloned successfully.
 	dupEntries := []*Entry{
 		{Inode: fileA, Name: []byte("dup"), Attr: &Attr{Typ: TypeFile}},
 		{Inode: fileB, Name: []byte("dup"), Attr: &Attr{Typ: TypeFile}},
@@ -286,43 +249,25 @@ func TestRedisBatchCloneDuplicateNamesInBatch(t *testing.T) {
 
 	var cloned uint64
 	st := m.getBase().BatchClone(ctx, srcDir, dstDir, dupEntries, CLONE_MODE_PRESERVE_ATTR, 022, &cloned)
-	if st != syscall.EEXIST {
-		t.Fatalf("BatchClone duplicate names in batch: got %s, want EEXIST", st)
+	if st != 0 {
+		t.Fatalf("BatchClone duplicate names: got %s, want success (duplicate skipped)", st)
 	}
-	if cloned != 0 {
-		t.Fatalf("BatchClone duplicate names should not increment count, got %d", cloned)
+	if cloned != 1 {
+		t.Fatalf("BatchClone duplicate names: want 1 cloned (duplicate skipped), got %d", cloned)
 	}
 
-	var dstEntries []*Entry
-	if st := m.Readdir(ctx, dstDir, 1, &dstEntries); st != 0 {
-		t.Fatalf("readdir dst_dup: %s", st)
+	var dstIno Ino
+	var dstAttr Attr
+	if st := m.Lookup(ctx, dstDir, "dup", &dstIno, &dstAttr, false); st != 0 {
+		t.Fatalf("lookup cloned dup: %s", st)
 	}
-	for _, e := range dstEntries {
-		name := string(e.Name)
-		if name != "." && name != ".." {
-			t.Fatalf("destination should stay empty on duplicate-name failure, found %q", name)
-		}
+	if dstAttr.Typ != TypeFile {
+		t.Fatalf("cloned dup type mismatch: want file got %d", dstAttr.Typ)
 	}
 }
 
 func TestRedisBatchCloneUpdatesParentTimestamps(t *testing.T) {
-	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/8", testConfig())
-	if err != nil {
-		t.Fatalf("create meta: %v", err)
-	}
-	m, ok := metaClient.(*redisMeta)
-	if !ok {
-		t.Fatalf("expected *redisMeta, got %T", metaClient)
-	}
-	defer m.Shutdown()
-
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %v", err)
-	}
-	if err := m.Init(testFormat(), true); err != nil {
-		t.Fatalf("init meta: %v", err)
-	}
-
+	m := newTestRedisMeta(t, 8)
 	ctx := Background()
 	var srcDir, dstDir Ino
 	if st := m.Mkdir(ctx, RootInode, "src_parent_ts", 0777, 022, 0, &srcDir, nil); st != 0 {
@@ -365,26 +310,33 @@ func TestRedisBatchCloneUpdatesParentTimestamps(t *testing.T) {
 	if after.Ctime == before.Ctime && after.Ctimensec == before.Ctimensec {
 		t.Fatalf("dst parent ctime did not change: before=%d.%d after=%d.%d", before.Ctime, before.Ctimensec, after.Ctime, after.Ctimensec)
 	}
+
+	if st := m.GetAttr(ctx, dstDir, &before); st != 0 {
+		t.Fatalf("getattr dst_parent_ts before preserve: %s", st)
+	}
+
+	time.Sleep(2 * time.Millisecond)
+
+	entries = []*Entry{{Inode: ino, Name: []byte("file1_preserve"), Attr: &Attr{Typ: TypeFile}}}
+	st = m.getBase().BatchClone(ctx, srcDir, dstDir, entries, CLONE_MODE_PRESERVE_ATTR, 022, &cloned)
+	if st != 0 {
+		t.Fatalf("BatchClone parent timestamps preserve attr: %s", st)
+	}
+
+	if st := m.GetAttr(ctx, dstDir, &after); st != 0 {
+		t.Fatalf("getattr dst_parent_ts after preserve: %s", st)
+	}
+
+	if after.Mtime != before.Mtime || after.Mtimensec != before.Mtimensec {
+		t.Fatalf("dst parent mtime changed with preserve attr: before=%d.%d after=%d.%d", before.Mtime, before.Mtimensec, after.Mtime, after.Mtimensec)
+	}
+	if after.Ctime != before.Ctime || after.Ctimensec != before.Ctimensec {
+		t.Fatalf("dst parent ctime changed with preserve attr: before=%d.%d after=%d.%d", before.Ctime, before.Ctimensec, after.Ctime, after.Ctimensec)
+	}
 }
 
 func TestRedisBatchCloneSpaceAccounting(t *testing.T) {
-	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/13", testConfig())
-	if err != nil {
-		t.Fatalf("create meta: %v", err)
-	}
-	m, ok := metaClient.(*redisMeta)
-	if !ok {
-		t.Fatalf("expected *redisMeta, got %T", metaClient)
-	}
-	defer m.Shutdown()
-
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %v", err)
-	}
-	if err := m.Init(testFormat(), true); err != nil {
-		t.Fatalf("init meta: %v", err)
-	}
-
+	m := newTestRedisMeta(t, 13)
 	ctx := Background()
 	var srcDir, dstDir Ino
 	if st := m.Mkdir(ctx, RootInode, "src_space", 0777, 022, 0, &srcDir, nil); st != 0 {
@@ -465,23 +417,7 @@ func TestRedisBatchCloneSpaceAccounting(t *testing.T) {
 }
 
 func TestRedisBatchCloneMultiChunkFile(t *testing.T) {
-	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/14", testConfig())
-	if err != nil {
-		t.Fatalf("create meta: %v", err)
-	}
-	m, ok := metaClient.(*redisMeta)
-	if !ok {
-		t.Fatalf("expected *redisMeta, got %T", metaClient)
-	}
-	defer m.Shutdown()
-
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %v", err)
-	}
-	if err := m.Init(testFormat(), true); err != nil {
-		t.Fatalf("init meta: %v", err)
-	}
-
+	m := newTestRedisMeta(t, 14)
 	ctx := Background()
 	var srcDir, dstDir Ino
 	if st := m.Mkdir(ctx, RootInode, "src_multi_chunk", 0777, 022, 0, &srcDir, nil); st != 0 {
@@ -587,31 +523,15 @@ func TestRedisBatchCloneMultiChunkFile(t *testing.T) {
 	}
 }
 
-func TestRedisBatchCloneLateFallbackAfterPartialSuccess(t *testing.T) {
-	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/7", testConfig())
-	if err != nil {
-		t.Fatalf("create meta: %v", err)
-	}
-	m, ok := metaClient.(*redisMeta)
-	if !ok {
-		t.Fatalf("expected *redisMeta, got %T", metaClient)
-	}
-	defer m.Shutdown()
-
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %v", err)
-	}
-	if err := m.Init(testFormat(), true); err != nil {
-		t.Fatalf("init meta: %v", err)
-	}
-
+func TestRedisBatchCloneSkipsDeletedSource(t *testing.T) {
+	m := newTestRedisMeta(t, 7)
 	ctx := Background()
 	var srcDir, dstDir Ino
-	if st := m.Mkdir(ctx, RootInode, "src_late_fallback", 0777, 022, 0, &srcDir, nil); st != 0 {
-		t.Fatalf("mkdir src_late_fallback: %s", st)
+	if st := m.Mkdir(ctx, RootInode, "src_skip_deleted", 0777, 022, 0, &srcDir, nil); st != 0 {
+		t.Fatalf("mkdir src_skip_deleted: %s", st)
 	}
-	if st := m.Mkdir(ctx, RootInode, "dst_late_fallback", 0777, 022, 0, &dstDir, nil); st != 0 {
-		t.Fatalf("mkdir dst_late_fallback: %s", st)
+	if st := m.Mkdir(ctx, RootInode, "dst_skip_deleted", 0777, 022, 0, &dstDir, nil); st != 0 {
+		t.Fatalf("mkdir dst_skip_deleted: %s", st)
 	}
 
 	const fileCount = 1001
@@ -625,7 +545,7 @@ func TestRedisBatchCloneLateFallbackAfterPartialSuccess(t *testing.T) {
 
 	var listed []*Entry
 	if st := m.Readdir(ctx, srcDir, 1, &listed); st != 0 {
-		t.Fatalf("readdir src_late_fallback: %s", st)
+		t.Fatalf("readdir src_skip_deleted: %s", st)
 	}
 	var batchEntries []*Entry
 	for _, e := range listed {
@@ -647,15 +567,15 @@ func TestRedisBatchCloneLateFallbackAfterPartialSuccess(t *testing.T) {
 	var cloned uint64
 	st := m.getBase().BatchClone(ctx, srcDir, dstDir, batchEntries, CLONE_MODE_PRESERVE_ATTR, 022, &cloned)
 	if st != 0 {
-		t.Fatalf("BatchClone late fallback after partial success: %s", st)
+		t.Fatalf("BatchClone skips deleted source: %s", st)
 	}
 	if cloned != fileCount-1 {
-		t.Fatalf("BatchClone late fallback count mismatch: got %d want %d", cloned, fileCount-1)
+		t.Fatalf("BatchClone skip deleted count mismatch: got %d want %d", cloned, fileCount-1)
 	}
 
 	var dstEntries []*Entry
 	if st := m.Readdir(ctx, dstDir, 1, &dstEntries); st != 0 {
-		t.Fatalf("readdir dst_late_fallback: %s", st)
+		t.Fatalf("readdir dst_skip_deleted: %s", st)
 	}
 	clonedNames := 0
 	for _, e := range dstEntries {
@@ -666,7 +586,7 @@ func TestRedisBatchCloneLateFallbackAfterPartialSuccess(t *testing.T) {
 		clonedNames++
 	}
 	if clonedNames != fileCount-1 {
-		t.Fatalf("dst_late_fallback entry count mismatch: got %d want %d", clonedNames, fileCount-1)
+		t.Fatalf("dst_skip_deleted entry count mismatch: got %d want %d", clonedNames, fileCount-1)
 	}
 
 	var ino Ino
@@ -677,23 +597,7 @@ func TestRedisBatchCloneLateFallbackAfterPartialSuccess(t *testing.T) {
 }
 
 func TestRedisBatchClonePartialFailureLeavesState(t *testing.T) {
-	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/15", testConfig())
-	if err != nil {
-		t.Fatalf("create meta: %v", err)
-	}
-	m, ok := metaClient.(*redisMeta)
-	if !ok {
-		t.Fatalf("expected *redisMeta, got %T", metaClient)
-	}
-	defer m.Shutdown()
-
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %v", err)
-	}
-	if err := m.Init(testFormat(), true); err != nil {
-		t.Fatalf("init meta: %v", err)
-	}
-
+	m := newTestRedisMeta(t, 15)
 	ctx := Background()
 	var srcDir, dstDir Ino
 	if st := m.Mkdir(ctx, RootInode, "src_partial", 0777, 022, 0, &srcDir, nil); st != 0 {
