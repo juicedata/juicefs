@@ -88,6 +88,23 @@ func (s *sharded) SetStorageClass(sc string) error {
 	return err
 }
 
+func (s *sharded) SetTier(init Tiers) {
+	for _, o := range s.stores {
+		if o, ok := o.(SupportTier); ok {
+			o.SetTier(init)
+		}
+	}
+}
+
+func (s *sharded) GetStorageClass(ctx context.Context) string {
+	for _, o := range s.stores {
+		if o, ok := o.(SupportTier); ok {
+			return o.GetStorageClass(ctx)
+		}
+	}
+	return ""
+}
+
 const maxResults = 10000
 
 // ListAll lists all keys that starts at marker from object storage.
@@ -210,6 +227,10 @@ func (s *sharded) AbortUpload(ctx context.Context, key string, uploadID string) 
 
 func (s *sharded) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	return s.pick(key).CompleteUpload(ctx, key, uploadID, parts)
+}
+
+func (s *sharded) Restore(ctx context.Context, key string) error {
+	return s.pick(key).Restore(ctx, key)
 }
 
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {

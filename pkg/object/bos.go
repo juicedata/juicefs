@@ -29,7 +29,6 @@ import (
 	"net/url"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -42,8 +41,8 @@ import (
 type bosclient struct {
 	DefaultObjectStorage
 	bucket string
-	sc     string
 	c      *bos.Client
+	tierStorage
 }
 
 func (q *bosclient) String() string {
@@ -93,6 +92,7 @@ func (q *bosclient) Head(ctx context.Context, key string) (Object, error) {
 		mtime,
 		strings.HasSuffix(key, "/"),
 		r.StorageClass,
+		r.BceRestore,
 	}, nil
 }
 
@@ -145,23 +145,23 @@ func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters .
 		return err
 	}
 	args := new(api.PutObjectArgs)
-	if q.sc != "" {
-		args.StorageClass = q.sc
+	sc := q.GetStorageClass(ctx)
+	if sc != "" {
+		args.StorageClass = sc
 	}
-	args.UserMeta = make(map[string]string)
-	args.UserMeta[checksumAlgr] = strconv.Itoa(int(crc32.Update(0, crc32c, data)))
 	_, err = q.c.PutObject(q.bucket, key, body, args)
 	attrs := ApplyGetters(getters...)
-	attrs.SetStorageClass(q.sc)
+	attrs.SetStorageClass(sc)
 	return err
 }
 
+func (q *bosclient) Restore(ctx context.Context, key string) error {
+	return q.c.RestoreObject(q.bucket, key, defaultRestoreDays, api.RESTORE_TIER_STANDARD)
+}
+
 func (q *bosclient) Copy(ctx context.Context, dst, src string) error {
-	var args *api.CopyObjectArgs
-	if q.sc != "" {
-		args = &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: q.sc}}
-	}
-	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, args)
+	sc := getOrDefaultScValue(q.GetStorageClass(ctx), api.STORAGE_CLASS_STANDARD)
+	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: sc}})
 	return err
 }
 
@@ -187,11 +187,11 @@ func (q *bosclient) List(ctx context.Context, prefix, start, token, delimiter st
 	for i := 0; i < n; i++ {
 		k := out.Contents[i]
 		mod, _ := time.Parse("2006-01-02T15:04:05Z", k.LastModified)
-		objs[i] = &obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/"), k.StorageClass}
+		objs[i] = &obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/"), k.StorageClass, ""}
 	}
 	if delimiter != "" {
 		for _, p := range out.CommonPrefixes {
-			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -267,7 +267,7 @@ func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 		region = r
 	}
 
-	endpoint := fmt.Sprintf("https://%s.%s.bcebos.com", bucketName, region)
+	endpoint := fmt.Sprintf("https://%s.bcebos.com", region)
 	bosCli, err := bos.NewClient(accessKey, secretKey, endpoint)
 	if err != nil {
 		return "", err
@@ -276,7 +276,7 @@ func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	if location, err := bosCli.GetBucketLocation(bucketName); err != nil {
 		return "", err
 	} else {
-		return fmt.Sprintf("%s.%s.bcebos.com", bucketName, location), nil
+		return fmt.Sprintf("%s.bcebos.com", location), nil
 	}
 }
 
@@ -297,17 +297,15 @@ func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		accessKey = os.Getenv("BDCLOUD_ACCESS_KEY")
 		secretKey = os.Getenv("BDCLOUD_SECRET_KEY")
 	}
-
+	endpoint = hostParts[1]
 	if hostParts[1] == "bcebos.com" {
 		if endpoint, err = autoBOSEndpoint(bucketName, accessKey, secretKey); err != nil {
 			return nil, fmt.Errorf("Fail to get location of bucket %q: %s", bucketName, err)
 		}
-		if !strings.HasPrefix(endpoint, "http") {
-			endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
-		}
-		logger.Debugf("Use endpoint: %s", endpoint)
 	}
-
+	endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
+	logger.Debugf("Use endpoint: %s", endpoint)
+	// endpoint format like https://bj.bcebos.com
 	bosClient, err := bos.NewClient(accessKey, secretKey, endpoint)
 	if err != nil {
 		return nil, err

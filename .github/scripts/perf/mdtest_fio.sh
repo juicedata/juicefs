@@ -4,6 +4,12 @@ set -e
 MNT_POINT=$1
 RESULTS_FILE=$2
 VERSION=$3
+META_URL=$4
+
+if [[ -z "$META_URL" ]]; then
+    echo "ERROR: META_URL is required as 4th argument for built-in mdtest scenario"
+    exit 1
+fi
 
 mkdir -p "$(dirname "$RESULTS_FILE")"
 
@@ -123,7 +129,7 @@ done
 echo "Running scenario 3 (built-in mdtest)..."
 output_file="${RESULTS_FILE}.scenario3.run1"
 echo 3 | sudo tee /proc/sys/vm/drop_caches
-{ time sudo ./juicefs mdtest "$MNT_POINT" --threads 10 --dirs 3 --depth 3 --files 100 --create; } 2>&1 | tee "$output_file"
+{ time sudo ./juicefs mdtest "$META_URL" /mdtest_perf --threads 10 --dirs 3 --depth 3 --files 100; } 2>&1 | tee "$output_file"
 process_run "$output_file" "scenario3" 1
 
 # Fio Scenario 4: Concurrent sequential write of 1 big file per thread (16 threads)

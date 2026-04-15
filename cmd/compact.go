@@ -66,12 +66,12 @@ func compact(ctx *cli.Context) error {
 	for i := 0; i < len(paths); i++ {
 		path, err := filepath.Abs(paths[i])
 		if err != nil {
-			logger.Fatalf("get absolute path of %s error: %v", paths[i], err)
+			logger.Fatalf("get absolute path of %q error: %v", paths[i], err)
 		}
 
 		inodeNo, err := utils.GetFileInode(path)
 		if err != nil {
-			logger.Errorf("lookup inode for %s error: %v", path, err)
+			logger.Errorf("lookup inode for %q error: %v", path, err)
 			continue
 		}
 		inode := meta.Ino(inodeNo)
@@ -123,6 +123,6 @@ func doCompact(inode meta.Ino, path string, coCnt uint16) error {
 		return fmt.Errorf("compact [%d:%s] error: %s", inode, path, errno)
 	}
 
-	logger.Infof("compact [%d:%s] success.", inode, path)
+	logger.Infof("compact [%d:%q] success.", inode, path)
 	return nil
 }

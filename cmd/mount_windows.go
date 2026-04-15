@@ -74,7 +74,12 @@ func mountFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "flush-on-cleanup",
-			Usage: "When enabled, Will instruct the WinFsp to call Flush() when a file handle is closing (MJ_IRP_CLEANUP). Requires the dev branch of WinFsp or version that GREATER than 2.1.25156.",
+			Usage: "When enabled, instruct WinFsp to call Flush() when a file handle is closing (MJ_IRP_CLEANUP). JuiceFS enables this by default. Requires WinFsp dev builds or versions >= 2.1.25219.",
+			Value: true,
+		},
+		&cli.BoolFlag{
+			Name:  "add-write-ea-access",
+			Usage: "When enabled, add the WinFsp AddWriteEaAccess mount option so ACE entries with FILE_WRITE_DATA also get FILE_WRITE_EA. Requires WinFsp dev builds or versions >= 2.1.26036.",
 			Value: true,
 		},
 		&cli.BoolFlag{

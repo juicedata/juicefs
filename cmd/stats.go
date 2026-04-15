@@ -369,13 +369,13 @@ func readStats(mp string) map[string]float64 {
 		f, err = os.Open(filepath.Join(mp, ".stats"))
 	}
 	if err != nil {
-		logger.Warnf("open stats file under mount point %s: %s", mp, err)
+		logger.Warnf("open stats file under mount point %q: %s", mp, err)
 		return nil
 	}
 	defer f.Close()
 	d, err := io.ReadAll(f)
 	if err != nil {
-		logger.Warnf("read stats file under mount point %s: %s", mp, err)
+		logger.Warnf("read stats file under mount point %q: %s", mp, err)
 		return nil
 	}
 	stats := make(map[string]float64)
@@ -398,10 +398,10 @@ func stats(ctx *cli.Context) error {
 	mp := ctx.Args().First()
 	inode, err := utils.GetFileInode(mp)
 	if err != nil {
-		logger.Fatalf("lookup inode for %s: %s", mp, err)
+		logger.Fatalf("lookup inode for %q: %s", mp, err)
 	}
 	if inode != 1 {
-		logger.Fatalf("path %s is not a mount point", mp)
+		logger.Fatalf("path %q is not a mount point", mp)
 	}
 
 	watcher := &statsWatcher{

@@ -243,14 +243,16 @@ type wSlice struct {
 	uploadError error
 	pendings    int
 	writeback   bool
+	tierID      uint8
 }
 
-func sliceForWrite(id uint64, store *cachedStore) *wSlice {
+func sliceForWrite(id uint64, store *cachedStore, tierID uint8) *wSlice {
 	return &wSlice{
 		rSlice:    rSlice{id, 0, store},
 		pages:     make([][]*Page, chunkSize/store.conf.BlockSize),
 		errors:    make(chan error, chunkSize/store.conf.BlockSize),
 		writeback: store.conf.Writeback,
+		tierID:    tierID,
 	}
 }
 
@@ -307,7 +309,7 @@ func (s *wSlice) WriteAt(p []byte, off int64) (n int, err error) {
 	return n, nil
 }
 
-func (store *cachedStore) put(key string, p *Page) error {
+func (store *cachedStore) put(ctx context.Context, key string, p *Page) error {
 	if store.upLimit != nil {
 		store.upLimit.Wait(int64(len(p.Data)))
 	}
@@ -316,7 +318,7 @@ func (store *cachedStore) put(key string, p *Page) error {
 		reqID string
 		sc    = object.DefaultStorageClass
 	)
-	return utils.WithTimeout(context.TODO(), func(ctx context.Context) error {
+	return utils.WithTimeout(ctx, func(ctx context.Context) error {
 		defer p.Release()
 		st := time.Now()
 		err := store.storage.Put(ctx, key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
@@ -351,7 +353,7 @@ func (store *cachedStore) delete(key string) error {
 	return err
 }
 
-func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
+func (store *cachedStore) upload(ctx context.Context, key string, block *Page, s *wSlice) error {
 	sync := s != nil
 	blen := len(block.Data)
 	bufSize := store.compressor.CompressBound(blen)
@@ -384,7 +386,7 @@ func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
 			err = fmt.Errorf("(cancelled) upload block %s: %s (after %d tries)", key, err, try)
 			break
 		}
-		if err = store.put(key, buf); err == nil {
+		if err = store.put(ctx, key, buf); err == nil {
 			break
 		}
 		logger.Debugf("Upload %s: %s (try %d)", key, err, try+1)
@@ -418,13 +420,14 @@ func (s *wSlice) upload(indx int) {
 		if off != blen {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
+		ctx := context.WithValue(context.Background(), object.TierKey{}, s.tierID)
 		if s.writeback && blen < s.store.conf.WritebackThresholdSize {
 			stagingPath := "unknown"
 			stageFailed := false
 			block.Acquire()
 			err := utils.WithTimeout(context.TODO(), func(context.Context) (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
 				defer block.Release()
-				stagingPath, err = s.store.bcache.stage(key, block.Data)
+				stagingPath, err = s.store.bcache.stage(key, block.Data, s.tierID)
 				if err == nil && stageFailed { // upload thread already marked me as failed because of timeout
 					_ = s.store.bcache.removeStage(key)
 				}
@@ -442,7 +445,7 @@ func (s *wSlice) upload(indx int) {
 					select {
 					case s.store.currentUpload <- struct{}{}:
 						defer func() { <-s.store.currentUpload }()
-						if err = s.store.upload(key, block, nil); err == nil {
+						if err = s.store.upload(ctx, key, block, nil); err == nil {
 							s.store.bcache.uploaded(key, blen)
 							if err := s.store.bcache.removeStage(key); err != nil {
 								logger.Warnf("failed to remove stage %s in upload", stagingPath)
@@ -461,7 +464,7 @@ func (s *wSlice) upload(indx int) {
 		}
 		s.store.currentUpload <- struct{}{}
 		defer func() { <-s.store.currentUpload }()
-		s.errors <- s.store.upload(key, block, s)
+		s.errors <- s.store.upload(ctx, key, block, s)
 	}()
 }
 
@@ -1055,6 +1058,10 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}
 	block := NewOffPage(blen)
 	_, err = f.ReadAt(block.Data, 0)
+	tierID := uint8(0)
+	if err == nil {
+		tierID, err = f.ReadTierID()
+	}
 	_ = f.Close()
 	if err != nil {
 		block.Release()
@@ -1066,9 +1073,9 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
-
+	ctx := context.WithValue(context.Background(), object.TierKey{}, tierID)
 	store.stageBlockDelay.Add(time.Since(item.ts).Seconds())
-	if err = store.upload(key, block, nil); err == nil {
+	if err = store.upload(ctx, key, block, nil); err == nil {
 		if !store.isPendingValid(key) { // Delete leaked objects if it's already deleted by other goroutines
 			err := store.delete(key)
 			logger.Infof("Key %s is not needed, abandoned, err: %v", key, err)
@@ -1153,8 +1160,8 @@ func (store *cachedStore) NewReader(id uint64, length int) Reader {
 	return sliceForRead(id, length, store)
 }
 
-func (store *cachedStore) NewWriter(id uint64) Writer {
-	return sliceForWrite(id, store)
+func (store *cachedStore) NewWriter(id uint64, tierID uint8) Writer {
+	return sliceForWrite(id, store, tierID)
 }
 
 func (store *cachedStore) Remove(id uint64, length int) error {
@@ -1231,6 +1238,10 @@ func (store *cachedStore) UpdateLimit(upload, download int64) {
 			store.downLimit = nil
 		}
 	}
+}
+
+func (store *cachedStore) BlobStorage() object.ObjectStorage {
+	return store.storage
 }
 
 var _ ChunkStore = (*cachedStore)(nil)

@@ -69,7 +69,7 @@ jobs:
           if [[ ${{matrix.meta}} == "tikv" ]]; then
             number=1500
           fi
-          make unit-random-test seed=$RANDOM checks=${number} steps=200 meta=$meta_url
+          make unit-random-test seed=$RANDOM checks=${number} steps=200 meta="$meta_url"
 
       - name: print failfile content
         if: failure()

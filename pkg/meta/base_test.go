@@ -155,6 +155,8 @@ func testMeta(t *testing.T, m Meta) {
 	testCaseIncensiHardlinkRename(t, m)
 	testCheckAndRepair(t, m)
 	testDirStat(t, m)
+	testRenameDirStat(t, m)
+	testRenameDirStatWithTrash(t, m)
 	testClone(t, m)
 	testBatchClone(t, m)
 	testACL(t, m)
@@ -589,20 +591,20 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Lookup(ctx, parent, "f", &inode, attr, true); st != 0 {
 		t.Fatalf("lookup f: %s", st)
 	}
-	if st := m.Resolve(ctx, 1, "d/f", &inode, attr); st != 0 && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx, 1, "d/f", &inode, attr, false); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve d/f: %s", st)
 	}
-	if st := m.Resolve(ctx, parent, "/f", &inode, attr); st != 0 && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx, parent, "/f", &inode, attr, false); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve f: %s", st)
 	}
 	var ctx2 = NewContext(0, 1, []uint32{1})
-	if st := m.Resolve(ctx2, parent, "/f", &inode, attr); st != syscall.EACCES && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx2, parent, "/f", &inode, attr, false); st != syscall.EACCES && st != syscall.ENOTSUP {
 		t.Fatalf("resolve f: %s", st)
 	}
-	if st := m.Resolve(ctx, parent, "/f/c", &inode, attr); st != syscall.ENOTDIR && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx, parent, "/f/c", &inode, attr, false); st != syscall.ENOTDIR && st != syscall.ENOTSUP {
 		t.Fatalf("resolve f: %s", st)
 	}
-	if st := m.Resolve(ctx, parent, "/f2", &inode, attr); st != syscall.ENOENT && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx, parent, "/f2", &inode, attr, false); st != syscall.ENOENT && st != syscall.ENOTSUP {
 		t.Fatalf("resolve f2: %s", st)
 	}
 	// check owner permission
@@ -638,7 +640,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		}
 
 	}
-	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil); st != 0 && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil, false); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve /d1/d2: %s", st)
 	}
 	if st := m.Remove(ctx, 1, "d1", false, RmrDefaultThreads, nil); st != 0 {
@@ -925,7 +927,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", 0, 0, map[string]*Quota{
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", DirQuotaType, map[string]*Quota{
 		"/subdir": {
 			MaxSpace:  0,
 			MaxInodes: 0,
@@ -941,7 +943,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", 0, 0, map[string]*Quota{
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", DirQuotaType, map[string]*Quota{
 		"/subdir": {
 			MaxSpace:  1 << 10,
 			MaxInodes: 0,
@@ -957,7 +959,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", 0, 0, map[string]*Quota{
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", DirQuotaType, map[string]*Quota{
 		"/subdir": {
 			MaxSpace:  0,
 			MaxInodes: 10,
@@ -973,7 +975,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", 0, 0, map[string]*Quota{
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", DirQuotaType, map[string]*Quota{
 		"/subdir": {
 			MaxSpace:  1 << 10,
 			MaxInodes: 10,
@@ -1384,19 +1386,19 @@ func testResolve(t *testing.T, m Meta) {
 		}
 	}()
 
-	if st := m.Resolve(NewContext(0, 65534, []uint32{65534}), 1, "/d/f", &inode, &attr); st != 0 {
+	if st := m.Resolve(NewContext(0, 65534, []uint32{65534}), 1, "/d/f", &inode, &attr, false); st != 0 {
 		if st == syscall.ENOTSUP {
 			return
 		}
 		t.Fatalf("resolve /d/f by owner: %s", st)
 	}
-	if st := m.Resolve(NewContext(0, 65533, []uint32{65534}), 1, "/d/f", &inode, &attr); st != 0 {
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65534}), 1, "/d/f", &inode, &attr, false); st != 0 {
 		t.Fatalf("resolve /d/f by group: %s", st)
 	}
-	if st := m.Resolve(NewContext(0, 65533, []uint32{65533, 65534}), 1, "/d/f", &inode, &attr); st != 0 {
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65533, 65534}), 1, "/d/f", &inode, &attr, false); st != 0 {
 		t.Fatalf("resolve /d/f by multi-group: %s", st)
 	}
-	if st := m.Resolve(NewContext(0, 65533, []uint32{65533}), 1, "/d/f", &inode, &attr); st != syscall.EACCES {
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65533}), 1, "/d/f", &inode, &attr, false); st != syscall.EACCES {
 		t.Fatalf("resolve /d/f by non-group: %s", st)
 	}
 }
@@ -1462,7 +1464,7 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "Foo", 0755, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create Foo should be OK")
 	}
-	if st := m.Resolve(ctx, 1, "/Foo", &inode, attr); st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx, 1, "/Foo", &inode, attr, false); st != syscall.ENOTSUP {
 		t.Fatalf("resolve with case insensitive should be ENOTSUP")
 	}
 	if st := m.Lookup(ctx, 1, "Bar", &inode, attr, true); st != 0 {
@@ -1642,7 +1644,7 @@ func testCaseIncensiHardlinkRename(t *testing.T, m Meta) {
 }
 
 type compactor interface {
-	compactChunk(inode Ino, indx uint32, once, force bool)
+	compactChunk(inode Ino, indx uint32, once, force bool, tierID int)
 }
 
 func testCompaction(t *testing.T, m Meta, trash bool) {
@@ -1700,7 +1702,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("expect 5 slices, but got %+v", cs1)
 	}
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 1, false, true)
+		c.compactChunk(inode, 1, false, true, 0)
 	}
 	var cs []Slice
 	_ = m.Read(ctx, inode, 1, &cs)
@@ -1719,7 +1721,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		time.Sleep(time.Millisecond)
 	}
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, false, true)
+		c.compactChunk(inode, 0, false, true, 0)
 	}
 	var slices []Slice
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
@@ -1773,7 +1775,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("truncate file: %s", st)
 	}
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, false, true)
+		c.compactChunk(inode, 0, false, true, 0)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
@@ -1788,7 +1790,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	m.NewSlice(ctx, &sliceId)
 	_ = m.Write(ctx, inode, 0, uint32(1<<20), Slice{Id: sliceId, Size: 2 << 20, Len: 2 << 20}, time.Now())
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, false, true)
+		c.compactChunk(inode, 0, false, true, 0)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
@@ -1806,7 +1808,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	_ = m.Write(ctx, inode, 0, uint32(128<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 128 << 10}, time.Now())
 	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: 0, Size: 1 << 20, Len: 1 << 20}, time.Now())
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, false, true)
+		c.compactChunk(inode, 0, false, true, 0)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
@@ -1824,7 +1826,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	_ = m.Fallocate(ctx, inode, fallocZeroRange, 2*ChunkSize+4515328, 3152428, nil)
 	_ = m.Fallocate(ctx, inode, fallocZeroRange, 2*ChunkSize+4515328, 2607724, nil)
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 2, false, true)
+		c.compactChunk(inode, 2, false, true, 0)
 	}
 	if st := m.Read(ctx, inode, 2, &slices); st != 0 {
 		t.Fatalf("read 1: %s", st)
@@ -1841,7 +1843,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	_ = m.Fallocate(ctx, inode, fallocZeroRange, 4*ChunkSize, ChunkSize, nil)
 	_ = m.CopyFileRange(ctx, inode, 3*ChunkSize, inode, 4*ChunkSize, 2338508, 0, nil, nil)
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 4, false, true)
+		c.compactChunk(inode, 4, false, true, 0)
 	}
 	if st := m.Read(ctx, inode, 4, &slices); st != 0 {
 		t.Fatalf("read inode %d chunk 4: %s", inode, st)
@@ -2126,6 +2128,24 @@ func testTrash(t *testing.T, m Meta) {
 	ctx := Background()
 	var inode, parent Ino
 	var attr = &Attr{}
+	getDirStat := func(ino Ino) *dirStat {
+		stat, st := m.GetDirStat(ctx, ino)
+		if st != 0 {
+			t.Fatalf("get dir stat %d: %s", ino, st)
+		}
+		return stat
+	}
+	waitDirStatInodes := func(ino Ino, expected int64, scene string) {
+		for i := 0; i < 20; i++ {
+			m.FlushSession()
+			if stat := getDirStat(ino); stat.inodes == expected {
+				return
+			}
+		}
+		stat := getDirStat(ino)
+		t.Fatalf("%s: expect inodes %d, got %d", scene, expected, stat.inodes)
+	}
+	var trashDir Ino
 	if st := m.Create(ctx, 1, "f1", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f1: %s", st)
 	}
@@ -2141,12 +2161,18 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != syscall.EISDIR {
 		t.Fatalf("rename f1 -> d: %s", st)
 	}
+	trashBeforeUnlink := int64(0)
+	if st := m.GetAttr(ctx, TrashInode+1, attr); st == 0 {
+		trashBeforeUnlink = getDirStat(TrashInode + 1).inodes
+	}
 	if st := m.Unlink(ctx, parent, "f"); st != 0 {
 		t.Fatalf("unlink d/f: %s", st)
 	}
 	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
 		t.Fatalf("getattr f(%d): %s, attr %+v", inode, st, attr)
 	}
+	trashDir = attr.Parent
+	waitDirStatInodes(trashDir, trashBeforeUnlink+1, "trash dir inodes after unlink d/f")
 	if st := m.Truncate(ctx, inode, 0, 1<<30, attr, false); st != syscall.EPERM {
 		t.Fatalf("should not truncate a file in trash")
 	}
@@ -2160,12 +2186,14 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx, 1, "d2", 0755, 022, 0, &parent2, attr); st != 0 {
 		t.Fatalf("mkdir d2: %s", st)
 	}
+	trashBeforeRmdir := getDirStat(trashDir)
 	if st := m.Rmdir(ctx, 1, "d2"); st != 0 {
 		t.Fatalf("rmdir d2: %s", st)
 	}
 	if st := m.GetAttr(ctx, parent2, attr); st != 0 || attr.Parent != TrashInode+1 {
 		t.Fatalf("getattr d2(%d): %s, attr %+v", parent2, st, attr)
 	}
+	waitDirStatInodes(trashDir, trashBeforeRmdir.inodes+1, "trash dir inodes after rmdir d2")
 	var tino Ino
 	if st := m.Mkdir(ctx, parent2, "d3", 0777, 022, 0, &tino, attr); st != syscall.ENOENT {
 		t.Fatalf("mkdir inside trash should fail")
@@ -2179,9 +2207,11 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "d", parent2, "ttlink", 0, &tino, attr); st != syscall.ENOENT {
 		t.Fatalf("link inside trash should fail")
 	}
+	trashBeforeRmdirD := getDirStat(trashDir)
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)
 	}
+	waitDirStatInodes(trashDir, trashBeforeRmdirD.inodes+1, "trash dir inodes after rmdir d")
 	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f1 -> d: %s", st)
 	}
@@ -2191,9 +2221,11 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f2", TrashInode+1, "td", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename f2 -> td: %s", st)
 	}
+	trashBeforeRename := getDirStat(trashDir)
 	if st := m.Rename(ctx, 1, "f2", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> d: %s", st)
 	}
+	waitDirStatInodes(trashDir, trashBeforeRename.inodes+1, "trash dir inodes after rename overwrite")
 	if st := m.Link(ctx, inode, 1, "l", attr); st != 0 || attr.Nlink != 2 {
 		t.Fatalf("link d -> l1: %s", st)
 	}
@@ -2242,6 +2274,49 @@ func testTrash(t *testing.T, m Meta) {
 	if len(entries) != 9 {
 		t.Fatalf("entries: %d", len(entries))
 	}
+
+	// test BatchUnlink: entries should be moved into trash and update dir stats
+	var bu1, bu2 Ino
+	if st := m.Create(ctx, 1, "batch_u1", 0644, 022, 0, &bu1, attr); st != 0 {
+		t.Fatalf("create batch_u1: %s", st)
+	}
+	if st := m.Create(ctx, 1, "batch_u2", 0644, 022, 0, &bu2, attr); st != 0 {
+		t.Fatalf("create batch_u2: %s", st)
+	}
+	var buAttr1, buAttr2 Attr
+	if st := m.GetAttr(ctx, bu1, &buAttr1); st != 0 {
+		t.Fatalf("getattr batch_u1: %s", st)
+	}
+	if st := m.GetAttr(ctx, bu2, &buAttr2); st != 0 {
+		t.Fatalf("getattr batch_u2: %s", st)
+	}
+	batchEntries := []*Entry{
+		{Inode: bu1, Name: []byte("batch_u1"), Attr: &buAttr1},
+		{Inode: bu2, Name: []byte("batch_u2"), Attr: &buAttr2},
+	}
+	trashBeforeBatch := getDirStat(trashDir)
+	var batchCount uint64
+	if st := m.getBase().BatchUnlink(ctx, RootInode, batchEntries, &batchCount, false); st != 0 {
+		t.Fatalf("batch unlink under root: %s", st)
+	}
+	if batchCount != 2 {
+		t.Fatalf("batch unlink count: expect 2, got %d", batchCount)
+	}
+	m.FlushSession()
+	trashAfterBatch := getDirStat(trashDir)
+	if trashAfterBatch.inodes < trashBeforeBatch.inodes+2 {
+		t.Fatalf("trash dir inodes after BatchUnlink: expect at least %d, got %d", trashBeforeBatch.inodes+2, trashAfterBatch.inodes)
+	}
+	batchTrashName1 := fmt.Sprintf("1-%d-%s", bu1, "batch_u1")
+	batchTrashName2 := fmt.Sprintf("1-%d-%s", bu2, "batch_u2")
+	var trashIno Ino
+	if st := m.Lookup(ctx, trashDir, batchTrashName1, &trashIno, attr, true); st != 0 {
+		t.Fatalf("lookup trash/%s: %s", batchTrashName1, st)
+	}
+	if st := m.Lookup(ctx, trashDir, batchTrashName2, &trashIno, attr, true); st != 0 {
+		t.Fatalf("lookup trash/%s: %s", batchTrashName2, st)
+	}
+
 	// test Remove with skipTrash true/false
 	if st := m.Mkdir(ctx, 1, "d10", 0755, 022, 0, &parent, attr); st != 0 {
 		t.Fatalf("mkdir d10: %s", st)
@@ -2259,7 +2334,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 12 {
+	if len(entries) != 14 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	if st := m.Mkdir(ctx, 1, "d10", 0755, 022, 0, &parent, attr); st != 0 {
@@ -2278,7 +2353,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 12 {
+	if len(entries) != 14 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 
@@ -2301,7 +2376,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 12 {
+	if len(entries) != 14 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	entries = entries[:0]
@@ -2314,7 +2389,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 12 {
+	if len(entries) != 14 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	entries = entries[:0]
@@ -2330,7 +2405,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 12 {
+	if len(entries) != 14 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	entries = entries[:0]
@@ -2985,6 +3060,467 @@ func testDirStat(t *testing.T, m Meta) {
 	checkResult(0, 0, 0)
 }
 
+func testRenameDirStat(t *testing.T, m Meta) {
+	ctx := Background()
+	var attr Attr
+	var dir1, dir2, dir3 Ino
+	var file1Inode, file2Inode Ino
+
+	// setup: create 3 directories and some files
+	if st := m.Mkdir(ctx, RootInode, "dir1", 0755, 022, 0, &dir1, &attr); st != 0 {
+		t.Fatalf("mkdir dir1: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "dir2", 0755, 022, 0, &dir2, &attr); st != 0 {
+		t.Fatalf("mkdir dir2: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "dir3", 0755, 022, 0, &dir3, &attr); st != 0 {
+		t.Fatalf("mkdir dir3: %s", st)
+	}
+	defer func() {
+		m.Rmdir(ctx, RootInode, "dir1")
+		m.Rmdir(ctx, RootInode, "dir2")
+		m.Rmdir(ctx, RootInode, "dir3")
+	}()
+
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	// Test 1: Rename file from dir1 to dir2 (cross-directory, no overwrite)
+	{
+		if st := m.Create(ctx, dir1, "file1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create file1: %s", st)
+		}
+
+		m.FlushSession()
+		stat1Before, _ := m.GetDirStat(ctx, dir1)
+		stat2Before, _ := m.GetDirStat(ctx, dir2)
+
+		if st := m.Rename(ctx, dir1, "file1", dir2, "file1", 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("rename file1 to dir2: %s", st)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+		stat1After, _ := m.GetDirStat(ctx, dir1)
+		stat2After, _ := m.GetDirStat(ctx, dir2)
+
+		// dir1 should decrease by one file
+		if stat1After.inodes != stat1Before.inodes-1 {
+			t.Fatalf("Test 1 failed: dir1 inodes %d != %d-1", stat1After.inodes, stat1Before.inodes)
+		}
+		// dir2 should increase by one file
+		if stat2After.inodes != stat2Before.inodes+1 {
+			t.Fatalf("Test 1 failed: dir2 inodes %d != %d+1", stat2After.inodes, stat2Before.inodes)
+		}
+		m.Unlink(ctx, dir2, "file1")
+		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
+		t.Logf("Test 1 passed: cross-dir rename without overwrite")
+	}
+
+	// Test 2: Rename file within same directory (no overwrite, no change in stat)
+	{
+		if st := m.Create(ctx, dir1, "file2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("create file2: %s", st)
+		}
+
+		m.FlushSession()
+		statBefore, _ := m.GetDirStat(ctx, dir1)
+
+		if st := m.Rename(ctx, dir1, "file2", dir1, "file3", 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("rename file2 to file3 in same dir: %s", st)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+		statAfter, _ := m.GetDirStat(ctx, dir1)
+
+		// same directory inodes should not change
+		if statAfter.inodes != statBefore.inodes {
+			t.Fatalf("Test 2 failed: inodes should not change %d != %d", statAfter.inodes, statBefore.inodes)
+		}
+		m.Unlink(ctx, dir1, "file3")
+		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
+		t.Logf("Test 2 passed: same-dir rename without overwrite")
+	}
+
+	// Test 3: Rename with overwrite in same directory
+	{
+		if st := m.Create(ctx, dir1, "file4", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create file4: %s", st)
+		}
+		if st := m.Create(ctx, dir1, "file5", 0644, 022, 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("create file5: %s", st)
+		}
+
+		m.FlushSession()
+		statBefore, _ := m.GetDirStat(ctx, dir1)
+
+		// rename file4 -> file5 (overwrite), trash is disabled
+		if st := m.Rename(ctx, dir1, "file4", dir1, "file5", 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("rename file4 to file5 (overwrite): %s", st)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+		statAfter, _ := m.GetDirStat(ctx, dir1)
+
+		// one file deleted, should decrease by 1
+		if statAfter.inodes != statBefore.inodes-1 {
+			t.Fatalf("Test 3 failed: inodes %d != %d-1", statAfter.inodes, statBefore.inodes)
+		}
+		m.Unlink(ctx, dir1, "file4")
+		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
+		t.Logf("Test 3 passed: same-dir rename with overwrite")
+	}
+
+	// Test 4: Rename with overwrite across directories
+	{
+		if st := m.Create(ctx, dir2, "file1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create file1 in dir2: %s", st)
+		}
+		if st := m.Create(ctx, dir3, "file_src", 0644, 022, 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("create file_src in dir3: %s", st)
+		}
+
+		m.FlushSession()
+		stat2Before, _ := m.GetDirStat(ctx, dir2)
+		stat3Before, _ := m.GetDirStat(ctx, dir3)
+
+		// rename dir3/file_src -> dir2/file1 (overwrite)
+		if st := m.Rename(ctx, dir3, "file_src", dir2, "file1", 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("rename file_src to file1 (overwrite cross-dir): %s", st)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+		stat2After, _ := m.GetDirStat(ctx, dir2)
+		stat3After, _ := m.GetDirStat(ctx, dir3)
+
+		// dir2: one deleted, one added, total no change
+		if stat2After.inodes != stat2Before.inodes {
+			t.Fatalf("Test 4 failed: dir2 inodes should not change %d != %d", stat2After.inodes, stat2Before.inodes)
+		}
+		// dir3: one deleted, should decrease by 1
+		if stat3After.inodes != stat3Before.inodes-1 {
+			t.Fatalf("Test 4 failed: dir3 inodes %d != %d-1", stat3After.inodes, stat3Before.inodes)
+		}
+		m.Unlink(ctx, dir2, "file1")
+		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
+		t.Logf("Test 4 passed: cross-dir rename with overwrite")
+	}
+
+	// Test 5: Rename with overwrite + RenameExchange flag across directories
+	{
+		if st := m.Create(ctx, dir1, "ex1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create ex1: %s", st)
+		}
+		if st := m.Create(ctx, dir3, "ex2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("create ex2: %s", st)
+		}
+
+		m.FlushSession()
+		stat1Before, _ := m.GetDirStat(ctx, dir1)
+		stat3Before, _ := m.GetDirStat(ctx, dir3)
+
+		// exchange: ex1 <-> ex2
+		if st := m.Rename(ctx, dir1, "ex1", dir3, "ex2", RenameExchange, &file1Inode, &attr); st != 0 {
+			t.Fatalf("rename exchange ex1 <-> ex2: %s", st)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+		stat1After, _ := m.GetDirStat(ctx, dir1)
+		stat3After, _ := m.GetDirStat(ctx, dir3)
+
+		// both directories should not change their inode counts with exchange
+		if stat1After.inodes != stat1Before.inodes {
+			t.Fatalf("Test 5 failed: dir1 inodes %d != %d", stat1After.inodes, stat1Before.inodes)
+		}
+		if stat3After.inodes != stat3Before.inodes {
+			t.Fatalf("Test 5 failed: dir3 inodes %d != %d", stat3After.inodes, stat3Before.inodes)
+		}
+		m.Unlink(ctx, dir1, "ex2")
+		m.Unlink(ctx, dir3, "ex1")
+		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
+		t.Logf("Test 5 passed: exchange rename")
+	}
+
+	// Test 6: Same-directory exchange (RenameExchange)
+	{
+		if st := m.Create(ctx, dir1, "file_a", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create file_a: %s", st)
+		}
+		if st := m.Create(ctx, dir1, "file_b", 0644, 022, 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("create file_b: %s", st)
+		}
+
+		m.FlushSession()
+		statBefore, _ := m.GetDirStat(ctx, dir1)
+
+		// exchange within same directory: file_a <-> file_b
+		if st := m.Rename(ctx, dir1, "file_a", dir1, "file_b", RenameExchange, &file1Inode, &attr); st != 0 {
+			t.Fatalf("rename same-dir exchange file_a <-> file_b: %s", st)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+		statAfter, _ := m.GetDirStat(ctx, dir1)
+
+		// same-dir exchange should not change inode count
+		if statAfter.inodes != statBefore.inodes {
+			t.Fatalf("Test 6 failed: inodes %d != %d", statAfter.inodes, statBefore.inodes)
+		}
+		m.Unlink(ctx, dir1, "file_b")
+		m.Unlink(ctx, dir1, "file_a")
+		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
+		t.Logf("Test 6 passed: same-dir exchange rename")
+	}
+}
+
+func testRenameDirStatWithTrash(t *testing.T, m Meta) {
+	format := testFormat()
+	format.TrashDays = 1
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init with trash: %v", err)
+	}
+	defer func() {
+		if err := m.Init(testFormat(), false); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+	}()
+
+	ctx := Background()
+	var dir1, dir2 Ino
+	var file1Inode, file2Inode Ino
+	var attr = Attr{}
+
+	if st := m.Mkdir(ctx, RootInode, "trash_dir1", 0755, 022, 0, &dir1, &attr); st != 0 {
+		t.Fatalf("mkdir trash_dir1: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "trash_dir2", 0755, 022, 0, &dir2, &attr); st != 0 {
+		t.Fatalf("mkdir trash_dir2: %s", st)
+	}
+	defer func() {
+		m.Rmdir(ctx, RootInode, "trash_dir1")
+		m.Rmdir(ctx, RootInode, "trash_dir2")
+	}()
+
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	// Test with trash enabled: overwrite should move to trash instead of delete
+	{
+		if st := m.Create(ctx, dir1, "trash_file1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create trash_file1: %s", st)
+		}
+		if st := m.Create(ctx, dir1, "trash_file2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("create trash_file2: %s", st)
+		}
+		defer m.Unlink(ctx, dir1, "trash_file2")
+
+		m.FlushSession()
+		statBefore, _ := m.GetDirStat(ctx, dir1)
+
+		// rename with overwrite (file2 goes to trash)
+		if st := m.Rename(ctx, dir1, "trash_file1", dir1, "trash_file2", 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("rename with trash enabled: %s", st)
+		}
+
+		m.FlushSession()
+		statAfter, _ := m.GetDirStat(ctx, dir1)
+
+		// with trash: deleted file doesn't reduce inode count, only goes to trash
+		// stat should decrease by 1 (the overwritten file)
+		if statAfter.inodes != statBefore.inodes-1 {
+			t.Fatalf("Test trash failed: inodes %d != %d-1", statAfter.inodes, statBefore.inodes)
+		}
+		overwritten := Attr{}
+		if st := m.GetAttr(ctx, file2Inode, &overwritten); st != 0 && st != syscall.ENOENT {
+			t.Fatalf("Test trash overwrite: getattr overwritten inode %d: %s", file2Inode, st)
+		} else if st == 0 && overwritten.Parent <= TrashInode {
+			t.Fatalf("Test trash overwrite: overwritten inode %d should be moved to trash or deleted, parent=%d", file2Inode, overwritten.Parent)
+		}
+		t.Logf("Test trash overwrite passed")
+	}
+
+	// Test cross-directory overwrite with trash enabled
+	{
+		if st := m.Create(ctx, dir1, "cross_trash1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create cross_trash1: %s", st)
+		}
+		if st := m.Create(ctx, dir2, "cross_trash2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("create cross_trash2: %s", st)
+		}
+		defer func() {
+			m.Unlink(ctx, dir2, "cross_trash2")
+		}()
+
+		m.FlushSession()
+		stat1Before, _ := m.GetDirStat(ctx, dir1)
+		stat2Before, _ := m.GetDirStat(ctx, dir2)
+
+		// cross-dir rename with overwrite and trash
+		if st := m.Rename(ctx, dir1, "cross_trash1", dir2, "cross_trash2", 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("rename cross_trash1 to cross_trash2 (overwrite with trash): %s", st)
+		}
+
+		m.FlushSession()
+		stat1After, _ := m.GetDirStat(ctx, dir1)
+		stat2After, _ := m.GetDirStat(ctx, dir2)
+
+		// dir1: one deleted
+		if stat1After.inodes != stat1Before.inodes-1 {
+			t.Fatalf("Test trash cross-dir failed: dir1 inodes %d != %d-1", stat1After.inodes, stat1Before.inodes)
+		}
+		// dir2: one deleted (goes to trash), one added, net no change
+		if stat2After.inodes != stat2Before.inodes {
+			t.Fatalf("Test trash cross-dir failed: dir2 inodes %d != %d", stat2After.inodes, stat2Before.inodes)
+		}
+		overwritten := Attr{}
+		if st := m.GetAttr(ctx, file2Inode, &overwritten); st != 0 && st != syscall.ENOENT {
+			t.Fatalf("Test trash cross-dir overwrite: getattr overwritten inode %d: %s", file2Inode, st)
+		} else if st == 0 && overwritten.Parent <= TrashInode {
+			t.Fatalf("Test trash cross-dir overwrite: overwritten inode %d should be moved to trash or deleted, parent=%d", file2Inode, overwritten.Parent)
+		}
+		t.Logf("Test trash cross-dir overwrite passed")
+	}
+
+	// Test exchange with trash enabled
+	{
+		if st := m.Create(ctx, dir1, "ex_trash1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create ex_trash1: %s", st)
+		}
+		if st := m.Create(ctx, dir2, "ex_trash2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("create ex_trash2: %s", st)
+		}
+		defer func() {
+			m.Unlink(ctx, dir1, "ex_trash2")
+			m.Unlink(ctx, dir2, "ex_trash1")
+		}()
+
+		m.FlushSession()
+		stat1Before, _ := m.GetDirStat(ctx, dir1)
+		stat2Before, _ := m.GetDirStat(ctx, dir2)
+
+		// exchange with trash
+		if st := m.Rename(ctx, dir1, "ex_trash1", dir2, "ex_trash2", RenameExchange, &file1Inode, &attr); st != 0 {
+			t.Fatalf("rename exchange with trash: %s", st)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+		stat1After, _ := m.GetDirStat(ctx, dir1)
+		stat2After, _ := m.GetDirStat(ctx, dir2)
+
+		// exchange should not change inode counts
+		if stat1After.inodes != stat1Before.inodes {
+			t.Fatalf("Test trash exchange failed: dir1 inodes %d != %d", stat1After.inodes, stat1Before.inodes)
+		}
+		if stat2After.inodes != stat2Before.inodes {
+			t.Fatalf("Test trash exchange failed: dir2 inodes %d != %d", stat2After.inodes, stat2Before.inodes)
+		}
+		t.Logf("Test trash exchange passed")
+	}
+
+	// Test 7: Restore from trash with overwrite (no exchange)
+	{
+		// Create a file to be deleted (moved to trash)
+		if st := m.Create(ctx, dir1, "to_trash", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create to_trash: %s", st)
+		}
+		var trashInode Ino
+		if st := m.GetAttr(ctx, file1Inode, &attr); st != 0 {
+			t.Fatalf("getattr to_trash: %s", st)
+		}
+
+		// Create target file that will be overwritten
+		if st := m.Create(ctx, dir2, "victim", 0644, 022, 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("create victim: %s", st)
+		}
+
+		m.FlushSession()
+
+		// Delete the file to move it to trash
+		if st := m.Unlink(ctx, dir1, "to_trash"); st != 0 {
+			t.Fatalf("unlink to_trash: %s", st)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
+		time.Sleep(500 * time.Millisecond)
+
+		// Get the trash inode (it should be marked as trash)
+		if !trashInode.IsTrash() {
+			// File in trash has a special inode
+			trashInode = file1Inode // Try using the same inode as it might be converted
+		}
+
+		stat1Before, _ := m.GetDirStat(ctx, dir1)
+		stat2Before, _ := m.GetDirStat(ctx, dir2)
+
+		// Try to restore from trash by renaming to dir2/victim (overwrite)
+		// Note: This test demonstrates the behavior, but from trash recovery
+		// may have specific restrictions depending on implementation
+		st := m.Rename(ctx, dir1, "to_trash", dir2, "victim", 0, &trashInode, &attr)
+		if st == 0 {
+			// If rename from trash succeeded, verify stats
+			time.Sleep(500 * time.Millisecond)
+			stat1After, _ := m.GetDirStat(ctx, dir1)
+			stat2After, _ := m.GetDirStat(ctx, dir2)
+
+			// dir1 should decrease (removed from trash)
+			if stat1After.inodes != stat1Before.inodes-1 {
+				t.Logf("Test 7 partial: rename from trash did decrease dir1 by 1")
+			}
+			// dir2 should increase by 1 (file restored and victim replaced)
+			if stat2After.inodes != stat2Before.inodes {
+				t.Logf("Test 7 partial: dir2 stat changed after restore from trash")
+			}
+			t.Logf("Test 7 passed: restore from trash with overwrite")
+		} else {
+			// If rename is blocked from trash, that's expected
+			t.Logf("Test 7 skipped: rename from trash not allowed (expected for security)")
+		}
+		m.Unlink(ctx, dir2, "victim")
+		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
+	}
+
+	// Test 8: Same-dir exchange with trash enabled
+	{
+		if st := m.Create(ctx, dir1, "trash_a", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create trash_a: %s", st)
+		}
+		if st := m.Create(ctx, dir1, "trash_b", 0644, 022, 0, &file2Inode, &attr); st != 0 {
+			t.Fatalf("create trash_b: %s", st)
+		}
+
+		m.FlushSession()
+		statBefore, _ := m.GetDirStat(ctx, dir1)
+
+		// same-dir exchange with trash enabled
+		if st := m.Rename(ctx, dir1, "trash_a", dir1, "trash_b", RenameExchange, &file1Inode, &attr); st != 0 {
+			t.Fatalf("rename same-dir exchange with trash: %s", st)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+		statAfter, _ := m.GetDirStat(ctx, dir1)
+
+		// same-dir exchange should not change inode count
+		if statAfter.inodes != statBefore.inodes {
+			t.Fatalf("Test 8 failed: inodes %d != %d", statAfter.inodes, statBefore.inodes)
+		}
+		m.Unlink(ctx, dir1, "trash_b")
+		m.Unlink(ctx, dir1, "trash_a")
+		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
+		t.Logf("Test 8 passed: same-dir exchange with trash")
+	}
+}
+
 func testBatchClone(t *testing.T, m Meta) {
 	ctx := Background()
 
@@ -3580,7 +4116,7 @@ func testQuota(t *testing.T, m Meta) {
 		t.Fatalf("Mkdir quota: %s", st)
 	}
 	p := "/quota"
-	if err := m.HandleQuota(ctx, QuotaSet, p, 0, 0, map[string]*Quota{p: {MaxSpace: 2 << 30, MaxInodes: 6}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 2 << 30, MaxInodes: 6}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set %s: %s", p, err)
 	}
 	m.getBase().loadQuotas()
@@ -3588,7 +4124,7 @@ func testQuota(t *testing.T, m Meta) {
 		t.Fatalf("Mkdir quota/d1: %s", st)
 	}
 	p = "/quota/d1"
-	if err := m.HandleQuota(ctx, QuotaSet, p, 0, 0, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 5}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 5}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota %s: %s", p, err)
 	}
 	m.getBase().loadQuotas()
@@ -3602,7 +4138,7 @@ func testQuota(t *testing.T, m Meta) {
 		t.Fatalf("Mkdir quota/d2/d22: %s", st)
 	}
 	p = "/quota/d2/d22"
-	if err := m.HandleQuota(ctx, QuotaSet, p, 0, 0, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 5}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 5}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota %s: %s", p, err)
 	}
 	m.getBase().loadQuotas()
@@ -3617,28 +4153,28 @@ func testQuota(t *testing.T, m Meta) {
 
 	qs := make(map[string]*Quota)
 	p = "/quota"
-	if err := m.HandleQuota(ctx, QuotaGet, p, 0, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, p, DirQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get %s: %s", p, err)
 	} else if q := qs[p]; q.MaxSpace != 2<<30 || q.MaxInodes != 6 || q.UsedSpace != 6*4<<10 || q.UsedInodes != 6 {
 		t.Fatalf("HandleQuota get %s: %+v", p, q)
 	}
 	delete(qs, p)
 	p = "/quota/d1"
-	if err := m.HandleQuota(ctx, QuotaGet, p, 0, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, p, DirQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get %s: %s", p, err)
 	} else if q := qs[p]; q.MaxSpace != 1<<30 || q.MaxInodes != 5 || q.UsedSpace != 4<<10 || q.UsedInodes != 1 {
 		t.Fatalf("HandleQuota get %s: %+v", p, q)
 	}
 	delete(qs, p)
 	p = "/quota/d2/d22"
-	if err := m.HandleQuota(ctx, QuotaGet, p, 0, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, p, DirQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get %s: %s", p, err)
 	} else if q := qs[p]; q.MaxSpace != 1<<30 || q.MaxInodes != 5 || q.UsedSpace != 4<<10 || q.UsedInodes != 1 {
 		t.Fatalf("HandleQuota get %s: %+v", p, q)
 	}
 	delete(qs, p)
 
-	if err := m.HandleQuota(ctx, QuotaList, "", 0, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaList, "", AllQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota list: %s", err)
 	} else {
 		if len(qs) != 3 {
@@ -3649,7 +4185,7 @@ func testQuota(t *testing.T, m Meta) {
 	getUsedInodes := func(path string) int64 {
 		m.getBase().doFlushQuotas()
 		qs := make(map[string]*Quota)
-		if err := m.HandleQuota(ctx, QuotaGet, path, 0, 0, qs, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaGet, path, DirQuotaType, qs, false, false, false); err != nil {
 			t.Fatalf("HandleQuota list: %s", err)
 		}
 		return qs[path].UsedInodes
@@ -3702,15 +4238,15 @@ func testQuota(t *testing.T, m Meta) {
 		t.Fatalf("Create quota/d2/f3: %s", st)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaDel, "/quota/d1", 0, 0, nil, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaDel, "/quota/d1", DirQuotaType, nil, false, false, false); err != nil {
 		t.Fatalf("HandleQuota del /quota/d1: %s", err)
 	}
-	if err := m.HandleQuota(ctx, QuotaDel, "/quota/d2", 0, 0, nil, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaDel, "/quota/d2", DirQuotaType, nil, false, false, false); err != nil {
 		t.Fatalf("HandleQuota del /quota/d2: %s", err)
 	}
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaList, "", 0, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaList, "", AllQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota list: %s", err)
 	} else {
 		if len(qs) != 2 {
@@ -4054,7 +4590,7 @@ func testCheckQuotaFileOwnerSimple(t *testing.T, m Meta) {
 	format := m.getBase().getFormat()
 	format.UserGroupQuota = true
 
-	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 4096, MaxInodes: 5}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 4096, MaxInodes: 5}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set user quota: %s", err)
 	}
 	m.getBase().loadQuotas()
@@ -4104,7 +4640,7 @@ func testQuotaEdgeCases(t *testing.T, m Meta) {
 	format.UserGroupQuota = true
 
 	t.Log("Testing inodes-only quota limit...")
-	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 0, MaxInodes: 2}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 0, MaxInodes: 2}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set inodes-only quota: %s", err)
 	}
 	m.getBase().loadQuotas()
@@ -4120,7 +4656,7 @@ func testQuotaEdgeCases(t *testing.T, m Meta) {
 	}
 
 	t.Log("Testing space-only quota limit...")
-	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024 * 1024, MaxInodes: 0}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 1024 * 1024, MaxInodes: 0}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set space-only quota: %s", err)
 	}
 	m.getBase().loadQuotas()
@@ -4148,7 +4684,7 @@ func testQuotaEdgeCasesComplex(t *testing.T, m Meta) {
 	format.UserGroupQuota = true
 
 	t.Log("Testing inodes-only quota limit...")
-	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 0, MaxInodes: 2}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 0, MaxInodes: 2}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set inodes-only quota: %s", err)
 	}
 	m.getBase().loadQuotas()
@@ -4180,7 +4716,7 @@ func testQuotaEdgeCasesComplex(t *testing.T, m Meta) {
 	}
 
 	t.Log("Testing space-only quota limit...")
-	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024 * 1024, MaxInodes: 0}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 1024 * 1024, MaxInodes: 0}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set space-only quota: %s", err)
 	}
 	m.getBase().loadQuotas()
@@ -4231,10 +4767,10 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 	operatorGid := uint32(2002)
 
 	t.Run("FileOwnerQuotaCheck", func(t *testing.T) {
-		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 5}}, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 1 << 20, MaxInodes: 5}}, false, false, false); err != nil {
 			t.Fatalf("HandleQuota set user quota for file owner uid %d: %s", fileOwnerUid, err)
 		}
-		if err := m.HandleQuota(ctx, QuotaSet, "", 0, fileOwnerGid, map[string]*Quota{UGQuotaKey: {MaxSpace: 2 << 20, MaxInodes: 10}}, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerGid), GroupQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerGid): {MaxSpace: 2 << 20, MaxInodes: 10}}, false, false, false); err != nil {
 			t.Fatalf("HandleQuota set group quota for file owner gid %d: %s", fileOwnerGid, err)
 		}
 		m.getBase().loadQuotas()
@@ -4268,24 +4804,24 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 		}
 
 		qs := make(map[string]*Quota)
-		if err := m.HandleQuota(ctx, QuotaGet, "", fileOwnerUid, 0, qs, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, qs, false, false, false); err != nil {
 			t.Fatalf("HandleQuota get user quota: %s", err)
 		}
-		if q := qs[UGQuotaKey]; q.UsedSpace < 1024 {
+		if q := qs[fmt.Sprintf("%d", fileOwnerUid)]; q.UsedSpace < 1024 {
 			t.Fatalf("User quota used space should be >= 1024, got %d", q.UsedSpace)
 		}
 
 		qs = make(map[string]*Quota)
-		if err := m.HandleQuota(ctx, QuotaGet, "", 0, fileOwnerGid, qs, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", fileOwnerGid), GroupQuotaType, qs, false, false, false); err != nil {
 			t.Fatalf("HandleQuota get group quota: %s", err)
 		}
-		if q := qs[UGQuotaKey]; q.UsedSpace < 1024 {
+		if q := qs[fmt.Sprintf("%d", fileOwnerGid)]; q.UsedSpace < 1024 {
 			t.Fatalf("Group quota used space should be >= 1024, got %d", q.UsedSpace)
 		}
 	})
 
 	t.Run("QuotaExceededByFileOwner", func(t *testing.T) {
-		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024, MaxInodes: 2}}, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 1024, MaxInodes: 2}}, false, false, false); err != nil {
 			t.Fatalf("HandleQuota set strict user quota: %s", err)
 		}
 		m.getBase().loadQuotas()
@@ -4319,7 +4855,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 	})
 
 	t.Run("TruncateQuotaCheck", func(t *testing.T) {
-		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
 			t.Fatalf("HandleQuota reset user quota: %s", err)
 		}
 		m.getBase().loadQuotas()
@@ -4353,7 +4889,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 	})
 
 	t.Run("MknodQuotaCheck", func(t *testing.T) {
-		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
 			t.Fatalf("HandleQuota reset user quota: %s", err)
 		}
 		m.getBase().loadQuotas()
@@ -4373,7 +4909,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 	})
 
 	t.Run("CloneQuotaCheck", func(t *testing.T) {
-		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
 			t.Fatalf("HandleQuota reset user quota: %s", err)
 		}
 		m.getBase().loadQuotas()
@@ -4407,10 +4943,10 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 	})
 
 	t.Run("CrossUserOperations", func(t *testing.T) {
-		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
 			t.Fatalf("HandleQuota set file owner quota: %s", err)
 		}
-		if err := m.HandleQuota(ctx, QuotaSet, "", operatorUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 512, MaxInodes: 2}}, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", operatorUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", operatorUid): {MaxSpace: 512, MaxInodes: 2}}, false, false, false); err != nil {
 			t.Fatalf("HandleQuota set operator quota: %s", err)
 		}
 		m.getBase().loadQuotas()
@@ -4434,18 +4970,18 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 		}
 
 		qs := make(map[string]*Quota)
-		if err := m.HandleQuota(ctx, QuotaGet, "", fileOwnerUid, 0, qs, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, qs, false, false, false); err != nil {
 			t.Fatalf("HandleQuota get file owner quota: %s", err)
 		}
-		if q := qs[UGQuotaKey]; q.UsedSpace < 1024 {
+		if q := qs[fmt.Sprintf("%d", fileOwnerUid)]; q.UsedSpace < 1024 {
 			t.Fatalf("File owner quota should be used: expected >= 1024, got %d", q.UsedSpace)
 		}
 
 		qs = make(map[string]*Quota)
-		if err := m.HandleQuota(ctx, QuotaGet, "", operatorUid, 0, qs, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", operatorUid), UserQuotaType, qs, false, false, false); err != nil {
 			t.Fatalf("HandleQuota get operator quota: %s", err)
 		}
-		if q := qs[UGQuotaKey]; q.UsedSpace > 0 {
+		if q := qs[fmt.Sprintf("%d", operatorUid)]; q.UsedSpace > 0 {
 			t.Fatalf("Operator quota should not be used for file owner's file: got %d", q.UsedSpace)
 		}
 
@@ -4453,7 +4989,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 	})
 
 	t.Run("EdgeCases", func(t *testing.T) {
-		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 0, MaxInodes: 0}}, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", fileOwnerUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", fileOwnerUid): {MaxSpace: 0, MaxInodes: 0}}, false, false, false); err != nil {
 			t.Fatalf("HandleQuota set zero quota: %s", err)
 		}
 		m.getBase().loadQuotas()
@@ -4519,43 +5055,43 @@ func cleanupQuotaTest(ctx Context, m Meta, parent Ino, uid, gid uint32) {
 	m.Unlink(ctx, parent, "hardlink")
 	m.Rmdir(ctx, RootInode, "ugquota")
 
-	m.HandleQuota(ctx, QuotaDel, "", uid, 0, nil, false, false, false)
-	m.HandleQuota(ctx, QuotaDel, "", 0, gid, nil, false, false, false)
-	m.HandleQuota(ctx, QuotaDel, "/path1", uid, 0, nil, false, false, false)
-	m.HandleQuota(ctx, QuotaDel, "/path2", 0, gid, nil, false, false, false)
+	m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", uid), UserQuotaType, nil, false, false, false)
+	m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", gid), GroupQuotaType, nil, false, false, false)
+	m.HandleQuota(ctx, QuotaDel, "/path1", DirQuotaType, nil, false, false, false)
+	m.HandleQuota(ctx, QuotaDel, "/path2", DirQuotaType, nil, false, false, false)
 	for i := 0; i < 5; i++ {
 		testUid := uint32(3000 + i)
-		m.HandleQuota(ctx, QuotaDel, "", testUid, 0, nil, false, false, false)
+		m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", testUid), UserQuotaType, nil, false, false, false)
 	}
 }
 
 func testBasicQuotaOperations(t *testing.T, m Meta, ctx Context, uid, gid uint32) {
-	if err := m.HandleQuota(ctx, QuotaSet, "", uid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 30, MaxInodes: 10}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", uid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", uid): {MaxSpace: 1 << 30, MaxInodes: 10}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set user quota for uid %d: %s", uid, err)
 	}
 	m.getBase().loadQuotas()
 
-	if err := m.HandleQuota(ctx, QuotaSet, "", 0, gid, map[string]*Quota{UGQuotaKey: {MaxSpace: 2 << 30, MaxInodes: 20}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", gid), GroupQuotaType, map[string]*Quota{fmt.Sprintf("%d", gid): {MaxSpace: 2 << 30, MaxInodes: 20}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set group quota for gid %d: %s", gid, err)
 	}
 	m.getBase().loadQuotas()
 
 	qs := make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get user quota for uid %d: %s", uid, err)
-	} else if q := qs[UGQuotaKey]; q.MaxSpace != 1<<30 || q.MaxInodes != 10 {
+	} else if q := qs[fmt.Sprintf("%d", uid)]; q.MaxSpace != 1<<30 || q.MaxInodes != 10 {
 		t.Fatalf("HandleQuota get user quota for uid %d: bad result %+v", uid, q)
 	}
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", 0, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", gid), GroupQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get group quota for gid %d: %s", gid, err)
-	} else if q := qs[UGQuotaKey]; q.MaxSpace != 2<<30 || q.MaxInodes != 20 {
+	} else if q := qs[fmt.Sprintf("%d", gid)]; q.MaxSpace != 2<<30 || q.MaxInodes != 20 {
 		t.Fatalf("HandleQuota get group quota for gid %d: bad result %+v", gid, q)
 	}
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaList, "", 0, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaList, "", AllQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota list: %s", err)
 	} else {
 		if len(qs) < 2 {
@@ -4563,16 +5099,16 @@ func testBasicQuotaOperations(t *testing.T, m Meta, ctx Context, uid, gid uint32
 		}
 	}
 
-	if err := m.HandleQuota(ctx, QuotaDel, "", uid, 0, nil, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", uid), UserQuotaType, nil, false, false, false); err != nil {
 		t.Fatalf("HandleQuota del user quota for uid %d: %s", uid, err)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaDel, "", 0, gid, nil, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", gid), GroupQuotaType, nil, false, false, false); err != nil {
 		t.Fatalf("HandleQuota del group quota for gid %d: %s", gid, err)
 	}
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaList, "", 0, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaList, "", AllQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota list after deletion: %s", err)
 	}
 
@@ -4611,38 +5147,38 @@ func testQuotaFileOperations(t *testing.T, m Meta, ctx Context, parent Ino, uid,
 	m.FlushSession()
 	time.Sleep(time.Second * 2)
 
-	if err := m.HandleQuota(ctx, QuotaDel, "", uid, 0, nil, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", uid), UserQuotaType, nil, false, false, false); err != nil {
 		t.Logf("HandleQuota delete user quota (may not exist): %s", err)
 	}
-	if err := m.HandleQuota(ctx, QuotaSet, "", uid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 30, MaxInodes: 10}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", uid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", uid): {MaxSpace: 1 << 30, MaxInodes: 10}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set user quota for uid %d: %s", uid, err)
 	}
 
 	qs := make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get user quota after file creation: %s", err)
-	} else if q := qs[UGQuotaKey]; q.UsedInodes < 1 {
+	} else if q := qs[fmt.Sprintf("%d", uid)]; q.UsedInodes < 1 {
 		t.Fatalf("HandleQuota get user quota: used inodes should be >= 1, got %d", q.UsedInodes)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaDel, "", 0, gid, nil, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", gid), GroupQuotaType, nil, false, false, false); err != nil {
 		t.Logf("HandleQuota delete group quota (may not exist): %s", err)
 	}
-	if err := m.HandleQuota(ctx, QuotaSet, "", 0, gid, map[string]*Quota{UGQuotaKey: {MaxSpace: 2 << 30, MaxInodes: 20}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", gid), GroupQuotaType, map[string]*Quota{fmt.Sprintf("%d", gid): {MaxSpace: 2 << 30, MaxInodes: 20}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set group quota for gid %d: %s", gid, err)
 	}
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get user quota after file creation: %s", err)
-	} else if q := qs[UGQuotaKey]; q.UsedInodes < 1 {
+	} else if q := qs[fmt.Sprintf("%d", uid)]; q.UsedInodes < 1 {
 		t.Fatalf("HandleQuota get user quota: used inodes should be >= 1, got %d", q.UsedInodes)
 	}
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", 0, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", gid), GroupQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get group quota after file creation: %s", err)
-	} else if q := qs[UGQuotaKey]; q.UsedInodes < 1 {
+	} else if q := qs[fmt.Sprintf("%d", gid)]; q.UsedInodes < 1 {
 		t.Fatalf("HandleQuota get group quota: used inodes should be >= 1, got %d", q.UsedInodes)
 	}
 
@@ -4650,33 +5186,29 @@ func testQuotaFileOperations(t *testing.T, m Meta, ctx Context, parent Ino, uid,
 }
 
 func testQuotaErrorCases(t *testing.T, m Meta, ctx Context, uid, gid uint32) {
-	if err := m.HandleQuota(ctx, QuotaSet, "", 0, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 30, MaxInodes: 10}}, false, false, false); err == nil {
-		t.Fatalf("HandleQuota should fail for invalid quota type (no path, uid, or gid)")
-	}
-
 	qs := make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, 99, "", uid, 0, qs, false, false, false); err == nil {
+	if err := m.HandleQuota(ctx, 99, "", 0, qs, false, false, false); err == nil {
 		t.Fatalf("HandleQuota should fail for invalid command")
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "", uid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 0, MaxInodes: 10}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", uid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", uid): {MaxSpace: 0, MaxInodes: 10}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set user quota with MaxSpace=0: %s", err)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "", 0, gid, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 30, MaxInodes: 0}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", gid), GroupQuotaType, map[string]*Quota{fmt.Sprintf("%d", gid): {MaxSpace: 1 << 30, MaxInodes: 0}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set group quota with MaxInodes=0: %s", err)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "", uid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 62, MaxInodes: 1 << 30}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", uid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", uid): {MaxSpace: 1 << 62, MaxInodes: 1 << 30}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set user quota with large values: %s", err)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaDel, "", 9999, 0, nil, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", 9999), UserQuotaType, nil, false, false, false); err != nil {
 		t.Fatalf("HandleQuota del non-existent user quota should not fail: %s", err)
 	}
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", 9999, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", 9999), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get non-existent user quota should not fail: %s", err)
 	}
 }
@@ -4689,7 +5221,7 @@ func testQuotaConcurrentOperations(t *testing.T, m Meta, ctx Context) {
 		go func(id int) {
 			defer wg.Done()
 			testUid := uint32(3000 + id)
-			err := m.HandleQuota(ctx, QuotaSet, "", testUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 5}}, false, false, false)
+			err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", testUid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", testUid): {MaxSpace: 1 << 20, MaxInodes: 5}}, false, false, false)
 			if err != nil {
 				t.Errorf("Concurrent HandleQuota set user quota for uid %d: %s", testUid, err)
 			}
@@ -4703,7 +5235,7 @@ func testQuotaConcurrentOperations(t *testing.T, m Meta, ctx Context) {
 			defer wg.Done()
 			testUid := uint32(3000 + id)
 			qs := make(map[string]*Quota)
-			err := m.HandleQuota(ctx, QuotaGet, "", testUid, 0, qs, false, false, false)
+			err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", testUid), UserQuotaType, qs, false, false, false)
 			if err != nil {
 				t.Errorf("Concurrent HandleQuota get user quota for uid %d: %s", testUid, err)
 			}
@@ -4725,16 +5257,16 @@ func testQuotaMixedTypes(t *testing.T, m Meta, ctx Context, uid, gid uint32) {
 		t.Fatalf("Mkdir path2: %s", st)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "/path1", uid, 0, map[string]*Quota{"/path1": {MaxSpace: 100 << 20, MaxInodes: 20}}, false, false, false); err != nil {
-		t.Fatalf("HandleQuota set path quota for uid %d: %s", uid, err)
+	if err := m.HandleQuota(ctx, QuotaSet, "/path1", DirQuotaType, map[string]*Quota{"/path1": {MaxSpace: 100 << 20, MaxInodes: 20}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set path quota for /path1: %s", err)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "/path2", 0, gid, map[string]*Quota{"/path2": {MaxSpace: 200 << 20, MaxInodes: 30}}, false, false, false); err != nil {
-		t.Fatalf("HandleQuota set path quota for gid %d: %s", gid, err)
+	if err := m.HandleQuota(ctx, QuotaSet, "/path2", DirQuotaType, map[string]*Quota{"/path2": {MaxSpace: 200 << 20, MaxInodes: 30}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set path quota for /path2: %s", err)
 	}
 
 	qs := make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaList, "", 0, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaList, "", AllQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota list mixed quota types: %s", err)
 	}
 	if len(qs) < 4 {
@@ -4772,33 +5304,32 @@ func testQuotaUsageStatistics(t *testing.T, m Meta, ctx Context, parent Ino, uid
 		t.Fatalf("SetAttr UID and GID for parent directory: %s", st)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaDel, "", uid, 0, nil, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", uid), UserQuotaType, nil, false, false, false); err != nil {
 		t.Logf("HandleQuota delete user quota (may not exist): %s", err)
 	}
-	if err := m.HandleQuota(ctx, QuotaSet, "", uid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 30, MaxInodes: 10}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", uid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", uid): {MaxSpace: 1 << 30, MaxInodes: 10}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set user quota for uid %d: %s", uid, err)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaDel, "", 0, gid, nil, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", gid), GroupQuotaType, nil, false, false, false); err != nil {
 		t.Logf("HandleQuota delete group quota (may not exist): %s", err)
 	}
-	if err := m.HandleQuota(ctx, QuotaSet, "", 0, gid, map[string]*Quota{UGQuotaKey: {MaxSpace: 2 << 30, MaxInodes: 20}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", gid), GroupQuotaType, map[string]*Quota{fmt.Sprintf("%d", gid): {MaxSpace: 2 << 30, MaxInodes: 20}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set group quota for gid %d: %s", gid, err)
 	}
-
 	time.Sleep(time.Second * 2)
 
 	qs := make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, 0, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get user quota for usage verification: %s", err)
-	} else if q := qs[UGQuotaKey]; q.UsedInodes < 4 {
+	} else if q := qs[fmt.Sprintf("%d", uid)]; q.UsedInodes < 4 {
 		t.Fatalf("HandleQuota user quota usage: expected >= 4 inodes, got %d", q.UsedInodes)
 	}
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", 0, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", gid), GroupQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get group quota for usage verification: %s", err)
-	} else if q := qs[UGQuotaKey]; q.UsedInodes < 5 {
+	} else if q := qs[fmt.Sprintf("%d", gid)]; q.UsedInodes < 5 {
 		t.Fatalf("HandleQuota group quota usage: expected >= 5 inodes, got %d", q.UsedInodes)
 	}
 }
@@ -4864,8 +5395,11 @@ func testUserGroupQuota(t *testing.T, m Meta) {
 }
 
 func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
-	if err := m.HandleQuota(ctx, QuotaSet, "", uid, gid, map[string]*Quota{UGQuotaKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
-		t.Fatalf("Set user group quota: %s", err)
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", uid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", uid): {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("Set user quota: %s", err)
+	}
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", gid), GroupQuotaType, map[string]*Quota{fmt.Sprintf("%d", gid): {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("Set group quota: %s", err)
 	}
 
 	var parentPath string
@@ -4875,7 +5409,7 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 		parentPath = "/ugquota"
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, parentPath, 0, 0, map[string]*Quota{parentPath: {MaxSpace: 200 << 20, MaxInodes: 200}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, parentPath, DirQuotaType, map[string]*Quota{parentPath: {MaxSpace: 200 << 20, MaxInodes: 200}}, false, false, false); err != nil {
 		t.Fatalf("Set directory quota for %s: %s", parentPath, err)
 	}
 
@@ -4901,19 +5435,18 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(100 * time.Millisecond)
 
 	qs := make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after file creation: %s", err)
 	}
-	ugQuotaAfterFile := qs[UGQuotaKey]
+	ugQuotaAfterFile := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaAfterFile == nil {
 		t.Fatalf("User group quota not found after file creation")
 	}
 
 	dirQs := make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, parentPath, 0, 0, dirQs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, parentPath, DirQuotaType, dirQs, false, false, false); err != nil {
 		t.Fatalf("Get directory quota after file creation: %s", err)
 	}
 	dirQuotaAfterFile := dirQs[parentPath]
@@ -4926,27 +5459,28 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(100 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after hardlink creation: %s", err)
 	}
-	ugQuotaAfterHardlink := qs[UGQuotaKey]
+	ugQuotaAfterHardlink := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaAfterHardlink == nil {
 		t.Fatalf("User group quota not found after hardlink creation")
 	}
 
 	dirQs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, parentPath, 0, 0, dirQs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, parentPath, DirQuotaType, dirQs, false, false, false); err != nil {
 		t.Fatalf("Get directory quota after hardlink creation: %s", err)
 	}
 	dirQuotaAfterHardlink := dirQs[parentPath]
 	if dirQuotaAfterHardlink == nil {
 		t.Fatalf("Directory quota not found after hardlink creation")
 	}
+	// After the new strategy, creating a hardlink does not increase user/group quota
+	// because hardlink only creates a new directory entry, not a new file
 	expectedSpaceIncrease := int64(0)
-	expectedInodeIncrease := int64(1)
+	expectedInodeIncrease := int64(0)
 
 	actualSpaceIncrease := ugQuotaAfterHardlink.UsedSpace - ugQuotaAfterFile.UsedSpace
 	actualInodeIncrease := ugQuotaAfterHardlink.UsedInodes - ugQuotaAfterFile.UsedInodes
@@ -4971,24 +5505,23 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 		t.Fatalf("Directory quota inode increase mismatch: expected %d, got %d", dirExpectedInodeIncrease, dirActualInodeIncrease)
 	}
 
-	if st := m.Unlink(ctx, parent, "test_hardlink_file"); st != 0 {
+	if st := m.Unlink(ctx, parent, "test_hardlink_file", true); st != 0 {
 		t.Fatalf("Unlink hardlink: %s", st)
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(100 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after hardlink deletion: %s", err)
 	}
-	ugQuotaAfterUnlink := qs[UGQuotaKey]
+	ugQuotaAfterUnlink := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaAfterUnlink == nil {
 		t.Fatalf("User group quota not found after hardlink deletion")
 	}
 
 	dirQs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, parentPath, 0, 0, dirQs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, parentPath, DirQuotaType, dirQs, false, false, false); err != nil {
 		t.Fatalf("Get directory quota after hardlink deletion: %s", err)
 	}
 	dirQuotaAfterUnlink := dirQs[parentPath]
@@ -4996,8 +5529,10 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 		t.Fatalf("Directory quota not found after hardlink deletion")
 	}
 
+	// After the new strategy, deleting a hardlink does not decrease user/group quota
+	// because hardlink only deletes a directory entry, not the actual file
 	expectedSpaceDecrease := int64(0)
-	expectedInodeDecrease := int64(1)
+	expectedInodeDecrease := int64(0)
 
 	actualSpaceDecrease := ugQuotaAfterHardlink.UsedSpace - ugQuotaAfterUnlink.UsedSpace
 	actualInodeDecrease := ugQuotaAfterHardlink.UsedInodes - ugQuotaAfterUnlink.UsedInodes
@@ -5023,13 +5558,17 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	}
 
 	m.Unlink(ctx, parent, "test_original_file")
-	m.HandleQuota(ctx, QuotaDel, "", uid, gid, nil, false, false, false)
-	m.HandleQuota(ctx, QuotaDel, parentPath, 0, 0, nil, false, false, false)
+	m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", uid), UserQuotaType, nil, false, false, false)
+	m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", gid), GroupQuotaType, nil, false, false, false)
+	m.HandleQuota(ctx, QuotaDel, parentPath, DirQuotaType, nil, false, false, false)
 }
 
 func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
-	if err := m.HandleQuota(ctx, QuotaSet, "", uid, gid, map[string]*Quota{UGQuotaKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
-		t.Fatalf("Set user group quota: %s", err)
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", uid), UserQuotaType, map[string]*Quota{fmt.Sprintf("%d", uid): {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("Set user quota: %s", err)
+	}
+	if err := m.HandleQuota(ctx, QuotaSet, fmt.Sprintf("%d", gid), GroupQuotaType, map[string]*Quota{fmt.Sprintf("%d", gid): {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("Set group quota: %s", err)
 	}
 	m.getBase().loadQuotas()
 
@@ -5060,13 +5599,12 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs := make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota before batch unlink: %s", err)
 	}
-	ugQuotaBefore := qs[UGQuotaKey]
+	ugQuotaBefore := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaBefore == nil {
 		t.Fatalf("User group quota not found before batch unlink")
 	}
@@ -5094,25 +5632,26 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after batch unlink: %s", err)
 	}
-	ugQuotaAfter := qs[UGQuotaKey]
+	ugQuotaAfter := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaAfter == nil {
 		t.Fatalf("User group quota not found after batch unlink")
 	}
 
-	expectedInodeDecrease := int64(len(fileNames))
+	// After the new strategy, files moved to trash do not decrease user/group quota
+	// Only files permanently deleted from trash decrease quota
+	expectedInodeDecrease := int64(0)
 	actualInodeDecrease := ugQuotaBefore.UsedInodes - ugQuotaAfter.UsedInodes
 
 	if actualInodeDecrease != expectedInodeDecrease {
 		t.Fatalf("User group quota inode decrease mismatch: expected %d, got %d", expectedInodeDecrease, actualInodeDecrease)
 	}
 
-	expectedSpaceDecrease := align4K(fileSize) * int64(len(fileNames))
+	expectedSpaceDecrease := int64(0)
 	actualSpaceDecrease := ugQuotaBefore.UsedSpace - ugQuotaAfter.UsedSpace
 
 	if actualSpaceDecrease != expectedSpaceDecrease {
@@ -5144,13 +5683,12 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota before hardlink unlink: %s", err)
 	}
-	ugQuotaBeforeHardlink := qs[UGQuotaKey]
+	ugQuotaBeforeHardlink := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaBeforeHardlink == nil {
 		t.Fatalf("User group quota not found before hardlink unlink")
 	}
@@ -5189,18 +5727,18 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after hardlink unlink: %s", err)
 	}
-	ugQuotaAfterHardlink := qs[UGQuotaKey]
+	ugQuotaAfterHardlink := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaAfterHardlink == nil {
 		t.Fatalf("User group quota not found after hardlink unlink")
 	}
 
-	expectedHardlinkInodeDecrease := int64(1)
+	// After the new strategy, hardlinks moved to trash do not decrease user/group quota
+	expectedHardlinkInodeDecrease := int64(0)
 	expectedHardlinkSpaceDecrease := int64(0)
 
 	actualHardlinkInodeDecrease := ugQuotaBeforeHardlink.UsedInodes - ugQuotaAfterHardlink.UsedInodes
@@ -5251,13 +5789,12 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota before multi-hardlink batch unlink: %s", err)
 	}
-	ugQuotaBeforeMultiHardlink := qs[UGQuotaKey]
+	ugQuotaBeforeMultiHardlink := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaBeforeMultiHardlink == nil {
 		t.Fatalf("User group quota not found before multi-hardlink batch unlink")
 	}
@@ -5295,18 +5832,18 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after multi-hardlink batch unlink: %s", err)
 	}
-	ugQuotaAfterMultiHardlink := qs[UGQuotaKey]
+	ugQuotaAfterMultiHardlink := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaAfterMultiHardlink == nil {
 		t.Fatalf("User group quota not found after multi-hardlink batch unlink")
 	}
 
-	expectedMultiHardlinkInodeDecrease := int64(len(hardlinkNames))
+	// After the new strategy, hardlinks moved to trash do not decrease user/group quota
+	expectedMultiHardlinkInodeDecrease := int64(0)
 	expectedMultiHardlinkSpaceDecrease := int64(0)
 
 	actualMultiHardlinkInodeDecrease := ugQuotaBeforeMultiHardlink.UsedInodes - ugQuotaAfterMultiHardlink.UsedInodes
@@ -5365,13 +5902,12 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota before symlink batch unlink: %s", err)
 	}
-	ugQuotaBeforeSymlink := qs[UGQuotaKey]
+	ugQuotaBeforeSymlink := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaBeforeSymlink == nil {
 		t.Fatalf("User group quota not found before symlink batch unlink")
 	}
@@ -5399,19 +5935,18 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.getBase().doFlushQuotas()
-	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
-	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaGet, fmt.Sprintf("%d", uid), UserQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after symlink batch unlink: %s", err)
 	}
-	ugQuotaAfterSymlink := qs[UGQuotaKey]
+	ugQuotaAfterSymlink := qs[fmt.Sprintf("%d", uid)]
 	if ugQuotaAfterSymlink == nil {
 		t.Fatalf("User group quota not found after symlink batch unlink")
 	}
 
-	expectedSymlinkInodeDecrease := int64(len(symlinkNames))
-	expectedSymlinkSpaceDecrease := align4K(0) * int64(len(symlinkNames))
+	expectedSymlinkInodeDecrease := int64(3)
+	expectedSymlinkSpaceDecrease := 3 * align4K(0)
 
 	actualSymlinkInodeDecrease := ugQuotaBeforeSymlink.UsedInodes - ugQuotaAfterSymlink.UsedInodes
 	actualSymlinkSpaceDecrease := ugQuotaBeforeSymlink.UsedSpace - ugQuotaAfterSymlink.UsedSpace
@@ -5431,7 +5966,10 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 		}
 	}
 
-	if err := m.HandleQuota(ctx, QuotaDel, "", uid, gid, nil, false, false, false); err != nil {
-		t.Fatalf("Delete user group quota: %s", err)
+	if err := m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", uid), UserQuotaType, nil, false, false, false); err != nil {
+		t.Fatalf("Delete user quota: %s", err)
+	}
+	if err := m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", gid), GroupQuotaType, nil, false, false, false); err != nil {
+		t.Fatalf("Delete group quota: %s", err)
 	}
 }

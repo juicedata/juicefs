@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	ENOTSUP        = errors.New("not supported")
+	ErrNotSUP      = errors.New("not supported")
 	ErrFuncTimeout = errors.New("function timeout")
 	ErrSkipped     = errors.New("skipped")
 	ErrExtlink     = syscall.Errno(1000)

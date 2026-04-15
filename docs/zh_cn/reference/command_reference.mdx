@@ -255,7 +255,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
-管理目录配额
+管理目录、用户和组配额
 
 #### 概览
 
@@ -265,16 +265,29 @@ juicefs quota command [command options] META-URL
 # 为目录设置配额
 juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
 
+# 为用户设置配额
+juicefs quota set redis://localhost --uid 1000 --capacity 2 --inodes 200
+
+# 为组设置配额
+juicefs quota set redis://localhost --gid 100 --capacity 5 --inodes 500
+
 # 获取目录配额信息
 juicefs quota get redis://localhost --path /dir1
 
-# 列出所有目录配额
+# 获取用户/组配额信息
+juicefs quota get redis://localhost --uid 1000
+juicefs quota get redis://localhost --gid 100
+
+# 列出所有配额
 juicefs quota list redis://localhost
 
 # 删除目录配额
 juicefs quota delete redis://localhost --path /dir1
 
 # 检查目录配额的一致性
+juicefs quota check redis://localhost --path /dir1
+
+# 检查用户组配额的一致性
 juicefs quota check redis://localhost
 ```
 
@@ -283,9 +296,12 @@ juicefs quota check redis://localhost
 |项 | 说明|
 |-|-|
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
-|`--path value`|卷中目录的全路径|
-|`--capacity value`|目录空间硬限制，单位 GiB (默认：0)|
-|`--inodes value`|用于硬限制目录 inode 数 (默认：0)|
+|`--path value`|卷中目录的全路径（用于目录配额）|
+|`--uid value`|用户 ID（用于用户配额）|
+|`--gid value`|组 ID（用于组配额）|
+|`--create`|目录不存在时自动创建（仅对目录配额生效）|
+|`--capacity value`|空间硬限制，单位 GiB (默认：0)|
+|`--inodes value`|硬限制 inode 数 (默认：0)|
 |`--repair`|修复不一致配额 (默认：false)|
 |`--strict`|在严格模式下计算目录的总使用量 (注意：对于大目录可能很慢) (默认：false)|
 

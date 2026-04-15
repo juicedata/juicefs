@@ -422,7 +422,7 @@ func (v *VFS) Opendir(ctx Context, ino Ino, flags uint32) (fh uint64, err syscal
 			return
 		}
 	}
-	fh = v.newHandle(ino, true).fh
+	fh = v.newHandle(ino, true, 0).fh
 	return
 }
 
@@ -532,7 +532,7 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 	}
 	if err == 0 {
 		v.UpdateLength(inode, attr)
-		fh = v.newFileHandle(inode, attr.Length, flags)
+		fh = v.newFileHandle(inode, attr.Length, flags, attr.Tier)
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 		v.invalidateDirHandle(parent, name, inode, attr)
 
@@ -560,7 +560,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 			err = syscall.EACCES
 			return
 		}
-		h := v.newHandle(ino, true)
+		h := v.newHandle(ino, true, 0)
 		fh = h.fh
 		n := getInternalNode(ino)
 		if n == nil {
@@ -587,7 +587,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 	err = v.Meta.Open(ctx, ino, flags, attr)
 	if err == 0 {
 		v.UpdateLength(ino, attr)
-		fh = v.newFileHandle(ino, attr.Length, flags)
+		fh = v.newFileHandle(ino, attr.Length, flags, attr.Tier)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
 	return

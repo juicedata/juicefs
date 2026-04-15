@@ -44,7 +44,7 @@ import (
 type ibmcos struct {
 	bucket string
 	s3     *s3.S3
-	sc     string
+	tierStorage
 }
 
 func (s *ibmcos) String() string {
@@ -99,7 +99,17 @@ func (s *ibmcos) Get(ctx context.Context, key string, off, limit int64, getters 
 	return resp.Body, nil
 }
 
+func (s *ibmcos) Restore(ctx context.Context, key string) error {
+	_, err := s.s3.RestoreObject(&s3.RestoreObjectInput{
+		Bucket:         aws.String(s.bucket),
+		Key:            aws.String(key),
+		RestoreRequest: &s3.RestoreRequest{Days: aws.Int64(defaultRestoreDays)},
+	})
+	return err
+}
+
 func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+	sc := s.GetStorageClass(ctx)
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -117,26 +127,25 @@ func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...A
 		Body:        body,
 		ContentType: &mimeType,
 	}
-	if s.sc != "" {
-		params.SetStorageClass(s.sc)
+	if sc != "" {
+		params.SetStorageClass(sc)
 	}
 	var reqID string
 	_, err := s.s3.PutObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
 	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(reqID).SetStorageClass(s.sc)
+	attrs.SetRequestID(reqID).SetStorageClass(sc)
 	return err
 }
 
 func (s *ibmcos) Copy(ctx context.Context, dst, src string) error {
+	sc := getOrDefaultScValue(s.GetStorageClass(ctx), DefaultStorageClass)
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
 		Key:        &dst,
 		CopySource: &src,
 	}
-	if s.sc != "" {
-		params.SetStorageClass(s.sc)
-	}
+	params.SetStorageClass(sc)
 	_, err := s.s3.CopyObjectWithContext(ctx, params)
 	return err
 }
@@ -159,6 +168,7 @@ func (s *ibmcos) Head(ctx context.Context, key string) (Object, error) {
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
 		*r.StorageClass,
+		*r.Restore,
 	}, nil
 }
 
@@ -197,7 +207,7 @@ func (s *ibmcos) List(ctx context.Context, prefix, start, token, delimiter strin
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
-		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
+		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass, ""}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -205,7 +215,7 @@ func (s *ibmcos) List(ctx context.Context, prefix, start, token, delimiter strin
 			if err != nil {
 				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

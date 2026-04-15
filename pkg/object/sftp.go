@@ -368,7 +368,7 @@ func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, f
 func (f *sftpStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object {
 	owner, group := getOwnerGroup(fi)
 	ff := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
+		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), "", ""},
 		owner,
 		group,
 		fi.Mode(),
@@ -488,7 +488,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	}
 	root := filepath.Clean(endpoint[idx+1:])
 	if runtime.GOOS == "windows" {
-		root = strings.Replace(root, "\\", "/", -1)
+		root = strings.ReplaceAll(root, "\\", "/")
 	}
 	// append suffix `/` removed by filepath.Clean()
 	if strings.HasSuffix(endpoint[idx+1:], dirSuffix) {

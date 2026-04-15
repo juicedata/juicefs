@@ -29,6 +29,19 @@ type withPrefix struct {
 	prefix string
 }
 
+func (s *withPrefix) SetTier(init Tiers) {
+	if o, ok := s.os.(SupportTier); ok {
+		o.SetTier(init)
+	}
+}
+
+func (s *withPrefix) GetStorageClass(ctx context.Context) string {
+	if o, ok := s.os.(SupportTier); ok {
+		return o.GetStorageClass(ctx)
+	}
+	return ""
+}
+
 // WithPrefix return an object storage that add a prefix to keys.
 func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 	return &withPrefix{os, prefix}
@@ -206,6 +219,10 @@ func (p *withPrefix) ListUploads(ctx context.Context, marker string) ([]*Pending
 		part.Key = part.Key[len(p.prefix):]
 	}
 	return parts, nextMarker, err
+}
+
+func (p *withPrefix) Restore(ctx context.Context, key string) error {
+	return p.os.Restore(ctx, p.prefix+key)
 }
 
 var _ ObjectStorage = (*withPrefix)(nil)

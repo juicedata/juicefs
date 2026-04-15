@@ -427,7 +427,7 @@ func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDi
 		}
 
 		copyArgs := []string{"powershell", "-Command", fmt.Sprintf("Get-Content -Tail %d %s > %s", limit, logPath, retLogPath)}
-		logger.Infof("The last %d lines of %s will be collected", limit, logPath)
+		logger.Infof("The last %d lines of %q will be collected", limit, logPath)
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		return exec.CommandContext(timeoutCtx, copyArgs[0], copyArgs[1:]...).Run()
@@ -437,7 +437,7 @@ func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDi
 			copyArgs = append(copyArgs, "sudo")
 		}
 		copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
-		logger.Infof("The last %d lines of %s will be collected", limit, logPath)
+		logger.Infof("The last %d lines of %q will be collected", limit, logPath)
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		return exec.CommandContext(timeoutCtx, copyArgs[0], copyArgs[1:]...).Run()
@@ -513,7 +513,7 @@ func debug(ctx *cli.Context) error {
 		}
 		return nil
 	}, 3*time.Second); err != nil {
-		logger.Warnf(err.Error())
+		logger.Warn(err.Error())
 		logger.Warnf("assuming the mount point is JuiceFS mount point")
 	} else {
 		if inode != uint64(meta.RootInode) {
@@ -541,7 +541,7 @@ func debug(ctx *cli.Context) error {
 	}
 
 	uid, pid, cmd, err := getCmdMount(amp)
-	logger.Infof("mount point:%s pid:%s uid:%s", amp, pid, uid)
+	logger.Infof("mount point:%q pid:%s uid:%s", amp, pid, uid)
 	if err != nil {
 		return fmt.Errorf("failed to get mount command: %v", err)
 	}
@@ -568,6 +568,6 @@ func debug(ctx *cli.Context) error {
 
 	wg.Wait()
 	abs, _ := filepath.Abs(currDir)
-	logger.Infof("All files are collected to %s", abs)
+	logger.Infof("All files are collected to %q", abs)
 	return geneZipFile(currDir, filepath.Join(outDir, fmt.Sprintf("%s-%s.zip", prefix, timestamp)))
 }

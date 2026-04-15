@@ -37,8 +37,8 @@ import (
 
 type tosClient struct {
 	bucket string
-	sc     string
 	client *tos.ClientV2
+	tierStorage
 }
 
 func (t *tosClient) String() string {
@@ -98,18 +98,19 @@ func (t *tosClient) Put(ctx context.Context, key string, in io.Reader, getters .
 			checksumAlgr: generateChecksum(ins),
 		}
 	}
+	sc := t.GetStorageClass(ctx)
 	resp, err := t.client.PutObjectV2(ctx, &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,
 			Key:          key,
-			StorageClass: enum.StorageClassType(t.sc),
+			StorageClass: enum.StorageClassType(sc),
 			Meta:         meta,
 		},
 		Content: in,
 	})
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(resp.RequestID).SetStorageClass(t.sc)
+		attrs.SetRequestID(resp.RequestID).SetStorageClass(sc)
 	}
 	return err
 }
@@ -136,12 +137,18 @@ func (t *tosClient) Head(ctx context.Context, key string) (Object, error) {
 		}
 		return nil, err
 	}
+	var status string
+	rInfo := head.RestoreInfo
+	if rInfo != nil {
+		status = fmt.Sprintf("OngoingRequest:%v,ExpiryDate:%s", rInfo.RestoreStatus.OngoingRequest, rInfo.RestoreStatus.ExpiryDate)
+	}
 	return &obj{
 		key,
 		head.ContentLength,
 		head.LastModified,
 		strings.HasSuffix(key, "/"),
 		string(head.StorageClass),
+		status,
 	}, err
 }
 
@@ -170,11 +177,12 @@ func (t *tosClient) List(ctx context.Context, prefix, start, token, delimiter st
 			o.LastModified,
 			strings.HasSuffix(o.Key, "/"),
 			string(o.StorageClass),
+			"",
 		}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -269,12 +277,22 @@ func (t *tosClient) ListUploads(ctx context.Context, marker string) ([]*PendingP
 }
 
 func (t *tosClient) Copy(ctx context.Context, dst, src string) error {
+	sc := getOrDefaultScValue(t.GetStorageClass(ctx), string(enum.StorageClassStandard))
 	_, err := t.client.CopyObject(ctx, &tos.CopyObjectInput{
 		SrcBucket:    t.bucket,
 		Bucket:       t.bucket,
 		SrcKey:       src,
 		Key:          dst,
-		StorageClass: enum.StorageClassType(t.sc),
+		StorageClass: enum.StorageClassType(sc),
+	})
+	return err
+}
+func (t *tosClient) Restore(ctx context.Context, key string) error {
+	_, err := t.client.RestoreObject(ctx, &tos.RestoreObjectInput{
+		Bucket:               t.bucket,
+		Key:                  key,
+		Days:                 defaultRestoreDays,
+		RestoreJobParameters: &tos.RestoreJobParameters{Tier: enum.TierStandard},
 	})
 	return err
 }

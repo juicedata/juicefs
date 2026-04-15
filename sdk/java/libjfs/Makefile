@@ -46,17 +46,17 @@ ceph: libjfs-ceph
 	gzip -c $(LIBFILE) > target/$(LIBFILE).gz
 
 libjfs-ceph: *.go ../../../pkg/*/*.go
-	go build -tags ceph -buildmode=c-shared -ldflags="$(LDFLAGS)" -o $(LIBFILE) .
+	go build -tags "ceph nogspt" -buildmode=c-shared -ldflags="$(LDFLAGS)" -o $(LIBFILE) .
 
 libjfs: *.go ../../../pkg/*/*.go
-	go build -buildmode=c-shared -ldflags="$(LDFLAGS)" -o $(LIBFILE) .
+	go build -tags nogspt -buildmode=c-shared -ldflags="$(LDFLAGS)" -o $(LIBFILE) .
 
 linux-arm64: libjfs-arm64.so
 	mkdir -p target
 	gzip -c libjfs-arm64.so > target/libjfs-arm64.so.gz
 
 libjfs-arm64.so: *.go ../../../pkg/*/*.go
-	GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc go build -buildmode=c-shared -ldflags="$(LDFLAGS)" -o libjfs-arm64.so .
+	GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc go build -tags nogspt -buildmode=c-shared -ldflags="$(LDFLAGS)" -o libjfs-arm64.so .
 
 mac: libjfs.dylib
 	mkdir -p target
@@ -64,7 +64,7 @@ mac: libjfs.dylib
 
 libjfs.dylib: *.go ../../../pkg/*/*.go
 	GOOS=darwin CGO_ENABLED=1 CC=o64-clang go build -o libjfs-amd64.dylib \
-	-buildmode=c-shared -ldflags="$(LDFLAGS)"
+	-tags nogspt -buildmode=c-shared -ldflags="$(LDFLAGS)"
 
 mac-arm64: libjfs-arm64.dylib
 	mkdir -p target
@@ -72,7 +72,7 @@ mac-arm64: libjfs-arm64.dylib
 
 libjfs-arm64.dylib: *.go ../../../pkg/*/*.go
 	GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 CC=o64-clang go build -o libjfs-arm64.dylib \
-	-buildmode=c-shared -ldflags="$(LDFLAGS)"
+	-tags nogspt -buildmode=c-shared -ldflags="$(LDFLAGS)"
 
 /usr/local/include/winfsp:
 	mkdir -p /usr/local/include/winfsp
@@ -84,4 +84,4 @@ win: libjfs.dll
 
 libjfs.dll: /usr/local/include/winfsp *.go ../../../pkg/*/*.go
 	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -o libjfs-amd64.dll \
-	-buildmode=c-shared -ldflags="$(LDFLAGS)"
+	-tags nogspt -buildmode=c-shared -ldflags="$(LDFLAGS)"

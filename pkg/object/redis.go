@@ -152,7 +152,7 @@ func (t *redisStore) ListAll(ctx context.Context, prefix, marker string, followL
 						}
 					}
 					// FIXME: mtime
-					objs <- &obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/"), ""}
+					objs <- &obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/"), "", ""}
 				}
 			}
 		}
@@ -173,6 +173,7 @@ func (t *redisStore) Head(ctx context.Context, key string) (Object, error) {
 		int64(len(data)),
 		time.Now(),
 		strings.HasSuffix(key, "/"),
+		"",
 		"",
 	}, err
 }

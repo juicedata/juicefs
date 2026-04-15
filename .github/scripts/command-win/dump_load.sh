@@ -35,6 +35,7 @@ test_dump_load_sustained_file(){
     fi
     echo "sustained file count: $sustained"
     ./juicefs.exe umount z:
+    sleep 3
     prepare_win_test
     ./juicefs.exe load $META_URL dump.json $(get_load_option)
     ./juicefs.exe mount -d $META_URL z:
@@ -50,6 +51,7 @@ test_dump_load_with_copy_file_range(){
     node .github/scripts/copyFile.js /z/test /z/test1
     ./juicefs.exe dump $META_URL dump.json $(get_dump_option)
     ./juicefs.exe umount z:
+    sleep 3
     redis-cli -h 127.0.0.1 -p 6379 -n 1 FLUSHDB
     ./juicefs.exe load $META_URL dump.json $(get_load_option)
     ./juicefs.exe mount -d $META_URL z:
@@ -64,6 +66,7 @@ test_dump_load_with_quota(){
     ./juicefs.exe quota set $META_URL --path //d --inodes 1000 --capacity 1
     ./juicefs.exe dump --log-level error $META_URL $(get_dump_option) > dump.json
     ./juicefs.exe umount z:
+    sleep 3
     redis-cli -h 127.0.0.1 -p 6379 -n 1 FLUSHDB
     ./juicefs.exe load $META_URL dump.json $(get_load_option)
     ./juicefs.exe mount $META_URL z: -d --heartbeat $HEARTBEAT_INTERVAL

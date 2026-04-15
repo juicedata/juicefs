@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"math"
 	"sort"
 
 	"github.com/dustin/go-humanize"
@@ -133,17 +134,26 @@ func quota(c *cli.Context) error {
 	case "check":
 		cmd = meta.QuotaCheck
 	default:
-		logger.Fatalf("Invalid quota command: %s", c.Command.Name)
+		logger.Fatalf("Invalid quota command: %q", c.Command.Name)
 	}
 
-
 	var uid, gid uint32
-	var quotaKey string
-	var quotaType string
+	var qkey string
+	var qtype uint32
+	validateID := func(name string) uint32 {
+		id := c.Uint64(name)
+		if id == 0 && name == "uid" {
+			logger.Fatalf("Invalid --uid: 0 is not allowed")
+		}
+		if id > math.MaxUint32 {
+			logger.Fatalf("Invalid --%q: %d exceeds maximum value %d", name, id, math.MaxUint32)
+		}
+		return uint32(id)
+	}
 	if c.IsSet("uid") {
-		uid = uint32(c.Uint64("uid"))
-		quotaKey = meta.UGQuotaKey
-		quotaType = "user"
+		uid = validateID("uid")
+		qkey = fmt.Sprintf("%d", uid)
+		qtype = meta.UserQuotaType
 		if c.IsSet("gid") {
 			logger.Fatalf("Cannot specify both --uid and --gid at the same time")
 		}
@@ -151,19 +161,23 @@ func quota(c *cli.Context) error {
 			logger.Fatalf("Cannot specify both --uid and --path at the same time")
 		}
 	} else if c.IsSet("gid") {
-		gid = uint32(c.Uint64("gid"))
-		quotaKey = meta.UGQuotaKey
-		quotaType = "group"
+		gid = validateID("gid")
+		qkey = fmt.Sprintf("%d", gid)
+		qtype = meta.GroupQuotaType
 		if c.IsSet("path") {
 			logger.Fatalf("Cannot specify both --gid and --path at the same time")
 		}
+	} else if c.IsSet("path") {
+		qkey = c.String("path")
+		qtype = meta.DirQuotaType
 	} else {
-		dpath := c.String("path")
-		if dpath == "" && cmd != meta.QuotaList {
-			logger.Fatalf("Please specify the directory with `--path <dir>` option")
+		if cmd == meta.QuotaList {
+			qtype = meta.AllQuotaType
+		} else if cmd == meta.QuotaCheck {
+			qtype = meta.UserQuotaType // check user and group quotas by default
+		} else {
+			logger.Fatalf("Please specify the directory with `--path <dir>` option or specify user/group with `--uid <uid>`/`--gid <gid>` option")
 		}
-		quotaKey = dpath
-		quotaType = "directory"
 	}
 
 	removePassword(c.Args().Get(0))
@@ -184,34 +198,43 @@ func quota(c *cli.Context) error {
 		if c.IsSet("inodes") {
 			q.MaxInodes = int64(c.Uint64("inodes"))
 		}
-		qs[quotaKey] = q
+		qs[qkey] = q
 	} else if cmd == meta.QuotaCheck {
 		strict = c.Bool("strict")
 		repair = c.Bool("repair")
 	}
 
-	if err := m.HandleQuota(meta.Background(), cmd, quotaKey, uid, gid, qs, strict, repair, c.Bool("create")); err != nil {
+	if err := m.HandleQuota(meta.Background(), cmd, qkey, qtype, qs, strict, repair, c.Bool("create")); err != nil {
 		return err
 	} else if len(qs) == 0 {
 		return nil
 	}
 
-	result := make([][]string, 1, len(qs)+1)
-	
-	if quotaType == "user" {
-		result[0] = []string{"User ID", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
-	} else if quotaType == "group" {
-		result[0] = []string{"Group ID", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
-	} else {
-		result[0] = []string{"Path", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
-	}
+	printQuotaResult(qtype, qs)
+	return nil
+}
 
-	paths := make([]string, 0, len(qs))
-	for p := range qs {
-		paths = append(paths, p)
+func printQuotaResult(qtype uint32, qs map[string]*meta.Quota) {
+	result := make([][]string, 1, len(qs)+1)
+	var firstCol string
+	switch qtype {
+	case meta.UserQuotaType:
+		firstCol = "User ID"
+	case meta.GroupQuotaType:
+		firstCol = "Group ID"
+	case meta.DirQuotaType:
+		firstCol = "Path"
+	default:
+		firstCol = "Path/ID"
 	}
-	sort.Strings(paths)
-	for _, p := range paths {
+	result[0] = []string{firstCol, "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
+
+	keys := make([]string, 0, len(qs))
+	for p := range qs {
+		keys = append(keys, p)
+	}
+	sort.Strings(keys)
+	for _, p := range keys {
 		q := qs[p]
 		if q.UsedSpace < 0 {
 			logger.Warnf("Used space of %s is negative (%d), please run `juicefs quota check` to fix it", p, q.UsedSpace)
@@ -222,32 +245,19 @@ func quota(c *cli.Context) error {
 			q.UsedInodes = 0
 		}
 		used := humanize.IBytes(uint64(q.UsedSpace))
-		var size, usedR string
+		iused := humanize.Comma(q.UsedInodes)
+		size, usedR := "unchanged", ""
 		if q.MaxSpace > 0 {
 			size = humanize.IBytes(uint64(q.MaxSpace))
 			usedR = fmt.Sprintf("%d%%", q.UsedSpace*100/q.MaxSpace)
-		} else {
-			size = "unchanged"
 		}
-		iused := humanize.Comma(q.UsedInodes)
-		var itotal, iusedR string
+		itotal, iusedR := "unchanged", ""
 		if q.MaxInodes > 0 {
 			itotal = humanize.Comma(q.MaxInodes)
 			iusedR = fmt.Sprintf("%d%%", q.UsedInodes*100/q.MaxInodes)
-		} else {
-			itotal = "unchanged"
 		}
-		
-		var identifier string
-		if quotaType == "user" {
-			identifier = fmt.Sprintf("UID:%d", uid)
-		} else if quotaType == "group" {
-			identifier = fmt.Sprintf("GID:%d", gid)
-		} else {
-			identifier = p
-		}
-		result = append(result, []string{identifier, size, used, usedR, itotal, iused, iusedR})
+
+		result = append(result, []string{p, size, used, usedR, itotal, iused, iusedR})
 	}
 	printResult(result, 0, false)
-	return nil
 }

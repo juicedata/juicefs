@@ -79,6 +79,7 @@ func (c *b2client) Head(ctx context.Context, key string) (Object, error) {
 		time.Unix(f.UploadTimestamp/1000, 0),
 		strings.HasSuffix(f.Name, "/"),
 		"",
+		"",
 	}, nil
 }
 
@@ -144,6 +145,7 @@ func (c *b2client) List(ctx context.Context, prefix, startAfter, token, delimite
 			f.ContentLength,
 			time.Unix(f.UploadTimestamp/1000, 0),
 			strings.HasSuffix(f.Name, "/"),
+			"",
 			"",
 		})
 	}

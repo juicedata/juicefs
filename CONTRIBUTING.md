@@ -2,7 +2,7 @@
 
 ## Guidelines
 
-- Before starting work on a feature or bug fix, please search GitHub or reach out to us via GitHub, Slack etc. The purpose of this step is make sure no one else is already working on it and we'll ask you to open a GitHub issue if necessary.
+- Before starting work on a feature or bug fix, please search GitHub or reach out to us via GitHub, Discord etc. The purpose of this step is to make sure that no one else is already working on it; if necessary, we'll ask you to open a GitHub issue.
 - We will use the GitHub issue to discuss the feature and come to agreement. This is to prevent your time being wasted, as well as ours.
 - If it is a major feature update, we highly recommend you also write a design document to help the community understand your motivation and solution.
 - A good way to find a project properly sized for a first time contributor is to search for open issues with the label ["kind/good-first-issue"](https://github.com/juicedata/juicefs/labels/kind%2Fgood-first-issue) or ["kind/help-wanted"](https://github.com/juicedata/juicefs/labels/kind%2Fhelp-wanted).

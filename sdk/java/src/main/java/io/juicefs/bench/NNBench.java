@@ -55,9 +55,6 @@ public class NNBench extends Main.Command {
   protected static String OUTPUT_DIR_NAME = "output";
   protected static String DATA_DIR_NAME = "data";
 
-  public static long startTime =
-          System.currentTimeMillis() + (30 * 1000); // default is 'now' + 30s
-
   @Parameter(description = "[create | open | rename | delete]", required = true)
   public static String operation;
   @Parameter(names = {"-maps"}, description = "number of maps")
@@ -73,6 +70,8 @@ public class NNBench extends Main.Command {
   public static boolean deleteBeforeRename;
   @Parameter(names = {"-local"}, description = "run in local single process")
   private boolean local;
+  @Parameter(names = {"-startTime"}, description = "start time in milliseconds")
+  public long startTime = System.currentTimeMillis() + (30 * 1000);
 
   // Supported operations
   private static final String OP_CREATE = "create";
