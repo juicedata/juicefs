@@ -47,7 +47,8 @@ install_tikv(){
     fi
     echo tiup is $tiup
     echo $(whoami) $(pwd)
-    $tiup playground 5.4.0 --mode tikv-slim > tikv.log 2>&1  &
+    # TODO update to latest TiDB 
+    $tiup playground 8.5.5 --mode tikv-slim > tikv.log 2>&1  &
     pid=$!
     timeout=60
     count=0
@@ -92,7 +93,7 @@ install_tidb(){
     fi
     echo tiup is $tiup
     
-    $tiup playground 5.4.0 > tidb.log 2>&1  &
+    $tiup playground 8.5.5 > tidb.log 2>&1  &
     pid=$!
     timeout=60
     count=0
