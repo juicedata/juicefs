@@ -48,6 +48,15 @@ var logger = utils.GetLogger("juicefs")
 
 const invalidFileHandle = uint64(0xffffffffffffffff)
 
+const (
+	// PR #614 merged on 2025-08-07. WinFsp build numbers follow YYDDD,
+	// so 2.1.25219 is the first build that can include FlushOnCleanup.
+	minWinFspVersionFlushOnCleanup = "2.1.25219"
+	// PR #648 merged on 2026-02-05. WinFsp build numbers follow YYDDD,
+	// so 2.1.26036 is the first build that can include AddWriteEaAccess.
+	minWinFspVersionAddWriteEaAccess = "2.1.26036"
+)
+
 type Ino = meta.Ino
 
 type handleInfo struct {
@@ -1008,7 +1017,6 @@ func compareWinFspVersion(v1, v2 string) int {
 		}
 		return result
 	}
-
 	p1 := parseVersion(v1)
 	p2 := parseVersion(v2)
 
@@ -1100,6 +1108,41 @@ func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFi
 	if asRoot {
 		options += ",uid=-1,gid=-1"
 	}
+	addWriteEaAccess := c.Bool("add-write-ea-access")
+	flushOnCleanup := c.Bool("flush-on-cleanup")
+	if addWriteEaAccess || flushOnCleanup {
+		winFSPVersion := getWinFspVersion()
+		if winFSPVersion == "" {
+			if addWriteEaAccess {
+				logger.Warningf("Failed to detect WinFsp version, disabling AddWriteEaAccess")
+				addWriteEaAccess = false
+			}
+			if flushOnCleanup {
+				logger.Warningf("Failed to detect WinFsp version, disabling flush-on-cleanup")
+				flushOnCleanup = false
+			}
+		} else {
+			if addWriteEaAccess {
+				if compareWinFspVersion(winFSPVersion, minWinFspVersionAddWriteEaAccess) < 0 {
+					logger.Warningf("WinFsp version %s < %s, AddWriteEaAccess disabled", winFSPVersion, minWinFspVersionAddWriteEaAccess)
+					addWriteEaAccess = false
+				} else {
+					logger.Debugf("WinFsp version %s >= %s, AddWriteEaAccess enabled", winFSPVersion, minWinFspVersionAddWriteEaAccess)
+				}
+			}
+			if flushOnCleanup {
+				if compareWinFspVersion(winFSPVersion, minWinFspVersionFlushOnCleanup) < 0 {
+					logger.Warningf("WinFsp version %s < %s, flush-on-cleanup disabled", winFSPVersion, minWinFspVersionFlushOnCleanup)
+					flushOnCleanup = false
+				} else {
+					logger.Debugf("WinFsp version %s >= %s, flush-on-cleanup enabled", winFSPVersion, minWinFspVersionFlushOnCleanup)
+				}
+			}
+		}
+	}
+	if addWriteEaAccess {
+		options += ",AddWriteEaAccess"
+	}
 	if fuseOpt != "" {
 		options += "," + fuseOpt
 	}
@@ -1111,22 +1154,6 @@ func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFi
 	if winfspDbgLog != "" {
 		logger.Infof("WinFsp Debug Log Path: %s", winfspDbgLog)
 		options += ",debug,DebugLog=" + winfspDbgLog
-	}
-	flushOnCleanup := c.Bool("flush-on-cleanup")
-	if flushOnCleanup {
-		winFSPVersion := getWinFspVersion()
-		if winFSPVersion == "" {
-			logger.Warningf("Failed to detect WinFsp version, disabling flush-on-cleanup")
-			flushOnCleanup = false
-		} else {
-			const minVersion = "2.1.25156"
-			if compareWinFspVersion(winFSPVersion, minVersion) <= 0 {
-				logger.Warningf("Winfsp version %s <= %s, flush-on-cleanup disabled", winFSPVersion, minVersion)
-				flushOnCleanup = false
-			} else {
-				logger.Debugf("Winfsp version %s > %s, flush-on-cleanup enabled", winFSPVersion, minVersion)
-			}
-		}
 	}
 	if flushOnCleanup {
 		options += ",FlushOnCleanup=1"
