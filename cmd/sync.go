@@ -237,6 +237,10 @@ func syncActionFlags() []cli.Flag {
 			Name:  "enable-checkpoint",
 			Usage: "enable checkpoint for resumable sync",
 		},
+		&cli.BoolFlag{
+			Name:  "checkpoint-force-reset",
+			Usage: "start from scratch and overwrite existing checkpoint",
+		},
 		&cli.StringFlag{
 			Name:  "checkpoint-interval",
 			Value: "10s",
