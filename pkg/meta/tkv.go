@@ -865,12 +865,23 @@ func (m *kvMeta) genLog(tx *kvTxn, ts time.Time, op string, args ...any) {
 
 func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
 	if last == 0 {
-		// TODO:  get last log
+		// Scan to find the latest log key
+		end := m.logKey(^uint64(0))
+		_ = m.client.simpleTxn(context.Background(), func(kt *kvTxn) error {
+			kt.scan(m.logKey(0), end, true, func(k, v []byte) bool {
+				last = int64(binary.BigEndian.Uint64(k[3:]))
+				return true
+			})
+			return nil
+		}, 0)
 		logger.Infof("last version is %d", last)
 	}
 	saw := make(map[uint64]uint32)
 	end := m.logKey(^uint64(0))
 	for {
+		if ctx.Canceled() {
+			return context.Canceled
+		}
 		err := m.client.simpleTxn(context.Background(), func(kt *kvTxn) error {
 			var err error
 			begin := m.logKey(m.client.rewind(uint64(last)))
@@ -2202,7 +2213,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if dupdate {
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		}
-		m.genLog(tx, now, "RENAME(%d,%s,%d,%s,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, ino)
+		m.genLog(tx, now, "MOVE(%d,%s,%d,%s,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, ino)
 		return nil
 	}, parentLocks...)
 
@@ -2387,6 +2398,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(time.Now().Unix()))
 		tx.delete(m.inodeKey(inode))
 		tx.delete(m.sustainedKey(sid, inode))
+		m.genLog(tx, time.Now(), "DELSUSTAINED(%d,%d)", sid, inode)
 		return nil
 	}, inode)
 	if err == nil && newSpace < 0 {
@@ -4287,7 +4299,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		case TypeSymlink:
 			tx.set(m.symKey(ino), tx.get(m.symKey(srcIno)))
 		}
-		m.genLog(tx, time.Now(), "CLONE(%d,%d,%s,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
+		m.genLog(tx, time.Now(), "CLONE(%d,%d,%s,%d,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
 		return nil
 	}, srcIno))
 }
@@ -4322,7 +4334,7 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		tx.deleteKeys(m.xattrKey(ino, ""))
 		tx.delete(m.dirStatKey(ino))
 		tx.delete(m.detachedKey(ino))
-		m.genLog(tx, time.Now(), "DETACH(%d)", ino)
+		m.genLog(tx, time.Now(), "CLEANUP(%d)", ino)
 		return nil
 	}, ino))
 }
@@ -4544,7 +4556,7 @@ func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 		tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		tx.set(m.entryKey(parent, name), m.packEntry(TypeDirectory, inode))
 		tx.delete(m.detachedKey(inode))
-		m.genLog(tx, now, "ATTACH(%d,%d,%s)", inode, parent, name)
+		m.genLog(tx, now, "ATTACH(%d,%d,%s)", inode, parent, logEncode2(name))
 		return nil
 	}, parent))
 }
@@ -4627,6 +4639,7 @@ func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			tx.set(m.inodeKey(ino), m.marshal(attr))
+			m.genLog(tx, now, "SETFACL(%d,%d)", ino, aclType)
 		}
 		return nil
 	}, ino))

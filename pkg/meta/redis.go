@@ -34,6 +34,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -1258,7 +1259,7 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 				pipe.RPush(ctx, m.chunkKey(inode, uint32(right/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize)))
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), delta.space)
-			m.genLog(ctx, pipe, now, "TRUNCATE(%s,%d,%d)", inode, length, flags)
+			m.genLog(ctx, pipe, now, "TRUNCATE(%d,%d,%d)", inode, length, flags)
 			return nil
 		})
 		if err == nil {
@@ -1328,7 +1329,7 @@ func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, 
 				}
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(length)-align4K(old))
-			m.genLog(ctx, pipe, now, "FALLOCATE(%s,%d,%d,%d)", inode, off, size, mode)
+			m.genLog(ctx, pipe, now, "FALLOCATE(%d,%d,%d,%d)", inode, off, size, mode)
 			return nil
 		})
 		if err == nil {
@@ -1377,6 +1378,7 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(dirtyAttr), 0)
+			m.genLog(ctx, pipe, now, "SETATTR(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", inode, set, sugidclearmode, dirtyAttr.Uid, dirtyAttr.Gid, dirtyAttr.Mode, dirtyAttr.Flags, dirtyAttr.Atime, dirtyAttr.Mtime, dirtyAttr.Atimensec, dirtyAttr.Mtimensec)
 			return nil
 		})
 		if err == nil {
@@ -1565,7 +1567,11 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			pipe.Incr(ctx, m.totalInodesKey())
-			m.genLog(ctx, pipe, now, "CREATE(%d,%s,%d,%d,%d,%s,%t):%d", parent, name, ctx.Uid(), ctx.Gid(), mode, ctx.Value(CtxKey("behavior")), updateParent, *inode)
+			behavior := ctx.Value(CtxKey("behavior"))
+			if behavior == nil {
+				behavior = runtime.GOOS
+			}
+			m.genLog(ctx, pipe, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, *inode)
 			return nil
 		})
 		return err
@@ -1603,6 +1609,9 @@ func (m *redisMeta) ScanChangelog(ctx Context, last int64, handler func(ver int6
 		logger.Infof("last version is %d", last)
 	}
 	for {
+		if ctx.Canceled() {
+			return context.Canceled
+		}
 		p := m.rdb.Pipeline()
 		var rs []redis.Cmder
 		p.Get(ctx, m.txnLastLog())
@@ -1802,7 +1811,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 					pipe.Del(ctx, m.parentKey(inode))
 				}
 			}
-			m.genLog(ctx, pipe, now, "UNLINK(%d,%s,%d,%t,%t,%t):%d", parent, name, trash, updateParent, opened, inode)
+			m.genLog(ctx, pipe, now, "UNLINK(%d,%s,%d,%t,%t):%d", parent, logEncode2(name), trash, opened, updateParent, inode)
 			return nil
 		})
 
@@ -2026,6 +2035,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 
 			// collect data for batch operations
 			var names []string
+			var encodedNames []string
+			var inodeStrs []string
 			var keys []string
 			var sustained []interface{}
 			var delfiles []redis.Z
@@ -2036,6 +2047,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 
 			for _, info := range entryInfos {
 				names = append(names, info.name)
+				encodedNames = append(encodedNames, logEncode2(info.name))
+				inodeStrs = append(inodeStrs, strconv.FormatUint(uint64(info.inode), 10))
 				if info.attr == nil {
 					continue
 				}
@@ -2174,7 +2187,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 				if updateParent {
 					pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 				}
-				m.genLog(ctx, pipe, now, "UNLINKBATCH(%d,%s,%d,%t):%d", parent, strings.Join(names, ","), trash, updateParent, len(entryInfos))
+				m.genLog(ctx, pipe, now, "UNLINKBATCH(%d,%s,%d,%t):%s", parent, strings.Join(encodedNames, ","), trash, updateParent, strings.Join(inodeStrs, ","))
 				return nil
 			})
 			return err
@@ -2309,7 +2322,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 			pipe.HDel(ctx, m.dirQuotaKey(), field)
 			pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
 			pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
-			m.genLog(ctx, pipe, now, "RMDIR(%d,%s,%d,%t):%d", parent, name, trash, !parent.IsTrash(), inode)
+			m.genLog(ctx, pipe, now, "RMDIR(%d,%s,%d):%d", parent, logEncode2(name), trash, inode)
 			return nil
 		})
 		return err
@@ -2630,7 +2643,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			if dupdate {
 				pipe.Set(ctx, m.inodeKey(parentDst), m.marshal(&dattr), 0)
 			}
-			m.genLog(ctx, pipe, now, "MOVE(%d,%s,%d,%s,%d,%t):%d", parentSrc, nameSrc, parentDst, nameDst, dino, !parentSrc.IsTrash(), ino)
+			m.genLog(ctx, pipe, now, "MOVE(%d,%s,%d,%s,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, ino)
 			return nil
 		})
 		return err
@@ -2717,7 +2730,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 				pipe.HIncrBy(ctx, m.parentKey(inode), oldParent.String(), 1)
 			}
 			pipe.HIncrBy(ctx, m.parentKey(inode), parent.String(), 1)
-			m.genLog(ctx, pipe, now, "LINK(%d,%d,%s):%d", inode, parent, name, iattr.Nlink)
+			m.genLog(ctx, pipe, now, "LINK(%d,%d,%s,%t):%d", inode, parent, logEncode2(name), updateParent, iattr.Nlink)
 			return nil
 		})
 		if err == nil && attr != nil {
@@ -2962,6 +2975,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 			pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 			pipe.Decr(ctx, m.totalInodesKey())
 			pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
+			m.genLog(ctx, pipe, time.Now(), "DELSUSTAINED(%d,%d)", sid, inode)
 			return nil
 		})
 		return err
@@ -3186,7 +3200,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			if newSpace > 0 {
 				pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 			}
-			m.genLog(ctx, pipe, now, "COPYFILE(%d,%d,%d,%d,%d):%d", fin, offIn, fout, offOut, size, attr.Length)
+			m.genLog(ctx, pipe, now, "COPYFILERANGE(%d,%d,%d,%d,%d):%d", fin, offIn, fout, offOut, size, attr.Length)
 			return nil
 		})
 		if err == nil {
@@ -3259,7 +3273,7 @@ func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno
 			pipe.HSet(ctx, m.dirDataLengthKey(), field, stat.length)
 			pipe.HSet(ctx, m.dirUsedSpaceKey(), field, stat.space)
 			pipe.HSet(ctx, m.dirUsedInodesKey(), field, stat.inodes)
-			m.genLog(ctx, pipe, time.Now(), "DIRSTAT(%d):(%d,%d,%d)", ino, stat.length, stat.space, stat.inodes)
+			m.genLog(ctx, pipe, time.Now(), "DIRSTAT(%d,%d,%d,%d)", ino, stat.length, stat.space, stat.inodes)
 			return nil
 		})
 		return err
@@ -3711,7 +3725,7 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 					}
 				}
 			}
-			m.genLog(ctx, pipe, time.Now(), "COMPACTCHUNK(%d,%d,%d,%d,%d,%d)", inode, indx, n, skipped, id, size)
+			m.genLog(ctx, pipe, time.Now(), "COMPACTCHUNK(%d,%d,%d,%d,%d,%d,%d)", inode, indx, skipped, n, pos, id, size)
 			return nil
 		})
 		return err
@@ -4146,7 +4160,7 @@ func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		}
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
-			m.genLog(ctx, pipe, time.Now(), "REPAIR(%d)", inode)
+			m.genLog(ctx, pipe, time.Now(), "REPAIRDIR(%d)", inode)
 			return nil
 		})
 		return err
@@ -4190,32 +4204,30 @@ func (m *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	key := m.xattrKey(inode)
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
-		// TODO: log
 		switch flags {
 		case XattrCreate:
-			ok, err := tx.HSetNX(ctx, key, name, value).Result()
+			ok, err := tx.HExists(ctx, key, name).Result()
+			if err != nil {
+				return err
+			}
+			if ok {
+				return syscall.EEXIST
+			}
+		case XattrReplace:
+			ok, err := tx.HExists(ctx, key, name).Result()
 			if err != nil {
 				return err
 			}
 			if !ok {
-				return syscall.EEXIST
-			}
-			return nil
-		case XattrReplace:
-			if ok, err := tx.HExists(ctx, key, name).Result(); err != nil {
-				return err
-			} else if !ok {
 				return ENOATTR
 			}
-			_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.HSet(ctx, key, name, value)
-				return nil
-			})
-			return err
-		default: // XattrCreateOrReplace
-			_, err := tx.HSet(ctx, key, name, value).Result()
-			return err
 		}
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(ctx, key, name, value)
+			m.genLog(ctx, pipe, time.Now(), "SETXATTR(%d,%s,%s)", inode, name, logEncode(value))
+			return nil
+		})
+		return err
 	}, key))
 }
 
@@ -5285,7 +5297,7 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 				}
 				p.Set(ctx, m.symKey(ino), path, 0)
 			}
-			m.genLog(ctx, p, time.Now(), "CLONE(%d,%d)", srcIno, ino)
+			m.genLog(ctx, p, time.Now(), "CLONE(%d,%d,%s,%d,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
 			return nil
 		})
 		return err
@@ -5370,7 +5382,7 @@ func (m *redisMeta) doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name st
 			pattr.Ctimensec = uint32(now.Nanosecond())
 			p.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			p.ZRem(ctx, m.detachedNodes(), dstIno.String())
-			m.genLog(ctx, p, now, "ATTACH(%d,%d,%s)", dstIno, parent, name)
+			m.genLog(ctx, p, now, "ATTACH(%d,%d,%s)", dstIno, parent, logEncode2(name))
 			return nil
 		})
 		return err
@@ -5459,6 +5471,7 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 			attr.Ctimensec = uint32(now.Nanosecond())
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
+				m.genLog(ctx, pipe, now, "SETFACL(%d,%d)", ino, aclType)
 				return nil
 			})
 			return err
