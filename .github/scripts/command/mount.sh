@@ -972,5 +972,218 @@ test_sm4gcm_data_not_plaintext_in_storage() {
     echo "PASS: test_sm4gcm_data_not_plaintext_in_storage"
 }
 
+test_skip_trash_basic() {
+    # Test: chattr +s on directory makes deleted files skip .trash
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs --enable-ioctl
+
+    # First verify normal trash behavior (without +s)
+    mkdir -p /jfs/normal_dir
+    echo "normal_data" > /jfs/normal_dir/normal_file.txt
+    rm /jfs/normal_dir/normal_file.txt
+    sleep 1
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -eq 0 ]]; then
+        echo "FAIL: normal file should go to .trash but trash is empty"
+        exit 1
+    fi
+    echo "OK: normal file moved to .trash as expected (count=$trash_count)"
+
+    # Clean trash for next check
+    ./juicefs rmr /jfs/.trash
+    rm -rf /jfs/normal_dir
+
+    # Now test skip-trash with chattr +s
+    mkdir -p /jfs/skip_dir
+    chattr +s /jfs/skip_dir
+    echo "skip_data" > /jfs/skip_dir/skip_file.txt
+    rm /jfs/skip_dir/skip_file.txt
+    sleep 1
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -ne 0 ]]; then
+        echo "FAIL: file with skip-trash flag should NOT go to .trash (count=$trash_count)"
+        find /jfs/.trash -type f 2>/dev/null
+        exit 1
+    fi
+    echo "OK: file with +s flag was permanently deleted, not in .trash"
+    echo "PASS: test_skip_trash_basic"
+}
+
+test_skip_trash_inherit() {
+    # Test: files/subdirs created under +s directory inherit the skip-trash flag
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs --enable-ioctl
+
+    mkdir -p /jfs/inherit_dir
+    chattr +s /jfs/inherit_dir
+
+    # Verify parent has +s
+    lsattr -d /jfs/inherit_dir | grep -q "s-" || {
+        echo "FAIL: parent directory should have 's' attribute"
+        lsattr -d /jfs/inherit_dir
+        exit 1
+    }
+
+    # Create file and subdir under +s directory
+    echo "inherit_test" > /jfs/inherit_dir/child_file.txt
+    mkdir -p /jfs/inherit_dir/child_dir
+    echo "nested" > /jfs/inherit_dir/child_dir/nested_file.txt
+    sleep 1
+
+    # Check that child file inherits +s
+    lsattr /jfs/inherit_dir/child_file.txt | grep -q "s-" || {
+        echo "FAIL: child file should inherit 's' attribute"
+        lsattr /jfs/inherit_dir/child_file.txt
+        exit 1
+    }
+
+    # Check that child dir inherits +s
+    lsattr -d /jfs/inherit_dir/child_dir | grep -q "s-" || {
+        echo "FAIL: child directory should inherit 's' attribute"
+        lsattr -d /jfs/inherit_dir/child_dir
+        exit 1
+    }
+
+    # Check that nested file (created under inherited +s dir) also has +s
+    lsattr /jfs/inherit_dir/child_dir/nested_file.txt | grep -q "s-" || {
+        echo "FAIL: nested file should inherit 's' attribute"
+        lsattr /jfs/inherit_dir/child_dir/nested_file.txt
+        exit 1
+    }
+
+    # Now delete the inherited files and verify they skip trash
+    rm /jfs/inherit_dir/child_file.txt
+    rm /jfs/inherit_dir/child_dir/nested_file.txt
+    sleep 1
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -ne 0 ]]; then
+        echo "FAIL: inherited +s files should NOT go to .trash (count=$trash_count)"
+        find /jfs/.trash -type f 2>/dev/null
+        exit 1
+    fi
+    echo "OK: inherited +s files were permanently deleted"
+    echo "PASS: test_skip_trash_inherit"
+}
+
+test_skip_trash_rename_overwrite() {
+    # Test: rename overwriting a target with +s flag skips trash for the target
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs --enable-ioctl
+
+    mkdir -p /jfs/rename_dir
+    chattr +s /jfs/rename_dir
+
+    # Create target file (inherits +s from parent)
+    echo "target_data" > /jfs/rename_dir/target.txt
+    sleep 1
+
+    # Verify target has +s
+    lsattr /jfs/rename_dir/target.txt | grep -q "s-" || {
+        echo "FAIL: target file should have 's' attribute"
+        lsattr /jfs/rename_dir/target.txt
+        exit 1
+    }
+
+    # Create source file outside +s directory (no +s flag)
+    echo "source_data" > /jfs/source.txt
+
+    # Rename source over target — target should skip trash
+    mv /jfs/source.txt /jfs/rename_dir/target.txt
+    sleep 1
+
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -ne 0 ]]; then
+        echo "FAIL: overwritten +s target should NOT go to .trash (count=$trash_count)"
+        find /jfs/.trash -type f 2>/dev/null
+        exit 1
+    fi
+
+    # Verify the content is from source
+    content=$(cat /jfs/rename_dir/target.txt)
+    if [[ "$content" != "source_data" ]]; then
+        echo "FAIL: target content should be from source after rename"
+        exit 1
+    fi
+    echo "OK: rename overwrite of +s target skipped trash"
+    echo "PASS: test_skip_trash_rename_overwrite"
+}
+
+test_skip_trash_remove_flag() {
+    # Test: removing +s flag restores normal trash behavior
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs --enable-ioctl
+
+    mkdir -p /jfs/toggle_dir
+    chattr +s /jfs/toggle_dir
+
+    # Create file (inherits +s)
+    echo "toggle_data1" > /jfs/toggle_dir/file1.txt
+    lsattr /jfs/toggle_dir/file1.txt | grep -q "s-" || {
+        echo "FAIL: file1 should have 's' attribute"
+        exit 1
+    }
+
+    # Remove +s from directory
+    chattr -s /jfs/toggle_dir
+
+    # Create new file (should NOT have +s since parent no longer has it)
+    echo "toggle_data2" > /jfs/toggle_dir/file2.txt
+    sleep 1
+
+    # file2 should not have +s
+    if lsattr /jfs/toggle_dir/file2.txt | grep -q "s-"; then
+        echo "FAIL: file2 should NOT have 's' attribute after removing flag from parent"
+        lsattr /jfs/toggle_dir/file2.txt
+        exit 1
+    fi
+
+    # Delete file2 — should go to .trash since it doesn't have +s
+    rm /jfs/toggle_dir/file2.txt
+    sleep 1
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -eq 0 ]]; then
+        echo "FAIL: file without +s should go to .trash"
+        exit 1
+    fi
+    echo "OK: file without +s went to .trash after flag removal"
+
+    # Clean trash
+    ./juicefs rmr /jfs/.trash
+
+    # Delete file1 — still has +s (was created when parent had +s), should skip trash
+    rm /jfs/toggle_dir/file1.txt
+    sleep 1
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -ne 0 ]]; then
+        echo "FAIL: file1 with +s should skip .trash (count=$trash_count)"
+        find /jfs/.trash -type f 2>/dev/null
+        exit 1
+    fi
+    echo "OK: file with +s still skips trash after parent flag removed"
+    echo "PASS: test_skip_trash_remove_flag"
+}
+
+test_skip_trash_without_ioctl() {
+    # Test: chattr should fail without --enable-ioctl
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs
+
+    mkdir -p /jfs/no_ioctl_dir
+    if chattr +s /jfs/no_ioctl_dir 2>/dev/null; then
+        # If chattr somehow succeeds, check if the flag is actually set
+        if lsattr -d /jfs/no_ioctl_dir 2>/dev/null | grep -q "s"; then
+            echo "FAIL: chattr +s should not work without --enable-ioctl"
+            exit 1
+        fi
+    fi
+    echo "OK: chattr +s correctly fails or has no effect without --enable-ioctl"
+    echo "PASS: test_skip_trash_without_ioctl"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@
 
