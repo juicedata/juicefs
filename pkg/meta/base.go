@@ -3353,7 +3353,7 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		// Batch clone files immediately (don't wait for subdirs to finish)
 		if len(nonDirEntries) > 0 {
 			batchEno := m.BatchClone(cloneCtx, srcIno, ino, nonDirEntries, cmode, cumask, count)
-			if batchEno == syscall.ENOTSUP {
+			if batchEno == batchCloneFallbackErr {
 				// Fallback: clone each file concurrently
 				for _, e := range nonDirEntries {
 					select {
@@ -3377,7 +3377,7 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 						break
 					}
 				}
-				if eno == syscall.ENOTSUP {
+				if eno == batchCloneFallbackErr {
 					eno = 0
 				}
 			} else if batchEno != 0 {
