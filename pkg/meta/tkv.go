@@ -4068,6 +4068,33 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		dm.Setting.SessionToken = "removed"
 		logger.Warnf("Session token is removed for the sake of safety")
 	}
+	if m.getFormat().ChangeLog {
+		var maxKey uint64
+		err = m.client.txn(ctx, func(tx *kvTxn) error {
+			tx.scan(m.logKey(0), m.logKey(^uint64(0)), true, func(k, v []byte) bool {
+				maxKey = binary.BigEndian.Uint64(k[3:])
+				return true
+			})
+			if maxKey == 0 {
+				return nil
+			}
+			begin := m.logKey(m.client.rewind(maxKey))
+			end := m.logKey(maxKey + 1)
+			tx.scan(begin, end, false, func(k, v []byte) bool {
+				ver := binary.BigEndian.Uint64(k[3:])
+				dm.ChangeLog = append(dm.ChangeLog, &DumpedChangeLog{
+					Version: int64(ver),
+					Entry:   string(v),
+				})
+				return true
+			})
+			return nil
+		}, 0)
+		if err != nil {
+			return err
+		}
+		dm.Counters.LastChangelog = int64(maxKey)
+	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err

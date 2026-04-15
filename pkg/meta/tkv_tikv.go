@@ -205,6 +205,11 @@ func (c *tikvClient) rewind(id uint64) uint64 {
 	// TiKV's timestamp is in milliseconds, and the last 18 bits are for logical time,
 	// so we can rewind at most 10 seconds to avoid missing some logs
 	shift := uint64(10 * 1000 * (1 << 18))
+	if s := os.Getenv("JFS_TIKV_REWIND"); s != "" {
+		if d, err := time.ParseDuration(s); err == nil && d >= time.Millisecond {
+			shift = uint64(d.Milliseconds()) * (1 << 18)
+		}
+	}
 	if id > shift {
 		return id - shift
 	}

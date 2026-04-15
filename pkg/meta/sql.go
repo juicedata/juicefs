@@ -4865,6 +4865,12 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 				counters.NextTrash = row.Value
 			}
 		}
+		if m.getFormat().ChangeLog {
+			var maxLog changeLog
+			if ok, _ := s.Desc("id").Limit(1).Get(&maxLog); ok {
+				counters.LastChangelog = maxLog.Id
+			}
+		}
 
 		var srows []sustained
 		if err := s.Find(&srows); err != nil {

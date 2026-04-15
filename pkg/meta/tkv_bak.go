@@ -47,6 +47,7 @@ func (m *kvMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 		m.dumpACL,
 		m.dumpQuota,
 		m.dumpDirStat,
+		m.dumpChangeLog,
 	}
 	ts := m.client.config("startTS")
 	if ts == nil && m.Name() == "tikv" {
@@ -97,10 +98,20 @@ func printSums(sums map[int]*atomic.Uint64) string {
 
 func (m *kvMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	return m.txn(ctx, func(tx *kvTxn) error {
-		counters := make([]*pb.Counter, 0, len(counterNames))
+		counters := make([]*pb.Counter, 0, len(counterNames)+1)
 		for _, name := range counterNames {
 			val := tx.get(m.counterKey(name))
 			counters = append(counters, &pb.Counter{Key: name, Value: parseCounter(val)})
+		}
+		if m.getFormat().ChangeLog {
+			var maxKey uint64
+			tx.scan(m.logKey(0), m.logKey(^uint64(0)), true, func(k, v []byte) bool {
+				maxKey = binary.BigEndian.Uint64(k[3:])
+				return true
+			})
+			if maxKey > 0 {
+				counters = append(counters, &pb.Counter{Key: "lastChangelog", Value: int64(maxKey)})
+			}
 		}
 		return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Counters: counters}})
 	})
@@ -465,6 +476,34 @@ func (m *kvMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResu
 			return true
 		})
 		return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: stats}})
+	})
+}
+
+func (m *kvMeta) dumpChangeLog(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
+	if !m.getFormat().ChangeLog {
+		return nil
+	}
+	return m.txn(ctx, func(tx *kvTxn) error {
+		var maxKey uint64
+		tx.scan(m.logKey(0), m.logKey(^uint64(0)), true, func(k, v []byte) bool {
+			maxKey = binary.BigEndian.Uint64(k[3:])
+			return true
+		})
+		if maxKey == 0 {
+			return nil
+		}
+		begin := m.logKey(m.client.rewind(maxKey))
+		end := m.logKey(maxKey + 1)
+		changelogs := make([]*pb.ChangeLog, 0, kvDumpBatchSize)
+		tx.scan(begin, end, false, func(k, v []byte) bool {
+			ver := binary.BigEndian.Uint64(k[3:])
+			changelogs = append(changelogs, &pb.ChangeLog{
+				Version: int64(ver),
+				Entry:   v,
+			})
+			return true
+		})
+		return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Changelogs: changelogs}})
 	})
 }
 

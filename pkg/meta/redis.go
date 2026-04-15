@@ -4947,6 +4947,12 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 		UserQuotas:  userQuotas,
 		GroupQuotas: groupQuotas,
 	}
+	if m.getFormat().ChangeLog {
+		lastLog, err := m.rdb.Get(ctx, m.txnLastLog()).Int64()
+		if err == nil {
+			dm.Counters.LastChangelog = lastLog
+		}
+	}
 	root = m.checkRoot(root)
 	if root != RootInode {
 		dm.UserQuotas = nil

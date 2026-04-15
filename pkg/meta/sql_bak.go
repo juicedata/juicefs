@@ -314,9 +314,22 @@ func (m *dbMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 	}); err != nil {
 		return err
 	}
-	var counters = make([]*pb.Counter, 0, len(rows))
+	var counters = make([]*pb.Counter, 0, len(rows)+1)
 	for _, row := range rows {
 		counters = append(counters, &pb.Counter{Key: row.Name, Value: row.Value})
+	}
+	if m.getFormat().ChangeLog {
+		var maxLog changeLog
+		if err := m.execTxn(ctx, func(s *xorm.Session) error {
+			if ok, err := s.Desc("id").Limit(1).Get(&maxLog); err != nil {
+				return err
+			} else if ok {
+				counters = append(counters, &pb.Counter{Key: "lastChangelog", Value: maxLog.Id})
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
 	}
 	logger.Debugf("dump counters %+v", counters)
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Counters: counters}})
