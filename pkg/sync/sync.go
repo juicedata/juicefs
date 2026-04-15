@@ -1932,7 +1932,13 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if config.EnableCheckpoint && config.Manager == "" {
 		checkpointMgr = NewCheckpointManager(src, dst, config)
-		if ckpt, err := checkpointMgr.Load(); err == nil {
+		if config.CheckpointForceReset {
+			if err := checkpointMgr.DeleteCheckpoint(); err != nil && !errors.Is(err, os.ErrNotExist) {
+				logger.Warnf("Failed to delete existing checkpoint: %v", err)
+			}
+			checkpointMgr.Reset(config)
+			logger.Infof("Force reset checkpoint, starting fresh")
+		} else if ckpt, err := checkpointMgr.Load(); err == nil {
 			if checkpointMgr.ValidateConfig(config) {
 				if len(ckpt.PrefixState) > 0 || len(ckpt.SrcDelayDel) > 0 || len(ckpt.DstDelayDel) > 0 {
 					checkpoint = ckpt
