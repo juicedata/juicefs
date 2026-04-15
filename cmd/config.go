@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -98,6 +99,14 @@ func configManagementFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "changelog",
 			Usage: "enable changelog",
+		},
+		&cli.DurationFlag{
+			Name:  "changelog-max-age",
+			Usage: "max age of changelog entries (e.g. 2h, 30m); 0 to disable time-based cleanup",
+		},
+		&cli.Int64Flag{
+			Name:  "changelog-max-lines",
+			Usage: "max number of changelog entries to keep; 0 means unlimited",
 		},
 		&cli.StringFlag{
 			Name:  "tier-sc",
@@ -270,6 +279,28 @@ func config(ctx *cli.Context) error {
 			if new := ctx.Bool(flag); new != format.ChangeLog {
 				msg.WriteString(fmt.Sprintf("%10s: %t -> %t\n", flag, format.ChangeLog, new))
 				format.ChangeLog = new
+				if new && format.ChangeLogMaxAge == 0 && !ctx.IsSet("changelog-max-age") {
+					format.ChangeLogMaxAge = 7200
+					msg.WriteString(fmt.Sprintf("%10s: 0s -> %s (default)\n", "changelog-max-age", time.Duration(7200)*time.Second))
+				}
+			}
+		case "changelog-max-age":
+			d := ctx.Duration(flag)
+			if d < 0 {
+				return fmt.Errorf("negative duration for %s: %s", flag, d)
+			}
+			newAge := int64(d.Seconds())
+			if newAge != format.ChangeLogMaxAge {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, time.Duration(format.ChangeLogMaxAge)*time.Second, d))
+				format.ChangeLogMaxAge = newAge
+			}
+		case "changelog-max-lines":
+			if new := ctx.Int64(flag); new != format.ChangeLogMaxLines {
+				if new < 0 {
+					return fmt.Errorf("negative value for %s: %d", flag, new)
+				}
+				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.ChangeLogMaxLines, new))
+				format.ChangeLogMaxLines = new
 			}
 		case "user-group-quota":
 			if new := ctx.Bool(flag); new != format.UserGroupQuota {

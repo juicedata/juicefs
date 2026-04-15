@@ -1045,6 +1045,78 @@ func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 	}
 }
 
+func (m *dbMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines int64) error {
+	var cutoffID int64
+
+	if maxAge > 0 {
+		cutoff := time.Now().Add(-maxAge)
+		for {
+			var logs []changeLog
+			if err := m.roTxn(ctx, func(s *xorm.Session) error {
+				return s.Where("id > ?", cutoffID).Asc("id").Limit(1000).Find(&logs)
+			}); err != nil {
+				return err
+			}
+			if len(logs) == 0 {
+				break
+			}
+			expired := false
+			for _, log := range logs {
+				t, err := parseChangelogTime(log.Entry)
+				if err != nil {
+					continue
+				}
+				if t.Before(cutoff) {
+					cutoffID = log.Id
+					expired = true
+				} else {
+					expired = false
+					break
+				}
+			}
+			if !expired {
+				break
+			}
+		}
+	}
+
+	if maxLines > 0 {
+		var count int64
+		if err := m.roTxn(ctx, func(s *xorm.Session) error {
+			var err error
+			count, err = s.Count(&changeLog{})
+			return err
+		}); err != nil {
+			return err
+		}
+		if count > maxLines {
+			excess := count - maxLines
+			var log changeLog
+			if ok, err := m.db.Asc("id").Limit(1, int(excess-1)).Get(&log); err != nil {
+				return err
+			} else if ok && log.Id > cutoffID {
+				cutoffID = log.Id
+			}
+		}
+	}
+
+	deleted := int64(0)
+	if cutoffID > 0 {
+		for {
+			affected, err := m.db.Where("id <= ?", cutoffID).Limit(10000).Delete(&changeLog{})
+			if err != nil {
+				return err
+			}
+			if affected == 0 {
+				break
+			}
+			deleted += affected
+		}
+		logger.Infof("cleaned up %d changelog entries", deleted)
+	}
+	return nil
+}
+
 var errBusy error
 
 func (m *dbMeta) shouldRetry(err error) bool {

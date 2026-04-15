@@ -29,6 +29,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -156,6 +157,8 @@ type engine interface {
 	doLoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno)
 	doDeleteTokens(ctx Context, ids []uint32) syscall.Errno
 	doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
+
+	doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines int64) error
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
@@ -805,6 +808,10 @@ func (m *baseMeta) NewSession(record bool) error {
 		go m.cleanupSlices(ctx)
 		go m.cleanupTrash(ctx)
 		go m.symlinks.clean(ctx, &m.sessWG)
+		if m.fmt.ChangeLog {
+			m.sessWG.Add(1)
+			go m.cleanupChangelog(ctx)
+		}
 	}
 	return nil
 }
@@ -1050,6 +1057,53 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 				m.bgjobDuration.WithLabelValues("cleanupSlices", status).Observe(time.Since(jobStart).Seconds())
 				m.bgjobDels.WithLabelValues("cleanupSlices").Add(float64(cnt))
 			}()
+		}
+	}
+}
+
+func parseChangelogTime(entry string) (time.Time, error) {
+	idx := strings.IndexByte(entry, '|')
+	if idx < 0 {
+		return time.Time{}, fmt.Errorf("invalid changelog entry: %s", entry)
+	}
+	timePart := entry[:idx]
+	dotIdx := strings.IndexByte(timePart, '.')
+	if dotIdx < 0 {
+		sec, err := strconv.ParseInt(timePart, 10, 64)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return time.Unix(sec, 0), nil
+	}
+	sec, err := strconv.ParseInt(timePart[:dotIdx], 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+	nsec, err := strconv.ParseInt(timePart[dotIdx+1:], 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(sec, nsec), nil
+}
+
+func (m *baseMeta) cleanupChangelog(ctx Context) {
+	defer m.sessWG.Done()
+	for {
+		maxAge := time.Duration(m.fmt.ChangeLogMaxAge) * time.Second
+		maxLines := m.fmt.ChangeLogMaxLines
+		interval := 5 * time.Minute
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(utils.JitterIt(interval)):
+		}
+
+		if ok, err := m.en.setIfSmall("lastCleanupChangelog", time.Now().Unix(), int64((interval * 9 / 10).Seconds())); err != nil {
+			logger.Warnf("checking counter lastCleanupChangelog: %s", err)
+		} else if ok {
+			if err := m.en.doCleanupChangelog(ctx, maxAge, maxLines); err != nil {
+				logger.Warnf("cleanup changelog: %s", err)
+			}
 		}
 	}
 }

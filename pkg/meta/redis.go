@@ -1668,6 +1668,65 @@ func (m *redisMeta) ScanChangelog(ctx Context, last int64, handler func(ver int6
 	}
 }
 
+func (m *redisMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines int64) error {
+	llen, err := m.rdb.LLen(ctx, m.txnLogKey()).Result()
+	if err != nil || llen == 0 {
+		return err
+	}
+
+	var trimPos int64
+	if maxLines > 0 && llen > maxLines {
+		trimPos = llen - maxLines
+	}
+	if maxAge > 0 {
+		cutoff := time.Now().Add(-maxAge)
+		const batchSize = 1000
+		allExpired := true
+		for pos := int64(0); pos < llen; pos += batchSize {
+			entries, e := m.rdb.LRange(ctx, m.txnLogKey(), pos, pos+batchSize-1).Result()
+			if e != nil {
+				return e
+			}
+			for i, entry := range entries {
+				t, e := parseChangelogTime(entry)
+				if e != nil {
+					continue
+				}
+				if !t.Before(cutoff) {
+					if tp := pos + int64(i); tp > trimPos {
+						trimPos = tp
+					}
+					allExpired = false
+					break
+				}
+			}
+			if !allExpired {
+				break
+			}
+		}
+		if allExpired && llen > trimPos {
+			trimPos = llen
+		}
+	}
+	if trimPos <= 0 {
+		return nil
+	}
+
+	const trimChunk = int64(10000)
+	for trimPos > 0 {
+		n := trimPos
+		if n > trimChunk {
+			n = trimChunk
+		}
+		if err := m.rdb.LTrim(ctx, m.txnLogKey(), n, -1).Err(); err != nil {
+			return err
+		}
+		trimPos -= n
+	}
+	logger.Infof("cleaned up changelog entries from Redis")
+	return nil
+}
+
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash, inode Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {

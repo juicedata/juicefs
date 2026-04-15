@@ -915,6 +915,93 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 	}
 }
 
+func (m *kvMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines int64) error {
+	end := m.logKey(^uint64(0))
+
+	var lineDeleteCount int64
+	if maxLines > 0 {
+		var total int64
+		err := m.client.simpleTxn(ctx, func(kt *kvTxn) error {
+			kt.scan(m.logKey(0), end, true, func(k, v []byte) bool {
+				total++
+				return true
+			})
+			return nil
+		}, 0)
+		if err != nil {
+			return err
+		}
+		if total == 0 {
+			return nil
+		}
+		if total > maxLines {
+			lineDeleteCount = total - maxLines
+		}
+	}
+
+	var cutoff time.Time
+	if maxAge > 0 {
+		cutoff = time.Now().Add(-maxAge)
+	}
+
+	const batchLimit = 1000
+	var deleted int64
+	var scanned int64
+	startKey := m.logKey(0)
+
+	for {
+		var batch [][]byte
+		done := false
+
+		err := m.client.simpleTxn(ctx, func(kt *kvTxn) error {
+			kt.scan(startKey, end, maxAge <= 0, func(k, v []byte) bool {
+				if len(batch) >= batchLimit {
+					return false
+				}
+				scanned++
+				var expired bool
+				if maxAge > 0 {
+					t, e := parseChangelogTime(string(v))
+					expired = e == nil && t.Before(cutoff)
+				}
+				overLimit := lineDeleteCount > 0 && scanned <= lineDeleteCount
+
+				if !expired && !overLimit {
+					done = true
+					return false
+				}
+				batch = append(batch, k)
+				return true
+			})
+			return nil
+		}, 0)
+		if err != nil {
+			return err
+		}
+		if len(batch) > 0 {
+			if e := m.client.txn(ctx, func(tx *kvTxn) error {
+				for _, k := range batch {
+					tx.delete(k)
+				}
+				return nil
+			}, 0); e != nil {
+				return e
+			}
+			deleted += int64(len(batch))
+			startKey = append(batch[len(batch)-1], 0)
+		}
+
+		if done || len(batch) == 0 {
+			break
+		}
+	}
+
+	if deleted > 0 {
+		logger.Infof("cleaned up %d changelog entries from TKV", deleted)
+	}
+	return nil
+}
+
 func (m *kvMeta) shouldRetry(err error) bool {
 	return m.client.shouldRetry(err)
 }
