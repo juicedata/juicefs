@@ -193,6 +193,14 @@ func (c *chunkWriter) commitThread() {
 				go s.flushData()
 			}
 		}
+
+		// Only commits that extend the file need ordering - they could expose a
+		// "hole" (zeros) if an earlier chunk's data hasn't been committed yet.
+		// Overwrites within the committed length are safe to proceed concurrently.
+		for f.hasLowerPendingChunk(c.indx) {
+			f.commitcond.WaitWithTimeout(time.Millisecond * 100)
+		}
+
 		err := s.err
 		f.Unlock()
 
@@ -214,6 +222,10 @@ func (c *chunkWriter) commitThread() {
 			}
 			f.err = err
 			logger.Errorf("write inode:%d indx:%d %s", f.inode, c.indx, err)
+		} else {
+			if end := c.sliceEnd(s); end > f.committedTo {
+				f.committedTo = end
+			}
 		}
 		c.slices = c.slices[1:]
 	}
@@ -227,6 +239,7 @@ type fileWriter struct {
 
 	inode        Ino
 	length       uint64
+	committedTo  uint64
 	tierID       uint8
 	err          syscall.Errno
 	flushwaiting uint16
@@ -234,8 +247,9 @@ type fileWriter struct {
 	refs         uint16
 	chunks       map[uint32]*chunkWriter
 
-	flushcond *utils.Cond // wait for chunks==nil (flush)
-	writecond *utils.Cond // wait for flushwaiting==0 (write)
+	flushcond  *utils.Cond // wait for chunks==nil (flush)
+	writecond  *utils.Cond // wait for flushwaiting==0 (write)
+	commitcond *utils.Cond // wait for lower-index chunks to finish committing
 }
 
 // protected by file
@@ -251,9 +265,35 @@ func (f *fileWriter) findChunk(i uint32) *chunkWriter {
 // protected by file
 func (f *fileWriter) freeChunk(c *chunkWriter) {
 	delete(f.chunks, c.indx)
+	// Wake higher-index commitThreads that wait for this chunk to finish
+	f.commitcond.Broadcast()
 	if len(f.chunks) == 0 && f.flushwaiting > 0 {
 		f.flushcond.Broadcast()
 	}
+}
+
+func (c *chunkWriter) sliceEnd(s *sliceWriter) uint64 {
+	return uint64(c.indx)*meta.ChunkSize + uint64(s.off) + uint64(s.slen)
+}
+
+func (c *chunkWriter) hasPendingBeyond(length uint64) bool {
+	for _, s := range c.slices {
+		if c.sliceEnd(s) > length {
+			return true
+		}
+	}
+	return false
+}
+
+// hasLowerPendingChunk reports whether any lower-index chunk still has a
+// pending slice that may still push committedTo forward.
+func (f *fileWriter) hasLowerPendingChunk(indx uint32) bool {
+	for i, c := range f.chunks {
+		if i < indx && c.hasPendingBeyond(f.committedTo) {
+			return true
+		}
+	}
+	return false
 }
 
 // protected by file
@@ -420,6 +460,7 @@ func (f *fileWriter) Truncate(length uint64) {
 	defer f.Unlock()
 	// TODO: truncate write buffer if length < f.length
 	f.length = length
+	f.committedTo = length
 }
 
 type dataWriter struct {
@@ -485,14 +526,16 @@ func (w *dataWriter) Open(inode Ino, len uint64, tierID uint8) FileWriter {
 	f, ok := w.files[inode]
 	if !ok {
 		f = &fileWriter{
-			w:      w,
-			inode:  inode,
-			length: len,
-			tierID: tierID,
-			chunks: make(map[uint32]*chunkWriter),
+			w:           w,
+			inode:       inode,
+			length:      len,
+			committedTo: len,
+			tierID:      tierID,
+			chunks:      make(map[uint32]*chunkWriter),
 		}
 		f.flushcond = utils.NewCond(f)
 		f.writecond = utils.NewCond(f)
+		f.commitcond = utils.NewCond(f)
 		w.files[inode] = f
 	}
 	f.refs++
