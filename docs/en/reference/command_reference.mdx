@@ -962,6 +962,30 @@ In which:
 |`--bwlimit=0`|Limit bandwidth in Mbps default to 0 which means unlimited.|
 |`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|URL of the global traffic control service for coordinating bandwidth across multiple sync instances. The service should expose an HTTP POST endpoint with request body `{"bytes": <requested-bytes>}` and response body `{"granted": <granted-bytes>, "expired": <expire-time-ms>}`.|
 
+Usage and API contract for `--traffic-control-url`:
+
+```shell
+# Use one global traffic control service for multiple sync instances
+juicefs sync SRC DST --traffic-control-url http://127.0.0.1:8080/traffic-control
+```
+
+* Interface definition: `POST /traffic-control` (actual path depends on your URL), `Content-Type: application/json`.
+* Request definition:
+
+  ```json
+  {"bytes": 1048576}
+  ```
+
+  * `bytes`: requested traffic quota in bytes. Positive means requesting quota, negative means paying back unused quota.
+* Response definition:
+
+  ```json
+  {"granted": 524288, "expired": 1000}
+  ```
+
+  * `granted`: bytes granted for this request.
+  * `expired`: expiration time of the granted quota in milliseconds.
+
 #### Cluster related options {#sync-cluster-related-options}
 
 |Items| Description|
