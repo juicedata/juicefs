@@ -108,17 +108,8 @@ sidebar_position: 4
 |----------------------------------------| -----------        | ---- |
 | `juicefs_compact_size_histogram_bytes` | 合并数据的大小分布 | 字节 |
 | `juicefs_used_read_buffer_size_bytes`  | 当前用于读取的缓冲区的大小 |    |
-
-## 后台任务 {#background-jobs}
-
-### 指标
-
-| 名称 | 描述 | 单位 |
-|-|-|-|
 | `juicefs_bgjob_duration_seconds` | 后台清理任务耗时（标签：`job`、`status`） | 秒 |
 | `juicefs_bgjob_deletions_total` | 后台任务执行的删除总数（标签：`job`） | |
-
-`job` 标签表示具体的后台任务名称，如 `cleanupSlices`、`cleanTrashFile` 或 `cleanDelayedSlice`。`status` 标签值为 `success` 或 `failed`。
 
 ## 数据同步 {#sync}
 
