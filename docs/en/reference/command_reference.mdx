@@ -648,6 +648,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`MOUNTPOINT`|file system mount point, e.g. `/mnt/jfs`, `Z:`.|
 |`-d, --background`|run in background (default: false)|
 |`--no-syslog`|disable syslog (default: false)|
+|`--hide-internal` <VersionAdd>1.4</VersionAdd> |hide all internal files (`.accesslog`, `.stats`, `.config`, `.control`) from directory listings, these files are still accessible via their full path (default: false)|
 |`--log=path`|path of log file when running in background (default: `$HOME/.juicefs/juicefs.log` or `/var/log/juicefs.log`)|
 |`--force`|force to mount even if the mount point is already mounted by the same filesystem.|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd> |add / update entry in `/etc/fstab`, will create a symlink from `/sbin/mount.juicefs` to JuiceFS executable if not existing (default: false)|

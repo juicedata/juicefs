@@ -644,6 +644,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`MOUNTPOINT`|文件系统挂载点，例如：`/mnt/jfs`、`Z:`。|
 |`-d, --background`|后台运行，默认为 false。|
 |`--no-syslog`|禁用系统日志，默认为 false。|
+|`--hide-internal` <VersionAdd>1.4</VersionAdd>|在目录列表中隐藏所有内部文件（`.accesslog`、`.stats`、`.config`、`.control`），这些文件仍可通过完整路径访问（默认值：false）。|
 |`--log=path`|后台运行时日志文件的位置 (默认：`$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)|
 |`--force`|强制挂载即使挂载点已经被相同的文件系统挂载 (默认值:false)|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd>|新增／更新 `/etc/fstab` 中的条目，如果不存在将会创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接，默认为 false。|
