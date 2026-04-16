@@ -3815,6 +3815,37 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		}
 	}()
 	ctx := Background()
+	var (
+		lastChangelog int64
+		changeLogs    []*DumpedChangeLog
+	)
+	if m.getFormat().ChangeLog {
+		var maxKey uint64
+		err = m.client.txn(ctx, func(tx *kvTxn) error {
+			tx.scan(m.logKey(0), m.logKey(^uint64(0)), true, func(k, v []byte) bool {
+				maxKey = binary.BigEndian.Uint64(k[3:])
+				return true
+			})
+			if maxKey == 0 {
+				return nil
+			}
+			begin := m.logKey(m.client.rewind(maxKey))
+			end := m.logKey(maxKey + 1)
+			tx.scan(begin, end, false, func(k, v []byte) bool {
+				ver := binary.BigEndian.Uint64(k[3:])
+				changeLogs = append(changeLogs, &DumpedChangeLog{
+					Version: int64(ver),
+					Entry:   string(v),
+				})
+				return true
+			})
+			lastChangelog = int64(maxKey)
+			return nil
+		}, 0)
+		if err != nil {
+			return err
+		}
+	}
 	vals, err := m.scanValues(ctx, m.fmtKey("D"), -1, nil)
 	if err != nil {
 		return err
@@ -4043,15 +4074,17 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	dm := DumpedMeta{
 		Setting: *m.getFormat(),
 		Counters: &DumpedCounters{
-			UsedSpace:   cs[0],
-			UsedInodes:  cs[1],
-			NextInode:   cs[2],
-			NextChunk:   cs[3],
-			NextSession: cs[4],
-			NextTrash:   cs[5],
+			UsedSpace:     cs[0],
+			UsedInodes:    cs[1],
+			NextInode:     cs[2],
+			NextChunk:     cs[3],
+			NextSession:   cs[4],
+			NextTrash:     cs[5],
+			LastChangelog: lastChangelog,
 		},
 		Sustained:   sessions,
 		DelFiles:    dels,
+		ChangeLog:   changeLogs,
 		Quotas:      dirQuotas,
 		UserQuotas:  ugQuotas["QU"],
 		GroupQuotas: ugQuotas["QG"],
@@ -4067,33 +4100,6 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	if !keepSecret && dm.Setting.SessionToken != "" {
 		dm.Setting.SessionToken = "removed"
 		logger.Warnf("Session token is removed for the sake of safety")
-	}
-	if m.getFormat().ChangeLog {
-		var maxKey uint64
-		err = m.client.txn(ctx, func(tx *kvTxn) error {
-			tx.scan(m.logKey(0), m.logKey(^uint64(0)), true, func(k, v []byte) bool {
-				maxKey = binary.BigEndian.Uint64(k[3:])
-				return true
-			})
-			if maxKey == 0 {
-				return nil
-			}
-			begin := m.logKey(m.client.rewind(maxKey))
-			end := m.logKey(maxKey + 1)
-			tx.scan(begin, end, false, func(k, v []byte) bool {
-				ver := binary.BigEndian.Uint64(k[3:])
-				dm.ChangeLog = append(dm.ChangeLog, &DumpedChangeLog{
-					Version: int64(ver),
-					Entry:   string(v),
-				})
-				return true
-			})
-			return nil
-		}, 0)
-		if err != nil {
-			return err
-		}
-		dm.Counters.LastChangelog = int64(maxKey)
 	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {

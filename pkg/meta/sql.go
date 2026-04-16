@@ -4795,6 +4795,13 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 	return m.roTxn(Background(), func(s *xorm.Session) error {
+		var lastChangelog int64
+		if m.getFormat().ChangeLog {
+			var maxLog changeLog
+			if ok, _ := s.Desc("id").Limit(1).Get(&maxLog); ok {
+				lastChangelog = maxLog.Id
+			}
+		}
 		if root == RootInode && fast {
 			defer func() { m.snap = nil }()
 			bar := progress.AddCountBar("Snapshot keys", 0)
@@ -4865,12 +4872,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 				counters.NextTrash = row.Value
 			}
 		}
-		if m.getFormat().ChangeLog {
-			var maxLog changeLog
-			if ok, _ := s.Desc("id").Limit(1).Get(&maxLog); ok {
-				counters.LastChangelog = maxLog.Id
-			}
-		}
+		counters.LastChangelog = lastChangelog
 
 		var srows []sustained
 		if err := s.Find(&srows); err != nil {

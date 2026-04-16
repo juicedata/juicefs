@@ -4874,6 +4874,13 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 		}
 	}()
 	ctx := Background()
+	var lastChangelog int64
+	if m.getFormat().ChangeLog {
+		lastLog, err := m.rdb.Get(ctx, m.txnLastLog()).Int64()
+		if err == nil {
+			lastChangelog = lastLog
+		}
+	}
 	zs, err := m.rdb.ZRangeWithScores(ctx, m.delfiles(), 0, -1).Result()
 	if err != nil {
 		return err
@@ -4934,24 +4941,19 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	dm := &DumpedMeta{
 		Setting: *m.getFormat(),
 		Counters: &DumpedCounters{
-			UsedSpace:   cs[0],
-			UsedInodes:  cs[1],
-			NextInode:   cs[2] + 1, // Redis nextInode/nextChunk is 1 smaller than sql/tkv
-			NextChunk:   cs[3] + 1,
-			NextSession: cs[4],
-			NextTrash:   cs[5],
+			UsedSpace:     cs[0],
+			UsedInodes:    cs[1],
+			NextInode:     cs[2] + 1, // Redis nextInode/nextChunk is 1 smaller than sql/tkv
+			NextChunk:     cs[3] + 1,
+			NextSession:   cs[4],
+			NextTrash:     cs[5],
+			LastChangelog: lastChangelog,
 		},
 		Sustained:   sessions,
 		DelFiles:    dels,
 		Quotas:      dirQuotas,
 		UserQuotas:  userQuotas,
 		GroupQuotas: groupQuotas,
-	}
-	if m.getFormat().ChangeLog {
-		lastLog, err := m.rdb.Get(ctx, m.txnLastLog()).Int64()
-		if err == nil {
-			dm.Counters.LastChangelog = lastLog
-		}
 	}
 	root = m.checkRoot(root)
 	if root != RootInode {
