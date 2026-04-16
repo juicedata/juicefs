@@ -109,6 +109,16 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | `juicefs_compact_size_histogram_bytes` | Size distributions of compacted data | byte |
 | `juicefs_used_read_buffer_size_bytes`  | size of currently used buffer for read |      |
 
+## Mount configuration {#mount-configuration}
+
+### Metrics
+
+| Name | Description | Unit |
+|-|-|-|
+| `subdir_info` | Indicates the subdir configuration for the current mount (label: `subdir`, value is always `1`) | |
+
+The `subdir` label contains the mounted subdirectory path. An empty string indicates a root mount.
+
 ## Data synchronization {#sync}
 
 ### Metrics
