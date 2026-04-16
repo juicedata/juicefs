@@ -154,6 +154,41 @@ test_remount_on_writeback(){
     ./juicefs warmup /tmp/jfs/test --evict
     compare_md5sum /tmp/test /tmp/jfs/test
 }
+
+test_writeback_threshold_size_stage_small_file(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --compress lz4
+    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 1h --writeback-threshold-size 8M
+
+    dd if=/dev/urandom of=/tmp/small-threshold-test bs=1M count=4 status=none
+    cp /tmp/small-threshold-test /tmp/jfs/small-threshold-test
+    sleep 3
+
+    stage_blocks=$(get_staging_blocks)
+    [[ "$stage_blocks" -gt 0 ]] || (echo "small file should be staged when writeback-threshold-size is 8M, actual stage_blocks=$stage_blocks" && exit 1)
+
+    stage_files=$(get_staging_file_count)
+    [[ "$stage_files" -gt 0 ]] || (echo "raw staging files should exist for small file, actual stage_files=$stage_files" && exit 1)
+}
+
+test_writeback_threshold_size_bypass_large_file(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --compress lz4
+    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 1h --writeback-threshold-size 1M
+
+    dd if=/dev/urandom of=/tmp/large-threshold-test bs=1M count=4 status=none
+    cp /tmp/large-threshold-test /tmp/jfs/large-threshold-test
+    sleep 3
+
+    stage_blocks=$(get_staging_blocks)
+    [[ "$stage_blocks" -eq 0 ]] || (echo "large file should bypass staging when writeback-threshold-size is 1M, actual stage_blocks=$stage_blocks" && exit 1)
+
+    stage_files=$(get_staging_file_count)
+    [[ "$stage_files" -eq 0 ]] || (echo "raw staging files should be empty for large file bypass, actual stage_files=$stage_files" && exit 1)
+
+    compare_md5sum /tmp/large-threshold-test /tmp/jfs/large-threshold-test
+}
+
 test_memory_cache_none(){
     do_test_memory_cache none
 }
@@ -556,6 +591,14 @@ wait_stage_uploaded()
     if [[ "$stageBlocks" -ne 0 ]]; then
         echo "stage blocks have not uploaded: $stageBlocks" && exit 1
     fi
+}
+
+get_staging_blocks(){
+    grep "juicefs_staging_blocks" /tmp/jfs/.stats | awk '{print $2}'
+}
+
+get_staging_file_count(){
+    find "$(get_rawstaging_dir)" -type f 2>/dev/null | wc -l | tr -d ' '
 }
 
 mount_jfsCache1(){
