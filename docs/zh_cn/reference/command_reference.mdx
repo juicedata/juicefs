@@ -955,6 +955,7 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--no-https`|不要使用 HTTPS，默认为 false。|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd>|目标端的新建文件的存储类型。|
 |`--bwlimit=0`|限制最大带宽，单位 Mbps，默认为 0 表示不限制。|
+|`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|全局流量控制服务的 URL，用于在多个 sync 实例间协调带宽。|
 
 #### 分布式相关参数 {#sync-cluster-related-options}
 
