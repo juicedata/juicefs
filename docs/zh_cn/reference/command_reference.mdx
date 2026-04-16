@@ -957,6 +957,30 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--bwlimit=0`|限制最大带宽，单位 Mbps，默认为 0 表示不限制。|
 |`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|全局流量控制服务的 URL，用于在多个 sync 实例间协调带宽。服务需提供 HTTP POST 接口，请求体 `{"bytes": <请求字节数>}`，响应体 `{"granted": <允许字节数>, "expired": <过期时间（毫秒）>}`。|
 
+`--traffic-control-url` 使用方法与接口定义：
+
+```shell
+# 为多个 sync 实例接入同一个全局流量控制服务
+juicefs sync SRC DST --traffic-control-url http://127.0.0.1:8080/traffic-control
+```
+
+* 接口定义：`POST /traffic-control`（以实际 URL 路径为准），`Content-Type: application/json`。
+* 请求定义：
+
+  ```json
+  {"bytes": 1048576}
+  ```
+
+  * `bytes`：本次申请的带宽额度（字节数）。正数表示申请额度，负数表示返还未使用额度。
+* 返回值定义：
+
+  ```json
+  {"granted": 524288, "expired": 1000}
+  ```
+
+  * `granted`：本次授予的可用字节数。
+  * `expired`：本次授予额度的过期时间（毫秒）。
+
 #### 分布式相关参数 {#sync-cluster-related-options}
 
 |项 | 说明 |
