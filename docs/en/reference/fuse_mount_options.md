@@ -45,6 +45,12 @@ FUSE supports ["writeback-cache mode"](https://www.kernel.org/doc/Documentation/
 
 These options are used to specify the owner ID and owner group ID of the file system (as distinct from the UID and GID of a file or directory) for higher-level permission validation. If the allow_other option is specified, this option will not work. e.g. `sudo juicefs mount -o user_id=100,group_id=100`.
 
+## ReadDirPlusAuto {#readdirplusauto}
+
+Starting from JuiceFS v1.4, `ReadDirPlusAuto` is automatically enabled. This feature allows the FUSE kernel module to automatically decide whether to use the `ReadDirPlus` operation (which returns directory entries along with file attributes) instead of plain `ReadDir`. This reduces the number of subsequent `getattr` calls when listing directories, significantly improving performance for large directory listings.
+
+This is an internal optimization and does not require any user configuration.
+
 ## debug
 
 This option will output Debug information from the low-level library (`go-fuse`) to `juicefs.log`.
