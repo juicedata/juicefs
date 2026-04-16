@@ -960,7 +960,7 @@ In which:
 |`--no-https`|Do not use HTTPS, default to false.|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |the storage class for destination|
 |`--bwlimit=0`|Limit bandwidth in Mbps default to 0 which means unlimited.|
-|`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|URL of the global traffic control service for coordinating bandwidth across multiple sync instances.|
+|`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|URL of the global traffic control service for coordinating bandwidth across multiple sync instances. The service should expose an HTTP POST endpoint with request body `{"bytes": <requested-bytes>}` and response body `{"granted": <granted-bytes>, "expired": <expire-time-ms>}`.|
 
 #### Cluster related options {#sync-cluster-related-options}
 
