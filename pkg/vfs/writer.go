@@ -202,6 +202,10 @@ func (c *chunkWriter) commitThread() {
 		}
 
 		err := s.err
+		skipped := err == 0 && f.err != 0
+		if skipped {
+			err = f.err
+		}
 		f.Unlock()
 
 		if err == 0 {
@@ -212,7 +216,7 @@ func (c *chunkWriter) commitThread() {
 
 		f.Lock()
 		if err != 0 {
-			if err == syscall.ENOENT || err == syscall.ENOSPC || err == syscall.EDQUOT {
+			if skipped || err == syscall.ENOENT || err == syscall.ENOSPC || err == syscall.EDQUOT {
 				go func(id uint64, length int) {
 					_ = f.w.store.Remove(id, length)
 				}(s.id, int(s.length))
