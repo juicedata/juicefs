@@ -7,7 +7,6 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
-dpkg -s gawk || .github/scripts/apt_install.sh gawk
 start_minio(){
     if ! docker ps | grep "minio/minio"; then
         docker run -d -p 9000:9000 --name minio \
@@ -334,9 +333,10 @@ check_sync_log(){
         echo "file_copied not equal, $file_copied, $file_count"
         exit 1
     fi
-    count2=$(cat sync.log | grep 172.20.0.2 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+    count2=$(grep 172.20.0.2 sync.log | grep "receive stats" | awk '{if (match($0, /Copied:[0-9]+/)) sum += substr($0, RSTART + 7, RLENGTH - 7)} END {print sum + 0}')
     [ -z "$count2" ] && count2=0
-    count3=$(cat sync.log | grep 172.20.0.3 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+#    count3=$(cat sync.log | grep 172.20.0.3 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+    count3=$(grep 172.20.0.3 sync.log | grep "receive stats" | awk '{if (match($0, /Copied:[0-9]+/)) sum += substr($0, RSTART + 7, RLENGTH - 7)} END {print sum + 0}')
     [ -z "$count3" ] && count3=0
     count1=$((file_count - count2 - count3))
     echo "count1, $count1, count2, $count2, count3, $count3"
