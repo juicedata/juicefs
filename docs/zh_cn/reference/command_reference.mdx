@@ -373,6 +373,7 @@ juicefs fsck redis://localhost
 |`--repair` <VersionAdd>1.1</VersionAdd>|发现损坏后尽可能修复 (默认：false)|
 |`--recursive, -r` <VersionAdd>1.1</VersionAdd>|递归检查或修复 (默认值：false)|
 |`--sync-dir-stat` <VersionAdd>1.1</VersionAdd>|同步所有目录的状态，即使他们没有损坏 (注意：巨大的文件树可能会花费很长时间) (默认：false)|
+|`--repair-dir-mode value` <VersionAdd>1.4</VersionAdd>|修复目录时使用的权限模式，八进制格式（默认值："0755"）|
 
 ### `juicefs restore` <VersionAdd>1.1</VersionAdd> {#restore}
 

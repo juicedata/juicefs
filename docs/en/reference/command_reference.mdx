@@ -376,6 +376,7 @@ juicefs fsck redis://localhost
 |`--repair` <VersionAdd>1.1</VersionAdd> |repair specified path if it's broken (default: false)|
 |`--recursive, -r` <VersionAdd>1.1</VersionAdd> |recursively check or repair (default: false)|
 |`--sync-dir-stat` <VersionAdd>1.1</VersionAdd> |sync stat of all directories, even if they are existed and not broken (NOTE: it may take a long time for huge trees) (default: false)|
+|`--repair-dir-mode value` <VersionAdd>1.4</VersionAdd> |permission mode for repaired directories in octal format (default: "0755")|
 
 ### `juicefs restore` <VersionAdd>1.1</VersionAdd> {#restore}
 
