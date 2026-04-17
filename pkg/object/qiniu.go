@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/middleware"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -214,9 +215,12 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		options.EndpointOptions.DisableHTTPS = uri.Scheme == "http"
 		options.UsePathStyle = true
 		options.HTTPClient = httpClient
-		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
-			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
-		})
+		options.APIOptions = append(options.APIOptions,
+			func(stack *smithymiddleware.Stack) error {
+				return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
+			},
+			middleware.AddUserAgentKey(UserAgent),
+		)
 		options.RetryMaxAttempts = 1
 	})
 	s3c := s3client{bucket: bucket, s3: client, region: region}

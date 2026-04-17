@@ -321,6 +321,7 @@ func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		hostParts[1]+"."+hostParts[2],
 		tos.WithRegion(strings.TrimPrefix(hostParts[1], "tos-")),
 		tos.WithCredentials(credentials),
+		tos.WithUserAgentProductName(UserAgent),
 		tos.WithEnableVerifySSL(httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify),
 		tos.WithEnableCRC(!disableChecksum))
 	if err != nil {
