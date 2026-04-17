@@ -196,7 +196,7 @@ func (tx *etcdTxn) id() uint64 {
 	return 0 // TODO
 }
 
-func (c *etcdClient) rewind(id uint64) uint64 {
+func (c *etcdClient) rewind(id uint64, factor int) uint64 {
 	return 0
 }
 

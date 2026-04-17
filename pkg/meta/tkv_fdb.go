@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net/url"
+	"os"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
@@ -143,10 +145,18 @@ func (c *fdbClient) getId() uint64 {
 	return atomic.AddUint64(&c.nextid, 1)
 }
 
-func (c *fdbClient) rewind(id uint64) uint64 {
-	// TODO: configurable rewind interval
-	if id > 1e6 {
-		return id - 1e6
+func (c *fdbClient) rewind(id uint64, factor int) uint64 {
+	shift := uint64(1e6)
+	if s := os.Getenv("JFS_TKV_REWIND"); s != "" {
+		if parsed, err := strconv.ParseUint(s, 10, 64); err == nil && parsed > 0 {
+			shift = parsed
+		}
+	}
+	if factor > 1 {
+		shift *= uint64(factor)
+	}
+	if id > shift {
+		return id - shift
 	}
 	return 1
 }

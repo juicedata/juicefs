@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -179,9 +180,18 @@ func (c *memKV) getId() uint64 {
 	return c.nextid
 }
 
-func (c *memKV) rewind(id uint64) uint64 {
-	if id > 1e3 {
-		return id - 1e3
+func (c *memKV) rewind(id uint64, factor int) uint64 {
+	shift := uint64(1e3)
+	if s := os.Getenv("JFS_TKV_REWIND"); s != "" {
+		if parsed, err := strconv.ParseUint(s, 10, 64); err == nil && parsed > 0 {
+			shift = parsed
+		}
+	}
+	if factor > 1 {
+		shift *= uint64(factor)
+	}
+	if id > shift {
+		return id - shift
 	}
 	return 1
 }

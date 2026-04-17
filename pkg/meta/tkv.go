@@ -65,7 +65,7 @@ type tkvClient interface {
 	close() error
 	shouldRetry(err error) bool
 	gc()
-	rewind(id uint64) uint64 // rewind id of log
+	rewind(id uint64, factor int) uint64 // rewind id of log
 	config(key string) interface{}
 }
 
@@ -863,15 +863,41 @@ func (m *kvMeta) genLog(tx *kvTxn, ts time.Time, op string, args ...any) {
 	tx.set(m.logKey(id), []byte(log))
 }
 
+const changelogProbeFallbacks = 5
+
+func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
+	scanRange := func(begin, end []byte) uint64 {
+		var maxKey uint64
+		tx.scan(begin, end, true, func(k, v []byte) bool {
+			maxKey = binary.BigEndian.Uint64(k[3:])
+			return true
+		})
+		return maxKey
+	}
+
+	upper := tx.id()
+	if upper == 0 {
+		return scanRange(m.logKey(0), m.logKey(^uint64(0)))
+	}
+
+	beginID := m.client.rewind(upper, 1)
+	end := m.logKey(upper)
+	for i := 0; i <= changelogProbeFallbacks; i++ {
+		begin := m.logKey(beginID)
+		if maxKey := scanRange(begin, end); maxKey != 0 {
+			return maxKey
+		}
+		end = begin
+		beginID = m.client.rewind(beginID, 1<<i)
+	}
+
+	return scanRange(m.logKey(0), m.logKey(^uint64(0)))
+}
+
 func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
 	if last == 0 {
-		// Scan to find the latest log key
-		end := m.logKey(^uint64(0))
-		_ = m.client.simpleTxn(context.Background(), func(kt *kvTxn) error {
-			kt.scan(m.logKey(0), end, true, func(k, v []byte) bool {
-				last = int64(binary.BigEndian.Uint64(k[3:]))
-				return true
-			})
+		_ = m.client.txn(ctx, func(kt *kvTxn) error {
+			last = int64(m.findLastLogKey(kt))
 			return nil
 		}, 0)
 		logger.Infof("last version is %d", last)
@@ -884,7 +910,7 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 		}
 		err := m.client.simpleTxn(context.Background(), func(kt *kvTxn) error {
 			var err error
-			begin := m.logKey(m.client.rewind(uint64(last)))
+			begin := m.logKey(m.client.rewind(uint64(last), 1))
 			now := uint32(time.Now().Unix())
 			kt.scan(begin, end, false, func(k, v []byte) bool {
 				id := binary.BigEndian.Uint64(k[3:]) // "LOG"
@@ -3820,16 +3846,12 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		changeLogs    []*DumpedChangeLog
 	)
 	if m.getFormat().ChangeLog {
-		var maxKey uint64
 		err = m.client.txn(ctx, func(tx *kvTxn) error {
-			tx.scan(m.logKey(0), m.logKey(^uint64(0)), true, func(k, v []byte) bool {
-				maxKey = binary.BigEndian.Uint64(k[3:])
-				return true
-			})
+			maxKey := m.findLastLogKey(tx)
 			if maxKey == 0 {
 				return nil
 			}
-			begin := m.logKey(m.client.rewind(maxKey))
+			begin := m.logKey(m.client.rewind(maxKey, 1))
 			end := m.logKey(maxKey + 1)
 			tx.scan(begin, end, false, func(k, v []byte) bool {
 				ver := binary.BigEndian.Uint64(k[3:])

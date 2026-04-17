@@ -24,6 +24,7 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -201,14 +202,17 @@ func (tx *tikvTxn) id() uint64 {
 	return tx.StartTS()
 }
 
-func (c *tikvClient) rewind(id uint64) uint64 {
+func (c *tikvClient) rewind(id uint64, factor int) uint64 {
 	// TiKV's timestamp is in milliseconds, and the last 18 bits are for logical time,
 	// so we can rewind at most 10 seconds to avoid missing some logs
 	shift := uint64(10 * 1000 * (1 << 18))
-	if s := os.Getenv("JFS_TIKV_REWIND"); s != "" {
-		if d, err := time.ParseDuration(s); err == nil && d >= time.Millisecond {
-			shift = uint64(d.Milliseconds()) * (1 << 18)
+	if s := os.Getenv("JFS_TKV_REWIND"); s != "" {
+		if parsed, err := strconv.ParseUint(s, 10, 64); err == nil && parsed > 0 {
+			shift = parsed
 		}
+	}
+	if factor > 1 {
+		shift *= uint64(factor)
 	}
 	if id > shift {
 		return id - shift

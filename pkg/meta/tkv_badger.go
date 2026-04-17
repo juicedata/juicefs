@@ -22,6 +22,8 @@ package meta
 import (
 	"bytes"
 	"context"
+	"os"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -151,9 +153,18 @@ func (c *badgerClient) getId() uint64 {
 	return atomic.AddUint64(&c.nextid, 1)
 }
 
-func (c *badgerClient) rewind(id uint64) uint64 {
-	if id > 1e5 {
-		return id - 1e5
+func (c *badgerClient) rewind(id uint64, factor int) uint64 {
+	shift := uint64(1e5)
+	if s := os.Getenv("JFS_TKV_REWIND"); s != "" {
+		if parsed, err := strconv.ParseUint(s, 10, 64); err == nil && parsed > 0 {
+			shift = parsed
+		}
+	}
+	if factor > 1 {
+		shift *= uint64(factor)
+	}
+	if id > shift {
+		return id - shift
 	}
 	return 1
 }
