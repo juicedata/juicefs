@@ -221,7 +221,11 @@ func (m *CheckpointManager) Load() (*Checkpoint, error) {
 	go m.cleanupCheckpointTmp()
 	obj, err := m.dst.Get(ctx, m.checkpointKey, 0, -1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get checkpoint: %w", err)
+		// head to wrap 404 as os.ErrNotExist
+		if _, err := m.dst.Head(ctx, m.checkpointKey); os.IsNotExist(err) {
+			return nil, err
+		}
+		return nil, err
 	}
 	defer obj.Close()
 
