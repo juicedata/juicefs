@@ -345,6 +345,7 @@ test_checkpoint_config_mismatch(){
     # This should trigger config mismatch and start fresh
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --force-update 2>&1 | tee sync2.log
     # Should see "config mismatch" warning in log
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --update --threads 4 2>&1 | tee sync1.log || true
     grep -i "mismatch\|starting fresh" sync2.log || echo "Warning: expected checkpoint config mismatch message"
     compare_sync_dirs data/ /jfs/data/
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
