@@ -13,6 +13,7 @@
 |`--skip-dir-mtime=100ms` <VersionAdd>1.2</VersionAdd>|如果 mtime 差异小于该值（默认值：100ms），则跳过更新目录的属性。|
 |`--sort-dir` <VersionAdd>1.3</VersionAdd>|按名称对目录中的条目进行排序|
 |`--fast-statfs` <VersionAdd>1.3</VersionAdd>|通过使用本地缓存减少元数据访问提升`statfs`性能，准确性会降低（默认：false）|
+|`--network-interfaces=value` <VersionAdd>1.4</VersionAdd>|用于 IP 发现的网络接口白名单；仅使用指定的接口，逗号分隔（例如 `eth0,en0`），为空表示使用所有接口。|
 
 #### 元数据缓存参数 {#mount-metadata-cache-options}
 
