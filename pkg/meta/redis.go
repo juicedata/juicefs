@@ -5147,6 +5147,9 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
+	m.Lock()
+	m.fmt = &dm.Setting
+	m.Unlock()
 	if err = m.loadDumpedACLs(ctx); err != nil {
 		return err
 	}

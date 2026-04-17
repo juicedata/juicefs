@@ -4288,6 +4288,9 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
+	m.Lock()
+	m.fmt = &dm.Setting
+	m.Unlock()
 
 	if err = m.loadDumpedACLs(Background()); err != nil {
 		return err
