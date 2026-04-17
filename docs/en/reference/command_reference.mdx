@@ -242,6 +242,8 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |the default storage class|
 |`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
 |`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|
+|`--max-uploads=20`|maximum number of concurrent uploads (default: 20)|
+|`--max-downloads=200` <VersionAdd>1.4</VersionAdd>|maximum number of concurrent downloads (default: 200)|
 
 #### Management options {#config-management-options}
 
