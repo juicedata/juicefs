@@ -264,7 +264,7 @@ test_checkpoint_basic_resume(){
         dd if=/dev/urandom of=data/file$i bs=64K count=1 status=none
     done
     # First sync: interrupt with SIGINT after short delay
-    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --threads 2 2>&1 | tee sync1.log || true
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --threads 2 --debug 2>&1 | tee sync1.log || true
     # Check that checkpoint file was created in destination
     checkpoint_file=$(find /jfs/data/ -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
     if [ -z "$checkpoint_file" ]; then
@@ -273,7 +273,7 @@ test_checkpoint_basic_resume(){
     fi
     echo "Checkpoint file found: $checkpoint_file"
     # Resume sync with checkpoint
-    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s 2>&1 | tee sync2.log || true
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --debug 2>&1 | tee sync2.log || true
     # Verify all files are synced correctly
     compare_sync_dirs data/ /jfs/data/
     # Verify checkpoint file is cleaned up after successful sync
