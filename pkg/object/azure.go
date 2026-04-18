@@ -317,22 +317,40 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, useTokenAuth: false}, nil
 	}
 
-	// Priority 2: Try managed identity / token-based authentication if no account key provided
+	// Priority 2: No account key — use SAS token or managed identity
 	if accountKey == "" {
-		logger.Debugf("No account key provided, attempting token-based authentication (managed identity, Azure CLI, etc.)")
-		tokenCred, err := createAzureCredential()
-		if err != nil {
-			return nil, fmt.Errorf("Failed to create Azure credential (managed identity/Azure CLI): %v", err)
-		}
-
 		var domain string
 		if len(hostParts) > 1 {
 			domain = hostParts[1]
 			if !strings.HasPrefix(hostParts[1], "blob") {
 				domain = fmt.Sprintf("blob.%s", hostParts[1])
 			}
-		} else if domain, err = autoWasbEndpointWithToken(containerName, accountName, uri.Scheme, tokenCred); err != nil {
-			return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
+		}
+
+		if token != "" {
+			// SAS token authentication via --session-token
+			logger.Debugf("Using SAS token authentication")
+			if domain == "" {
+				domain = "blob.core.windows.net"
+			}
+			sasURL := fmt.Sprintf("%s://%s.%s?%s", uri.Scheme, accountName, domain, token)
+			client, err := azblob.NewClientWithNoCredential(sasURL, nil)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to create Azure blob client with SAS token: %v", err)
+			}
+			return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName}, nil
+		}
+
+		// Managed identity / token-based authentication
+		logger.Debugf("No account key provided, attempting token-based authentication (managed identity, Azure CLI, etc.)")
+		tokenCred, err := createAzureCredential()
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create Azure credential (managed identity/Azure CLI): %v", err)
+		}
+		if domain == "" {
+			if domain, err = autoWasbEndpointWithToken(containerName, accountName, uri.Scheme, tokenCred); err != nil {
+				return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
+			}
 		}
 
 		serviceURL := fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain)
