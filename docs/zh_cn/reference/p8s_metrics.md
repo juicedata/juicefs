@@ -108,6 +108,18 @@ sidebar_position: 4
 |----------------------------------------| -----------        | ---- |
 | `juicefs_compact_size_histogram_bytes` | 合并数据的大小分布 | 字节 |
 | `juicefs_used_read_buffer_size_bytes`  | 当前用于读取的缓冲区的大小 |    |
+| `juicefs_bgjob_duration_seconds` | 后台清理任务耗时（标签：`job`、`status`） | 秒 |
+| `juicefs_bgjob_deletions_total` | 后台任务执行的删除总数（标签：`job`） | |
+
+## 挂载配置 {#mount-configuration}
+
+### 指标
+
+| 名称 | 描述 | 单位 |
+|-|-|-|
+| `subdir_info` | 当前挂载的子目录配置信息（标签：`subdir`，值恒为 `1`） | |
+
+`subdir` 标签包含挂载的子目录路径，空字符串表示根挂载。
 
 ## 数据同步 {#sync}
 

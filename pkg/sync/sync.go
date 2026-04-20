@@ -236,8 +236,7 @@ func formatSize(bytes int64) string {
 	return fmt.Sprintf("%.2f %siB", v, units[z])
 }
 
-// ListAll on all the keys that starts at marker from object storage.
-func ListAll(store object.ObjectStorage, prefix, start, end string, followLink bool) (<-chan object.Object, error) {
+func listAll(store object.ObjectStorage, prefix, start, end string, followLink, includeStart bool) (<-chan object.Object, error) {
 	startTime := time.Now()
 	logger.Debugf("Iterating objects from %s with prefix %s start %q", store, prefix, start)
 
@@ -245,7 +244,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 
 	// As the result of object storage's List method doesn't include the marker key,
 	// we try List the marker key separately.
-	if start != "" && strings.HasPrefix(start, prefix) {
+	if includeStart && start != "" && strings.HasPrefix(start, prefix) {
 		if obj, err := store.Head(ctx, start); err == nil {
 			logger.Debugf("Found start key: %s from %s in %s", start, store, time.Since(startTime))
 			out <- obj
@@ -333,6 +332,11 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 		close(out)
 	}()
 	return out, nil
+}
+
+// ListAll on all the keys that starts at marker from object storage.
+func ListAll(store object.ObjectStorage, prefix, start, end string, followLink bool) (<-chan object.Object, error) {
+	return listAll(store, prefix, start, end, followLink, true)
 }
 
 var bufPool = sync.Pool{
@@ -652,12 +656,6 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64, calChks
 		if err == nil {
 			err = dst.Put(ctx, key, r)
 		}
-		if err != nil {
-			if _, e := src.Head(ctx, key); os.IsNotExist(e) {
-				logger.Debugf("Head src %s: %s", key, err)
-				err = utils.ErrSkipped
-			}
-		}
 		return r.chksum, err
 	}
 	return doCopySingle0(src, dst, key, size, calChksum)
@@ -952,9 +950,15 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 			}
 		}
 	}
+
 	if err == nil {
 		logger.Debugf("Copied data of %s (%d bytes) in %s", key, size, time.Since(start))
 	} else {
+		if _, e := src.Head(ctx, key); os.IsNotExist(e) {
+			logger.Debugf("Head src %s: %s", key, err)
+			err = utils.ErrSkipped
+			return 0, err
+		}
 		logger.Errorf("Failed to copy data of %s in %s: %s", key, time.Since(start), err)
 	}
 	return srcChksum, err
@@ -1111,7 +1115,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			}
 		}
 
-		trackCheckpointCompletion(key, taskErr != nil, checkpointMgr, config)
+		trackCheckpointCompletion(key, taskErr, checkpointMgr, config)
 		incrHandled(1)
 		done()
 	}
@@ -1234,11 +1238,13 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
 	startAfter := start
+	includeStart := true
 	if lastKey := checkpointMgr.GetLastListedKey(prefix); lastKey != "" {
 		startAfter = lastKey
+		includeStart = false
 	}
 
-	srckeys, err := ListAll(src, prefix, startAfter, end, !config.Links)
+	srckeys, err := listAll(src, prefix, startAfter, end, !config.Links, includeStart)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", src, err)
 	}
@@ -1249,7 +1255,7 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 		close(t)
 		dstkeys = t
 	} else {
-		dstkeys, err = ListAll(dst, prefix, startAfter, end, !config.Links)
+		dstkeys, err = listAll(dst, prefix, startAfter, end, !config.Links, includeStart)
 		if err != nil {
 			return fmt.Errorf("list %s: %s", dst, err)
 		}
@@ -1436,9 +1442,6 @@ func parseIncludeRules(args []string) (rules []rule) {
 
 func filterKey(o object.Object, now time.Time, rules []rule, config *Config) bool {
 	var ok bool = true
-	if object.IsJuiceFSTempKey(o.Key()) {
-		return false
-	}
 	if !o.IsDir() && !o.IsSymlink() {
 		ok = o.Size() >= int64(config.MinSize) && o.Size() <= int64(config.MaxSize)
 		if ok && config.MaxAge > 0 {
@@ -1927,7 +1930,13 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if config.EnableCheckpoint && config.Manager == "" {
 		checkpointMgr = NewCheckpointManager(src, dst, config)
-		if ckpt, err := checkpointMgr.Load(); err == nil {
+		if config.CheckpointForceReset {
+			if err := checkpointMgr.DeleteCheckpoint(); err != nil && !errors.Is(err, os.ErrNotExist) {
+				logger.Warnf("Failed to delete existing checkpoint: %v", err)
+			}
+			checkpointMgr.Reset(config)
+			logger.Infof("Force reset checkpoint, starting fresh")
+		} else if ckpt, err := checkpointMgr.Load(); err == nil {
 			if checkpointMgr.ValidateConfig(config) {
 				if len(ckpt.PrefixState) > 0 || len(ckpt.SrcDelayDel) > 0 || len(ckpt.DstDelayDel) > 0 {
 					checkpoint = ckpt
@@ -2064,9 +2073,14 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			stats.Skipped = skipped.Current()
 			stats.SkippedBytes = skippedBytes.Current()
 			stats.Handled = handled.Current()
-			if failed != nil {
-				stats.Failed = failed.Current()
+			stats.Failed = 0
+			checkpointMgr.checkpoint.RLock()
+			for _, state := range checkpointMgr.checkpoint.PrefixState {
+				state.RLock()
+				stats.Failed += int64(len(state.FailedKeys))
+				state.RUnlock()
 			}
+			checkpointMgr.checkpoint.RUnlock()
 		}
 	}
 
@@ -2096,7 +2110,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				msg += fmt.Sprintf(", failed: %d", failed.Current())
 			}
 			if total-handled.Current()-extra.Current() > 0 {
-				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
+				msg += fmt.Sprintf(", lost: %d", total-handled.Current()-extra.Current())
 			}
 			logger.Info(msg)
 
@@ -2127,9 +2141,6 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if !config.Dry {
 		failed = progress.AddCountSpinner("Failed objects")
-		if checkpoint != nil {
-			failed.SetCurrent(checkpoint.Stats.Failed)
-		}
 		if config.MaxFailure > 0 {
 			go func() {
 				for {

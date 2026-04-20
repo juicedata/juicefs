@@ -138,7 +138,7 @@ type engine interface {
 	// @trySync: try sync dir stat if broken or not existed
 	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, syscall.Errno)
 	doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno)
-	doSyncVolumeStat(ctx Context) error
+	doSyncVolumeStat(ctx Context, used, inodes int64) error
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -166,7 +166,7 @@ type engine interface {
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
 type pendingSliceScan func(id uint64, size uint32) (clean bool, err error)
-type trashFileScan func(inode Ino, size uint64, ts time.Time) (clean bool, err error)
+type trashFileScan func(inode Ino, size uint64, ts time.Time, count int64) (clean bool, err error)
 type pendingFileScan func(ino Ino, size uint64, ts int64) (clean bool, err error)
 
 // fsStat aligned for atomic operations
@@ -292,7 +292,7 @@ type baseMeta struct {
 	dSliceMu sync.Mutex
 	dSliceWG sync.WaitGroup
 
-	dirStatsLock sync.Mutex
+	dirStatsLock sync.RWMutex
 	dirStats     map[Ino]dirStat
 
 	fsStatsLock sync.Mutex
@@ -1787,7 +1787,6 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	st := m.en.doBatchClone(ctx, srcParent, dstParent, entries, cmode, cumask, &r)
 	if st == 0 {
 		m.en.updateStats(r.space, r.inodes)
-		m.updateDirStat(ctx, dstParent, r.length, r.space, r.inodes)
 		m.updateDirQuota(ctx, dstParent, r.space, r.inodes)
 		for _, q := range r.deltas {
 			m.updateUserGroupStat(ctx, q.Uid, q.Gid, q.Space, q.Inodes)
@@ -2418,6 +2417,28 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	nodeBar := progress.AddCountBar("Checked nodes", 0)
 
 	var hasError bool
+	var walkError bool
+	needSyncVolumeStat := fpath == "/" && opt.Repair && opt.SyncDirStat
+	seen := make(map[Ino]bool)
+	var volumeUsed, volumeInodes int64
+	recordStat := func(ino Ino, attr *Attr) {
+		if !needSyncVolumeStat || ino == RootInode || ino == TrashInode {
+			return
+		}
+		if attr.Typ != TypeDirectory {
+			if attr.Nlink > 1 {
+				if seen[ino] {
+					return
+				}
+				seen[ino] = true
+			}
+			volumeUsed += align4K(attr.Length)
+			volumeInodes += 1
+			return
+		}
+		volumeUsed += align4K(0)
+		volumeInodes += 1
+	}
 	type node struct {
 		inode Ino
 		path  string
@@ -2429,11 +2450,21 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 		var count int64
 		if opt.Recursive {
 			if st := m.walk(ctx, inode, fpath, &attr, func(ctx Context, inode Ino, path string, attr *Attr) {
+				recordStat(inode, attr)
 				nodes <- &node{inode, path, attr}
 				atomic.AddInt64(&count, 1)
 			}); st != 0 {
-				hasError = true
+				walkError = true
 				logger.Errorf("Walk %s: %s", fpath, st)
+			}
+			if needSyncVolumeStat && m.getFormat().TrashDays > 0 {
+				trashAttr := Attr{Typ: TypeDirectory}
+				if st := m.walk(ctx, TrashInode, "/.trash", &trashAttr, func(_ Context, ino Ino, _ string, a *Attr) {
+					recordStat(ino, a)
+				}); st != 0 {
+					walkError = true
+					logger.Errorf("Walk /.trash: %s", st)
+				}
 			}
 		} else {
 			nodes <- &node{inode, fpath, &attr}
@@ -2584,13 +2615,13 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 		}()
 	}
 	wg.Wait()
-	if fpath == "/" && opt.Repair && opt.Recursive && opt.SyncDirStat {
-		if err := m.syncVolumeStat(ctx); err != nil {
+	if needSyncVolumeStat && !walkError {
+		if err := m.syncVolumeStat(ctx, volumeUsed, volumeInodes); err != nil {
 			logger.Errorf("Sync used space: %s", err)
 			hasError = true
 		}
 	}
-	if hasError {
+	if hasError || walkError {
 		return errors.New("some errors occurred, please check the log of fsck")
 	}
 
@@ -3096,41 +3127,28 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 	return 0
 }
 
-func (m *baseMeta) scanTrashEntry(ctx Context, scan func(inode Ino, size uint64)) error {
-	var st syscall.Errno
-	var entries []*Entry
-	if st = m.en.doReaddir(ctx, TrashInode, 1, &entries, -1); st != 0 {
-		return errors.Wrap(st, "read trash")
-	}
-
-	var subEntries []*Entry
-	for _, entry := range entries {
-		scan(entry.Inode, entry.Attr.Length)
-		subEntries = subEntries[:0]
-		if st = m.en.doReaddir(ctx, entry.Inode, 1, &subEntries, -1); st != 0 {
-			logger.Warnf("readdir subEntry %d: %s", entry.Inode, st)
-			continue
-		}
-		for _, se := range subEntries {
-			scan(se.Inode, se.Attr.Length)
-		}
-	}
-	return nil
-}
-
 func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 	var st syscall.Errno
 	var entries []*Entry
 	if st = m.en.doReaddir(ctx, TrashInode, 1, &entries, -1); st != 0 {
 		return errors.Wrap(st, "read trash")
 	}
-
 	var subEntries []*Entry
 	for _, entry := range entries {
 		ts, err := time.Parse("2006-01-02-15", string(entry.Name))
 		if err != nil {
 			logger.Warnf("bad entry as a subTrash: %s", entry.Name)
 			continue
+		}
+		if m.fmt.DirStats {
+			ds, st := m.GetDirStat(ctx, entry.Inode)
+			if st == 0 && ds != nil {
+				if _, err := scan(entry.Inode, uint64(ds.length), ts, ds.inodes); err != nil {
+					return errors.Wrap(err, "scan trash files")
+				}
+				continue
+			}
+			logger.Warnf("get dir stat %d: %s, fallback to readdir", entry.Inode, st)
 		}
 		subEntries = subEntries[:0]
 		if st = m.en.doReaddir(ctx, entry.Inode, 1, &subEntries, -1); st != 0 {
@@ -3139,7 +3157,7 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 		}
 		for _, se := range subEntries {
 			if se.Attr.Typ == TypeFile {
-				clean, err := scan(se.Inode, se.Attr.Length, ts)
+				clean, err := scan(se.Inode, se.Attr.Length, ts, 1)
 				if err != nil {
 					return errors.Wrap(err, "scan trash files")
 				}

@@ -328,6 +328,27 @@ juicefs format \
 For Azure users in China, the value of `EndpointSuffix` is `core.chinacloudapi.cn`.
 :::
 
+#### Managed Identity Authentication <VersionAdd>1.4</VersionAdd> {#azure-managed-identity}
+
+Starting from v1.4, JuiceFS supports Azure [Managed Identity](https://learn.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview) authentication. When `--access-key` and `--secret-key` are not provided, JuiceFS will automatically use the [DefaultAzureCredential](https://learn.microsoft.com/en-us/azure/developer/go/azure-sdk-authentication) chain, which tries the following credential sources in order:
+
+1. Environment variables (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`)
+2. Workload Identity (for Kubernetes)
+3. Managed Identity (system-assigned or user-assigned)
+4. Azure CLI credentials
+
+For example, to use managed identity on an Azure VM:
+
+```bash
+juicefs format \
+    --storage wasb \
+    --bucket https://<container>.<endpoint> \
+    ... \
+    myjfs
+```
+
+No `--access-key` or `--secret-key` is needed when using managed identity.
+
 ### Backblaze B2
 
 To use Backblaze B2 as a data storage for JuiceFS, you need to create [application key](https://www.backblaze.com/b2/docs/application_keys.html) first. **Application Key ID** and **Application Key** corresponds to Access Key and Secret Key, respectively.

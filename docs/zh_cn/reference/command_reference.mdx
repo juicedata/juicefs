@@ -239,6 +239,8 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--storage-class=value` <VersionAdd>1.1</VersionAdd>|默认存储类型。|
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
+|`--max-uploads=20`|上传并发上限（默认：20）|
+|`--max-downloads=200` <VersionAdd>1.4</VersionAdd>|下载并发上限（默认：200）|
 
 #### 管理参数 {#config-management-options}
 
@@ -373,6 +375,7 @@ juicefs fsck redis://localhost
 |`--repair` <VersionAdd>1.1</VersionAdd>|发现损坏后尽可能修复 (默认：false)|
 |`--recursive, -r` <VersionAdd>1.1</VersionAdd>|递归检查或修复 (默认值：false)|
 |`--sync-dir-stat` <VersionAdd>1.1</VersionAdd>|同步所有目录的状态，即使他们没有损坏 (注意：巨大的文件树可能会花费很长时间) (默认：false)|
+|`--repair-dir-mode value` <VersionAdd>1.4</VersionAdd>|修复目录时使用的权限模式，八进制格式（默认值："0755"）|
 
 ### `juicefs restore` <VersionAdd>1.1</VersionAdd> {#restore}
 
@@ -644,6 +647,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`MOUNTPOINT`|文件系统挂载点，例如：`/mnt/jfs`、`Z:`。|
 |`-d, --background`|后台运行，默认为 false。|
 |`--no-syslog`|禁用系统日志，默认为 false。|
+|`--hide-internal` <VersionAdd>1.4</VersionAdd>|在目录列表中隐藏所有内部文件（`.accesslog`、`.stats`、`.config`、`.control`），这些文件仍可通过完整路径访问（默认值：false）。|
 |`--log=path`|后台运行时日志文件的位置 (默认：`$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)|
 |`--force`|强制挂载即使挂载点已经被相同的文件系统挂载 (默认值:false)|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd>|新增／更新 `/etc/fstab` 中的条目，如果不存在将会创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接，默认为 false。|
@@ -955,6 +959,31 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--no-https`|不要使用 HTTPS，默认为 false。|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd>|目标端的新建文件的存储类型。|
 |`--bwlimit=0`|限制最大带宽，单位 Mbps，默认为 0 表示不限制。|
+|`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|全局流量控制服务的 URL，用于在多个 sync 实例间协调带宽。服务需提供 HTTP POST 接口，请求体 `{"bytes": <请求字节数>}`，响应体 `{"granted": <允许字节数>, "expired": <过期时间（毫秒）>}`。|
+
+`--traffic-control-url` 使用方法与接口定义：
+
+```shell
+# 为多个 sync 实例接入同一个全局流量控制服务
+juicefs sync SRC DST --traffic-control-url http://127.0.0.1:8080/traffic-control
+```
+
+* 接口定义：`POST /traffic-control`（以实际 URL 路径为准），`Content-Type: application/json`。
+* 请求定义：
+
+  ```json
+  {"bytes": 1048576}
+  ```
+
+  * `bytes`：本次申请的带宽额度（字节数）。正数表示申请额度，负数表示返还未使用额度。
+* 返回值定义：
+
+  ```json
+  {"granted": 524288, "expired": 1000}
+  ```
+
+  * `granted`：本次授予的可用字节数。
+  * `expired`：本次授予额度的过期时间（毫秒）。
 
 #### 分布式相关参数 {#sync-cluster-related-options}
 

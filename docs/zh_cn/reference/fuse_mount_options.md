@@ -45,6 +45,12 @@ FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentati
 
 这两个选项用来指定文件系统的所有者 ID 和所有者组 ID（不同于文件或目录的 UID、GID），用以做更高层级的权限校验。如果指定了 allow_other 选项，此选项将失效。用法如 `sudo juicefs mount -o user_id=100,group_id=100`。
 
+## ReadDirPlusAuto {#readdirplusauto}
+
+从 JuiceFS v1.4 开始，`ReadDirPlusAuto` 已自动启用。该特性允许 FUSE 内核模块自动决定是否使用 `ReadDirPlus` 操作（在返回目录条目的同时返回文件属性），而非仅使用普通的 `ReadDir`。这减少了目录列表时后续的 `getattr` 调用次数，显著提升了大目录的列举性能。
+
+这是一项内部优化，用户无需进行任何配置。
+
 ## debug
 
 该选项会将低层类库（`go-fuse`）的 Debug 信息输出到 `juicefs.log` 中。

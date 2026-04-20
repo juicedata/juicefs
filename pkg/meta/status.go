@@ -85,8 +85,8 @@ func Status(ctx context.Context, m Meta, trash bool, sections *Sections) error {
 				pendingDeletedSlicesSpinner.IncrInt64(int64(size))
 				return false, nil
 			},
-			func(_ Ino, size uint64, _ time.Time) (bool, error) {
-				trashFileSpinner.IncrInt64(int64(size))
+			func(_ Ino, size uint64, _ time.Time, count int64) (bool, error) {
+				trashFileSpinner.Add(count, int64(size))
 				return false, nil
 			},
 			func(_ Ino, size uint64, _ int64) (bool, error) {

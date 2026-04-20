@@ -797,36 +797,9 @@ func (m *redisMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.usedInodes, inodes)
 }
 
-func (m *redisMeta) doSyncVolumeStat(ctx Context) error {
+func (m *redisMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
-	}
-	var used, inodes int64
-	if err := m.hscan(ctx, m.dirUsedSpaceKey(), func(keys []string) error {
-		for i := 0; i < len(keys); i += 2 {
-			v, err := strconv.ParseInt(keys[i+1], 10, 64)
-			if err != nil {
-				logger.Warnf("invalid used space: %s->%s", keys[i], keys[i+1])
-				continue
-			}
-			used += v
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	if err := m.hscan(ctx, m.dirUsedInodesKey(), func(keys []string) error {
-		for i := 0; i < len(keys); i += 2 {
-			v, err := strconv.ParseInt(keys[i+1], 10, 64)
-			if err != nil {
-				logger.Warnf("invalid used inode: %s->%s", keys[i], keys[i+1])
-				continue
-			}
-			inodes += v
-		}
-		return nil
-	}); err != nil {
-		return err
 	}
 
 	var inoKeys []string
@@ -874,12 +847,6 @@ func (m *redisMeta) doSyncVolumeStat(ctx Context) error {
 				inodes += 1
 			}
 		}
-	}
-	if err := m.scanTrashEntry(ctx, func(_ Ino, length uint64) {
-		used += align4K(length)
-		inodes += 1
-	}); err != nil {
-		return err
 	}
 	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inodes)
 	if err := m.rdb.Set(ctx, m.totalInodesKey(), strconv.FormatInt(inodes, 10), 0).Err(); err != nil {
@@ -2401,10 +2368,10 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						if dtyp == TypeFile && tattr.Nlink == 0 && m.sid > 0 {
 							opened = m.of.IsOpen(dino)
 						}
-						defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 					} else if tattr.Parent > 0 {
 						tattr.Parent = trash
 					}
+					defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 				}
 			}
 			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {

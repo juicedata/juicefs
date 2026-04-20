@@ -327,6 +327,27 @@ juicefs format \
 对于 Azure 中国用户，`EndpointSuffix` 的值为 `core.chinacloudapi.cn`。
 :::
 
+#### 托管身份认证 <VersionAdd>1.4</VersionAdd> {#azure-managed-identity}
+
+从 v1.4 开始，JuiceFS 支持 Azure [托管身份](https://learn.microsoft.com/zh-cn/azure/active-directory/managed-identities-azure-resources/overview)认证。当未提供 `--access-key` 和 `--secret-key` 时，JuiceFS 将自动使用 [DefaultAzureCredential](https://learn.microsoft.com/zh-cn/azure/developer/go/azure-sdk-authentication) 凭据链，按以下顺序尝试：
+
+1. 环境变量（`AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_CLIENT_SECRET`）
+2. 工作负载身份（Kubernetes 环境）
+3. 托管身份（系统分配或用户分配）
+4. Azure CLI 凭据
+
+例如，在 Azure 虚拟机上使用托管身份：
+
+```bash
+juicefs format \
+    --storage wasb \
+    --bucket https://<container>.<endpoint> \
+    ... \
+    myjfs
+```
+
+使用托管身份时无需提供 `--access-key` 或 `--secret-key`。
+
 ### Backblaze B2
 
 使用 Backblaze B2 作为 JuiceFS 的数据存储，需要先创建 [application key](https://www.backblaze.com/b2/docs/application_keys.html)，**Application Key ID** 和 **Application Key** 分别对应 Access Key 和 Secret Key。

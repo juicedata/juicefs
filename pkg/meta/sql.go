@@ -1215,18 +1215,9 @@ func (m *dbMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newInodes, inodes)
 }
 
-func (m *dbMeta) doSyncVolumeStat(ctx Context) error {
+func (m *dbMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
-	}
-	var used, inode int64
-	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		total, err := s.SumsInt(&dirStats{}, "used_space", "used_inodes")
-		used += total[0]
-		inode += total[1]
-		return err
-	}); err != nil {
-		return err
 	}
 	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		queryResultMap, err := s.QueryString(m.sqlConv("SELECT length FROM node WHERE inode IN (SELECT inode FROM sustained)"))
@@ -1240,22 +1231,15 @@ func (m *dbMeta) doSyncVolumeStat(ctx Context) error {
 				continue
 			}
 			used += align4K(uint64(value))
-			inode += 1
+			inodes += 1
 		}
 		return nil
 	}); err != nil {
 		return err
 	}
-
-	if err := m.scanTrashEntry(ctx, func(_ Ino, length uint64) {
-		used += align4K(length)
-		inode += 1
-	}); err != nil {
-		return err
-	}
-	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inode)
+	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inodes)
 	return m.txn(func(s *xorm.Session) error {
-		if _, err := s.Cols("value").Update(&counter{Value: inode}, &counter{Name: totalInodes}); err != nil {
+		if _, err := s.Cols("value").Update(&counter{Value: inodes}, &counter{Name: totalInodes}); err != nil {
 			return fmt.Errorf("update totalInodes: %s", err)
 		}
 		_, err := s.Cols("value").Update(&counter{Value: used}, &counter{Name: usedSpace})
@@ -2275,10 +2259,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if de.Type == TypeFile && dn.Nlink == 0 && m.sid > 0 {
 						opened = m.of.IsOpen(dn.Inode)
 					}
-					defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 				} else if dn.Parent > 0 {
 					dn.Parent = trash
 				}
+				defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 			}
 			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
 				return syscall.EACCES

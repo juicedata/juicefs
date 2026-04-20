@@ -66,6 +66,13 @@ func (s *DoubleSpinner) IncrInt64(size int64) {
 	s.bytes.IncrInt64(size)
 }
 
+func (s *DoubleSpinner) Add(count, size int64) {
+	for i := int64(0); i < count; i++ {
+		s.count.Increment()
+	}
+	s.bytes.IncrInt64(size)
+}
+
 func (s *DoubleSpinner) Done() {
 	s.count.SetTotal(0, true)
 	s.bytes.SetTotal(0, true)

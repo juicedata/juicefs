@@ -1981,10 +1981,10 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						if dtyp == TypeFile && tattr.Nlink == 0 && m.sid > 0 {
 							opened = m.of.IsOpen(dino)
 						}
-						defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 					} else if tattr.Parent > 0 {
 						tattr.Parent = trash
 					}
+					defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 				}
 			}
 			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
@@ -3284,22 +3284,9 @@ func (m *kvMeta) cleanUgUsage(ctx Context, qtype uint32) error {
 	})
 }
 
-func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
+func (m *kvMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
-	}
-	var used, inodes int64
-	if err := m.client.txn(ctx, func(tx *kvTxn) error {
-		prefix := m.fmtKey("U")
-		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
-			stat := m.parseDirStat(v)
-			used += stat.space
-			inodes += stat.inodes
-			return true
-		})
-		return nil
-	}, 0); err != nil {
-		return err
 	}
 	// need add sustained file size
 	vals, err := m.scanKeys(ctx, m.fmtKey("SS"))
@@ -3321,13 +3308,6 @@ func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
 		}
 		used += align4K(attr.Length)
 		inodes += 1
-	}
-
-	if err := m.scanTrashEntry(ctx, func(_ Ino, length uint64) {
-		used += align4K(length)
-		inodes += 1
-	}); err != nil {
-		return err
 	}
 	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inodes)
 	err = m.setValue(m.counterKey(totalInodes), packCounter(inodes))

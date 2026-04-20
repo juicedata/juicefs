@@ -1,5 +1,5 @@
 #!/bin/bash -e
-REDIS_CSC_QUERY="client-cache=true&client-cache-size=500&client-cache-expire=60s&client-cache-preload=100"
+REDIS_CSC_QUERY="client-cache=false&client-cache-size=500&client-cache-expire=60s&client-cache-preload=100"
 
 retry() {
     local retries=5
@@ -47,21 +47,31 @@ install_tikv(){
     fi
     echo tiup is $tiup
     echo $(whoami) $(pwd)
-    $tiup playground --mode tikv-slim > tikv.log 2>&1  &
+    # TODO update to latest TiDB 
+    $tiup playground 8.5.5 --mode tikv-slim > tikv.log 2>&1  &
     pid=$!
     timeout=60
     count=0
     while true; do
+        # Check if tiup playground process is still alive
+        if ! kill -0 $pid 2>/dev/null; then
+            echo "tiup playground process (pid=$pid) exited unexpectedly."
+            echo "=== tikv.log ==="
+            cat tikv.log || true
+            exit 1
+        fi
         echo 'head -1' > /tmp/head.txt
         lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt && exit_code=0 || exit_code=$?
         if [ $exit_code -eq 0 ]; then
-            echo "TiDB is running."
+            echo "TiKV is running."
             exit 0
         fi
         sleep 1
         count=$((count+1))
         if [ $count -eq $timeout ]; then
-            echo "TiDB failed to start within $timeout seconds."
+            echo "TiKV failed to start within $timeout seconds."
+            echo "=== tikv.log ==="
+            tail -50 tikv.log || true
             kill -9 $pid || true
             exit 1
         fi
@@ -83,7 +93,7 @@ install_tidb(){
     fi
     echo tiup is $tiup
     
-    $tiup playground 5.4.0 > tidb.log 2>&1  &
+    $tiup playground 8.5.5 > tidb.log 2>&1  &
     pid=$!
     timeout=60
     count=0

@@ -167,6 +167,13 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 	}
 	if stat == nil {
 		stat, st = m.calcDirStat(ctx, inode)
+	} else {
+		m.dirStatsLock.RLock()
+		pending := m.dirStats[inode]
+		m.dirStatsLock.RUnlock()
+		stat.length += pending.length
+		stat.space += pending.space
+		stat.inodes += pending.inodes
 	}
 	return
 }
@@ -262,8 +269,8 @@ func (m *baseMeta) doFlushStats() {
 	m.fsStatsLock.Unlock()
 }
 
-func (m *baseMeta) syncVolumeStat(ctx Context) error {
-	return m.en.doSyncVolumeStat(ctx)
+func (m *baseMeta) syncVolumeStat(ctx Context, used, inodes int64) error {
+	return m.en.doSyncVolumeStat(ctx, used, inodes)
 }
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, uid, gid uint32, parents ...Ino) syscall.Errno {

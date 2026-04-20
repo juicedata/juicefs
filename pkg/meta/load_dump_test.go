@@ -518,8 +518,8 @@ func testSecretAndTrash(t *testing.T, addr, addr2 string) {
 		29: 10485760,
 	}
 	cnt := 0
-	m2.getBase().scanTrashFiles(Background(), func(inode Ino, size uint64, ts time.Time) (clean bool, err error) {
-		cnt++
+	m2.getBase().scanTrashFiles(Background(), func(inode Ino, size uint64, ts time.Time, count int64) (clean bool, err error) {
+		cnt += int(count)
 		if tSize, ok := trashs[inode]; !ok || size != tSize {
 			t.Fatalf("trash file: %d %d", inode, size)
 		}
