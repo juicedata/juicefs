@@ -333,12 +333,13 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 			if domain == "" {
 				domain = "blob.core.windows.net"
 			}
-			sasURL := fmt.Sprintf("%s://%s.%s?%s", uri.Scheme, accountName, domain, token)
+			normalizedToken := strings.TrimPrefix(strings.TrimSpace(token), "?")
+			sasURL := fmt.Sprintf("%s://%s.%s?%s", uri.Scheme, accountName, domain, normalizedToken)
 			client, err := azblob.NewClientWithNoCredential(sasURL, nil)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to create Azure blob client with SAS token: %v", err)
 			}
-			return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName}, nil
+			return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, useTokenAuth: true}, nil
 		}
 
 		// Managed identity / token-based authentication
