@@ -476,7 +476,7 @@ juicefs format \
 ```
 
 :::note 注意
-Storj 在上传前就完成加密，且密钥不会离开客户端，因此它已经提供了与 JuiceFS 自身加密相同级别的数据保护。在此基础上再启用 `--encrypt-rsa-key`（[JuiceFS 静态数据加密](https://juicefs.com/docs/community/security/encryption/#enable-data-encryption-at-rest)）会导致每个数据块被重复加密：先由 JuiceFS（RSA 密钥封装 + AES）加密，再由 Uplink 库（AES-GCM）加密。安全性不会提升，但读写 CPU 开销会显著增加。更多信息请参考 [Storj 加密文档](https://storj.dev/learn/concepts/access/encryption-and-keys)。
+Storj 在上传前就完成加密，且密钥不会离开客户端，因此它已经提供了与 JuiceFS 自身加密相同级别的数据保护。在此基础上再启用 `--encrypt-rsa-key`（[JuiceFS 静态数据加密](https://juicefs.com/docs/community/security/encryption/#enable-data-encryption-at-rest)）会导致每个数据块被重复加密：先由 JuiceFS（使用 RSA 密钥封装和 AES）加密，再由 Uplink 库（AES-GCM）加密。安全性不会提升，但读写 CPU 开销会显著增加。更多信息请参考 [Storj 加密文档](https://storj.dev/learn/concepts/access/encryption-and-keys)。
 :::
 
 ### Vultr 对象存储
