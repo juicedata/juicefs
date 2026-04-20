@@ -648,4 +648,52 @@ test_sync_traffic_control_update(){
     echo "test_sync_traffic_control_update passed"
 }
 
+test_sync_files_from_ignore_nonexistent(){
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+
+    # Create source files
+    mkdir -p /jfs/src
+    for i in $(seq 1 10); do
+        echo "content-$i" > /jfs/src/exist_file$i
+    done
+
+    # Create files-from list with both existing and non-existing paths
+    cat > /tmp/files_list << 'EOF'
+exist_file1
+exist_file2
+exist_file3
+nonexistent_file_a
+nonexistent_file_b
+nonexistent_file_c
+exist_file4
+exist_file5
+EOF
+
+    ./juicefs sync /jfs/src/ /jfs/dst/ --files-from /tmp/files_list >sync.log 2>&1
+
+    # Verify non-existent paths were ignored (PR #6339)
+    grep "Ignored 3 non-existent paths from the file list" sync.log || (echo "FAIL: expected 3 ignored non-existent paths" && cat sync.log && exit 1)
+
+    # Verify existing files in the list were synced correctly
+    for i in 1 2 3 4 5; do
+        [ -f "/jfs/dst/exist_file$i" ] || (echo "FAIL: exist_file$i not synced" && exit 1)
+        expected="content-$i"
+        actual=$(cat "/jfs/dst/exist_file$i")
+        [ "$actual" = "$expected" ] || (echo "FAIL: exist_file$i content mismatch" && exit 1)
+    done
+
+    # Verify files NOT in the list were NOT synced
+    for i in 6 7 8 9 10; do
+        [ ! -f "/jfs/dst/exist_file$i" ] || (echo "FAIL: exist_file$i should not be synced (not in files list)" && exit 1)
+    done
+
+    # Verify non-existing files were NOT created in destination
+    [ ! -f "/jfs/dst/nonexistent_file_a" ] || (echo "FAIL: nonexistent_file_a should not exist" && exit 1)
+
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    echo "PASS: test_sync_files_from_ignore_nonexistent"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@

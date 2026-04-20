@@ -694,4 +694,52 @@ test_sync_traffic_control_cluster_encrypt(){
     echo "test_sync_traffic_control_cluster_encrypt passed"
 }
 
+test_sync_files_from_ignore_nonexistent_cluster(){
+    # PR #6339: verify files-from gracefully ignores non-existent paths in cluster mode
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+
+    # Create source files
+    mkdir -p /jfs/src
+    for i in $(seq 1 30); do
+        echo "content-$i" > /jfs/src/file$i
+    done
+    chmod -R 777 /jfs/src
+
+    # Create files-from list with both existing and non-existing paths
+    cat > /tmp/files_list << 'EOF'
+file1
+file2
+file3
+missing_aaa
+missing_bbb
+missing_ccc
+file10
+file20
+file30
+EOF
+    chmod 644 /tmp/files_list
+
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/src/ jfs://meta_url/dst/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --files-from /tmp/files_list \
+         >sync.log 2>&1
+
+    # Verify non-existent paths were ignored
+    grep "Ignored 3 non-existent paths from the file list" sync.log || (echo "FAIL: expected 3 ignored paths" && cat sync.log && exit 1)
+
+    # Verify existing files in the list were synced
+    for name in file1 file2 file3 file10 file20 file30; do
+        [ -f "/jfs/dst/$name" ] || (echo "FAIL: $name not synced" && exit 1)
+    done
+
+    # Verify files NOT in the list were NOT synced
+    for name in file4 file5 file15; do
+        [ ! -f "/jfs/dst/$name" ] || (echo "FAIL: $name should not be synced (not in files list)" && exit 1)
+    done
+
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    echo "PASS: test_sync_files_from_ignore_nonexistent_cluster"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@

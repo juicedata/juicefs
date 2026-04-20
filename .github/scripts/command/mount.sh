@@ -1434,5 +1434,46 @@ test_readdir_plus_auto() {
     echo "PASS: test_readdir_plus_auto"
 }
 
+test_sort_dir_readdirplus(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs --sort-dir
+
+    # Create files in reverse alphabetical order to verify sorting
+    for name in zzz_file ttt_file ppp_file mmm_file hhh_file ddd_file aaa_file; do
+        echo "$name" > "/jfs/$name"
+    done
+
+    # Create subdirectory with files in random order
+    mkdir -p /jfs/subdir
+    for name in zoo_entry cat_entry apple_entry banana_entry dog_entry; do
+        echo "$name" > "/jfs/subdir/$name"
+    done
+
+    # Use Python os.scandir() which exercises READDIRPLUS on FUSE
+    # Before the fix, ReaddirPlus did not sort entries even with --sort-dir
+    python3 -c "
+import os
+entries = [e.name for e in os.scandir('/jfs') if not e.name.startswith('.')]
+assert entries == sorted(entries), f'root entries not sorted: {entries}'
+sub_entries = [e.name for e in os.scandir('/jfs/subdir')]
+assert sub_entries == sorted(sub_entries), f'subdir entries not sorted: {sub_entries}'
+print('PASS: entries sorted via scandir (READDIRPLUS path)')
+"
+
+    # Verify ls -U (raw directory order) matches ls (sorted) for subdir
+    ls /jfs/subdir > /tmp/rdp_ls_sorted
+    ls -U /jfs/subdir > /tmp/rdp_ls_raw
+    diff /tmp/rdp_ls_sorted /tmp/rdp_ls_raw
+
+    # Verify with ls -l (triggers stat, uses READDIRPLUS cached attrs)
+    ls -l /jfs > /tmp/rdp_lsl
+    ls -U -l /jfs > /tmp/rdp_lsl_raw
+    diff /tmp/rdp_lsl /tmp/rdp_lsl_raw
+
+    rm -f /tmp/rdp_ls_sorted /tmp/rdp_ls_raw /tmp/rdp_lsl /tmp/rdp_lsl_raw
+    echo "PASS: test_sort_dir_readdirplus"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@
 
