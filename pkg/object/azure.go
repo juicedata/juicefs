@@ -310,8 +310,9 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 	if accountKey == "" {
 		domain := domainFromHost(hostParts)
 
-		if token != "" {
-			normalized := normalizeSASToken(token)
+		normalized := normalizeSASToken(token)
+
+		if normalized != "" {
 			if domain == "" {
 				var err error
 				if domain, err = autoWasbEndpoint(accountName, uri.Scheme, func(serviceURL string) (*azblob.Client, error) {
