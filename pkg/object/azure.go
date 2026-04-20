@@ -246,26 +246,30 @@ func createAzureCredential() (azcore.TokenCredential, error) {
 func autoWasbEndpoint(containerName, accountName, scheme string, makeClient func(serviceURL string) (*azblob.Client, error)) (string, error) {
 	baseURLs := []string{"blob.core.windows.net", "blob.core.chinacloudapi.cn"}
 	endpoint := ""
+	var lastErr error
 	for _, baseURL := range baseURLs {
 		if _, err := net.LookupIP(fmt.Sprintf("%s.%s", accountName, baseURL)); err != nil {
 			logger.Debugf("Attempt to resolve domain name %s failed: %s", baseURL, err)
+			lastErr = err
 			continue
 		}
 		serviceURL := fmt.Sprintf("%s://%s.%s", scheme, accountName, baseURL)
 		client, err := makeClient(serviceURL)
 		if err != nil {
 			logger.Debugf("Try to create client at %s failed: %s", baseURL, err)
+			lastErr = err
 			continue
 		}
 		if _, err = client.ServiceClient().GetProperties(ctx, nil); err != nil {
 			logger.Debugf("Try to get service properties at %s failed: %s", baseURL, err)
+			lastErr = err
 			continue
 		}
 		endpoint = baseURL
 		break
 	}
 	if endpoint == "" {
-		return "", fmt.Errorf("fail to get endpoint for container %s", containerName)
+		return "", fmt.Errorf("fail to get endpoint for container %s: %w", containerName, lastErr)
 	}
 	return endpoint, nil
 }
