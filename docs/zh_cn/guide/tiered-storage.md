@@ -4,7 +4,7 @@ sidebar_position: 8
 description: 了解 JuiceFS 分层存储（tier）的配置、迁移与恢复。
 ---
 
-JuiceFS 从 v1.5 开始支持分层存储，可以把不同目录或文件映射到不同对象存储类型（Storage Class），例如把热数据保留在标准存储，把冷数据下沉到 IA / Glacier 类存储，降低成本。
+JuiceFS 从 v1.4 开始支持分层存储，可以把不同目录或文件映射到不同对象存储类型（Storage Class），例如把热数据保留在标准存储，把冷数据下沉到 IA / Glacier 类存储，降低成本。
 
 ## 核心概念
 

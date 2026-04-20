@@ -237,8 +237,8 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#session-token)以了解更多。|
 |`--storage-class=value` <VersionAdd>1.1</VersionAdd>|默认存储类型。|
-|`--tier-id=value` <VersionAdd>1.5</VersionAdd>|分层存储 ID（1-3），与 `--tier-sc` 配合使用，用于配置指定 tier 的存储类型。ID `0` 为保留默认层，不可在此处配置。|
-|`--tier-sc=value` <VersionAdd>1.5</VersionAdd>|分层存储对应的对象存储类型（例如 `STANDARD_IA`、`INTELLIGENT_TIERING`、`GLACIER_IR`），需与 `--tier-id` 同时使用。|
+|`--tier-id=value` <VersionAdd>1.4</VersionAdd>|分层存储 ID（1-3），与 `--tier-sc` 配合使用，用于配置指定 tier 的存储类型。ID `0` 为保留默认层，不可在此处配置。|
+|`--tier-sc=value` <VersionAdd>1.4</VersionAdd>|分层存储对应的对象存储类型（例如 `STANDARD_IA`、`INTELLIGENT_TIERING`、`GLACIER_IR`），需与 `--tier-id` 同时使用。|
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
 |`--max-uploads=20`|上传并发上限（默认：20）|
@@ -1045,7 +1045,7 @@ juicefs compact /mnt/jfs
 |-|-|
 |`--threads, -p`| 并发执行任务的线程数（默认：10） |
 
-### `juicefs tier` <VersionAdd>1.5</VersionAdd> {#tier}
+### `juicefs tier` <VersionAdd>1.4</VersionAdd> {#tier}
 
 管理分层存储（Storage Tier）。详细介绍参考[「分层存储」](../guide/tiered-storage.md)。
 
