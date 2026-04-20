@@ -177,11 +177,14 @@ func TestRemoveEmptyDirReturnsEINTRWhenCanceled(t *testing.T) {
 	}
 
 	cctx := NewContext(1, 0, []uint32{0})
+	startCh := make(chan struct{})
 	go func() {
-		time.Sleep(5 * time.Millisecond)
+		<-startCh
+		time.Sleep(1 * time.Millisecond)
 		cctx.Cancel()
 	}()
 	var count uint64
+	close(startCh)
 	st := m.Remove(cctx, RootInode, "rmr-root", true, 16, &count)
 	if st != syscall.EINTR {
 		t.Fatalf("expected EINTR, got %s", st)

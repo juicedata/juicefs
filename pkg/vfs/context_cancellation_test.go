@@ -234,57 +234,6 @@ func buildTestTreeForControlCancel(t *testing.T, v *VFS, ctx Context, parent Ino
 	}
 }
 
-func openControl(t *testing.T, v *VFS, ctx Context) (*meta.Entry, uint64) {
-	t.Helper()
-	ce, st := v.Lookup(ctx, 1, ".control")
-	if st != 0 {
-		t.Fatalf("lookup .control: %s", st)
-	}
-	_, fh, st := v.Open(ctx, ce.Inode, syscall.O_RDWR)
-	if st != 0 {
-		t.Fatalf("open .control: %s", st)
-	}
-	return ce, fh
-}
-
-func readControlData(t *testing.T, v *VFS, ctx Context, inode Ino, fh uint64, off *uint64, timeout time.Duration) ([]byte, syscall.Errno) {
-	t.Helper()
-	resp := make([]byte, 2<<16)
-	deadline := time.Now().Add(timeout)
-	for {
-		if time.Now().After(deadline) {
-			return nil, syscall.ETIMEDOUT
-		}
-		n, eno := v.Read(ctx, inode, resp, *off, fh)
-		if eno != 0 {
-			return nil, eno
-		}
-		if n == 0 {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		*off += uint64(n)
-		var p uint64
-		for {
-			if n-int(p) == 1 {
-				return nil, syscall.Errno(resp[p])
-			}
-			if p+17 <= uint64(n) && resp[p] == meta.CPROGRESS {
-				p += 17
-				continue
-			}
-			if p+5 < uint64(n) && resp[p] == meta.CDATA {
-				sz := binary.BigEndian.Uint32(resp[p+1 : p+5])
-				if p+5+uint64(sz) > uint64(n) {
-					return nil, syscall.EIO
-				}
-				return resp[p+5 : p+5+uint64(sz)], 0
-			}
-			return nil, syscall.EIO
-		}
-	}
-}
-
 func TestControlInfoV2Cancellation(t *testing.T) {
 	v, _ := createTestVFS(nil, "")
 	ctx := NewLogContext(meta.Background())
