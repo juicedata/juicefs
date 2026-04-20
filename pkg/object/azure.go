@@ -243,7 +243,7 @@ func createAzureCredential() (azcore.TokenCredential, error) {
 	return cred, nil
 }
 
-func autoWasbEndpoint(containerName, accountName, scheme string, credential *azblob.SharedKeyCredential) (string, error) {
+func autoWasbEndpoint(containerName, accountName, scheme string, makeClient func(serviceURL string) (*azblob.Client, error)) (string, error) {
 	baseURLs := []string{"blob.core.windows.net", "blob.core.chinacloudapi.cn"}
 	endpoint := ""
 	for _, baseURL := range baseURLs {
@@ -251,35 +251,11 @@ func autoWasbEndpoint(containerName, accountName, scheme string, credential *azb
 			logger.Debugf("Attempt to resolve domain name %s failed: %s", baseURL, err)
 			continue
 		}
-		client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("%s://%s.%s", scheme, accountName, baseURL), credential, nil)
+		serviceURL := fmt.Sprintf("%s://%s.%s", scheme, accountName, baseURL)
+		client, err := makeClient(serviceURL)
 		if err != nil {
-			return "", err
-		}
-		if _, err = client.ServiceClient().GetProperties(ctx, nil); err != nil {
-			logger.Debugf("Try to get containers properties at %s failed: %s", baseURL, err)
+			logger.Debugf("Try to create client at %s failed: %s", baseURL, err)
 			continue
-		}
-		endpoint = baseURL
-		break
-	}
-
-	if endpoint == "" {
-		return "", fmt.Errorf("fail to get endpoint for container %s", containerName)
-	}
-	return endpoint, nil
-}
-
-func autoWasbEndpointWithToken(containerName, accountName, scheme string, credential azcore.TokenCredential) (string, error) {
-	baseURLs := []string{"blob.core.windows.net", "blob.core.chinacloudapi.cn"}
-	endpoint := ""
-	for _, baseURL := range baseURLs {
-		if _, err := net.LookupIP(fmt.Sprintf("%s.%s", accountName, baseURL)); err != nil {
-			logger.Debugf("Attempt to resolve domain name %s failed: %s", baseURL, err)
-			continue
-		}
-		client, err := azblob.NewClient(fmt.Sprintf("%s://%s.%s", scheme, accountName, baseURL), credential, nil)
-		if err != nil {
-			return "", err
 		}
 		if _, err = client.ServiceClient().GetProperties(ctx, nil); err != nil {
 			logger.Debugf("Try to get service properties at %s failed: %s", baseURL, err)
@@ -288,11 +264,30 @@ func autoWasbEndpointWithToken(containerName, accountName, scheme string, creden
 		endpoint = baseURL
 		break
 	}
-
 	if endpoint == "" {
 		return "", fmt.Errorf("fail to get endpoint for container %s", containerName)
 	}
 	return endpoint, nil
+}
+
+func autoWasbEndpointWithSharedKey(containerName, accountName, scheme string, credential *azblob.SharedKeyCredential) (string, error) {
+	return autoWasbEndpoint(containerName, accountName, scheme, func(serviceURL string) (*azblob.Client, error) {
+		return azblob.NewClientWithSharedKeyCredential(serviceURL, credential, nil)
+	})
+}
+
+func autoWasbEndpointWithToken(containerName, accountName, scheme string, credential azcore.TokenCredential) (string, error) {
+	return autoWasbEndpoint(containerName, accountName, scheme, func(serviceURL string) (*azblob.Client, error) {
+		return azblob.NewClient(serviceURL, credential, nil)
+	})
+}
+
+func autoWasbEndpointWithSASToken(containerName, accountName, scheme, token string) (string, error) {
+	normalizedToken := strings.TrimPrefix(strings.TrimSpace(token), "?")
+	return autoWasbEndpoint(containerName, accountName, scheme, func(serviceURL string) (*azblob.Client, error) {
+		sasURL := serviceURL + "?" + normalizedToken
+		return azblob.NewClientWithNoCredential(sasURL, nil)
+	})
 }
 
 func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, error) {
@@ -331,7 +326,10 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 			// SAS token authentication via --session-token
 			logger.Debugf("Using SAS token authentication")
 			if domain == "" {
-				domain = "blob.core.windows.net"
+				var err error
+				if domain, err = autoWasbEndpointWithSASToken(containerName, accountName, uri.Scheme, token); err != nil {
+					return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
+				}
 			}
 			normalizedToken := strings.TrimPrefix(strings.TrimSpace(token), "?")
 			sasURL := fmt.Sprintf("%s://%s.%s?%s", uri.Scheme, accountName, domain, normalizedToken)
@@ -376,7 +374,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 		if !strings.HasPrefix(hostParts[1], "blob") {
 			domain = fmt.Sprintf("blob.%s", hostParts[1])
 		}
-	} else if domain, err = autoWasbEndpoint(containerName, accountName, uri.Scheme, credential); err != nil {
+	} else if domain, err = autoWasbEndpointWithSharedKey(containerName, accountName, uri.Scheme, credential); err != nil {
 		return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
 	}
 
