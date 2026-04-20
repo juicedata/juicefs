@@ -385,6 +385,8 @@ test_sync_traffic_control_encrypt(){
     check_tc_log 2
     kill_traffic_control_server
     echo "test_sync_traffic_control_encrypt passed"
+}
+
 test_checkpoint_minio_basic(){
     # Test: checkpoint basic resume for minio-to-minio sync
     prepare_test

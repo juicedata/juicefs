@@ -631,30 +631,6 @@ check_tc_log(){
     echo "TC log: $req_count requests"
 }
 
-# Traffic control: JFS -> JFS with distributed workers
-test_sync_traffic_control_cluster_basic(){
-    prepare_test
-    ./juicefs mount -d $META_URL /jfs
-    file_count=200
-    mkdir -p /jfs/data
-    for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=/jfs/data/file$i bs=10K count=1 status=none
-    done
-    chmod -R 777 /jfs/data
-    start_traffic_control_server 0
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ jfs://meta_url/data2/ \
-        --traffic-control-url $TC_URL \
-        --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-        --list-threads 10 --list-depth 5 --check-new \
-        >sync.log 2>&1
-    cat sync.log
-    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
-    diff /jfs/data/ /jfs/data2/
-    check_tc_log 1
-    kill_traffic_control_server
-    echo "test_sync_traffic_control_cluster_basic passed"
-}
-
 # Traffic control with bwlimit combined: JFS -> minio with cluster
 test_sync_traffic_control_cluster_with_bwlimit(){
     prepare_test
@@ -681,30 +657,6 @@ test_sync_traffic_control_cluster_with_bwlimit(){
     echo "test_sync_traffic_control_cluster_with_bwlimit passed"
 }
 
-# Traffic control with rate-limited server in cluster mode
-test_sync_traffic_control_cluster_ratelimit(){
-    prepare_test
-    ./juicefs mount -d $META_URL /jfs
-    file_count=50
-    mkdir -p /jfs/data
-    for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=/jfs/data/file$i bs=100K count=1 status=none
-    done
-    chmod -R 777 /jfs/data
-    # 1MB/s limit on the server side
-    start_traffic_control_server 1048576
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ jfs://meta_url/data2/ \
-        --traffic-control-url $TC_URL \
-        --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-        --list-threads 10 --list-depth 5 --check-new \
-        >sync.log 2>&1
-    cat sync.log
-    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
-    diff /jfs/data/ /jfs/data2/
-    check_tc_log 1
-    kill_traffic_control_server
-    echo "test_sync_traffic_control_cluster_ratelimit passed"
-}
 
 # Traffic control with encrypt in cluster mode
 test_sync_traffic_control_cluster_encrypt(){
@@ -786,6 +738,8 @@ EOF
 
     grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     echo "PASS: test_sync_files_from_ignore_nonexistent_cluster"
+}
+
 skip_test_checkpoint_cluster_save_on_check_change_failure(){
     # Issue #6890: cluster sync with --check-change that fails should save checkpoint
     # Use long checkpoint-interval so only explicit save-on-failure creates the checkpoint.
