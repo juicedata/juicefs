@@ -2110,7 +2110,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				msg += fmt.Sprintf(", failed: %d", failed.Current())
 			}
 			if total-handled.Current()-extra.Current() > 0 {
-				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
+				msg += fmt.Sprintf(", lost: %d", total-handled.Current()-extra.Current())
 			}
 			logger.Info(msg)
 
