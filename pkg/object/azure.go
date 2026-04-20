@@ -260,8 +260,8 @@ func autoWasbEndpoint(containerName, accountName, scheme string, makeClient func
 			lastErr = err
 			continue
 		}
-		if _, err = client.ServiceClient().NewContainerClient(containerName).GetProperties(ctx, nil); err != nil {
-			logger.Debugf("Try to get container properties at %s failed: %s", baseURL, err)
+		if _, err = client.ServiceClient().GetProperties(ctx, nil); err != nil {
+			logger.Debugf("Try to get service properties at %s failed: %s", baseURL, err)
 			lastErr = err
 			continue
 		}
