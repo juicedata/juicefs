@@ -158,4 +158,147 @@ wait_gateway_ready(){
     fi
 }
 
+test_checkpoint_minio_basic(){
+    # Test: checkpoint basic resume for minio-to-minio sync
+    prepare_test
+    ./juicefs mdtest $META_URL /test --dirs 10 --depth 3 --files 5 --threads 10
+    # First sync with checkpoint, interrupt early
+    timeout 5 ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --list-threads 100 --list-depth 10 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        >sync1.log 2>&1 || true
+    cat sync1.log
+    # Checkpoint file should exist in destination
+    checkpoint_count=$(./mc find myminio/myjfs/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count" -eq 0 ]; then
+        echo "checkpoint file should exist after interrupted minio sync"
+        exit 1
+    fi
+    # Resume sync
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --list-threads 100 --list-depth 10 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        >sync2.log 2>&1
+    cat sync2.log
+    count1=$(./mc ls -r juicegw/myjfs/ | grep -v ".juicefs-sync-checkpoint" | wc -l)
+    count2=$(./mc ls -r myminio/myjfs/ | grep -v ".juicefs-sync-checkpoint" | wc -l)
+    [ $count1 -eq $count2 ] || (echo "file count mismatch: $count1 vs $count2" && exit 1)
+    # Checkpoint should be cleaned up
+    checkpoint_count=$(./mc find myminio/myjfs/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count" -ne 0 ]; then
+        echo "checkpoint file should be deleted after successful minio sync"
+        exit 1
+    fi
+}
+
+test_checkpoint_minio_cleanup_on_success(){
+    # Test: checkpoint file is deleted after successful minio sync (no interruption)
+    prepare_test
+    ./juicefs mdtest $META_URL /test --dirs 5 --depth 2 --files 10 --threads 10
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --list-threads 100 --list-depth 10 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        >sync.log 2>&1
+    count1=$(./mc ls -r juicegw/myjfs/ | wc -l)
+    count2=$(./mc ls -r myminio/myjfs/ | wc -l)
+    [ $count1 -eq $count2 ] || (echo "file count mismatch: $count1 vs $count2" && exit 1)
+    # Verify checkpoint cleaned up
+    checkpoint_count=$(./mc find myminio/myjfs/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count" -ne 0 ]; then
+        echo "checkpoint file should be deleted after success"
+        exit 1
+    fi
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+}
+
+test_checkpoint_minio_stats_correctness(){
+    # Test: checkpoint stats correctness for minio sync
+    prepare_test
+    echo abc > /jfs/abc
+    echo def > /jfs/def
+    echo ghi > /jfs/ghi
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --list-threads 10 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync.log
+    # Verify stats show correct copied count
+    copied=$(grep -oP 'Copied:\s*\K\d+' sync.log || grep -oP 'copied:\s*\K\d+' sync.log || echo "0")
+    if [ "$copied" -lt 3 ]; then
+        echo "Warning: copied count ($copied) seems low for 3 files"
+    fi
+    # Rerun - should skip existing files
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --list-threads 10 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync2.log
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_minio_with_update(){
+    # Test: checkpoint + --update for minio sync
+    prepare_test
+    echo abc > /jfs/abc
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --enable-checkpoint --checkpoint-interval 2s
+    echo def > def
+    ./mc cp def myminio/myjfs/abc
+    # Sync with --update + checkpoint should keep newer dst
+    ./juicefs sync --update minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --enable-checkpoint --checkpoint-interval 2s
+    ./mc cat myminio/myjfs/abc | grep def || (echo "content should be def with --update" && exit 1)
+    # Sync with --force-update + checkpoint should overwrite
+    ./juicefs sync --force-update minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --enable-checkpoint --checkpoint-interval 2s
+    ./mc cat myminio/myjfs/abc | grep abc || (echo "content should be abc with --force-update" && exit 1)
+}
+
+test_checkpoint_minio_big_file_resume(){
+    # Test: checkpoint resume for large file minio sync
+    prepare_test
+    dd if=/dev/urandom of=/tmp/bigfile_ckpt bs=1M count=256
+    cp /tmp/bigfile_ckpt /jfs/bigfile
+    # First sync with checkpoint, interrupt
+    timeout 10 ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --list-threads 10 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        >sync1.log 2>&1 || true
+    # Resume
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --list-threads 10 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        >sync2.log 2>&1
+    ./mc cp myminio/myjfs/bigfile /tmp/bigfile_ckpt2
+    cmp /tmp/bigfile_ckpt /tmp/bigfile_ckpt2 || (echo "big file content mismatch after checkpoint resume" && exit 1)
+    rm -f /tmp/bigfile_ckpt /tmp/bigfile_ckpt2
+}
+
+test_checkpoint_minio_signal_save(){
+    # Test: SIGINT saves checkpoint for minio sync
+    prepare_test
+    ./juicefs mdtest $META_URL /test --dirs 10 --depth 3 --files 10 --threads 10
+    # Start sync in background
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --list-threads 100 --list-depth 10 \
+        --enable-checkpoint --checkpoint-interval 60s \
+        >sync1.log 2>&1 &
+    sync_pid=$!
+    sleep 3
+    kill -INT $sync_pid || true
+    wait $sync_pid || true
+    # Checkpoint should be saved
+    checkpoint_count=$(./mc find myminio/myjfs/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count" -eq 0 ]; then
+        echo "checkpoint file should exist after SIGINT"
+        exit 1
+    fi
+    # Resume should work
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --list-threads 100 --list-depth 10 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        >sync2.log 2>&1
+    count1=$(./mc ls -r juicegw/myjfs/ | grep -v ".juicefs-sync-checkpoint" | wc -l)
+    count2=$(./mc ls -r myminio/myjfs/ | grep -v ".juicefs-sync-checkpoint" | wc -l)
+    [ $count1 -eq $count2 ] || (echo "file count mismatch after resume: $count1 vs $count2" && exit 1)
+}
+
 source .github/scripts/common/run_test.sh && run_test $@

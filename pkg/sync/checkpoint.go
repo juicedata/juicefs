@@ -130,6 +130,8 @@ type CheckpointManager struct {
 	checkpoint       *Checkpoint
 	checkpointKey    string
 	stopChan         chan struct{}
+	stopOnce         sync.Once
+	periodicDone     chan struct{}
 	keyPrefix        sync.Map               // key -> prefix mapping for fast lookup
 	statsUpdater     func(*CheckpointStats) // callback to update stats before save
 	restoredPrefixes sync.Map               // for dedup: prefixes already restored
@@ -219,7 +221,11 @@ func (m *CheckpointManager) Load() (*Checkpoint, error) {
 	go m.cleanupCheckpointTmp()
 	obj, err := m.dst.Get(m.checkpointKey, 0, -1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get checkpoint: %w", err)
+		// head to wrap 404 as os.ErrNotExist
+		if _, err := m.dst.Head(m.checkpointKey); os.IsNotExist(err) {
+			return nil, err
+		}
+		return nil, err
 	}
 	defer obj.Close()
 
@@ -509,15 +515,18 @@ func (m *CheckpointManager) RegisterChildPrefix(childPrefix string, listDepth in
 }
 
 func (m *CheckpointManager) Stop() {
-	select {
-	case <-m.stopChan:
-	default:
+	m.stopOnce.Do(func() {
 		close(m.stopChan)
+	})
+	if m.periodicDone != nil {
+		<-m.periodicDone
 	}
 }
 
 // DeleteCheckpoint removes the checkpoint file from storage.
 func (m *CheckpointManager) DeleteCheckpoint() error {
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
 	return m.dst.Delete(m.checkpointKey)
 }
 
@@ -527,7 +536,10 @@ func (m *CheckpointManager) Reset(config *Config) {
 }
 
 func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
+	done := make(chan struct{})
+	m.periodicDone = done
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
