@@ -4,7 +4,7 @@ sidebar_position: 8
 description: Learn how to configure, migrate, and restore JuiceFS tiered storage.
 ---
 
-JuiceFS tiered storage lets you map individual files or directories to different object storage classes (Storage Classes), for example keeping hot data in Standard storage while moving cold data to IA or Glacier-class storage to reduce costs.
+JuiceFS supports tiered storage since v1.5, letting you map individual files or directories to different object storage classes (Storage Classes), for example keeping hot data in Standard storage while moving cold data to IA or Glacier-class storage to reduce costs.
 
 ## Key Concepts
 
