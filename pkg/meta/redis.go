@@ -315,14 +315,15 @@ func (m *redisMeta) NewSession(record bool) error {
 
 func (m *redisMeta) doDeleteSlice(id uint64, size uint32) error {
 	ctx := Background()
-	return m.txn(ctx, func(tx *redis.Tx) error {
-		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HDel(ctx, m.sliceRefs(), m.sliceKey(id, size))
-			m.genLog(ctx, pipe, time.Now(), "DELETESLICE(%d,%d)", id, size)
-			return nil
-		})
-		return err
-	}, m.sliceRefs())
+	if !m.fmt.ChangeLog {
+		return m.rdb.HDel(ctx, m.sliceRefs(), m.sliceKey(id, size)).Err()
+	}
+	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.HDel(ctx, m.sliceRefs(), m.sliceKey(id, size))
+		m.genLog(ctx, pipe, time.Now(), "DELETESLICE(%d,%d)", id, size)
+		return nil
+	})
+	return err
 }
 
 func (m *redisMeta) Name() string {
@@ -3825,13 +3826,7 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 	}
 
 	if st == syscall.EINVAL {
-		_ = m.txn(ctx, func(tx *redis.Tx) error {
-			_, err := tx.Pipelined(ctx, func(p redis.Pipeliner) error {
-				p.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(id, size), -1)
-				return nil
-			})
-			return err
-		}, m.sliceRefs())
+		m.rdb.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(id, size), -1)
 	} else if st == 0 {
 		m.cleanupZeroRef(m.sliceKey(id, size))
 		if delayed == nil {
