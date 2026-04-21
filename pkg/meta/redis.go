@@ -314,8 +314,15 @@ func (m *redisMeta) NewSession(record bool) error {
 }
 
 func (m *redisMeta) doDeleteSlice(id uint64, size uint32) error {
-	// TODO: txn
-	return m.rdb.HDel(Background(), m.sliceRefs(), m.sliceKey(id, size)).Err()
+	ctx := Background()
+	return m.txn(ctx, func(tx *redis.Tx) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HDel(ctx, m.sliceRefs(), m.sliceKey(id, size))
+			m.genLog(ctx, pipe, time.Now(), "DELETESLICE(%d,%d)", id, size)
+			return nil
+		})
+		return err
+	}, m.sliceRefs())
 }
 
 func (m *redisMeta) Name() string {
@@ -425,15 +432,20 @@ func (m *redisMeta) doLoad() ([]byte, error) {
 }
 
 func (m *redisMeta) doNewSession(sinfo []byte, update bool) error {
-	// TODO: txn
-	err := m.rdb.ZAdd(Background(), m.allSessions(), redis.Z{
-		Score:  float64(m.expireTime()),
-		Member: strconv.FormatUint(m.sid, 10)}).Err()
+	ctx := Background()
+	ssid := strconv.FormatUint(m.sid, 10)
+	expire := m.expireTime()
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.ZAdd(ctx, m.allSessions(), redis.Z{Score: float64(expire), Member: ssid})
+			pipe.HSet(ctx, m.sessionInfos(), ssid, sinfo)
+			m.genLog(ctx, pipe, time.Now(), "NEWSESSION(%d,%d,%s)", m.sid, expire, logEncode(sinfo))
+			return nil
+		})
+		return err
+	}, m.allSessions(), m.sessionInfos())
 	if err != nil {
-		return fmt.Errorf("set session ID %d: %s", m.sid, err)
-	}
-	if err = m.rdb.HSet(Background(), m.sessionInfos(), m.sid, sinfo).Err(); err != nil {
-		return fmt.Errorf("set session info: %s", err)
+		return fmt.Errorf("new session %d: %s", m.sid, err)
 	}
 
 	if m.shaLookup, err = m.rdb.ScriptLoad(Background(), scriptLookup).Result(); err != nil {
@@ -490,7 +502,6 @@ func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 			changed = true
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, name, value, 0)
-				m.genLog(ctx, pipe, time.Now(), "SET(%s, %d)", name, value)
 				return nil
 			})
 			return err
@@ -2943,17 +2954,22 @@ func (m *redisMeta) doCleanStaleSession(sid uint64) error {
 		fail = true
 	}
 
-	if !fail {
-		// TODO
-		if err := m.rdb.HDel(ctx, m.sessionInfos(), ssid).Err(); err != nil {
-			logger.Warnf("HDel sessionInfos %s: %s", ssid, err)
-			fail = true
-		}
-	}
 	if fail {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
-		if n, err := m.rdb.ZRem(ctx, m.allSessions(), ssid).Result(); err != nil {
+		var removed *redis.IntCmd
+		if err := m.txn(ctx, func(tx *redis.Tx) error {
+			_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.HDel(ctx, m.sessionInfos(), ssid)
+				removed = pipe.ZRem(ctx, m.allSessions(), ssid)
+				m.genLog(ctx, pipe, time.Now(), "CLEANSESSION(%d)", sid)
+				return nil
+			})
+			return err
+		}, m.sessionInfos(), m.allSessions()); err != nil {
+			return err
+		}
+		if n, err := removed.Result(); err != nil {
 			return err
 		} else if n == 1 {
 			return nil
@@ -2998,19 +3014,27 @@ func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 func (m *redisMeta) doRefreshSession() error {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)
-	// we have to check sessionInfo here because the operations are not within a transaction
-	ok, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result()
-	// TODO:
-	if err == nil && !ok {
-		logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-		err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
-	}
-	if err != nil {
+	expire := m.expireTime()
+	return m.txn(ctx, func(tx *redis.Tx) error {
+		ok, err := tx.HExists(ctx, m.sessionInfos(), ssid).Result()
+		if err != nil {
+			return err
+		}
+		if !ok {
+			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
+		}
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			if !ok {
+				pipe.HSet(ctx, m.sessionInfos(), ssid, m.newSessionInfo())
+			}
+			pipe.ZAdd(ctx, m.allSessions(), redis.Z{
+				Score:  float64(expire),
+				Member: ssid,
+			})
+			return nil
+		})
 		return err
-	}
-	return m.rdb.ZAdd(ctx, m.allSessions(), redis.Z{
-		Score:  float64(m.expireTime()),
-		Member: ssid}).Err()
+	}, m.sessionInfos(), m.allSessions())
 }
 
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
@@ -3508,7 +3532,6 @@ func (m *redisMeta) cleanupZeroRef(key string) {
 		}
 		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
 			p.HDel(ctx, m.sliceRefs(), key)
-			m.genLog(ctx, p, time.Now(), "CLEANUP_ZERO_REF(%s)", key)
 			return nil
 		})
 		return err
@@ -3576,22 +3599,23 @@ func (m *redisMeta) cleanupOldSliceRefs(delete bool) {
 				todel = append(todel, ckeys[i])
 			} else {
 				vv, _ := strconv.Atoi(v.(string))
-				m.txn(ctx, func(tx *redis.Tx) error {
+				if err := m.txn(ctx, func(tx *redis.Tx) error {
 					_, err := tx.Pipelined(ctx, func(p redis.Pipeliner) error {
-						// FIXME
-						m.rdb.HIncrBy(ctx, m.sliceRefs(), ckeys[i], int64(vv))
-						m.rdb.DecrBy(ctx, ckeys[i], int64(vv))
-						m.genLog(ctx, p, time.Now(), "SLICEREF(%d,%s)", vv, ckeys[i])
+						p.HIncrBy(ctx, m.sliceRefs(), ckeys[i], int64(vv))
+						p.DecrBy(ctx, ckeys[i], int64(vv))
 						return nil
 					})
 					return err
-				})
+				}, m.sliceRefs(), ckeys[i]); err != nil {
+					return err
+				}
 				logger.Infof("move refs %d for slice %s", vv, ckeys[i])
 			}
 		}
 		if delete && len(todel) > 0 {
-			// FIXME:
-			m.rdb.Del(ctx, todel...)
+			if err := m.rdb.Del(ctx, todel...).Err(); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -3701,9 +3725,10 @@ func (r *redisMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 				continue
 			} else if ts >= uint64(edge) {
 				continue
-			}
-
-			if err := r.txn(ctx, func(tx *redis.Tx) error {
+			} else if id, e := strconv.ParseUint(ps[0], 10, 64); e != nil {
+				logger.Warnf("Invalid key %s", key)
+				continue
+			} else if err := r.txn(ctx, func(tx *redis.Tx) error {
 				ss, rs = ss[:0], rs[:0]
 				val, e := tx.HGet(ctx, r.delSlices(), key).Result()
 				if e == redis.Nil {
@@ -3721,7 +3746,7 @@ func (r *redisMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 						rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.Id, s.Size), -1))
 					}
 					pipe.HDel(ctx, r.delSlices(), key)
-					r.genLog(ctx, pipe, time.Now(), "CLEANUP_DELAYED_SLICES(%s)", key)
+					r.genLog(ctx, pipe, time.Now(), "CLEANUP_DELAYED_SLICES(%d,%d)", id, int64(ts))
 					return nil
 				})
 				return e
@@ -3784,7 +3809,7 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 					}
 				}
 			}
-			m.genLog(ctx, pipe, time.Now(), "COMPACTCHUNK(%d,%d,%d,%d,%d,%d,%d)", inode, indx, skipped, n, pos, id, size)
+			m.genLog(ctx, pipe, time.Now(), "COMPACTCHUNK(%d,%d,%d,%d,%d,%d,%d)", inode, indx, skipped, len(ss), pos, id, size)
 			return nil
 		})
 		return err
@@ -3803,11 +3828,10 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 		_ = m.txn(ctx, func(tx *redis.Tx) error {
 			_, err := tx.Pipelined(ctx, func(p redis.Pipeliner) error {
 				p.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(id, size), -1)
-				m.genLog(ctx, p, time.Now(), "SLICEREF(%d,%d,%d)", id, size, -1)
 				return nil
 			})
 			return err
-		})
+		}, m.sliceRefs())
 	} else if st == 0 {
 		m.cleanupZeroRef(m.sliceKey(id, size))
 		if delayed == nil {
@@ -4088,7 +4112,11 @@ func (m *redisMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 						rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Id, s.Size), -1))
 					}
 					pipe.HDel(ctx, m.delSlices(), key)
-					m.genLog(ctx, pipe, time.Now(), "CLEANUP_TRASH_SLICES(%s)", key)
+					id, err := strconv.ParseUint(ps[0], 10, 64)
+					if err != nil {
+						return fmt.Errorf("invalid key %s, fail to parse slice id", key)
+					}
+					m.genLog(ctx, pipe, time.Now(), "CLEANUP_TRASH_SLICES(%d,%d)", id, ts)
 					return nil
 				})
 			}
@@ -5668,9 +5696,8 @@ func (m *redisMeta) loadDumpedACLs(ctx Context) error {
 			acls[strconv.FormatUint(uint64(id), 10)] = rule.Encode()
 		}
 		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			tx.HSet(ctx, m.aclKey(), acls)
-			tx.Set(ctx, m.prefix+aclCounter, maxId, 0)
-			// FIXME:
+			pipe.HSet(ctx, m.aclKey(), acls)
+			pipe.Set(ctx, m.prefix+aclCounter, maxId, 0)
 			m.genLog(ctx, pipe, time.Now(), "LOADDUMPEDACLS(%d)", maxId)
 			return nil
 		})
@@ -5687,7 +5714,7 @@ func (m *redisMeta) doStoreToken(ctx Context, token []byte) (id uint32, st sysca
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, m.krbTokenKey(), strconv.FormatUint(uint64(newId), 10), token)
 			id = uint32(newId)
-			m.genLog(ctx, pipe, time.Now(), "STORETOKEN(%d,%s)", id, string(token))
+			m.genLog(ctx, pipe, time.Now(), "STORETOKEN(%d,%s)", id, logEncode(token))
 			return nil
 		})
 		return err
@@ -5706,7 +5733,7 @@ func (m *redisMeta) doUpdateToken(ctx Context, id uint32, token []byte) syscall.
 		}
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, m.krbTokenKey(), strconv.FormatUint(uint64(id), 10), token)
-			m.genLog(ctx, pipe, time.Now(), "UPDATETOKEN(%d,%s)", id, string(token))
+			m.genLog(ctx, pipe, time.Now(), "UPDATETOKEN(%d,%s)", id, logEncode(token))
 			return nil
 		})
 		return err
@@ -5736,7 +5763,7 @@ func (m *redisMeta) doDeleteTokens(ctx Context, ids []uint32) syscall.Errno {
 		}
 		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, m.krbTokenKey(), strIds...)
-			m.genLog(ctx, pipe, time.Now(), "DELETETOKENS(%v)", strIds)
+			m.genLog(ctx, pipe, time.Now(), "DELETETOKENS(%s)", strings.Join(strIds, ","))
 			return nil
 		})
 		return err
@@ -5745,23 +5772,19 @@ func (m *redisMeta) doDeleteTokens(ctx Context, ids []uint32) syscall.Errno {
 
 func (m *redisMeta) doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno) {
 	tokens = make(map[uint32][]byte)
-	// TODO: remove txn
-	err := m.txn(ctx, func(tx *redis.Tx) error {
-		vals, err := tx.HGetAll(ctx, m.krbTokenKey()).Result()
+	vals, err := m.rdb.HGetAll(ctx, m.krbTokenKey()).Result()
+	if err != nil {
+		return nil, errno(err)
+	}
+	for k, v := range vals {
+		id, err := strconv.ParseUint(k, 10, 32)
 		if err != nil {
-			return err
+			logger.Errorf("parse token id: %s: %v", k, err)
+			continue
 		}
-		for k, v := range vals {
-			id, err := strconv.ParseUint(k, 10, 32)
-			if err != nil {
-				logger.Errorf("parse token id: %s: %v", k, err)
-				continue
-			}
-			tokens[uint32(id)] = []byte(v)
-		}
-		return nil
-	}, m.krbTokenKey())
-	return tokens, errno(err)
+		tokens[uint32(id)] = []byte(v)
+	}
+	return tokens, 0
 }
 
 func (m *redisMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {

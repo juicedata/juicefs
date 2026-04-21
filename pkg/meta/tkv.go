@@ -124,7 +124,11 @@ func (m *kvMeta) Name() string {
 }
 
 func (m *kvMeta) doDeleteSlice(id uint64, size uint32) error {
-	return m.deleteKeys(m.sliceKey(id, size))
+	return m.txn(Background(), func(tx *kvTxn) error {
+		tx.delete(m.sliceKey(id, size))
+		m.genLog(tx, time.Now(), "DELETESLICE(%d,%d)", id, size)
+		return nil
+	})
 }
 
 func (m *kvMeta) keyLen(args ...interface{}) int {
@@ -1075,7 +1079,6 @@ func (m *kvMeta) txn(ctx Context, f func(tx *kvTxn) error, inodes ...Ino) error 
 func (m *kvMeta) setValue(key, value []byte) error {
 	return m.txn(Background(), func(tx *kvTxn) error {
 		tx.set(key, value)
-		m.genLog(tx, time.Now(), "SET(%s,%s)", logEncode(key), logEncode(value))
 		return nil
 	})
 }
@@ -2985,6 +2988,10 @@ func (m *kvMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 					rs = append(rs, tx.incrBy(m.sliceKey(s.Id, s.Size), -1))
 				}
 				tx.delete(key)
+				b := utils.ReadBuffer(key[1:])
+				ts := int64(b.Get64())
+				id := b.Get64()
+				m.genLog(tx, time.Now(), "CLEANUP_DELAYED_SLICES(%d,%d)", id, ts)
 				return nil
 			}); err != nil {
 				logger.Warnf("Cleanup delayed slices %q: %s", key, err)
@@ -3173,6 +3180,8 @@ func (m *kvMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 					rs = append(rs, tx.incrBy(m.sliceKey(s.Id, s.Size), -1))
 				}
 				tx.delete(key)
+				id := b.Get64()
+				m.genLog(tx, time.Now(), "CLEANUP_TRASH_SLICES(%d,%d)", id, int64(ts))
 			}
 			return nil
 		})
@@ -4893,6 +4902,7 @@ func (m *kvMeta) loadDumpedACLs(ctx Context) error {
 			tx.set(m.aclKey(id), rule.Encode())
 		}
 		tx.set(m.counterKey(aclCounter), packCounter(int64(maxId)))
+		m.genLog(tx, time.Now(), "LOADDUMPEDACLS(%d)", maxId)
 		return nil
 	})
 }
@@ -4917,7 +4927,7 @@ func (m *kvMeta) doUpdateToken(ctx Context, id uint32, token []byte) syscall.Err
 			return syscall.ENOENT
 		}
 		tx.set(m.krbTokenKey(id), token)
-		m.genLog(tx, time.Now(), "UPDATETOKEN(%d,%s)", id, string(token))
+		m.genLog(tx, time.Now(), "UPDATETOKEN(%d,%s)", id, logEncode(token))
 		return nil
 	}))
 }
@@ -4942,7 +4952,7 @@ func (m *kvMeta) doDeleteTokens(ctx Context, ids []uint32) syscall.Errno {
 		for i, id := range ids {
 			strIds[i] = strconv.FormatUint(uint64(id), 10)
 		}
-		m.genLog(tx, time.Now(), "DELETETOKENS(%v)", strings.Join(strIds, ","))
+		m.genLog(tx, time.Now(), "DELETETOKENS(%s)", strings.Join(strIds, ","))
 		return nil
 	}))
 }

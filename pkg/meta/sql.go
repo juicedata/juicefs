@@ -559,6 +559,9 @@ func (m *dbMeta) Name() string {
 func (m *dbMeta) doDeleteSlice(id uint64, size uint32) error {
 	return m.txn(func(s *xorm.Session) error {
 		_, err := s.Delete(&sliceRef{Id: id})
+		if err == nil {
+			m.genLog(Background(), s, time.Now().UnixNano(), "DELETESLICE(%d,%d)", id, size)
+		}
 		return err
 	})
 }
@@ -767,11 +770,18 @@ func (m *dbMeta) doNewSession(sinfo []byte, update bool) error {
 		if update {
 			return m.txn(func(s *xorm.Session) error {
 				_, err = s.Cols("expire", "info").Update(&beans, &session2{Sid: beans.Sid})
+				if err == nil {
+					m.genLog(Background(), s, time.Now().UnixNano(), "NEWSESSION(%d,%d,%s)", m.sid, beans.Expire, logEncode(sinfo))
+				}
 				return err
 			})
 		} else {
 			if err = m.txn(func(s *xorm.Session) error {
-				return mustInsert(s, &beans)
+				if err := mustInsert(s, &beans); err != nil {
+					return err
+				}
+				m.genLog(Background(), s, time.Now().UnixNano(), "NEWSESSION(%d,%d,%s)", m.sid, beans.Expire, logEncode(sinfo))
+				return nil
 			}); err == nil {
 				break
 			}
@@ -1008,7 +1018,10 @@ func (m *dbMeta) genLog(ctx Context, s *xorm.Session, ns int64, op string, args 
 	}
 	op = fmt.Sprintf(op, args...)
 	log := fmt.Sprintf("%d.%09d|%s|(%d,%d)", ns/1e9, ns%1e9, op, m.sid, m.getTxnId())
-	_ = mustInsert(s, &changeLog{Entry: log})
+	err := mustInsert(s, &changeLog{Entry: log})
+	if err != nil {
+		logger.Errorf("insert changelog: %s", err)
+	}
 }
 
 func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
@@ -3131,16 +3144,27 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
 		return m.txn(func(s *xorm.Session) error {
+			var deleted bool
 			if n, err := s.Delete(&session2{Sid: sid}); err != nil {
 				return err
 			} else if n == 1 {
-				return nil
+				deleted = true
 			}
 			ok, err := s.IsTableExist(&session{})
-			if err == nil && ok {
-				_, err = s.Delete(&session{Sid: sid})
+			if err != nil {
+				return err
 			}
-			return err
+			if ok {
+				n, err := s.Delete(&session{Sid: sid})
+				if err != nil {
+					return err
+				}
+				deleted = deleted || n == 1
+			}
+			if deleted {
+				m.genLog(Background(), s, time.Now().UnixNano(), "CLEANSESSION(%d)", sid)
+			}
+			return nil
 		})
 	}
 }
@@ -3548,7 +3572,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 			_, err = s.Cols("data_length", "used_space", "used_inodes").Update(record, &dirStats{Inode: ino})
 		}
 		if err == nil {
-			m.genLog(ctx, s, time.Now().UnixNano(), "DIRSTAT(%d):(%d,%d,%d)", ino, stat.length, stat.space, stat.inodes)
+			m.genLog(ctx, s, time.Now().UnixNano(), "DIRSTAT(%d,%d,%d,%d)", ino, stat.length, stat.space, stat.inodes)
 		}
 		return err
 	})
@@ -3736,7 +3760,7 @@ func (m *dbMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 					}
 				}
 				_, e := ses.Delete(&delslices{Id: ds.Id})
-				m.genLog(ctx, ses, time.Now().UnixNano(), "CLEANUP_DELAYED_SLICES(%d)", ds.Id)
+				m.genLog(ctx, ses, time.Now().UnixNano(), "CLEANUP_DELAYED_SLICES(%d,%d)", ds.Id, ds.Deleted)
 				return e
 			}); err != nil {
 				logger.Warnf("Cleanup delayed slices %d: %s", ds.Id, err)
@@ -3803,7 +3827,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 				}
 			}
 		}
-		m.genLog(Background(), s, time.Now().UnixNano(), "COMPACTCHUNK(%d,%d,%d,%d,%d,%d)", inode, indx, len(ss), skipped, id, size)
+		m.genLog(Background(), s, time.Now().UnixNano(), "COMPACTCHUNK(%d,%d,%d,%d,%d,%d,%d)", inode, indx, skipped, len(ss), pos, id, size)
 		return nil
 	}, inode))
 	// there could be false-negative that the compaction is successful, double-check
@@ -3967,7 +3991,7 @@ func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 					}
 				}
 				_, err = tx.Delete(del)
-				m.genLog(ctx, tx, time.Now().UnixNano(), "CLEANUP_TRASH_SLICES(%d)", del.Id)
+				m.genLog(ctx, tx, time.Now().UnixNano(), "CLEANUP_TRASH_SLICES(%d,%d)", del.Id, del.Deleted)
 			}
 			return err
 		})
@@ -4090,7 +4114,7 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 			}
 		}
 		if err == nil {
-			m.genLog(ctx, s, time.Now().UnixNano(), "REPAIR(%d)", inode)
+			m.genLog(ctx, s, time.Now().UnixNano(), "REPAIRDIR(%d)", inode)
 		}
 		return err
 	}, inode))
@@ -5931,7 +5955,7 @@ func (m *dbMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.
 			return err
 		}
 		id = t.Id
-		m.genLog(ctx, s, time.Now().UnixNano(), "STORETOKEN(%d,%s)", id, string(token))
+		m.genLog(ctx, s, time.Now().UnixNano(), "STORETOKEN(%d,%s)", id, logEncode(token))
 		return nil
 	})
 	return id, errno(err)
@@ -5941,7 +5965,7 @@ func (m *dbMeta) doUpdateToken(ctx Context, id uint32, token []byte) syscall.Err
 	return errno(m.txn(func(s *xorm.Session) error {
 		_, err := s.Cols("token").Update(&delegationToken{Id: id, Token: token}, &delegationToken{Id: id})
 		if err == nil {
-			m.genLog(ctx, s, time.Now().UnixNano(), "UPDATETOKEN(%d,%s)", id, string(token))
+			m.genLog(ctx, s, time.Now().UnixNano(), "UPDATETOKEN(%d,%s)", id, logEncode(token))
 		}
 		return err
 	}))
@@ -5971,7 +5995,7 @@ func (m *dbMeta) doDeleteTokens(ctx Context, ids []uint32) syscall.Errno {
 			for i, id := range ids {
 				strIds[i] = strconv.FormatUint(uint64(id), 10)
 			}
-			m.genLog(ctx, s, time.Now().UnixNano(), "DELETETOKENS(%v)", strIds)
+			m.genLog(ctx, s, time.Now().UnixNano(), "DELETETOKENS(%s)", strings.Join(strIds, ","))
 		}
 		return err
 	}))
