@@ -477,19 +477,33 @@ func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
 		return 0, syscall.EROFS
 	}
 	key := m.counterKey(name)
+
+	var v int64
+	var err error
+	if !m.fmt.ChangeLog {
+		v, err = m.rdb.IncrBy(Background(), key, value).Result()
+	} else {
+		_, err = m.rdb.TxPipelined(Background(), func(pipe redis.Pipeliner) error {
+			v, err = m.rdb.IncrBy(Background(), key, value).Result()
+			if err == nil {
+				m.genLog(Background(), pipe, time.Now(), "INCR_COUNTER(%s,%d)", logEncode2(name), value)
+			}
+			return err
+		})
+	}
+
 	if name == "nextInode" || name == "nextChunk" {
 		// for nextinode, nextchunk
 		// the current one is already used
-		v, err := m.rdb.IncrBy(Background(), key, value).Result()
 		return v + 1, err
 	}
-	// TODO: txn
-	return m.rdb.IncrBy(Background(), key, value).Result()
+	return v, err
 }
 
 func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 	var changed bool
 	ctx := Background()
+	origName := name
 	name = m.prefix + name
 	err := m.txn(ctx.WithValue(txMethodKey{}, "setIfSmall:"+name), func(tx *redis.Tx) error {
 		changed = false
@@ -503,6 +517,7 @@ func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 			changed = true
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, name, value, 0)
+				m.genLog(ctx, pipe, time.Now(), "SET(%s,%d)", logEncode2(origName), value)
 				return nil
 			})
 			return err

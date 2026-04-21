@@ -124,6 +124,9 @@ func (m *kvMeta) Name() string {
 }
 
 func (m *kvMeta) doDeleteSlice(id uint64, size uint32) error {
+	if !m.fmt.ChangeLog {
+		return m.deleteKeys(m.sliceKey(id, size))
+	}
 	return m.txn(Background(), func(tx *kvTxn) error {
 		tx.delete(m.sliceKey(id, size))
 		m.genLog(tx, time.Now(), "DELETESLICE(%d,%d)", id, size)
@@ -600,6 +603,15 @@ func (m *kvMeta) doFlushStats() {
 }
 
 func (m *kvMeta) doNewSession(sinfo []byte, update bool) error {
+	if !m.fmt.ChangeLog {
+		if err := m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime())); err != nil {
+			return fmt.Errorf("new session: %s", err)
+		}
+		if err := m.setValue(m.sessionInfoKey(m.sid), sinfo); err != nil {
+			return fmt.Errorf("new session: %s", err)
+		}
+		return nil
+	}
 	err := m.txn(Background(), func(tx *kvTxn) error {
 		tx.set(m.sessionKey(m.sid), m.packInt64(m.expireTime()))
 		tx.set(m.sessionInfoKey(m.sid), sinfo)
@@ -699,6 +711,9 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 	if fail {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
+		if !m.fmt.ChangeLog {
+			return m.deleteKeys(m.sessionKey(sid), m.legacySessionKey(sid), m.sessionInfoKey(sid))
+		}
 		return m.txn(ctx, func(tx *kvTxn) error {
 			tx.delete(m.sessionKey(sid))
 			tx.delete(m.legacySessionKey(sid))
@@ -1093,6 +1108,7 @@ func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 	key := m.counterKey(name)
 	err := m.txn(Background().WithValue(txMethodKey{}, "incrCounter:"+name), func(tx *kvTxn) error {
 		new = tx.incrBy(key, value)
+		m.genLog(tx, time.Now(), "INCR_COUNTER(%s,%d)", logEncode2(name), value)
 		return nil
 	})
 	return new, err
@@ -1108,6 +1124,7 @@ func (m *kvMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 		} else {
 			changed = true
 			tx.set(key, m.packInt64(value))
+			m.genLog(tx, time.Now(), "SET(%s,%d)", logEncode2(name), value)
 			return nil
 		}
 	})

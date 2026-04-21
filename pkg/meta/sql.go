@@ -948,6 +948,9 @@ func (m *dbMeta) getCounter(name string) (v int64, err error) {
 func (m *dbMeta) incrCounter(name string, value int64) (v int64, err error) {
 	err = m.txn(func(s *xorm.Session) error {
 		v, err = m.incrSessionCounter(s, name, value)
+		if err == nil {
+			m.genLog(Background(), s, time.Now().UnixNano(), "INCR_COUNTER(%s,%d)", logEncode2(name), value)
+		}
 		return err
 	})
 	return
@@ -989,6 +992,9 @@ func (m *dbMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 				_, err = s.Cols("value").Update(&c, &counter{Name: name})
 			} else {
 				err = mustInsert(s, &c)
+			}
+			if err == nil {
+				m.genLog(Background(), s, time.Now().UnixNano(), "SET(%s,%d)", logEncode2(name), value)
 			}
 			return err
 		}
