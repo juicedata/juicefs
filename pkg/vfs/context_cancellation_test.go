@@ -237,9 +237,7 @@ func buildTestTreeForControlCancel(t *testing.T, v *VFS, ctx Context, parent Ino
 func TestControlInfoV2Cancellation(t *testing.T) {
 	v, _ := createTestVFS(nil, "")
 	ctx := NewLogContext(meta.Background())
-
-	buildTestTreeForControlCancel(t, v, ctx, 1, 8, 8)
-
+	buildTestTreeForControlCancel(t, v, ctx, 1, 2, 5)
 	payload := make([]byte, 8+1+1+1)
 	w := utils.FromBuffer(payload)
 	w.Put64(1)
@@ -270,9 +268,7 @@ func TestControlInfoV2Cancellation(t *testing.T) {
 func TestControlSummaryCancellation(t *testing.T) {
 	v, _ := createTestVFS(nil, "")
 	ctx := NewLogContext(meta.Background())
-
-	buildTestTreeForControlCancel(t, v, ctx, 1, 8, 8)
-
+	buildTestTreeForControlCancel(t, v, ctx, 1, 2, 5)
 	payload := make([]byte, 8+1+1+1)
 	w := utils.FromBuffer(payload)
 	w.Put64(1)

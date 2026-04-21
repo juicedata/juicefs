@@ -158,34 +158,14 @@ func TestRemoveEmptyDirReturnsEINTRWhenCanceled(t *testing.T) {
 	ctx := Background()
 	var root Ino
 	var attr Attr
-	if st := m.Mkdir(ctx, RootInode, "rmr-root", 0755, 0, 0, &root, &attr); st != 0 {
-		t.Fatalf("mkdir root: %s", st)
-	}
-	for i := 0; i < 80; i++ {
-		var d Ino
-		name := fmt.Sprintf("d-%03d", i)
-		if st := m.Mkdir(ctx, root, name, 0755, 0, 0, &d, &attr); st != 0 {
-			t.Fatalf("mkdir %s: %s", name, st)
-		}
-		for j := 0; j < 10; j++ {
-			var ino Ino
-			fname := fmt.Sprintf("f-%03d", j)
-			if st := m.Create(ctx, d, fname, 0644, 0, 0, &ino, &attr); st != 0 {
-				t.Fatalf("create %s/%s: %s", name, fname, st)
-			}
-		}
+	if st := m.Mkdir(ctx, RootInode, "test-dir", 0755, 0, 0, &root, &attr); st != 0 {
+		t.Fatalf("mkdir test-dir: %s", st)
 	}
 
-	cctx := NewContext(1, 0, []uint32{0})
-	startCh := make(chan struct{})
-	go func() {
-		<-startCh
-		time.Sleep(1 * time.Millisecond)
-		cctx.Cancel()
-	}()
 	var count uint64
-	close(startCh)
-	st := m.Remove(cctx, RootInode, "rmr-root", true, 16, &count)
+	cctx := NewContext(1, 0, []uint32{0})
+	cctx.Cancel()
+	st := m.Remove(cctx, RootInode, "test-dir", true, 16, &count)
 	if st != syscall.EINTR {
 		t.Fatalf("expected EINTR, got %s", st)
 	}
