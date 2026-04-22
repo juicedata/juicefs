@@ -414,7 +414,13 @@ class ClientParamsTests(FileTests):
         cache_size = 0
         for root, dirs, files in os.walk(cache_dir):
             for file in files:
-                cache_size += os.path.getsize(os.path.join(root, file))
+                if file.endswith('.tmp'):
+                    continue
+                path = os.path.join(root, file)
+                try:
+                    cache_size += os.path.getsize(path)
+                except FileNotFoundError:
+                    continue
         self.assertGreaterEqual(cache_size, size_mb * 1024 * 1024/2)
 
     def test_io_limits(self):
