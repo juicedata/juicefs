@@ -1514,7 +1514,7 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			Update(&dirtyNode, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&dirtyNode, attr)
-			m.genLog(ctx, s, now.UnixNano(), "SETATTR(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", inode, set, sugidclearmode, attr.Uid, attr.Gid, attr.Mode, attr.Flags, attr.Atime, attr.Mtime, attr.Atimensec, attr.Mtimensec)
+			m.genLog(ctx, s, now.UnixNano(), "SETATTR(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", inode, set, sugidclearmode, attr.Uid, attr.Gid, attr.Mode, attr.Flags, attr.Atime, attr.Mtime, attr.Atimensec, attr.Mtimensec, attr.Ctime, attr.Ctimensec, attr.AccessACL)
 		}
 		return err
 	}, inode))
@@ -1620,6 +1620,7 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 				return err
 			}
 		}
+		oldLength := nodeAttr.Length
 		nodeAttr.Length = length
 		now := time.Now().UnixNano()
 		nodeAttr.setMtime(now)
@@ -1628,7 +1629,7 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 			return err
 		}
 		m.parseAttr(&nodeAttr, attr)
-		m.genLog(ctx, s, now, "TRUNCATE(%d,%d,%d)", inode, length, flags)
+		m.genLog(ctx, s, now, "TRUNCATE(%d,%d,%d,%d)", inode, oldLength, length, flags)
 		return nil
 	}, inode))
 }
@@ -2609,7 +2610,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			}
 		}
-		m.genLog(ctx, s, now, "MOVE(%d,%s,%d,%s,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, se.Inode)
+		m.genLog(ctx, s, now, "MOVE(%d,%s,%d,%s,%d,%d,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, se.Inode)
 		return err
 	}, parentLocks...)
 	if err == nil && !exchange && dino > 0 {
@@ -3334,7 +3335,7 @@ func (m *dbMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 			*numSlices = len(ck.Slices) / sliceBytes
 		}
 		if err == nil {
-			m.genLog(ctx, s, now, "WRITE(%d,%d,%d,%d,%d):%d", inode, indx, off, slice.Id, slice.Len, *numSlices)
+			m.genLog(ctx, s, now, "WRITE(%d,%d,%d,%d,%d,%d,%d):%d", inode, indx, off, slice.Id, slice.Len, attr.Mtime, attr.Mtimensec, *numSlices)
 		}
 		return err
 	}, inode))

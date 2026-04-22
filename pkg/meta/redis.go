@@ -1264,6 +1264,7 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 				zeroChunks = append(zeroChunks, uint32(i))
 			}
 		}
+		oldLength := t.Length
 		t.Length = length
 		now := time.Now()
 		t.Mtime = now.Unix()
@@ -1286,7 +1287,7 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 				pipe.RPush(ctx, m.chunkKey(inode, uint32(right/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize)))
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), delta.space)
-			m.genLog(ctx, pipe, now, "TRUNCATE(%d,%d,%d)", inode, length, flags)
+			m.genLog(ctx, pipe, now, "TRUNCATE(%d,%d,%d,%d)", inode, oldLength, length, flags)
 			return nil
 		})
 		if err == nil {
@@ -1405,7 +1406,7 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(dirtyAttr), 0)
-			m.genLog(ctx, pipe, now, "SETATTR(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", inode, set, sugidclearmode, dirtyAttr.Uid, dirtyAttr.Gid, dirtyAttr.Mode, dirtyAttr.Flags, dirtyAttr.Atime, dirtyAttr.Mtime, dirtyAttr.Atimensec, dirtyAttr.Mtimensec)
+			m.genLog(ctx, pipe, now, "SETATTR(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", inode, set, sugidclearmode, dirtyAttr.Uid, dirtyAttr.Gid, dirtyAttr.Mode, dirtyAttr.Flags, dirtyAttr.Atime, dirtyAttr.Mtime, dirtyAttr.Atimensec, dirtyAttr.Mtimensec, dirtyAttr.Ctime, dirtyAttr.Ctimensec, dirtyAttr.AccessACL)
 			return nil
 		})
 		if err == nil {
@@ -2729,7 +2730,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			if dupdate {
 				pipe.Set(ctx, m.inodeKey(parentDst), m.marshal(&dattr), 0)
 			}
-			m.genLog(ctx, pipe, now, "MOVE(%d,%s,%d,%s,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, ino)
+			m.genLog(ctx, pipe, now, "MOVE(%d,%s,%d,%s,%d,%d,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, ino)
 			return nil
 		})
 		return err
@@ -3166,7 +3167,7 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 			if delta.space > 0 {
 				pipe.IncrBy(ctx, m.usedSpaceKey(), delta.space)
 			}
-			m.genLog(ctx, pipe, now, "WRITE(%d,%d,%d,%d,%d):%d", inode, indx, off, slice.Id, slice.Len, *numSlices)
+			m.genLog(ctx, pipe, now, "WRITE(%d,%d,%d,%d,%d,%d,%d):%d", inode, indx, off, slice.Id, slice.Len, attr.Mtime, attr.Mtimensec, *numSlices)
 			return nil
 		})
 		if err == nil {

@@ -1215,7 +1215,7 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(inode), m.marshal(dirtyAttr))
 		*attr = *dirtyAttr
-		m.genLog(tx, now, "SETATTR(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", inode, set, sugidclearmode, attr.Uid, attr.Gid, attr.Mode, attr.Flags, attr.Atime, attr.Mtime, attr.Atimensec, attr.Mtimensec)
+		m.genLog(tx, now, "SETATTR(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", inode, set, sugidclearmode, attr.Uid, attr.Gid, attr.Mode, attr.Flags, attr.Atime, attr.Mtime, attr.Atimensec, attr.Mtimensec, attr.Ctime, attr.Ctimensec, attr.AccessACL)
 		return nil
 	}, inode))
 }
@@ -1266,6 +1266,7 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		if right > (left/ChunkSize+1)*ChunkSize && right%ChunkSize > 0 {
 			tx.append(m.chunkKey(inode, uint32(right/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize)))
 		}
+		oldLength := t.Length
 		t.Length = length
 		now := time.Now()
 		t.Mtime = now.Unix()
@@ -1274,7 +1275,7 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		t.Ctimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(inode), m.marshal(&t))
 		*attr = t
-		m.genLog(tx, now, "TRUNCATE(%d,%d,%d)", inode, length, flags)
+		m.genLog(tx, now, "TRUNCATE(%d,%d,%d,%d)", inode, oldLength, length, flags)
 		return nil
 	}, inode))
 }
@@ -2346,7 +2347,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if dupdate {
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		}
-		m.genLog(tx, now, "MOVE(%d,%s,%d,%s,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, ino)
+		m.genLog(tx, now, "MOVE(%d,%s,%d,%s,%d,%d,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, ino)
 		return nil
 	}, parentLocks...)
 
@@ -2609,7 +2610,7 @@ func (m *kvMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		tx.set(m.chunkKey(inode, indx), val)
 		*numSlices = len(val) / sliceBytes
-		m.genLog(tx, now, "WRITE(%d,%d,%d,%d,%d):%d", inode, indx, off, slice.Id, slice.Len, *numSlices)
+		m.genLog(tx, now, "WRITE(%d,%d,%d,%d,%d,%d,%d):%d", inode, indx, off, slice.Id, slice.Len, attr.Mtime, attr.Mtimensec, *numSlices)
 		return nil
 	}, inode))
 }
