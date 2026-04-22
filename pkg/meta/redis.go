@@ -1144,7 +1144,11 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 		lastErr        error
 		method         txMethod
 	)
-	for i := 0; i < 50; i++ {
+	maxRetry := 50
+	if val := ctx.Value(txMaxRetryKey{}); val != nil {
+		maxRetry = val.(int)
+	}
+	for i := 0; i < maxRetry; i++ {
 		if ctx.Canceled() {
 			logger.Warnf("Transaction %s interrupted after %s, tried %d, keys: %v", method.name(ctx), time.Since(start), i+1, keys)
 			return syscall.EINTR
@@ -5206,10 +5210,14 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 			}
 		}
 
-		watchKeys := []string{m.inodeKey(dstParent), m.entryKey(dstParent)}
+		watchKeys := make([]string, 0, len(srcList)*2+2)
+		watchKeys = append(watchKeys, m.inodeKey(dstParent), m.entryKey(dstParent))
+		for _, ino := range srcList {
+			watchKeys = append(watchKeys, m.inodeKey(ino), m.xattrKey(ino))
+		}
 
 		var batchResult batchCloneResult
-		err := m.txn(ctx, func(tx *redis.Tx) error {
+		err := m.txn(ctx.WithValue(txMaxRetryKey{}, 1), func(tx *redis.Tx) error {
 			now := time.Now()
 			var pattr Attr
 			pval, err := tx.Get(ctx, m.inodeKey(dstParent)).Bytes()
@@ -5427,13 +5435,6 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 					case TypeSymlink:
 						p.Set(ctx, m.symKey(info.dstIno), sd.sym, 0)
 					}
-				}
-				if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-					pattr.Mtime = now.Unix()
-					pattr.Mtimensec = uint32(now.Nanosecond())
-					pattr.Ctime = now.Unix()
-					pattr.Ctimensec = uint32(now.Nanosecond())
-					p.Set(ctx, m.inodeKey(dstParent), m.marshal(&pattr), 0)
 				}
 				if batchResult.space != 0 {
 					p.IncrBy(ctx, m.usedSpaceKey(), batchResult.space)
