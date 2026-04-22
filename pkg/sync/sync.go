@@ -1106,17 +1106,19 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 					copyPerms(dst, obj, config)
 				}
 				copied.Increment()
+			} else if errors.Is(err, utils.ErrSkipped) {
+				skipped.Increment()
+			} else {
+				failed.Increment()
+				logger.Errorf("Failed to copy object %s: %s", key, err)
+				taskErr = err
 			}
-			if err == nil && config.DeleteSrcAfter {
-				err = deleteObj(src, key, config.Dry)
-			}
-			if err != nil {
-				if errors.Is(err, utils.ErrSkipped) {
-					skipped.Increment()
-				} else {
-					failed.Increment()
-					logger.Errorf("Failed to copy object %s: %s", key, err)
-					taskErr = err
+
+			if taskErr == nil {
+				if config.DeleteSrcAfter {
+					if err = deleteObj(src, key, config.Dry); err != nil {
+						failed.IncrBy(-1)
+					}
 				}
 			}
 		}
