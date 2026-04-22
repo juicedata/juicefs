@@ -164,7 +164,19 @@ class Client(object):
         self.h = self.lib.jfs_init(0, 0, name.encode(), jsonConf.encode(), user.pw_name.encode(), ','.join(groups).encode(), superuser.pw_name.encode(), ''.join(supergroups).encode())
 
     def __del__(self):
-        self.lib.jfs_term(c_int64(_tid()), c_int64(self.h))
+        self.close(terminate=False)
+
+    def close(self, terminate=False):
+        """Close the JuiceFS client.
+        
+        Args:
+            terminate: If True, fully close the filesystem and stop
+                       background goroutines. If False (default), only
+                       flush and keep the filesystem cached for reuse.
+        """
+        if hasattr(self, 'h') and self.h:
+            self.lib.jfs_term(c_int64(_tid()), c_int64(self.h), 1 if terminate else 0)
+            self.h = 0
 
     def stat(self, path):
         """Get the status of a file or a directory."""
