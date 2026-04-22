@@ -204,6 +204,10 @@ func syncActionFlags() []cli.Flag {
 			Usage:   "delete objects from source those already exist in destination",
 		},
 		&cli.BoolFlag{
+			Name:  "delete-src-after",
+			Usage: "delete the source object after successful processing",
+		},
+		&cli.BoolFlag{
 			Name:    "delete-dst",
 			Aliases: []string{"deleteDst"},
 			Usage:   "delete extraneous objects from destination",

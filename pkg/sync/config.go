@@ -40,6 +40,7 @@ type Config struct {
 	MaxFailure        int64
 	Dry               bool
 	DeleteSrc         bool
+	DeleteSrcAfter    bool
 	DeleteDst         bool
 	MatchFullPath     bool
 	Dirs              bool
@@ -189,6 +190,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Dry:                  c.Bool("dry"),
 		MaxFailure:           c.Int64("max-failure"),
 		DeleteSrc:            c.Bool("delete-src"),
+		DeleteSrcAfter:       c.Bool("delete-src-after"),
 		DeleteDst:            c.Bool("delete-dst"),
 		Exclude:              c.StringSlice("exclude"),
 		Include:              c.StringSlice("include"),
