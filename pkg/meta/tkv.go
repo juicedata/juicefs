@@ -495,7 +495,13 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 			if err != nil {
 				return errors.Wrap(err, "scan dir stats")
 			}
-			err = m.deleteKeys(keys...)
+			err = m.txn(Background(), func(tx *kvTxn) error {
+				for _, key := range keys {
+					tx.delete(key)
+				}
+				m.genLog(tx, time.Now(), "INIT_ENABLE_DIRSTATS()")
+				return nil
+			})
 			if err != nil {
 				return errors.Wrap(err, "delete dir stats")
 			}
@@ -504,11 +510,12 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 			// remove user group quota as they are outdated
 			userPrefix := m.fmtKey("QU")
 			groupPrefix := m.fmtKey("QG")
-			err := m.client.txn(Background(), func(tx *kvTxn) error {
+			err := m.txn(Background(), func(tx *kvTxn) error {
 				tx.deleteKeys(userPrefix)
 				tx.deleteKeys(groupPrefix)
+				m.genLog(tx, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
 				return nil
-			}, 0)
+			})
 			if err != nil {
 				return errors.Wrap(err, "delete user group quota")
 			}

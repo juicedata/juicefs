@@ -633,14 +633,28 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 		}
 		if !old.DirStats && format.DirStats {
 			// remove dir stats as they are outdated
-			_, err = m.db.Where("TRUE").Delete(new(dirStats))
+			err = m.txn(func(s *xorm.Session) error {
+				_, err := s.Where("TRUE").Delete(new(dirStats))
+				if err != nil {
+					return err
+				}
+				m.genLog(Background(), s, time.Now().UnixNano(), "INIT_ENABLE_DIRSTATS()")
+				return nil
+			})
 			if err != nil {
 				return errors.Wrap(err, "drop table dirStats")
 			}
 		}
 		if !old.UserGroupQuota && format.UserGroupQuota {
 			// remove user group quota as they are outdated
-			_, err = m.db.Where("TRUE").Delete(new(userGroupQuota))
+			err = m.txn(func(s *xorm.Session) error {
+				_, err := s.Where("TRUE").Delete(new(userGroupQuota))
+				if err != nil {
+					return err
+				}
+				m.genLog(Background(), s, time.Now().UnixNano(), "INIT_ENABLE_USERGROUPQUOTA()")
+				return nil
+			})
 			if err != nil {
 				return errors.Wrap(err, "drop table userGroupQuota")
 			}

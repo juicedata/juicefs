@@ -344,16 +344,23 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 		}
 		if !old.DirStats && format.DirStats {
 			// remove dir stats as they are outdated
-			// TODO: txn
-			err := m.rdb.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey()).Err()
+			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey())
+				m.genLog(ctx, pipe, time.Now(), "INIT_ENABLE_DIRSTATS()")
+				return nil
+			})
 			if err != nil {
 				return errors.Wrap(err, "remove dir stats")
 			}
 		}
 		if !old.UserGroupQuota && format.UserGroupQuota {
 			// remove user group quota as they are outdated
-			err := m.rdb.Del(ctx, m.userQuotaKey(), m.userQuotaUsedSpaceKey(), m.userQuotaUsedInodesKey(),
-				m.groupQuotaKey(), m.groupQuotaUsedSpaceKey(), m.groupQuotaUsedInodesKey()).Err()
+			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Del(ctx, m.userQuotaKey(), m.userQuotaUsedSpaceKey(), m.userQuotaUsedInodesKey(),
+					m.groupQuotaKey(), m.groupQuotaUsedSpaceKey(), m.groupQuotaUsedInodesKey())
+				m.genLog(ctx, pipe, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
+				return nil
+			})
 			if err != nil {
 				return errors.Wrap(err, "remove user group quota")
 			}
