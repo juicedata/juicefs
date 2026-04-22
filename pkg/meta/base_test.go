@@ -3582,11 +3582,6 @@ func testBatchClone(t *testing.T, m Meta) {
 	// --- test 1: successful batch clone ---
 	var count uint64
 	st := m.getBase().BatchClone(ctx, srcDir, dstDir, nonDirEntries, 0, 022, &count)
-	if st == batchCloneFallbackErr {
-		m.Remove(ctx, RootInode, "batchSrc", false, RmrDefaultThreads, nil)
-		m.Remove(ctx, RootInode, "batchDst", false, RmrDefaultThreads, nil)
-		return
-	}
 
 	if st != 0 {
 		t.Fatalf("BatchClone: %s", st)

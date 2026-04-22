@@ -5147,11 +5147,11 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 
 func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno {
 	type cloneInfo struct {
-		entry  *Entry
-		srcIno Ino
-		dstIno Ino
+		entry   *Entry
+		srcIno  Ino
+		dstIno  Ino
 		dstAttr Attr
-		xattr  map[string]string
+		xattr   map[string]string
 	}
 	type chunkData struct {
 		vals   []string
@@ -5380,8 +5380,9 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 					info.dstAttr.Nlink = 1
 				}
 				info.xattr = sd.xattr
-
-				batchResult.length += int64(sd.attr.Length)
+				if info.dstAttr.Typ == TypeFile {
+					batchResult.length += int64(sd.attr.Length)
+				}
 				entrySpace := align4K(sd.attr.Length)
 				batchResult.space += entrySpace
 				batchResult.inodes++

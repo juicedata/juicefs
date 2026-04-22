@@ -3408,36 +3408,8 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 
 		// Batch clone files immediately (don't wait for subdirs to finish)
 		if len(nonDirEntries) > 0 {
-			batchEno := m.BatchClone(cloneCtx, srcIno, ino, nonDirEntries, cmode, cumask, count)
-			if batchEno == batchCloneFallbackErr {
-				// Fallback: clone each file concurrently
-				for _, e := range nonDirEntries {
-					select {
-					case concurrent <- struct{}{}:
-						entry := e
-						g.Go(func() error {
-							defer func() { <-concurrent }()
-							if childEno := cloneChild(entry); childEno != 0 {
-								return childEno
-							}
-							return nil
-						})
-					default:
-						// Synchronous fallback when concurrency limit reached
-						if childEno := cloneChild(e); childEno != 0 && eno == 0 {
-							eno = childEno
-						}
-					}
-
-					if cloneCtx.Canceled() {
-						break
-					}
-				}
-				if eno == batchCloneFallbackErr {
-					eno = 0
-				}
-			} else if batchEno != 0 {
-				eno = batchEno
+			eno = m.BatchClone(cloneCtx, srcIno, ino, nonDirEntries, cmode, cumask, count)
+			if eno != 0 {
 				break
 			}
 		}

@@ -135,10 +135,6 @@ func (qm *queryMap) pop(key string) string {
 	return qm.Get(key)
 }
 
-// batchCloneFallbackErr is an internal-only signal telling baseMeta.Clone to
-// fall back to per-entry clone handling for non-directory entries.
-const batchCloneFallbackErr = syscall.Errno(0x20000001)
-
 func errno(err error) syscall.Errno {
 	if err == nil {
 		return 0
