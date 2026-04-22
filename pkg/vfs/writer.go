@@ -50,19 +50,20 @@ type DataWriter interface {
 }
 
 type sliceWriter struct {
-	id      uint64
-	chunk   *chunkWriter
-	off     uint32
-	length  uint32
-	soff    uint32
-	slen    uint32
-	writer  chunk.Writer
-	freezed bool
-	done    bool
-	err     syscall.Errno
-	notify  *utils.Cond
-	started time.Time
-	lastMod time.Time
+	id         uint64
+	chunk      *chunkWriter
+	off        uint32
+	length     uint32
+	soff       uint32
+	slen       uint32
+	writer     chunk.Writer
+	growLength bool // true if this slice will extend file length visible in metadata
+	freezed    bool
+	done       bool
+	err        syscall.Errno
+	notify     *utils.Cond
+	started    time.Time
+	lastMod    time.Time
 }
 
 func (s *sliceWriter) prepareID(ctx meta.Context, retry bool) {
@@ -197,8 +198,8 @@ func (c *chunkWriter) commitThread() {
 		// Only commits that extend the file need ordering - they could expose a
 		// "hole" (zeros) if an earlier chunk's data hasn't been committed yet.
 		// Overwrites within the committed length are safe to proceed concurrently.
-		for f.hasLowerPendingChunk(c.indx) {
-			f.commitcond.WaitWithTimeout(time.Millisecond * 100)
+		if s.growLength {
+			f.waitCommit(s)
 		}
 
 		err := s.err
@@ -226,11 +227,10 @@ func (c *chunkWriter) commitThread() {
 			}
 			f.err = err
 			logger.Errorf("write inode:%d indx:%d %s", f.inode, c.indx, err)
-		} else {
-			if end := c.sliceEnd(s); end > f.committedTo {
-				f.committedTo = end
-			}
+		} else if end := c.sliceEnd(s); end > f.committedTo {
+			f.committedTo = end
 		}
+		f.finishCommit(s)
 		c.slices = c.slices[1:]
 	}
 	f.freeChunk(c)
@@ -243,17 +243,18 @@ type fileWriter struct {
 
 	inode        Ino
 	length       uint64
-	committedTo  uint64
 	tierID       uint8
 	err          syscall.Errno
 	flushwaiting uint16
 	writewaiting uint16
 	refs         uint16
 	chunks       map[uint32]*chunkWriter
+	committedTo  uint64 // highest file length already committed to metadata
+	commitQueue  []*sliceWriter
 
 	flushcond  *utils.Cond // wait for chunks==nil (flush)
 	writecond  *utils.Cond // wait for flushwaiting==0 (write)
-	commitcond *utils.Cond // wait for lower-index chunks to finish committing
+	commitcond *utils.Cond // wait for grow-length slices to commit in queue order
 }
 
 // protected by file
@@ -269,8 +270,6 @@ func (f *fileWriter) findChunk(i uint32) *chunkWriter {
 // protected by file
 func (f *fileWriter) freeChunk(c *chunkWriter) {
 	delete(f.chunks, c.indx)
-	// Wake higher-index commitThreads that wait for this chunk to finish
-	f.commitcond.Broadcast()
 	if len(f.chunks) == 0 && f.flushwaiting > 0 {
 		f.flushcond.Broadcast()
 	}
@@ -280,24 +279,40 @@ func (c *chunkWriter) sliceEnd(s *sliceWriter) uint64 {
 	return uint64(c.indx)*meta.ChunkSize + uint64(s.off) + uint64(s.slen)
 }
 
-func (c *chunkWriter) hasPendingBeyond(length uint64) bool {
-	for _, s := range c.slices {
-		if c.sliceEnd(s) > length {
-			return true
-		}
+func (f *fileWriter) waitCommit(s *sliceWriter) {
+	for len(f.commitQueue) > 0 && f.commitQueue[0] != s {
+		f.commitcond.WaitWithTimeout(time.Millisecond * 100)
 	}
-	return false
 }
 
-// hasLowerPendingChunk reports whether any lower-index chunk still has a
-// pending slice that may still push committedTo forward.
-func (f *fileWriter) hasLowerPendingChunk(indx uint32) bool {
-	for i, c := range f.chunks {
-		if i < indx && c.hasPendingBeyond(f.committedTo) {
-			return true
+func (f *fileWriter) enqueueCommit(s *sliceWriter) {
+	if s.growLength || s.chunk.sliceEnd(s) <= f.committedTo {
+		return
+	}
+	s.growLength = true
+	f.commitQueue = append(f.commitQueue, s)
+}
+
+func (f *fileWriter) finishCommit(s *sliceWriter) {
+	if !s.growLength {
+		return
+	}
+	// Queue head should always match `s` after waitCommit returns
+	if len(f.commitQueue) > 0 && f.commitQueue[0] == s {
+		f.commitQueue = f.commitQueue[1:]
+		f.commitcond.Broadcast()
+		return
+	}
+	// Fallback path to avoid wedging future commits if that invariant is broken
+	for i, queued := range f.commitQueue {
+		if queued == s {
+			logger.Warnf("write inode:%d grow-length queue out of order, should not happen", f.inode)
+			copy(f.commitQueue[i:], f.commitQueue[i+1:])
+			f.commitQueue = f.commitQueue[:len(f.commitQueue)-1]
+			f.commitcond.Broadcast()
+			return
 		}
 	}
-	return false
 }
 
 // protected by file
@@ -321,7 +336,11 @@ func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data 
 			go c.commitThread()
 		}
 	}
-	return s.write(ctx, off-s.off, data)
+	if st := s.write(ctx, off-s.off, data); st != 0 {
+		return st
+	}
+	f.enqueueCommit(s)
+	return 0
 }
 
 func (f *fileWriter) totalSlices() int {
