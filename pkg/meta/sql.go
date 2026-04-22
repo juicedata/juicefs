@@ -4201,7 +4201,7 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 			}
 		}
 		if err == nil {
-			m.genLog(ctx, s, time.Now().UnixNano(), "SETXATTR(%d,%s,%s)", inode, name, logEncode(value))
+			m.genLog(ctx, s, time.Now().UnixNano(), "SETXATTR(%d,%s,%s,%d)", inode, logEncode2(name), logEncode(value), flags)
 		}
 		return err
 	}))
@@ -4215,7 +4215,7 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 		} else if n == 0 {
 			return ENOATTR
 		} else {
-			m.genLog(ctx, s, time.Now().UnixNano(), "REMOVEXATTR(%d,%s)", inode, name)
+			m.genLog(ctx, s, time.Now().UnixNano(), "REMOVEXATTR(%d,%s)", inode, logEncode2(name))
 			return nil
 		}
 	}))
@@ -5887,7 +5887,7 @@ func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 			dirtyNode.setCtime(time.Now().UnixNano())
 			_, err := s.Cols(updateCols...).Update(&dirtyNode, &node{Inode: ino})
 			if err == nil {
-				m.genLog(ctx, s, time.Now().UnixNano(), "SETFACL(%d,%d)", ino, aclType)
+				m.genLog(ctx, s, time.Now().UnixNano(), "SETFACL(%d,%d,%s)", ino, aclType, logEncode(rule.Encode()))
 			}
 			return err
 		}

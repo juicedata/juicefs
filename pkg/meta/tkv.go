@@ -3351,7 +3351,7 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 		if v == nil || !bytes.Equal(v, value) {
 			tx.set(key, value)
 		}
-		m.genLog(tx, time.Now(), "SETXATTR(%d,%s,%s)", inode, name, logEncode(value))
+		m.genLog(tx, time.Now(), "SETXATTR(%d,%s,%s,%d)", inode, logEncode2(name), logEncode(value), flags)
 		return nil
 	}))
 }
@@ -3364,7 +3364,7 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 			return ENOATTR
 		}
 		tx.delete(key)
-		m.genLog(tx, time.Now(), "REMOVEXATTR(%d,%s)", inode, name)
+		m.genLog(tx, time.Now(), "REMOVEXATTR(%d,%s)", inode, logEncode2(name))
 		return nil
 	}))
 }
@@ -4810,7 +4810,7 @@ func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			tx.set(m.inodeKey(ino), m.marshal(attr))
-			m.genLog(tx, now, "SETFACL(%d,%d)", ino, aclType)
+			m.genLog(tx, now, "SETFACL(%d,%d,%s)", ino, aclType, logEncode(rule.Encode()))
 		}
 		return nil
 	}, ino))

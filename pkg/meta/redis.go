@@ -4321,7 +4321,7 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 		}
 		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, key, name, value)
-			m.genLog(ctx, pipe, time.Now(), "SETXATTR(%d,%s,%s)", inode, name, logEncode(value))
+			m.genLog(ctx, pipe, time.Now(), "SETXATTR(%d,%s,%s,%d)", inode, logEncode2(name), logEncode(value), flags)
 			return nil
 		})
 		return err
@@ -4333,7 +4333,7 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		cmd, err := tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, m.xattrKey(inode), name)
-			m.genLog(ctx, pipe, time.Now(), "REMOVEXATTR(%d,%s)", inode, name)
+			m.genLog(ctx, pipe, time.Now(), "REMOVEXATTR(%d,%s)", inode, logEncode2(name))
 			return nil
 		})
 		if err == nil && len(cmd) > 0 {
@@ -5579,7 +5579,7 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 			attr.Ctimensec = uint32(now.Nanosecond())
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
-				m.genLog(ctx, pipe, now, "SETFACL(%d,%d)", ino, aclType)
+				m.genLog(ctx, pipe, now, "SETFACL(%d,%d,%s)", ino, aclType, logEncode(rule.Encode()))
 				return nil
 			})
 			return err
