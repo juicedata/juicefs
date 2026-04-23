@@ -5452,14 +5452,14 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 			}
 		}
 
-		watchKeys := make([]string, 0, len(srcList)*2+2)
-		watchKeys = append(watchKeys, m.inodeKey(dstParent), m.entryKey(dstParent))
+		watchKeys := make([]string, 0, len(srcList)*2+1)
+		watchKeys = append(watchKeys, m.inodeKey(dstParent))
 		for _, ino := range srcList {
 			watchKeys = append(watchKeys, m.inodeKey(ino), m.xattrKey(ino))
 		}
 
 		var batchResult batchCloneResult
-		err := m.txn(ctx.WithValue(txMaxRetryKey{}, 1), func(tx *redis.Tx) error {
+		err := m.txn(ctx.WithValue(txMaxRetryKey{}, 10), func(tx *redis.Tx) error {
 			now := time.Now()
 			var pattr Attr
 			pval, err := tx.Get(ctx, m.inodeKey(dstParent)).Bytes()
