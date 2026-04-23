@@ -330,6 +330,7 @@ func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage
 			authEndpoint, apiKey, serviceInstanceID)).
 		WithS3ForcePathStyle(defaultPathStyle())
 	sess := session.Must(session.NewSession())
+	sess.Handlers.Build.PushBack(request.MakeAddToUserAgentFreeFormHandler(UserAgent))
 	client := s3.New(sess, conf)
 	return &ibmcos{bucket: bucket, s3: client}, nil
 }

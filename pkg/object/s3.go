@@ -561,9 +561,12 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	optFns = append(optFns, func(options *s3.Options) {
 		options.EndpointOptions.DisableHTTPS = !ssl
 		options.Region = region
-		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
-			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
-		})
+		options.APIOptions = append(options.APIOptions,
+			func(stack *smithymiddleware.Stack) error {
+				return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
+			},
+			middleware.AddUserAgentKey(UserAgent),
+		)
 		options.RetryMaxAttempts = 1
 	})
 

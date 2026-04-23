@@ -36,6 +36,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 type gs struct {
@@ -224,7 +225,7 @@ func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	}
 	clis := make([]*storage.Client, size)
 	for i := 0; i < size; i++ {
-		client, err := storage.NewClient(ctx)
+		client, err := storage.NewClient(ctx, option.WithUserAgent(UserAgent))
 		if err != nil {
 			return nil, err
 		}
