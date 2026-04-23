@@ -235,6 +235,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			info, err := c.ClusterInfo(Background()).Result()
 			if err != nil && strings.Contains(err.Error(), "cluster mode") || err == nil && strings.Contains(info, "cluster_state:") {
 				logger.Infof("redis %s is in cluster mode", hosts)
+				c.Close()
 			} else {
 				rdb = c
 			}

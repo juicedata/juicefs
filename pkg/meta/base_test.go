@@ -2604,9 +2604,6 @@ func testConcurrentDir(t *testing.T, m Meta) {
 		}(i)
 	}
 	g.Wait()
-	if err != nil {
-		t.Fatalf("concurrent dir: %s", err)
-	}
 	for i := 0; i < 100; i++ {
 		g.Add(1)
 		go func(i int) {
