@@ -399,11 +399,11 @@ func (s *s3client) SetStorageClass(sc string) error {
 	return nil
 }
 
-func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
+func autoS3Region(bucketName, accessKey, secretKey, token string) (string, error) {
 	var cfg aws.Config
 	var err error
 	if accessKey != "" {
-		cfg, err = config.LoadDefaultConfig(ctx, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")))
+		cfg, err = config.LoadDefaultConfig(ctx, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	} else {
 		cfg, err = config.LoadDefaultConfig(ctx)
 	}
@@ -507,7 +507,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		if len(hostParts) == 1 {
 			// take endpoint as bucketname
 			bucketName = hostParts[0]
-			if region, err = autoS3Region(bucketName, accessKey, secretKey); err != nil {
+			if region, err = autoS3Region(bucketName, accessKey, secretKey, token); err != nil {
 				return nil, fmt.Errorf("Can't guess your region for bucket %s: %s", bucketName, err)
 			}
 		} else {
