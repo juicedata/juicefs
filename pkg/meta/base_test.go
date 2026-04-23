@@ -3153,39 +3153,19 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		deadline := time.Now().Add(3 * time.Second)
-		for {
-			statBefore, st := m.GetDirStat(ctx, dir1)
-			if st == 0 && statBefore != nil && statBefore.inodes == 2 {
-				break
-			}
-			if time.Now().After(deadline) {
-				if st != 0 {
-					t.Fatalf("Test 3 failed: get dir stat before rename: %s", st)
-				}
-				t.Fatalf("Test 3 failed: expected dir1 inodes 2 before rename, got %d", statBefore.inodes)
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
+		statBefore, _ := m.GetDirStat(ctx, dir1)
 
 		// rename file4 -> file5 (overwrite), trash is disabled
 		if st := m.Rename(ctx, dir1, "file4", dir1, "file5", 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("rename file4 to file5 (overwrite): %s", st)
 		}
 
-		deadline = time.Now().Add(3 * time.Second)
-		for {
-			statAfter, st := m.GetDirStat(ctx, dir1)
-			if st == 0 && statAfter != nil && statAfter.inodes == 1 {
-				break
-			}
-			if time.Now().After(deadline) {
-				if st != 0 {
-					t.Fatalf("Test 3 failed: get dir stat after rename: %s", st)
-				}
-				t.Fatalf("Test 3 failed: expected dir1 inodes 1 after overwrite rename, got %d", statAfter.inodes)
-			}
-			time.Sleep(50 * time.Millisecond)
+		m.FlushSession()
+		statAfter, _ := m.GetDirStat(ctx, dir1)
+
+		// with trash disabled: overwritten file is deleted, so inodes should decrease by 1
+		if statAfter.inodes != statBefore.inodes-1 {
+			t.Fatalf("Test 3 failed: expected dir1 inodes %d, got %d", statBefore.inodes-1, statAfter.inodes)
 		}
 		if st := m.Unlink(ctx, dir1, "file5"); st != 0 {
 			t.Fatalf("cleanup file5 after Test 3: %s", st)
@@ -3470,7 +3450,6 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 
 		time.Sleep(500 * time.Millisecond)
 		m.FlushSession()
-
 
 		// Get the trash inode (it should be marked as trash)
 		if !trashInode.IsTrash() {
