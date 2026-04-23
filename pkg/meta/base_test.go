@@ -2983,7 +2983,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Create(Background(), testInode, "file", 0640, 022, 0, &fileInode, nil); st != 0 {
 		t.Fatalf("create: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
+	m.FlushSession()
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, align4K(0), 1)
 
@@ -2991,7 +2991,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Fallocate(Background(), fileInode, 0, 0, 4097, nil); st != 0 {
 		t.Fatalf("fallocate: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
+	m.FlushSession()
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(4097, align4K(4097), 1)
 
@@ -2999,7 +2999,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Truncate(Background(), fileInode, 0, 0, nil, false); st != 0 {
 		t.Fatalf("truncate: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
+	m.FlushSession()
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, align4K(0), 1)
 
@@ -3007,7 +3007,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Write(Background(), fileInode, 0, 0, Slice{Id: 1, Size: 1 << 20, Off: 0, Len: 4097}, time.Now()); st != 0 {
 		t.Fatalf("write: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
+	m.FlushSession()
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(4097, align4K(4097), 1)
 
@@ -3015,7 +3015,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Link(Background(), fileInode, testInode, "file2", nil); st != 0 {
 		t.Fatalf("link: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
+	m.FlushSession()
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(2*4097, 2*align4K(4097), 2)
 
@@ -3024,7 +3024,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Mkdir(Background(), testInode, "sub", 0640, 022, 0, &subInode, nil); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
+	m.FlushSession()
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(2*4097, align4K(0)+2*align4K(4097), 3)
 
@@ -3032,7 +3032,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Rename(Background(), testInode, "file2", subInode, "file", 0, nil, nil); st != 0 {
 		t.Fatalf("rename: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
+	m.FlushSession()
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(4097, align4K(0)+align4K(4097), 2)
 	stat, st = m.GetDirStat(Background(), subInode)
@@ -3045,7 +3045,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Unlink(Background(), subInode, "file"); st != 0 {
 		t.Fatalf("unlink: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
+	m.FlushSession()
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, align4K(0), 1)
 	stat, st = m.GetDirStat(Background(), subInode)
@@ -3055,7 +3055,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Rmdir(Background(), testInode, "sub"); st != 0 {
 		t.Fatalf("rmdir: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
+	m.FlushSession()
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, 0, 0)
 }
@@ -3101,7 +3101,7 @@ func testRenameDirStat(t *testing.T, m Meta) {
 			t.Fatalf("rename file1 to dir2: %s", st)
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
 		stat1After, _ := m.GetDirStat(ctx, dir1)
 		stat2After, _ := m.GetDirStat(ctx, dir2)
 
@@ -3114,7 +3114,6 @@ func testRenameDirStat(t *testing.T, m Meta) {
 			t.Fatalf("Test 1 failed: dir2 inodes %d != %d+1", stat2After.inodes, stat2Before.inodes)
 		}
 		m.Unlink(ctx, dir2, "file1")
-		time.Sleep(500 * time.Millisecond)
 		m.FlushSession()
 		t.Logf("Test 1 passed: cross-dir rename without overwrite")
 	}
@@ -3132,7 +3131,7 @@ func testRenameDirStat(t *testing.T, m Meta) {
 			t.Fatalf("rename file2 to file3 in same dir: %s", st)
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
 		statAfter, _ := m.GetDirStat(ctx, dir1)
 
 		// same directory inodes should not change
@@ -3140,7 +3139,6 @@ func testRenameDirStat(t *testing.T, m Meta) {
 			t.Fatalf("Test 2 failed: inodes should not change %d != %d", statAfter.inodes, statBefore.inodes)
 		}
 		m.Unlink(ctx, dir1, "file3")
-		time.Sleep(500 * time.Millisecond)
 		m.FlushSession()
 		t.Logf("Test 2 passed: same-dir rename without overwrite")
 	}
@@ -3189,8 +3187,9 @@ func testRenameDirStat(t *testing.T, m Meta) {
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
-		m.Unlink(ctx, dir1, "file4")
-		time.Sleep(500 * time.Millisecond)
+		if st := m.Unlink(ctx, dir1, "file5"); st != 0 {
+			t.Fatalf("cleanup file5 after Test 3: %s", st)
+		}
 		m.FlushSession()
 		t.Logf("Test 3 passed: same-dir rename with overwrite")
 	}
@@ -3213,7 +3212,7 @@ func testRenameDirStat(t *testing.T, m Meta) {
 			t.Fatalf("rename file_src to file1 (overwrite cross-dir): %s", st)
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
 		stat2After, _ := m.GetDirStat(ctx, dir2)
 		stat3After, _ := m.GetDirStat(ctx, dir3)
 
@@ -3226,7 +3225,6 @@ func testRenameDirStat(t *testing.T, m Meta) {
 			t.Fatalf("Test 4 failed: dir3 inodes %d != %d-1", stat3After.inodes, stat3Before.inodes)
 		}
 		m.Unlink(ctx, dir2, "file1")
-		time.Sleep(500 * time.Millisecond)
 		m.FlushSession()
 		t.Logf("Test 4 passed: cross-dir rename with overwrite")
 	}
@@ -3249,7 +3247,7 @@ func testRenameDirStat(t *testing.T, m Meta) {
 			t.Fatalf("rename exchange ex1 <-> ex2: %s", st)
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
 		stat1After, _ := m.GetDirStat(ctx, dir1)
 		stat3After, _ := m.GetDirStat(ctx, dir3)
 
@@ -3260,9 +3258,12 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		if stat3After.inodes != stat3Before.inodes {
 			t.Fatalf("Test 5 failed: dir3 inodes %d != %d", stat3After.inodes, stat3Before.inodes)
 		}
-		m.Unlink(ctx, dir1, "ex2")
-		m.Unlink(ctx, dir3, "ex1")
-		time.Sleep(500 * time.Millisecond)
+		if st := m.Unlink(ctx, dir1, "ex1"); st != 0 {
+			t.Fatalf("cleanup ex1 after Test 5: %s", st)
+		}
+		if st := m.Unlink(ctx, dir3, "ex2"); st != 0 {
+			t.Fatalf("cleanup ex2 after Test 5: %s", st)
+		}
 		m.FlushSession()
 		t.Logf("Test 5 passed: exchange rename")
 	}
@@ -3284,7 +3285,7 @@ func testRenameDirStat(t *testing.T, m Meta) {
 			t.Fatalf("rename same-dir exchange file_a <-> file_b: %s", st)
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
 		statAfter, _ := m.GetDirStat(ctx, dir1)
 
 		// same-dir exchange should not change inode count
@@ -3293,7 +3294,6 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		}
 		m.Unlink(ctx, dir1, "file_b")
 		m.Unlink(ctx, dir1, "file_a")
-		time.Sleep(500 * time.Millisecond)
 		m.FlushSession()
 		t.Logf("Test 6 passed: same-dir exchange rename")
 	}
@@ -3431,7 +3431,7 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 			t.Fatalf("rename exchange with trash: %s", st)
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
 		stat1After, _ := m.GetDirStat(ctx, dir1)
 		stat2After, _ := m.GetDirStat(ctx, dir2)
 
@@ -3470,7 +3470,7 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 
 		time.Sleep(500 * time.Millisecond)
 		m.FlushSession()
-		time.Sleep(500 * time.Millisecond)
+
 
 		// Get the trash inode (it should be marked as trash)
 		if !trashInode.IsTrash() {
@@ -3487,7 +3487,7 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 		st := m.Rename(ctx, dir1, "to_trash", dir2, "victim", 0, &trashInode, &attr)
 		if st == 0 {
 			// If rename from trash succeeded, verify stats
-			time.Sleep(500 * time.Millisecond)
+			m.FlushSession()
 			stat1After, _ := m.GetDirStat(ctx, dir1)
 			stat2After, _ := m.GetDirStat(ctx, dir2)
 
@@ -3505,7 +3505,6 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 			t.Logf("Test 7 skipped: rename from trash not allowed (expected for security)")
 		}
 		m.Unlink(ctx, dir2, "victim")
-		time.Sleep(500 * time.Millisecond)
 		m.FlushSession()
 	}
 
@@ -3526,7 +3525,7 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 			t.Fatalf("rename same-dir exchange with trash: %s", st)
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		m.FlushSession()
 		statAfter, _ := m.GetDirStat(ctx, dir1)
 
 		// same-dir exchange should not change inode count
@@ -3535,7 +3534,6 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 		}
 		m.Unlink(ctx, dir1, "trash_b")
 		m.Unlink(ctx, dir1, "trash_a")
-		time.Sleep(500 * time.Millisecond)
 		m.FlushSession()
 		t.Logf("Test 8 passed: same-dir exchange with trash")
 	}
