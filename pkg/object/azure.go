@@ -358,7 +358,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 		if domain, err = autoWasbEndpoint(accountName, uri.Scheme, func(serviceURL string) (*azblob.Client, error) {
 			return azblob.NewClientWithSharedKeyCredential(serviceURL, credential, nil)
 		}); err != nil {
-			return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
+			return nil, fmt.Errorf("Unable to get endpoint of container %s: %w", containerName, err)
 		}
 	}
 	client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain), credential, nil)
