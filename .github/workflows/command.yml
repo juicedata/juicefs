@@ -84,6 +84,11 @@ jobs:
           wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
           chmod +x random-test
       
+      - name: Test Changelog
+        timeout-minutes: 25
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/changelog.sh
+    
       - name: Test Tier
         timeout-minutes: 20
         env:
@@ -108,7 +113,7 @@ jobs:
         timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/config.sh
-    
+
       - name: Test acl
         timeout-minutes: 10
         run: |
