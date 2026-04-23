@@ -4524,7 +4524,7 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		}
 	}
 
-	return errno(m.txn(ctx.WithValue(txMaxRetryKey{}, 1), func(tx *kvTxn) error {
+	return errno(m.txn(ctx, func(tx *kvTxn) error {
 		now := time.Now()
 		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
 

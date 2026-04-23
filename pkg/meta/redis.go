@@ -5459,7 +5459,7 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 		}
 
 		var batchResult batchCloneResult
-		err := m.txn(ctx.WithValue(txMaxRetryKey{}, 10), func(tx *redis.Tx) error {
+		err := m.txn(ctx, func(tx *redis.Tx) error {
 			now := time.Now()
 			var pattr Attr
 			pval, err := tx.Get(ctx, m.inodeKey(dstParent)).Bytes()
