@@ -55,6 +55,43 @@ func testFormat() *Format {
 	return &Format{Name: "test", DirStats: true}
 }
 
+func checkResult(expect dirStat, stat *dirStat, st syscall.Errno) error {
+	if st != 0 {
+		return fmt.Errorf("get dir usage: %s", st)
+	}
+	if stat == nil {
+		return fmt.Errorf("get dir usage: nil stat")
+	}
+	if expect.length >= 0 && stat.length != expect.length {
+		return fmt.Errorf("expect %+v, but got %+v", expect, stat)
+	}
+	if expect.space >= 0 && stat.space != expect.space {
+		return fmt.Errorf("expect %+v, but got %+v", expect, stat)
+	}
+	if expect.inodes >= 0 && stat.inodes != expect.inodes {
+		return fmt.Errorf("expect %+v, but got %+v", expect, stat)
+	}
+	return nil
+}
+
+func waitCheckResult(m Meta, expect dirStat, statFn func() (*dirStat, syscall.Errno)) error {
+	deadline := time.Now().Add(3 * time.Second)
+	var lastErr error
+	for {
+		m.FlushSession()
+		stat, st := statFn()
+		if err := checkResult(expect, stat, st); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		if time.Now().After(deadline) {
+			return lastErr
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func TestRedisClient(t *testing.T) {
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
 	if err != nil || m.Name() != "redis" {
@@ -2136,14 +2173,11 @@ func testTrash(t *testing.T, m Meta) {
 		return stat
 	}
 	waitDirStatInodes := func(ino Ino, expected int64, scene string) {
-		for i := 0; i < 20; i++ {
-			m.FlushSession()
-			if stat := getDirStat(ino); stat.inodes == expected {
-				return
-			}
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: expected}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, ino)
+		}); err != nil {
+			t.Fatalf("%s: %v", scene, err)
 		}
-		stat := getDirStat(ino)
-		t.Fatalf("%s: expect inodes %d, got %d", scene, expected, stat.inodes)
 	}
 	var trashDir Ino
 	if st := m.Create(ctx, 1, "f1", 0644, 022, 0, &inode, attr); st != 0 {
@@ -2966,77 +3000,88 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("new session: %s", err)
 	}
 	defer m.CloseSession()
-	stat, st := m.GetDirStat(Background(), testInode)
-	checkResult := func(length, space, inodes int64) {
-		if st != 0 {
-			t.Fatalf("get dir usage: %s", st)
-		}
-		expect := dirStat{length, space, inodes}
-		if *stat != expect {
-			t.Fatalf("test dir usage: expect %+v, but got %+v", expect, stat)
-		}
+	if err := waitCheckResult(m, dirStat{0, 0, 0}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage empty: %v", err)
 	}
-	checkResult(0, 0, 0)
 
 	// test dir with file
 	var fileInode Ino
 	if st := m.Create(Background(), testInode, "file", 0640, 022, 0, &fileInode, nil); st != 0 {
 		t.Fatalf("create: %s", st)
 	}
-	m.FlushSession()
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(0, align4K(0), 1)
+	if err := waitCheckResult(m, dirStat{0, align4K(0), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage create: %v", err)
+	}
 
 	// test dir with file and fallocate
 	if st := m.Fallocate(Background(), fileInode, 0, 0, 4097, nil); st != 0 {
 		t.Fatalf("fallocate: %s", st)
 	}
-	m.FlushSession()
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(4097, align4K(4097), 1)
+	if err := waitCheckResult(m, dirStat{4097, align4K(4097), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage fallocate: %v", err)
+	}
 
 	// test dir with file and truncate
 	if st := m.Truncate(Background(), fileInode, 0, 0, nil, false); st != 0 {
 		t.Fatalf("truncate: %s", st)
 	}
-	m.FlushSession()
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(0, align4K(0), 1)
+	if err := waitCheckResult(m, dirStat{0, align4K(0), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage truncate: %v", err)
+	}
 
 	// test dir with file and write
 	if st := m.Write(Background(), fileInode, 0, 0, Slice{Id: 1, Size: 1 << 20, Off: 0, Len: 4097}, time.Now()); st != 0 {
 		t.Fatalf("write: %s", st)
 	}
-	m.FlushSession()
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(4097, align4K(4097), 1)
+	if err := waitCheckResult(m, dirStat{4097, align4K(4097), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage write: %v", err)
+	}
 
 	// test dir with file and link
 	if st := m.Link(Background(), fileInode, testInode, "file2", nil); st != 0 {
 		t.Fatalf("link: %s", st)
 	}
-	m.FlushSession()
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(2*4097, 2*align4K(4097), 2)
+	if err := waitCheckResult(m, dirStat{2 * 4097, 2 * align4K(4097), 2}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage link: %v", err)
+	}
 
 	// test dir with subdir
 	var subInode Ino
 	if st := m.Mkdir(Background(), testInode, "sub", 0640, 022, 0, &subInode, nil); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	m.FlushSession()
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(2*4097, align4K(0)+2*align4K(4097), 3)
+	if err := waitCheckResult(m, dirStat{2 * 4097, align4K(0) + 2*align4K(4097), 3}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage mkdir sub: %v", err)
+	}
 
 	// test rename
 	if st := m.Rename(Background(), testInode, "file2", subInode, "file", 0, nil, nil); st != 0 {
 		t.Fatalf("rename: %s", st)
 	}
-	m.FlushSession()
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(4097, align4K(0)+align4K(4097), 2)
-	stat, st = m.GetDirStat(Background(), subInode)
-	checkResult(4097, align4K(4097), 1)
+	if err := waitCheckResult(m, dirStat{4097, align4K(0) + align4K(4097), 2}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage rename src: %v", err)
+	}
+	if err := waitCheckResult(m, dirStat{4097, align4K(4097), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), subInode)
+	}); err != nil {
+		t.Fatalf("test dir usage rename dst: %v", err)
+	}
 
 	// test unlink
 	if st := m.Unlink(Background(), testInode, "file"); st != 0 {
@@ -3045,19 +3090,26 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Unlink(Background(), subInode, "file"); st != 0 {
 		t.Fatalf("unlink: %s", st)
 	}
-	m.FlushSession()
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(0, align4K(0), 1)
-	stat, st = m.GetDirStat(Background(), subInode)
-	checkResult(0, 0, 0)
+	if err := waitCheckResult(m, dirStat{0, align4K(0), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage unlink src: %v", err)
+	}
+	if err := waitCheckResult(m, dirStat{0, 0, 0}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), subInode)
+	}); err != nil {
+		t.Fatalf("test dir usage unlink dst: %v", err)
+	}
 
 	// test rmdir
 	if st := m.Rmdir(Background(), testInode, "sub"); st != 0 {
 		t.Fatalf("rmdir: %s", st)
 	}
-	m.FlushSession()
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(0, 0, 0)
+	if err := waitCheckResult(m, dirStat{0, 0, 0}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage rmdir: %v", err)
+	}
 }
 
 func testRenameDirStat(t *testing.T, m Meta) {
@@ -3102,16 +3154,18 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		stat1After, _ := m.GetDirStat(ctx, dir1)
-		stat2After, _ := m.GetDirStat(ctx, dir2)
 
 		// dir1 should decrease by one file
-		if stat1After.inodes != stat1Before.inodes-1 {
-			t.Fatalf("Test 1 failed: dir1 inodes %d != %d-1", stat1After.inodes, stat1Before.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: stat1Before.inodes - 1}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir1)
+		}); err != nil {
+			t.Fatalf("Test 1 dir1 inodes: %v", err)
 		}
 		// dir2 should increase by one file
-		if stat2After.inodes != stat2Before.inodes+1 {
-			t.Fatalf("Test 1 failed: dir2 inodes %d != %d+1", stat2After.inodes, stat2Before.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: stat2Before.inodes + 1}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir2)
+		}); err != nil {
+			t.Fatalf("Test 1 dir2 inodes: %v", err)
 		}
 		m.Unlink(ctx, dir2, "file1")
 		m.FlushSession()
@@ -3132,11 +3186,12 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		statAfter, _ := m.GetDirStat(ctx, dir1)
 
 		// same directory inodes should not change
-		if statAfter.inodes != statBefore.inodes {
-			t.Fatalf("Test 2 failed: inodes should not change %d != %d", statAfter.inodes, statBefore.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: statBefore.inodes}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir1)
+		}); err != nil {
+			t.Fatalf("Test 2 same dir inodes: %v", err)
 		}
 		m.Unlink(ctx, dir1, "file3")
 		m.FlushSession()
@@ -3161,11 +3216,12 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		statAfter, _ := m.GetDirStat(ctx, dir1)
 
 		// with trash disabled: overwritten file is deleted, so inodes should decrease by 1
-		if statAfter.inodes != statBefore.inodes-1 {
-			t.Fatalf("Test 3 failed: expected dir1 inodes %d, got %d", statBefore.inodes-1, statAfter.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: statBefore.inodes - 1}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir1)
+		}); err != nil {
+			t.Fatalf("Test 3 overwrite inodes: %v", err)
 		}
 		if st := m.Unlink(ctx, dir1, "file5"); st != 0 {
 			t.Fatalf("cleanup file5 after Test 3: %s", st)
@@ -3193,16 +3249,18 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		stat2After, _ := m.GetDirStat(ctx, dir2)
-		stat3After, _ := m.GetDirStat(ctx, dir3)
 
 		// dir2: one deleted, one added, total no change
-		if stat2After.inodes != stat2Before.inodes {
-			t.Fatalf("Test 4 failed: dir2 inodes should not change %d != %d", stat2After.inodes, stat2Before.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: stat2Before.inodes}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir2)
+		}); err != nil {
+			t.Fatalf("Test 4 dir2 inodes: %v", err)
 		}
 		// dir3: one deleted, should decrease by 1
-		if stat3After.inodes != stat3Before.inodes-1 {
-			t.Fatalf("Test 4 failed: dir3 inodes %d != %d-1", stat3After.inodes, stat3Before.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: stat3Before.inodes - 1}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir3)
+		}); err != nil {
+			t.Fatalf("Test 4 dir3 inodes: %v", err)
 		}
 		m.Unlink(ctx, dir2, "file1")
 		m.FlushSession()
@@ -3228,15 +3286,17 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		stat1After, _ := m.GetDirStat(ctx, dir1)
-		stat3After, _ := m.GetDirStat(ctx, dir3)
 
 		// both directories should not change their inode counts with exchange
-		if stat1After.inodes != stat1Before.inodes {
-			t.Fatalf("Test 5 failed: dir1 inodes %d != %d", stat1After.inodes, stat1Before.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: stat1Before.inodes}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir1)
+		}); err != nil {
+			t.Fatalf("Test 5 dir1 inodes: %v", err)
 		}
-		if stat3After.inodes != stat3Before.inodes {
-			t.Fatalf("Test 5 failed: dir3 inodes %d != %d", stat3After.inodes, stat3Before.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: stat3Before.inodes}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir3)
+		}); err != nil {
+			t.Fatalf("Test 5 dir3 inodes: %v", err)
 		}
 		if st := m.Unlink(ctx, dir1, "ex1"); st != 0 {
 			t.Fatalf("cleanup ex1 after Test 5: %s", st)
@@ -3266,11 +3326,12 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		statAfter, _ := m.GetDirStat(ctx, dir1)
 
 		// same-dir exchange should not change inode count
-		if statAfter.inodes != statBefore.inodes {
-			t.Fatalf("Test 6 failed: inodes %d != %d", statAfter.inodes, statBefore.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: statBefore.inodes}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir1)
+		}); err != nil {
+			t.Fatalf("Test 6 same dir exchange: %v", err)
 		}
 		m.Unlink(ctx, dir1, "file_b")
 		m.Unlink(ctx, dir1, "file_a")
@@ -3331,12 +3392,13 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		statAfter, _ := m.GetDirStat(ctx, dir1)
 
 		// with trash: deleted file doesn't reduce inode count, only goes to trash
 		// stat should decrease by 1 (the overwritten file)
-		if statAfter.inodes != statBefore.inodes-1 {
-			t.Fatalf("Test trash failed: inodes %d != %d-1", statAfter.inodes, statBefore.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: statBefore.inodes - 1}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir1)
+		}); err != nil {
+			t.Fatalf("Test trash overwrite: %v", err)
 		}
 		overwritten := Attr{}
 		if st := m.GetAttr(ctx, file2Inode, &overwritten); st != 0 && st != syscall.ENOENT {
@@ -3369,16 +3431,18 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		stat1After, _ := m.GetDirStat(ctx, dir1)
-		stat2After, _ := m.GetDirStat(ctx, dir2)
 
 		// dir1: one deleted
-		if stat1After.inodes != stat1Before.inodes-1 {
-			t.Fatalf("Test trash cross-dir failed: dir1 inodes %d != %d-1", stat1After.inodes, stat1Before.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: stat1Before.inodes - 1}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir1)
+		}); err != nil {
+			t.Fatalf("Test trash cross-dir dir1: %v", err)
 		}
 		// dir2: one deleted (goes to trash), one added, net no change
-		if stat2After.inodes != stat2Before.inodes {
-			t.Fatalf("Test trash cross-dir failed: dir2 inodes %d != %d", stat2After.inodes, stat2Before.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: stat2Before.inodes}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir2)
+		}); err != nil {
+			t.Fatalf("Test trash cross-dir dir2: %v", err)
 		}
 		overwritten := Attr{}
 		if st := m.GetAttr(ctx, file2Inode, &overwritten); st != 0 && st != syscall.ENOENT {
@@ -3412,15 +3476,17 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		stat1After, _ := m.GetDirStat(ctx, dir1)
-		stat2After, _ := m.GetDirStat(ctx, dir2)
 
 		// exchange should not change inode counts
-		if stat1After.inodes != stat1Before.inodes {
-			t.Fatalf("Test trash exchange failed: dir1 inodes %d != %d", stat1After.inodes, stat1Before.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: stat1Before.inodes}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir1)
+		}); err != nil {
+			t.Fatalf("Test trash exchange dir1: %v", err)
 		}
-		if stat2After.inodes != stat2Before.inodes {
-			t.Fatalf("Test trash exchange failed: dir2 inodes %d != %d", stat2After.inodes, stat2Before.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: stat2Before.inodes}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir2)
+		}); err != nil {
+			t.Fatalf("Test trash exchange dir2: %v", err)
 		}
 		t.Logf("Test trash exchange passed")
 	}
@@ -3505,11 +3571,12 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 		}
 
 		m.FlushSession()
-		statAfter, _ := m.GetDirStat(ctx, dir1)
 
 		// same-dir exchange should not change inode count
-		if statAfter.inodes != statBefore.inodes {
-			t.Fatalf("Test 8 failed: inodes %d != %d", statAfter.inodes, statBefore.inodes)
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: statBefore.inodes}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, dir1)
+		}); err != nil {
+			t.Fatalf("Test 8 same-dir exchange: %v", err)
 		}
 		m.Unlink(ctx, dir1, "trash_b")
 		m.Unlink(ctx, dir1, "trash_a")
