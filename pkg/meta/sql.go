@@ -398,7 +398,7 @@ func (m *dbMeta) initStatement() {
 	m.statement["node.*"] = fmt.Sprintf("%snode.*", m.tablePrefix)
 	m.statement[`INSERT INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`] =
 		fmt.Sprintf(`INSERT INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`, m.tablePrefix)
-	m.statement[`INSERT IGNORE INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?)`] = 
+	m.statement[`INSERT IGNORE INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?)`] =
 		fmt.Sprintf(`INSERT IGNORE INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?)`, m.tablePrefix)
 }
 
@@ -1717,13 +1717,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			if _type == TypeDirectory {
 				n.Mode |= 02000
 			} else if n.Mode&02010 == 02010 && ctx.Uid() != 0 {
-				var found bool
-				for _, gid := range ctx.Gids() {
-					if gid == pn.Gid {
-						found = true
-					}
-				}
-				if !found {
+				if !containsGid(ctx, pn.Gid) {
 					n.Mode &= ^uint16(02000)
 				}
 			}

@@ -543,6 +543,26 @@ func testMetaClient(t *testing.T, m Meta) {
 			t.Fatalf("sgid should be cleared")
 		}
 
+		var p2 Ino
+		ctx4 := NewContext(3, 3, []uint32{3, 1})
+		if st := m.Mkdir(ctx4, 1, "d3", 0775, 0, 0, &p2, attr); st != 0 {
+			t.Fatalf("mkdir d3: %s", st)
+		}
+		if st := m.SetAttr(ctx4, p2, SetAttrGID, 0, &Attr{Gid: 1}); st != 0 {
+			t.Fatalf("chgrp d3: %s", st)
+		}
+		if st := m.SetAttr(ctx4, p2, SetAttrMode, 0, &Attr{Mode: 02775}); st != 0 {
+			t.Fatalf("chmod g+s d3: %s", st)
+		}
+		if st := m.GetAttr(ctx4, p2, attr); st != 0 {
+			t.Fatalf("getattr d3: %s", st)
+		} else if attr.Mode&02000 == 0 {
+			t.Fatalf("sgid should be kept when gid is in supplementary groups")
+		}
+		if st := m.Rmdir(ctx4, 1, "d3"); st != 0 {
+			t.Fatalf("rmdir d3: %s", st)
+		}
+
 	}
 	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve /d1/d2: %s", st)
