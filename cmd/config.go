@@ -101,8 +101,10 @@ func configManagementFlags() []cli.Flag {
 			Usage: "enable changelog",
 		},
 		&cli.DurationFlag{
-			Name:  "changelog-max-age",
-			Usage: "max age of changelog entries (e.g. 2h, 30m); 0 to disable time-based cleanup",
+			Name:        "changelog-max-age",
+			Usage:       "max age of changelog entries (e.g. 2h, 30m); 0 to disable time-based cleanup",
+			Value:       2 * time.Hour,
+			DefaultText: "2h",
 		},
 		&cli.Int64Flag{
 			Name:  "changelog-max-lines",
