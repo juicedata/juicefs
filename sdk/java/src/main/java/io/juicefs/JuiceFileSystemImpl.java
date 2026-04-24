@@ -987,6 +987,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public BlockLocation[] getFileBlockLocations(FileStatus file, long start, long len) throws IOException {
+    if (file == null) {
+      return null;
+    }
     if (needCheckPermission() && !checkPathAccess(file.getPath(), FsAction.READ, "getFileBlockLocations")) {
       return superGroupFileSystem.getFileBlockLocations(file, start, len);
     }
@@ -999,10 +1002,6 @@ public class JuiceFileSystemImpl extends FileSystem {
         }
       }
       return bls;
-    }
-
-    if (file == null) {
-      return null;
     }
 
     if (start < 0 || len < 0) {
