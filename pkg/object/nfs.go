@@ -277,9 +277,9 @@ func (n *nfsStore) readDirSorted(ctx context.Context, dir string, followLink boo
 			nfsEntries = append(nfsEntries, &nfsEntry{e, e.Name() + dirSuffix, nil, false})
 		} else if isSymlink && followLink {
 			// follow symlink
-			nfsEntries = append(nfsEntries, &nfsEntry{e, e.Name(), nil, true})
 			src, err := n.Readlink(path.Join(dirname, e.Name()))
 			if err != nil {
+				nfsEntries = append(nfsEntries, &nfsEntry{e, e.Name(), nil, true})
 				logger.Errorf("readlink %s: %s", e.Name(), err)
 				continue
 			}
