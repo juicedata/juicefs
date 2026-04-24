@@ -2945,7 +2945,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	}
 	if set&SetAttrMode != 0 {
 		if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
-			if ctx.Gid() != cur.Gid {
+			if !containsGid(ctx, cur.Gid) {
 				attr.Mode &= 05777
 			}
 		}

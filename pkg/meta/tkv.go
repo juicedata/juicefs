@@ -1227,13 +1227,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			if _type == TypeDirectory {
 				attr.Mode |= 02000
 			} else if attr.Mode&02010 == 02010 && ctx.Uid() != 0 {
-				var found bool
-				for _, gid := range ctx.Gids() {
-					if gid == pattr.Gid {
-						found = true
-					}
-				}
-				if !found {
+				if !containsGid(ctx, pattr.Gid) {
 					attr.Mode &= ^uint16(02000)
 				}
 			}
