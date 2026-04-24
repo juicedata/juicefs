@@ -267,9 +267,16 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 			name := e.Name()
 			if fi.IsDir() {
 				name = e.Name() + dirSuffix
+			} else if !fi.Mode().IsRegular() {
+				logger.Warnf("%s is not a regular file, ignore it", name)
+				continue
 			}
 			mEntries[i] = &mEntry{e, name, fi, false}
 		} else {
+			if !isSymlink && !e.Mode().IsRegular() {
+				logger.Warnf("%s is not a regular file, ignore it", e.Name())
+				continue
+			}
 			mEntries[i] = &mEntry{e, e.Name(), nil, isSymlink}
 		}
 	}
