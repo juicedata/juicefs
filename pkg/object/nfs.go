@@ -270,14 +270,14 @@ func (n *nfsStore) readDirSorted(ctx context.Context, dir string, followLink boo
 	if err != nil {
 		return nil, errors.Wrapf(err, "readdir %s", dirname)
 	}
-	nfsEntries := make([]*nfsEntry, len(entries))
-	for i, e := range entries {
+	nfsEntries := make([]*nfsEntry, 0, len(entries))
+	for _, e := range entries {
 		isSymlink := e.Attr.Attr.Type == nfs.NF3Lnk
 		if e.IsDir() {
-			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix, nil, false}
+			nfsEntries = append(nfsEntries, &nfsEntry{e, e.Name() + dirSuffix, nil, false})
 		} else if isSymlink && followLink {
 			// follow symlink
-			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, true}
+			nfsEntries = append(nfsEntries, &nfsEntry{e, e.Name(), nil, true})
 			src, err := n.Readlink(path.Join(dirname, e.Name()))
 			if err != nil {
 				logger.Errorf("readlink %s: %s", e.Name(), err)
@@ -296,13 +296,13 @@ func (n *nfsStore) readDirSorted(ctx context.Context, dir string, followLink boo
 				logger.Warnf("%s is not a regular file, ignore it", name)
 				continue
 			}
-			nfsEntries[i] = &nfsEntry{e, name, fi, false}
+			nfsEntries = append(nfsEntries, &nfsEntry{e, name, fi, false})
 		} else {
 			if !isSymlink && !e.Mode().IsRegular() {
 				logger.Warnf("%s is not a regular file, ignore it", e.Name())
 				continue
 			}
-			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, isSymlink}
+			nfsEntries = append(nfsEntries, &nfsEntry{e, e.Name(), nil, isSymlink})
 		}
 	}
 	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].Name() < nfsEntries[j].Name() })
