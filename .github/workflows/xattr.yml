@@ -74,6 +74,7 @@ jobs:
       - name: Set Variable
         id: vars
         run: |
+          exit 1
           if [ "${{matrix.meta}}" == "fdb" ]; then
             echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
           else
