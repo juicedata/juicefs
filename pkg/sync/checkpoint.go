@@ -175,7 +175,8 @@ func generateCheckpointKey(src, dst string, config *Config) string {
 		fmt.Fprintf(h, "|%s|%s", strings.Join(config.Include, ","), strings.Join(config.Exclude, ","))
 	}
 	hash := h.Sum(nil)
-	if strings.HasSuffix(dst, "/") {
+	dstPath := strings.TrimSuffix(strings.TrimSuffix(dst, "(encrypted-chunked)"), "(encrypted)")
+	if strings.HasSuffix(dstPath, "/") {
 		return fmt.Sprintf("%s.%x.json", checkpointPrefix, hash)
 	}
 	return fmt.Sprintf("/%s.%x.json", checkpointPrefix, hash)
