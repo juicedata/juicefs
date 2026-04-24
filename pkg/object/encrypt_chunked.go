@@ -162,7 +162,7 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 
 	n = copy(p, plain)
 	if n < len(plain) {
-		r.buf = plain[n:]
+		r.buf = append([]byte(nil), plain[n:]...)
 	}
 	return n, nil
 }
