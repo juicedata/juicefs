@@ -1626,7 +1626,9 @@ func (m *redisMeta) ScanChangelog(ctx Context, last int64, handler func(ver int6
 		p.LRange(ctx, m.txnLogKey(), cursor, cursor+1000)
 		rs, err := p.Exec(ctx)
 		if err != nil {
-			logger.Warnf("txn for tailChangeLog: %s", err)
+			if err != redis.Nil {
+				logger.Warnf("txn for tailChangeLog: %s", err)
+			}
 			time.Sleep(time.Second)
 			continue
 		}
