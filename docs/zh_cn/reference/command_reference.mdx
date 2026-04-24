@@ -36,6 +36,7 @@ COMMANDS:
      load     Load metadata from a previously dumped JSON file
      version  Show version
    INSPECTOR:
+     changelog  Tail the changelog of a volume
      status   Show status of a volume
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
@@ -254,6 +255,9 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最小客户端版本|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最大客户端版本|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd>|开启目录统计，这是快速汇总和目录配额所必需的 (默认值：false)|
+|`--changelog` <VersionAdd>1.4</VersionAdd>|启用[元数据 changelog](../administration/changelog.md)（默认值：false）|
+|`--changelog-max-age` <VersionAdd>1.4</VersionAdd>|changelog 条目的最长保留时间，例如 `2h` 或 `30m`；`0` 表示不按时间清理|
+|`--changelog-max-lines` <VersionAdd>1.4</VersionAdd>|最多保留的 changelog 条目数量；`0` 表示不限制|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
@@ -447,6 +451,33 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 | `--encrypt-algo=aes256gcm-rsa` <VersionAdd>1.0.4</VersionAdd> |加密算法，默认为 `aes256gcm-rsa`。|
 
 ## 检视 {#inspector}
+
+### `juicefs changelog` <VersionAdd>1.4</VersionAdd> {#changelog}
+
+跟踪显示文件系统元数据操作的 changelog。用法和保留策略详见[「元数据 Changelog」](../administration/changelog.md)。使用前需要先启用 changelog 功能：
+
+```shell
+juicefs config redis://localhost --changelog
+```
+
+#### 概览
+
+```shell
+juicefs changelog [command options] META-URL
+
+# 从最新的 changelog 开始跟踪
+juicefs changelog redis://localhost
+
+# 从指定元数据版本开始跟踪
+juicefs changelog redis://localhost --from 100
+```
+
+#### 参数
+
+|项 | 说明|
+|-|-|
+|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
+|`--from=0`|从指定元数据版本开始显示 changelog。`0` 表示从最新版本开始跟踪。|
 
 ### `juicefs status` {#status}
 
