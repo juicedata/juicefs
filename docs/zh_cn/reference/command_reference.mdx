@@ -948,6 +948,9 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--check-change` <VersionAdd>1.3</VersionAdd>|校验同步前后的数据是否有变更，默认为 false。校验方式基于文件大小和 mtime，比较轻量。|
 |`--max-failure` <VersionAdd>1.3</VersionAdd>|最大允许失败的文件数（-1 表示无限）|
 |`--dry`|仅打印执行计划，不实际拷贝文件。|
+|`--enable-checkpoint`|启用 checkpoint，用于断点续传。|
+|`--checkpoint-interval=10s`|保存 checkpoint 的时间间隔。|
+|`--checkpoint-force-reset`|从头开始同步，并覆盖已有 checkpoint。|
 
 #### 对象存储相关参数 {#sync-storage-related-options}
 

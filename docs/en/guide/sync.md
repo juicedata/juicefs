@@ -197,6 +197,28 @@ By default, `juicefs sync` performs incremental synchronization. It only overwri
 
 For full synchronization (where all files are synchronized regardless of their presence on the destination path), use [`--force-update`](../reference/command_reference.mdx#sync).
 
+### Resumable sync with checkpoint {#checkpoint}
+
+For long-running sync jobs, use `--enable-checkpoint` to save progress to the destination storage, so that an interrupted job can resume from the latest checkpoint:
+
+```shell
+juicefs sync --enable-checkpoint SRC DST
+```
+
+After restarting the same sync command with `--enable-checkpoint`, JuiceFS automatically loads the checkpoint whose source, destination, and sync options match the current run. The checkpoint records listed prefixes, pending and failed objects, delayed deletes, and progress statistics. It is saved every 10 seconds by default. You can adjust the interval with `--checkpoint-interval`:
+
+```shell
+juicefs sync --enable-checkpoint --checkpoint-interval 30s SRC DST
+```
+
+The checkpoint file is stored in the destination storage as a hidden object named like `.juicefs-sync-checkpoint.<hash>.json`. JuiceFS deletes it after the sync job finishes successfully. If the process is interrupted, restarted, or exits with failed objects, the checkpoint is kept for the next run.
+
+To ignore an existing checkpoint and start from scratch, add `--checkpoint-force-reset`:
+
+```shell
+juicefs sync --enable-checkpoint --checkpoint-force-reset SRC DST
+```
+
 ### Directory structure and file permissions {#directory-structure-and-file-permissions}
 
 By default, empty directories are not synchronized. To include them, use the `--dirs` option.

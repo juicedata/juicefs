@@ -215,6 +215,28 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
+### 使用 checkpoint 断点续传 {#checkpoint}
+
+对于耗时较长的同步任务，可以通过 `--enable-checkpoint` 将同步进度保存到目标存储中，任务中断后可从最近一次 checkpoint 继续：
+
+```shell
+juicefs sync --enable-checkpoint SRC DST
+```
+
+中断后重新执行相同的 `juicefs sync --enable-checkpoint` 命令，JuiceFS 会自动加载与当前源端、目标端和同步参数匹配的 checkpoint。checkpoint 会记录已经扫描的前缀、待同步和同步失败的对象、延迟删除的对象以及进度统计信息。默认每 10 秒保存一次，可以通过 `--checkpoint-interval` 调整保存间隔：
+
+```shell
+juicefs sync --enable-checkpoint --checkpoint-interval 30s SRC DST
+```
+
+checkpoint 文件会以 `.juicefs-sync-checkpoint.<hash>.json` 这样的隐藏对象保存在目标存储中。同步任务成功结束后，JuiceFS 会自动删除该文件；如果进程中断、重启或存在同步失败的对象，checkpoint 会保留下来供下次运行继续使用。
+
+如果需要忽略已有 checkpoint，从头开始同步，可以使用 `--checkpoint-force-reset`：
+
+```shell
+juicefs sync --enable-checkpoint --checkpoint-force-reset SRC DST
+```
+
 ### 目录结构与文件权限 {#directory-structure-and-file-permissions}
 
 默认情况下，sync 命令只同步文件对象以及包含文件对象的目录，空目录不会被同步。如需同步空目录，可以使用 `--dirs` 选项。

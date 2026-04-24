@@ -953,6 +953,9 @@ In which:
 |`--check-change` <VersionAdd>1.3</VersionAdd>|Verify whether the data has changed before and after synchronization, default is false. Based on file size and mtime, which is lightweight.|
 |`--max-failure`<VersionAdd>1.3</VersionAdd> |max number of allowed failed files (-1 for unlimited)|
 |`--dry`|Don't actually copy any file.|
+|`--enable-checkpoint`|Enable checkpoint for resumable sync.|
+|`--checkpoint-interval=10s`|Interval to save checkpoint.|
+|`--checkpoint-force-reset`|Start from scratch and overwrite existing checkpoint.|
 
 #### Storage related options {#sync-storage-related-options}
 
