@@ -48,6 +48,8 @@ META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
 # github runner 22.04 will set /home/runner to 750, which make juicefs binary not accessed by other users.
 chmod 755 /home/runner/
 
+CLUSTER_CHECKPOINT_OPTS="--enable-checkpoint --checkpoint-interval 2s"
+
 test_sync_without_mount_point(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
@@ -407,7 +409,7 @@ test_sync_encrypt_cluster_basic(){
 
     (./mc rb myminio/encdata > /dev/null 2>&1 --force || true) && ./mc mb myminio/encdata
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encdata/ \
-        --encrypt-rsa-key /tmp/sync-enc-nopass.pem \
+        --encrypt-rsa-key /tmp/sync-enc-nopass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -428,7 +430,7 @@ test_sync_encrypt_cluster_basic(){
     chmod -R 777 /jfs
 
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/encdata/ jfs://meta_url/decdata/ \
-        --decrypt-rsa-key /tmp/sync-enc-nopass.pem \
+        --decrypt-rsa-key /tmp/sync-enc-nopass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -452,7 +454,7 @@ test_sync_encrypt_cluster_chacha20(){
 
     (./mc rb myminio/encch > /dev/null 2>&1 --force || true) && ./mc mb myminio/encch
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encch/ \
-        --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo chacha20-rsa \
+        --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo chacha20-rsa $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -460,7 +462,7 @@ test_sync_encrypt_cluster_chacha20(){
 
     chmod 777 /jfs
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/encch/ jfs://meta_url/decdata/ \
-        --decrypt-rsa-key /tmp/sync-enc-nopass.pem --decrypt-algo chacha20-rsa \
+        --decrypt-rsa-key /tmp/sync-enc-nopass.pem --decrypt-algo chacha20-rsa $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -487,7 +489,7 @@ test_sync_reencrypt_cluster(){
 
     # Encrypt with key1
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/reenc1/ \
-        --encrypt-rsa-key /tmp/sync-enc-nopass.pem \
+        --encrypt-rsa-key /tmp/sync-enc-nopass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -495,7 +497,7 @@ test_sync_reencrypt_cluster(){
 
     # Re-encrypt: key1 -> key2
     sudo -u juicedata ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/reenc1/ minio://minioadmin:minioadmin@172.20.0.1:9000/reenc2/ \
-        --decrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-rsa-key /tmp/sync-enc-wrong.pem \
+        --decrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-rsa-key /tmp/sync-enc-wrong.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -504,7 +506,7 @@ test_sync_reencrypt_cluster(){
     # Decrypt with key2 and verify
     chmod 777 /jfs
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/reenc2/ jfs://meta_url/decdata/ \
-        --decrypt-rsa-key /tmp/sync-enc-wrong.pem \
+        --decrypt-rsa-key /tmp/sync-enc-wrong.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -528,7 +530,7 @@ test_sync_encrypt_cluster_passphrase(){
     (./mc rb myminio/encpass > /dev/null 2>&1 --force || true) && ./mc mb myminio/encpass
     sudo -u juicedata JFS_ENCRYPT_RSA_PASSPHRASE=cluster-enc-pass meta_url=$META_URL \
         ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encpass/ \
-        --encrypt-rsa-key /tmp/sync-enc-withpass.pem \
+        --encrypt-rsa-key /tmp/sync-enc-withpass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -537,7 +539,7 @@ test_sync_encrypt_cluster_passphrase(){
     chmod 777 /jfs
     sudo -u juicedata JFS_DECRYPT_RSA_PASSPHRASE=cluster-enc-pass meta_url=$META_URL \
         ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/encpass/ jfs://meta_url/decdata/ \
-        --decrypt-rsa-key /tmp/sync-enc-withpass.pem \
+        --decrypt-rsa-key /tmp/sync-enc-withpass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -561,7 +563,7 @@ test_sync_encrypt_cluster_update(){
 
     (./mc rb myminio/encupd > /dev/null 2>&1 --force || true) && ./mc mb myminio/encupd
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encupd/ \
-        --encrypt-rsa-key /tmp/sync-enc-nopass.pem \
+        --encrypt-rsa-key /tmp/sync-enc-nopass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -574,7 +576,7 @@ test_sync_encrypt_cluster_update(){
     done
 
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encupd/ \
-        --encrypt-rsa-key /tmp/sync-enc-nopass.pem --update --check-all \
+        --encrypt-rsa-key /tmp/sync-enc-nopass.pem --update --check-all $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -583,7 +585,7 @@ test_sync_encrypt_cluster_update(){
     # Decrypt and verify
     chmod 777 /jfs
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/encupd/ jfs://meta_url/decdata/ \
-        --decrypt-rsa-key /tmp/sync-enc-nopass.pem \
+        --decrypt-rsa-key /tmp/sync-enc-nopass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -671,7 +673,7 @@ test_sync_traffic_control_cluster_encrypt(){
     start_traffic_control_server 0
     # Encrypt with traffic control
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/tcenc/ \
-        --encrypt-rsa-key /tmp/sync-enc-nopass.pem --traffic-control-url $TC_URL \
+        --encrypt-rsa-key /tmp/sync-enc-nopass.pem --traffic-control-url $TC_URL $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -680,7 +682,7 @@ test_sync_traffic_control_cluster_encrypt(){
     # Decrypt with traffic control
     chmod 777 /jfs
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/tcenc/ jfs://meta_url/decdata/ \
-        --decrypt-rsa-key /tmp/sync-enc-nopass.pem --traffic-control-url $TC_URL \
+        --decrypt-rsa-key /tmp/sync-enc-nopass.pem --traffic-control-url $TC_URL $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         >sync.log 2>&1
@@ -784,6 +786,38 @@ skip_test_checkpoint_cluster_save_on_check_change_failure(){
          > sync2.log 2>&1
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
     ./mc rm -r --force myminio/data1
+}
+
+test_checkpoint_force_reset_cluster(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    mkdir -p /jfs/src /jfs/dst
+    for i in $(seq 1 800); do
+        dd if=/dev/urandom of=/jfs/src/file$i bs=32K count=1 status=none
+    done
+    chmod -R 777 /jfs/src /jfs/dst
+    timeout 2 sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/src/ jfs://meta_url/dst/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --dirs --check-change $CLUSTER_CHECKPOINT_OPTS \
+         --threads 2 >sync1.log 2>&1 || true
+    checkpoint_count=$(find /jfs/dst -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count" -eq 0 ]; then
+        echo "checkpoint file should exist after interrupted cluster sync"
+        exit 1
+    fi
+    echo "force-reset-marker" > /jfs/src/force-reset-marker
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/src/ jfs://meta_url/dst/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --dirs --check-change $CLUSTER_CHECKPOINT_OPTS \
+         --checkpoint-force-reset >sync2.log 2>&1
+    grep "Force reset checkpoint, starting fresh" sync2.log || (echo "expected force reset log" && exit 1)
+    diff -ur --no-dereference --exclude='.jfs.file*.tmp.*' /jfs/src /jfs/dst
+    checkpoint_count_after=$(find /jfs/dst -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count_after" -ne 0 ]; then
+        echo "checkpoint file should be deleted after successful force reset cluster sync"
+        exit 1
+    fi
+    grep "panic:\|<FATAL>\|ERROR" sync2.log && echo "panic or fatal or ERROR in sync2.log" && exit 1 || true
 }
 
 source .github/scripts/common/run_test.sh && run_test $@

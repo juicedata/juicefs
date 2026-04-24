@@ -482,6 +482,51 @@ func TestRestoreListDonePrefix(t *testing.T) {
 	}
 }
 
+func TestSyncCheckpointForceResetStartsFresh(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "force-reset-src", "", "", "")
+	dst, _ := object.CreateStorage("mem", "force-reset-dst", "", "", "")
+
+	putObjects(t, src, "dir/a", "dir/b", "dir/sub/x", "dir/sub/pending")
+	pendingObj, err := src.Head(ctx, "dir/sub/pending")
+	if err != nil {
+		t.Fatalf("head pending object: %v", err)
+	}
+
+	seedConfig := newTestConfig()
+	mgr := NewCheckpointManager(src, dst, seedConfig)
+	ckpt := &Checkpoint{
+		PrefixState: map[string]*PrefixState{
+			"dir/": {
+				ListDone:    true,
+				ListDepth:   2,
+				PendingKeys: make(map[string]object.Object),
+				FailedKeys:  make(map[string]object.Object),
+			},
+			"dir/sub/": {
+				ListDone:    true,
+				ListDepth:   1,
+				PendingKeys: map[string]object.Object{"dir/sub/pending": pendingObj},
+				FailedKeys:  make(map[string]object.Object),
+			},
+		},
+		Config: seedConfig,
+	}
+	if err := mgr.Save(ckpt); err != nil {
+		t.Fatalf("save checkpoint: %v", err)
+	}
+
+	config := newTestConfig()
+	config.CheckpointForceReset = true
+	if err := Sync(src, dst, config); err != nil {
+		t.Fatalf("Sync with checkpoint force reset: %v", err)
+	}
+
+	assertDstHasKeys(t, dst, "dir/a", "dir/b", "dir/sub/x", "dir/sub/pending")
+	if _, err := dst.Head(ctx, generateCheckpointKey(src.String(), dst.String(), config)); !os.IsNotExist(err) {
+		t.Fatalf("checkpoint file should be removed after successful force-reset sync, got err=%v", err)
+	}
+}
+
 // TestProduceFromListOverlappingPrefixes verifies that when files-from contains
 // both "dir/" and "dir/sub/", and both are in checkpoint, each is restored exactly once.
 func TestProduceFromListOverlappingPrefixes(t *testing.T) {

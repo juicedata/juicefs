@@ -289,6 +289,8 @@ prepare_encrypt_test(){
     mkdir -p /tmp/sync_enc_dst /tmp/sync_enc_dec
 }
 
+ENCRYPT_CHECKPOINT_OPTS="--enable-checkpoint --checkpoint-interval 1s"
+
 verify_encrypted(){
     local src_dir=$1
     local dst_dir=$2
@@ -318,9 +320,9 @@ verify_decrypted(){
 test_sync_encrypt_decrypt_local(){
     generate_encrypt_source
     prepare_encrypt_test
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_encrypted /tmp/sync_enc_src /tmp/sync_enc_dst
-    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
 
@@ -329,11 +331,11 @@ test_sync_encrypt_decrypt_passphrase(){
     generate_encrypt_source
     prepare_encrypt_test
     export JFS_ENCRYPT_RSA_PASSPHRASE=sync-enc-pass
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-withpass.pem
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-withpass.pem $ENCRYPT_CHECKPOINT_OPTS
     unset JFS_ENCRYPT_RSA_PASSPHRASE
     verify_encrypted /tmp/sync_enc_src /tmp/sync_enc_dst
     export JFS_DECRYPT_RSA_PASSPHRASE=sync-enc-pass
-    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-withpass.pem
+    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-withpass.pem $ENCRYPT_CHECKPOINT_OPTS
     unset JFS_DECRYPT_RSA_PASSPHRASE
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
@@ -342,9 +344,9 @@ test_sync_encrypt_decrypt_passphrase(){
 test_sync_encrypt_decrypt_chacha20(){
     generate_encrypt_source
     prepare_encrypt_test
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo chacha20-rsa
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo chacha20-rsa $ENCRYPT_CHECKPOINT_OPTS
     verify_encrypted /tmp/sync_enc_src /tmp/sync_enc_dst
-    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem --decrypt-algo chacha20-rsa
+    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem --decrypt-algo chacha20-rsa $ENCRYPT_CHECKPOINT_OPTS
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
 
@@ -352,9 +354,9 @@ test_sync_encrypt_decrypt_chacha20(){
 test_sync_encrypt_decrypt_rsa4096(){
     generate_encrypt_source
     prepare_encrypt_test
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-4096.pem
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-4096.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_encrypted /tmp/sync_enc_src /tmp/sync_enc_dst
-    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-4096.pem
+    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-4096.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
 
@@ -362,8 +364,8 @@ test_sync_encrypt_decrypt_rsa4096(){
 test_sync_encrypt_wrong_key(){
     generate_encrypt_source
     prepare_encrypt_test
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem
-    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-wrong.pem 2>&1 | tee /tmp/sync_enc_err.log || true
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
+    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-wrong.pem $ENCRYPT_CHECKPOINT_OPTS 2>&1 | tee /tmp/sync_enc_err.log || true
     local match=0
     for f in $(find /tmp/sync_enc_src -type f -printf '%P\n'); do
         if [ -f "/tmp/sync_enc_dec/$f" ] && cmp -s "/tmp/sync_enc_src/$f" "/tmp/sync_enc_dec/$f"; then
@@ -379,8 +381,8 @@ test_sync_encrypt_wrong_key(){
 test_sync_encrypt_wrong_algo(){
     generate_encrypt_source
     prepare_encrypt_test
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo aes256gcm-rsa
-    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem --decrypt-algo chacha20-rsa 2>&1 | tee /tmp/sync_enc_err.log || true
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo aes256gcm-rsa $ENCRYPT_CHECKPOINT_OPTS
+    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem --decrypt-algo chacha20-rsa $ENCRYPT_CHECKPOINT_OPTS 2>&1 | tee /tmp/sync_enc_err.log || true
     local match=0
     for f in $(find /tmp/sync_enc_src -type f -printf '%P\n'); do
         if [ -f "/tmp/sync_enc_dec/$f" ] && cmp -s "/tmp/sync_enc_src/$f" "/tmp/sync_enc_dec/$f"; then
@@ -397,9 +399,9 @@ test_sync_encrypt_large_file(){
     prepare_encrypt_test
     rm -rf /tmp/sync_enc_src && mkdir -p /tmp/sync_enc_src
     dd if=/dev/urandom of=/tmp/sync_enc_src/large9m.bin bs=1M count=9 status=none
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_encrypted /tmp/sync_enc_src /tmp/sync_enc_dst
-    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
 
@@ -409,9 +411,9 @@ test_sync_encrypt_with_mount_point(){
     prepare_encrypt_test
     ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
     ./juicefs mount -d $META_URL /jfs
-    ./juicefs sync /tmp/sync_enc_src/ /jfs/encrypted/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /tmp/sync_enc_src/ /jfs/encrypted/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_encrypted /tmp/sync_enc_src /jfs/encrypted
-    ./juicefs sync /jfs/encrypted/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /jfs/encrypted/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
 
@@ -420,10 +422,10 @@ test_sync_encrypt_without_mount_point(){
     generate_encrypt_source
     prepare_encrypt_test
     ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
-    meta_url=$META_URL ./juicefs sync /tmp/sync_enc_src/ jfs://meta_url/encrypted/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem
+    meta_url=$META_URL ./juicefs sync /tmp/sync_enc_src/ jfs://meta_url/encrypted/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     ./juicefs mount -d $META_URL /jfs
     verify_encrypted /tmp/sync_enc_src /jfs/encrypted
-    meta_url=$META_URL ./juicefs sync jfs://meta_url/encrypted/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem
+    meta_url=$META_URL ./juicefs sync jfs://meta_url/encrypted/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
 
@@ -431,12 +433,12 @@ test_sync_encrypt_without_mount_point(){
 test_sync_reencrypt(){
     generate_encrypt_source
     prepare_encrypt_test
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     rm -rf /tmp/sync_enc_reenc && mkdir -p /tmp/sync_enc_reenc
     ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_reenc/ \
-        --decrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-rsa-key /tmp/sync-enc-wrong.pem
+        --decrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-rsa-key /tmp/sync-enc-wrong.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_encrypted /tmp/sync_enc_src /tmp/sync_enc_reenc
-    ./juicefs sync /tmp/sync_enc_reenc/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-wrong.pem
+    ./juicefs sync /tmp/sync_enc_reenc/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-wrong.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
 
@@ -444,13 +446,13 @@ test_sync_reencrypt(){
 test_sync_reencrypt_diff_algo(){
     generate_encrypt_source
     prepare_encrypt_test
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo aes256gcm-rsa
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo aes256gcm-rsa $ENCRYPT_CHECKPOINT_OPTS
     rm -rf /tmp/sync_enc_reenc && mkdir -p /tmp/sync_enc_reenc
     ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_reenc/ \
         --decrypt-rsa-key /tmp/sync-enc-nopass.pem --decrypt-algo aes256gcm-rsa \
-        --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo chacha20-rsa
+        --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo chacha20-rsa $ENCRYPT_CHECKPOINT_OPTS
     verify_encrypted /tmp/sync_enc_src /tmp/sync_enc_reenc
-    ./juicefs sync /tmp/sync_enc_reenc/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem --decrypt-algo chacha20-rsa
+    ./juicefs sync /tmp/sync_enc_reenc/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem --decrypt-algo chacha20-rsa $ENCRYPT_CHECKPOINT_OPTS
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
 
@@ -458,11 +460,11 @@ test_sync_reencrypt_diff_algo(){
 test_sync_encrypt_update(){
     generate_encrypt_source
     prepare_encrypt_test
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     sleep 2
     echo "updated content" > /tmp/sync_enc_src/small.txt
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --update
-    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --update $ENCRYPT_CHECKPOINT_OPTS
+    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     [ "$(cat /tmp/sync_enc_dec/small.txt)" = "updated content" ] || (echo "FAIL: updated content mismatch" && exit 1)
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
@@ -473,11 +475,11 @@ test_sync_encrypt_combined_flags(){
     prepare_encrypt_test
     mkdir -p /tmp/sync_enc_src/empty_subdir
     ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem \
-        --check-all --update --dirs --list-threads 10 --list-depth 5
+        --check-all --update --dirs --list-threads 10 --list-depth 5 $ENCRYPT_CHECKPOINT_OPTS
     verify_encrypted /tmp/sync_enc_src /tmp/sync_enc_dst
     [ -d /tmp/sync_enc_dst/empty_subdir ] || (echo "FAIL: empty_subdir should exist with --dirs" && exit 1)
     ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem \
-        --check-all --update --dirs --list-threads 10 --list-depth 5
+        --check-all --update --dirs --list-threads 10 --list-depth 5 $ENCRYPT_CHECKPOINT_OPTS
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
 
@@ -486,10 +488,10 @@ test_sync_encrypt_delete_dst(){
     generate_encrypt_source
     prepare_encrypt_test
     echo "extra" > /tmp/sync_enc_dst/extra_file.txt
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --delete-dst
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --delete-dst $ENCRYPT_CHECKPOINT_OPTS
     [ -f /tmp/sync_enc_dst/extra_file.txt ] && echo "FAIL: extra_file.txt should be deleted" && exit 1
     verify_encrypted /tmp/sync_enc_src /tmp/sync_enc_dst
-    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     verify_decrypted /tmp/sync_enc_src /tmp/sync_enc_dec
 }
 
@@ -497,12 +499,12 @@ test_sync_encrypt_delete_dst(){
 test_sync_encrypt_exclude(){
     generate_encrypt_source
     prepare_encrypt_test
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --exclude '*.bin'
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --exclude '*.bin' $ENCRYPT_CHECKPOINT_OPTS
     bin_count=$(find /tmp/sync_enc_dst -name '*.bin' -type f | wc -l)
     [ "$bin_count" -gt 0 ] && echo "FAIL: *.bin should be excluded" && exit 1
     txt_count=$(find /tmp/sync_enc_dst -name '*.txt' -type f | wc -l)
     [ "$txt_count" -eq 0 ] && echo "FAIL: *.txt should be present" && exit 1
-    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem
+    ./juicefs sync /tmp/sync_enc_dst/ /tmp/sync_enc_dec/ --decrypt-rsa-key /tmp/sync-enc-nopass.pem $ENCRYPT_CHECKPOINT_OPTS
     for f in $(find /tmp/sync_enc_src -name '*.txt' -type f -printf '%P\n'); do
         cmp -s "/tmp/sync_enc_src/$f" "/tmp/sync_enc_dec/$f" || (echo "FAIL: $f mismatch" && exit 1)
     done
@@ -513,7 +515,7 @@ test_sync_encrypt_exclude(){
 test_sync_encrypt_dry_run(){
     generate_encrypt_source
     prepare_encrypt_test
-    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --dry 2>&1 | tee /tmp/sync_enc_dry.log
+    ./juicefs sync /tmp/sync_enc_src/ /tmp/sync_enc_dst/ --encrypt-rsa-key /tmp/sync-enc-nopass.pem --dry $ENCRYPT_CHECKPOINT_OPTS 2>&1 | tee /tmp/sync_enc_dry.log
     file_count=$(find /tmp/sync_enc_dst -type f 2>/dev/null | wc -l)
     [ "$file_count" -gt 0 ] && echo "FAIL: --dry should not write files" && exit 1
     echo "test_sync_encrypt_dry_run passed"
@@ -797,6 +799,33 @@ test_checkpoint_config_mismatch(){
     ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --update --threads 4 2>&1 | tee sync1.log || true
     grep -i "mismatch\|starting fresh" sync2.log || echo "Warning: expected checkpoint config mismatch message"
     compare_sync_dirs data/ /jfs/data/
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_force_reset(){
+    # Test: --checkpoint-force-reset should discard an existing checkpoint and start from scratch
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+    for i in $(seq 1 300); do
+        dd if=/dev/urandom of=data/file$i bs=64K count=1 status=none
+    done
+    timeout 2 ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --threads 2 2>&1 | tee sync1.log || true
+    checkpoint_file=$(find /jfs/data/ -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
+    if [ -z "$checkpoint_file" ]; then
+        echo "checkpoint file should exist after interrupted sync"
+        exit 1
+    fi
+    echo "force-reset-marker" > data/force-reset-marker
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s --checkpoint-force-reset 2>&1 | tee sync2.log
+    grep "Force reset checkpoint, starting fresh" sync2.log || (echo "expected force reset log" && exit 1)
+    compare_sync_dirs data/ /jfs/data/
+    checkpoint_file_after=$(find /jfs/data/ -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
+    if [ -n "$checkpoint_file_after" ]; then
+        echo "checkpoint file should be deleted after successful force reset sync"
+        exit 1
+    fi
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
 }
 
