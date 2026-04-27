@@ -48,6 +48,8 @@ juicefs tier set redis://localhost --id 1 /path/to/file
 
 ### 设置目录（仅目录本身）
 
+为目录本身设置存储层级的作用是当后续有新文件或子目录创建在该目录下时，会继承其父目录的 tier-id，从而自动使用对应的存储类型。
+
 ```shell
 juicefs tier set redis://localhost --id 2 /path/to/dir
 ```
@@ -86,7 +88,7 @@ juicefs tier set redis://localhost --id 2 /path/to/dir -r --force
 juicefs tier restore redis://localhost /path/to/dir -r
 ```
 
-`restore` 只向对象存储发起恢复请求；是否可读取、何时可读取取决于对象存储服务端恢复进度。
+`restore` 只向对象存储发起恢复请求；是否可读取、何时可读取取决于对象存储服务端恢复进度。活动副本的默认存活期（以天为单位）为 3 天
 
 ## 5. 状态检查
 
@@ -99,6 +101,7 @@ juicefs info /mountpoint/path/to/file
 重点关注：
 
 - `tier: <id>-><storage-class>`：元数据中的 tier 与映射。
+- `restore-status`：会显示对象是否处于解冻状态以及副本的过期时间。
 - 当映射与对象实际存储类型不一致时，会显示 `expected(...),actual(...)`，提示需要执行 `tier set --force` 重写。
 - 对 `tier-id=0`，会显示对象实际存储类型（`actual(...)`）。
 

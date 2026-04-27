@@ -48,6 +48,8 @@ juicefs tier set redis://localhost --id 1 /path/to/file
 
 ### Directory (directory entry only, non-recursive)
 
+The purpose of setting a storage tier for a directory itself is that when new files or subdirectories are created in this directory later, they will inherit the tier-id of their parent directory, thereby automatically using the corresponding storage type.
+
 ```shell
 juicefs tier set redis://localhost --id 2 /path/to/dir
 ```
@@ -86,7 +88,7 @@ For archive storage classes such as `GLACIER` or `DEEP_ARCHIVE`, issue a restore
 juicefs tier restore redis://localhost /path/to/dir -r
 ```
 
-`tier restore` only sends the restore request to the object storage service. Whether and when the objects become readable depends on the object storage provider's restore duration.
+`tier restore` only sends the restore request to the object storage service. Whether and when the objects become readable depends on the object storage provider's restore duration. Lifetime of the active copy in days is 3 days
 
 ## 5. Checking Tier Status
 
@@ -99,6 +101,7 @@ juicefs info /mountpoint/path/to/file
 Key fields to look for:
 
 - `tier: <id>-><storage-class>` — the tier-id stored in metadata and its mapped storage class.
+- `restore-status`：display whether the object is in an unfrozen state and the expiration time of the copy.
 - `expected(...),actual(...)` — shown when the metadata mapping and the object's real storage class differ. This signals that `tier set --force` is needed to re-write the objects.
 - `actual(...)` — shown for `tier-id=0` files, displaying the object's actual storage class.
 
