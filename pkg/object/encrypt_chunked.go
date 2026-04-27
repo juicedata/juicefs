@@ -115,39 +115,52 @@ type limitedReadCloser struct {
 }
 
 type chunkDecryptReader struct {
-	r    io.ReadCloser
-	enc  *dataEncryptor
-	buf  []byte
-	pool *sync.Pool
-	skip int64
+	r        io.ReadCloser
+	enc      *dataEncryptor
+	buf      []byte
+	pool     *sync.Pool
+	skip     int64
+	chunkBuf *[]byte
+}
+
+func (r *chunkDecryptReader) putChunkBuf() {
+	if r.chunkBuf != nil {
+		r.pool.Put(r.chunkBuf)
+		r.chunkBuf = nil
+		r.buf = nil
+	}
 }
 
 func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 	if len(r.buf) > 0 {
 		n := copy(p, r.buf)
 		r.buf = r.buf[n:]
+		if len(r.buf) == 0 {
+			r.putChunkBuf()
+		}
 		return n, nil
 	}
-
 	chunkBuf := r.pool.Get().(*[]byte)
-	defer r.pool.Put(chunkBuf)
-
 	n, err := io.ReadFull(r.r, *chunkBuf)
 	chunk := (*chunkBuf)[:n]
 	if err != io.ErrUnexpectedEOF && err != nil {
+		r.pool.Put(chunkBuf)
 		return 0, err
 	}
 
 	if len(chunk) < chunkHeaderSize {
+		r.pool.Put(chunkBuf)
 		return 0, fmt.Errorf("Decrypt: truncated chunk header")
 	}
 	ctLen := int(binary.BigEndian.Uint32(chunk[:chunkHeaderSize]))
 	if chunkHeaderSize+ctLen > len(chunk) {
+		r.pool.Put(chunkBuf)
 		return 0, fmt.Errorf("Decrypt: chunk data truncated: need %d, have %d", chunkHeaderSize+ctLen, len(chunk))
 	}
 
 	plain, decErr := r.enc.Decrypt(chunk[chunkHeaderSize : chunkHeaderSize+ctLen])
 	if decErr != nil {
+		r.pool.Put(chunkBuf)
 		return 0, fmt.Errorf("Decrypt: %s", decErr)
 	}
 
@@ -155,6 +168,7 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 		skip := r.skip
 		r.skip = 0
 		if skip >= int64(len(plain)) {
+			r.pool.Put(chunkBuf)
 			return 0, io.EOF
 		}
 		plain = plain[skip:]
@@ -162,12 +176,18 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 
 	n = copy(p, plain)
 	if n < len(plain) {
-		r.buf = append([]byte(nil), plain[n:]...)
+		r.buf = plain[n:]
+		r.chunkBuf = chunkBuf
+	} else {
+		r.pool.Put(chunkBuf)
 	}
 	return n, nil
 }
 
-func (r *chunkDecryptReader) Close() error { return r.r.Close() }
+func (r *chunkDecryptReader) Close() error {
+	r.putChunkBuf()
+	return r.r.Close()
+}
 
 type chunkEncryptReader struct {
 	r        io.Reader
