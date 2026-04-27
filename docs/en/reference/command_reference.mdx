@@ -36,6 +36,7 @@ COMMANDS:
      load     Load metadata from a previously dumped JSON file
      version  Show version
    INSPECTOR:
+     changelog  Tail the changelog of a volume
      status   Show status of a volume
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
@@ -257,6 +258,9 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd> |minimum client version allowed to connect|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd> |maximum client version allowed to connect|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd> |enable dir stats, which is necessary for fast summary and dir quota (default: false)|
+|`--changelog` <VersionAdd>1.4</VersionAdd>|enable [metadata changelog](../administration/changelog.md) (default: false)|
+|`--changelog-max-age` <VersionAdd>1.4</VersionAdd>|maximum retention time for changelog entries, such as `2h` or `30m`; `0` disables time-based cleanup|
+|`--changelog-max-lines` <VersionAdd>1.4</VersionAdd>|maximum number of changelog entries to keep; `0` means unlimited|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
@@ -450,6 +454,33 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 |`--encrypt-alg=aes256gcm-rsa` <VersionAdd>1.0.4</VersionAdd> |Encryption algorithm, the default is `aes256gcm-rsa`.|
 
 ## Inspector {#inspector}
+
+### `juicefs changelog` <VersionAdd>1.4</VersionAdd> {#changelog}
+
+Tail the changelog of file system metadata operations. See ["Metadata Changelog"](../administration/changelog.md) for usage and retention policy details. Enable the changelog feature before use:
+
+```shell
+juicefs config redis://localhost --changelog
+```
+
+#### Synopsis
+
+```shell
+juicefs changelog [command options] META-URL
+
+# Tail from the latest changelog
+juicefs changelog redis://localhost
+
+# Tail from a specific metadata version
+juicefs changelog redis://localhost --from 100
+```
+
+#### Options
+
+|Items|Description|
+|-|-|
+|`META-URL`|Database URL of the metadata engine. See [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
+|`--from=0`|show changelog from the specified metadata version. `0` means tailing from the latest version.|
 
 ### `juicefs status` {#status}
 
