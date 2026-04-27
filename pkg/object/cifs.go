@@ -416,9 +416,16 @@ func (c *cifsStore) List(ctx context.Context, prefix, marker, token, delimiter s
 				name := e.Name()
 				if fi.IsDir() {
 					name = e.Name() + dirSuffix
+				} else if !fi.Mode().IsRegular() {
+					logger.Warnf("%s is not a regular file, ignore it", name)
+					continue
 				}
 				mEntries = append(mEntries, &mEntry{e, name, fi, false})
 			} else {
+				if !isSymlink && !e.Mode().IsRegular() {
+					logger.Warnf("%s is not a regular file, ignore it", e.Name())
+					continue
+				}
 				mEntries = append(mEntries, &mEntry{e, e.Name(), nil, isSymlink})
 			}
 		}
