@@ -319,7 +319,7 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 			name := string(e.Name)
 			if fi2.IsDir() {
 				name += dirSuffix
-			} else if !fi.Mode().IsRegular() {
+			} else if !fi2.Mode().IsRegular() {
 				logger.Warnf("%s is not a regular file, ignore it", name)
 				continue
 			}
