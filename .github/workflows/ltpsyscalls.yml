@@ -109,15 +109,25 @@ jobs:
           sudo /tmp/rm_list.sh /tmp/rm_syscalls /opt/ltp/runtest/syscalls
           split -a 1 -d -l $(( $(wc -l < /opt/ltp/runtest/syscalls) / 3 + 1 )) /opt/ltp/runtest/syscalls /tmp/syscalls_
           sudo chmod 777 /tmp/syscalls_*
+          cat >/tmp/ltp.skip <<'EOF'
+          # LTP listmount04 was added after LTP 20240930 and LTP 20250930
+          # expects listmount() invalid mount-id validation added in Linux 6.11.
+          # GitHub Actions ubuntu-22.04 currently runs Azure 6.8 kernels
+          # (for example 6.8.0-1044-azure), so listmount04 reports two
+          # kernel/LTP mismatch failures unrelated to JuiceFS.
+          # Remove this skip after the runner kernel is >= 6.11 or LTP carries
+          # the upstream listmount04 minimum-kernel fix.
+          listmount04
+          EOF
           if [ "${{matrix.type}}" == "head" ]; then
             cat /tmp/syscalls_0
-            sudo ./runltp -d /tmp/jfs -C result.log.failed -T result.log.tconf -l result0.log -f /tmp/syscalls_0
+            sudo ./runltp -d /tmp/jfs -S /tmp/ltp.skip -C result.log.failed -T result.log.tconf -l result0.log -f /tmp/syscalls_0
           elif [ "${{matrix.type}}" == "middle" ]; then
             cat /tmp/syscalls_1
-            sudo ./runltp -d /tmp/jfs -C result.log.failed -T result.log.tconf -l result1.log -f /tmp/syscalls_1
+            sudo ./runltp -d /tmp/jfs -S /tmp/ltp.skip -C result.log.failed -T result.log.tconf -l result1.log -f /tmp/syscalls_1
           elif [ "${{matrix.type}}" == "tail" ]; then
             cat /tmp/syscalls_2
-            sudo ./runltp -d /tmp/jfs -C result.log.failed -T result.log.tconf -l result2.log -f /tmp/syscalls_2
+            sudo ./runltp -d /tmp/jfs -S /tmp/ltp.skip -C result.log.failed -T result.log.tconf -l result2.log -f /tmp/syscalls_2
           else
             echo "matrix.type: ${{matrix.type}} is not valid" && exit 1
           fi
