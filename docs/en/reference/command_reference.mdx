@@ -459,7 +459,7 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 
 ### `juicefs changelog` <VersionAdd>1.4</VersionAdd> {#changelog}
 
-Tail the changelog of file system metadata operations. See ["Metadata Changelog"](../administration/changelog.md) for usage and retention policy details. Enable the changelog feature before use:
+Tail the changelog of file system metadata operations. See [Metadata Changelog](../administration/changelog.md) for usage and retention policy details. Enable the changelog feature before use:
 
 ```shell
 juicefs config redis://localhost --changelog
@@ -481,8 +481,8 @@ juicefs changelog redis://localhost --from 100
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL of the metadata engine. See [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
-|`--from=0`|show changelog from the specified metadata version. `0` means tailing from the latest version.|
+|`META-URL`|URL of the metadata engine database. See [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
+|`--from=0`|show changelog starting from the specified metadata version. `0` means tailing from the latest version.|
 
 ### `juicefs status` {#status}
 
