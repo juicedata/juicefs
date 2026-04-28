@@ -91,7 +91,7 @@ jobs:
       - name: Install LTP Syscalls
         run: |
           sudo .github/scripts/apt_install.sh libaio-dev libacl1-dev attr
-          wget -O ltp.tar.gz https://github.com/linux-test-project/ltp/archive/refs/tags/20210927.tar.gz
+          wget -O ltp.tar.gz https://github.com/linux-test-project/ltp/archive/refs/tags/20250930.tar.gz
           mkdir ltp
           tar -xvf ltp.tar.gz -C ltp --strip-components 1
           cd ltp
