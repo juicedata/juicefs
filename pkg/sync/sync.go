@@ -1113,12 +1113,13 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 				logger.Errorf("Failed to copy object %s: %s", key, err)
 				taskErr = err
 			}
-
-			if taskErr == nil {
-				if config.DeleteSrcAfter {
-					if err = deleteObj(src, key, config.Dry); err != nil {
-						failed.IncrBy(-1)
-					}
+			if taskErr == nil && config.DeleteSrcAfter {
+				if obj.IsDir() {
+					srcDelayDelMu.Lock()
+					srcDelayDel = append(srcDelayDel, key)
+					srcDelayDelMu.Unlock()
+				} else {
+					taskErr = deleteObj(src, key, false)
 				}
 			}
 		}
