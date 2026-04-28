@@ -3441,19 +3441,13 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 		if !trashInode.IsTrash() {
 			trashInode = file1Inode
 		}
-		stat1Before, _ := m.GetDirStat(ctx, dir1)
-		stat2Before, _ := m.GetDirStat(ctx, dir2)
+		assertInodes(t, m, "Test 7 before rename dir1", dir1, 0)
+		assertInodes(t, m, "Test 7 before rename dir2", dir2, 1)
 		st := m.Rename(ctx, dir1, "to_trash", dir2, "victim", 0, &trashInode, &attr)
 		if st == 0 {
 			m.FlushSession()
-			stat1After, _ := m.GetDirStat(ctx, dir1)
-			stat2After, _ := m.GetDirStat(ctx, dir2)
-			if stat1After.inodes != stat1Before.inodes-1 {
-				t.Logf("Test 7 partial: rename from trash did decrease dir1 by 1")
-			}
-			if stat2After.inodes != stat2Before.inodes {
-				t.Logf("Test 7 partial: dir2 stat changed after restore from trash")
-			}
+			assertInodes(t, m, "Test 7 after rename dir1", dir1, 0)
+			assertInodes(t, m, "Test 7 after rename dir2", dir2, 1)
 			t.Logf("Test 7 passed: restore from trash with overwrite")
 		} else {
 			t.Logf("Test 7 skipped: rename from trash not allowed (expected for security)")
