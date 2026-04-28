@@ -926,7 +926,7 @@ hadoop jar juicefs-hadoop-{version}.jar ranger \
 
 ## Kerberos 支持（ v1.4支持 ）
 
-JuiceFS 支持使用 Kerberos 进行用户认证，不过仅限于 Hadoop JAVA SDK。
+JuiceFS 支持使用 Kerberos 进行用户认证，不过仅限于 Hadoop Java SDK。
 
 ### 1. 相关配置
 
