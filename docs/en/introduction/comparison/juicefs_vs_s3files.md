@@ -79,7 +79,7 @@ S3 Files integrates seamlessly with existing S3 buckets, making it a natural cho
 
 ## Cost Implications
 
-S3 Files introduces additional cost layers beyond standard S3 storage:
+**S3 Files** introduces additional cost layers beyond standard S3 storage:
 - S3 costs.
 - EFS high-performance tier storage fees for active data ($0.30/GB-month in popular US regions).
 - Data flow costs: In popular US regions, reads from the EFS tier cost $0.03/GB. Writes first land in the EFS tier ($0.06/GB) and then sync back to S3, which involves additional reads from the EFS tier again ($0.03/GB).
@@ -87,7 +87,7 @@ S3 Files introduces additional cost layers beyond standard S3 storage:
 
 For write-heavy workloads such as generating training datasets or analysis outputs, these costs can accumulate rapidly. S3 Files is better suited for reading existing data, especially for small files. On the other hand, when it comes to sustained, large-scale file reads and writes, particularly for modifying or appending to large files, S3 Files can be costly and less performant. For more details, refer to the [pricing page](https://aws.amazon.com/s3/pricing/) for S3 and S3 files.
 
-JuiceFS costs are more transparent and user-controlled:
+**JuiceFS** costs are more transparent and user-controlled:
 - Object storage costs.
 - Metadata engine costs: self-hosted or fully managed metadata service (independent database or JuiceFS Enterprise Edition metadata engine).
 - No mandatory intermediate tier or data flow surcharges.
