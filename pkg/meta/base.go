@@ -973,7 +973,9 @@ func (m *baseMeta) CloseSession() error {
 	if m.sid > 0 {
 		err = m.en.doCleanStaleSession(m.sid)
 	}
-	m.sessCtx.Cancel()
+	if m.sessCtx != nil {
+		m.sessCtx.Cancel()
+	}
 	m.sessWG.Wait()
 	m.stopDeleteSliceTasks()
 	logger.Infof("close session %d: %v", m.sid, err)
