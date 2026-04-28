@@ -94,6 +94,10 @@ jobs:
           if [ -n "$UUID" ];then
             ./juicefs destroy --yes $meta_url $UUID
           fi
+          if [ "${{matrix.meta}}" == "badger" ]; then
+            sudo rm -rf /tmp/test /tmp/test2 || true
+          fi
+          sudo rm -rf /mnt/jfs/$volume || true
           test -d /var/jfs/$volume && rm -rf /var/jfs/$volume || true
         shell: bash
 
@@ -103,10 +107,14 @@ jobs:
           sudo chmod 777 /var
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
+          if [ "${{matrix.meta}}" == "badger" ]; then
+            sudo rm -rf /tmp/test /tmp/test2
+          fi
           mp=/tmp/jfs
           # wget -q https://s.juicefs.com/static/bench/500K_empty_files.dump.gz
           # gzip -dk  500K_empty_files.dump.gz
           # ./juicefs load $meta_url 500K_empty_files.dump
+          sudo rm -rf /mnt/jfs/jfs || true
           GOCOVERDIR=$(pwd)/cover ./juicefs format $meta_url --bucket=/mnt/jfs jfs
           GOCOVERDIR=$(pwd)/cover ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 15 --threads 10 --no-usage-report
           GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url $mp --no-usage-report
