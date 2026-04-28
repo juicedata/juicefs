@@ -74,7 +74,7 @@ jobs:
       - name: Build and install SDK
         timeout-minutes: 5
         run: |
-          make -C sdk/python/ libjfs.so
+          make -C sdk/python/ libjfs
           sudo python3 sdk/python/juicefs/setup.py install
 
       - name: Build and install juicefs spec
