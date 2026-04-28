@@ -13,7 +13,7 @@ python3 sdk/python/examples/ffrecord/main.py read
 python3 sdk/python/examples/ffrecord/main.py
 
 # Prepare python-sdk
-make -C sdk/python libjfs.so
+make -C sdk/python libjfs
 # Read dataset with Juicefs-pythonsdk-dataloader: (takes 10.02s)
 python3 sdk/python/examples/ffrecord/dataloader.py
 ```

@@ -1,6 +1,19 @@
 LDFLAGS = -s -w
 
-.PHONY: libjfs.so juicefs
+ifeq ($(OS),Windows_NT)
+	LIBJFS_EXT = dll
+else
+	UNAME_S := $(shell uname -s)
+	ifeq ($(UNAME_S),Darwin)
+		LIBJFS_EXT = dylib
+	else
+		LIBJFS_EXT = so
+	endif
+endif
+
+LIBJFS := juicefs/juicefs/libjfs.$(LIBJFS_EXT)
+
+.PHONY: libjfs libjfs.so juicefs
 
 # SET GOPROXY if WITH_PROXY is set
 CN_GOPROXY ?= 0
@@ -27,8 +40,10 @@ ifneq ($(strip $(REVISION)),) # Use git clone
 endif
 
 # libjfs is located in the sdk/java/libjfs
-libjfs.so:
-	go build -buildmode c-shared -ldflags="$(LDFLAGS)" -o juicefs/juicefs/libjfs.so ../java/libjfs
+libjfs:
+	go build -buildmode c-shared -ldflags="$(LDFLAGS)" -o $(LIBJFS) ../java/libjfs
+
+libjfs.so: libjfs
 
 builder: Dockerfile.builder
 	docker build -t sdkbuilder -f Dockerfile.builder .

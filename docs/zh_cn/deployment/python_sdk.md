@@ -31,15 +31,15 @@ cd juicefs/sdk/python
 
 ### 直接编译
 
-直接编译需要 `go1.20+` 和 `python3` 环境。
+直接编译需要 `go1.20+`、`make` 和 `python3` 环境。
 
-#### 第一步：编译 libjfs.so
+#### 第一步：编译 libjfs
 
 ```bash
-go build -buildmode c-shared -ldflags="-s -w" -o juicefs/juicefs/libjfs.so ../java/libjfs
+make libjfs
 ```
 
-编译产生的 `libjfs.so` 和 `libjfs.h` 文件在 `sdk/python/juicefs/juicefs` 目录下。
+编译产生的原生库（Linux 上为 `libjfs.so`，macOS 上为 `libjfs.dylib`，Windows 上为 `libjfs.dll`）和 `libjfs.h` 文件在 `sdk/python/juicefs/juicefs` 目录下。
 
 #### 第二步：编译 Python SDK
 
