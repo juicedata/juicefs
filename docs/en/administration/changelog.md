@@ -98,5 +98,4 @@ Example:
 - The changelog is not a metadata backup. Use [metadata backup](metadata_dump_load.md) for backup and restore.
 - The changelog does not contain file data and cannot be used alone to restore files.
 - If old entries have been cleaned up, `juicefs changelog --from` cannot recover the missing entries in between.
-- If old entries have been cleaned up, `juicefs changelog --from` cannot recover the missing intermediate entries.
 - Enabling the changelog increases writes to the metadata engine. For metadata‑intensive workloads, evaluate the overhead before using a long retention window.
