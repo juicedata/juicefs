@@ -20,6 +20,7 @@ While both S3 Files and JuiceFS enable file-system access to object storage via 
 **Amazon S3 Files** uses [Amazon EFS (Elastic File System)](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html) as a managed high-performance storage layer to handle metadata and low-latency data access. S3 Files maintains a direct mapping between files and S3 objects. The service automatically synchronizes changes between the file system view and S3, with S3 always serving as the source of truth.
 
 Key architectural characteristics:
+
 - S3 Files uses EFS as a caching and metadata layer.
 - It does not split files into chunks, preserving one-to-one file-object mapping.
 - Only files smaller than a threshold (configurable, defaulting to 128 KiB) are placed in the EFS high-performance tier during data import.
@@ -80,14 +81,16 @@ S3 Files integrates seamlessly with existing S3 buckets, making it a natural cho
 ## Cost Implications
 
 **S3 Files** introduces additional cost layers beyond standard S3 storage:
+
 - S3 costs.
 - EFS high-performance tier storage fees for active data ($0.30/GB-month in popular US regions).
 - Data flow costs: In popular US regions, reads from the EFS tier cost $0.03/GB. Writes first land in the EFS tier ($0.06/GB) and then sync back to S3, which involves additional reads from the EFS tier again ($0.03/GB).
 - Short-term data residency: Even after synchronization completes, data continues to occupy EFS capacity until the expiration period (default 30 days).
 
-For write-heavy workloads such as generating training datasets or analysis outputs, these costs can accumulate rapidly. S3 Files is better suited for reading existing data, especially for small files. On the other hand, when it comes to sustained, large-scale file reads and writes, particularly for modifying or appending to large files, S3 Files can be costly and less performant. For more details, refer to the [pricing page](https://aws.amazon.com/s3/pricing/) for S3 and S3 files.
+For write-heavy workloads such as generating training datasets or analysis outputs, these costs can accumulate rapidly. S3 Files is better suited for reading existing data, especially for small files. On the other hand, when it comes to sustained, large-scale file reads and writes, particularly for modifying or appending to large files, S3 Files can be costly and less performant. For more details, refer to the [pricing page](https://aws.amazon.com/s3/pricing) for S3 and S3 files.
 
 **JuiceFS** costs are more transparent and user-controlled:
+
 - Object storage costs.
 - Metadata engine costs: self-hosted or fully managed metadata service (independent database or JuiceFS Enterprise Edition metadata engine).
 - No mandatory intermediate tier or data flow surcharges.
@@ -97,4 +100,4 @@ For write-heavy workloads such as generating training datasets or analysis outpu
 
 **Amazon S3 Files** adopts a storage architecture that uses Amazon EFS as a high-performance metadata and caching layer on top of S3. By preserving direct object-to-file mapping without chunking, it enables zero-to-minimal migration access to existing S3 buckets through the standard NFS protocol. The built-in bidirectional sync between the file system view and S3, combined with sub-ms latency for active working sets, makes S3 Files very suitable for AWS-native interactive workloads, agentic AI tools, and scenarios where teams need to mount existing S3 data as a shared file system without code changes or data copying.
 
-**JuiceFS** supports tens of object storage backends, including AWS S3, Azure Blob, Google Cloud Storage, MinIO, and Alibaba Cloud OSS, as well as HDFS and local disks as data storage engines. It supports popular databases such as Redis, TiKV, MySQL, MariaDB, PostgreSQL, and SQLite as metadata storage engines. The JuiceFS Enterprise Edition also offers a proprietary, highly scalable distributed metadata engine. JuiceFS provides a standard POSIX file system interface through FUSE, a Java API for Hadoop ecosystems that can directly replace HDFS, and a Kubernetes CSI driver for container persistent storage. By splitting files into smaller blocks and decoupling metadata from data, JuiceFS enables efficient random writes, fast directory operations, and strong consistency without write amplification. JuiceFS is a file system designed for enterprise-level distributed data storage scenarios. It is widely used in various scenarios such as big data analytics, AI/ML training, agentic AI tools, multi-cloud and hybrid cloud deployments, container shared storage, and high-performance computing.
+**JuiceFS** supports tens of object storage backends, including AWS S3, Azure Blob, Google Cloud Storage, MinIO, and Alibaba Cloud OSS, as well as HDFS and local disks as data storage engines. It supports popular databases such as Redis, TiKV, MySQL, MariaDB, PostgreSQL, and SQLite as metadata storage engines. The JuiceFS Enterprise Edition also offers a proprietary, highly scalable distributed metadata engine. JuiceFS provides a standard POSIX file system interface through FUSE, a Java API for Hadoop ecosystems that can directly replace HDFS, and a Kubernetes CSI Driver for container persistent storage. By splitting files into smaller blocks and decoupling metadata from data, JuiceFS enables efficient random writes, fast directory operations, and strong consistency without write amplification. JuiceFS is a file system designed for enterprise-level distributed data storage scenarios. It is widely used in various scenarios such as big data analytics, AI/ML training, agentic AI tools, multi-cloud and hybrid cloud deployments, container shared storage, and high-performance computing.
