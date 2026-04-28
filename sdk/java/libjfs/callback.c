@@ -16,19 +16,25 @@
 
 #include <stdio.h>
 
+#ifdef _WIN32
+#define EXPORT __declspec(dllexport)
+#else
+#define EXPORT
+#endif
+
 static void (*log_callback)(const char *msg);
 
 typedef void LogCallBack(const char *msg);
 
 void jfs_set_logger(void*p);
 
-void jfs_set_callback(LogCallBack *callback)
+EXPORT void jfs_set_callback(LogCallBack *callback)
 {
     log_callback = callback;
     jfs_set_logger(callback);
 }
 
-void jfs_callback(const char *msg)
+EXPORT void jfs_callback(const char *msg)
 {
     if (log_callback != NULL) {
         (*log_callback)(msg);
