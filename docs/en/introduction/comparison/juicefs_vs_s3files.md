@@ -19,7 +19,9 @@ While both S3 Files and JuiceFS enable file-system access to object storage via 
 
 **Amazon S3 Files** uses [Amazon EFS (Elastic File System)](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html) as a managed high-performance storage layer to handle metadata and low-latency data access. S3 Files maintains a direct mapping between files and S3 objects. The service automatically synchronizes changes between the file system view and S3, with S3 always serving as the source of truth.
 
+<!-- markdownlint-disable enhanced-proper-names -->
 [![S3-files-compute-dataflow](../images/s3-files-compute-dataflow.png)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files.html)
+<!-- markdownlint-enable enhanced-proper-names -->
 
 Key architectural characteristics:
 
