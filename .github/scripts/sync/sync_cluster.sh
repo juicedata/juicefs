@@ -792,8 +792,8 @@ test_checkpoint_force_reset_cluster(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
     mkdir -p /jfs/src /jfs/dst
-    for i in $(seq 1 800); do
-        dd if=/dev/urandom of=/jfs/src/file$i bs=32K count=1 status=none
+    for i in $(seq 1 2000); do
+        dd if=/dev/urandom of=/jfs/src/file$i bs=64K count=1 status=none
     done
     chmod -R 777 /jfs/src /jfs/dst
     timeout 2 sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/src/ jfs://meta_url/dst/ \
@@ -803,6 +803,7 @@ test_checkpoint_force_reset_cluster(){
     checkpoint_count=$(find /jfs/dst -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
     if [ "$checkpoint_count" -eq 0 ]; then
         echo "checkpoint file should exist after interrupted cluster sync"
+        cat sync1.log
         exit 1
     fi
     echo "force-reset-marker" > /jfs/src/force-reset-marker
@@ -815,6 +816,7 @@ test_checkpoint_force_reset_cluster(){
     checkpoint_count_after=$(find /jfs/dst -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
     if [ "$checkpoint_count_after" -ne 0 ]; then
         echo "checkpoint file should be deleted after successful force reset cluster sync"
+        cat sync2.log
         exit 1
     fi
     grep "panic:\|<FATAL>\|ERROR" sync2.log && echo "panic or fatal or ERROR in sync2.log" && exit 1 || true
