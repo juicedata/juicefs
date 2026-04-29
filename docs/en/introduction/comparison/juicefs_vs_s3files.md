@@ -19,6 +19,8 @@ While both S3 Files and JuiceFS enable file-system access to object storage via 
 
 **Amazon S3 Files** uses [Amazon EFS (Elastic File System)](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html) as a managed high-performance storage layer to handle metadata and low-latency data access. S3 Files maintains a direct mapping between files and S3 objects. The service automatically synchronizes changes between the file system view and S3, with S3 always serving as the source of truth.
 
+[![S3-files-compute-dataflow](../images/s3-files-compute-dataflow.png)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files.html)
+
 Key architectural characteristics:
 
 - S3 Files uses EFS as a caching and metadata layer.
@@ -28,6 +30,8 @@ Key architectural characteristics:
 - There is an aggregation window of up to 60 seconds before writes are synced back to S3.
 
 **JuiceFS** adopts a decoupled architecture that separates metadata management from data storage. Files are split into blocks (default 4 MiB) before being uploaded to object storage, with corresponding metadata stored in a separate database engine.
+
+![JuiceFS-arch](../images/juicefs-arch.svg)
 
 Key architectural characteristics:
 
@@ -63,7 +67,7 @@ S3 Files integrates seamlessly with existing S3 buckets, making it a natural cho
 | Features                 | S3 Files                   | JuiceFS Community Edition                                | JuiceFS Enterprise Edition                                         |
 | ------------------------ | -------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
 | Metadata storage         | EFS                        | External database (Redis, TiKV, MySQL, PostgreSQL, etc.) | Horizontally-scalable high-performance distributed metadata engine |
-| Data storage             | S3 only                    | ✓ Any mainstream object storage                         | ✓ Any mainstream object storage storage                           |
+| Data storage             | S3 only                    | ✓ Any mainstream object storage                          | ✓ Any mainstream object storage storage                            |
 | Redundancy               | Provided by object storage | Provided by object storage                               | Provided by object storage                                         |
 | Data caching             | EFS                        | Local cache                                              | Distributed cache                                                  |
 | Encryption               | ✓ Supported                | ✓ Supported                                              | ✓ Supported                                                        |
