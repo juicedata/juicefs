@@ -17,6 +17,7 @@
 package vfs
 
 import (
+	"fmt"
 	"math/rand"
 	"runtime"
 	"sync"
@@ -279,12 +280,6 @@ func (c *chunkWriter) sliceEnd(s *sliceWriter) uint64 {
 	return uint64(c.indx)*meta.ChunkSize + uint64(s.off) + uint64(s.slen)
 }
 
-func (f *fileWriter) waitCommit(s *sliceWriter) {
-	for len(f.commitQueue) > 0 && f.commitQueue[0] != s {
-		f.commitcond.WaitWithTimeout(time.Millisecond * 100)
-	}
-}
-
 func (f *fileWriter) enqueueCommit(s *sliceWriter) {
 	if s.growLength || s.chunk.sliceEnd(s) <= f.committedTo {
 		return
@@ -293,26 +288,21 @@ func (f *fileWriter) enqueueCommit(s *sliceWriter) {
 	f.commitQueue = append(f.commitQueue, s)
 }
 
+func (f *fileWriter) waitCommit(s *sliceWriter) {
+	for len(f.commitQueue) > 0 && f.commitQueue[0] != s { // not my turn
+		f.commitcond.WaitWithTimeout(time.Millisecond * 100)
+	}
+}
+
 func (f *fileWriter) finishCommit(s *sliceWriter) {
 	if !s.growLength {
 		return
 	}
-	// Queue head should always match `s` after waitCommit returns
-	if len(f.commitQueue) > 0 && f.commitQueue[0] == s {
-		f.commitQueue = f.commitQueue[1:]
-		f.commitcond.Broadcast()
-		return
+	if len(f.commitQueue) == 0 || f.commitQueue[0] != s { // data race happened after waitCommit?
+		panic(fmt.Sprintf("write inode:%d commit queue out of order", f.inode))
 	}
-	// Fallback path to avoid wedging future commits if that invariant is broken
-	for i, queued := range f.commitQueue {
-		if queued == s {
-			logger.Warnf("write inode:%d grow-length queue out of order, should not happen", f.inode)
-			copy(f.commitQueue[i:], f.commitQueue[i+1:])
-			f.commitQueue = f.commitQueue[:len(f.commitQueue)-1]
-			f.commitcond.Broadcast()
-			return
-		}
-	}
+	f.commitQueue = f.commitQueue[1:]
+	f.commitcond.Broadcast()
 }
 
 // protected by file
