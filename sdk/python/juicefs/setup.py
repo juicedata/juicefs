@@ -9,7 +9,7 @@ setup(
     name='juicefs',
     version=VERSION,
     description=BUILD_INFO,
-    package_data={'juicefs': ['*.so']},
+    package_data={'juicefs': ['*.so', '*.dylib', '*.dll']},
     packages=find_packages(where="."),
     include_package_data=True,
     install_requires=['six'],

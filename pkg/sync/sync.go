@@ -1113,6 +1113,15 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 				logger.Errorf("Failed to copy object %s: %s", key, err)
 				taskErr = err
 			}
+			if taskErr == nil && config.DeleteSrcAfter {
+				if obj.IsDir() {
+					srcDelayDelMu.Lock()
+					srcDelayDel = append(srcDelayDel, key)
+					srcDelayDelMu.Unlock()
+				} else {
+					taskErr = deleteObj(src, key, false)
+				}
+			}
 		}
 
 		trackCheckpointCompletion(key, taskErr, checkpointMgr, config)
@@ -2038,7 +2047,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		checked = progress.AddCountSpinner("Checked objects")
 		checkedBytes = progress.AddByteSpinner("Checked bytes")
 	}
-	if config.DeleteSrc || config.DeleteDst {
+	if config.DeleteSrc || config.DeleteDst || config.DeleteSrcAfter {
 		deleted = progress.AddCountSpinner("Deleted objects")
 	}
 
@@ -2110,7 +2119,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				msg += fmt.Sprintf(", failed: %d", failed.Current())
 			}
 			if total-handled.Current()-extra.Current() > 0 {
-				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
+				msg += fmt.Sprintf(", lost: %d", total-handled.Current()-extra.Current())
 			}
 			logger.Info(msg)
 

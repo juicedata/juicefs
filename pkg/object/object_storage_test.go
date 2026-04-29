@@ -781,7 +781,7 @@ func TestAzure(t *testing.T) { //skip mutate
 	}
 	//https://containersName.core.windows.net
 	abs, _ := newWasb(os.Getenv("AZURE_ENDPOINT"),
-		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"), "")
+		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"), os.Getenv("AZURE_SAS_TOKEN"))
 	testStorage(t, abs)
 }
 

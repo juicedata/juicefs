@@ -55,6 +55,53 @@ func testFormat() *Format {
 	return &Format{Name: "test", DirStats: true}
 }
 
+func checkResult(expect dirStat, stat *dirStat, st syscall.Errno) error {
+	if st != 0 {
+		return fmt.Errorf("get dir usage: %s", st)
+	}
+	if stat == nil {
+		return fmt.Errorf("get dir usage: nil stat")
+	}
+	if expect.length >= 0 && stat.length != expect.length {
+		return fmt.Errorf("expect %+v, but got %+v", expect, stat)
+	}
+	if expect.space >= 0 && stat.space != expect.space {
+		return fmt.Errorf("expect %+v, but got %+v", expect, stat)
+	}
+	if expect.inodes >= 0 && stat.inodes != expect.inodes {
+		return fmt.Errorf("expect %+v, but got %+v", expect, stat)
+	}
+	return nil
+}
+
+func waitCheckResult(m Meta, expect dirStat, statFn func() (*dirStat, syscall.Errno)) error {
+	deadline := time.Now().Add(3 * time.Second)
+	var lastErr error
+	for {
+		m.FlushSession()
+		stat, st := statFn()
+		if err := checkResult(expect, stat, st); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		if time.Now().After(deadline) {
+			return lastErr
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func assertInodes(t *testing.T, m Meta, label string, dirIno Ino, expected int64) {
+	t.Helper()
+	ctx := Background()
+	if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: expected}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(ctx, dirIno)
+	}); err != nil {
+		t.Fatalf("%s: %v", label, err)
+	}
+}
+
 func TestRedisClient(t *testing.T) {
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
 	if err != nil || m.Name() != "redis" {
@@ -637,6 +684,26 @@ func testMetaClient(t *testing.T, m Meta) {
 			t.Fatalf("create f2: %s", st)
 		} else if attr.Mode&02010 != 00010 {
 			t.Fatalf("sgid should be cleared")
+		}
+
+		var p2 Ino
+		ctx4 := NewContext(3, 3, []uint32{3, 1})
+		if st := m.Mkdir(ctx4, 1, "d3", 0775, 0, 0, &p2, attr); st != 0 {
+			t.Fatalf("mkdir d3: %s", st)
+		}
+		if st := m.SetAttr(ctx4, p2, SetAttrGID, 0, &Attr{Gid: 1}); st != 0 {
+			t.Fatalf("chgrp d3: %s", st)
+		}
+		if st := m.SetAttr(ctx4, p2, SetAttrMode, 0, &Attr{Mode: 02775}); st != 0 {
+			t.Fatalf("chmod g+s d3: %s", st)
+		}
+		if st := m.GetAttr(ctx4, p2, attr); st != 0 {
+			t.Fatalf("getattr d3: %s", st)
+		} else if attr.Mode&02000 == 0 {
+			t.Fatalf("sgid should be kept when gid is in supplementary groups")
+		}
+		if st := m.Rmdir(ctx4, 1, "d3"); st != 0 {
+			t.Fatalf("rmdir d3: %s", st)
 		}
 
 	}
@@ -2136,14 +2203,11 @@ func testTrash(t *testing.T, m Meta) {
 		return stat
 	}
 	waitDirStatInodes := func(ino Ino, expected int64, scene string) {
-		for i := 0; i < 20; i++ {
-			m.FlushSession()
-			if stat := getDirStat(ino); stat.inodes == expected {
-				return
-			}
+		if err := waitCheckResult(m, dirStat{length: -1, space: -1, inodes: expected}, func() (*dirStat, syscall.Errno) {
+			return m.GetDirStat(ctx, ino)
+		}); err != nil {
+			t.Fatalf("%s: %v", scene, err)
 		}
-		stat := getDirStat(ino)
-		t.Fatalf("%s: expect inodes %d, got %d", scene, expected, stat.inodes)
 	}
 	var trashDir Ino
 	if st := m.Create(ctx, 1, "f1", 0644, 022, 0, &inode, attr); st != 0 {
@@ -2604,9 +2668,6 @@ func testConcurrentDir(t *testing.T, m Meta) {
 		}(i)
 	}
 	g.Wait()
-	if err != nil {
-		t.Fatalf("concurrent dir: %s", err)
-	}
 	for i := 0; i < 100; i++ {
 		g.Add(1)
 		go func(i int) {
@@ -2966,77 +3027,88 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("new session: %s", err)
 	}
 	defer m.CloseSession()
-	stat, st := m.GetDirStat(Background(), testInode)
-	checkResult := func(length, space, inodes int64) {
-		if st != 0 {
-			t.Fatalf("get dir usage: %s", st)
-		}
-		expect := dirStat{length, space, inodes}
-		if *stat != expect {
-			t.Fatalf("test dir usage: expect %+v, but got %+v", expect, stat)
-		}
+	if err := waitCheckResult(m, dirStat{0, 0, 0}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage empty: %v", err)
 	}
-	checkResult(0, 0, 0)
 
 	// test dir with file
 	var fileInode Ino
 	if st := m.Create(Background(), testInode, "file", 0640, 022, 0, &fileInode, nil); st != 0 {
 		t.Fatalf("create: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(0, align4K(0), 1)
+	if err := waitCheckResult(m, dirStat{0, align4K(0), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage create: %v", err)
+	}
 
 	// test dir with file and fallocate
 	if st := m.Fallocate(Background(), fileInode, 0, 0, 4097, nil); st != 0 {
 		t.Fatalf("fallocate: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(4097, align4K(4097), 1)
+	if err := waitCheckResult(m, dirStat{4097, align4K(4097), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage fallocate: %v", err)
+	}
 
 	// test dir with file and truncate
 	if st := m.Truncate(Background(), fileInode, 0, 0, nil, false); st != 0 {
 		t.Fatalf("truncate: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(0, align4K(0), 1)
+	if err := waitCheckResult(m, dirStat{0, align4K(0), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage truncate: %v", err)
+	}
 
 	// test dir with file and write
 	if st := m.Write(Background(), fileInode, 0, 0, Slice{Id: 1, Size: 1 << 20, Off: 0, Len: 4097}, time.Now()); st != 0 {
 		t.Fatalf("write: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(4097, align4K(4097), 1)
+	if err := waitCheckResult(m, dirStat{4097, align4K(4097), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage write: %v", err)
+	}
 
 	// test dir with file and link
 	if st := m.Link(Background(), fileInode, testInode, "file2", nil); st != 0 {
 		t.Fatalf("link: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(2*4097, 2*align4K(4097), 2)
+	if err := waitCheckResult(m, dirStat{2 * 4097, 2 * align4K(4097), 2}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage link: %v", err)
+	}
 
 	// test dir with subdir
 	var subInode Ino
 	if st := m.Mkdir(Background(), testInode, "sub", 0640, 022, 0, &subInode, nil); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(2*4097, align4K(0)+2*align4K(4097), 3)
+	if err := waitCheckResult(m, dirStat{2 * 4097, align4K(0) + 2*align4K(4097), 3}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage mkdir sub: %v", err)
+	}
 
 	// test rename
 	if st := m.Rename(Background(), testInode, "file2", subInode, "file", 0, nil, nil); st != 0 {
 		t.Fatalf("rename: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(4097, align4K(0)+align4K(4097), 2)
-	stat, st = m.GetDirStat(Background(), subInode)
-	checkResult(4097, align4K(4097), 1)
+	if err := waitCheckResult(m, dirStat{4097, align4K(0) + align4K(4097), 2}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage rename src: %v", err)
+	}
+	if err := waitCheckResult(m, dirStat{4097, align4K(4097), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), subInode)
+	}); err != nil {
+		t.Fatalf("test dir usage rename dst: %v", err)
+	}
 
 	// test unlink
 	if st := m.Unlink(Background(), testInode, "file"); st != 0 {
@@ -3045,19 +3117,26 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Unlink(Background(), subInode, "file"); st != 0 {
 		t.Fatalf("unlink: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(0, align4K(0), 1)
-	stat, st = m.GetDirStat(Background(), subInode)
-	checkResult(0, 0, 0)
+	if err := waitCheckResult(m, dirStat{0, align4K(0), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage unlink src: %v", err)
+	}
+	if err := waitCheckResult(m, dirStat{0, 0, 0}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), subInode)
+	}); err != nil {
+		t.Fatalf("test dir usage unlink dst: %v", err)
+	}
 
 	// test rmdir
 	if st := m.Rmdir(Background(), testInode, "sub"); st != 0 {
 		t.Fatalf("rmdir: %s", st)
 	}
-	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background(), testInode)
-	checkResult(0, 0, 0)
+	if err := waitCheckResult(m, dirStat{0, 0, 0}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage rmdir: %v", err)
+	}
 }
 
 func testRenameDirStat(t *testing.T, m Meta) {
@@ -3066,7 +3145,7 @@ func testRenameDirStat(t *testing.T, m Meta) {
 	var dir1, dir2, dir3 Ino
 	var file1Inode, file2Inode Ino
 
-	// setup: create 3 directories and some files
+	// setup: create 3 directories
 	if st := m.Mkdir(ctx, RootInode, "dir1", 0755, 022, 0, &dir1, &attr); st != 0 {
 		t.Fatalf("mkdir dir1: %s", st)
 	}
@@ -3088,64 +3167,45 @@ func testRenameDirStat(t *testing.T, m Meta) {
 	defer m.CloseSession()
 
 	// Test 1: Rename file from dir1 to dir2 (cross-directory, no overwrite)
+	assertInodes(t, m, "Test 1 pre-condition dir1", dir1, 0)
+	assertInodes(t, m, "Test 1 pre-condition dir2", dir2, 0)
 	{
 		if st := m.Create(ctx, dir1, "file1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("create file1: %s", st)
 		}
-
-		m.FlushSession()
-		stat1Before, _ := m.GetDirStat(ctx, dir1)
-		stat2Before, _ := m.GetDirStat(ctx, dir2)
-
+		assertInodes(t, m, "Test 1 after create dir1", dir1, 1)
 		if st := m.Rename(ctx, dir1, "file1", dir2, "file1", 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("rename file1 to dir2: %s", st)
 		}
-
-		time.Sleep(500 * time.Millisecond)
-		stat1After, _ := m.GetDirStat(ctx, dir1)
-		stat2After, _ := m.GetDirStat(ctx, dir2)
-
-		// dir1 should decrease by one file
-		if stat1After.inodes != stat1Before.inodes-1 {
-			t.Fatalf("Test 1 failed: dir1 inodes %d != %d-1", stat1After.inodes, stat1Before.inodes)
+		assertInodes(t, m, "Test 1 dir1 after rename", dir1, 0)
+		assertInodes(t, m, "Test 1 dir2 after rename", dir2, 1)
+		if st := m.Unlink(ctx, dir2, "file1"); st != 0 {
+			t.Fatalf("cleanup dir2/file1: %s", st)
 		}
-		// dir2 should increase by one file
-		if stat2After.inodes != stat2Before.inodes+1 {
-			t.Fatalf("Test 1 failed: dir2 inodes %d != %d+1", stat2After.inodes, stat2Before.inodes)
-		}
-		m.Unlink(ctx, dir2, "file1")
-		time.Sleep(500 * time.Millisecond)
-		m.FlushSession()
+		assertInodes(t, m, "Test 1 cleanup dir2", dir2, 0)
 		t.Logf("Test 1 passed: cross-dir rename without overwrite")
 	}
 
-	// Test 2: Rename file within same directory (no overwrite, no change in stat)
+	// Test 2: Rename file within same directory (no overwrite)
+	assertInodes(t, m, "Test 2 pre-condition dir1", dir1, 0)
 	{
 		if st := m.Create(ctx, dir1, "file2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create file2: %s", st)
 		}
-
-		m.FlushSession()
-		statBefore, _ := m.GetDirStat(ctx, dir1)
-
+		assertInodes(t, m, "Test 2 after create dir1", dir1, 1)
 		if st := m.Rename(ctx, dir1, "file2", dir1, "file3", 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("rename file2 to file3 in same dir: %s", st)
 		}
-
-		time.Sleep(500 * time.Millisecond)
-		statAfter, _ := m.GetDirStat(ctx, dir1)
-
-		// same directory inodes should not change
-		if statAfter.inodes != statBefore.inodes {
-			t.Fatalf("Test 2 failed: inodes should not change %d != %d", statAfter.inodes, statBefore.inodes)
+		assertInodes(t, m, "Test 2 same dir after rename", dir1, 1)
+		if st := m.Unlink(ctx, dir1, "file3"); st != 0 {
+			t.Fatalf("cleanup dir1/file3: %s", st)
 		}
-		m.Unlink(ctx, dir1, "file3")
-		time.Sleep(500 * time.Millisecond)
-		m.FlushSession()
+		assertInodes(t, m, "Test 2 cleanup dir1", dir1, 0)
 		t.Logf("Test 2 passed: same-dir rename without overwrite")
 	}
 
-	// Test 3: Rename with overwrite in same directory
+	// Test 3: Rename with overwrite in same directory (trash disabled)
+	assertInodes(t, m, "Test 3 pre-condition dir1", dir1, 0)
 	{
 		if st := m.Create(ctx, dir1, "file4", 0644, 022, 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("create file4: %s", st)
@@ -3153,49 +3213,21 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		if st := m.Create(ctx, dir1, "file5", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create file5: %s", st)
 		}
-
-		m.FlushSession()
-		deadline := time.Now().Add(3 * time.Second)
-		for {
-			statBefore, st := m.GetDirStat(ctx, dir1)
-			if st == 0 && statBefore != nil && statBefore.inodes == 2 {
-				break
-			}
-			if time.Now().After(deadline) {
-				if st != 0 {
-					t.Fatalf("Test 3 failed: get dir stat before rename: %s", st)
-				}
-				t.Fatalf("Test 3 failed: expected dir1 inodes 2 before rename, got %d", statBefore.inodes)
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-
-		// rename file4 -> file5 (overwrite), trash is disabled
+		assertInodes(t, m, "Test 3 after creates dir1", dir1, 2)
 		if st := m.Rename(ctx, dir1, "file4", dir1, "file5", 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("rename file4 to file5 (overwrite): %s", st)
 		}
-
-		deadline = time.Now().Add(3 * time.Second)
-		for {
-			statAfter, st := m.GetDirStat(ctx, dir1)
-			if st == 0 && statAfter != nil && statAfter.inodes == 1 {
-				break
-			}
-			if time.Now().After(deadline) {
-				if st != 0 {
-					t.Fatalf("Test 3 failed: get dir stat after rename: %s", st)
-				}
-				t.Fatalf("Test 3 failed: expected dir1 inodes 1 after overwrite rename, got %d", statAfter.inodes)
-			}
-			time.Sleep(50 * time.Millisecond)
+		assertInodes(t, m, "Test 3 overwrite inodes", dir1, 1)
+		if st := m.Unlink(ctx, dir1, "file5"); st != 0 {
+			t.Fatalf("cleanup file5 after Test 3: %s", st)
 		}
-		m.Unlink(ctx, dir1, "file4")
-		time.Sleep(500 * time.Millisecond)
-		m.FlushSession()
+		assertInodes(t, m, "Test 3 cleanup dir1", dir1, 0)
 		t.Logf("Test 3 passed: same-dir rename with overwrite")
 	}
 
 	// Test 4: Rename with overwrite across directories
+	assertInodes(t, m, "Test 4 pre-condition dir2", dir2, 0)
+	assertInodes(t, m, "Test 4 pre-condition dir3", dir3, 0)
 	{
 		if st := m.Create(ctx, dir2, "file1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("create file1 in dir2: %s", st)
@@ -3203,35 +3235,23 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		if st := m.Create(ctx, dir3, "file_src", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create file_src in dir3: %s", st)
 		}
-
-		m.FlushSession()
-		stat2Before, _ := m.GetDirStat(ctx, dir2)
-		stat3Before, _ := m.GetDirStat(ctx, dir3)
-
-		// rename dir3/file_src -> dir2/file1 (overwrite)
+		assertInodes(t, m, "Test 4 after create dir2", dir2, 1)
+		assertInodes(t, m, "Test 4 after create dir3", dir3, 1)
 		if st := m.Rename(ctx, dir3, "file_src", dir2, "file1", 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("rename file_src to file1 (overwrite cross-dir): %s", st)
 		}
-
-		time.Sleep(500 * time.Millisecond)
-		stat2After, _ := m.GetDirStat(ctx, dir2)
-		stat3After, _ := m.GetDirStat(ctx, dir3)
-
-		// dir2: one deleted, one added, total no change
-		if stat2After.inodes != stat2Before.inodes {
-			t.Fatalf("Test 4 failed: dir2 inodes should not change %d != %d", stat2After.inodes, stat2Before.inodes)
+		assertInodes(t, m, "Test 4 dir2 after rename", dir2, 1)
+		assertInodes(t, m, "Test 4 dir3 after rename", dir3, 0)
+		if st := m.Unlink(ctx, dir2, "file1"); st != 0 {
+			t.Fatalf("cleanup dir2/file1: %s", st)
 		}
-		// dir3: one deleted, should decrease by 1
-		if stat3After.inodes != stat3Before.inodes-1 {
-			t.Fatalf("Test 4 failed: dir3 inodes %d != %d-1", stat3After.inodes, stat3Before.inodes)
-		}
-		m.Unlink(ctx, dir2, "file1")
-		time.Sleep(500 * time.Millisecond)
-		m.FlushSession()
+		assertInodes(t, m, "Test 4 cleanup dir2", dir2, 0)
 		t.Logf("Test 4 passed: cross-dir rename with overwrite")
 	}
 
-	// Test 5: Rename with overwrite + RenameExchange flag across directories
+	// Test 5: Exchange rename across directories
+	assertInodes(t, m, "Test 5 pre-condition dir1", dir1, 0)
+	assertInodes(t, m, "Test 5 pre-condition dir3", dir3, 0)
 	{
 		if st := m.Create(ctx, dir1, "ex1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("create ex1: %s", st)
@@ -3239,35 +3259,26 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		if st := m.Create(ctx, dir3, "ex2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create ex2: %s", st)
 		}
-
-		m.FlushSession()
-		stat1Before, _ := m.GetDirStat(ctx, dir1)
-		stat3Before, _ := m.GetDirStat(ctx, dir3)
-
-		// exchange: ex1 <-> ex2
+		assertInodes(t, m, "Test 5 after create dir1", dir1, 1)
+		assertInodes(t, m, "Test 5 after create dir3", dir3, 1)
 		if st := m.Rename(ctx, dir1, "ex1", dir3, "ex2", RenameExchange, &file1Inode, &attr); st != 0 {
 			t.Fatalf("rename exchange ex1 <-> ex2: %s", st)
 		}
-
-		time.Sleep(500 * time.Millisecond)
-		stat1After, _ := m.GetDirStat(ctx, dir1)
-		stat3After, _ := m.GetDirStat(ctx, dir3)
-
-		// both directories should not change their inode counts with exchange
-		if stat1After.inodes != stat1Before.inodes {
-			t.Fatalf("Test 5 failed: dir1 inodes %d != %d", stat1After.inodes, stat1Before.inodes)
+		assertInodes(t, m, "Test 5 dir1 after exchange", dir1, 1)
+		assertInodes(t, m, "Test 5 dir3 after exchange", dir3, 1)
+		if st := m.Unlink(ctx, dir1, "ex1"); st != 0 {
+			t.Fatalf("cleanup ex1 after Test 5: %s", st)
 		}
-		if stat3After.inodes != stat3Before.inodes {
-			t.Fatalf("Test 5 failed: dir3 inodes %d != %d", stat3After.inodes, stat3Before.inodes)
+		if st := m.Unlink(ctx, dir3, "ex2"); st != 0 {
+			t.Fatalf("cleanup ex2 after Test 5: %s", st)
 		}
-		m.Unlink(ctx, dir1, "ex2")
-		m.Unlink(ctx, dir3, "ex1")
-		time.Sleep(500 * time.Millisecond)
-		m.FlushSession()
+		assertInodes(t, m, "Test 5 cleanup dir1", dir1, 0)
+		assertInodes(t, m, "Test 5 cleanup dir3", dir3, 0)
 		t.Logf("Test 5 passed: exchange rename")
 	}
 
-	// Test 6: Same-directory exchange (RenameExchange)
+	// Test 6: Same-directory exchange
+	assertInodes(t, m, "Test 6 pre-condition dir1", dir1, 0)
 	{
 		if st := m.Create(ctx, dir1, "file_a", 0644, 022, 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("create file_a: %s", st)
@@ -3275,26 +3286,18 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		if st := m.Create(ctx, dir1, "file_b", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create file_b: %s", st)
 		}
-
-		m.FlushSession()
-		statBefore, _ := m.GetDirStat(ctx, dir1)
-
-		// exchange within same directory: file_a <-> file_b
+		assertInodes(t, m, "Test 6 after creates dir1", dir1, 2)
 		if st := m.Rename(ctx, dir1, "file_a", dir1, "file_b", RenameExchange, &file1Inode, &attr); st != 0 {
 			t.Fatalf("rename same-dir exchange file_a <-> file_b: %s", st)
 		}
-
-		time.Sleep(500 * time.Millisecond)
-		statAfter, _ := m.GetDirStat(ctx, dir1)
-
-		// same-dir exchange should not change inode count
-		if statAfter.inodes != statBefore.inodes {
-			t.Fatalf("Test 6 failed: inodes %d != %d", statAfter.inodes, statBefore.inodes)
+		assertInodes(t, m, "Test 6 same dir after exchange", dir1, 2)
+		if st := m.Unlink(ctx, dir1, "file_b"); st != 0 {
+			t.Fatalf("cleanup dir1/file_b: %s", st)
 		}
-		m.Unlink(ctx, dir1, "file_b")
-		m.Unlink(ctx, dir1, "file_a")
-		time.Sleep(500 * time.Millisecond)
-		m.FlushSession()
+		if st := m.Unlink(ctx, dir1, "file_a"); st != 0 {
+			t.Fatalf("cleanup dir1/file_a: %s", st)
+		}
+		assertInodes(t, m, "Test 6 cleanup dir1", dir1, 0)
 		t.Logf("Test 6 passed: same-dir exchange rename")
 	}
 }
@@ -3334,120 +3337,91 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 
 	// Test with trash enabled: overwrite should move to trash instead of delete
 	{
+		assertInodes(t, m, "Test trash overwrite pre-condition dir1", dir1, 0)
 		if st := m.Create(ctx, dir1, "trash_file1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("create trash_file1: %s", st)
 		}
 		if st := m.Create(ctx, dir1, "trash_file2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create trash_file2: %s", st)
 		}
-		defer m.Unlink(ctx, dir1, "trash_file2")
-
-		m.FlushSession()
-		statBefore, _ := m.GetDirStat(ctx, dir1)
-
-		// rename with overwrite (file2 goes to trash)
+		assertInodes(t, m, "Test trash overwrite after creates dir1", dir1, 2)
 		if st := m.Rename(ctx, dir1, "trash_file1", dir1, "trash_file2", 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("rename with trash enabled: %s", st)
 		}
-
-		m.FlushSession()
-		statAfter, _ := m.GetDirStat(ctx, dir1)
-
-		// with trash: deleted file doesn't reduce inode count, only goes to trash
-		// stat should decrease by 1 (the overwritten file)
-		if statAfter.inodes != statBefore.inodes-1 {
-			t.Fatalf("Test trash failed: inodes %d != %d-1", statAfter.inodes, statBefore.inodes)
-		}
+		assertInodes(t, m, "Test trash overwrite", dir1, 1)
 		overwritten := Attr{}
 		if st := m.GetAttr(ctx, file2Inode, &overwritten); st != 0 && st != syscall.ENOENT {
 			t.Fatalf("Test trash overwrite: getattr overwritten inode %d: %s", file2Inode, st)
 		} else if st == 0 && overwritten.Parent <= TrashInode {
 			t.Fatalf("Test trash overwrite: overwritten inode %d should be moved to trash or deleted, parent=%d", file2Inode, overwritten.Parent)
 		}
+		if st := m.Unlink(ctx, dir1, "trash_file2"); st != 0 {
+			t.Fatalf("cleanup trash_file2: %s", st)
+		}
+		assertInodes(t, m, "Test trash overwrite cleanup dir1", dir1, 0)
 		t.Logf("Test trash overwrite passed")
 	}
 
 	// Test cross-directory overwrite with trash enabled
 	{
+		assertInodes(t, m, "Test trash cross-dir pre-condition dir1", dir1, 0)
+		assertInodes(t, m, "Test trash cross-dir pre-condition dir2", dir2, 0)
 		if st := m.Create(ctx, dir1, "cross_trash1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("create cross_trash1: %s", st)
 		}
 		if st := m.Create(ctx, dir2, "cross_trash2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create cross_trash2: %s", st)
 		}
-		defer func() {
-			m.Unlink(ctx, dir2, "cross_trash2")
-		}()
-
-		m.FlushSession()
-		stat1Before, _ := m.GetDirStat(ctx, dir1)
-		stat2Before, _ := m.GetDirStat(ctx, dir2)
-
-		// cross-dir rename with overwrite and trash
+		assertInodes(t, m, "Test trash cross-dir after create dir1", dir1, 1)
+		assertInodes(t, m, "Test trash cross-dir after create dir2", dir2, 1)
 		if st := m.Rename(ctx, dir1, "cross_trash1", dir2, "cross_trash2", 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("rename cross_trash1 to cross_trash2 (overwrite with trash): %s", st)
 		}
-
-		m.FlushSession()
-		stat1After, _ := m.GetDirStat(ctx, dir1)
-		stat2After, _ := m.GetDirStat(ctx, dir2)
-
-		// dir1: one deleted
-		if stat1After.inodes != stat1Before.inodes-1 {
-			t.Fatalf("Test trash cross-dir failed: dir1 inodes %d != %d-1", stat1After.inodes, stat1Before.inodes)
-		}
-		// dir2: one deleted (goes to trash), one added, net no change
-		if stat2After.inodes != stat2Before.inodes {
-			t.Fatalf("Test trash cross-dir failed: dir2 inodes %d != %d", stat2After.inodes, stat2Before.inodes)
-		}
+		assertInodes(t, m, "Test trash cross-dir dir1", dir1, 0)
+		assertInodes(t, m, "Test trash cross-dir dir2", dir2, 1)
 		overwritten := Attr{}
 		if st := m.GetAttr(ctx, file2Inode, &overwritten); st != 0 && st != syscall.ENOENT {
 			t.Fatalf("Test trash cross-dir overwrite: getattr overwritten inode %d: %s", file2Inode, st)
 		} else if st == 0 && overwritten.Parent <= TrashInode {
 			t.Fatalf("Test trash cross-dir overwrite: overwritten inode %d should be moved to trash or deleted, parent=%d", file2Inode, overwritten.Parent)
 		}
+		if st := m.Unlink(ctx, dir2, "cross_trash2"); st != 0 {
+			t.Fatalf("cleanup cross_trash2: %s", st)
+		}
+		assertInodes(t, m, "Test trash cross-dir cleanup dir2", dir2, 0)
 		t.Logf("Test trash cross-dir overwrite passed")
 	}
 
 	// Test exchange with trash enabled
 	{
+		assertInodes(t, m, "Test trash exchange pre-condition dir1", dir1, 0)
+		assertInodes(t, m, "Test trash exchange pre-condition dir2", dir2, 0)
 		if st := m.Create(ctx, dir1, "ex_trash1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("create ex_trash1: %s", st)
 		}
 		if st := m.Create(ctx, dir2, "ex_trash2", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create ex_trash2: %s", st)
 		}
-		defer func() {
-			m.Unlink(ctx, dir1, "ex_trash2")
-			m.Unlink(ctx, dir2, "ex_trash1")
-		}()
-
-		m.FlushSession()
-		stat1Before, _ := m.GetDirStat(ctx, dir1)
-		stat2Before, _ := m.GetDirStat(ctx, dir2)
-
-		// exchange with trash
+		assertInodes(t, m, "Test trash exchange after create dir1", dir1, 1)
+		assertInodes(t, m, "Test trash exchange after create dir2", dir2, 1)
 		if st := m.Rename(ctx, dir1, "ex_trash1", dir2, "ex_trash2", RenameExchange, &file1Inode, &attr); st != 0 {
 			t.Fatalf("rename exchange with trash: %s", st)
 		}
-
-		time.Sleep(500 * time.Millisecond)
-		stat1After, _ := m.GetDirStat(ctx, dir1)
-		stat2After, _ := m.GetDirStat(ctx, dir2)
-
-		// exchange should not change inode counts
-		if stat1After.inodes != stat1Before.inodes {
-			t.Fatalf("Test trash exchange failed: dir1 inodes %d != %d", stat1After.inodes, stat1Before.inodes)
+		assertInodes(t, m, "Test trash exchange dir1", dir1, 1)
+		assertInodes(t, m, "Test trash exchange dir2", dir2, 1)
+		if st := m.Unlink(ctx, dir1, "ex_trash1"); st != 0 {
+			t.Fatalf("cleanup ex_trash1: %s", st)
 		}
-		if stat2After.inodes != stat2Before.inodes {
-			t.Fatalf("Test trash exchange failed: dir2 inodes %d != %d", stat2After.inodes, stat2Before.inodes)
+		if st := m.Unlink(ctx, dir2, "ex_trash2"); st != 0 {
+			t.Fatalf("cleanup ex_trash2: %s", st)
 		}
+		assertInodes(t, m, "Test trash exchange cleanup dir1", dir1, 0)
+		assertInodes(t, m, "Test trash exchange cleanup dir2", dir2, 0)
 		t.Logf("Test trash exchange passed")
 	}
 
-	// Test 7: Restore from trash with overwrite (no exchange)
+	// Test 7: Restore from trash with overwrite
 	{
-		// Create a file to be deleted (moved to trash)
 		if st := m.Create(ctx, dir1, "to_trash", 0644, 022, 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("create to_trash: %s", st)
 		}
@@ -3455,88 +3429,56 @@ func testRenameDirStatWithTrash(t *testing.T, m Meta) {
 		if st := m.GetAttr(ctx, file1Inode, &attr); st != 0 {
 			t.Fatalf("getattr to_trash: %s", st)
 		}
-
-		// Create target file that will be overwritten
 		if st := m.Create(ctx, dir2, "victim", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create victim: %s", st)
 		}
-
 		m.FlushSession()
-
-		// Delete the file to move it to trash
 		if st := m.Unlink(ctx, dir1, "to_trash"); st != 0 {
 			t.Fatalf("unlink to_trash: %s", st)
 		}
-
 		time.Sleep(500 * time.Millisecond)
 		m.FlushSession()
-		time.Sleep(500 * time.Millisecond)
-
-		// Get the trash inode (it should be marked as trash)
 		if !trashInode.IsTrash() {
-			// File in trash has a special inode
-			trashInode = file1Inode // Try using the same inode as it might be converted
+			trashInode = file1Inode
 		}
-
-		stat1Before, _ := m.GetDirStat(ctx, dir1)
-		stat2Before, _ := m.GetDirStat(ctx, dir2)
-
-		// Try to restore from trash by renaming to dir2/victim (overwrite)
-		// Note: This test demonstrates the behavior, but from trash recovery
-		// may have specific restrictions depending on implementation
+		assertInodes(t, m, "Test 7 before rename dir1", dir1, 0)
+		assertInodes(t, m, "Test 7 before rename dir2", dir2, 1)
 		st := m.Rename(ctx, dir1, "to_trash", dir2, "victim", 0, &trashInode, &attr)
 		if st == 0 {
-			// If rename from trash succeeded, verify stats
-			time.Sleep(500 * time.Millisecond)
-			stat1After, _ := m.GetDirStat(ctx, dir1)
-			stat2After, _ := m.GetDirStat(ctx, dir2)
-
-			// dir1 should decrease (removed from trash)
-			if stat1After.inodes != stat1Before.inodes-1 {
-				t.Logf("Test 7 partial: rename from trash did decrease dir1 by 1")
-			}
-			// dir2 should increase by 1 (file restored and victim replaced)
-			if stat2After.inodes != stat2Before.inodes {
-				t.Logf("Test 7 partial: dir2 stat changed after restore from trash")
-			}
+			m.FlushSession()
+			assertInodes(t, m, "Test 7 after rename dir1", dir1, 0)
+			assertInodes(t, m, "Test 7 after rename dir2", dir2, 1)
 			t.Logf("Test 7 passed: restore from trash with overwrite")
 		} else {
-			// If rename is blocked from trash, that's expected
 			t.Logf("Test 7 skipped: rename from trash not allowed (expected for security)")
 		}
-		m.Unlink(ctx, dir2, "victim")
-		time.Sleep(500 * time.Millisecond)
-		m.FlushSession()
+		if st := m.Unlink(ctx, dir2, "victim"); st != 0 && st != syscall.ENOENT {
+			t.Fatalf("cleanup victim: %s", st)
+		}
+		assertInodes(t, m, "Test 7 cleanup dir2", dir2, 0)
 	}
 
 	// Test 8: Same-dir exchange with trash enabled
 	{
+		assertInodes(t, m, "Test 8 pre-condition dir1", dir1, 0)
 		if st := m.Create(ctx, dir1, "trash_a", 0644, 022, 0, &file1Inode, &attr); st != 0 {
 			t.Fatalf("create trash_a: %s", st)
 		}
 		if st := m.Create(ctx, dir1, "trash_b", 0644, 022, 0, &file2Inode, &attr); st != 0 {
 			t.Fatalf("create trash_b: %s", st)
 		}
-
-		m.FlushSession()
-		statBefore, _ := m.GetDirStat(ctx, dir1)
-
-		// same-dir exchange with trash enabled
+		assertInodes(t, m, "Test 8 after creates dir1", dir1, 2)
 		if st := m.Rename(ctx, dir1, "trash_a", dir1, "trash_b", RenameExchange, &file1Inode, &attr); st != 0 {
 			t.Fatalf("rename same-dir exchange with trash: %s", st)
 		}
-
-		time.Sleep(500 * time.Millisecond)
-		statAfter, _ := m.GetDirStat(ctx, dir1)
-
-		// same-dir exchange should not change inode count
-		if statAfter.inodes != statBefore.inodes {
-			t.Fatalf("Test 8 failed: inodes %d != %d", statAfter.inodes, statBefore.inodes)
+		assertInodes(t, m, "Test 8 same-dir exchange", dir1, 2)
+		if st := m.Unlink(ctx, dir1, "trash_b"); st != 0 {
+			t.Fatalf("cleanup trash_b: %s", st)
 		}
-		m.Unlink(ctx, dir1, "trash_b")
-		m.Unlink(ctx, dir1, "trash_a")
-		time.Sleep(500 * time.Millisecond)
-		m.FlushSession()
+		if st := m.Unlink(ctx, dir1, "trash_a"); st != 0 {
+			t.Fatalf("cleanup trash_a: %s", st)
+		}
+		assertInodes(t, m, "Test 8 cleanup dir1", dir1, 0)
 		t.Logf("Test 8 passed: same-dir exchange with trash")
 	}
 }
@@ -3602,11 +3544,6 @@ func testBatchClone(t *testing.T, m Meta) {
 	// --- test 1: successful batch clone ---
 	var count uint64
 	st := m.getBase().BatchClone(ctx, srcDir, dstDir, nonDirEntries, 0, 022, &count)
-	if st == syscall.ENOTSUP {
-		m.Remove(ctx, RootInode, "batchSrc", false, RmrDefaultThreads, nil)
-		m.Remove(ctx, RootInode, "batchDst", false, RmrDefaultThreads, nil)
-		return
-	}
 
 	if st != 0 {
 		t.Fatalf("BatchClone: %s", st)

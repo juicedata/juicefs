@@ -36,6 +36,7 @@ COMMANDS:
      load     Load metadata from a previously dumped JSON file
      version  Show version
    INSPECTOR:
+     changelog  Tail the changelog of a volume
      status   Show status of a volume
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
@@ -240,6 +241,8 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
 |`--session-token=value`|session token for object storage, see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#session-token) for more.|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |the default storage class|
+|`--tier-id=value` <VersionAdd>1.4</VersionAdd>|storage tier ID (1-3), used together with `--tier-sc` to configure the storage class for a specific tier. ID `0` is reserved for the default tier and cannot be configured here.|
+|`--tier-sc=value` <VersionAdd>1.4</VersionAdd>|storage class for the given tier (e.g. `STANDARD_IA`, `INTELLIGENT_TIERING`, `GLACIER_IR`); must be used together with `--tier-id`.|
 |`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
 |`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|
 |`--max-uploads=20`|maximum number of concurrent uploads (default: 20)|
@@ -257,6 +260,9 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd> |minimum client version allowed to connect|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd> |maximum client version allowed to connect|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd> |enable dir stats, which is necessary for fast summary and dir quota (default: false)|
+|`--changelog` <VersionAdd>1.4</VersionAdd>|enable [metadata changelog](../administration/changelog.md) (default: false)|
+|`--changelog-max-age` <VersionAdd>1.4</VersionAdd>|maximum retention time for changelog entries, such as `2h` or `30m`; `0` disables time-based cleanup|
+|`--changelog-max-lines` <VersionAdd>1.4</VersionAdd>|maximum number of changelog entries to keep; `0` means unlimited|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
@@ -450,6 +456,33 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 |`--encrypt-alg=aes256gcm-rsa` <VersionAdd>1.0.4</VersionAdd> |Encryption algorithm, the default is `aes256gcm-rsa`.|
 
 ## Inspector {#inspector}
+
+### `juicefs changelog` <VersionAdd>1.4</VersionAdd> {#changelog}
+
+Tail the changelog of file system metadata operations. See [Metadata Changelog](../administration/changelog.md) for usage and retention policy details. Enable the changelog feature before use:
+
+```shell
+juicefs config redis://localhost --changelog
+```
+
+#### Synopsis
+
+```shell
+juicefs changelog [command options] META-URL
+
+# Tail from the latest changelog
+juicefs changelog redis://localhost
+
+# Tail from a specific metadata version
+juicefs changelog redis://localhost --from 100
+```
+
+#### Options
+
+|Items|Description|
+|-|-|
+|`META-URL`|URL of the metadata engine database. See [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
+|`--from=0`|show changelog starting from the specified metadata version. `0` means tailing from the latest version.|
 
 ### `juicefs status` {#status}
 
@@ -953,6 +986,9 @@ In which:
 |`--check-change` <VersionAdd>1.3</VersionAdd>|Verify whether the data has changed before and after synchronization, default is false. Based on file size and mtime, which is lightweight.|
 |`--max-failure`<VersionAdd>1.3</VersionAdd> |max number of allowed failed files (-1 for unlimited)|
 |`--dry`|Don't actually copy any file.|
+|`--enable-checkpoint`|Enable checkpoint for resumable sync.|
+|`--checkpoint-interval=10s`|Interval at which the checkpoint is saved.|
+|`--checkpoint-force-reset`|Start the sync from scratch and overwrite the existing checkpoint.|
 
 #### Storage related options {#sync-storage-related-options}
 
@@ -1047,3 +1083,41 @@ juicefs compact /mnt/jfs
 | Item | Description |
 |-|-|
 | `--threads, -p` | Number of threads to concurrently execute tasks (default: 10) |
+
+### `juicefs tier` <VersionAdd>1.4</VersionAdd> {#tier}
+
+Manage storage tiers. For detailed information, refer to [「Tiered Storage」](../guide/tiered-storage.md).
+
+#### Synopsis
+
+```shell
+juicefs tier [subcommand] [command options] META-URL [PATH]
+
+# List all tier configurations
+juicefs tier list redis://localhost
+
+# Set tier for a single file
+juicefs tier set redis://localhost --id 1 /path/to/file
+
+# Recursively set tier for a directory
+juicefs tier set redis://localhost --id 2 /path/to/dir -r
+
+# Restore archived objects
+juicefs tier restore redis://localhost /path/to/dir -r
+```
+
+#### Subcommands
+
+| Subcommand | Description |
+|-|-|
+|`list META-URL`|List all tier configurations (id and storage class) for the volume.|
+|`set META-URL PATH`|Set the storage tier for a file or directory.|
+|`restore META-URL PATH`|Issue an archive-restore request to object storage (for `GLACIER`, `DEEP_ARCHIVE`, etc.).|
+
+#### Options
+
+| Item | Description |
+|-|-|
+|`--id value`|Tier ID (0-3). `0` is the default tier (reserved), `1-3` are configurable. Required for `tier set`.|
+|`--recursive, -r`|Recursively process all files and sub-directories under the target directory (default: false).|
+|`--force, -f`|Force re-writing objects to the tier's current storage class even if the tier ID is unchanged (default: false). Use after changing `--tier-sc` to migrate existing objects.|

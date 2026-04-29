@@ -29,6 +29,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -157,6 +158,8 @@ type engine interface {
 	doDeleteTokens(ctx Context, ids []uint32) syscall.Errno
 	doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 
+	doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines int64) error
+
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
 	dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error
@@ -274,6 +277,7 @@ type baseMeta struct {
 	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict
 	subTrash     internalNode
 	sid          uint64
+	nextTxnId    uint64
 	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
@@ -613,6 +617,28 @@ func (m *baseMeta) getBase() *baseMeta {
 	return m
 }
 
+func (m *baseMeta) getTxnId() uint64 {
+	return atomic.AddUint64(&m.nextTxnId, 1)
+}
+
+func logEncode(name []byte) string {
+	var escname = make([]byte, 0)
+	for _, c := range name {
+		if c < 32 || c >= 127 || c == ',' || c == '%' || c == '(' || c == ')' || c == '"' || c == '\\' {
+			escname = append(escname, '%')
+			escname = append(escname, CHARS[(c>>4)&0xF])
+			escname = append(escname, CHARS[c&0xF])
+		} else {
+			escname = append(escname, c)
+		}
+	}
+	return string(escname)
+}
+
+func logEncode2(name string) string {
+	return logEncode([]byte(name))
+}
+
 func (m *baseMeta) checkRoot(inode Ino) Ino {
 	switch inode {
 	case 0:
@@ -782,6 +808,10 @@ func (m *baseMeta) NewSession(record bool) error {
 		go m.cleanupSlices(ctx)
 		go m.cleanupTrash(ctx)
 		go m.symlinks.clean(ctx, &m.sessWG)
+		if m.fmt.ChangeLog {
+			m.sessWG.Add(1)
+			go m.cleanupChangelog(ctx)
+		}
 	}
 	return nil
 }
@@ -1027,6 +1057,53 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 				m.bgjobDuration.WithLabelValues("cleanupSlices", status).Observe(time.Since(jobStart).Seconds())
 				m.bgjobDels.WithLabelValues("cleanupSlices").Add(float64(cnt))
 			}()
+		}
+	}
+}
+
+func parseChangelogTime(entry string) (time.Time, error) {
+	idx := strings.IndexByte(entry, '|')
+	if idx < 0 {
+		return time.Time{}, fmt.Errorf("invalid changelog entry: %s", entry)
+	}
+	timePart := entry[:idx]
+	dotIdx := strings.IndexByte(timePart, '.')
+	if dotIdx < 0 {
+		sec, err := strconv.ParseInt(timePart, 10, 64)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return time.Unix(sec, 0), nil
+	}
+	sec, err := strconv.ParseInt(timePart[:dotIdx], 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+	nsec, err := strconv.ParseInt(timePart[dotIdx+1:], 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(sec, nsec), nil
+}
+
+func (m *baseMeta) cleanupChangelog(ctx Context) {
+	defer m.sessWG.Done()
+	for {
+		maxAge := time.Duration(m.fmt.ChangeLogMaxAge) * time.Second
+		maxLines := m.fmt.ChangeLogMaxLines
+		interval := 5 * time.Minute
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(utils.JitterIt(interval)):
+		}
+
+		if ok, err := m.en.setIfSmall("lastCleanupChangelog", time.Now().Unix(), int64((interval * 9 / 10).Seconds())); err != nil {
+			logger.Warnf("checking counter lastCleanupChangelog: %s", err)
+		} else if ok {
+			if err := m.en.doCleanupChangelog(ctx, maxAge, maxLines); err != nil {
+				logger.Warnf("cleanup changelog: %s", err)
+			}
 		}
 	}
 }
@@ -1494,14 +1571,7 @@ func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, paren
 		if _type == TypeDirectory {
 			childMode |= 02000
 		} else if childMode&02010 == 02010 && ctx.Uid() != 0 {
-			found := false
-			for _, g := range ctx.Gids() {
-				if g == parentGid {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !containsGid(ctx, parentGid) {
 				childMode &= ^uint16(02000)
 			}
 		}
@@ -3426,36 +3496,8 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 
 		// Batch clone files immediately (don't wait for subdirs to finish)
 		if len(nonDirEntries) > 0 {
-			batchEno := m.BatchClone(cloneCtx, srcIno, ino, nonDirEntries, cmode, cumask, count)
-			if batchEno == syscall.ENOTSUP {
-				// Fallback: clone each file concurrently
-				for _, e := range nonDirEntries {
-					select {
-					case concurrent <- struct{}{}:
-						entry := e
-						g.Go(func() error {
-							defer func() { <-concurrent }()
-							if childEno := cloneChild(entry); childEno != 0 {
-								return childEno
-							}
-							return nil
-						})
-					default:
-						// Synchronous fallback when concurrency limit reached
-						if childEno := cloneChild(e); childEno != 0 && eno == 0 {
-							eno = childEno
-						}
-					}
-
-					if cloneCtx.Canceled() {
-						break
-					}
-				}
-				if eno == syscall.ENOTSUP {
-					eno = 0
-				}
-			} else if batchEno != 0 {
-				eno = batchEno
+			eno = m.BatchClone(cloneCtx, srcIno, ino, nonDirEntries, cmode, cumask, count)
+			if eno != 0 {
 				break
 			}
 		}
@@ -3514,7 +3556,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	}
 	if set&SetAttrMode != 0 {
 		if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
-			if ctx.Gid() != cur.Gid {
+			if !containsGid(ctx, cur.Gid) {
 				attr.Mode &= 05777
 			}
 		}

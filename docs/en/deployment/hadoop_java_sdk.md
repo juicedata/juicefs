@@ -768,23 +768,94 @@ juicefs config META-URL --ranger-rest-url "" --ranger-service jfs ""
 
 Considering the convenience of use, JuiceFS packages all Ranger dependencies into the JuiceFS SDK. If you encounter version conflicts with Apache Ranger, you may need to modify the version and recompile.
 
-### 3. Tips
+### 3. Configure Kerberos
 
-#### 3.1 Ranger version
+When Kerberos is enabled, the JuiceFS client used by business applications cannot download Ranger security policies. You need to configure `policy.download.auth.users` and `tag.download.auth.users` in the Ranger Admin Web UI under the HDFS Service to grant the specified users the permission to download security policies. Multiple users are separated by commas `,`.
+
+After completing the configuration, you also need to use that user to update the policies stored in JuiceFS.
+
+The command to update the security policy file is as follows (it is recommended to configure it as a scheduled task for automatic updates). Replace `{PRINCIPAL}` with the user configured in `policy.download.auth.users`:
+
+```shell
+hadoop jar juicefs-hadoop-{version}.jar ranger \
+  --fs jfs://{VOL_NAME}/ \
+  --keytab /path/to/keytab \
+  --principal {PRINCIPAL}
+```
+
+### 4. Tips
+
+#### 4.1 Ranger version
 
 The code is tested on `Ranger2.3` and `Ranger2.4`. As no other features are used except for `HDFS` module authentication, theoretically all other versions are applicable.
 
-#### 3.2 Ranger Audit
+#### 4.2 Ranger Audit
 
 Currently, only support authentication function, and the `Ranger Audit` is disabled.
 
-#### 3.3 Ranger's other parameters
+#### 4.3 Ranger's other parameters
 
 To improve usage efficiency, currently only support some **CORE** parameters of Ranger.
 
-#### 3.4 Security tips
+#### 4.4 Security tips
 
 Due to the complete open source of the project, it is unavoidable for users to disrupt permission control by replacing parameters such as `ranger-rest-url`. If stricter control is required, it is recommended to compile the code independently and solve the problem by encrypting relevant security parameters.
+
+## Kerberos support (from v1.4)
+
+JuiceFS supports Kerberos authentication, but only for the Hadoop Java SDK.
+
+### 1. Configurations
+
+The Kerberos configuration is stored in the metadata database and can be managed via the JuiceFS CLI.
+
+```shell
+# enable Kerberos when formatting
+juicefs format META-URL --kerberos-config-file kerb.cfg
+# or enable Kerberos on an existing filesystem
+./juicefs config META-URL --kerberos-config-file kerb.cfg
+
+# disable Kerberos
+./juicefs config META-URL --kerberos-config-file ""
+```
+
+Kerberos configuration file:
+
+```
+# Kerberos keytab, encode with BASE64
+# base64 -w 0 meta.keytab
+{VOL_NAME}.keytab={BASE64 KEYTAB}
+# delegation token
+{VOL_NAME}.token.life=604800
+{VOL_NAME}.token.renew=86400
+
+# superuser and supergroup
+{VOL_NAME}.superuser=hadoop
+{VOL_NAME}.supergroup=supergroup
+
+# Mapping from Kerberos principals to OS user accounts
+# https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SecureMode.html#Mapping_from_Kerberos_principals_to_OS_user_accounts
+{VOL_NAME}.mechanism=hadoop
+{VOL_NAME}.rule=DEFAULT
+
+# proxy user settings
+# https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SecureMode.html#Proxy_user
+# users: user1,user2 or *
+{VOL_NAME}.proxy.client.users=foo
+# groups: group1,group2 or *
+{VOL_NAME}.proxy.client.groups=foogrp
+# hosts: host1,host2 or 192.168.1.1,192.168.1.2 or 192.168.1.1/32 or *
+{VOL_NAME}.proxy.client.hosts=*
+```
+
+`core-site.xml` configuration:
+
+```xml
+<property>
+  <name>juicefs.server-principal</name>
+  <value>{YOUR_SPN}</value>
+</property>
+```
 
 ## FAQ
 

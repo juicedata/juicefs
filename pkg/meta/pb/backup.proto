@@ -91,6 +91,11 @@ message Symlink {
   bytes target = 2;
 }
 
+message ChangeLog {
+  int64 version = 1;
+  bytes entry = 2;
+}
+
 message Batch {
   repeated Node nodes = 1;
   repeated Edge edges = 2;
@@ -105,6 +110,7 @@ message Batch {
   repeated Quota quotas = 11;
   repeated Acl acls = 12;
   repeated Counter counters = 13;
+  repeated ChangeLog changelogs = 14;
 }
 
 message Footer {

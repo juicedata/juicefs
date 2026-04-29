@@ -191,9 +191,16 @@ func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 			}
 			if fi.IsDir() {
 				name += dirSuffix
+			} else if !fi.Mode().IsRegular() {
+				logger.Warnf("%s is not a regular file, ignore it", name)
+				continue
 			}
 			mEntries = append(mEntries, &mEntry{nil, name, fi, false})
 		} else {
+			if !isSymlink && !e.Mode().IsRegular() {
+				logger.Warnf("%s is not a regular file, ignore it", name)
+				continue
+			}
 			mEntries = append(mEntries, &mEntry{nil, name, e, isSymlink})
 		}
 	}

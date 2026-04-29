@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -52,6 +53,10 @@ type memTxn struct {
 	store    *memKV
 	observed map[string]int
 	buffer   map[string][]byte
+}
+
+func (tx *memTxn) id() uint64 {
+	return tx.store.getId()
 }
 
 func (tx *memTxn) get(key []byte) []byte {
@@ -163,8 +168,32 @@ func (it *kvItem) Less(o btree.Item) bool {
 
 type memKV struct {
 	sync.Mutex
-	items *btree.BTree
-	temp  *kvItem
+	items  *btree.BTree
+	temp   *kvItem
+	nextid uint64
+}
+
+func (c *memKV) getId() uint64 {
+	c.Lock()
+	defer c.Unlock()
+	c.nextid++
+	return c.nextid
+}
+
+func (c *memKV) rewind(id uint64, factor int) uint64 {
+	shift := uint64(1e3)
+	if s := os.Getenv("JFS_TKV_REWIND"); s != "" {
+		if parsed, err := strconv.ParseUint(s, 10, 64); err == nil && parsed > 0 {
+			shift = parsed
+		}
+	}
+	if factor > 1 {
+		shift *= uint64(factor)
+	}
+	if id > shift {
+		return id - shift
+	}
+	return 1
 }
 
 func (c *memKV) name() string {

@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"syscall"
 	"time"
+
 	"xorm.io/xorm"
 )
 
@@ -33,6 +34,9 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 	if ltype == F_UNLCK {
 		return errno(m.txn(func(s *xorm.Session) error {
 			_, err := s.MustCols("inode", "owner", "sid").Delete(&flock{Inode: inode, Owner: owner, Sid: m.sid})
+			if err == nil {
+				m.genLog(ctx, s, time.Now().UnixNano(), "FLOCK(%d,%d,U)", inode, owner_)
+			}
 			return err
 		}, inode))
 	}
@@ -85,6 +89,9 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 			}
 			if err == nil && n == 0 {
 				err = fmt.Errorf("insert/update failed")
+			}
+			if err == nil {
+				m.genLog(ctx, s, time.Now().UnixNano(), "FLOCK(%d,%d,%c)", inode, owner_, typec)
 			}
 			return err
 		}, inode))
@@ -186,6 +193,9 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				} else {
 					_, err = s.MustCols("inode", "owner", "sid").Cols("records").Update(plock{Records: dumpLocks(ls)}, l)
 				}
+				if err == nil {
+					m.genLog(ctx, s, time.Now().UnixNano(), "SETLK(%d,%d,U,%d,%d,%d)", inode, owner_, start, end, pid)
+				}
 				return err
 			}
 			var ps []plock
@@ -229,6 +239,13 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 			}
 			if err == nil && n == 0 {
 				err = fmt.Errorf("insert/update failed")
+			}
+			if err == nil {
+				lt := "R"
+				if ltype == F_WRLCK {
+					lt = "W"
+				}
+				m.genLog(ctx, s, time.Now().UnixNano(), "SETLK(%d,%d,%s,%d,%d,%d)", inode, owner_, lt, start, end, pid)
 			}
 			return err
 		}, inode))

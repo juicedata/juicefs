@@ -84,6 +84,11 @@ jobs:
           wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
           chmod +x random-test
       
+      - name: Test Changelog
+        timeout-minutes: 25
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/changelog.sh
+    
       - name: Test Tier
         timeout-minutes: 20
         env:
@@ -108,7 +113,7 @@ jobs:
         timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/config.sh
-    
+
       - name: Test acl
         timeout-minutes: 10
         run: |
@@ -264,8 +269,9 @@ jobs:
         if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_JUICEFS_CE_CI_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+          workflow_name: ${{ github.workflow }}
 
       - name: Success
         if: success()

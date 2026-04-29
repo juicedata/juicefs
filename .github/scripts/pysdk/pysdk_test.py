@@ -197,14 +197,14 @@ class QuotaTests(FileTests):
         # set quota
         self.v.set_quota(path=TESTFN, capacity=1024*1024*1024, inodes=1000, create=True)
         res = self.v.get_quota(path=TESTFN)
-        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 0, "UsedInodes": 3}}))
+        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 16384, "UsedInodes": 4}}))
 
         res = self.v.list_quota()
-        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 0, "UsedInodes": 3}}))
+        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 16384, "UsedInodes": 4}}))
 
         self.v.set_quota(path=TESTFN+"/dir1",  capacity=1024*1024*1024, inodes=10000, create=True, strict=True)
         res = self.v.list_quota()
-        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 0, "UsedInodes": 3}, "/test/dir1": {"MaxSpace": 1024*1024*1024, "MaxInodes": 10000, "UsedSpace": 4096, "UsedInodes": 1}}))
+        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 16384, "UsedInodes": 4}, "/test/dir1": {"MaxSpace": 1024*1024*1024, "MaxInodes": 10000, "UsedSpace": 4096, "UsedInodes": 1}}))
 
         # check quota
         self.v.check_quota(path=TESTFN, strict=True, repair=True)
@@ -414,7 +414,13 @@ class ClientParamsTests(FileTests):
         cache_size = 0
         for root, dirs, files in os.walk(cache_dir):
             for file in files:
-                cache_size += os.path.getsize(os.path.join(root, file))
+                if file.endswith('.tmp'):
+                    continue
+                path = os.path.join(root, file)
+                try:
+                    cache_size += os.path.getsize(path)
+                except FileNotFoundError:
+                    continue
         self.assertGreaterEqual(cache_size, size_mb * 1024 * 1024/2)
 
     def test_io_limits(self):

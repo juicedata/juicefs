@@ -196,5 +196,135 @@ check_diff(){
     echo "check diff success"
 }
 
+test_checkpoint_fsrand_basic_resume(){
+    # Test: checkpoint resume with random filesystem structure
+    prepare_test
+    ./juicefs mount $META_URL /tmp/jfs -d
+    sync_option="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
+    # First sync with checkpoint, interrupt
+    timeout 5 sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync1.log || true
+    # Resume sync with checkpoint
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync2.log || true
+    do_copy $sync_option
+    check_diff $DEST_DIR1 $DEST_DIR2
+}
+
+test_checkpoint_fsrand_no_mount_point(){
+    # Test: checkpoint with jfs:// scheme (no mount point) + random FS
+    prepare_test
+    ./juicefs mount $META_URL /tmp/jfs -d --attr-cache 0 --entry-cache 0 --dir-entry-cache 0
+    sync_option="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
+    # First sync to DEST_DIR1 with checkpoint
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync1.log || true
+    # Sync to jfs:// with checkpoint, interrupt then resume
+    timeout 5 sudo -u $USER GOCOVERDIR=$GOCOVERDIR meta_url=$META_URL ./juicefs sync -v $SOURCE_DIR1 jfs://meta_url/fsrand2/ $sync_option \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync2_interrupt.log || true
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR meta_url=$META_URL ./juicefs sync -v $SOURCE_DIR1 jfs://meta_url/fsrand2/ $sync_option \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync2.log || true
+    check_diff $DEST_DIR1 $DEST_DIR2
+}
+
+test_checkpoint_fsrand_with_update(){
+    # Test: checkpoint + --update + --delete-dst with random FS
+    prepare_test
+    ./juicefs mount $META_URL /tmp/jfs -d
+    sync_option="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
+    # Initial sync with checkpoint
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync.log || true
+    do_copy $sync_option
+    check_diff $DEST_DIR1 $DEST_DIR2
+    # Generate more random data
+    sudo -u $USER PROFILE=generate EXCLUDE_RULES=$EXCLUDE_RULES MAX_EXAMPLE=$MAX_EXAMPLE SEED=$SEED ROOT_DIR1=$SOURCE_DIR1 ROOT_DIR2=$SOURCE_DIR2 python3 .github/scripts/hypo/fs.py || true
+    do_copy $sync_option
+    # Sync with --update --delete-dst + checkpoint
+    for i in {1..5}; do
+        update_option="$sync_option --update --delete-dst"
+        sudo -u $USER GOCOVERDIR=$GOCOVERDIR meta_url=$META_URL ./juicefs sync $SOURCE_DIR1 jfs://meta_url/fsrand1/ $update_option \
+            --enable-checkpoint --checkpoint-interval 2s \
+            2>&1 | tee sync.log || true
+        if grep -q "Failed to delete" sync.log; then
+            echo "failed to delete, retry sync"
+        else
+            echo "sync delete success"
+            break
+        fi
+    done
+    diff -ur --no-dereference $DEST_DIR1 $DEST_DIR2
+}
+
+test_checkpoint_fsrand_inplace(){
+    # Test: checkpoint + --inplace with random FS
+    prepare_test
+    ./juicefs mount $META_URL /tmp/jfs -d
+    sync_option1="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
+    sync_option2="--dirs --perms --check-all --links --list-threads 10 --list-depth 5 --inplace"
+    # Sync to fsrand1 with checkpoint
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR meta_url=$META_URL ./juicefs sync -v $SOURCE_DIR1 jfs://meta_url/fsrand1/ $sync_option1 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync1.log || true
+    # Sync to fsrand2 with --inplace + checkpoint
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR meta_url=$META_URL ./juicefs sync -v $SOURCE_DIR1 jfs://meta_url/fsrand2/ $sync_option2 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync2.log || true
+    check_diff $DEST_DIR1 $DEST_DIR2
+}
+
+test_checkpoint_fsrand_check_change(){
+    # Test: checkpoint + --check-change with random FS
+    prepare_test
+    ./juicefs mount $META_URL /tmp/jfs -d
+    sync_option="--dirs --check-change --links --perms --list-threads 10 --list-depth 5"
+    # First sync with checkpoint, interrupt
+    timeout 5 sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync1.log || true
+    # Resume with checkpoint
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync2.log || true
+    do_copy $sync_option
+    check_diff $DEST_DIR1 $DEST_DIR2
+}
+
+test_checkpoint_fsrand_files_from(){
+    # Test: checkpoint + --files-from with random FS
+    prepare_test
+    ./juicefs mount $META_URL /tmp/jfs -d
+    sync_option1="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
+    sync_option2="--dirs --perms --check-all --links --list-threads 10 --list-depth 5 --files-from files"
+    ls -A "$SOURCE_DIR1" | while read file; do
+        full_path="$SOURCE_DIR1/$file"
+        if [ -L "$full_path" ] && [ ! -e "$full_path" ]; then
+            rm "$full_path"
+        else
+            echo "$file"
+        fi
+    done > files
+    # Sync with files-from + checkpoint
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option1 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync1.log || true
+    SOURCE_PERM=$(sudo stat -c "%a" "$DEST_DIR1")
+    SOURCE_OWNER=$(sudo stat -c "%U" "$DEST_DIR1")
+    SOURCE_GROUP=$(sudo stat -c "%G" "$DEST_DIR1")
+    sudo mkdir -p $DEST_DIR2
+    sudo chmod $SOURCE_PERM $DEST_DIR2
+    sudo chown $SOURCE_OWNER:$SOURCE_GROUP $DEST_DIR2
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR2 $sync_option2 \
+        --enable-checkpoint --checkpoint-interval 2s \
+        2>&1 | tee sync2.log || true
+    check_diff $DEST_DIR1 $DEST_DIR2
+}
+
 
 source .github/scripts/common/run_test.sh && run_test $@

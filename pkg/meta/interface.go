@@ -553,6 +553,8 @@ type Meta interface {
 	LoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno)
 	DeleteTokens(ctx Context, ids []uint32) syscall.Errno
 	ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
+
+	ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error
 }
 
 type CheckOpt struct {

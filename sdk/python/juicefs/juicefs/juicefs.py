@@ -21,6 +21,7 @@ import json
 import locale
 import os
 import pwd
+import sys
 import six
 import struct
 import threading
@@ -80,7 +81,13 @@ def unpack(fmt, buf):
 
 class JuiceFSLib(object):
     def __init__(self):
-        self.lib = cdll.LoadLibrary(os.path.join(os.path.dirname(__file__), "libjfs.so"))
+        if sys.platform == "win32":
+            _ext = "dll"
+        elif sys.platform == "darwin":
+            _ext = "dylib"
+        else:
+            _ext = "so"
+        self.lib = cdll.LoadLibrary(os.path.join(os.path.dirname(__file__), f"libjfs.{_ext}"))
 
     def __getattr__(self, n):
         fn = getattr(self.lib, n)

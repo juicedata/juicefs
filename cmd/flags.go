@@ -80,6 +80,8 @@ func addCategory(f cli.Flag, cat string) {
 		ff.Category = cat
 	case *cli.Float64Flag:
 		ff.Category = cat
+	case *cli.DurationFlag:
+		ff.Category = cat
 	case *cli.StringSliceFlag:
 		ff.Category = cat
 	default:

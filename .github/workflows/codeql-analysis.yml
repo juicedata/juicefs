@@ -92,5 +92,6 @@ jobs:
       if: failure()
       uses: juicedata/slack-notify-action@main
       with:
-        channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+        channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_JUICEFS_CE_CI_NOTIFY }}"
         slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+        workflow_name: ${{ github.workflow }}

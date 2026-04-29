@@ -972,5 +972,508 @@ test_sm4gcm_data_not_plaintext_in_storage() {
     echo "PASS: test_sm4gcm_data_not_plaintext_in_storage"
 }
 
+test_skip_trash_basic() {
+    # Test: chattr +s on directory makes deleted files skip .trash
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs --enable-ioctl
+
+    # First verify normal trash behavior (without +s)
+    mkdir -p /jfs/normal_dir
+    echo "normal_data" > /jfs/normal_dir/normal_file.txt
+    rm /jfs/normal_dir/normal_file.txt
+    sleep 1
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -eq 0 ]]; then
+        echo "FAIL: normal file should go to .trash but trash is empty"
+        exit 1
+    fi
+    echo "OK: normal file moved to .trash as expected (count=$trash_count)"
+
+    # Clean trash for next check
+    ./juicefs rmr /jfs/.trash
+    rm -rf /jfs/normal_dir
+
+    # Now test skip-trash with chattr +s
+    mkdir -p /jfs/skip_dir
+    chattr +s /jfs/skip_dir
+    echo "skip_data" > /jfs/skip_dir/skip_file.txt
+    rm /jfs/skip_dir/skip_file.txt
+    sleep 1
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -ne 0 ]]; then
+        echo "FAIL: file with skip-trash flag should NOT go to .trash (count=$trash_count)"
+        find /jfs/.trash -type f 2>/dev/null
+        exit 1
+    fi
+    echo "OK: file with +s flag was permanently deleted, not in .trash"
+    echo "PASS: test_skip_trash_basic"
+}
+
+test_skip_trash_inherit() {
+    # Test: files/subdirs created under +s directory inherit the skip-trash flag
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs --enable-ioctl
+
+    mkdir -p /jfs/inherit_dir
+    chattr +s /jfs/inherit_dir
+
+    # Verify parent has +s
+    lsattr -d /jfs/inherit_dir | grep -q "s-" || {
+        echo "FAIL: parent directory should have 's' attribute"
+        lsattr -d /jfs/inherit_dir
+        exit 1
+    }
+
+    # Create file and subdir under +s directory
+    echo "inherit_test" > /jfs/inherit_dir/child_file.txt
+    mkdir -p /jfs/inherit_dir/child_dir
+    echo "nested" > /jfs/inherit_dir/child_dir/nested_file.txt
+    sleep 1
+
+    # Check that child file inherits +s
+    lsattr /jfs/inherit_dir/child_file.txt | grep -q "s-" || {
+        echo "FAIL: child file should inherit 's' attribute"
+        lsattr /jfs/inherit_dir/child_file.txt
+        exit 1
+    }
+
+    # Check that child dir inherits +s
+    lsattr -d /jfs/inherit_dir/child_dir | grep -q "s-" || {
+        echo "FAIL: child directory should inherit 's' attribute"
+        lsattr -d /jfs/inherit_dir/child_dir
+        exit 1
+    }
+
+    # Check that nested file (created under inherited +s dir) also has +s
+    lsattr /jfs/inherit_dir/child_dir/nested_file.txt | grep -q "s-" || {
+        echo "FAIL: nested file should inherit 's' attribute"
+        lsattr /jfs/inherit_dir/child_dir/nested_file.txt
+        exit 1
+    }
+
+    # Now delete the inherited files and verify they skip trash
+    rm /jfs/inherit_dir/child_file.txt
+    rm /jfs/inherit_dir/child_dir/nested_file.txt
+    sleep 1
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -ne 0 ]]; then
+        echo "FAIL: inherited +s files should NOT go to .trash (count=$trash_count)"
+        find /jfs/.trash -type f 2>/dev/null
+        exit 1
+    fi
+    echo "OK: inherited +s files were permanently deleted"
+    echo "PASS: test_skip_trash_inherit"
+}
+
+test_skip_trash_rename_overwrite() {
+    # Test: rename overwriting a target with +s flag skips trash for the target
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs --enable-ioctl
+
+    mkdir -p /jfs/rename_dir
+    chattr +s /jfs/rename_dir
+
+    # Create target file (inherits +s from parent)
+    echo "target_data" > /jfs/rename_dir/target.txt
+    sleep 1
+
+    # Verify target has +s
+    lsattr /jfs/rename_dir/target.txt | grep -q "s-" || {
+        echo "FAIL: target file should have 's' attribute"
+        lsattr /jfs/rename_dir/target.txt
+        exit 1
+    }
+
+    # Create source file outside +s directory (no +s flag)
+    echo "source_data" > /jfs/source.txt
+
+    # Rename source over target — target should skip trash
+    mv /jfs/source.txt /jfs/rename_dir/target.txt
+    sleep 1
+
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -ne 0 ]]; then
+        echo "FAIL: overwritten +s target should NOT go to .trash (count=$trash_count)"
+        find /jfs/.trash -type f 2>/dev/null
+        exit 1
+    fi
+
+    # Verify the content is from source
+    content=$(cat /jfs/rename_dir/target.txt)
+    if [[ "$content" != "source_data" ]]; then
+        echo "FAIL: target content should be from source after rename"
+        exit 1
+    fi
+    echo "OK: rename overwrite of +s target skipped trash"
+    echo "PASS: test_skip_trash_rename_overwrite"
+}
+
+test_skip_trash_remove_flag() {
+    # Test: removing +s flag restores normal trash behavior
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs --enable-ioctl
+
+    mkdir -p /jfs/toggle_dir
+    chattr +s /jfs/toggle_dir
+
+    # Create file (inherits +s)
+    echo "toggle_data1" > /jfs/toggle_dir/file1.txt
+    lsattr /jfs/toggle_dir/file1.txt | grep -q "s-" || {
+        echo "FAIL: file1 should have 's' attribute"
+        exit 1
+    }
+
+    # Remove +s from directory
+    chattr -s /jfs/toggle_dir
+
+    # Create new file (should NOT have +s since parent no longer has it)
+    echo "toggle_data2" > /jfs/toggle_dir/file2.txt
+    sleep 1
+
+    # file2 should not have +s
+    if lsattr /jfs/toggle_dir/file2.txt | grep -q "s-"; then
+        echo "FAIL: file2 should NOT have 's' attribute after removing flag from parent"
+        lsattr /jfs/toggle_dir/file2.txt
+        exit 1
+    fi
+
+    # Delete file2 — should go to .trash since it doesn't have +s
+    rm /jfs/toggle_dir/file2.txt
+    sleep 1
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -eq 0 ]]; then
+        echo "FAIL: file without +s should go to .trash"
+        exit 1
+    fi
+    echo "OK: file without +s went to .trash after flag removal"
+
+    # Clean trash
+    ./juicefs rmr /jfs/.trash
+
+    # Delete file1 — still has +s (was created when parent had +s), should skip trash
+    rm /jfs/toggle_dir/file1.txt
+    sleep 1
+    trash_count=$(find /jfs/.trash -type f 2>/dev/null | wc -l)
+    if [[ "$trash_count" -ne 0 ]]; then
+        echo "FAIL: file1 with +s should skip .trash (count=$trash_count)"
+        find /jfs/.trash -type f 2>/dev/null
+        exit 1
+    fi
+    echo "OK: file with +s still skips trash after parent flag removed"
+    echo "PASS: test_skip_trash_remove_flag"
+}
+
+test_skip_trash_without_ioctl() {
+    # Test: chattr should fail without --enable-ioctl
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs
+
+    mkdir -p /jfs/no_ioctl_dir
+    if chattr +s /jfs/no_ioctl_dir 2>/dev/null; then
+        # If chattr somehow succeeds, check if the flag is actually set
+        if lsattr -d /jfs/no_ioctl_dir 2>/dev/null | grep -q "s"; then
+            echo "FAIL: chattr +s should not work without --enable-ioctl"
+            exit 1
+        fi
+    fi
+    echo "OK: chattr +s correctly fails or has no effect without --enable-ioctl"
+    echo "PASS: test_skip_trash_without_ioctl"
+}
+
+# PR #6307: --hide-internal option hides .accesslog, .stats, .config, .trash from readdir
+test_hide_internal() {
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+
+    # Without --hide-internal: internal files should be visible in root listing
+    ./juicefs mount -d $META_URL /jfs
+    for f in .stats .accesslog .config .trash; do
+        if ! ls -a /jfs/ | grep -qx "$f"; then
+            echo "FAIL: $f should be visible without --hide-internal"
+            ls -a /jfs/
+            exit 1
+        fi
+    done
+    echo "OK: internal files visible without --hide-internal"
+    umount_jfs /jfs "$META_URL"
+
+    # With --hide-internal: internal files should be hidden from readdir
+    ./juicefs mount -d $META_URL /jfs --hide-internal
+    for f in .stats .accesslog .config .trash; do
+        if ls -a /jfs/ | grep -qx "$f"; then
+            echo "FAIL: $f should be hidden with --hide-internal"
+            ls -a /jfs/
+            exit 1
+        fi
+    done
+    echo "OK: internal files hidden with --hide-internal"
+
+    # Internal files should still be accessible by direct path (lookup works)
+    cat /jfs/.stats > /dev/null || {
+        echo "FAIL: .stats should be accessible directly even when hidden"
+        exit 1
+    }
+    cat /jfs/.config > /dev/null || {
+        echo "FAIL: .config should be accessible directly even when hidden"
+        exit 1
+    }
+
+    # User files should still work normally
+    echo "hide_test" > /jfs/normal_file.txt
+    content=$(cat /jfs/normal_file.txt)
+    if [[ "$content" != "hide_test" ]]; then
+        echo "FAIL: user file read/write failed with --hide-internal"
+        exit 1
+    fi
+    echo "PASS: test_hide_internal"
+}
+
+# PR #6392: --network-interfaces flag for IP discovery configuration
+test_network_interfaces() {
+    prepare_test
+    ./juicefs format $META_URL myjfs
+
+    # Detect a real non-loopback interface
+    local iface=""
+    if command -v ip &>/dev/null; then
+        iface=$(ip -o link show up | awk -F': ' '{print $2}' | grep -v lo | head -1)
+    fi
+    if [[ -z "$iface" ]]; then
+        # Fallback for macOS
+        iface=$(ifconfig 2>/dev/null | grep -E '^[a-z]' | grep -v lo | head -1 | awk -F: '{print $1}')
+    fi
+    if [[ -z "$iface" ]]; then
+        echo "WARN: Cannot detect non-loopback interface, using lo"
+        iface="lo"
+    fi
+    echo "Detected interface: $iface"
+
+    # Test 1: mount with a specific network interface
+    ./juicefs mount -d $META_URL /jfs --network-interfaces "$iface"
+    echo "net_iface_test" > /jfs/test_net.txt
+    content=$(cat /jfs/test_net.txt)
+    if [[ "$content" != "net_iface_test" ]]; then
+        echo "FAIL: read/write failed with --network-interfaces $iface"
+        exit 1
+    fi
+    # Verify session info is available
+    ./juicefs status $META_URL 2>&1 || true
+    umount_jfs /jfs "$META_URL"
+
+    # Test 2: mount with multiple interfaces (comma-separated)
+    ./juicefs mount -d $META_URL /jfs --network-interfaces "$iface, lo"
+    echo "multi_iface" > /jfs/test_multi.txt
+    content=$(cat /jfs/test_multi.txt)
+    if [[ "$content" != "multi_iface" ]]; then
+        echo "FAIL: read/write failed with --network-interfaces '$iface, lo'"
+        exit 1
+    fi
+    umount_jfs /jfs "$META_URL"
+
+    # Test 3: mount with non-existent interface (should still mount, just no matching IPs)
+    ./juicefs mount -d $META_URL /jfs --network-interfaces "nonexistent_if_99999"
+    echo "no_iface_test" > /jfs/test_no_iface.txt
+    content=$(cat /jfs/test_no_iface.txt)
+    if [[ "$content" != "no_iface_test" ]]; then
+        echo "FAIL: read/write failed with non-existent interface"
+        exit 1
+    fi
+    echo "PASS: test_network_interfaces"
+}
+
+# PR #6438: META_PASSWORD_FILE support for mysql and postgres
+test_meta_password_file() {
+    if [[ "$META" != "mysql" && "$META" != "postgres" ]]; then
+        echo "Skip META_PASSWORD_FILE test for META=$META (only mysql/postgres supported)"
+        return 0
+    fi
+
+    prepare_test
+    local pw_file="/tmp/test_meta_password_$$"
+    local no_pw_url=""
+
+    if [[ "$META" == "mysql" ]]; then
+        echo -n "root" > "$pw_file"
+        no_pw_url="mysql://root:@(127.0.0.1)/test?max_open_conns=30"
+    elif [[ "$META" == "postgres" ]]; then
+        echo -n "postgres" > "$pw_file"
+        no_pw_url="postgres://postgres@127.0.0.1:5432/test?sslmode=disable"
+    fi
+
+    # Format and mount using META_PASSWORD_FILE (URL has no password)
+    META_PASSWORD_FILE="$pw_file" ./juicefs format "$no_pw_url" myjfs
+    META_PASSWORD_FILE="$pw_file" ./juicefs mount -d "$no_pw_url" /jfs
+
+    echo "password_file_test" > /jfs/pw_test.txt
+    content=$(cat /jfs/pw_test.txt)
+    if [[ "$content" != "password_file_test" ]]; then
+        echo "FAIL: read/write failed with META_PASSWORD_FILE for $META"
+        exit 1
+    fi
+
+    rm -f "$pw_file"
+    echo "PASS: test_meta_password_file"
+}
+
+# PR #6438: META_PASSWORD takes precedence over META_PASSWORD_FILE
+test_meta_password_file_precedence() {
+    if [[ "$META" != "mysql" && "$META" != "postgres" ]]; then
+        echo "Skip META_PASSWORD_FILE precedence test for META=$META"
+        return 0
+    fi
+
+    prepare_test
+    local wrong_pw_file="/tmp/test_wrong_password_$$"
+    echo -n "deliberately_wrong_password" > "$wrong_pw_file"
+    local no_pw_url=""
+
+    if [[ "$META" == "mysql" ]]; then
+        no_pw_url="mysql://root:@(127.0.0.1)/test?max_open_conns=30"
+        # META_PASSWORD=root should take precedence over wrong password in file
+        META_PASSWORD="root" META_PASSWORD_FILE="$wrong_pw_file" ./juicefs format "$no_pw_url" myjfs
+        META_PASSWORD="root" META_PASSWORD_FILE="$wrong_pw_file" ./juicefs mount -d "$no_pw_url" /jfs
+    elif [[ "$META" == "postgres" ]]; then
+        no_pw_url="postgres://postgres@127.0.0.1:5432/test?sslmode=disable"
+        META_PASSWORD="postgres" META_PASSWORD_FILE="$wrong_pw_file" ./juicefs format "$no_pw_url" myjfs
+        META_PASSWORD="postgres" META_PASSWORD_FILE="$wrong_pw_file" ./juicefs mount -d "$no_pw_url" /jfs
+    fi
+
+    echo "precedence_test" > /jfs/prec_test.txt
+    content=$(cat /jfs/prec_test.txt)
+    if [[ "$content" != "precedence_test" ]]; then
+        echo "FAIL: META_PASSWORD should take precedence over META_PASSWORD_FILE"
+        exit 1
+    fi
+
+    rm -f "$wrong_pw_file"
+    echo "PASS: test_meta_password_file_precedence"
+}
+
+# PR #6438: META_PASSWORD_FILE pointing to non-existent file should fail
+test_meta_password_file_nonexistent() {
+    if [[ "$META" != "mysql" && "$META" != "postgres" ]]; then
+        echo "Skip META_PASSWORD_FILE non-existent file test for META=$META"
+        return 0
+    fi
+
+    prepare_test
+    local no_pw_url=""
+
+    if [[ "$META" == "mysql" ]]; then
+        no_pw_url="mysql://root:@(127.0.0.1)/test?max_open_conns=30"
+    elif [[ "$META" == "postgres" ]]; then
+        no_pw_url="postgres://postgres@127.0.0.1:5432/test?sslmode=disable"
+    fi
+
+    # Should fail because the password file doesn't exist
+    if META_PASSWORD_FILE="/nonexistent/path/password.txt" ./juicefs format "$no_pw_url" myjfs 2>/dev/null; then
+        echo "FAIL: format should fail with non-existent META_PASSWORD_FILE"
+        exit 1
+    fi
+    echo "OK: format correctly failed with non-existent META_PASSWORD_FILE"
+    echo "PASS: test_meta_password_file_nonexistent"
+}
+
+# PR #6299: ReadDirPlusAuto enabled by default, exercises READDIRPLUS auto kernel path
+test_readdir_plus_auto() {
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+
+    # Create directory with many files to exercise READDIRPLUS auto mode
+    mkdir -p /jfs/rdpa_test
+    for i in $(seq 1 500); do
+        echo "content_$i" > "/jfs/rdpa_test/file_$(printf '%04d' $i).txt"
+    done
+
+    # ls triggers readdir; kernel may choose READDIRPLUS or READDIR based on auto heuristic
+    local count
+    count=$(ls /jfs/rdpa_test/ | wc -l)
+    if [[ "$count" -ne 500 ]]; then
+        echo "FAIL: Expected 500 files, got $count"
+        exit 1
+    fi
+
+    # Verify file contents are correct (ensures READDIRPLUS attrs don't interfere)
+    for idx in 1 100 250 500; do
+        local expected="content_$idx"
+        local actual
+        actual=$(cat "/jfs/rdpa_test/file_$(printf '%04d' $idx).txt")
+        if [[ "$actual" != "$expected" ]]; then
+            echo "FAIL: file_$(printf '%04d' $idx) content mismatch: expected='$expected', got='$actual'"
+            exit 1
+        fi
+    done
+
+    # Mix in subdirectories, verify readdir returns correct total
+    for i in $(seq 1 10); do
+        mkdir -p "/jfs/rdpa_test/subdir_$i"
+        echo "sub_$i" > "/jfs/rdpa_test/subdir_$i/inner.txt"
+    done
+
+    local total
+    total=$(ls /jfs/rdpa_test/ | wc -l)
+    if [[ "$total" -ne 510 ]]; then
+        echo "FAIL: Expected 510 entries (500 files + 10 dirs), got $total"
+        exit 1
+    fi
+
+    # ls -l triggers stat on each entry; with ReadDirPlusAuto kernel may batch attrs
+    local ls_lines
+    ls_lines=$(ls -l /jfs/rdpa_test/ | tail -n +2 | wc -l)
+    if [[ "$ls_lines" -ne 510 ]]; then
+        echo "FAIL: ls -l should show 510 entries, got $ls_lines"
+        exit 1
+    fi
+
+    echo "PASS: test_readdir_plus_auto"
+}
+
+test_sort_dir_readdirplus(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs --sort-dir
+
+    # Create files in reverse alphabetical order to verify sorting
+    for name in zzz_file ttt_file ppp_file mmm_file hhh_file ddd_file aaa_file; do
+        echo "$name" > "/jfs/$name"
+    done
+
+    # Create subdirectory with files in random order
+    mkdir -p /jfs/subdir
+    for name in zoo_entry cat_entry apple_entry banana_entry dog_entry; do
+        echo "$name" > "/jfs/subdir/$name"
+    done
+
+    # Use Python os.scandir() which exercises READDIRPLUS on FUSE
+    # Before the fix, ReaddirPlus did not sort entries even with --sort-dir
+    python3 -c "
+import os
+entries = [e.name for e in os.scandir('/jfs') if not e.name.startswith('.')]
+assert entries == sorted(entries), f'root entries not sorted: {entries}'
+sub_entries = [e.name for e in os.scandir('/jfs/subdir')]
+assert sub_entries == sorted(sub_entries), f'subdir entries not sorted: {sub_entries}'
+print('PASS: entries sorted via scandir (READDIRPLUS path)')
+"
+
+    # Verify ls -U (raw directory order) matches ls (sorted) for subdir
+    ls /jfs/subdir > /tmp/rdp_ls_sorted
+    ls -U /jfs/subdir > /tmp/rdp_ls_raw
+    diff /tmp/rdp_ls_sorted /tmp/rdp_ls_raw
+
+    # Verify with ls -l (triggers stat, uses READDIRPLUS cached attrs)
+    ls -l /jfs > /tmp/rdp_lsl
+    ls -U -l /jfs > /tmp/rdp_lsl_raw
+    diff /tmp/rdp_lsl /tmp/rdp_lsl_raw
+
+    rm -f /tmp/rdp_ls_sorted /tmp/rdp_ls_raw /tmp/rdp_lsl /tmp/rdp_lsl_raw
+    echo "PASS: test_sort_dir_readdirplus"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@
 

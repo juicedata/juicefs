@@ -3,3 +3,5 @@ build
 *.egg-info 
 *.h
 *.so
+*.dylib
+*.dll

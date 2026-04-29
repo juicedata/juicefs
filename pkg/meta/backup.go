@@ -53,6 +53,7 @@ const (
 	segTypeStat
 	segTypeQuota
 	segTypeParent // for redis/tkv only
+	segTypeChangeLog
 	segTypeMax
 )
 
@@ -71,6 +72,7 @@ var SegType2Name = map[int]string{
 	segTypeStat:      "stat",
 	segTypeQuota:     "quota",
 	segTypeParent:    "parent",
+	segTypeChangeLog: "changeLog",
 }
 
 var errBakEOF = fmt.Errorf("reach backup EOF")
@@ -271,6 +273,8 @@ func newBakSegment(val proto.Message) *BakSegment {
 			s.typ = uint32(segTypeSymlink)
 		} else if v.Parents != nil {
 			s.typ = uint32(segTypeParent)
+		} else if v.Changelogs != nil {
+			s.typ = uint32(segTypeChangeLog)
 		} else {
 			return nil
 		}
@@ -311,6 +315,8 @@ func (s *BakSegment) num() uint64 {
 			return uint64(len(b.Quotas))
 		case segTypeParent:
 			return uint64(len(b.Parents))
+		case segTypeChangeLog:
+			return uint64(len(b.Changelogs))
 		}
 		return 0
 	}

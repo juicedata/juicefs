@@ -64,6 +64,7 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 			switch ltype {
 			case F_UNLCK:
 				delete(ls, lkey)
+				m.genLog(tx, time.Now(), "FLOCK(%d,%d,U)", inode, owner)
 			case F_RDLCK:
 				for o, l := range ls {
 					if l == 'W' && o != lkey {
@@ -71,12 +72,14 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 					}
 				}
 				ls[lkey] = 'R'
+				m.genLog(tx, time.Now(), "FLOCK(%d,%d,R)", inode, owner)
 			case F_WRLCK:
 				delete(ls, lkey)
 				if len(ls) > 0 {
 					return syscall.EAGAIN
 				}
 				ls[lkey] = 'W'
+				m.genLog(tx, time.Now(), "FLOCK(%d,%d,W)", inode, owner)
 			default:
 				return syscall.EINVAL
 			}
@@ -188,6 +191,7 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 				} else {
 					owners[lkey] = dumpLocks(ls)
 				}
+				m.genLog(tx, time.Now(), "SETLK(%d,%d,U,%d,%d,%d)", inode, owner, start, end, pid)
 			} else {
 				ls := loadLocks(owners[lkey])
 				delete(owners, lkey)
@@ -202,6 +206,11 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 				}
 				ls = updateLocks(ls, lock)
 				owners[lkey] = dumpLocks(ls)
+				lt := "R"
+				if ltype == F_WRLCK {
+					lt = "W"
+				}
+				m.genLog(tx, time.Now(), "SETLK(%d,%d,%s,%d,%d,%d)", inode, owner, lt, start, end, pid)
 			}
 			if len(owners) == 0 {
 				tx.delete(ikey)
