@@ -54,6 +54,7 @@
       "code_blocks": false,
       "html_elements": false,
       "heading_id": false,
+      "urls": false,
       "names": [
         "ACL",
         "AI",
