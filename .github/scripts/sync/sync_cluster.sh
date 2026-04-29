@@ -796,7 +796,7 @@ test_checkpoint_force_reset_cluster(){
         dd if=/dev/urandom of=/jfs/src/file$i bs=64K count=1 status=none
     done
     chmod -R 777 /jfs/src /jfs/dst
-    timeout 2 sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/src/ jfs://meta_url/dst/ \
+    timeout 1 sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/src/ jfs://meta_url/dst/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --dirs --check-change $CLUSTER_CHECKPOINT_OPTS \
          --threads 2 >sync1.log 2>&1 || true
