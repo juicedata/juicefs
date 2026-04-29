@@ -40,9 +40,6 @@ jobs:
         run: |-
           echo 'GITHUB_TOKEN=${{secrets.GH_PERSONAL_ACCESS_TOKEN}}' > .release-env
 
-      - name: Build release builder
-        run: docker build --platform linux/amd64 -t juicedata/golang-cross:v1.25.7-0 -f hack/builder/Dockerfile .
-
       - name: goreleaser release
         run: make release
 
