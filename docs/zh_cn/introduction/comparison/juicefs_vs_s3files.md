@@ -1,5 +1,4 @@
 ---
-title: JuiceFS 对比 S3 Files
 slug: /comparison/juicefs_vs_s3files
 description: 本文对比了 JuiceFS 与 Amazon S3 Files，从产品定位、系统架构到功能特性进行了全方位分析。
 ---
