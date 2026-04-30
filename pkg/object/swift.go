@@ -151,6 +151,7 @@ func newSwiftOSS(endpoint, username, apiKey, token string) (ObjectStorage, error
 		ApiKey:    apiKey,
 		AuthToken: token,
 		AuthUrl:   authURL,
+		UserAgent: UserAgent,
 		Transport: httpClient.Transport.(*http.Transport),
 	}
 	err = conn.Authenticate(context.Background())
