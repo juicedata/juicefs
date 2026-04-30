@@ -51,20 +51,19 @@ type DataWriter interface {
 }
 
 type sliceWriter struct {
-	id         uint64
-	chunk      *chunkWriter
-	off        uint32
-	length     uint32
-	soff       uint32
-	slen       uint32
-	writer     chunk.Writer
-	growLength bool // true if this slice will extend file length visible in metadata
-	freezed    bool
-	done       bool
-	err        syscall.Errno
-	notify     *utils.Cond
-	started    time.Time
-	lastMod    time.Time
+	id      uint64
+	chunk   *chunkWriter
+	off     uint32
+	length  uint32
+	soff    uint32
+	slen    uint32
+	writer  chunk.Writer
+	freezed bool
+	done    bool
+	err     syscall.Errno
+	notify  *utils.Cond
+	started time.Time
+	lastMod time.Time
 }
 
 func (s *sliceWriter) prepareID(ctx meta.Context, retry bool) {
@@ -156,6 +155,7 @@ type chunkWriter struct {
 	indx   uint32
 	file   *fileWriter
 	slices []*sliceWriter
+	queued bool
 }
 
 // protected by file
@@ -196,11 +196,12 @@ func (c *chunkWriter) commitThread() {
 			}
 		}
 
-		// Only commits that extend the file need ordering - they could expose a
+		// Only commits that extend file size need ordering - they could expose a
 		// "hole" (zeros) if an earlier chunk's data hasn't been committed yet.
 		// Overwrites within the committed length are safe to proceed concurrently.
-		if s.growLength {
-			f.waitCommit(s)
+		// Slice order within a chunk is handled by c.slices FIFO above.
+		if c.queued {
+			f.waitCommit(c)
 		}
 
 		err := s.err
@@ -227,8 +228,10 @@ func (c *chunkWriter) commitThread() {
 		} else if end := c.sliceEnd(s); end > f.committedTo {
 			f.committedTo = end
 		}
-		f.finishCommit(s)
 		c.slices = c.slices[1:]
+		if c.queued && !c.hasSliceBeyond(f.committedTo) { // recheck after dequeuing one committed slice
+			f.dequeueCommit(c)
+		}
 	}
 	f.freeChunk(c)
 	f.Unlock()
@@ -247,11 +250,11 @@ type fileWriter struct {
 	refs         uint16
 	chunks       map[uint32]*chunkWriter
 	committedTo  uint64 // highest file length already committed to metadata
-	commitQueue  []*sliceWriter
+	commitQueue  []*chunkWriter
 
 	flushcond  *utils.Cond // wait for chunks==nil (flush)
 	writecond  *utils.Cond // wait for flushwaiting==0 (write)
-	commitcond *utils.Cond // wait for grow-length slices to commit in queue order
+	commitcond *utils.Cond // wait for grow-length chunks to commit in queue order
 }
 
 // protected by file
@@ -276,28 +279,41 @@ func (c *chunkWriter) sliceEnd(s *sliceWriter) uint64 {
 	return uint64(c.indx)*meta.ChunkSize + uint64(s.off) + uint64(s.slen)
 }
 
-func (f *fileWriter) enqueueCommit(s *sliceWriter) {
-	if s.growLength || s.chunk.sliceEnd(s) <= f.committedTo {
-		return
+// protected by file
+func (c *chunkWriter) hasSliceBeyond(length uint64) bool {
+	for _, s := range c.slices {
+		if c.sliceEnd(s) > length {
+			return true
+		}
 	}
-	s.growLength = true
-	f.commitQueue = append(f.commitQueue, s)
+	return false
 }
 
-func (f *fileWriter) waitCommit(s *sliceWriter) {
-	for len(f.commitQueue) > 0 && f.commitQueue[0] != s { // not my turn
+// protected by file
+func (f *fileWriter) tryEnqueueCommit(s *sliceWriter) {
+	c := s.chunk
+	if c.queued || c.sliceEnd(s) <= f.committedTo {
+		return
+	}
+	c.queued = true
+	f.commitQueue = append(f.commitQueue, c)
+	f.commitcond.Broadcast()
+}
+
+// protected by file
+func (f *fileWriter) waitCommit(c *chunkWriter) {
+	for len(f.commitQueue) > 0 && f.commitQueue[0] != c { // not my turn
 		f.commitcond.WaitWithTimeout(time.Millisecond * 100)
 	}
 }
 
-func (f *fileWriter) finishCommit(s *sliceWriter) {
-	if !s.growLength {
-		return
-	}
-	if len(f.commitQueue) == 0 || f.commitQueue[0] != s { // data race happened after waitCommit?
+// protected by file
+func (f *fileWriter) dequeueCommit(c *chunkWriter) {
+	if len(f.commitQueue) == 0 || f.commitQueue[0] != c { // data race happened after waitCommit?
 		panic(fmt.Sprintf("write inode:%d commit queue out of order", f.inode))
 	}
 	f.commitQueue = f.commitQueue[1:]
+	c.queued = false
 	f.commitcond.Broadcast()
 }
 
@@ -325,7 +341,7 @@ func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data 
 	if st := s.write(ctx, off-s.off, data); st != 0 {
 		return st
 	}
-	f.enqueueCommit(s)
+	f.tryEnqueueCommit(s)
 	return 0
 }
 
