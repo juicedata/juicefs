@@ -267,16 +267,15 @@ public class RangerPermissionChecker {
   }
 
   public FileStatus getAncestor(Path path) throws IOException {
-    if (path.getParent() != null) {
-      return getIfExist(path.getParent());
+    Path parent = path.getParent();
+    while (parent != null) {
+      FileStatus status = getIfExist(parent);
+      if (status != null) {
+        return status;
+      }
+      parent = parent.getParent();
     }
-    path = path.getParent();
-    FileStatus tmp = null;
-    while (path != null && tmp == null) {
-      tmp = getIfExist(path);
-      path = path.getParent();
-    }
-    return tmp;
+    return null;
   }
 
   public static class PathObj {

@@ -63,7 +63,7 @@ func (m *redisMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) 
 }
 
 func (m *redisMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
-	counters := make([]*pb.Counter, 0, len(counterNames))
+	counters := make([]*pb.Counter, 0, len(counterNames)+1)
 	for _, name := range counterNames {
 		cnt, err := m.getCounter(name)
 		if err != nil {
@@ -73,6 +73,12 @@ func (m *redisMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumped
 			cnt++ // Redis nextInode/nextChunk is one smaller than db
 		}
 		counters = append(counters, &pb.Counter{Key: name, Value: cnt})
+	}
+	if m.getFormat().ChangeLog {
+		lastLog, err := m.rdb.Get(ctx, m.txnLastLog()).Int64()
+		if err == nil {
+			counters = append(counters, &pb.Counter{Key: "lastChangelog", Value: lastLog})
+		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Counters: counters}})
 }

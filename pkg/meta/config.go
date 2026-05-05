@@ -104,6 +104,9 @@ type Format struct {
 	EnableACL        bool
 	RangerRestUrl    string `json:",omitempty"`
 	RangerService    string `json:",omitempty"`
+	ChangeLog         bool  `json:",omitempty"`
+	ChangeLogMaxAge   int64 `json:",omitempty"`
+	ChangeLogMaxLines int64 `json:",omitempty"`
 
 	//kerberos
 	KerbConf string `json:",omitempty"`

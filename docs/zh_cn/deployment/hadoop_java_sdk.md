@@ -891,23 +891,94 @@ juicefs config META-URL --ranger-rest-url "" --ranger-service jfs ""
 
 考虑到使用的方便性，JuiceFS 将 Ranger 所有依赖的包均打包到 JuiceFS 的 SDK 中。如果遇到 Apache Ranger 的版本冲突问题，可能需要修改版本重新编译。
 
-### 3. 使用提示
+### 3. 配置 Kerberos
 
-#### 3.1 Ranger版本
+开启 Kerberos 会导致业务使用的 JuiceFS 客户端无法下载 Ranger 安全规则，你需要在 Ranger Admin Web UI - HDFS Service 配置 policy.download.auth.users 和 tag.download.auth.users 来为指定的用户赋予下载安全规则的权限，多个用户用逗号','隔开。
+
+配置完成以后，你还需要使用该用户来更新 JuiceFS 中保存的规则。
+
+更新安全规则文件的命令如下（建议配置成定时任务自动更新），注意将 {PRINCIPAL} 替换为 policy.download.auth.users 配置的用户：
+
+```shell
+hadoop jar juicefs-hadoop-{version}.jar ranger \
+  --fs jfs://{VOL_NAME}/ \
+  --keytab /path/to/keytab \
+  --principal {PRINCIPAL}
+```
+
+### 4. 使用提示
+
+#### 4.1 Ranger版本
 
 当前代码测试基于`Ranger2.3`和`Ranger2.4`版本，因除`HDFS`模块鉴权外并未使用其他特性，理论上其他版本均适用。
 
-#### 3.2 Ranger Audit
+#### 4.2 Ranger Audit
 
 当前仅支持鉴权功能，`Ranger Audit`功能已关闭。
 
-#### 3.3 Ranger其他参数
+#### 4.3 Ranger其他参数
 
 为提升使用效率，当前仅开放连接 Ranger 最核心的参数。
 
-#### 3.4 安全性问题
+#### 4.4 安全性问题
 
 因项目代码完全开源，无法避免用户通过替换`ranger-rest-url`等参数的方式扰乱安全管控。如需更严格的管控，建议自主编译代码，通过将相关安全参数进行加密处理等方式解决。
+
+## Kerberos 支持（ v1.4支持 ）
+
+JuiceFS 支持使用 Kerberos 进行用户认证，不过仅限于 Hadoop Java SDK。
+
+### 1. 相关配置
+
+Kerberos 的配置统一放在 META 数据库内，可以通过 JuiceFS 命令行进行管理。
+
+```shell
+# format 的时候开启 Kerberos
+juicefs format META-URL --kerberos-config-file kerb.cfg
+# 或者对已有文件系统开启 Kerberos
+./juicefs config META-URL --kerberos-config-file kerb.cfg
+
+# 关闭 Kerberos
+./juicefs config META-URL --kerberos-config-file ""
+```
+
+kerbero 配置文件
+
+```
+# kerberos keytab, encode with BASE64
+# base64 -w 0 meta.keytab
+{VOL_NAME}.keytab={BASE64 KEYTAB}
+# delegation token
+{VOL_NAME}.token.life=604800
+{VOL_NAME}.token.renew=86400
+
+# superuser and supergroup
+{VOL_NAME}.superuser=hadoop
+{VOL_NAME}.supergroup=supergroup
+
+# Mapping from Kerberos principals to OS user accounts
+# https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SecureMode.html#Mapping_from_Kerberos_principals_to_OS_user_accounts
+{VOL_NAME}.mechanism=hadoop
+{VOL_NAME}.rule=DEFAULT
+
+# proxy user settings
+# https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SecureMode.html#Proxy_user
+# users: user1,user2 or *
+{VOL_NAME}.proxy.client.users=foo
+# groups: group1,group2 or *
+{VOL_NAME}.proxy.client.groups=foogrp
+# hosts: host1,host2 or 192.168.1.1,192.168.1.2 or 192.168.1.1/32 or *
+{VOL_NAME}.proxy.client.hosts=*
+```
+
+core-site 配置
+
+```
+<property>
+  <name>juicefs.server-principal</name>
+  <value>{YOUR_SPN}</value>
+</property>
+```
 
 ## FAQ
 

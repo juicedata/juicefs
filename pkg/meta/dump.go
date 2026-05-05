@@ -43,6 +43,7 @@ type DumpedCounters struct {
 	NextSession       int64 `json:"nextSession"`
 	NextTrash         int64 `json:"nextTrash"`
 	NextCleanupSlices int64 `json:"nextCleanupSlices,omitempty"` // deprecated, always 0
+	LastChangelog     int64 `json:"lastChangelog,omitempty"`
 }
 
 type DumpedDelFile struct {
@@ -126,6 +127,11 @@ type DumpedEntry struct {
 	Entries    map[string]*DumpedEntry `json:"entries,omitempty"`
 	AccessACL  *DumpedACL              `json:"posix_acl_access,omitempty"`
 	DefaultACL *DumpedACL              `json:"posix_acl_default,omitempty"`
+}
+
+type DumpedChangeLog struct {
+	Version int64  `json:"version"`
+	Entry   string `json:"entry"`
 }
 
 type wrapEntryPool struct {
@@ -333,6 +339,7 @@ type DumpedMeta struct {
 	Quotas      map[Ino]*DumpedQuota    `json:",omitempty"`
 	UserQuotas  map[uint64]*DumpedQuota `json:",omitempty"`
 	GroupQuotas map[uint64]*DumpedQuota `json:",omitempty"`
+	ChangeLog   []*DumpedChangeLog      `json:",omitempty"`
 	FSTree      *DumpedEntry            `json:",omitempty"`
 	Trash       *DumpedEntry            `json:",omitempty"`
 }
@@ -480,6 +487,8 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 			err = dec.Decode(&dm.UserQuotas)
 		case "GroupQuotas":
 			err = dec.Decode(&dm.GroupQuotas)
+		case "ChangeLog":
+			err = dec.Decode(&dm.ChangeLog)
 		case "FSTree":
 			_, err = decodeEntry(dec, 0, counters, parents, dm.Quotas, refs, bar, load, addChunk)
 		case "Trash":

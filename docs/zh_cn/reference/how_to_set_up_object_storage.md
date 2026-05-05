@@ -159,7 +159,7 @@ juicefs format \
 | [Scaleway](#scaleway)                       | `scw`      |
 | [DigitalOcean Spaces](#digitalocean-spaces) | `space`    |
 | [Wasabi](#wasabi)                           | `wasabi`   |
-| [Storj DCS](#storj-dcs)                     | `s3`       |
+| [Storj](#storj)                             | `storj`    |
 | [Vultr 对象存储](#vultr-对象存储)           | `s3`       |
 | [Cloudflare R2](#r2)                        | `s3`       |
 | [阿里云 OSS](#阿里云-oss)                   | `oss`      |
@@ -191,6 +191,7 @@ juicefs format \
 | [本地磁盘](#本地磁盘)                       | `file`     |
 | [SFTP/SSH](#sftp)                           | `sftp`     |
 | [NFS](#nfs)                                 | `nfs`      |
+| [CIFS/SMB](#cifs)                           | `cifs`     |
 
 ### Amazon S3
 
@@ -327,6 +328,27 @@ juicefs format \
 对于 Azure 中国用户，`EndpointSuffix` 的值为 `core.chinacloudapi.cn`。
 :::
 
+#### 托管身份认证 <VersionAdd>1.4</VersionAdd> {#azure-managed-identity}
+
+从 v1.4 开始，JuiceFS 支持 Azure [托管身份](https://learn.microsoft.com/zh-cn/azure/active-directory/managed-identities-azure-resources/overview)认证。当未提供 `--access-key` 和 `--secret-key` 时，JuiceFS 将自动使用 [DefaultAzureCredential](https://learn.microsoft.com/zh-cn/azure/developer/go/azure-sdk-authentication) 凭据链，按以下顺序尝试：
+
+1. 环境变量（`AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_CLIENT_SECRET`）
+2. 工作负载身份（Kubernetes 环境）
+3. 托管身份（系统分配或用户分配）
+4. Azure CLI 凭据
+
+例如，在 Azure 虚拟机上使用托管身份：
+
+```bash
+juicefs format \
+    --storage wasb \
+    --bucket https://<container>.<endpoint> \
+    ... \
+    myjfs
+```
+
+使用托管身份时无需提供 `--access-key` 或 `--secret-key`。
+
 ### Backblaze B2
 
 使用 Backblaze B2 作为 JuiceFS 的数据存储，需要先创建 [application key](https://www.backblaze.com/b2/docs/application_keys.html)，**Application Key ID** 和 **Application Key** 分别对应 Access Key 和 Secret Key。
@@ -439,24 +461,23 @@ juicefs format \
 Tokyo (ap-northeast-1) 区域的用户，查看 [这篇文档](https://wasabi-support.zendesk.com/hc/en-us/articles/360039372392-How-do-I-access-the-Wasabi-Tokyo-ap-northeast-1-storage-region-) 了解 endpoint URI 的设置方法。
 :::
 
-### Storj DCS
+### Storj
 
-使用 Storj DCS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.storj.io/api-reference/s3-compatible-gateway) 了解如何创建 Access Key 和 Secret Key。
+Storj 提供原生 Uplink 集成，`--storage` 使用 `storj`，并需要先生成 [Storj Access Grant](https://storj.dev/learn/concepts/access/access-grants)。
 
-Storj DCS 兼容 AWS S3，存储类型使用 `s3` ，`--bucket` 格式为 `https://gateway.<region>.storjshare.io/<bucket>`。`<region>` 为存储区域，目前 DCS 有三个可用存储区域：us1、ap1 和 eu1。
+通过 `--access-key` 传入 Access Grant，通过 `--bucket` 传入存储桶名称：
 
 ```shell
 juicefs format \
-    --storage s3 \
-    --bucket https://gateway.<region>.storjshare.io/<bucket> \
-    --access-key <your-access-key> \
-    --secret-key <your-sceret-key> \
+    --storage storj \
+    --bucket <bucket-name> \
+    --access-key <your-access-grant> \
     ... \
     myjfs
 ```
 
-:::caution 特别提示
-因为 Storj DCS 的 [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API 并非完全 S3 兼容（返回结果没有实现排序功能），所以 JuiceFS 的部分功能无法使用，比如 `juicefs gc`，`juicefs fsck`，`juicefs sync`，`juicefs destroy`。另外，使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#backup-automatically)功能，即加上 `--backup-meta 0`。
+:::note 注意
+Storj 在上传前就完成加密，且密钥不会离开客户端，因此它已经提供了与 JuiceFS 自身加密相同级别的数据保护。在此基础上再启用 `--encrypt-rsa-key`（[JuiceFS 静态数据加密](https://juicefs.com/docs/community/security/encryption/#enable-data-encryption-at-rest)）会导致每个数据块被重复加密：先由 JuiceFS（使用 RSA 密钥封装和 AES）加密，再由 Uplink 库（AES-GCM）加密。安全性不会提升，但读写 CPU 开销会显著增加。更多信息请参考 [Storj 加密文档](https://storj.dev/learn/concepts/access/encryption-and-keys)。
 :::
 
 ### Vultr 对象存储
@@ -1203,6 +1224,37 @@ juicefs format  \
 - `--bucket` 用来设置服务器的地址及存储路径，格式为 `[sftp://]<IP/Domain>:[port]:<Path>`。注意，目录名应该以 `/` 结尾，端口号为可选项默认为 `22`，例如 `192.168.1.11:22:myjfs/`。
 - `--access-key` 用来设置远程服务器的用户名
 - `--secret-key` 用来设置远程服务器的密码
+
+### CIFS/SMB {#cifs}
+
+CIFS/SMB（Common Internet File System / Server Message Block）是一种在 Windows 环境中广泛使用的网络文件共享协议，它允许网络中的计算机访问远程服务器上的共享文件和文件夹。
+
+JuiceFS 支持使用 CIFS/SMB 作为底层数据存储。当你有现有的 Windows 文件服务器或支持 SMB 协议的 NAS 设备时，这非常有用。
+
+```bash
+juicefs format \
+    --storage cifs \
+    --bucket 192.168.1.100/share \
+    --access-key username \
+    --secret-key password \
+    ...
+    redis://localhost:6379/1 myjfs
+```
+
+:::note 注意事项
+
+- `--storage` 可以设置为 `cifs` 或 `smb`，两者都支持。
+- `--bucket` 格式为 `<host>[:port]/<share>` 或 `cifs://<host>[:port]/<share>`，其中 `<share>` 是 SMB 共享名称。默认端口为 `445`。
+- `--access-key` 是 SMB 认证的用户名。
+- `--secret-key` 是 SMB 认证的密码。
+:::
+
+:::caution 限制
+
+- SMB 协议对 Unix 文件权限的支持有限。仅支持只读（0444）和可写（0666）两种模式，其他权限位会被忽略。
+- 符号链接不能像 POSIX 系统那样完全支持。
+- 要调整连接池大小，请设置 `JFS_CIFS_MAX_POOL` 环境变量（默认为 8）。
+:::
 
 ### NFS {#nfs}
 

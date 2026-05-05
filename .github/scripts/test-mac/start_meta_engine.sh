@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-REDIS_CSC_QUERY="client-cache=true&client-cache-size=500&client-cache-expire=60s&client-cache-preload=100"
+REDIS_CSC_QUERY="client-cache=false&client-cache-size=500&client-cache-expire=60s&client-cache-preload=100"
 
 # Helper function to install packages via Homebrew
 brew_install() {

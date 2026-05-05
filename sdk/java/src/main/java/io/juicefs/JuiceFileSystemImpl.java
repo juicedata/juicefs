@@ -815,7 +815,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     File libFile = new File(dir, name);
 
-    InputStream ins;
+    InputStream ins = null;
     long soTime;
     URL location = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation();
     if (location == null) {
@@ -865,16 +865,15 @@ public class JuiceFileSystemImpl extends FileSystem {
           // try the name for current user
           libFile = new File(dir, System.getProperty("user.name") + "-" + name);
           if (!libFile.exists() || libFile.lastModified() < soTime) {
-            InputStream reader = new GZIPInputStream(ins);
             File tmp = File.createTempFile(name, null, dir);
-            FileOutputStream writer = new FileOutputStream(tmp);
-            byte[] buffer = new byte[128 << 10];
-            int bytesRead = 0;
-            while ((bytesRead = reader.read(buffer)) != -1) {
-              writer.write(buffer, 0, bytesRead);
+            try (InputStream reader = new GZIPInputStream(ins);
+                 FileOutputStream writer = new FileOutputStream(tmp)) {
+              byte[] buffer = new byte[128 << 10];
+              int bytesRead = 0;
+              while ((bytesRead = reader.read(buffer)) != -1) {
+                writer.write(buffer, 0, bytesRead);
+              }
             }
-            writer.close();
-            reader.close();
             tmp.setLastModified(soTime);
             tmp.setReadable(true, false);
             try {
@@ -887,9 +886,14 @@ public class JuiceFileSystemImpl extends FileSystem {
           }
         }
       }
-      ins.close();
     } catch (Exception e) {
       throw new RuntimeException("Init libjfs failed", e);
+    } finally {
+      if (ins != null) {
+        try {
+          ins.close();
+        } catch (Exception ignore){}
+      }
     }
     return libjfsLibraryLoader.load(libFile.getAbsolutePath());
   }
@@ -987,6 +991,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public BlockLocation[] getFileBlockLocations(FileStatus file, long start, long len) throws IOException {
+    if (file == null) {
+      return null;
+    }
     if (needCheckPermission() && !checkPathAccess(file.getPath(), FsAction.READ, "getFileBlockLocations")) {
       return superGroupFileSystem.getFileBlockLocations(file, start, len);
     }
@@ -999,10 +1006,6 @@ public class JuiceFileSystemImpl extends FileSystem {
         }
       }
       return bls;
-    }
-
-    if (file == null) {
-      return null;
     }
 
     if (start < 0 || len < 0) {
@@ -1545,33 +1548,33 @@ public class JuiceFileSystemImpl extends FileSystem {
     DataOutputBuffer checksumBuf = new DataOutputBuffer();
     DataOutputBuffer crcBuf = new DataOutputBuffer();
     byte[] buf = new byte[bytesPerCrc];
-    FSDataInputStream in = open(f, 1 << 20);
     boolean eof = false;
     long got = 0;
-    while (got < length && !eof) {
-      for (int i = 0; i < blocksize / bytesPerCrc && got < length; i++) {
-        int n;
-        if (length < bytesPerCrc) {
-          n = in.read(buf, 0, (int) length);
-        } else {
-          n = in.read(buf);
+    try (FSDataInputStream in = open(f, 1 << 20)) {
+      while (got < length && !eof) {
+        for (int i = 0; i < blocksize / bytesPerCrc && got < length; i++) {
+          int n;
+          if (length < bytesPerCrc) {
+            n = in.read(buf, 0, (int) length);
+          } else {
+            n = in.read(buf);
+          }
+          if (n <= 0) {
+            eof = true;
+            break;
+          } else {
+            summer.update(buf, 0, n);
+            summer.writeValue(crcBuf, true);
+            got += n;
+          }
         }
-        if (n <= 0) {
-          eof = true;
-          break;
-        } else {
-          summer.update(buf, 0, n);
-          summer.writeValue(crcBuf, true);
-          got += n;
+        if (crcBuf.getLength() > 0) {
+          MD5Hash blockMd5 = MD5Hash.digest(crcBuf.getData(), 0, crcBuf.getLength());
+          blockMd5.write(checksumBuf);
+          crcBuf.reset();
         }
-      }
-      if (crcBuf.getLength() > 0) {
-        MD5Hash blockMd5 = MD5Hash.digest(crcBuf.getData(), 0, crcBuf.getLength());
-        blockMd5.write(checksumBuf);
-        crcBuf.reset();
       }
     }
-    in.close();
     if (checksumBuf.getLength() == 0) { // empty file
       return new MD5MD5CRC32GzipFileChecksum(0, 0, MD5Hash.digest(new byte[32]));
     }

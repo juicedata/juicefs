@@ -29,7 +29,6 @@ import (
 	"net/url"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -150,8 +149,6 @@ func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters .
 	if sc != "" {
 		args.StorageClass = sc
 	}
-	args.UserMeta = make(map[string]string)
-	args.UserMeta[checksumAlgr] = strconv.Itoa(int(crc32.Update(0, crc32c, data)))
 	_, err = q.c.PutObject(q.bucket, key, body, args)
 	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(sc)

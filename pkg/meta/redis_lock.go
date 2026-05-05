@@ -44,6 +44,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 				if len(lkeys) == 1 && lkeys[0] == lkey {
 					pipe.SRem(ctx, r.lockedKey(r.sid), ikey)
 				}
+				r.genLog(ctx, pipe, time.Now(), "FLOCK(%d,%d,U)", inode, owner)
 				return nil
 			})
 			return err
@@ -65,6 +66,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 				}
 				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					pipe.HSet(ctx, ikey, lkey, "R")
+					r.genLog(ctx, pipe, time.Now(), "FLOCK(%d,%d,R)", inode, owner)
 					return nil
 				})
 				return err
@@ -75,6 +77,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.HSet(ctx, ikey, lkey, "W")
 				pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
+				r.genLog(ctx, pipe, time.Now(), "FLOCK(%d,%d,W)", inode, owner)
 				return nil
 			})
 			return err
@@ -167,6 +170,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 					} else {
 						pipe.HSet(ctx, ikey, lkey, dumpLocks(ls))
 					}
+					r.genLog(ctx, pipe, time.Now(), "SETLK(%d,%d,U,%d,%d,%d)", inode, owner, start, end, pid)
 					return nil
 				})
 				return err
@@ -190,6 +194,11 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.HSet(ctx, ikey, lkey, dumpLocks(ls))
 				pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
+				ls := "R"
+				if ltype == F_WRLCK {
+					ls = "W"
+				}
+				r.genLog(ctx, pipe, time.Now(), "SETLK(%d,%d,%s,%d,%d,%d)", inode, owner, ls, start, end, pid)
 				return nil
 			})
 			return err

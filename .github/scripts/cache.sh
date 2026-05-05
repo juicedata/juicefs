@@ -154,6 +154,41 @@ test_remount_on_writeback(){
     ./juicefs warmup /tmp/jfs/test --evict
     compare_md5sum /tmp/test /tmp/jfs/test
 }
+
+test_writeback_threshold_size_stage_small_file(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --compress lz4
+    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 1h --writeback-threshold-size 8M
+
+    dd if=/dev/urandom of=/tmp/small-threshold-test bs=1M count=4 status=none
+    cp /tmp/small-threshold-test /tmp/jfs/small-threshold-test
+    sleep 3
+
+    stage_blocks=$(get_staging_blocks)
+    [[ "$stage_blocks" -gt 0 ]] || (echo "small file should be staged when writeback-threshold-size is 8M, actual stage_blocks=$stage_blocks" && exit 1)
+
+    stage_files=$(get_staging_file_count)
+    [[ "$stage_files" -gt 0 ]] || (echo "raw staging files should exist for small file, actual stage_files=$stage_files" && exit 1)
+}
+
+test_writeback_threshold_size_bypass_large_file(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --compress lz4
+    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 1h --writeback-threshold-size 1M
+
+    dd if=/dev/urandom of=/tmp/large-threshold-test bs=1M count=4 status=none
+    cp /tmp/large-threshold-test /tmp/jfs/large-threshold-test
+    sleep 3
+
+    stage_blocks=$(get_staging_blocks)
+    [[ "$stage_blocks" -eq 0 ]] || (echo "large file should bypass staging when writeback-threshold-size is 1M, actual stage_blocks=$stage_blocks" && exit 1)
+
+    stage_files=$(get_staging_file_count)
+    [[ "$stage_files" -eq 0 ]] || (echo "raw staging files should be empty for large file bypass, actual stage_files=$stage_files" && exit 1)
+
+    compare_md5sum /tmp/large-threshold-test /tmp/jfs/large-threshold-test
+}
+
 test_memory_cache_none(){
     do_test_memory_cache none
 }
@@ -558,6 +593,14 @@ wait_stage_uploaded()
     fi
 }
 
+get_staging_blocks(){
+    grep "juicefs_staging_blocks" /tmp/jfs/.stats | awk '{print $2}'
+}
+
+get_staging_file_count(){
+    find "$(get_rawstaging_dir)" -type f 2>/dev/null | wc -l | tr -d ' '
+}
+
 mount_jfsCache1(){
     capacity=$1
     [[ -z $capacity ]] && capacity=100G
@@ -690,7 +733,74 @@ wait_disk_down()
         fi
     done
     echo "Wait for state change to down timeout after $timeout seconds" && exit 1
-}   
+}
+
+test_rename_overwrite_stale_cache_with_trash(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1   # trash ENABLED
+    ./juicefs mount $META_URL /tmp/jfs -d --open-cache 1
+
+    # --- case 1: same-directory overwrite with trash enabled ---
+    # Write original content to dst, then overwrite via rename.
+    echo "original_content" > /tmp/jfs/dst_file
+    echo "new_content"      > /tmp/jfs/src_file
+
+    # Open dst_file and keep an fd alive in a background subprocess so the inode
+    # stays in the open-file table (exercises the of.InvalidateChunk path).
+    exec 5</tmp/jfs/dst_file
+
+    # Read back original content through the open fd to warm up any attr cache.
+    old_data=$(cat /proc/self/fd/5)
+    [[ "$old_data" != "original_content" ]] && echo "pre-rename read on fd5 should return original_content, got: $old_data" && exit 1
+
+    # Rename src -> dst (with trash enabled, old dst goes to trash, NOT deleted).
+    mv /tmp/jfs/src_file /tmp/jfs/dst_file
+
+    # Close the fd that was keeping the old inode open.
+    exec 5>&-
+
+    # Reading dst_file through the path must now return new_content, not stale original_content.
+    path_data=$(cat /tmp/jfs/dst_file)
+    [[ "$path_data" != "new_content" ]] && echo "post-rename read via path should return new_content, got: $path_data" && exit 1
+
+    # --- case 2: cross-directory overwrite with trash enabled ---
+    mkdir -p /tmp/jfs/dir1 /tmp/jfs/dir2
+    echo "dir1_original" > /tmp/jfs/dir1/cross_file
+    echo "dir2_new"      > /tmp/jfs/dir2/cross_file
+
+    exec 6</tmp/jfs/dir1/cross_file
+    old_cross=$(cat /proc/self/fd/6)
+    [[ "$old_cross" != "dir1_original" ]] && echo "pre-rename cross read should return dir1_original, got: $old_cross" && exit 1
+
+    mv /tmp/jfs/dir2/cross_file /tmp/jfs/dir1/cross_file
+    exec 6>&-
+
+    path_cross=$(cat /tmp/jfs/dir1/cross_file)
+    [[ "$path_cross" != "dir2_new" ]] && echo "post-rename cross read via path should return dir2_new, got: $path_cross" && exit 1
+
+    # --- case 3: verify overwritten inode actually went to trash, not deleted ---
+    # .trash directory should contain the overwritten inode's data after gc period.
+    # Just confirm trash directory exists (trash-days=1, so items land there).
+    trash_count=$(ls /tmp/jfs/.trash 2>/dev/null | wc -l)
+    [[ $trash_count -eq 0 ]] && echo "trash directory should not be empty after overwrite with trash enabled" && exit 1 || true
+
+    # --- case 4: large-file overwrite to stress chunk cache invalidation ---
+    dd if=/dev/urandom of=/tmp/jfs/large_dst bs=1M count=4 2>/dev/null
+    dd if=/dev/urandom of=/tmp/jfs/large_src bs=1M count=4 2>/dev/null
+    src_md5=$(md5sum /tmp/jfs/large_src | awk '{print $1}')
+
+    exec 7</tmp/jfs/large_dst
+    # warm attr cache on the open fd
+    stat /proc/self/fd/7 > /dev/null
+
+    mv /tmp/jfs/large_src /tmp/jfs/large_dst
+    exec 7>&-
+
+    dst_md5=$(md5sum /tmp/jfs/large_dst | awk '{print $1}')
+    [[ "$dst_md5" != "$src_md5" ]] && echo "post-rename large file md5 mismatch: expected $src_md5, got $dst_md5" && exit 1
+
+    echo "test_rename_overwrite_stale_cache_with_trash passed"
+}
 
 source .github/scripts/common/run_test.sh && run_test $@
 

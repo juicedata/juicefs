@@ -206,7 +206,14 @@ func (l *listThread) reset() {
 }
 
 func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
-	entries, _, _, err := store.List(ctx, prefix, start, "", "/", 1e9, followLink)
+	marker := start
+	if start != "" && strings.HasPrefix(start, prefix) {
+		remaining := start[len(prefix):]
+		if idx := strings.Index(remaining, "/"); idx >= 0 {
+			marker = prefix + remaining[:idx]
+		}
+	}
+	entries, _, _, err := store.List(ctx, prefix, marker, "", "/", 1e9, followLink)
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
 		return nil, err

@@ -36,6 +36,7 @@ COMMANDS:
      load     Load metadata from a previously dumped JSON file
      version  Show version
    INSPECTOR:
+     changelog  Tail the changelog of a volume
      status   Show status of a volume
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
@@ -237,8 +238,12 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#session-token)以了解更多。|
 |`--storage-class=value` <VersionAdd>1.1</VersionAdd>|默认存储类型。|
+|`--tier-id=value` <VersionAdd>1.4</VersionAdd>|分层存储 ID（1-3），与 `--tier-sc` 配合使用，用于配置指定 tier 的存储类型。ID `0` 为保留默认层，不可在此处配置。|
+|`--tier-sc=value` <VersionAdd>1.4</VersionAdd>|分层存储对应的对象存储类型（例如 `STANDARD_IA`、`INTELLIGENT_TIERING`、`GLACIER_IR`），需与 `--tier-id` 同时使用。|
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
+|`--max-uploads=20`|上传并发上限（默认：20）|
+|`--max-downloads=200` <VersionAdd>1.4</VersionAdd>|下载并发上限（默认：200）|
 
 #### 管理参数 {#config-management-options}
 
@@ -252,10 +257,13 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最小客户端版本|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最大客户端版本|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd>|开启目录统计，这是快速汇总和目录配额所必需的 (默认值：false)|
+|`--changelog` <VersionAdd>1.4</VersionAdd>|启用[元数据 changelog](../administration/changelog.md)（默认值：false）|
+|`--changelog-max-age` <VersionAdd>1.4</VersionAdd>|changelog 条目的最长保留时间，例如 `2h` 或 `30m`；`0` 表示不按时间清理|
+|`--changelog-max-lines` <VersionAdd>1.4</VersionAdd>|最多保留的 changelog 条目数量；`0` 表示不限制|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
-管理目录配额
+管理目录、用户和组配额
 
 #### 概览
 
@@ -265,16 +273,29 @@ juicefs quota command [command options] META-URL
 # 为目录设置配额
 juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
 
+# 为用户设置配额
+juicefs quota set redis://localhost --uid 1000 --capacity 2 --inodes 200
+
+# 为组设置配额
+juicefs quota set redis://localhost --gid 100 --capacity 5 --inodes 500
+
 # 获取目录配额信息
 juicefs quota get redis://localhost --path /dir1
 
-# 列出所有目录配额
+# 获取用户/组配额信息
+juicefs quota get redis://localhost --uid 1000
+juicefs quota get redis://localhost --gid 100
+
+# 列出所有配额
 juicefs quota list redis://localhost
 
 # 删除目录配额
 juicefs quota delete redis://localhost --path /dir1
 
 # 检查目录配额的一致性
+juicefs quota check redis://localhost --path /dir1
+
+# 检查用户组配额的一致性
 juicefs quota check redis://localhost
 ```
 
@@ -283,9 +304,12 @@ juicefs quota check redis://localhost
 |项 | 说明|
 |-|-|
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
-|`--path value`|卷中目录的全路径|
-|`--capacity value`|目录空间硬限制，单位 GiB (默认：0)|
-|`--inodes value`|用于硬限制目录 inode 数 (默认：0)|
+|`--path value`|卷中目录的全路径（用于目录配额）|
+|`--uid value`|用户 ID（用于用户配额）|
+|`--gid value`|组 ID（用于组配额）|
+|`--create`|目录不存在时自动创建（仅对目录配额生效）|
+|`--capacity value`|空间硬限制，单位 GiB (默认：0)|
+|`--inodes value`|硬限制 inode 数 (默认：0)|
 |`--repair`|修复不一致配额 (默认：false)|
 |`--strict`|在严格模式下计算目录的总使用量 (注意：对于大目录可能很慢) (默认：false)|
 
@@ -357,6 +381,7 @@ juicefs fsck redis://localhost
 |`--repair` <VersionAdd>1.1</VersionAdd>|发现损坏后尽可能修复 (默认：false)|
 |`--recursive, -r` <VersionAdd>1.1</VersionAdd>|递归检查或修复 (默认值：false)|
 |`--sync-dir-stat` <VersionAdd>1.1</VersionAdd>|同步所有目录的状态，即使他们没有损坏 (注意：巨大的文件树可能会花费很长时间) (默认：false)|
+|`--repair-dir-mode value` <VersionAdd>1.4</VersionAdd>|修复目录时使用的权限模式，八进制格式（默认值："0755"）|
 
 ### `juicefs restore` <VersionAdd>1.1</VersionAdd> {#restore}
 
@@ -428,6 +453,33 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 | `--encrypt-algo=aes256gcm-rsa` <VersionAdd>1.0.4</VersionAdd> |加密算法，默认为 `aes256gcm-rsa`。|
 
 ## 检视 {#inspector}
+
+### `juicefs changelog` <VersionAdd>1.4</VersionAdd> {#changelog}
+
+跟踪显示文件系统元数据操作的 changelog。用法和保留策略详见[「元数据 Changelog」](../administration/changelog.md)。使用前需要先启用 changelog 功能：
+
+```shell
+juicefs config redis://localhost --changelog
+```
+
+#### 概览
+
+```shell
+juicefs changelog [command options] META-URL
+
+# 从最新的 changelog 开始跟踪
+juicefs changelog redis://localhost
+
+# 从指定元数据版本开始跟踪
+juicefs changelog redis://localhost --from 100
+```
+
+#### 参数
+
+|项 | 说明|
+|-|-|
+|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
+|`--from=0`|从指定元数据版本开始显示 changelog。`0` 表示从最新版本开始跟踪。|
 
 ### `juicefs status` {#status}
 
@@ -628,6 +680,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`MOUNTPOINT`|文件系统挂载点，例如：`/mnt/jfs`、`Z:`。|
 |`-d, --background`|后台运行，默认为 false。|
 |`--no-syslog`|禁用系统日志，默认为 false。|
+|`--hide-internal` <VersionAdd>1.4</VersionAdd>|在目录列表中隐藏所有内部文件（`.accesslog`、`.stats`、`.config`、`.control`），这些文件仍可通过完整路径访问（默认值：false）。|
 |`--log=path`|后台运行时日志文件的位置 (默认：`$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)|
 |`--force`|强制挂载即使挂载点已经被相同的文件系统挂载 (默认值:false)|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd>|新增／更新 `/etc/fstab` 中的条目，如果不存在将会创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接，默认为 false。|
@@ -928,6 +981,9 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--check-change` <VersionAdd>1.3</VersionAdd>|校验同步前后的数据是否有变更，默认为 false。校验方式基于文件大小和 mtime，比较轻量。|
 |`--max-failure` <VersionAdd>1.3</VersionAdd>|最大允许失败的文件数（-1 表示无限）|
 |`--dry`|仅打印执行计划，不实际拷贝文件。|
+|`--enable-checkpoint`|启用 checkpoint，用于断点续传。|
+|`--checkpoint-interval=10s`|保存 checkpoint 的时间间隔。|
+|`--checkpoint-force-reset`|从头开始同步，并覆盖已有 checkpoint。|
 
 #### 对象存储相关参数 {#sync-storage-related-options}
 
@@ -939,6 +995,31 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--no-https`|不要使用 HTTPS，默认为 false。|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd>|目标端的新建文件的存储类型。|
 |`--bwlimit=0`|限制最大带宽，单位 Mbps，默认为 0 表示不限制。|
+|`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|全局流量控制服务的 URL，用于在多个 sync 实例间协调带宽。服务需提供 HTTP POST 接口，请求体 `{"bytes": <请求字节数>}`，响应体 `{"granted": <允许字节数>, "expired": <过期时间（毫秒）>}`。|
+
+`--traffic-control-url` 使用方法与接口定义：
+
+```shell
+# 为多个 sync 实例接入同一个全局流量控制服务
+juicefs sync SRC DST --traffic-control-url http://127.0.0.1:8080/traffic-control
+```
+
+* 接口定义：`POST /traffic-control`（以实际 URL 路径为准），`Content-Type: application/json`。
+* 请求定义：
+
+  ```json
+  {"bytes": 1048576}
+  ```
+
+  * `bytes`：本次申请的带宽额度（字节数）。正数表示申请额度，负数表示返还未使用额度。
+* 返回值定义：
+
+  ```json
+  {"granted": 524288, "expired": 1000}
+  ```
+
+  * `granted`：本次授予的可用字节数。
+  * `expired`：本次授予额度的过期时间（毫秒）。
 
 #### 分布式相关参数 {#sync-cluster-related-options}
 
@@ -997,3 +1078,41 @@ juicefs compact /mnt/jfs
 |项 | 说明|
 |-|-|
 |`--threads, -p`| 并发执行任务的线程数（默认：10） |
+
+### `juicefs tier` <VersionAdd>1.4</VersionAdd> {#tier}
+
+管理分层存储（Storage Tier）。详细介绍参考[「分层存储」](../guide/tiered-storage.md)。
+
+#### 概览
+
+```shell
+juicefs tier [subcommand] [command options] META-URL [PATH]
+
+# 查看所有 tier 配置
+juicefs tier list redis://localhost
+
+# 为单个文件设置 tier
+juicefs tier set redis://localhost --id 1 /path/to/file
+
+# 递归为目录设置 tier
+juicefs tier set redis://localhost --id 2 /path/to/dir -r
+
+# 恢复归档对象
+juicefs tier restore redis://localhost /path/to/dir -r
+```
+
+#### 子命令
+
+| 子命令 | 说明 |
+|-|-|
+|`list META-URL`|列出当前文件系统所有 tier 配置（id 与存储类型）。|
+|`set META-URL PATH`|为指定文件或目录设置 tier。|
+|`restore META-URL PATH`|向对象存储发起归档恢复请求（适用于 GLACIER / DEEP_ARCHIVE 等归档类型）。|
+
+#### 参数
+
+| 项 | 说明 |
+|-|-|
+|`--id value`|tier ID（0-3）。`0` 为默认层（保留值），`1-3` 为可配置层。`tier set` 时必填。|
+|`--recursive, -r`|递归处理目标目录下的所有文件和子目录（默认：false）。|
+|`--force, -f`|强制将对象重写到 tier 当前映射的存储类型，即使 tier id 未改变（默认：false）。适用于 `--tier-sc` 变更后需要迁移已有对象的场景。|

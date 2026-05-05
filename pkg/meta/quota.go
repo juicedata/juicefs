@@ -167,6 +167,13 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 	}
 	if stat == nil {
 		stat, st = m.calcDirStat(ctx, inode)
+	} else {
+		m.dirStatsLock.RLock()
+		pending := m.dirStats[inode]
+		m.dirStatsLock.RUnlock()
+		stat.length += pending.length
+		stat.space += pending.space
+		stat.inodes += pending.inodes
 	}
 	return
 }
@@ -262,8 +269,8 @@ func (m *baseMeta) doFlushStats() {
 	m.fsStatsLock.Unlock()
 }
 
-func (m *baseMeta) syncVolumeStat(ctx Context) error {
-	return m.en.doSyncVolumeStat(ctx)
+func (m *baseMeta) syncVolumeStat(ctx Context, used, inodes int64) error {
+	return m.en.doSyncVolumeStat(ctx, used, inodes)
 }
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, uid, gid uint32, parents ...Ino) syscall.Errno {
@@ -592,7 +599,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 
 	switch cmd {
 	case QuotaSet:
-		return m.handleQuotaSet(ctx, qtype, key, dpath, quotas, strict)
+		return m.handleQuotaSet(ctx, qtype, key, dpath, quotas)
 	case QuotaGet:
 		return m.handleQuotaGet(ctx, qtype, key, dpath, quotas)
 	case QuotaDel:
@@ -606,7 +613,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 	}
 }
 
-func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath string, quotas map[string]*Quota, strict bool) error {
+func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath string, quotas map[string]*Quota) error {
 	format := m.getFormat()
 	var quota *Quota
 	var scan bool = false
@@ -657,10 +664,10 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	if !created {
 		return nil
 	}
-	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, scan)
+	return m.initializeQuotaUsage(ctx, qtype, key, dpath, scan)
 }
 
-func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, strict bool, scan bool) error {
+func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, scan bool) error {
 	switch qtype {
 	case DirQuotaType:
 		wrapErr := func(e error) error {
@@ -668,7 +675,7 @@ func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, d
 		}
 
 		var sum Summary
-		if st := m.GetSummary(ctx, Ino(key), &sum, true, strict); st != 0 {
+		if st := m.GetSummary(ctx, Ino(key), &sum, true, true); st != 0 {
 			return wrapErr(st)
 		}
 

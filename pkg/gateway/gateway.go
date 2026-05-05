@@ -1255,7 +1255,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	if n.gConf.KeepEtag {
 		eno = n.fs.SetXattr(mctx, tmp, s3Etag, []byte(s3MD5), 0)
 		if eno != 0 {
-			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmp, s3Etag, s3MD5, 0)
+			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d error: %s", tmp, s3Etag, s3MD5, 0, eno)
 		}
 	}
 

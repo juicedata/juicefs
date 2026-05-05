@@ -259,5 +259,88 @@ test_ro_gateway()
     diff mc file1
 }
 
+test_bucket_name()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs gateway $META_URL 127.0.0.1:9001 --bucket-name custom-bucket --keep-etag -background
+    sleep 2
+    ./mc alias set gateway1 http://127.0.0.1:9001 admin admin123
+
+    # Custom bucket name should be accessible
+    ./mc ls gateway1/custom-bucket || { echo "custom bucket name should be accessible"; exit 1; }
+
+    # Original JuiceFS name should NOT be accessible in single-bucket mode
+    if ./mc ls gateway1/myjfs 2>/dev/null; then
+        echo "original juicefs name should not be accessible when --bucket-name is set"
+        exit 1
+    fi
+
+    # Upload and download via custom bucket name
+    ./mc cp mc gateway1/custom-bucket/file1
+    ./mc cp gateway1/custom-bucket/file1 file1_downloaded
+    compare_md5sum file1_downloaded mc
+
+    # ListBuckets should return the custom bucket name
+    bucket_list=$(./mc ls gateway1 | awk '{print $NF}' | tr -d '/')
+    if [ "$bucket_list" != "custom-bucket" ]; then
+        echo "ListBuckets should return custom-bucket, got: $bucket_list"
+        exit 1
+    fi
+
+    kill_gateway 9001
+}
+
+test_bucket_name_ignored_with_multi_buckets()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs mount -d $META_URL /tmp/jfs
+    mkdir -p /tmp/jfs/dir1
+    ./juicefs gateway $META_URL 127.0.0.1:9001 --multi-buckets --bucket-name custom-bucket --keep-etag -background
+    sleep 2
+    ./mc alias set gateway1 http://127.0.0.1:9001 admin admin123
+
+    # In multi-buckets mode, top-level directories are exposed as buckets; custom-bucket flag is ignored
+    ./mc ls gateway1/dir1 || { echo "dir1 should be accessible as a bucket in multi-buckets mode"; exit 1; }
+
+    # custom-bucket should not exist as a virtual bucket (it is a dir, not created)
+    if ./mc ls gateway1/custom-bucket 2>/dev/null; then
+        echo "custom-bucket should not exist as a virtual bucket in multi-buckets mode unless directory exists"
+        exit 1
+    fi
+
+    kill_gateway 9001
+}
+
+test_bucket_name_validation()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+
+    # Bucket name starting with .minio.sys should be rejected
+    if ./juicefs gateway $META_URL 127.0.0.1:9001 --bucket-name ".minio.sys-test" -background 2>/dev/null; then
+        sleep 1
+        kill_gateway 9001
+        echo "gateway should reject bucket name starting with .minio.sys"
+        exit 1
+    fi
+
+    # Bucket name with invalid S3 chars (e.g. uppercase) should be rejected
+    if ./juicefs gateway $META_URL 127.0.0.1:9001 --bucket-name "Invalid_Bucket!" -background 2>/dev/null; then
+        sleep 1
+        kill_gateway 9001
+        echo "gateway should reject bucket name with invalid S3 characters"
+        exit 1
+    fi
+
+    # Valid bucket name should start normally
+    ./juicefs gateway $META_URL 127.0.0.1:9001 --bucket-name "valid-bucket-123" -background
+    sleep 2
+    ./mc alias set gateway1 http://127.0.0.1:9001 admin admin123
+    ./mc ls gateway1/valid-bucket-123 || { echo "valid bucket name should be accessible"; exit 1; }
+    kill_gateway 9001
+}
+
 source .github/scripts/common/run_test.sh && run_test $@
 

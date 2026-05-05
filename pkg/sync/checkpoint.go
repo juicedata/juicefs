@@ -20,11 +20,13 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"os"
 	"os/signal"
+	"path"
 	"slices"
 	"strings"
 	"sync"
@@ -128,6 +130,8 @@ type CheckpointManager struct {
 	checkpoint       *Checkpoint
 	checkpointKey    string
 	stopChan         chan struct{}
+	stopOnce         sync.Once
+	periodicDone     chan struct{}
 	keyPrefix        sync.Map               // key -> prefix mapping for fast lookup
 	statsUpdater     func(*CheckpointStats) // callback to update stats before save
 	restoredPrefixes sync.Map               // for dedup: prefixes already restored
@@ -171,7 +175,8 @@ func generateCheckpointKey(src, dst string, config *Config) string {
 		fmt.Fprintf(h, "|%s|%s", strings.Join(config.Include, ","), strings.Join(config.Exclude, ","))
 	}
 	hash := h.Sum(nil)
-	if strings.HasSuffix(dst, "/") {
+	dstPath := strings.TrimSuffix(strings.TrimSuffix(dst, "(encrypted-chunked)"), "(encrypted)")
+	if strings.HasSuffix(dstPath, "/") {
 		return fmt.Sprintf("%s.%x.json", checkpointPrefix, hash)
 	}
 	return fmt.Sprintf("/%s.%x.json", checkpointPrefix, hash)
@@ -181,11 +186,47 @@ func (m *CheckpointManager) isCheckpointKey(key string) bool {
 	return m != nil && key == m.checkpointKey
 }
 
+func checkpointTmpPrefix(key string) string {
+	name := path.Base(key)
+	if len(name) > 200 {
+		name = name[:200]
+	}
+	prefix := ".jfs." + name + ".tmp."
+	dir := path.Dir(key)
+	if dir == "." {
+		return prefix
+	}
+	return path.Join(dir, prefix)
+}
+
+func (m *CheckpointManager) cleanupCheckpointTmp() {
+	tmpPrefix := checkpointTmpPrefix(m.checkpointKey)
+	objs, err := ListAll(m.dst, tmpPrefix, "", "", true)
+	if err != nil {
+		logger.Warnf("Failed to list checkpoint tmp files with prefix %q: %v", tmpPrefix, err)
+		return
+	}
+	for obj := range objs {
+		if obj == nil {
+			logger.Warnf("Listing checkpoint tmp files with prefix %q failed", tmpPrefix)
+			return
+		}
+		if err := m.dst.Delete(ctx, obj.Key()); err != nil {
+			logger.Warnf("Failed to delete checkpoint tmp file %q: %v", obj.Key(), err)
+		}
+	}
+}
+
 // Load loads checkpoint from object storage
 func (m *CheckpointManager) Load() (*Checkpoint, error) {
+	go m.cleanupCheckpointTmp()
 	obj, err := m.dst.Get(ctx, m.checkpointKey, 0, -1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get checkpoint: %w", err)
+		// head to wrap 404 as os.ErrNotExist
+		if _, err := m.dst.Head(ctx, m.checkpointKey); os.IsNotExist(err) {
+			return nil, err
+		}
+		return nil, err
 	}
 	defer obj.Close()
 
@@ -474,8 +515,19 @@ func (m *CheckpointManager) RegisterChildPrefix(childPrefix string, listDepth in
 	state.Unlock()
 }
 
+func (m *CheckpointManager) Stop() {
+	m.stopOnce.Do(func() {
+		close(m.stopChan)
+	})
+	if m.periodicDone != nil {
+		<-m.periodicDone
+	}
+}
+
 // DeleteCheckpoint removes the checkpoint file from storage.
 func (m *CheckpointManager) DeleteCheckpoint() error {
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
 	return m.dst.Delete(ctx, m.checkpointKey)
 }
 
@@ -485,7 +537,10 @@ func (m *CheckpointManager) Reset(config *Config) {
 }
 
 func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
+	done := make(chan struct{})
+	m.periodicDone = done
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
@@ -511,7 +566,7 @@ func (m *CheckpointManager) SaveOnSignal() {
 	go func() {
 		<-sigChan
 		logger.Infof("Received signal, saving checkpoint...")
-		close(m.stopChan)
+		m.Stop()
 
 		if err := m.Save(m.checkpoint); err != nil {
 			logger.Errorf("Failed to save checkpoint on signal: %v", err)
@@ -524,9 +579,13 @@ func (m *CheckpointManager) SaveOnSignal() {
 	}()
 }
 
-func trackCheckpointCompletion(key string, failed bool, mgr *CheckpointManager, config *Config) {
+func trackCheckpointCompletion(key string, err error, mgr *CheckpointManager, config *Config) {
 	if !config.EnableCheckpoint {
 		return
+	}
+	failed := err != nil
+	if errors.Is(err, os.ErrNotExist) {
+		failed = false
 	}
 	if mgr != nil {
 		if failed {

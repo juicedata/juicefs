@@ -253,24 +253,31 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 		return nil, err
 	}
 
-	mEntries := make([]*mEntry, len(entries))
-	for i, e := range entries {
+	mEntries := make([]*mEntry, 0, len(entries))
+	for _, e := range entries {
 		isSymlink := e.Mode()&os.ModeSymlink != 0
 		if e.IsDir() {
-			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
+			mEntries = append(mEntries, &mEntry{e, e.Name() + dirSuffix, nil, false})
 		} else if isSymlink && followLink {
 			fi, err := os.Stat(filepath.Join(dir, e.Name()))
 			if err != nil {
-				mEntries[i] = &mEntry{e, e.Name(), nil, true}
+				mEntries = append(mEntries, &mEntry{e, e.Name(), nil, true})
 				continue
 			}
 			name := e.Name()
 			if fi.IsDir() {
 				name = e.Name() + dirSuffix
+			} else if !fi.Mode().IsRegular() {
+				logger.Warnf("%s is not a regular file, ignore it", name)
+				continue
 			}
-			mEntries[i] = &mEntry{e, name, fi, false}
+			mEntries = append(mEntries, &mEntry{e, name, fi, false})
 		} else {
-			mEntries[i] = &mEntry{e, e.Name(), nil, isSymlink}
+			if !isSymlink && !e.Mode().IsRegular() {
+				logger.Warnf("%s is not a regular file, ignore it", e.Name())
+				continue
+			}
+			mEntries = append(mEntries, &mEntry{e, e.Name(), nil, isSymlink})
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })

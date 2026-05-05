@@ -115,22 +115,37 @@ type limitedReadCloser struct {
 }
 
 type chunkDecryptReader struct {
-	r    io.ReadCloser
-	enc  *dataEncryptor
-	buf  []byte
-	pool *sync.Pool
-	skip int64
+	r        io.ReadCloser
+	enc      *dataEncryptor
+	buf      []byte
+	pool     *sync.Pool
+	skip     int64
+	chunkBuf *[]byte
+}
+
+func (r *chunkDecryptReader) putChunkBuf() {
+	if r.chunkBuf != nil {
+		r.pool.Put(r.chunkBuf)
+		r.chunkBuf = nil
+		r.buf = nil
+	}
 }
 
 func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 	if len(r.buf) > 0 {
 		n := copy(p, r.buf)
 		r.buf = r.buf[n:]
+		if len(r.buf) == 0 {
+			r.putChunkBuf()
+		}
 		return n, nil
 	}
-
 	chunkBuf := r.pool.Get().(*[]byte)
-	defer r.pool.Put(chunkBuf)
+	defer func() {
+		if len(r.buf) == 0 {
+			r.pool.Put(chunkBuf)
+		}
+	}()
 
 	n, err := io.ReadFull(r.r, *chunkBuf)
 	chunk := (*chunkBuf)[:n]
@@ -163,11 +178,15 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 	n = copy(p, plain)
 	if n < len(plain) {
 		r.buf = plain[n:]
+		r.chunkBuf = chunkBuf
 	}
 	return n, nil
 }
 
-func (r *chunkDecryptReader) Close() error { return r.r.Close() }
+func (r *chunkDecryptReader) Close() error {
+	r.putChunkBuf()
+	return r.r.Close()
+}
 
 type chunkEncryptReader struct {
 	r        io.Reader

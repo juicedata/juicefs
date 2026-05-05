@@ -18,15 +18,15 @@ cd juicefs/sdk/python
 
 ### Direct Compilation
 
-Direct compilation requires `go1.20+` and `python3` environments.
+Direct compilation requires `go1.20+`, `make`, and `python3` environments.
 
-#### Step 1: Compile libjfs.so
+#### Step 1: Compile libjfs
 
 ```bash
-go build -buildmode c-shared -ldflags="-s -w" -o juicefs/juicefs/libjfs.so ../java/libjfs
+make libjfs
 ```
 
-The compiled `libjfs.so` and `libjfs.h` files will be in the `sdk/python/juicefs/juicefs` directory.
+The compiled native library (`libjfs.so` on Linux, `libjfs.dylib` on macOS, or `libjfs.dll` on Windows) and `libjfs.h` file will be in the `sdk/python/juicefs/juicefs` directory.
 
 #### Step 2: Compile Python SDK
 

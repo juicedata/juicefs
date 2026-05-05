@@ -906,7 +906,7 @@ func jfs_is_superuser(h int64, user *C.char, groups *C.char) int32 {
 }
 
 //export jfs_term
-func jfs_term(pid int64, h int64) int32 {
+func jfs_term(pid int64, h int64, terminate C.int) int32 {
 	w := F(h)
 	if w == nil {
 		return 0
@@ -943,9 +943,11 @@ func jfs_term(pid int64, h int64) int32 {
 					activefs[k] = ws[:len(ws)-1]
 				} else {
 					_ = w.Flush()
-					// don't close the filesystem, so it can be re-used later
-					// w.Close()
-					// delete(activefs, name)
+					if terminate != 0 {
+						w.Close()
+						delete(activefs, k)
+					}
+					// Otherwise, don't close the filesystem, so it can be re-used later
 				}
 			}
 		}
@@ -1579,6 +1581,7 @@ func jfs_chown(pid int64, h int64, cpath *C.char, uid uint32, gid uint32) int32 
 	if err != 0 {
 		return errno(err)
 	}
+	defer f.Close(w.withPid(pid))
 	return errno(f.Chown(w.withPid(pid), uid, gid))
 }
 

@@ -22,7 +22,11 @@ package meta
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/url"
+	"os"
+	"strconv"
+	"sync/atomic"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 )
@@ -34,10 +38,12 @@ func init() {
 
 type fdbTxn struct {
 	fdb.Transaction
+	c *fdbClient
 }
 
 type fdbClient struct {
 	client fdb.Database
+	nextid uint64
 }
 
 func newFdbClient(addr string) (tkvClient, error) {
@@ -54,7 +60,7 @@ func newFdbClient(addr string) (tkvClient, error) {
 		return nil, fmt.Errorf("open database: %s", err)
 	}
 	// TODO: database options
-	return withPrefix(&fdbClient{db}, append([]byte(u.Query().Get("prefix")), 0xFD)), nil
+	return withPrefix(&fdbClient{db, rand.Uint64()}, append([]byte(u.Query().Get("prefix")), 0xFD)), nil
 }
 
 func (c *fdbClient) name() string {
@@ -71,7 +77,7 @@ func (c *fdbClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry i
 
 func (c *fdbClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) error {
 	_, err := c.client.Transact(func(t fdb.Transaction) (interface{}, error) {
-		e := f(&kvTxn{&fdbTxn{t}, retry})
+		e := f(&kvTxn{&fdbTxn{t, c}, retry})
 		return nil, e
 	})
 	return err
@@ -134,6 +140,36 @@ func (c *fdbClient) shouldRetry(err error) bool {
 }
 
 func (c *fdbClient) gc() {}
+
+func (c *fdbClient) getId() uint64 {
+	return atomic.AddUint64(&c.nextid, 1)
+}
+
+func (c *fdbClient) rewind(id uint64, factor int) uint64 {
+	shift := uint64(1e6)
+	if s := os.Getenv("JFS_TKV_REWIND"); s != "" {
+		if parsed, err := strconv.ParseUint(s, 10, 64); err == nil && parsed > 0 {
+			shift = parsed
+		}
+	}
+	if factor > 1 {
+		shift *= uint64(factor)
+	}
+	if id > shift {
+		return id - shift
+	}
+	return 1
+}
+
+func (tx *fdbTxn) id() uint64 {
+	ver, err := tx.GetReadVersion().Get()
+	if err != nil {
+		logger.Debugf("get read version: %s", err)
+		return 0
+	}
+	// add logical id to avoid conflict between concurrent transactions
+	return uint64(ver)*1e3 + tx.c.getId()%1e3
+}
 
 func (tx *fdbTxn) get(key []byte) []byte {
 	return tx.Get(fdb.Key(key)).MustGet()
