@@ -153,15 +153,23 @@ juicefs format --storage s3 \
 
 上例中的 `/etc/certs` 只是一个目录，实际使用时请替换为你的证书目录，可以使用相对路径或绝对路径。
 
+### Valkey
+
+[Valkey](https://valkey.io) 是 Redis 的一个开源分支，旨在保留该项目由社区驱动的治理模式，同时保持与 Redis 生态系统的高度兼容。Valkey 专注于在中立的方式下维护稳定性、提升性能并持续创新，从而为依赖 Redis 兼容工作负载的用户确保长期可用性。
+
+在用于 JuiceFS 的元数据存储引擎时，Valkey 的功能与 Redis 完全相同。请参考 Valkey 的[文档](https://valkey.io/topics/installation)进行安装以及了解其他相关内容，同时参考 [Redis](#redis) 章节了解使用方法。
+
 ### KeyDB
 
 [KeyDB](https://keydb.dev) 是 Redis 的开源分支，在开发上保持与 Redis 主线对齐。KeyDB 在 Redis 的基础上实现了多线程支持、更好的内存利用率和更大的吞吐量，另外还支持 [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication)，即 Active Active（双活）功能。
 
+[KeyDB](https://keydb.dev) 是 Redis 的一个开源分支，其开发目的是与 Redis 社区保持一致。KeyDB 在 Redis 的基础上实现了多线程支持、更优的内存利用率以及更高的吞吐量，同时还支持 Active Replication（也称为 Active-Active）。KeyDB [目前不再积极维护](https://github.com/Snapchat/KeyDB/issues/895)，并且被认为与 Redis 6 版本兼容。
+
 :::note 注意
-KeyDB 的数据复制是异步的，使用 Active Active（双活）功能可能导致数据一致性问题，请务必充分验证、谨慎使用！
+KeyDB 的 Active Replication 功能是异步复制的，可能会导致一致性问题，请务必充分验证、谨慎使用！
 :::
 
-在用于 JuiceFS 元数据存储时，KeyDB 与 Redis 的用法完全一致，这里不再赘述，请参考 [Redis](#redis) 部分使用。
+在用于 JuiceFS 的元数据存储引擎时，KeyDB 的功能与 Redis 完全相同。请参考 KeyDB 的[文档](https://docs.keydb.dev/docs)进行安装以及了解其他相关内容，同时参考 [Redis](#redis) 章节了解使用方法。
 
 ## 键值数据库
 
