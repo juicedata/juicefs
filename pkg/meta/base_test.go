@@ -5570,14 +5570,8 @@ func testSustainedInodeQuotaDecrement(t *testing.T, m Meta, ctx Context, parent 
 		t.Fatalf("group quota inode should increase by 1 after create: before=%d after=%d", gidBefore, gidAfterCreate)
 	}
 
-	if st := m.Open(ctx, inode, syscall.O_RDONLY, &attr); st != 0 {
-		t.Fatalf("Open sustained file: %s", st)
-	}
 	if st := m.Unlink(ctx, parent, "sustained_inode_quota_file", true); st != 0 {
 		t.Fatalf("Unlink sustained file: %s", st)
-	}
-	if err := m.getBase().en.doDeleteSustainedInode(m.getBase().sid, inode); err != nil {
-		t.Fatalf("Delete sustained inode: %s", err)
 	}
 	if st := m.Close(ctx, inode); st != 0 {
 		t.Fatalf("Close sustained file: %s", st)
