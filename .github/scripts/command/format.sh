@@ -137,17 +137,19 @@ prepare_sync_source_tree()
 
 skip_test_mount_process_exit_on_format()
 {
+    local run_id=${RANDOM}
+    local mount_point="/tmp/myjfs${run_id}"
     prepare_test
-    echo "round $i"
-    ./juicefs format $META_URL volume-$i
-    ./juicefs mount -d $META_URL /tmp/myjfs$i_$j --no-usage-report
-    cd /tmp/myjfs$i_$j
+    echo "round $run_id"
+    ./juicefs format $META_URL volume-$run_id
+    ./juicefs mount -d $META_URL "$mount_point" --no-usage-report
+    cd "$mount_point"
     bash -c 'for k in {1..300}; do echo abc>$k; sleep 0.2; done' || true & 
     cd -
     sleep 3
     uuid=$(./juicefs status $META_URL | grep UUID | cut -d '"' -f 4) 
     ./juicefs destroy --force $META_URL $uuid
-    ./juicefs format $META_URL new-volume-$i 
+    ./juicefs format $META_URL new-volume-$run_id 
     sleep 15   
     ps -ef | grep juicefs
     # TODO: fix the bug and remove the following line
@@ -159,11 +161,12 @@ skip_test_mount_process_exit_on_format()
 
 test_format_sftp_object()
 {
+    local run_id=${RANDOM}
     docker run -d --name sftp -p 2222:22 juicedata/ci-sftp
     prepare_test
     CONTAINER_IP=$(docker container inspect sftp --format '{{ .NetworkSettings.IPAddress }}')
-    echo "round $i"
-    ./juicefs format $META_URL volume-$i --storage sftp \
+    echo "round $run_id"
+    ./juicefs format $META_URL volume-$run_id --storage sftp \
     --bucket $CONTAINER_IP:myjfs/ \
     --access-key testUser1 \
     --secret-key password
@@ -188,7 +191,7 @@ test_format_sftp_object()
     done
     uuid=$(./juicefs status $META_URL | grep UUID | cut -d '"' -f 4)
     ./juicefs destroy --force $META_URL $uuid
-    ./juicefs format $META_URL new-volume-$i
+    ./juicefs format $META_URL new-volume-$run_id
 }
 
 test_format_cifs_objbench_matrix()
