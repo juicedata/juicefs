@@ -174,7 +174,7 @@ When being used as the metadata storage engine for JuiceFS, Valkey functions the
 
 ### KeyDB
 
-[KeyDB](https://keydb.dev) is an open-source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis and also supports [Active Replication](https://docs.keydb.dev/docs/active-rep) (also known as Active-Active). KeyDB is [not actively maintained](https://github.com/Snapchat/KeyDB/issues/895) at the moment, and it is considered to be compatible with Redis version 6.
+[KeyDB](https://keydb.dev) is an open-source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis and also supports [Active Replication](https://docs.keydb.dev/docs/active-rep) (also known as Active-Active). KeyDB is [not actively maintained](https://github.com/Snapchat/KeyDB/issues/895) at the moment, and it is considered compatible with Redis version 6.
 
 :::note
 The Active Replication feature is asynchronous and may cause consistency issues, so use with caution!
@@ -514,7 +514,7 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 :::note
 
 1. Don't leave out the `()` brackets on either side of the URL.
-2. Special characters in passwords do not require url encoding
+2. Special characters in passwords do not require URL encoding
 
 :::
 
@@ -656,7 +656,7 @@ juicefs format \
 1. JuiceFS uses public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) by default, if you want to use a `non-public schema`,  you need to specify `search_path` in the connection string parameter. e.g `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
 2. If the `public schema` is not the first hit in the `search_path` configured on the PostgreSQL server, the `search_path` parameter must be explicitly set in the connection string.
 3. The `search_path` connection parameter can be set to multiple schemas natively, but currently JuiceFS only supports setting one. `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` will be considered illegal.
-4. Special characters in the password need to be replaced by url encoding. For example, `|` needs to be replaced with `%7C`.
+4. Special characters in the password need to be replaced by URL encoding. For example, `|` needs to be replaced with `%7C`.
 
 :::
 

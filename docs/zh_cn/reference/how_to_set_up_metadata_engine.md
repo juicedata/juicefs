@@ -129,7 +129,7 @@ juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 
 JuiceFS 同时支持 Redis 的 TLS 单向加密认证和 mTLS 双向加密认证连接。通过 TLS 或 mTLS 连接到 Redis 时均使用 `rediss://` 协议头，但是在使用 TLS 单向加密认证时，不需要指定客户端证书和私钥。
 
-:::note
+:::note 注意
 对 Redis mTLS 功能的支持需要使用 1.1.0 及以上版本的 JuiceFS
 :::
 
@@ -497,7 +497,7 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 :::note 注意
 
 1. 不要漏掉 URL 两边的 `()` 括号
-2. 密码中的特殊字符不需要进行 url 编码
+2. 密码中的特殊字符不需要进行 URL 编码
 
 :::
 
@@ -621,12 +621,12 @@ juicefs format \
     pics
 ```
 
-:::note 说明
+:::note 注意
 
 1. JuiceFS 默认使用的 public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) ，如果要使用非 `public schema`，需要在连接字符串中指定 `search_path` 参数，例如 `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
 2. 如果 `public schema` 并非是 PostgreSQL 服务端配置的 `search_path` 中第一个命中的，则必须在连接字符串中明确设置 `search_path` 参数
 3. `search_path` 连接参数原生可以设置为多个 schema，但是目前 JuiceFS 仅支持设置一个。`postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` 将被认为不合法
-4. 密码中的特殊字符需要进行 url 编码，例如 `|` 需要编码为`%7C`。
+4. 密码中的特殊字符需要进行 URL 编码，例如 `|` 需要编码为`%7C`。
 
 :::
 
