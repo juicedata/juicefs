@@ -161,7 +161,7 @@ juicefs format --storage s3 \
 
 ### KeyDB
 
-[KeyDB](https://keydb.dev) 是 Redis 的一个开源分支，其开发目的是与 Redis 社区保持一致。KeyDB 在 Redis 的基础上实现了多线程支持、更优的内存利用率以及更高的吞吐量，同时还支持 [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication)，即 Active-Active（双活）功能。KeyDB [目前不再积极维护](https://github.com/Snapchat/KeyDB/issues/895)，并且被认为与 Redis 6 版本兼容。
+[KeyDB](https://keydb.dev) 是 Redis 的一个开源分支，其开发目的是与 Redis 社区保持一致。KeyDB 在 Redis 的基础上实现了多线程支持、更优的内存利用率以及更高的吞吐量，同时还支持 [Active Replication](https://docs.keydb.dev/docs/active-rep)，即 Active-Active（双活）功能。KeyDB 被认为与 Redis 6 版本兼容，但目前[不再被其社区积极维护](https://github.com/Snapchat/KeyDB/issues/895)。
 
 :::note 注意
 KeyDB 的 Active Replication 功能是异步复制的，可能会导致一致性问题，请务必充分验证、谨慎使用！

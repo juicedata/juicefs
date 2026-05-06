@@ -174,7 +174,7 @@ When being used as the metadata storage engine for JuiceFS, Valkey functions the
 
 ### KeyDB
 
-[KeyDB](https://keydb.dev) is an open-source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis and also supports [Active Replication](https://docs.keydb.dev/docs/active-rep) (also known as Active-Active). KeyDB is [not actively maintained](https://github.com/Snapchat/KeyDB/issues/895) at the moment, and it is considered compatible with Redis version 6.
+[KeyDB](https://keydb.dev) is an open-source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis and also supports [Active Replication](https://docs.keydb.dev/docs/active-rep) (also known as Active-Active). KeyDB is considered compatible with Redis version 6, but it is [not actively maintained by its community](https://github.com/Snapchat/KeyDB/issues/895) at the moment.
 
 :::note
 The Active Replication feature is asynchronous and may cause consistency issues, so use with caution!
