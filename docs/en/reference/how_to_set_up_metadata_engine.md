@@ -166,15 +166,21 @@ When specifying options in a URL, start with the `?` symbol and use the `&` symb
 
 In the above example, `/etc/certs` is just a directory name. Replace it with your actual certificate directory when using it, which can be a relative or absolute path.
 
+### Valkey
+
+[Valkey](https://valkey.io) is an open-source fork of Redis, created to preserve the project's community-driven governance while remaining fully compatible with the Redis ecosystem. Valkey focuses on maintaining stability, improved performance, and continued innovation under a neutral approach, ensuring long-term availability for users who rely on Redis-compatible workloads.
+
+When being used as the metadata storage engine for JuiceFS, Valkey functions the same way as Redis. Please refer to Valkey's [documentation](https://valkey.io/topics/installation) for installation and other aspects, as well as the [Redis](#redis) section for usage.
+
 ### KeyDB
 
-[KeyDB](https://keydb.dev) is an open source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis, and also supports [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication), i.e., the Active Active feature.
+[KeyDB](https://keydb.dev) is an open-source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis and also supports [Active Replication](https://docs.keydb.dev/docs/active-rep) (also known as Active-Active).
 
 :::note
-Same as Redis, the Active Replication is asynchronous, which may cause consistency issues. So use with caution!
+Similar to Redis, Active Replication is asynchronous and may cause consistency issues, so use with caution! Also note that Active-Active replication is only available in [Redis Cloud](https://redis.io/cloud) or [Redis Software](https://redis.io/software) (Redis' enterprise offering).
 :::
 
-When being used as metadata storage engine for Juice, KeyDB is used exactly in the same way as Redis. So please refer to the [Redis](#redis) section for usage.
+When being used as the metadata storage engine for JuiceFS, KeyDB functions the same way as Redis. Please refer to KeyDB's [documentation](https://docs.keydb.dev/docs) for installation and other aspects, as well as the [Redis](#redis) section for usage.
 
 ## Key-Value Database
 
