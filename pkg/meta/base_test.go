@@ -5347,6 +5347,10 @@ func testUserGroupQuota(t *testing.T, m Meta) {
 		testBatchUnlinkWithUserGroupQuota(t, m, ctx, parent, uid, gid)
 	})
 
+	t.Run("SustainedInodeQuotaDecrement", func(t *testing.T) {
+		testSustainedInodeQuotaDecrement(t, m, ctx, parent, uid, gid)
+	})
+
 	cleanupQuotaTest(ctx, m, parent, uid, gid)
 
 }
@@ -5518,6 +5522,75 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", uid), UserQuotaType, nil, false, false, false)
 	m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", gid), GroupQuotaType, nil, false, false, false)
 	m.HandleQuota(ctx, QuotaDel, parentPath, DirQuotaType, nil, false, false, false)
+}
+
+func testSustainedInodeQuotaDecrement(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
+	format := m.getBase().getFormat()
+	format.UserGroupQuota = true
+
+	uidKey := fmt.Sprintf("%d", uid)
+	gidKey := fmt.Sprintf("%d", gid)
+	if err := m.HandleQuota(ctx, QuotaSet, uidKey, UserQuotaType, map[string]*Quota{uidKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("Set user quota: %s", err)
+	}
+	if err := m.HandleQuota(ctx, QuotaSet, gidKey, GroupQuotaType, map[string]*Quota{gidKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("Set group quota: %s", err)
+	}
+	m.getBase().loadQuotas()
+
+	getUsedInodes := func(qtype uint32, key string) int64 {
+		m.getBase().doFlushQuotas()
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, key, qtype, qs, false, false, false); err != nil {
+			t.Fatalf("Get quota %d/%s: %s", qtype, key, err)
+		}
+		q := qs[key]
+		if q == nil {
+			t.Fatalf("quota %d/%s not found", qtype, key)
+		}
+		return q.UsedInodes
+	}
+
+	uidBefore := getUsedInodes(UserQuotaType, uidKey)
+	gidBefore := getUsedInodes(GroupQuotaType, gidKey)
+
+	ownerCtx := &testContext{Context: context.Background(), uid: uid, gid: gid}
+	var inode Ino
+	var attr Attr
+	if st := m.Create(ownerCtx, parent, "sustained_inode_quota_file", 0644, 0, 0, &inode, &attr); st != 0 {
+		t.Fatalf("Create sustained file: %s", st)
+	}
+
+	uidAfterCreate := getUsedInodes(UserQuotaType, uidKey)
+	gidAfterCreate := getUsedInodes(GroupQuotaType, gidKey)
+	if uidAfterCreate != uidBefore+1 {
+		t.Fatalf("user quota inode should increase by 1 after create: before=%d after=%d", uidBefore, uidAfterCreate)
+	}
+	if gidAfterCreate != gidBefore+1 {
+		t.Fatalf("group quota inode should increase by 1 after create: before=%d after=%d", gidBefore, gidAfterCreate)
+	}
+
+	if st := m.Open(ctx, inode, syscall.O_RDONLY, &attr); st != 0 {
+		t.Fatalf("Open sustained file: %s", st)
+	}
+	if st := m.Unlink(ctx, parent, "sustained_inode_quota_file"); st != 0 {
+		t.Fatalf("Unlink sustained file: %s", st)
+	}
+	if st := m.Close(ctx, inode); st != 0 {
+		t.Fatalf("Close sustained file: %s", st)
+	}
+
+	uidAfterDelete := getUsedInodes(UserQuotaType, uidKey)
+	gidAfterDelete := getUsedInodes(GroupQuotaType, gidKey)
+	if uidAfterDelete != uidBefore {
+		t.Fatalf("user quota inode should return to baseline after sustained delete: before=%d after=%d", uidBefore, uidAfterDelete)
+	}
+	if gidAfterDelete != gidBefore {
+		t.Fatalf("group quota inode should return to baseline after sustained delete: before=%d after=%d", gidBefore, gidAfterDelete)
+	}
+
+	m.HandleQuota(ctx, QuotaDel, uidKey, UserQuotaType, nil, false, false, false)
+	m.HandleQuota(ctx, QuotaDel, gidKey, GroupQuotaType, nil, false, false, false)
 }
 
 func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
