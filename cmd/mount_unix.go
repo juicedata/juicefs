@@ -57,6 +57,8 @@ import (
 
 var mountPid int
 
+const fuseConnectionsPath = "/sys/fs/fuse/connections"
+
 func showThreadStack(agentAddr string) {
 	if agentAddr == "" {
 		return
@@ -95,25 +97,29 @@ func killMountProcess(pid int, dev uint64, lastActive *int64) {
 			return
 		}
 	}
-	if runtime.GOOS == "linux" && dev > 0 {
-		tids, _ := os.ReadDir(fmt.Sprintf("/proc/%d/task", pid))
-		for _, tid := range tids {
-			stack, err := os.ReadFile(fmt.Sprintf("/proc/%d/task/%s/stack", pid, tid))
-			if err == nil && bytes.Contains(stack, []byte("fuse_simple_request")) {
-				logger.Errorf("find deadlock in mount process, abort it: %s", string(stack))
-				if fuseFd > 0 {
-					_ = syscall.Close(fuseFd)
-					fuseFd = 0
-				}
-				f, err := os.OpenFile(fmt.Sprintf("/sys/fs/fuse/connections/%d/abort", devMinor(dev)), os.O_WRONLY, 0777)
-				if err != nil {
-					logger.Warn(err)
-				} else {
-					_, _ = f.WriteString("1")
-					_ = f.Close()
-				}
-				break
+	if runtime.GOOS != "linux" || dev == 0 {
+		return
+	}
+	conn := devMinor(dev)
+	data, err := os.ReadFile(filepath.Join(fuseConnectionsPath, strconv.FormatUint(uint64(conn), 10), "waiting"))
+	if err == nil {
+		waiting, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err == nil && waiting > 0 {
+			if fuseFd > 0 {
+				_ = syscall.Close(fuseFd)
+				fuseFd = 0
 			}
+			f, err := os.OpenFile(filepath.Join(fuseConnectionsPath, strconv.FormatUint(uint64(conn), 10), "abort"), os.O_WRONLY, 0)
+			if err != nil {
+				logger.Warn(err)
+				return
+			}
+			defer func() { _ = f.Close() }()
+			if _, err = f.WriteString("1"); err != nil {
+				logger.Warn(err)
+			}
+		} else if err != nil {
+			logger.Warnf("watchdog: read waiting FUSE requests for connection %d: %v; aborting anyway", conn, err)
 		}
 	}
 }
