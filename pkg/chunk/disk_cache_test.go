@@ -166,7 +166,7 @@ func TestScanCached(t *testing.T) {
 		}
 	}
 	defer os.RemoveAll(rawDir)
-	cache.scanCached()
+	cache.scanCached(true)
 	require.Equal(t, num, cache.keys.len())
 }
 
@@ -461,7 +461,7 @@ func TestAtimeNotLost(t *testing.T) {
 		if atimeMem == 0 {
 			t.Fatalf("CacheStore key %s atime lost", key)
 		}
-		s.scanCached() // should use atime from memory
+		s.scanCached(false) // should use atime from memory
 		atimeAfterScan := s.keys.peekAtime(s.getCacheKey(key))
 		if atimeAfterScan != atimeMem {
 			t.Fatalf("CacheStore key %s atime lost after scan, before: %d, after: %d", key, atimeMem, atimeAfterScan)

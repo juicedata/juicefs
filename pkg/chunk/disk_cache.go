@@ -411,11 +411,11 @@ func (cache *cacheStore) refreshCacheKeys() {
 	if cache.scanInterval < 0 {
 		return
 	}
-	cache.scanCached()
+	cache.scanCached(true)
 	if cache.scanInterval > 0 {
 		for {
 			time.Sleep(cache.scanInterval)
-			cache.scanCached()
+			cache.scanCached(false)
 		}
 	}
 }
@@ -916,7 +916,7 @@ func (cache *cacheStore) uploadStaging() {
 	}
 }
 
-func (cache *cacheStore) scanCached() {
+func (cache *cacheStore) scanCached(fast bool) {
 	cache.Lock()
 	cache.used = 0
 	// atime in memory is more accurate than on disk, inherit it for the next round
@@ -929,7 +929,16 @@ func (cache *cacheStore) scanCached() {
 
 	cachePrefix := filepath.Join(cache.dir, cacheDir)
 	logger.Debugf("Scan %s to find cached blocks", cachePrefix)
-	_ = fastwalk.Walk(nil, cachePrefix, func(path string, d fs.DirEntry, err error) error {
+
+	walkDir := func(path string, walkFn fs.WalkDirFunc) error {
+		if fast {
+			return fastwalk.Walk(nil, path, walkFn)
+		} else {
+			return filepath.WalkDir(path, walkFn)
+		}
+	}
+
+	_ = walkDir(cachePrefix, func(path string, d fs.DirEntry, err error) error {
 		// this func should be concurrent safe
 		if err != nil {
 			return nil
