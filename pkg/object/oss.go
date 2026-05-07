@@ -407,12 +407,12 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		}
 		if strings.HasSuffix(domain, ".aliyuncs.com") {
 			if strings.Contains(domain, ".privatelink.") {
-				// <id>.oss.<region>.privatelink.aliyuncs.com
+				// domain=https://oss.cn-shanghai.privatelink.aliyuncs.com
 				parts := strings.Split(domain, ".")
 				if len(parts) < 3 {
 					return nil, fmt.Errorf("invalid private link endpoint: %q", domain)
 				}
-				regionID = parts[2]
+				regionID = parts[1]
 				useV4 = true
 			} else {
 				// oss-<region>.aliyuncs.com
