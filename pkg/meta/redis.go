@@ -3064,7 +3064,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
-		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, 0)
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, -1)
 	}
 	return err
 }
