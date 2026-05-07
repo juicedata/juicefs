@@ -437,6 +437,8 @@ run_as_user_cmd()
     return 1
 }
 
+
+
 set_quota_by_username()
 {
     username=$1
@@ -918,7 +920,7 @@ run_remove_and_restore_uid_gid_case(){
     grep -i "Disk quota exceeded" error.log || (echo "uid trash-reserved quota after restore check failed" && exit 1)
 
     ./juicefs rmr /jfs/.trash
-    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    sleep $((DIR_QUOTA_FLUSH_INTERVAL+HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     run_as_user_cmd "$TEST_USER_1" "dd if=/dev/zero of=/jfs/rrq/uid_after_rm bs=1G count=1"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_1" "echo a | tee -a /jfs/rrq/uid_after_rm" 2>error.log && echo "uid quota should block append after filling freed space" && exit 1 || true
@@ -950,7 +952,7 @@ run_remove_and_restore_uid_gid_case(){
     grep -i "Disk quota exceeded" error.log || (echo "gid trash-reserved quota after restore check failed" && exit 1)
 
     ./juicefs rmr /jfs/.trash
-    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    sleep $((DIR_QUOTA_FLUSH_INTERVAL+HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/rrq/gid_after_rm bs=1G count=1"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_2" "echo a | tee -a /jfs/rrq/gid_after_rm" 2>error.log && echo "gid quota should block append after filling freed space" && exit 1 || true
