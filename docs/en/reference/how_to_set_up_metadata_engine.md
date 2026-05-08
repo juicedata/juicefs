@@ -25,7 +25,7 @@ When the average file is larger (over 64MB), or the file is frequently modified 
 
 When you need to migrate between two types of metadata engines, you can use this method to estimate the required storage space. For example, if you want to migrate the metadata engine from a relational database (MySQL) to a key-value database (Redis), and the current usage of MySQL is 30GB, then the target Redis needs to prepare at least 15GB or more of memory. The reverse is also true.
 
-## Redis compatible database
+## Redis-compatible database
 
 ### Redis
 
