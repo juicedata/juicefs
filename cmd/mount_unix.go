@@ -105,10 +105,12 @@ func killMountProcess(pid int, dev uint64, lastActive *int64) {
 	if err == nil {
 		waiting, err := strconv.Atoi(strings.TrimSpace(string(data)))
 		if err == nil && waiting > 0 {
+			fuseMu.Lock()
 			if fuseFd > 0 {
 				_ = syscall.Close(fuseFd)
 				fuseFd = 0
 			}
+			fuseMu.Unlock()
 			f, err := os.OpenFile(filepath.Join(fuseConnectionsPath, strconv.FormatUint(uint64(conn), 10), "abort"), os.O_WRONLY, 0)
 			if err != nil {
 				logger.Warn(err)
@@ -119,7 +121,7 @@ func killMountProcess(pid int, dev uint64, lastActive *int64) {
 				logger.Warn(err)
 			}
 		} else if err != nil {
-			logger.Warnf("watchdog: read waiting FUSE requests for connection %d: %v; aborting anyway", conn, err)
+			logger.Warnf("watchdog: failed to parse waiting FUSE requests for connection %d: %v; abort not triggered", conn, err)
 		}
 	}
 }
