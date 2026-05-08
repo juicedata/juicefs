@@ -25,7 +25,7 @@ When the average file is larger (over 64MB), or the file is frequently modified 
 
 When you need to migrate between two types of metadata engines, you can use this method to estimate the required storage space. For example, if you want to migrate the metadata engine from a relational database (MySQL) to a key-value database (Redis), and the current usage of MySQL is 30GB, then the target Redis needs to prepare at least 15GB or more of memory. The reverse is also true.
 
-## Redis Compatible Database
+## Redis compatible database
 
 ### Redis
 
@@ -182,7 +182,7 @@ The Active Replication feature is asynchronous and may cause consistency issues,
 
 When being used as the metadata storage engine for JuiceFS, KeyDB functions the same way as Redis. Please refer to KeyDB's [documentation](https://docs.keydb.dev/docs) for installation and other aspects, as well as the [Redis](#redis) section for usage.
 
-## Key-Value Database
+## Key-value database
 
 ### BadgerDB
 
@@ -219,7 +219,7 @@ BadgerDB only allows single-process access. If you need to perform operations li
 By using the official tool TiUP, you can easily build a local playground for testing (refer [here](https://tikv.org/docs/latest/concepts/tikv-in-5-minutes) for details). Production environment generally requires at least three hosts to store three data replicas (refer to the [official document](https://tikv.org/docs/latest/deploy/install/install) for all deployment steps).
 
 :::note
-It's recommended to use dedicated TiKV 5.0+ cluster as the metadata engine for JuiceFS.
+It is recommended to use dedicated TiKV 5.0+ cluster as the metadata engine for JuiceFS.
 :::
 
 #### Create a file system
@@ -477,7 +477,7 @@ juicefs.fdb mount -d \
     /mnt/jfs
 ```
 
-## SQL Database
+## SQL database
 
 Each database can only be used by one JuiceFS file system by default. If you want multiple file systems to share a database, you can achieve this by adding a `table_prefix` <VersionAdd>1.3</VersionAdd> query parameter in the META-URL to add different table prefixes for different file systems.
 For example: `mysql://user:mypassword@(192.168.1.6:3306)/juicefs?table_prefix=volume1`
@@ -513,8 +513,8 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 
 :::note
 
-1. Don't leave out the `()` brackets on either side of the URL.
-2. Special characters in passwords do not require URL encoding
+1. Don not leave out the `()` brackets on either side of the URL.
+2. Special characters in passwords do not require URL encoding.
 
 :::
 
