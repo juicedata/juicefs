@@ -25,7 +25,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/viki-org/dnscache"
@@ -34,53 +36,109 @@ import (
 var resolver = dnscache.New(time.Minute)
 var httpClient *http.Client
 
+// roundRobinTransport rotates requests across N transports to spread keep-alive
+// connections across LB backends. Opt-in via JFS_HTTP_TRANSPORT_POOL=N.
+type roundRobinTransport struct {
+	transports []*http.Transport
+	counter    uint64
+}
+
+func (rt *roundRobinTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	idx := atomic.AddUint64(&rt.counter, 1) % uint64(len(rt.transports))
+	return rt.transports[idx].RoundTrip(req)
+}
+
+func (rt *roundRobinTransport) CloseIdleConnections() {
+	for _, t := range rt.transports {
+		t.CloseIdleConnections()
+	}
+}
+
+func dialWithResolver(network, address string) (net.Conn, error) {
+	separator := strings.LastIndex(address, ":")
+	host := address[:separator]
+	port := address[separator:]
+	ips, err := resolver.Fetch(host)
+	if err != nil {
+		return nil, err
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("No such host: %s", host)
+	}
+	var conn net.Conn
+	n := len(ips)
+	first := rand.Intn(n)
+	dialer := &net.Dialer{Timeout: time.Second * 10}
+	for i := 0; i < n; i++ {
+		ip := ips[(first+i)%n]
+		address = ip.String()
+		if port != "" {
+			address = net.JoinHostPort(address, port[1:])
+		}
+		conn, err = dialer.Dial(network, address)
+		if err == nil {
+			return conn, nil
+		}
+	}
+	return nil, err
+}
+
+func newHTTPTransport(tlsCfg *tls.Config) *http.Transport {
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		TLSHandshakeTimeout:   time.Second * 20,
+		ResponseHeaderTimeout: time.Second * 30,
+		IdleConnTimeout:       time.Second * 300,
+		MaxIdleConnsPerHost:   500,
+		ReadBufferSize:        32 << 10,
+		WriteBufferSize:       32 << 10,
+		Dial:                  dialWithResolver,
+		DisableCompression:    true,
+		TLSClientConfig:       tlsCfg,
+	}
+}
+
+// httpTransportPoolSize reads JFS_HTTP_TRANSPORT_POOL (1..64); defaults to 1.
+func httpTransportPoolSize() int {
+	if v := os.Getenv("JFS_HTTP_TRANSPORT_POOL"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 64 {
+			return n
+		}
+	}
+	return 1
+}
+
 func init() {
+	tlsCfg := &tls.Config{}
+	n := httpTransportPoolSize()
+	var transport http.RoundTripper
+	if n == 1 {
+		transport = newHTTPTransport(tlsCfg)
+	} else {
+		transports := make([]*http.Transport, n)
+		for i := range transports {
+			transports[i] = newHTTPTransport(tlsCfg)
+		}
+		transport = &roundRobinTransport{transports: transports}
+	}
 	httpClient = &http.Client{
-		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			TLSHandshakeTimeout:   time.Second * 20,
-			ResponseHeaderTimeout: time.Second * 30,
-			IdleConnTimeout:       time.Second * 300,
-			MaxIdleConnsPerHost:   500,
-			ReadBufferSize:        32 << 10,
-			WriteBufferSize:       32 << 10,
-			Dial: func(network string, address string) (net.Conn, error) {
-				separator := strings.LastIndex(address, ":")
-				host := address[:separator]
-				port := address[separator:]
-				ips, err := resolver.Fetch(host)
-				if err != nil {
-					return nil, err
-				}
-				if len(ips) == 0 {
-					return nil, fmt.Errorf("No such host: %s", host)
-				}
-				var conn net.Conn
-				n := len(ips)
-				first := rand.Intn(n)
-				dialer := &net.Dialer{Timeout: time.Second * 10}
-				for i := 0; i < n; i++ {
-					ip := ips[(first+i)%n]
-					address = ip.String()
-					if port != "" {
-						address = net.JoinHostPort(address, port[1:])
-					}
-					conn, err = dialer.Dial(network, address)
-					if err == nil {
-						return conn, nil
-					}
-				}
-				return nil, err
-			},
-			DisableCompression: true,
-			TLSClientConfig:    &tls.Config{},
-		},
-		Timeout: time.Hour,
+		Transport: transport,
+		Timeout:   time.Hour,
 	}
 }
 
 func GetHttpClient() *http.Client {
 	return httpClient
+}
+
+// GetHttpTransport returns a concrete *http.Transport for SDKs that don't
+// accept http.RoundTripper; this bypasses the round-robin pool, so prefer
+// GetHttpClient when possible.
+func GetHttpTransport() *http.Transport {
+	if rr, ok := httpClient.Transport.(*roundRobinTransport); ok {
+		return rr.transports[0]
+	}
+	return httpClient.Transport.(*http.Transport)
 }
 
 func cleanup(response *http.Response) {
