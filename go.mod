@@ -102,7 +102,7 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
 	pgregory.net/rapid v0.5.3
-	storj.io/uplink v1.14.0
+	storj.io/uplink v1.14.1
 	xorm.io/xorm v1.0.7
 )
 
@@ -334,7 +334,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/fileutil v1.0.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
-	storj.io/common v0.0.0-20260225132117-99155641c30a // indirect
+	storj.io/common v0.0.0-20260424095045-b08642b6e25d // indirect
 	storj.io/drpc v0.0.35-0.20250513201419-f7819ea69b55 // indirect
 	storj.io/eventkit v0.0.0-20250410172343-61f26d3de156 // indirect
 	storj.io/infectious v0.0.2 // indirect
