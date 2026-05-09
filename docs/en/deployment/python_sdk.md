@@ -26,7 +26,7 @@ Direct compilation requires `go1.20+`, `make`, and `python3` environments.
 make libjfs
 ```
 
-The compiled native library (`libjfs.so` on Linux, `libjfs.dylib` on macOS, or `libjfs.dll` on Windows) and `libjfs.h` file will be in the `sdk/python/juicefs/juicefs` directory.
+After compilation, the native library (`libjfs.so` on Linux, `libjfs.dylib` on macOS, or `libjfs.dll` on Windows) and the `libjfs.h` file are placed in the `sdk/python/juicefs/juicefs` directory.
 
 #### Step 2: Compile Python SDK
 

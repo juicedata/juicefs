@@ -770,9 +770,9 @@ Considering the convenience of use, JuiceFS packages all Ranger dependencies int
 
 ### 3. Configure Kerberos
 
-When Kerberos is enabled, the JuiceFS client used by business applications cannot download Ranger security policies. You need to configure `policy.download.auth.users` and `tag.download.auth.users` in the Ranger Admin Web UI under the HDFS Service to grant the specified users the permission to download security policies. Multiple users are separated by commas `,`.
+When Kerberos is enabled, the JuiceFS client used by business applications cannot download Ranger security policies. You need to configure `policy.download.auth.users` and `tag.download.auth.users` in the Ranger Admin Web UI under the HDFS Service to grant specified users the permission to download security policies. Multiple users should be separated by commas (,).
 
-After completing the configuration, you also need to use that user to update the policies stored in JuiceFS.
+After completing the configuration, you must use that user to update the policies stored in JuiceFS.
 
 The command to update the security policy file is as follows (it is recommended to configure it as a scheduled task for automatic updates). Replace `{PRINCIPAL}` with the user configured in `policy.download.auth.users`:
 
@@ -807,29 +807,29 @@ JuiceFS supports Kerberos authentication, but only for the Hadoop Java SDK.
 
 ### 1. Configurations
 
-The Kerberos configuration is stored in the metadata database and can be managed via the JuiceFS CLI.
+Kerberos configuration is stored in the metadata database and can be managed via the JuiceFS CLI.
 
 ```shell
-# enable Kerberos when formatting
+# Enable Kerberos when formatting
 juicefs format META-URL --kerberos-config-file kerb.cfg
-# or enable Kerberos on an existing filesystem
+# Or enable Kerberos on an existing filesystem
 ./juicefs config META-URL --kerberos-config-file kerb.cfg
 
-# disable Kerberos
+# Disable Kerberos
 ./juicefs config META-URL --kerberos-config-file ""
 ```
 
-Kerberos configuration file:
+The Kerberos configuration file:
 
 ```
-# Kerberos keytab, encode with BASE64
+# Kerberos keytab, encoded with BASE64
 # base64 -w 0 meta.keytab
 {VOL_NAME}.keytab={BASE64 KEYTAB}
-# delegation token
+# Delegation token
 {VOL_NAME}.token.life=604800
 {VOL_NAME}.token.renew=86400
 
-# superuser and supergroup
+# Superuser and supergroup
 {VOL_NAME}.superuser=hadoop
 {VOL_NAME}.supergroup=supergroup
 
@@ -838,13 +838,13 @@ Kerberos configuration file:
 {VOL_NAME}.mechanism=hadoop
 {VOL_NAME}.rule=DEFAULT
 
-# proxy user settings
+# Proxy user settings
 # https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SecureMode.html#Proxy_user
-# users: user1,user2 or *
+# Users: user1,user2 or *
 {VOL_NAME}.proxy.client.users=foo
-# groups: group1,group2 or *
+# Groups: group1,group2 or *
 {VOL_NAME}.proxy.client.groups=foogrp
-# hosts: host1,host2 or 192.168.1.1,192.168.1.2 or 192.168.1.1/32 or *
+# Hosts: host1,host2 or 192.168.1.1,192.168.1.2 or 192.168.1.1/32 or *
 {VOL_NAME}.proxy.client.hosts=*
 ```
 
