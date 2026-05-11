@@ -298,7 +298,9 @@ func (w *Warmup) resolveOrDownloadManifest(ctx context.Context, paths, peers []s
 	if w.resolver == nil {
 		return nil, fmt.Errorf("meta resolver not available (nil meta engine)")
 	}
-	mctx := meta.Background()
+	// Wrap the caller's ctx so SIGTERM/SIGINT cancels the meta scan instead
+	// of leaving it to run to completion on the deadlineless background ctx.
+	mctx := meta.WrapContext(ctx)
 	blocks, err := w.resolver.Resolve(mctx, paths)
 	if err != nil {
 		return nil, fmt.Errorf("resolve paths: %w", err)
