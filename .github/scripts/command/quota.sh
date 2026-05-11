@@ -735,6 +735,9 @@ run_sub_dir_uid_gid_case(){
     prepare_ug_quota_test
     resolve_test_users || return 0
 
+    echo "test user 1: $TEST_USER_1"
+    echo "test user 2: $TEST_USER_2"
+
     mkdir -p /jfs/d
     chmod 777 /jfs/d
 
@@ -749,8 +752,12 @@ run_sub_dir_uid_gid_case(){
     run_as_user_cmd "$TEST_USER_1" "dd if=/dev/zero of=/jfs/uid_cap bs=1G count=1"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_1" "echo a | tee -a /jfs/uid_cap" 2>error.log \
-        && echo "uid capacity quota should block write via subdir mount" && exit 1 || true
-    grep -i "Disk quota exceeded" error.log || (echo "uid subdir capacity quota not enforced" && exit 1)
+        && echo "uid capacity quota should block write via subdir mount"
+    if ! grep -i "Disk quota exceeded" error.log >/dev/null; then
+        echo "[$LINENO] uid subdir capacity quota not enforced"
+        ./juicefs quota list $META_URL
+        exit 1
+    fi
 
     ./juicefs rmr /jfs/uid_cap --skip-trash
     sleep $DIR_QUOTA_FLUSH_INTERVAL
@@ -758,22 +765,34 @@ run_sub_dir_uid_gid_case(){
     run_as_user_cmd "$TEST_USER_1" "for i in \$(seq 1 100); do touch /jfs/uid_inode_\$i; done"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_1" "touch /jfs/uid_inode_overflow" 2>error.log \
-        && echo "uid inode quota should block create via subdir mount" && exit 1 || true
-    grep -i "Disk quota exceeded" error.log || (echo "uid subdir inode quota not enforced" && exit 1)
+        && echo "uid inode quota should block create via subdir mount"
+    if ! grep -i "Disk quota exceeded" error.log >/dev/null; then
+        echo "[$LINENO] uid subdir inode quota not enforced"
+        ./juicefs quota list $META_URL
+        exit 1
+    fi
 
     run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/gid_cap bs=1G count=1"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_2" "echo a | tee -a /jfs/gid_cap" 2>error.log \
-        && echo "gid capacity quota should block write via subdir mount" && exit 1 || true
-    grep -i "Disk quota exceeded" error.log || (echo "gid subdir capacity quota not enforced" && exit 1)
+        && echo "gid capacity quota should block write via subdir mount"
+    if ! grep -i "Disk quota exceeded" error.log >/dev/null; then
+        echo "[$LINENO] gid subdir capacity quota not enforced"
+        ./juicefs quota list $META_URL
+        exit 1
+    fi
     ./juicefs rmr /jfs/gid_cap --skip-trash
     sleep $DIR_QUOTA_FLUSH_INTERVAL
 
     run_as_user_cmd "$TEST_USER_2" "for i in \$(seq 1 100); do touch /jfs/gid_inode_\$i; done"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_2" "touch /jfs/gid_inode_overflow" 2>error.log \
-        && echo "gid inode quota should block create via subdir mount" && exit 1 || true
-    grep -i "Disk quota exceeded" error.log || (echo "gid subdir inode quota not enforced" && exit 1)
+        && echo "gid inode quota should block create via subdir mount"
+    if ! grep -i "Disk quota exceeded" error.log >/dev/null; then
+        echo "[$LINENO] gid subdir inode quota not enforced"
+        ./juicefs quota list $META_URL
+        exit 1
+    fi
 }
 
 run_hard_link_uid_gid_case(){
