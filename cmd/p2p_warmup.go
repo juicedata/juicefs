@@ -64,7 +64,7 @@ Examples:
 			&cli.BoolFlag{Name: "keep-alive", Usage: "keep serving blocks to peers after warmup completes (until SIGTERM/SIGINT)"},
 			&cli.StringFlag{Name: "keep-alive-timeout", Value: "0", Usage: "auto-shutdown after this duration in keep-alive mode (0=wait for SIGTERM); ignored without --keep-alive"},
 			&cli.StringFlag{Name: "cache-dir", Usage: "cache directory (default: from volume format)"},
-			&cli.Int64Flag{Name: "download-limit", Usage: "object-storage download bandwidth cap in Mbps per peer (0=unlimited); peer-to-peer transfers are not throttled"},
+			&cli.StringFlag{Name: "download-limit", Usage: "bandwidth limit for download from object storage in Mbps per peer (e.g. 800 or 1G); peer-to-peer transfers are not throttled"},
 		},
 	}
 }
