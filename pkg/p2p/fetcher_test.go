@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -290,6 +291,44 @@ func TestFetcher_FetchBlock_SkipsExistingWithMatchingSize(t *testing.T) {
 	}
 	if got := f.stats.FromPeers.Load(); got != 0 {
 		t.Errorf("FromPeers = %d, want 0", got)
+	}
+}
+
+// TestFetcher_FetchBlock_CacheHitForTrailerLayouts confirms the fast-path
+// recognises files mount may have written with a checksum and/or tier
+// trailer — without this, p2p-warmup re-downloads every block on a peer
+// that runs `--verify-cache-checksum=extend` or multi-tier caching.
+func TestFetcher_FetchBlock_CacheHitForTrailerLayouts(t *testing.T) {
+	cases := []struct {
+		name    string
+		logical int
+		onDisk  int // total bytes to write
+	}{
+		{"logical only", 100, 100},
+		{"logical + tier", 100, 100 + 1},
+		{"logical + checksum (1 csBlock)", 100, 100 + 4},
+		{"logical + checksum + tier", 100, 100 + 4 + 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cacheDir := t.TempDir()
+			key := "chunks/0/0/42_0_" + strconv.Itoa(c.logical)
+			writeRawBlock(t, cacheDir, key, make([]byte, c.onDisk))
+
+			storage := newTrackingStorage()
+			f := NewFetcher(storage, cacheDir, 4*1024*1024, http.DefaultClient, nil)
+
+			block := &Block{Key: key, Size: c.logical}
+			if _, err := f.FetchBlock(context.Background(), block); err != nil {
+				t.Fatalf("FetchBlock: %v", err)
+			}
+			if got := storage.getCalls.Load(); got != 0 {
+				t.Errorf("storage.Get called %d times on cache hit, want 0", got)
+			}
+			if got := f.stats.FromCache.Load(); got != 1 {
+				t.Errorf("FromCache = %d, want 1", got)
+			}
+		})
 	}
 }
 

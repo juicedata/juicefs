@@ -165,19 +165,25 @@ func TestParseLogicalSize(t *testing.T) {
 }
 
 func TestValidCacheFileSize(t *testing.T) {
-	// Verify both layouts mount accepts: exact logical size, and
-	// logical + per-csBlock CRC32 trailer (4 bytes per 32 KiB block).
+	// Mirror every layout pkg/chunk/disk_cache.go's openCacheFile accepts:
+	// logical, logical+tier, logical+checksum, logical+checksum+tier.
 	cases := []struct {
 		name    string
 		onDisk  int64
 		logical int
 		ok      bool
 	}{
+		// Accepted (mount accepts these on read).
 		{"exact match", 100, 100, true},
+		{"with tier only", 100 + 1, 100, true},
 		{"with checksum trailer (1 csBlock)", 100 + 4, 100, true},
+		{"with checksum + tier (1 csBlock)", 100 + 4 + 1, 100, true},
 		{"larger logical with checksum (2 csBlocks)", 40*1024 + 8, 40 * 1024, true},
+		{"larger logical with checksum + tier (2 csBlocks)", 40*1024 + 8 + 1, 40 * 1024, true},
+		// Rejected.
 		{"compressed-too-small", 50, 100, false},
 		{"random extra bytes", 102, 100, false},
+		{"checksum minus one byte", 100 + 3, 100, false},
 		{"zero logical (parse failure upstream)", 0, 0, false},
 		{"negative logical (defensive)", 100, -1, false},
 	}

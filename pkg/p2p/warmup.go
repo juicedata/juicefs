@@ -346,6 +346,11 @@ func countTerminalBlocks(blocks []*Block) (done int, failed int) {
 // at which mount writes 4-byte CRC32C checksums when CacheChecksum is enabled.
 const cacheChecksumBlock = 32 << 10
 
+// cacheTierIDLength matches pkg/chunk/disk_cache.go tierIDLength — the
+// single-byte tier marker mount may append to cache files when multi-tier
+// storage is configured.
+const cacheTierIDLength = 1
+
 // parseLogicalSize extracts the logical block size from a key like
 // "chunks/0/0/100_0_4194304" (mirrors pkg/chunk/cached_store.go's
 // parseObjOrigSize). Returns 0 for malformed keys so callers can reject them.
@@ -361,18 +366,31 @@ func parseLogicalSize(key string) int {
 	return n
 }
 
-// validCacheFileSize accepts the two layouts pkg/chunk/disk_cache.go's
-// openCacheFile accepts: exactly logical, or logical + ceil(logical/csBlock)*4
-// (checksum trailer). Anything else is corrupt and must not be announced.
+// validCacheFileSize accepts the four layouts pkg/chunk/disk_cache.go's
+// openCacheFile accepts. Mount may append an optional checksum trailer and/or
+// a 1-byte tier marker, so the on-disk size minus the logical size must equal
+// one of:
+//
+//	① 0                            (no checksum, no tier)
+//	② cacheTierIDLength            (no checksum, tier)
+//	③ checksumLen                  (checksum, no tier)
+//	④ checksumLen + cacheTierIDLength (checksum, tier)
+//
+// Anything else is corrupt or partial and must not be announced.
+//
+// Keep this in lock-step with openCacheFile — every layout mount accepts on
+// read must also count as a cache hit here, otherwise p2p-warmup re-downloads
+// blocks the mount considers fine.
 func validCacheFileSize(onDisk int64, logical int) bool {
 	if logical <= 0 {
 		return false
 	}
-	if onDisk == int64(logical) {
+	delta := onDisk - int64(logical)
+	if delta == 0 || delta == cacheTierIDLength {
 		return true
 	}
 	checksumLen := int64((logical-1)/cacheChecksumBlock+1) * 4
-	return onDisk == int64(logical)+checksumLen
+	return delta == checksumLen || delta == checksumLen+cacheTierIDLength
 }
 
 // scanExistingCache walks {cacheDir}/raw and announces well-formed block

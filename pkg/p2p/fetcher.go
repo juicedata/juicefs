@@ -152,9 +152,13 @@ func (f *Fetcher) CacheBlock(key string, data []byte) error {
 // FetchBlock fetches a block (cache > peer > storage) and writes it to the
 // disk cache. fromPeer is true when the data came from a peer.
 func (f *Fetcher) FetchBlock(ctx context.Context, block *Block) (fromPeer bool, err error) {
-	// Cache-hit fast path: skip fetch if file exists on disk with expected size.
+	// Cache-hit fast path: skip the fetch when the on-disk file matches any
+	// of the layouts mount accepts (logical / +checksum / +tier / both).
+	// Use the same predicate as scanExistingCache so the two views agree —
+	// otherwise a file announced via /available would still be re-fetched
+	// here on its way through the worker queue.
 	cachePath := filepath.Join(f.cacheDir, "raw", block.Key)
-	if fi, statErr := os.Stat(cachePath); statErr == nil && fi.Size() == int64(block.Size) {
+	if fi, statErr := os.Stat(cachePath); statErr == nil && validCacheFileSize(fi.Size(), block.Size) {
 		f.stats.FromCache.Add(1)
 		return false, nil
 	}
