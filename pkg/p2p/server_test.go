@@ -210,3 +210,118 @@ func appendInt64(dst []byte, n int64) []byte {
 	dst = appendInt64(dst, n/10)
 	return append(dst, byte('0'+n%10))
 }
+
+func TestValidBlockKey(t *testing.T) {
+	valid := []string{
+		"chunks/0/0/100_0_4194304",
+		"chunks/FF/0/9999_3_2048",
+		"chunks/0/1234567/9999999_0_8192",
+	}
+	invalid := []string{
+		"",
+		"/abs",
+		"\\abs",
+		"C:windows",
+		"C:/x",
+		"..",
+		".",
+		"/",
+		"\\",
+		"../escape",
+		"chunks/../escape",
+		"chunks/./hidden",
+		"chunks/a//b",
+		"chunks/a/",
+		"chunks/a/..",
+	}
+	for _, k := range valid {
+		if !validBlockKey(k) {
+			t.Errorf("validBlockKey(%q) = false, want true", k)
+		}
+	}
+	for _, k := range invalid {
+		if validBlockKey(k) {
+			t.Errorf("validBlockKey(%q) = true, want false", k)
+		}
+	}
+}
+
+func TestServer_HandleBlock_RejectsPathTraversal(t *testing.T) {
+	// Place a sentinel file *outside* the cache dir; if the handler ever
+	// leaks it, the assertion below fails.
+	tmpDir := t.TempDir()
+	cacheDir := filepath.Join(tmpDir, "cache")
+	if err := os.MkdirAll(filepath.Join(cacheDir, "raw"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	outsideContent := []byte("CONFIDENTIAL")
+	outsidePath := filepath.Join(tmpDir, "secret.txt")
+	if err := os.WriteFile(outsidePath, outsideContent, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	tracker := NewAvailabilityTracker()
+	srv := NewServer("uuid", tracker, cacheDir)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	cases := []string{
+		"/block/../secret.txt",
+		"/block/../../etc/passwd",
+		"/block/./hidden",
+		"/block/sub/../escape",
+		"/block//abs",
+		"/block/%2E%2E/secret.txt",   // URL-encoded ".."
+		"/block/%2E%2E%2Fsecret.txt", // URL-encoded "../"
+		"/block/\\windows\\path",
+		"/block/C:/x",
+	}
+	for _, p := range cases {
+		t.Run(p, func(t *testing.T) {
+			resp, err := http.Get(ts.URL + p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusNotFound {
+				t.Errorf("status = %d, want 404 for %q", resp.StatusCode, p)
+			}
+			body := make([]byte, len(outsideContent))
+			n, _ := resp.Body.Read(body)
+			if string(body[:n]) == string(outsideContent) {
+				t.Fatalf("LEAK: handler returned outside-cache sentinel content for %q", p)
+			}
+		})
+	}
+}
+
+func TestServer_HandleBlock_ServesValidKey(t *testing.T) {
+	cacheDir := t.TempDir()
+	rawDir := filepath.Join(cacheDir, "raw", "chunks", "0", "0")
+	if err := os.MkdirAll(rawDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	want := []byte("block-payload")
+	if err := os.WriteFile(filepath.Join(rawDir, "100_0_13"), want, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	tracker := NewAvailabilityTracker()
+	srv := NewServer("uuid", tracker, cacheDir)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/block/chunks/0/0/100_0_13")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	got := make([]byte, 64)
+	n, _ := resp.Body.Read(got)
+	if string(got[:n]) != string(want) {
+		t.Errorf("body = %q, want %q", got[:n], want)
+	}
+}

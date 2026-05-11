@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -96,24 +97,70 @@ func (s *Server) handleAvailable(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validBlockKey rejects URL-derived keys whose shape could trigger filesystem
+// traversal. JuiceFS cache keys are of the form "chunks/<dirs>/<id>_<idx>_<size>"
+// — all segments are alphanumeric, so a key that path.Clean rewrites or that
+// contains absolute-path or parent-dir markers is never legitimate.
+func validBlockKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	// Reject absolute paths (POSIX leading "/", Windows leading "\" or drive
+	// letter). filepath.Join silently overrides the prefix on Windows when
+	// given a path with a drive letter, and a leading "/" is suspicious
+	// regardless.
+	if key[0] == '/' || key[0] == '\\' {
+		return false
+	}
+	if len(key) >= 2 && key[1] == ':' { // Windows drive letter like "C:"
+		return false
+	}
+	// Reject any "." or ".." segment that path.Clean would collapse.
+	for _, seg := range strings.Split(key, "/") {
+		if seg == "." || seg == ".." {
+			return false
+		}
+	}
+	// Final check: anything that path.Clean rewrites (duplicate slashes,
+	// trailing slash, embedded "./", etc.) is rejected so the on-wire key
+	// matches the cached filename exactly.
+	if path.Clean(key) != key {
+		return false
+	}
+	return true
+}
+
 // handleBlock serves raw block data from the local disk cache.
 // GET /block/<key> → binary file contents, or 404
 // The key is everything after "/block/" in the URL path.
 func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 	key := strings.TrimPrefix(r.URL.Path, "/block/")
-	if key == "" {
+	if !validBlockKey(key) {
 		http.NotFound(w, r)
 		return
 	}
 
-	path := filepath.Join(s.cacheDir, "raw", key)
-	data, err := os.ReadFile(path)
+	rawRoot := filepath.Join(s.cacheDir, "raw")
+	blockPath := filepath.Join(rawRoot, key)
+
+	// Defense in depth: even after the shape check, confirm the resolved
+	// path is still under {cacheDir}/raw. filepath.Rel returns a path
+	// starting with ".." when the target escapes the root.
+	rel, err := filepath.Rel(rawRoot, blockPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		http.NotFound(w, r)
+		return
+	}
+
+	data, err := os.ReadFile(blockPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			http.NotFound(w, r)
-			return
+		// Treat every read error as 404 so the response does not leak
+		// whether the path exists but is unreadable (e.g. permission
+		// denied); log unexpected errors for the operator.
+		if !os.IsNotExist(err) {
+			logger.WithError(err).Debugf("handleBlock: read %q failed", blockPath)
 		}
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		http.NotFound(w, r)
 		return
 	}
 
