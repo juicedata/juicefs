@@ -599,7 +599,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 
 	switch cmd {
 	case QuotaSet:
-		return m.handleQuotaSet(ctx, qtype, key, dpath, quotas)
+		return m.handleQuotaSet(ctx, qtype, key, dpath, quotas, strict)
 	case QuotaGet:
 		return m.handleQuotaGet(ctx, qtype, key, dpath, quotas)
 	case QuotaDel:
@@ -613,7 +613,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 	}
 }
 
-func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath string, quotas map[string]*Quota) error {
+func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath string, quotas map[string]*Quota, strict bool) error {
 	format := m.getFormat()
 	var quota *Quota
 	var scan bool = false
@@ -664,10 +664,10 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	if !created {
 		return nil
 	}
-	return m.initializeQuotaUsage(ctx, qtype, key, dpath, scan)
+	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, scan)
 }
 
-func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, scan bool) error {
+func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, strict bool, scan bool) error {
 	switch qtype {
 	case DirQuotaType:
 		wrapErr := func(e error) error {
@@ -675,7 +675,7 @@ func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, d
 		}
 
 		var sum Summary
-		if st := m.GetSummary(ctx, Ino(key), &sum, true, true); st != 0 {
+		if st := m.GetSummary(ctx, Ino(key), &sum, true, strict); st != 0 {
 			return wrapErr(st)
 		}
 
