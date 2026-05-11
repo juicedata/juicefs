@@ -94,12 +94,92 @@ func TestFetcher_FetchFromPeer(t *testing.T) {
 
 	// Override the HTTP client to use the test server's transport but speak to
 	// the real address (the server uses http://, so we just pass the addr).
-	got, err := f.FetchFromPeer(context.Background(), peerAddr, "chunks/0/0/100_0_4194304")
+	got, err := f.FetchFromPeer(context.Background(), peerAddr, "chunks/0/0/100_0_4194304", len(wantData))
 	if err != nil {
 		t.Fatalf("FetchFromPeer: unexpected error: %v", err)
 	}
 	if string(got) != string(wantData) {
 		t.Errorf("FetchFromPeer: got %q, want %q", got, wantData)
+	}
+}
+
+// TestFetcher_FetchFromPeer_RejectsOversizedBody confirms a peer cannot
+// drown the fetcher in memory by sending a body bigger than the largest
+// layout mount accepts for the requested logical size.
+func TestFetcher_FetchFromPeer_RejectsOversizedBody(t *testing.T) {
+	const logical = 100
+	// One byte past the largest accepted layout (logical + checksum + tier).
+	checksumLen := ((logical-1)/(32<<10) + 1) * 4
+	tooBig := make([]byte, logical+checksumLen+int(cacheTierIDLength)+1)
+
+	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(tooBig)
+	}))
+	defer peer.Close()
+
+	f := NewFetcher(nil, t.TempDir(), 4194304, peer.Client(), nil)
+	_, err := f.FetchFromPeer(context.Background(), peer.Listener.Addr().String(), "chunks/0/0/k_0_100", logical)
+	if err == nil {
+		t.Fatal("expected error on oversized body")
+	}
+}
+
+// TestFetcher_FetchFromPeer_RejectsInvalidLength confirms a body whose
+// length is not one of the four valid cache layouts is rejected, so the
+// caller falls through to storage rather than caching bytes mount would
+// later refuse to open.
+func TestFetcher_FetchFromPeer_RejectsInvalidLength(t *testing.T) {
+	const logical = 100
+	// logical + 3: not 0, not tier(1), not checksum(4), not checksum+tier(5).
+	body := make([]byte, logical+3)
+
+	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(body)
+	}))
+	defer peer.Close()
+
+	f := NewFetcher(nil, t.TempDir(), 4194304, peer.Client(), nil)
+	_, err := f.FetchFromPeer(context.Background(), peer.Listener.Addr().String(), "chunks/0/0/k_0_100", logical)
+	if err == nil {
+		t.Fatal("expected error on body whose length is not a valid cache layout")
+	}
+}
+
+// TestFetcher_FetchFromPeer_AcceptsValidLayouts confirms each of the four
+// layouts mount accepts (logical / +tier / +checksum / +checksum+tier)
+// passes through unchanged.
+func TestFetcher_FetchFromPeer_AcceptsValidLayouts(t *testing.T) {
+	const logical = 100
+	checksumLen := ((logical-1)/(32<<10) + 1) * 4
+	cases := []struct {
+		name string
+		n    int
+	}{
+		{"logical only", logical},
+		{"logical + tier", logical + 1},
+		{"logical + checksum", logical + checksumLen},
+		{"logical + checksum + tier", logical + checksumLen + 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			body := make([]byte, c.n)
+			peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/octet-stream")
+				_, _ = w.Write(body)
+			}))
+			defer peer.Close()
+
+			f := NewFetcher(nil, t.TempDir(), 4194304, peer.Client(), nil)
+			got, err := f.FetchFromPeer(context.Background(), peer.Listener.Addr().String(), "chunks/0/0/k_0_100", logical)
+			if err != nil {
+				t.Fatalf("FetchFromPeer: %v", err)
+			}
+			if len(got) != c.n {
+				t.Errorf("got %d bytes, want %d", len(got), c.n)
+			}
+		})
 	}
 }
 

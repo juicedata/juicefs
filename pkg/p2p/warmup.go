@@ -393,6 +393,18 @@ func validCacheFileSize(onDisk int64, logical int) bool {
 	return delta == checksumLen || delta == checksumLen+cacheTierIDLength
 }
 
+// maxCacheFileSize is the largest layout openCacheFile will accept for the
+// given logical size: logical + full checksum trailer + tier byte. Used by
+// FetchFromPeer to cap peer-served bodies — without a cap, a misbehaving
+// peer could stream arbitrary bytes into memory.
+func maxCacheFileSize(logical int) int64 {
+	if logical <= 0 {
+		return 0
+	}
+	checksumLen := int64((logical-1)/cacheChecksumBlock+1) * 4
+	return int64(logical) + checksumLen + cacheTierIDLength
+}
+
 // scanExistingCache walks {cacheDir}/raw and announces well-formed block
 // files via the availability tracker, returning the count. Missing roots are
 // treated as empty. Files failing validCacheFileSize are skipped — primarily

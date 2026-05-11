@@ -75,9 +75,14 @@ func (f *Fetcher) SetDownloadLimit(b *ratelimit.Bucket) {
 	f.downLimit = b
 }
 
-// FetchFromPeer issues GET http://{peerAddr}/block/{key} and returns the
-// response body. The caller is responsible for validating length/integrity.
-func (f *Fetcher) FetchFromPeer(ctx context.Context, peerAddr, key string) ([]byte, error) {
+// FetchFromPeer issues GET /block/{key} against peerAddr and returns the
+// response body. The body is capped at the largest layout mount accepts
+// for `size` (logical + checksum trailer + tier byte) so a misbehaving
+// peer cannot stream arbitrary bytes into memory, and is rejected outright
+// if its length is not one of the four valid cache layouts — otherwise the
+// caller would write a malformed file to cache that mount would later reject.
+// On any failure the caller falls through to storage.
+func (f *Fetcher) FetchFromPeer(ctx context.Context, peerAddr, key string, size int) ([]byte, error) {
 	url := fmt.Sprintf("http://%s/block/%s", peerAddr, key)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -93,9 +98,19 @@ func (f *Fetcher) FetchFromPeer(ctx context.Context, peerAddr, key string) ([]by
 		return nil, fmt.Errorf("peer fetch %s: status %d", url, resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	max := maxCacheFileSize(size)
+	if resp.ContentLength > 0 && resp.ContentLength > max {
+		return nil, fmt.Errorf("peer fetch %s: Content-Length %d exceeds max %d", url, resp.ContentLength, max)
+	}
+	// LimitReader stops at max+1 so an oversized body produces a length
+	// that the validCacheFileSize check below rejects, rather than
+	// silently truncating to max.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
 	if err != nil {
 		return nil, fmt.Errorf("peer fetch %s: read body: %w", url, err)
+	}
+	if !validCacheFileSize(int64(len(data)), size) {
+		return nil, fmt.Errorf("peer fetch %s: body length %d invalid for logical size %d", url, len(data), size)
 	}
 	return data, nil
 }
@@ -168,7 +183,7 @@ func (f *Fetcher) FetchBlock(ctx context.Context, block *Block) (fromPeer bool, 
 	// Attempt peer download if we have an availability tracker.
 	if f.availability != nil {
 		if peerAddr := f.availability.FindPeerWith(block.Key); peerAddr != "" {
-			data, err = f.FetchFromPeer(ctx, peerAddr, block.Key)
+			data, err = f.FetchFromPeer(ctx, peerAddr, block.Key, block.Size)
 			if err == nil {
 				fromPeer = true
 			}

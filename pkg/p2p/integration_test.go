@@ -20,12 +20,12 @@ func TestIntegration_TwoPeers(t *testing.T) {
 	cache1, cache2 := t.TempDir(), t.TempDir()
 
 	// Write fake blocks to each cache directory.
-	writeBlock(t, cache1, "chunks/0/0/1_0_100", "data-block-1")
-	writeBlock(t, cache2, "chunks/0/0/1_1_100", "data-block-2")
+	writeBlock(t, cache1, "chunks/0/0/1_0_12", "data-block-1")
+	writeBlock(t, cache2, "chunks/0/0/1_1_12", "data-block-2")
 
 	// Start peer1 server with block1 marked as local.
 	at1 := NewAvailabilityTracker()
-	at1.MarkLocal("chunks/0/0/1_0_100")
+	at1.MarkLocal("chunks/0/0/1_0_12")
 	srv1 := NewServer("uuid-1", at1, cache1)
 	ln1, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -36,7 +36,7 @@ func TestIntegration_TwoPeers(t *testing.T) {
 
 	// Start peer2 server with block2 marked as local.
 	at2 := NewAvailabilityTracker()
-	at2.MarkLocal("chunks/0/0/1_1_100")
+	at2.MarkLocal("chunks/0/0/1_1_12")
 	srv2 := NewServer("uuid-2", at2, cache2)
 	ln2, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -51,7 +51,7 @@ func TestIntegration_TwoPeers(t *testing.T) {
 
 	// --- Test: peer2 fetches block1 from peer1 ---
 	fetcher2 := NewFetcher(nil, cache2, 4*1024*1024, client, nil)
-	data, err := fetcher2.FetchFromPeer(context.Background(), peer1Addr, "chunks/0/0/1_0_100")
+	data, err := fetcher2.FetchFromPeer(context.Background(), peer1Addr, "chunks/0/0/1_0_12", 12)
 	if err != nil {
 		t.Fatalf("peer2.FetchFromPeer block1: %v", err)
 	}
@@ -60,10 +60,10 @@ func TestIntegration_TwoPeers(t *testing.T) {
 	}
 
 	// --- Test: CacheBlock writes block1 to peer2's cache, verify on disk ---
-	if err := fetcher2.CacheBlock("chunks/0/0/1_0_100", data); err != nil {
+	if err := fetcher2.CacheBlock("chunks/0/0/1_0_12", data); err != nil {
 		t.Fatalf("peer2.CacheBlock: %v", err)
 	}
-	onDisk, err := os.ReadFile(filepath.Join(cache2, "raw", "chunks/0/0/1_0_100"))
+	onDisk, err := os.ReadFile(filepath.Join(cache2, "raw", "chunks/0/0/1_0_12"))
 	if err != nil {
 		t.Fatalf("read cached block on disk: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestIntegration_TwoPeers(t *testing.T) {
 
 	// --- Test: peer1 fetches block2 from peer2 ---
 	fetcher1 := NewFetcher(nil, cache1, 4*1024*1024, client, nil)
-	data2, err := fetcher1.FetchFromPeer(context.Background(), peer2Addr, "chunks/0/0/1_1_100")
+	data2, err := fetcher1.FetchFromPeer(context.Background(), peer2Addr, "chunks/0/0/1_1_12", 12)
 	if err != nil {
 		t.Fatalf("peer1.FetchFromPeer block2: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestIntegration_TwoPeers(t *testing.T) {
 	if ts <= 0 {
 		t.Errorf("PollAvailability: updated_at = %d, want > 0", ts)
 	}
-	if !at3.PeerHas(peer1Addr, "chunks/0/0/1_0_100") {
+	if !at3.PeerHas(peer1Addr, "chunks/0/0/1_0_12") {
 		t.Errorf("at3 should know peer1 has block1 after polling")
 	}
 
@@ -188,7 +188,7 @@ func TestIntegration_PreCachedBlocksServedAfterScan(t *testing.T) {
 		t.Fatal("peer2 should see pre-cached block on peer1 after scan; /available did not report it")
 	}
 
-	data, err := fetcher2.FetchFromPeer(context.Background(), peer1Addr, "chunks/0/0/1_0_18")
+	data, err := fetcher2.FetchFromPeer(context.Background(), peer1Addr, "chunks/0/0/1_0_18", 18)
 	if err != nil {
 		t.Fatalf("FetchFromPeer: %v", err)
 	}
