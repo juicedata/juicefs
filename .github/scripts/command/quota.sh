@@ -887,76 +887,170 @@ run_remove_and_restore_uid_gid_case(){
     prepare_ug_quota_test
     resolve_test_users || return 0
 
+    rrq_log()
+    {
+        echo "[$(date '+%F %T')] [L${BASH_LINENO[0]}] [run_remove_and_restore_uid_gid_case] $*"
+    }
+
+    rrq_show_file_with_prefix()
+    {
+        file=$1
+        if [[ -f "$file" ]]; then
+            sed "s/^/[L${LINENO}] [run_remove_and_restore_uid_gid_case] [${file}] /" "$file"
+        else
+            rrq_log "file not found: $file"
+        fi
+    }
+
+    rrq_dump_state()
+    {
+        tag=$1
+        rrq_log "===== STATE BEGIN: $tag ====="
+        rrq_log "META=$META META_URL=$META_URL"
+        rrq_log "HEARTBEAT_INTERVAL=$HEARTBEAT_INTERVAL HEARTBEAT_SLEEP=$HEARTBEAT_SLEEP DIR_QUOTA_FLUSH_INTERVAL=$DIR_QUOTA_FLUSH_INTERVAL"
+        rrq_log "TEST_USER_1=$TEST_USER_1 TEST_UID_1=$TEST_UID_1 TEST_GID_1=$TEST_GID_1"
+        rrq_log "TEST_USER_2=$TEST_USER_2 TEST_UID_2=$TEST_UID_2 TEST_GID_2=$TEST_GID_2"
+        rrq_log "id: user=$(id -un) uid=$(id -u) gid=$(id -g)"
+
+        rrq_log "df -h /jfs"
+        df -h /jfs 2>&1 | sed "s/^/[L${LINENO}] [run_remove_and_restore_uid_gid_case] /"
+        rrq_log "df -ih /jfs"
+        df -ih /jfs 2>&1 | sed "s/^/[L${LINENO}] [run_remove_and_restore_uid_gid_case] /"
+
+        rrq_log "ls -al /jfs/rrq"
+        ls -al /jfs/rrq 2>&1 | sed "s/^/[L${LINENO}] [run_remove_and_restore_uid_gid_case] /"
+        rrq_log "ls -al /jfs/.trash"
+        ls -al /jfs/.trash 2>&1 | sed "s/^/[L${LINENO}] [run_remove_and_restore_uid_gid_case] /"
+
+        rrq_log "quota list (uid=$TEST_UID_1)"
+        ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | sed "s/^/[L${LINENO}] [run_remove_and_restore_uid_gid_case] /"
+        rrq_log "quota list (gid=$TEST_GID_2)"
+        ./juicefs quota list $META_URL --gid "$TEST_GID_2" 2>&1 | sed "s/^/[L${LINENO}] [run_remove_and_restore_uid_gid_case] /"
+
+        rrq_log "===== STATE END: $tag ====="
+    }
+
     mkdir -p /jfs/rrq
     chmod 777 /jfs/rrq
 
     ./juicefs quota set $META_URL --uid "$TEST_UID_1" --capacity 1
     ./juicefs quota set $META_URL --gid "$TEST_GID_2" --capacity 1
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+    rrq_dump_state "after set uid/gid capacity quota"
 
     run_as_user_cmd "$TEST_USER_1" "dd if=/dev/zero of=/jfs/rrq/uid_file bs=1G count=1"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_1" "echo a | tee -a /jfs/rrq/uid_file" 2>error.log && echo "uid remove/restore should hit capacity quota" && exit 1 || true
+    rrq_log "after append uid_file: expect Disk quota exceeded"
+    rrq_show_file_with_prefix error.log
     grep -i "Disk quota exceeded" error.log || (echo "uid remove/restore pre-delete quota check failed" && exit 1)
+    rrq_dump_state "after uid_file append quota hit"
 
     rm -f /jfs/rrq/uid_file
+    rrq_log "removed /jfs/rrq/uid_file"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     rm -f error.log
     run_as_user_cmd "$TEST_USER_1" "dd if=/dev/zero of=/jfs/rrq/uid_after_rm bs=1M count=1" 2>error.log \
         && echo "uid quota should still be occupied while file is in trash" && exit 1 || true
+    rrq_log "after dd uid_after_rm 1M (trash reserved): expect Disk quota exceeded"
+    rrq_show_file_with_prefix error.log
     grep -i "Disk quota exceeded" error.log || (echo "uid trash-reserved quota check failed" && exit 1)
+    rrq_dump_state "after first uid_after_rm blocked by trash"
 
     trash_dir=$(ls /jfs/.trash | tail -n1)
+    rrq_log "selected trash_dir for restore: $trash_dir"
     ./juicefs restore $META_URL $trash_dir --put-back
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     run_as_user_cmd "$TEST_USER_1" "echo a | tee -a /jfs/rrq/uid_file" 2>error.log && echo "uid restore should keep quota usage after put-back" && exit 1 || true
+    rrq_log "after restore and append uid_file: expect Disk quota exceeded"
+    rrq_show_file_with_prefix error.log
     grep -i "Disk quota exceeded" error.log || (echo "uid restore quota check failed" && exit 1)
+    rrq_dump_state "after restore and uid_file append blocked"
 
     rm -f /jfs/rrq/uid_file
+    rrq_log "removed restored /jfs/rrq/uid_file"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     rm -f error.log
     run_as_user_cmd "$TEST_USER_1" "dd if=/dev/zero of=/jfs/rrq/uid_after_rm bs=1M count=1" 2>error.log \
         && echo "uid quota should still be occupied after deleting restored file into trash" && exit 1 || true
+    rrq_log "after second dd uid_after_rm 1M (post-restore delete): expect Disk quota exceeded"
+    rrq_show_file_with_prefix error.log
     grep -i "Disk quota exceeded" error.log || (echo "uid trash-reserved quota after restore check failed" && exit 1)
+    rrq_dump_state "after second uid_after_rm blocked by trash"
 
+    rrq_log "about to clean trash: ./juicefs rmr /jfs/.trash"
     ./juicefs rmr /jfs/.trash
     sleep $((DIR_QUOTA_FLUSH_INTERVAL+HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
-    run_as_user_cmd "$TEST_USER_1" "dd if=/dev/zero of=/jfs/rrq/uid_after_rm bs=1G count=1"
+    rrq_dump_state "after trash cleanup before uid 1G dd"
+    if ! run_as_user_cmd "$TEST_USER_1" "dd if=/dev/zero of=/jfs/rrq/uid_after_rm bs=1G count=1"; then
+        rrq_log "unexpected: uid 1G dd failed after trash cleanup"
+        rrq_show_file_with_prefix error.log
+        rrq_dump_state "uid 1G dd failed after trash cleanup"
+        return 1
+    fi
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_1" "echo a | tee -a /jfs/rrq/uid_after_rm" 2>error.log && echo "uid quota should block append after filling freed space" && exit 1 || true
+    rrq_log "after uid 1G fill and append: expect Disk quota exceeded"
+    rrq_show_file_with_prefix error.log
     grep -i "Disk quota exceeded" error.log || (echo "uid quota should be enforced after trash cleanup and refill" && exit 1)
+    rrq_dump_state "after uid refill and append blocked"
 
     run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/rrq/gid_file bs=1G count=1"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_2" "echo a | tee -a /jfs/rrq/gid_file" 2>error.log && echo "gid remove/restore should hit capacity quota" && exit 1 || true
+    rrq_log "after append gid_file: expect Disk quota exceeded"
+    rrq_show_file_with_prefix error.log
     grep -i "Disk quota exceeded" error.log || (echo "gid remove/restore pre-delete quota check failed" && exit 1)
+    rrq_dump_state "after gid_file append quota hit"
 
     rm -f /jfs/rrq/gid_file
+    rrq_log "removed /jfs/rrq/gid_file"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     rm -f error.log
     run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/rrq/gid_after_rm bs=1M count=1" 2>error.log \
         && echo "gid quota should still be occupied while file is in trash" && exit 1 || true
+    rrq_log "after dd gid_after_rm 1M (trash reserved): expect Disk quota exceeded"
+    rrq_show_file_with_prefix error.log
     grep -i "Disk quota exceeded" error.log || (echo "gid trash-reserved quota check failed" && exit 1)
+    rrq_dump_state "after first gid_after_rm blocked by trash"
 
     trash_dir=$(ls /jfs/.trash | tail -n1)
+    rrq_log "selected trash_dir for gid restore: $trash_dir"
     ./juicefs restore $META_URL $trash_dir --put-back
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     run_as_user_cmd "$TEST_USER_2" "echo a | tee -a /jfs/rrq/gid_file" 2>error.log && echo "gid restore should keep quota usage after put-back" && exit 1 || true
+    rrq_log "after gid restore and append gid_file: expect Disk quota exceeded"
+    rrq_show_file_with_prefix error.log
     grep -i "Disk quota exceeded" error.log || (echo "gid restore quota check failed" && exit 1)
+    rrq_dump_state "after gid restore and append blocked"
 
     rm -f /jfs/rrq/gid_file
+    rrq_log "removed restored /jfs/rrq/gid_file"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     rm -f error.log
     run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/rrq/gid_after_rm bs=1M count=1" 2>error.log \
         && echo "gid quota should still be occupied after deleting restored file into trash" && exit 1 || true
+    rrq_log "after second dd gid_after_rm 1M (post-restore delete): expect Disk quota exceeded"
+    rrq_show_file_with_prefix error.log
     grep -i "Disk quota exceeded" error.log || (echo "gid trash-reserved quota after restore check failed" && exit 1)
+    rrq_dump_state "after second gid_after_rm blocked by trash"
 
+    rrq_log "about to clean trash for gid path: ./juicefs rmr /jfs/.trash"
     ./juicefs rmr /jfs/.trash
     sleep $((DIR_QUOTA_FLUSH_INTERVAL+HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
-    run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/rrq/gid_after_rm bs=1G count=1"
+    rrq_dump_state "after trash cleanup before gid 1G dd"
+    if ! run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/rrq/gid_after_rm bs=1G count=1"; then
+        rrq_log "unexpected: gid 1G dd failed after trash cleanup"
+        rrq_show_file_with_prefix error.log
+        rrq_dump_state "gid 1G dd failed after trash cleanup"
+        return 1
+    fi
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_2" "echo a | tee -a /jfs/rrq/gid_after_rm" 2>error.log && echo "gid quota should block append after filling freed space" && exit 1 || true
+    rrq_log "after gid 1G fill and append: expect Disk quota exceeded"
+    rrq_show_file_with_prefix error.log
     grep -i "Disk quota exceeded" error.log || (echo "gid quota should be enforced after trash cleanup and refill" && exit 1)
+    rrq_dump_state "after gid refill and append blocked"
 }
 
 run_dir_capacity_uid_gid_case(){
