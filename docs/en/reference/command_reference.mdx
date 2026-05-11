@@ -21,7 +21,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.2.0
+   1.3.1
 
 COMMANDS:
    ADMIN:
@@ -32,11 +32,10 @@ COMMANDS:
      gc       Garbage collector of objects in data storage
      fsck     Check consistency of a volume
      restore  restore files from trash
-     dump     Dump metadata into a JSON file
-     load     Load metadata from a previously dumped JSON file
+     dump     Dump metadata into a file
+     load     Load metadata from a previously dumped file
      version  Show version
    INSPECTOR:
-     changelog  Tail the changelog of a volume
      status   Show status of a volume
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
