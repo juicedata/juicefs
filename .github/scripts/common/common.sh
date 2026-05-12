@@ -19,18 +19,34 @@ init_platform() {
 }
 
 # Platform-agnostic functions with internal branching
+cleanup_test_mounts() {
+    case "$PLATFORM" in
+        mac)
+            for mp in ~/jfs3 ~/jfs2 ~/jfs; do
+                ./juicefs umount "$mp" 2>/dev/null || true
+                umount_jfs "$mp" "$META_URL"
+            done
+            ;;
+        linux)
+            for mp in /jfs3 /jfs2 /jfs; do
+                ./juicefs umount "$mp" 2>/dev/null || true
+                umount_jfs "$mp" "$META_URL"
+            done
+            ;;
+    esac
+}
+
 prepare_test() {
     case "$PLATFORM" in
         mac)
-            ./juicefs umount ~/jfs || true
-            umount_jfs ~/jfs "$META_URL"
+            cleanup_test_mounts
             sleep 1
             python3 .github/scripts/flush_meta.py "$META_URL"
             rm -rf ~/.juicefs/local/myjfs/ || true
             rm -rf ~/.juicefs/cache || true
             ;;
         linux)
-            umount_jfs /jfs "$META_URL"
+            cleanup_test_mounts
             python3 .github/scripts/flush_meta.py "$META_URL"
             rm -rf /var/jfs/myjfs || true
             rm -rf /var/jfsCache/myjfs || true
@@ -170,5 +186,5 @@ ensure_directory() {
 init_platform
 
 # Make functions available to subprocesses
-export -f prepare_test umount_jfs wait_mount_process_killed compare_md5sum wait_command_success ensure_directory
+export -f cleanup_test_mounts prepare_test umount_jfs wait_mount_process_killed compare_md5sum wait_command_success ensure_directory
 export PLATFORM META_URL
