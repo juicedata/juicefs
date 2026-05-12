@@ -974,6 +974,7 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 				}
 				return 0
 			}
+		} else {
 			m.cache.entryCache.AddIf(m.cache.entryName(parent, name), &entryMark, func(oldEntry *cachedEntry, exists bool) bool {
 				return exists
 			})
