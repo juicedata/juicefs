@@ -57,6 +57,8 @@ import (
 
 var mountPid int
 
+const fuseConnectionsPath = "/sys/fs/fuse/connections"
+
 func showThreadStack(agentAddr string) {
 	if agentAddr == "" {
 		return
@@ -95,25 +97,50 @@ func killMountProcess(pid int, dev uint64, lastActive *int64) {
 			return
 		}
 	}
-	if runtime.GOOS == "linux" && dev > 0 {
-		tids, _ := os.ReadDir(fmt.Sprintf("/proc/%d/task", pid))
-		for _, tid := range tids {
-			stack, err := os.ReadFile(fmt.Sprintf("/proc/%d/task/%s/stack", pid, tid))
-			if err == nil && bytes.Contains(stack, []byte("fuse_simple_request")) {
-				logger.Errorf("find deadlock in mount process, abort it: %s", string(stack))
-				if fuseFd > 0 {
-					_ = syscall.Close(fuseFd)
-					fuseFd = 0
+	if runtime.GOOS != "linux" || dev == 0 {
+		return
+	}
+	conn := devMinor(dev)
+	data, err := os.ReadFile(filepath.Join(fuseConnectionsPath, strconv.FormatUint(uint64(conn), 10), "waiting"))
+	if err == nil {
+		waiting, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err == nil && waiting > 0 {
+			tids, err := os.ReadDir(fmt.Sprintf("/proc/%d/task", pid))
+			if err != nil {
+				logger.Warnf("watchdog: read tasks of process %d: %v", pid, err)
+			} else {
+				for _, tid := range tids {
+					stackPath := fmt.Sprintf("/proc/%d/task/%s/stack", pid, tid.Name())
+					stack, err := os.ReadFile(stackPath)
+					if err != nil {
+						continue
+					}
+					stackText := strings.TrimSpace(string(stack))
+					if stackText == "" {
+						continue
+					}
+					logger.Warnf("watchdog: potential hung task kernel stack (pid=%d tid=%s):\n%s", pid, tid.Name(), stackText)
 				}
-				f, err := os.OpenFile(fmt.Sprintf("/sys/fs/fuse/connections/%d/abort", devMinor(dev)), os.O_WRONLY, 0777)
-				if err != nil {
-					logger.Warn(err)
-				} else {
-					_, _ = f.WriteString("1")
-					_ = f.Close()
-				}
-				break
 			}
+			fuseMu.Lock()
+			if fuseFd > 0 {
+				_ = syscall.Close(fuseFd)
+				fuseFd = 0
+			}
+			fuseMu.Unlock()
+			f, err := os.OpenFile(filepath.Join(fuseConnectionsPath, strconv.FormatUint(uint64(conn), 10), "abort"), os.O_WRONLY, 0)
+			if err != nil {
+				logger.Warn(err)
+				return
+			}
+			defer func() { _ = f.Close() }()
+			if _, err = f.WriteString("1"); err != nil {
+				logger.Warn(err)
+				return
+			}
+			logger.Warnf("watchdog: FUSE abort triggered for connection %d, pid %d", conn, pid)
+		} else if err != nil {
+			logger.Warnf("watchdog: failed to parse waiting FUSE requests for connection %d, pid %d: %v; abort not triggered", conn, pid, err)
 		}
 	}
 }
