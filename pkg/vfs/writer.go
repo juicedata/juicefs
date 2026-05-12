@@ -152,10 +152,11 @@ func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.
 }
 
 type chunkWriter struct {
-	indx   uint32
-	file   *fileWriter
-	slices []*sliceWriter
-	queued bool
+	indx        uint32
+	file        *fileWriter
+	slices      []*sliceWriter
+	queued      bool
+	maxSliceEnd uint64
 }
 
 // protected by file
@@ -229,8 +230,8 @@ func (c *chunkWriter) commitThread() {
 			f.committedTo = end
 		}
 		c.slices = c.slices[1:]
-		if c.queued && !c.hasSliceBeyond(f.committedTo) { // recheck after dequeuing one committed slice
-			f.dequeueCommit(c)
+		if c.queued && f.committedTo >= c.maxSliceEnd {
+			f.dequeueCommit(c) // dequeue once committed caught up to pending
 		}
 	}
 	f.freeChunk(c)
@@ -280,19 +281,16 @@ func (c *chunkWriter) sliceEnd(s *sliceWriter) uint64 {
 }
 
 // protected by file
-func (c *chunkWriter) hasSliceBeyond(length uint64) bool {
-	for _, s := range c.slices {
-		if c.sliceEnd(s) > length {
-			return true
-		}
-	}
-	return false
-}
-
-// protected by file
 func (f *fileWriter) tryEnqueueCommit(s *sliceWriter) {
 	c := s.chunk
-	if c.queued || c.sliceEnd(s) <= f.committedTo {
+	end := c.sliceEnd(s)
+	if end <= f.committedTo {
+		return
+	}
+	if end > c.maxSliceEnd {
+		c.maxSliceEnd = end
+	}
+	if c.queued {
 		return
 	}
 	c.queued = true
@@ -314,6 +312,7 @@ func (f *fileWriter) dequeueCommit(c *chunkWriter) {
 	}
 	f.commitQueue = f.commitQueue[1:]
 	c.queued = false
+	c.maxSliceEnd = 0
 	f.commitcond.Broadcast()
 }
 
@@ -486,6 +485,7 @@ func (f *fileWriter) Truncate(length uint64) {
 	// TODO: truncate write buffer if length < f.length
 	f.length = length
 	f.committedTo = length
+	// Truncate doesn't drop slices from c.slices, so leave maxSliceEnd as is
 }
 
 type dataWriter struct {
