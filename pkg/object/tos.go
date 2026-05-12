@@ -1,4 +1,4 @@
-//go:build !tos
+//go:build !notos
 
 /*
  * JuiceFS, Copyright 2022 Juicedata, Inc.
