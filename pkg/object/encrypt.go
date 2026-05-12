@@ -63,6 +63,8 @@ func ExportRsaPrivateKeyToPem(key *rsa.PrivateKey, passphrase string) string {
 	return string(privPEM)
 }
 
+var ErrKeyNeedPasswd = errors.New("passphrase is required to private key")
+
 func ParseRsaPrivateKeyFromPem(enc []byte, passphrase []byte) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode(enc)
 	if block == nil {
@@ -115,7 +117,10 @@ func ParseRsaPrivateKeyFromPath(path, passphrase string) (*rsa.PrivateKey, error
 		block, _ := pem.Decode(b)
 		// nolint:staticcheck
 		if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
-			return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
+			return nil, ErrKeyNeedPasswd
+		}
+		if block != nil && strings.Contains(block.Type, "ENCRYPTED") {
+			return nil, ErrKeyNeedPasswd
 		}
 	}
 	return ParseRsaPrivateKeyFromPem(b, []byte(passphrase))
@@ -144,7 +149,7 @@ const (
 	CHACHA20_RSA  = "chacha20-rsa"
 )
 
-func NewDataEncryptor(keyEncryptor Encryptor, algo string) (Encryptor, error) {
+func NewDataEncryptor(keyEncryptor Encryptor, algo string) (*dataEncryptor, error) {
 	switch algo {
 	case "", AES256GCM_RSA:
 		aead := func(key []byte) (cipher.AEAD, error) {
@@ -216,6 +221,29 @@ func (e *dataEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 		return nil, err
 	}
 	return aead.Open(ciphertext[:0], nonce, ciphertext, nil)
+}
+
+// MaxOverhead returns the maximum number of extra bytes that Encrypt can add.
+// Layout is:
+//
+//	2 bytes wrapped-key length
+//	1 byte nonce length
+//	wrapped encrypted data key
+//	nonce
+//	AEAD tag
+func (e *dataEncryptor) MaxOverhead() int {
+	aead, err := e.aead(make([]byte, e.keyLen))
+	if err != nil {
+		panic(err)
+	}
+	var wrappedKeyLen int
+	switch ke := e.keyEncryptor.(type) {
+	case *rsaEncryptor:
+		wrappedKeyLen = ke.privKey.Size()
+	default:
+		panic(fmt.Sprintf("unsupported key encryptor %T", e.keyEncryptor))
+	}
+	return 2 + 1 + wrappedKeyLen + aead.NonceSize() + aead.Overhead()
 }
 
 type encrypted struct {
