@@ -83,7 +83,6 @@ func devMinor(dev uint64) uint32 {
 	return uint32(minor)
 }
 
-
 func killMountProcess(pid int, dev uint64, lastActive *int64) {
 	if pid > 0 {
 		logger.Infof("watchdog: kill %d", pid)
@@ -139,9 +138,9 @@ func killMountProcess(pid int, dev uint64, lastActive *int64) {
 				logger.Warn(err)
 				return
 			}
-			logger.Warnf("watchdog: FUSE abort triggered for connection %d", conn)
+			logger.Warnf("watchdog: FUSE abort triggered for connection %d, pid %d", conn, pid)
 		} else if err != nil {
-			logger.Warnf("watchdog: failed to parse waiting FUSE requests for connection %d: %v; abort not triggered", conn, err)
+			logger.Warnf("watchdog: failed to parse waiting FUSE requests for connection %d, pid %d: %v; abort not triggered", conn, pid, err)
 		}
 	}
 }
