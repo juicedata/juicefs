@@ -83,6 +83,7 @@ func devMinor(dev uint64) uint32 {
 	return uint32(minor)
 }
 
+
 func killMountProcess(pid int, dev uint64, lastActive *int64) {
 	if pid > 0 {
 		logger.Infof("watchdog: kill %d", pid)
@@ -105,6 +106,23 @@ func killMountProcess(pid int, dev uint64, lastActive *int64) {
 	if err == nil {
 		waiting, err := strconv.Atoi(strings.TrimSpace(string(data)))
 		if err == nil && waiting > 0 {
+			tids, err := os.ReadDir(fmt.Sprintf("/proc/%d/task", pid))
+			if err != nil {
+				logger.Warnf("watchdog: read tasks of process %d: %v", pid, err)
+			} else {
+				for _, tid := range tids {
+					stackPath := fmt.Sprintf("/proc/%d/task/%s/stack", pid, tid.Name())
+					stack, err := os.ReadFile(stackPath)
+					if err != nil {
+						continue
+					}
+					stackText := strings.TrimSpace(string(stack))
+					if stackText == "" {
+						continue
+					}
+					logger.Warnf("watchdog: potential hung task kernel stack (pid=%d tid=%s):\n%s", pid, tid.Name(), stackText)
+				}
+			}
 			fuseMu.Lock()
 			if fuseFd > 0 {
 				_ = syscall.Close(fuseFd)
@@ -119,7 +137,9 @@ func killMountProcess(pid int, dev uint64, lastActive *int64) {
 			defer func() { _ = f.Close() }()
 			if _, err = f.WriteString("1"); err != nil {
 				logger.Warn(err)
+				return
 			}
+			logger.Warnf("watchdog: FUSE abort triggered for connection %d", conn)
 		} else if err != nil {
 			logger.Warnf("watchdog: failed to parse waiting FUSE requests for connection %d: %v; abort not triggered", conn, err)
 		}
