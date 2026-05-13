@@ -195,7 +195,7 @@ class QuotaTests(FileTests):
         self.v.mkdir(TESTFN + '/dir2')
 
         # set quota
-        self.v.set_quota(path=TESTFN, capacity=1024*1024*1024, inodes=1000, create=True)
+        self.v.set_quota(path=TESTFN, capacity=1024*1024*1024, inodes=1000, create=True, strict=True)
         res = self.v.get_quota(path=TESTFN)
         self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 16384, "UsedInodes": 4}}))
 

@@ -21,7 +21,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.2.0
+   1.3.1
 
 COMMANDS:
    ADMIN:
@@ -32,11 +32,10 @@ COMMANDS:
      gc       Garbage collector of objects in data storage
      fsck     Check consistency of a volume
      restore  restore files from trash
-     dump     Dump metadata into a JSON file
-     load     Load metadata from a previously dumped JSON file
+     dump     Dump metadata into a file
+     load     Load metadata from a previously dumped file
      version  Show version
    INSPECTOR:
-     changelog  Tail the changelog of a volume
      status   Show status of a volume
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
@@ -760,6 +759,8 @@ juicefs gateway redis://localhost localhost:9000
 |`--multi-buckets`|使用第一级目录作为存储桶（默认：false）|
 |`--keep-etag`|保留对象上传时的 ETag（默认：false）|
 |`--umask=022`|新文件和新目录的 umask 的八进制格式（默认值：022）|
+|`--head-dir`|标准的 S3 协议是没有「目录」这一概念的，因此默认情况下，为了符合 S3 协议，该选项是关闭的，此时对目录进行 HEAD 请求，会返回 404，除非该是显式 PUT 创建的（用类似 `aws s3api put-object --key /path/dirname/` 的方式）。<br/><br/>在 `--head-dir` 未开启的情况下，S3 Gateway 会使用目录的 atime 作为目录是否显式创建的判断标准：如果 atime 为 0，则视为显式创建，可以进行 HEAD 请求；如果 atime 大于 0，则视为隐式创建，对其发起 HEAD 请求会返回 404。<br/><br/>在某些场景下，如果希望能够对 所有目录发起 HEAD 请求，可以启用 `--head-dir` 参数，让文件系统内的所有目录，都可以当做普通的 S3 对象来查询。如果要使用该功能，建议升级到 5.3.8 或者更新版本，来避免一些已知问题。|
+|`--hide-dir-object`|通过 S3 Gateway 在文件系统（尚不存在的）深层目录显式创建文件，目录层级因此被动创建出来，这种目录属于隐式创建目录。<br/><br/>`--hide-dir-object` 这个参数的作用是隐藏通过 PUT 请求隐式创建的目录。该选项默认关闭，在此情形下，系统会通过 atime 决定目录是否展示：如果 atime 为 0，则目录会出现在 LIST 请求中；如果 atime 大于 0，则不会显示。<br/><br/>如果开启该选项，则彻底隐藏隐式创建的目录，只有用类似 `aws s3api put-object --key /path/dirname/` 的方式显式创建目录（atime 为 0），才能够被 LIST 请求展示出来。|
 |`--object-tag` <VersionAdd>1.2</VersionAdd>|启用对象标签 API|
 |`--domain value` <VersionAdd>1.2</VersionAdd>|虚拟主机样式请求的域|
 |`--refresh-iam-interval=5m` <VersionAdd>1.2</VersionAdd>|重新加载网关 IAM 配置的间隔时间（默认值：5 分钟）|
@@ -951,9 +952,9 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--files-from` <VersionAdd>1.3</VersionAdd>|仅同步给定文件中记录的对象，其每行内容都是待同步对象的相对路径，如果对象是目录建议以 / 结尾|
 |`--start=KEY, -s KEY, --end=KEY, -e KEY`|提供 KEY 范围，来指定对象存储的 List 范围。|
 |`--end KEY, -e KEY`|同步的最后一个 `KEY`|
-|`--exclude=PATTERN`|排除匹配 `PATTERN` 的 Key。参考[「过滤」](../guide/sync.md#filtering)文档了解如何使用。|
-|`--include=PATTERN`|不排除匹配 `PATTERN` 的 Key，需要与 `--exclude` 选项配合使用。参考[「过滤」](../guide/sync.md#filtering)文档了解如何使用。|
-|`--match-full-path` <VersionAdd>1.2</VersionAdd>|使用「完整路径过滤模式」，默认为 false。参考[「过滤模式」](../guide/sync.md#filtering-mode)文档了解如何使用。|
+|`--exclude=PATTERN`|排除匹配 `PATTERN` 的 Key。参考[「模式匹配」](../guide/sync.md#pattern-matching)文档了解如何使用。|
+|`--include=PATTERN`|不排除匹配 `PATTERN` 的 Key，需要与 `--exclude` 选项配合使用。参考[「模式匹配」](../guide/sync.md#pattern-matching)文档了解如何使用。|
+|`--match-full-path` <VersionAdd>1.2</VersionAdd>|使用「完整路径过滤模式」，默认为 false。参考[「完整路径过滤模式」](../guide/sync.md#full-path-filtering-mode)文档了解如何使用。|
 |`--max-size=SIZE` <VersionAdd>1.2</VersionAdd>|跳过大小大于 `SIZE` 的文件，单位字节|
 |`--min-size=SIZE` <VersionAdd>1.2</VersionAdd>|跳过大小小于 `SIZE` 的文件，单位字节|
 |`--max-age=DURATION` <VersionAdd>1.2</VersionAdd>|跳过最后修改时间超过 `DURATION` 的文件，单位秒。例如 `--max-age=3600` 表示仅同步在 1 小时内被修改过的文件。|
