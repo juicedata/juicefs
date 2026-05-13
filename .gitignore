@@ -21,6 +21,7 @@ cmd/cmd
 # ide
 .vscode
 .idea
+.trae
 
 # lang
 __pycache__
