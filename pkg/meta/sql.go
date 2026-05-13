@@ -1032,16 +1032,6 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	return nil
 }
 
-func buildChunkRefDeltas(ss []*slice, delta int) map[uint64]int {
-	deltas := make(map[uint64]int)
-	for _, sl := range ss {
-		if sl.id > 0 {
-			deltas[sl.id] += delta
-		}
-	}
-	return deltas
-}
-
 func (m *dbMeta) batchUpdateChunkRefs(s *xorm.Session, chunkRefDeltas map[uint64]int) error {
 	if len(chunkRefDeltas) == 0 {
 		return nil
@@ -3459,13 +3449,14 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		}
 
 		ses := s
-		chunkRefDeltas := make(map[uint64]int)
 		updateSlices := func(indx uint32, buf []byte, id uint64, size uint32) error {
 			if err := m.appendSlice(ses, fout, indx, buf); err != nil {
 				return err
 			}
 			if id > 0 {
-				chunkRefDeltas[id]++
+				if _, err := ses.Exec(m.sqlConv("update chunk_ref set refs=refs+1 where chunkid = ? AND size = ?"), id, size); err != nil {
+					return err
+				}
 			}
 			return nil
 		}
@@ -3509,9 +3500,6 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 					}
 				}
 			}
-		}
-		if err := m.batchUpdateChunkRefs(ses, chunkRefDeltas); err != nil {
-			return err
 		}
 		if _, err := s.Cols("length", "mtime", "ctime", "mtimensec", "ctimensec").Update(&nout, &node{Inode: fout}); err != nil {
 			return err
@@ -3731,7 +3719,13 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		if ss == nil {
 			logger.Errorf("Corrupt value for inode %d chunk index %d, use `gc` to clean up leaked slices", inode, indx)
 		}
-		if err = m.batchUpdateChunkRefs(s, buildChunkRefDeltas(ss, -1)); err != nil {
+		deltas := make(map[uint64]int)
+		for _, sl := range ss {
+			if sl.id > 0 {
+				deltas[sl.id] += -1
+			}
+		}
+		if err = m.batchUpdateChunkRefs(s, deltas); err != nil {
 			return err
 		}
 		c.Slices = nil
@@ -3807,14 +3801,10 @@ func (m *dbMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 				if len(ss) == 0 {
 					return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Id, ds.Slices)
 				}
-				chunkRefDeltas := make(map[uint64]int)
 				for _, s := range ss {
-					if s.Id > 0 {
-						chunkRefDeltas[s.Id]--
+					if _, e := ses.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? AND size=?"), s.Id, s.Size); e != nil {
+						return e
 					}
-				}
-				if e := m.batchUpdateChunkRefs(ses, chunkRefDeltas); e != nil {
-					return e
 				}
 				_, e := ses.Delete(&delslices{Id: ds.Id})
 				m.genLog(ctx, ses, time.Now().UnixNano(), "CLEANUP_DELAYED_SLICES(%d,%d)", ds.Id, ds.Deleted)
@@ -3875,8 +3865,13 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 				}
 			}
 		} else {
-			if err := m.batchUpdateChunkRefs(s, buildChunkRefDeltas(ss, -1)); err != nil {
-				return err
+			for _, s_ := range ss {
+				if s_.id == 0 {
+					continue
+				}
+				if _, err := s.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? AND size=?"), s_.id, s_.size); err != nil {
+					return err
+				}
 			}
 		}
 		m.genLog(Background(), s, time.Now().UnixNano(), "COMPACTCHUNK(%d,%d,%d,%d,%d,%d,%d)", inode, indx, skipped, len(ss), pos, id, size)
@@ -4037,14 +4032,10 @@ func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 				return err
 			}
 			if clean {
-				chunkRefDeltas := make(map[uint64]int)
 				for _, s := range ss {
-					if s.Id > 0 {
-						chunkRefDeltas[s.Id]--
+					if _, e := tx.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? AND size=?"), s.Id, s.Size); e != nil {
+						return e
 					}
-				}
-				if err := m.batchUpdateChunkRefs(tx, chunkRefDeltas); err != nil {
-					return err
 				}
 				_, err = tx.Delete(del)
 				m.genLog(ctx, tx, time.Now().UnixNano(), "CLEANUP_TRASH_SLICES(%d,%d)", del.Id, del.Deleted)
@@ -5422,16 +5413,15 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 						return err
 					}
 				}
-				chunkRefDeltas := make(map[uint64]int)
+				// TODO: batch?
 				for _, c := range cs {
 					for _, sli := range readSliceBuf(c.Slices) {
 						if sli.id > 0 {
-							chunkRefDeltas[sli.id]++
+							if _, err := s.Exec(m.sqlConv("update chunk_ref set refs=refs+1 where chunkid = ? AND size = ?"), sli.id, sli.size); err != nil {
+								return err
+							}
 						}
 					}
-				}
-				if err := m.batchUpdateChunkRefs(s, chunkRefDeltas); err != nil {
-					return err
 				}
 			}
 		case TypeSymlink:
