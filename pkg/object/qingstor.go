@@ -1,5 +1,5 @@
-//go:build !noqingstore
-// +build !noqingstore
+//go:build !noqingstor
+// +build !noqingstor
 
 /*
  * JuiceFS, Copyright 2018 Juicedata, Inc.
