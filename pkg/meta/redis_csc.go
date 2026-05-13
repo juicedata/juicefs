@@ -2,7 +2,7 @@
 // +build !noredis
 
 /*
- * JuiceFS, Copyright 2020 Juicedata, Inc.
+ * JuiceFS, Copyright 2025 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -33,10 +34,9 @@ import (
 	"github.com/redis/go-redis/v9/push"
 )
 
-var entryMark cachedEntry
-
 type cachedEntry struct {
-	ino Ino
+	ino  Ino
+	term uint64
 	Attr
 }
 
@@ -56,6 +56,9 @@ type redisCache struct {
 
 	inodeCache *expirable.LRU[Ino, []byte]
 	entryCache *expirable.LRU[string, *cachedEntry]
+
+	entryTermMu sync.RWMutex
+	entryTerms  map[Ino]uint64
 }
 
 func newRedisCache(prefix string, cap int, expiry time.Duration, preload int) *redisCache {
@@ -67,6 +70,7 @@ func newRedisCache(prefix string, cap int, expiry time.Duration, preload int) *r
 		preload:    preload,
 		inodeCache: expirable.NewLRU[Ino, []byte](cap, nil, expiry),
 		entryCache: expirable.NewLRU[string, *cachedEntry](cap, nil, expiry),
+		entryTerms: make(map[Ino]uint64),
 	}
 }
 
@@ -116,6 +120,25 @@ func (c *redisCache) entryName(parent Ino, name string) string {
 	return fmt.Sprintf("%d%d%s", parent, os.PathSeparator, name)
 }
 
+func (c *redisCache) entryTerm(parent Ino) uint64 {
+	c.entryTermMu.RLock()
+	defer c.entryTermMu.RUnlock()
+	return c.entryTerms[parent]
+}
+
+func (c *redisCache) bumpEntryTerm(parent Ino) uint64 {
+	c.entryTermMu.Lock()
+	defer c.entryTermMu.Unlock()
+	c.entryTerms[parent]++
+	return c.entryTerms[parent]
+}
+
+func (c *redisCache) resetEntryTerms() {
+	c.entryTermMu.Lock()
+	defer c.entryTermMu.Unlock()
+	c.entryTerms = make(map[Ino]uint64)
+}
+
 func (c *redisCache) HandlePushNotification(ctx context.Context, handlerCtx push.NotificationHandlerContext, notification []interface{}) error {
 	if len(notification) != 2 || notification[0] == nil || notification[1] == nil {
 		return nil
@@ -137,12 +160,9 @@ func (c *redisCache) HandlePushNotification(ctx context.Context, handlerCtx push
 			}
 		case keyTypEntry:
 			parentStr := key[len(c.prefix)+1:]
-			// invalidate all entries related to this directory
-			prefix := fmt.Sprintf("%s%d", parentStr, os.PathSeparator)
-			for _, k := range c.entryCache.Keys() {
-				if strings.HasPrefix(k, prefix) {
-					c.entryCache.Remove(k)
-				}
+			parent, err := strconv.ParseUint(parentStr, 10, 64)
+			if err == nil {
+				c.bumpEntryTerm(Ino(parent))
 			}
 		}
 	}
@@ -284,6 +304,7 @@ func (c *redisCache) onInvalidateConnect(ctx context.Context, cn *redis.Conn) er
 	// clear all caches on reconnect
 	c.inodeCache.Purge()
 	c.entryCache.Purge()
+	c.resetEntryTerms()
 	// use the pubsub connection to handle tracking and invalidate
 	_ = cn.Do(ctx, "CLIENT", "TRACKING", "OFF").Err()
 	if err := cn.Do(ctx, "CLIENT", "TRACKING", "ON", "BCAST", "PREFIX", c.prefix+"i", "PREFIX", c.prefix+"d").Err(); err != nil {
@@ -308,6 +329,7 @@ func (m *redisMeta) preloadCache() {
 		return
 	}
 
+	term := m.cache.entryTerm(m.root)
 	var entries []*Entry
 	if eno := m.doReaddir(ctx, m.root, 1, &entries, m.cache.preload); eno != 0 {
 		logger.Warnf("failed to read root %d directory: %d", m.root, eno)
@@ -316,6 +338,7 @@ func (m *redisMeta) preloadCache() {
 	for _, entry := range entries {
 		m.cache.entryCache.Add(m.cache.entryName(m.root, string(entry.Name)), &cachedEntry{
 			ino:  entry.Inode,
+			term: term,
 			Attr: *entry.Attr,
 		})
 	}

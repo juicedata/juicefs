@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9/push"
 	"github.com/stretchr/testify/require"
 )
 
@@ -81,9 +82,10 @@ func TestRedisCache(t *testing.T) {
 	t.Run("entry hook", func(t *testing.T) {
 		cache := m.cache
 		ino := Ino(104)
+		gen := cache.entryTerm(ino)
 		name1, name2 := cache.entryName(ino, "f1"), cache.entryName(ino, "f2")
-		cache.entryCache.Add(name1, &cachedEntry{})
-		cache.entryCache.Add(name2, &cachedEntry{})
+		cache.entryCache.Add(name1, &cachedEntry{term: gen})
+		cache.entryCache.Add(name2, &cachedEntry{term: gen})
 
 		err := m.rdb.HSet(ctx, m.entryKey(ino), "f1", "c1", "f2", "c2").Err()
 		require.NoError(t, err)
@@ -93,14 +95,64 @@ func TestRedisCache(t *testing.T) {
 		_, ok = cache.entryCache.Get(name2)
 		require.False(t, ok)
 
-		cache.entryCache.Add(name1, &cachedEntry{})
-		cache.entryCache.Add(name2, &cachedEntry{})
+		cache.entryCache.Add(name1, &cachedEntry{term: gen})
+		cache.entryCache.Add(name2, &cachedEntry{term: gen})
 		err = m.rdb.HDel(ctx, m.entryKey(ino), "f1", "f2").Err()
 		require.NoError(t, err)
 
 		_, ok = cache.entryCache.Get(name1)
 		require.False(t, ok)
 		_, ok = cache.entryCache.Get(name2)
+		require.False(t, ok)
+	})
+
+	t.Run("entry generation invalidation", func(t *testing.T) {
+		cache := m.cache
+		parent := Ino(105)
+		name := cache.entryName(parent, "f")
+		gen := cache.entryTerm(parent)
+		cache.entryCache.Add(name, &cachedEntry{ino: 106, term: gen, Attr: Attr{Typ: TypeFile}})
+
+		err := cache.HandlePushNotification(ctx, push.NotificationHandlerContext{}, []interface{}{"invalidate", []interface{}{m.entryKey(parent)}})
+		require.NoError(t, err)
+		require.Equal(t, gen+1, cache.entryTerm(parent))
+
+		entry, ok := cache.entryCache.Get(name)
+		require.True(t, ok)
+		require.NotEqual(t, cache.entryTerm(parent), entry.term)
+	})
+
+	t.Run("entry mark refill requires current generation", func(t *testing.T) {
+		cache := m.cache
+		parent := Ino(107)
+		name := cache.entryName(parent, "f")
+		gen := cache.entryTerm(parent)
+		cache.entryCache.Add(name, &cachedEntry{term: gen})
+
+		cache.bumpEntryTerm(parent)
+		added, _ := cache.entryCache.AddIf(name, &cachedEntry{ino: 108, term: gen}, func(oldEntry *cachedEntry, exists bool) bool {
+			return exists && oldEntry.isMark() && oldEntry.term == gen && cache.entryTerm(parent) == gen
+		})
+		require.False(t, added)
+
+		entry, ok := cache.entryCache.Get(name)
+		require.True(t, ok)
+		require.True(t, entry.isMark())
+	})
+
+	t.Run("entry mark refill requires existing mark", func(t *testing.T) {
+		cache := m.cache
+		parent := Ino(109)
+		name := cache.entryName(parent, "f")
+		gen := cache.entryTerm(parent)
+		cache.entryCache.Add(name, &cachedEntry{term: gen})
+		cache.entryCache.Remove(name)
+
+		added, _ := cache.entryCache.AddIf(name, &cachedEntry{ino: 110, term: gen}, func(oldEntry *cachedEntry, exists bool) bool {
+			return exists && oldEntry.isMark() && oldEntry.term == gen && cache.entryTerm(parent) == gen
+		})
+		require.False(t, added)
+		_, ok := cache.entryCache.Get(name)
 		require.False(t, ok)
 	})
 }
