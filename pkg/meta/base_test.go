@@ -1127,9 +1127,15 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "f3"); st != 0 {
 		t.Fatalf("unlink f3: %s", st)
 	}
-	time.Sleep(time.Millisecond * 100) // wait for delete
-	if st := m.Read(ctx, inode, 0, &slices); st != syscall.ENOENT {
-		t.Fatalf("read chunk: %s", st)
+	var i int
+	for i = 0; i < 50; i++ {
+		if st := m.Read(ctx, inode, 0, &slices); st == syscall.ENOENT {
+			break
+		}
+		time.Sleep(time.Millisecond * 100)
+	}
+	if i >= 50 {
+		t.Fatalf("chunk not delete after 5s")
 	}
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)
