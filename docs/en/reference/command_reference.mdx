@@ -21,7 +21,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.2.0
+   1.3.1
 
 COMMANDS:
    ADMIN:
@@ -32,11 +32,10 @@ COMMANDS:
      gc       Garbage collector of objects in data storage
      fsck     Check consistency of a volume
      restore  restore files from trash
-     dump     Dump metadata into a JSON file
-     load     Load metadata from a previously dumped JSON file
+     dump     Dump metadata into a file
+     load     Load metadata from a previously dumped file
      version  Show version
    INSPECTOR:
-     changelog  Tail the changelog of a volume
      status   Show status of a volume
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
@@ -764,6 +763,8 @@ juicefs gateway redis://localhost localhost:9000
 |`--multi-buckets`|use top level of directories as buckets (default: false)|
 |`--keep-etag`|save the ETag for uploaded objects (default: false)|
 |`--umask=022`|umask for new file and directory in octal (default: 022)|
+|`--head-dir`|The notion of "directory" does not exist in the standard S3 protocol, so this option is disabled by default to remain protocol-compliant. When disabled, HEAD requests to directories return 404 unless the directory was explicitly created by a PUT request such as `aws s3api put-object --key /path/dirname/`. <br/><br/>When `--head-dir` is disabled, the S3 Gateway uses a directory's atime to determine whether it was explicitly created: atime 0 means explicitly created and allowed for HEAD requests; atime greater than 0 means implicitly created and HEAD requests return 404. <br/><br/>If you need HEAD requests to succeed for all directories, enable `--head-dir` to treat directories as ordinary S3 objects. It is recommended to upgrade to 5.3.8 or later when using this option to avoid known issues.|
+|`--hide-dir-object`|When S3 Gateway implicitly creates a deep directory structure because a file is PUT into a path under directories that do not yet exist, those directories are considered implicitly created. <br/><br/>The `--hide-dir-object` option hides those implicitly created directories. This option is disabled by default, in which case the gateway uses atime to decide whether a directory can be listed: atime 0 directories appear in LIST results; atime greater than 0 directories do not. <br/><br/>When enabled, implicitly created directories are hidden completely. Only directories explicitly created by a PUT request such as `aws s3api put-object --key /path/dirname/` (atime 0) will be shown in LIST responses.|
 |`--object-tag` <VersionAdd>1.2</VersionAdd>|enable object tagging API|
 |`--domain value` <VersionAdd>1.2</VersionAdd>|domain for virtual-host-style requests|
 |`--refresh-iam-interval=5m` <VersionAdd>1.2</VersionAdd>|interval to reload gateway IAM from configuration (default: 5m)|
@@ -956,9 +957,9 @@ In which:
 |`--files-from` <VersionAdd>1.3</VersionAdd>|Only synchronize the objects recorded in the given file, where each line is the relative path of the object to be synchronized. If the object is a directory, it is recommended to end with `/`.|
 |`--start=KEY, -s KEY, --end=KEY, -e KEY`|Provide object storage key range for syncing.|
 |`--end KEY, -e KEY`|the last `KEY` to sync|
-|`--exclude=PATTERN`|Exclude keys matching `PATTERN`. Refer to the ["Filtering"](../guide/sync.md#filtering) document to learn how to use it.|
-|`--include=PATTERN`|Include keys matching `PATTERN`, need to be used with `--exclude`. Refer to the ["Filtering"](../guide/sync.md#filtering) document to learn how to use it.|
-|`--match-full-path` <VersionAdd>1.2</VersionAdd>|Use "Full path filtering mode", default is false. Refer to the ["Filtering modes"](../guide/sync.md#filtering-mode) document to learn how to use it.|
+|`--exclude=PATTERN`|Exclude keys matching `PATTERN`. Refer to the ["Pattern matching"](../guide/sync.md#pattern-matching) document to learn how to use it.|
+|`--include=PATTERN`|Include keys matching `PATTERN`, need to be used with `--exclude`. Refer to the ["Pattern matching"](../guide/sync.md#pattern-matching) document to learn how to use it.|
+|`--match-full-path` <VersionAdd>1.2</VersionAdd>|Use "Full path filtering mode", default is false. Refer to the ["Full path filtering"](../guide/sync.md#full-path-filtering-mode) document to learn how to use it.|
 |`--max-size-SIZE` <VersionAdd>1.2</VersionAdd>|skip files larger than `SIZE`|
 |`--min-size-SIZE` <VersionAdd>1.2</VersionAdd>|skip files smaller than `SIZE`|
 |`--max-age=DURATION` <VersionAdd>1.2</VersionAdd>|Skip files whose last modification time exceeds `DURATION`, in seconds. For example, `--max-age=3600` means to synchronize only files that have been modified within 1 hour.|

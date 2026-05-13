@@ -897,7 +897,7 @@ juicefs config META-URL --ranger-rest-url "" --ranger-service jfs ""
 
 配置完成以后，你还需要使用该用户来更新 JuiceFS 中保存的规则。
 
-更新安全规则文件的命令如下（建议配置成定时任务自动更新），注意将 {PRINCIPAL} 替换为 policy.download.auth.users 配置的用户：
+更新安全规则文件的命令如下（建议配置成定时任务自动更新），注意将 `{PRINCIPAL}` 替换为 policy.download.auth.users 配置的用户：
 
 ```shell
 hadoop jar juicefs-hadoop-{version}.jar ranger \

@@ -7,7 +7,7 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
 if [[ "$META" == "sqlite3" ]]; then
-    META_URL="sqlite3:///tmp/test.db"
+    META_URL="sqlite3:///tmp/cache-${PPID}-$$.db"
 fi
 
 test_warmup_in_background(){
@@ -548,8 +548,15 @@ test_disk_failure_on_writeback()
 prepare_test()
 {
     df -h /
+    cleanup_test_mounts
+    ./juicefs umount /tmp/jfs 2>/dev/null || umount -l /tmp/jfs 2>/dev/null || true
     umount_jfs /tmp/jfs $META_URL
+    ./juicefs umount /var/jfsCache1 2>/dev/null || umount -l /var/jfsCache1 2>/dev/null || true
     python3 .github/scripts/flush_meta.py $META_URL
+    if [[ "$META" == "sqlite3" ]]; then
+        META_URL="sqlite3:///tmp/cache-${PPID}-$$-${RANDOM}.db"
+        rm -f "${META_URL#sqlite3://}"
+    fi
     rm -rf /var/jfs/myjfs || true
     rm -rf /var/jfsCache/myjfs || true
     [[ ! -f /usr/local/bin/mc ]] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && chmod +x /usr/local/bin/mc
