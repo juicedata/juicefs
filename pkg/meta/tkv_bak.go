@@ -484,13 +484,11 @@ func (m *kvMeta) dumpChangeLog(ctx Context, opt *DumpOption, ch chan<- *dumpedRe
 		if maxKey == 0 {
 			return nil
 		}
-		begin := m.logKey(m.client.rewind(maxKey, 1))
-		end := m.logKey(maxKey + 1)
+		beginID := m.client.rewind(maxKey, 1)
 		changelogs := make([]*pb.ChangeLog, 0, kvDumpBatchSize)
-		tx.scan(begin, end, false, func(k, v []byte) bool {
-			ver := binary.BigEndian.Uint64(k[4:])
+		m.scanLogRange(tx, beginID, maxKey+1, false, func(k, v []byte) bool {
 			changelogs = append(changelogs, &pb.ChangeLog{
-				Version: int64(ver),
+				Version: int64(m.parseLogID(k)),
 				Entry:   v,
 			})
 			return true

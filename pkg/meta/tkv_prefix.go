@@ -18,6 +18,7 @@ package meta
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 )
 
@@ -53,6 +54,19 @@ func (tx *prefixTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []
 	tx.kvTxn.scan(tx.realKey(begin), tx.realKey(end), keysOnly, func(k, v []byte) bool {
 		return handler(tx.origKey(k), v)
 	})
+}
+
+type prefixIterator struct {
+	kvIterator
+	prefix []byte
+}
+
+func (it *prefixIterator) Key() []byte {
+	return it.kvIterator.Key()[len(it.prefix):]
+}
+
+func (tx *prefixTxn) iter(begin, end []byte, keysOnly bool) kvIterator {
+	return &prefixIterator{tx.kvTxn.kvtxn.(iterKvTxn).iter(tx.realKey(begin), tx.realKey(end), keysOnly), tx.prefix}
 }
 
 func (tx *prefixTxn) exist(prefix []byte) bool {
@@ -106,6 +120,28 @@ func (c *prefixClient) reset(prefix []byte) error {
 		return fmt.Errorf("prefix must be nil, but got %v", prefix)
 	}
 	return c.tkvClient.reset(c.prefix)
+}
+
+func (c *prefixClient) logKey(m *kvMeta, id uint64) []byte {
+	if cc, ok := c.tkvClient.(tkvChangelogClient); ok {
+		return cc.logKey(m, id)
+	}
+	return m.fmtKey("XLOG", id)
+}
+
+func (c *prefixClient) parseLogID(key []byte) uint64 {
+	if cc, ok := c.tkvClient.(tkvChangelogClient); ok {
+		return cc.parseLogID(key)
+	}
+	return binary.BigEndian.Uint64(key[4:])
+}
+
+func (c *prefixClient) scanLogRange(m *kvMeta, tx *kvTxn, beginID, endID uint64, keysOnly bool, handler func(k, v []byte) bool) {
+	if cc, ok := c.tkvClient.(tkvChangelogClient); ok {
+		cc.scanLogRange(m, tx, beginID, endID, keysOnly, handler)
+		return
+	}
+	tx.scan(m.fmtKey("XLOG", beginID), m.fmtKey("XLOG", endID), keysOnly, handler)
 }
 
 func withPrefix(client tkvClient, prefix []byte) tkvClient {
