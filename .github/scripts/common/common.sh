@@ -99,26 +99,15 @@ wait_mount_process_killed() {
     
     echo "waiting for mount process $pid to exit within $wait_seconds seconds"
     for i in $(seq 1 "$wait_seconds"); do
-        case "$PLATFORM" in
-            mac)
-                if ! ps -p "$pid" > /dev/null; then
-                    echo "mount process is killed"
-                    break
-                fi
-                ;;
-            linux)
-                count=$(ps -ef | grep "juicefs mount" | awk '{print $2}' | grep "^$pid$" | wc -l)
-                if [ "$count" -eq 0 ]; then
-                    echo "mount process is killed"
-                    break
-                fi
-                ;;
-        esac
+        if ! kill -0 "$pid" 2>/dev/null; then
+            echo "mount process is killed"
+            break
+        fi
         
         if [ "$i" -eq "$wait_seconds" ]; then
             case "$PLATFORM" in
                 mac)    ps -p "$pid";;
-                linux)  ps -ef | grep "juicefs mount" | grep -v "grep";;
+                linux)  ps -fp "$pid" 2>/dev/null || true;;
             esac
             echo "<FATAL>: mount process is not killed after $wait_seconds"
             exit 1
