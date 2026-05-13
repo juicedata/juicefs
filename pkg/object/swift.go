@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -149,7 +150,7 @@ func newSwiftOSS(endpoint, username, apiKey, token string) (ObjectStorage, error
 		ApiKey:    apiKey,
 		AuthToken: token,
 		AuthUrl:   authURL,
-		Transport: GetHttpTransport(),
+		Transport: httpClient.Transport.(*http.Transport),
 	}
 	err = conn.Authenticate(context.Background())
 	if err != nil {
