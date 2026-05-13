@@ -1032,9 +1032,9 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	return nil
 }
 
-func buildChunkRefDeltas(slices []*slice, delta int) map[uint64]int {
+func buildChunkRefDeltas(ss []*slice, delta int) map[uint64]int {
 	deltas := make(map[uint64]int)
-	for _, sl := range slices {
+	for _, sl := range ss {
 		if sl.id > 0 {
 			deltas[sl.id] += delta
 		}
