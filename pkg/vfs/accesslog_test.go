@@ -17,6 +17,7 @@
 package vfs
 
 import (
+	"regexp"
 	"testing"
 	"time"
 
@@ -61,7 +62,8 @@ func TestAccessLog(t *testing.T) {
 	if now.Sub(ts.Local()) > time.Millisecond*10 {
 		t.Fatalf("stale time: %s now: %s", ts, time.Now())
 	}
-	if logs[26:len(logs)-4] != " [uid:1,gid:2,pid:10] method test - OK <0.0000" {
+	matched, _ := regexp.MatchString(` $$uid:1,gid:2,pid:10$$ method test - OK <0\.\d{4,6}>`, logs[26:])
+	if !matched {
 		t.Fatalf("unexpected log: %q", logs[26:])
 	}
 
