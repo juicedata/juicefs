@@ -1,5 +1,5 @@
-//go:build !noks3
-// +build !noks3
+//go:build !nos3 && !noks3
+// +build !nos3,!noks3
 
 /*
  * JuiceFS, Copyright 2018 Juicedata, Inc.
