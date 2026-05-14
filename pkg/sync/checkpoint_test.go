@@ -31,10 +31,10 @@ import (
 func TestCheckpointManagerSaveAndLoad(t *testing.T) {
 	srcStore, _ := object.CreateStorage("mem", "src", "", "", "")
 	store, _ := object.CreateStorage("mem", "", "", "", "")
-	if err := store.Put(ctx, "pending", bytes.NewReader([]byte("pending"))); err != nil {
+	if err := store.Put("pending", bytes.NewReader([]byte("pending"))); err != nil {
 		t.Fatalf("put pending object: %v", err)
 	}
-	pendingObj, err := store.Head(ctx, "pending")
+	pendingObj, err := store.Head("pending")
 	if err != nil {
 		t.Fatalf("head pending object: %v", err)
 	}
@@ -107,10 +107,10 @@ func TestCheckpointManagerSaveAndLoad(t *testing.T) {
 func TestCheckpointManagerPrefixStateLifecycle(t *testing.T) {
 	srcStore, _ := object.CreateStorage("mem", "src", "", "", "")
 	store, _ := object.CreateStorage("mem", "", "", "", "")
-	if err := store.Put(ctx, "prefix/file", bytes.NewReader([]byte("data"))); err != nil {
+	if err := store.Put("prefix/file", bytes.NewReader([]byte("data"))); err != nil {
 		t.Fatalf("put object: %v", err)
 	}
-	obj, err := store.Head(ctx, "prefix/file")
+	obj, err := store.Head("prefix/file")
 	if err != nil {
 		t.Fatalf("head object: %v", err)
 	}
@@ -281,11 +281,11 @@ func newTestConfig() *Config {
 //     with "dir/sub/pending" as pending and "dir/sub/y" as failed
 func seedCheckpoint(t *testing.T, src, dst object.ObjectStorage, config *Config) {
 	t.Helper()
-	pendingObj, err := src.Head(ctx, "dir/sub/pending")
+	pendingObj, err := src.Head("dir/sub/pending")
 	if err != nil {
 		t.Fatalf("head dir/sub/pending: %v", err)
 	}
-	failedObj, err := src.Head(ctx, "dir/sub/y")
+	failedObj, err := src.Head("dir/sub/y")
 	if err != nil {
 		t.Fatalf("head dir/sub/y: %v", err)
 	}
@@ -318,7 +318,7 @@ func seedCheckpoint(t *testing.T, src, dst object.ObjectStorage, config *Config)
 func putObjects(t *testing.T, store object.ObjectStorage, keys ...string) {
 	t.Helper()
 	for _, key := range keys {
-		if err := store.Put(ctx, key, bytes.NewReader([]byte(key))); err != nil {
+		if err := store.Put(key, bytes.NewReader([]byte(key))); err != nil {
 			t.Fatalf("put %s: %v", key, err)
 		}
 	}
@@ -335,7 +335,7 @@ func collectTasks(tasks <-chan object.Object) []string {
 func assertDstHasKeys(t *testing.T, dst object.ObjectStorage, keys ...string) {
 	t.Helper()
 	for _, key := range keys {
-		if _, err := dst.Head(ctx, key); err != nil {
+		if _, err := dst.Head(key); err != nil {
 			t.Errorf("expected dst to have %q, but Head returned: %v", key, err)
 		}
 	}
@@ -400,7 +400,7 @@ func TestRestorePrefixDedup(t *testing.T) {
 	dst, _ := object.CreateStorage("mem", "dedup-dst", "", "", "")
 
 	putObjects(t, src, "p/file1")
-	obj, _ := src.Head(ctx, "p/file1")
+	obj, _ := src.Head("p/file1")
 
 	mgr := NewCheckpointManager(src, dst, nil)
 	mgr.checkpoint = &Checkpoint{
@@ -443,7 +443,7 @@ func TestRestoreListDonePrefix(t *testing.T) {
 	dst, _ := object.CreateStorage("mem", "listdone-dst", "", "", "")
 
 	putObjects(t, src, "dir/a", "dir/b", "dir/sub/x", "dir/sub/pending")
-	pendingObj, _ := src.Head(ctx, "dir/sub/pending")
+	pendingObj, _ := src.Head("dir/sub/pending")
 
 	config := newTestConfig()
 
@@ -476,7 +476,7 @@ func TestRestoreListDonePrefix(t *testing.T) {
 
 	// ListDone=true means no new listing — these should NOT be in dst
 	for _, key := range []string{"dir/a", "dir/b", "dir/sub/x"} {
-		if _, err := dst.Head(ctx, key); err == nil {
+		if _, err := dst.Head(key); err == nil {
 			t.Errorf("dst should NOT have %q (listing should not have restarted)", key)
 		}
 	}
