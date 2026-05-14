@@ -1032,6 +1032,48 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	return nil
 }
 
+func (m *dbMeta) batchUpdateChunkRefs(s *xorm.Session, chunkRefDeltas map[uint64]int) error {
+	if len(chunkRefDeltas) == 0 {
+		return nil
+	}
+	chunkIds := make([]uint64, 0, len(chunkRefDeltas))
+	for id, delta := range chunkRefDeltas {
+		if delta != 0 {
+			chunkIds = append(chunkIds, id)
+		}
+	}
+	if len(chunkIds) == 0 {
+		return nil
+	}
+	slices.Sort(chunkIds)
+
+	batchSize := m.getTxnBatchNum()
+	for start := 0; start < len(chunkIds); start += batchSize {
+		end := min(start+batchSize, len(chunkIds))
+		batch := chunkIds[start:end]
+		var sb strings.Builder
+		args := make([]interface{}, 0, len(batch)*3)
+		fmt.Fprintf(&sb, "UPDATE %schunk_ref SET refs = refs + CASE ", m.tablePrefix)
+		for _, id := range batch {
+			sb.WriteString("WHEN chunkid = ? THEN ? ")
+			args = append(args, id, chunkRefDeltas[id])
+		}
+		sb.WriteString("ELSE 0 END WHERE chunkid IN (")
+		for i, id := range batch {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			sb.WriteString("?")
+			args = append(args, id)
+		}
+		sb.WriteString(")")
+		if _, err := s.Exec(append([]interface{}{sb.String()}, args...)...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *dbMeta) genLog(ctx Context, s *xorm.Session, ns int64, op string, args ...any) {
 	if !m.fmt.ChangeLog {
 		return
@@ -3677,14 +3719,14 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		if ss == nil {
 			logger.Errorf("Corrupt value for inode %d chunk index %d, use `gc` to clean up leaked slices", inode, indx)
 		}
-		for _, sc := range ss {
-			if sc.id == 0 {
-				continue
+		deltas := make(map[uint64]int)
+		for _, sl := range ss {
+			if sl.id > 0 {
+				deltas[sl.id] += -1
 			}
-			_, err = s.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? AND size=?"), sc.id, sc.size)
-			if err != nil {
-				return err
-			}
+		}
+		if err = m.batchUpdateChunkRefs(s, deltas); err != nil {
+			return err
 		}
 		c.Slices = nil
 		n, err := s.Where("inode = ? AND indx = ?", inode, indx).Delete(&c)
@@ -5594,42 +5636,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			}
 		}
 
-		if err := func() error {
-			if len(chunkRefCounts) == 0 {
-				return nil
-			}
-			chunkIds := make([]uint64, 0, len(chunkRefCounts))
-			for id := range chunkRefCounts {
-				chunkIds = append(chunkIds, id)
-			}
-			slices.Sort(chunkIds)
-
-			batchSize := m.getTxnBatchNum()
-			for start := 0; start < len(chunkIds); start += batchSize {
-				end := min(start+batchSize, len(chunkIds))
-				batch := chunkIds[start:end]
-				var sb strings.Builder
-				args := make([]interface{}, 0, len(batch)*3)
-				fmt.Fprintf(&sb, "UPDATE %schunk_ref SET refs = refs + CASE ", m.tablePrefix)
-				for _, id := range batch {
-					sb.WriteString("WHEN chunkid = ? THEN ? ")
-					args = append(args, id, chunkRefCounts[id])
-				}
-				sb.WriteString("ELSE 0 END WHERE chunkid IN (")
-				for i, id := range batch {
-					if i > 0 {
-						sb.WriteString(",")
-					}
-					sb.WriteString("?")
-					args = append(args, id)
-				}
-				sb.WriteString(")")
-				if _, err := s.Exec(append([]interface{}{sb.String()}, args...)...); err != nil {
-					return err
-				}
-			}
-			return nil
-		}(); err != nil {
+		if err := m.batchUpdateChunkRefs(s, chunkRefCounts); err != nil {
 			return err
 		}
 
