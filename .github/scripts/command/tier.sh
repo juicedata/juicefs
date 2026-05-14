@@ -23,6 +23,31 @@ else
 fi
 AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-${AWS_S3_ENDPOINT_URL:-$DEFAULT_AWS_ENDPOINT_URL}}
 AWS_BUCKET_URL=${AWS_BUCKET_URL:-${AWS_ENDPOINT_URL}/${AWS_BUCKET}}
+TIER_VOLUME_NAME=${TIER_VOLUME_NAME:-myjfs}
+
+cleanup_aws_volume_prefix()
+{
+    local volume_name=${1:-$TIER_VOLUME_NAME}
+    local prefix="${volume_name}/"
+    local key_count
+
+    echo "cleanup aws prefix: s3://${AWS_BUCKET}/${prefix}"
+    aws s3 rm "s3://${AWS_BUCKET}/${prefix}" --recursive --endpoint-url "$AWS_ENDPOINT_URL" >/tmp/aws.rm_prefix.log 2>/tmp/aws.rm_prefix.err || true
+    key_count=$(aws s3api list-objects-v2 \
+        --bucket "$AWS_BUCKET" \
+        --prefix "$prefix" \
+        --endpoint-url "$AWS_ENDPOINT_URL" \
+        --query 'KeyCount' \
+        --output text 2>/tmp/aws.list_prefix.err || echo 0)
+    [[ -z "$key_count" || "$key_count" == "None" ]] && key_count=0
+    if [[ "$key_count" != "0" ]]; then
+        echo "<FATAL>: aws prefix is not empty after cleanup: s3://${AWS_BUCKET}/${prefix}, key_count=$key_count"
+        cat /tmp/aws.rm_prefix.err 2>/dev/null || true
+        cat /tmp/aws.list_prefix.err 2>/dev/null || true
+        exit 1
+    fi
+    echo "aws prefix is clean: s3://${AWS_BUCKET}/${prefix}"
+}
 
 ensure_aws_cli()
 {
@@ -95,8 +120,9 @@ setup_tier_volume()
 {
     prepare_test
     recreate_aws_bucket_once
+    cleanup_aws_volume_prefix "$TIER_VOLUME_NAME"
     local format_cmd=(
-        ./juicefs format "$META_URL" myjfs
+        ./juicefs format "$META_URL" "$TIER_VOLUME_NAME"
         --storage s3
         --bucket "$AWS_BUCKET_URL"
         --access-key "$AWS_ACCESS_KEY_VALUE"
@@ -119,8 +145,9 @@ setup_tier_volume_writeback()
     local upload_delay=${1:-10s}
     prepare_test
     recreate_aws_bucket_once
+    cleanup_aws_volume_prefix "$TIER_VOLUME_NAME"
     local format_cmd=(
-        ./juicefs format "$META_URL" myjfs
+        ./juicefs format "$META_URL" "$TIER_VOLUME_NAME"
         --storage s3
         --bucket "$AWS_BUCKET_URL"
         --access-key "$AWS_ACCESS_KEY_VALUE"

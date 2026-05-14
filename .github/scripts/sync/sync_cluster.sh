@@ -7,6 +7,55 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
+HOST_META_URL=$META_URL
+
+get_cluster_host(){
+    local gateway
+    gateway=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}' worker1 2>/dev/null | head -n 1)
+    if [ -z "$gateway" ]; then
+        gateway="172.20.0.1"
+    fi
+    echo "$gateway"
+}
+
+restart_redis_service(){
+    sudo systemctl restart redis-server 2>/dev/null || \
+    sudo systemctl restart redis 2>/dev/null || \
+    sudo service redis-server restart 2>/dev/null || \
+    sudo service redis restart 2>/dev/null
+}
+
+configure_redis_for_cluster(){
+    [ "$META" != "redis" ] && return 0
+
+    local conf=/etc/redis/redis.conf
+    if [ ! -f "$conf" ]; then
+        echo "redis config not found: $conf"
+        exit 1
+    fi
+
+    sudo sed -E -i \
+        -e 's/^[#[:space:]]*bind .*/bind 0.0.0.0 ::0/' \
+        -e 's/^[#[:space:]]*protected-mode .*/protected-mode no/' \
+        "$conf"
+
+    grep -Eq '^[[:space:]]*bind[[:space:]]' "$conf" || echo 'bind 0.0.0.0 ::0' | sudo tee -a "$conf" >/dev/null
+    grep -Eq '^[[:space:]]*protected-mode[[:space:]]' "$conf" || echo 'protected-mode no' | sudo tee -a "$conf" >/dev/null
+
+    restart_redis_service
+
+    for _ in $(seq 1 30); do
+        if redis-cli -h 127.0.0.1 -p 6379 ping >/dev/null 2>&1 && redis-cli -h "$CLUSTER_HOST" -p 6379 ping >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "redis is not reachable from both localhost and cluster gateway $CLUSTER_HOST"
+    sudo ss -ltnp '( sport = :6379 )' || true
+    exit 1
+}
+
 start_minio(){
     if ! docker ps | grep "minio/minio"; then
         docker run -d -p 9000:9000 --name minio \
@@ -42,9 +91,9 @@ start_worker(){
 }
 start_worker
 
-sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0 ::1/g' /etc/redis/redis.conf
-systemctl restart redis
-META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
+CLUSTER_HOST=$(get_cluster_host)
+CLUSTER_META_URL=$(echo "$HOST_META_URL" | sed -E "s#(127\.0\.0\.1|localhost)#$CLUSTER_HOST#g")
+configure_redis_for_cluster
 # github runner 22.04 will set /home/runner to 750, which make juicefs binary not accessed by other users.
 chmod 755 /home/runner/
 
@@ -60,7 +109,7 @@ test_sync_without_mount_point(){
     done
     dd if=/dev/urandom of=/jfs/data/file$file_count bs=1M count=1024
     (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-change \
          >sync.log 2>&1
@@ -83,14 +132,14 @@ test_sync_without_mount_point2(){
     
     # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
     set -o pipefail
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-change \
          >sync.log 2>&1
     set +o pipefail
     check_sync_log $file_count
     set -o pipefail
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --start-time 2020-01-01 \
          --list-threads 10 --list-depth 5 --check-all \
          >sync.log 2>&1
@@ -105,7 +154,7 @@ test_sync_without_mount_point2(){
     ./mc cp -r data myminio/data
     sleep 2
     set -o pipefail
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --start-time "$current_time" \
          --list-threads 10 --list-depth 5 --update \
          >sync.log 2>&1
@@ -127,7 +176,7 @@ test_sync_delete_src_and_update(){
     done
     ./mc cp -r data myminio/data
     set -o pipefail
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --dirs --check-change \
          >sync.log 2>&1
@@ -139,7 +188,7 @@ test_sync_delete_src_and_update(){
     done
     ./mc cp -r data myminio/data
     set -o pipefail
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --delete-src --update --dirs --check-change \
          --enable-checkpoint --checkpoint-interval 2s \
@@ -147,7 +196,7 @@ test_sync_delete_src_and_update(){
     set +o pipefail
     diff data/ /jfs/data/
     set -o pipefail
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --delete-src --dirs --check-change \
          --enable-checkpoint --checkpoint-interval 2s \
@@ -174,7 +223,7 @@ test_sync_delete_dst(){
     echo "retain" > /jfs/data/retain
     chmod -R 777 /jfs/data
     rm -rf empty && mkdir empty
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-dst --match-full-path --exclude='retain' --include='*' \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync --delete-dst --match-full-path --exclude='retain' --include='*' \
          ./empty/ jfs://meta_url/data/  --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-new \
          --enable-checkpoint --checkpoint-interval 2s \
@@ -195,7 +244,7 @@ test_sync_with_random_test(){
     chmod -R 777 /jfs/test2
     run_id=1
     for sig in INT KILL INT; do
-        sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/test/ jfs://meta_url/test2/ \
+        sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-new --links --dirs --start-time "$current_time" \
          --enable-checkpoint --checkpoint-interval 2s \
@@ -215,20 +264,20 @@ test_sync_with_random_test(){
         fi
         run_id=$((run_id + 1))
     done
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/test/ jfs://meta_url/test2/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-new --links --dirs --start-time "$current_time" \
          --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     diff -ur --no-dereference --exclude='.jfs.file*.tmp.*' /jfs/test /jfs/test2
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync --mountpoint /jfs --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all --links --start-time 2199-12-30 \
          --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true 
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync --mountpoint /jfs --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --dirs \
          --list-threads 10 --list-depth 5 --check-all --links --start-time "$current_time" \
          --enable-checkpoint --checkpoint-interval 2s \
@@ -238,7 +287,7 @@ test_sync_with_random_test(){
     echo "delete src test passed"
     rm -rf empty || true
     mkdir empty || true
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs --delete-dst --match-full-path  --include='*' \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync --mountpoint /jfs --delete-dst --match-full-path  --include='*' \
          ./empty/ jfs://meta_url/test2/ --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-change --dirs --links --start-time "$current_time" \
          --enable-checkpoint --checkpoint-interval 2s \
@@ -257,7 +306,7 @@ test_sync_files_from_file(){
     chmod -R 777 /jfs/test
     chmod -R 777 /jfs/test2
     ls /jfs/test > files | tee files
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all --check-change --links --dirs --files-from files \
          --enable-checkpoint --checkpoint-interval 2s \
@@ -275,7 +324,7 @@ test_sync_chown_perms(){
     done
     sudo chown 1000:1000 /jfs/data -R
     sudo chmod -R 777 /jfs/data
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/data/ jfs://meta_url/data2/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync jfs://meta_url/data/ jfs://meta_url/data2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all --links --dirs --perms \
          >sync.log 2>&1
@@ -315,7 +364,7 @@ test_sync_worker_down(){
         echo "test-$i" > /jfs/data/test-$i
     done
     docker stop worker1
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/data/ jfs://meta_url/data2/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync jfs://meta_url/data/ jfs://meta_url/data2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-new \
          >sync.log 2>&1
@@ -408,7 +457,7 @@ test_sync_encrypt_cluster_basic(){
     chmod -R 777 /jfs/data
 
     (./mc rb myminio/encdata > /dev/null 2>&1 --force || true) && ./mc mb myminio/encdata
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encdata/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encdata/ \
         --encrypt-rsa-key /tmp/sync-enc-nopass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -429,7 +478,7 @@ test_sync_encrypt_cluster_basic(){
     ./juicefs mount -d $META_URL /jfs
     chmod -R 777 /jfs
 
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/encdata/ jfs://meta_url/decdata/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/encdata/ jfs://meta_url/decdata/ \
         --decrypt-rsa-key /tmp/sync-enc-nopass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -453,7 +502,7 @@ test_sync_encrypt_cluster_chacha20(){
     chmod -R 777 /jfs/data
 
     (./mc rb myminio/encch > /dev/null 2>&1 --force || true) && ./mc mb myminio/encch
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encch/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encch/ \
         --encrypt-rsa-key /tmp/sync-enc-nopass.pem --encrypt-algo chacha20-rsa $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -461,7 +510,7 @@ test_sync_encrypt_cluster_chacha20(){
     grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
 
     chmod 777 /jfs
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/encch/ jfs://meta_url/decdata/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/encch/ jfs://meta_url/decdata/ \
         --decrypt-rsa-key /tmp/sync-enc-nopass.pem --decrypt-algo chacha20-rsa $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -488,7 +537,7 @@ test_sync_reencrypt_cluster(){
     (./mc rb myminio/reenc2 > /dev/null 2>&1 --force || true) && ./mc mb myminio/reenc2
 
     # Encrypt with key1
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/reenc1/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/reenc1/ \
         --encrypt-rsa-key /tmp/sync-enc-nopass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -505,7 +554,7 @@ test_sync_reencrypt_cluster(){
 
     # Decrypt with key2 and verify
     chmod 777 /jfs
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/reenc2/ jfs://meta_url/decdata/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/reenc2/ jfs://meta_url/decdata/ \
         --decrypt-rsa-key /tmp/sync-enc-wrong.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -562,7 +611,7 @@ test_sync_encrypt_cluster_update(){
     chmod -R 777 /jfs/data
 
     (./mc rb myminio/encupd > /dev/null 2>&1 --force || true) && ./mc mb myminio/encupd
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encupd/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encupd/ \
         --encrypt-rsa-key /tmp/sync-enc-nopass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -575,7 +624,7 @@ test_sync_encrypt_cluster_update(){
         echo "updated-$i" > /jfs/data/file$i.txt
     done
 
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encupd/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/encupd/ \
         --encrypt-rsa-key /tmp/sync-enc-nopass.pem --update --check-all $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -584,7 +633,7 @@ test_sync_encrypt_cluster_update(){
 
     # Decrypt and verify
     chmod 777 /jfs
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/encupd/ jfs://meta_url/decdata/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/encupd/ jfs://meta_url/decdata/ \
         --decrypt-rsa-key /tmp/sync-enc-nopass.pem $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -645,7 +694,7 @@ test_sync_traffic_control_cluster_with_bwlimit(){
     chmod -R 777 /jfs/data
     (./mc rb myminio/tcdata > /dev/null 2>&1 --force || true) && ./mc mb myminio/tcdata
     start_traffic_control_server 0
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/tcdata/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/tcdata/ \
         --traffic-control-url $TC_URL --bwlimit 8192 \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -672,7 +721,7 @@ test_sync_traffic_control_cluster_encrypt(){
     (./mc rb myminio/tcenc > /dev/null 2>&1 --force || true) && ./mc mb myminio/tcenc
     start_traffic_control_server 0
     # Encrypt with traffic control
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/tcenc/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/tcenc/ \
         --encrypt-rsa-key /tmp/sync-enc-nopass.pem --traffic-control-url $TC_URL $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -681,7 +730,7 @@ test_sync_traffic_control_cluster_encrypt(){
     grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in encrypt sync.log" && exit 1 || true
     # Decrypt with traffic control
     chmod 777 /jfs
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/tcenc/ jfs://meta_url/decdata/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/tcenc/ jfs://meta_url/decdata/ \
         --decrypt-rsa-key /tmp/sync-enc-nopass.pem --traffic-control-url $TC_URL $CLUSTER_CHECKPOINT_OPTS \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -720,7 +769,7 @@ file30
 EOF
     chmod 644 /tmp/files_list
 
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/src/ jfs://meta_url/dst/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync jfs://meta_url/src/ jfs://meta_url/dst/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --files-from /tmp/files_list \
          >sync.log 2>&1
@@ -761,7 +810,7 @@ skip_test_checkpoint_cluster_save_on_check_change_failure(){
     done) &
     modifier_pid=$!
     # Cluster sync with --check-change + long checkpoint interval → should fail
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/data/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync jfs://meta_url/data/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-change \
@@ -778,7 +827,7 @@ skip_test_checkpoint_cluster_save_on_check_change_failure(){
         exit 1
     fi
     # Resume (source no longer changing) should succeed
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/data/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync jfs://meta_url/data/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-change \
@@ -796,7 +845,7 @@ test_checkpoint_force_reset_cluster(){
         dd if=/dev/urandom of=/jfs/src/file$i bs=64K count=1 status=none
     done
     chmod -R 777 /jfs/src /jfs/dst
-    timeout 1 sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/src/ jfs://meta_url/dst/ \
+    timeout 1 sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/src/ jfs://meta_url/dst/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --dirs --check-change $CLUSTER_CHECKPOINT_OPTS \
          --threads 2 >sync1.log 2>&1 || true
@@ -807,7 +856,7 @@ test_checkpoint_force_reset_cluster(){
         exit 1
     fi
     echo "force-reset-marker" > /jfs/src/force-reset-marker
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/src/ jfs://meta_url/dst/ \
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/src/ jfs://meta_url/dst/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --dirs --check-change $CLUSTER_CHECKPOINT_OPTS \
          --checkpoint-force-reset >sync2.log 2>&1

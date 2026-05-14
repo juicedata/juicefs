@@ -35,12 +35,14 @@ def flush_meta(meta_url:str):
         assert db
         print(f'flushing {protocol}://{host}:{port}/{db}')
         if protocol == 'redis':
-            run_cmd(f'redis-cli -h {host} -p {port} -n {db} flushdb')
+            rc = run_cmd(f'redis-cli -h {host} -p {port} -n {db} flushdb')
         elif protocol == 'tikv':
             # TODO: should only flush the specified db
-            run_cmd(f'echo "delall --yes" |tcli -pd {host}:{port}')
+            rc = run_cmd(f'echo "delall --yes" |tcli -pd {host}:{port}')
         else:
             raise Exception(f'{protocol} not supported')
+        if rc != 0:
+            raise Exception(f'flush {protocol}://{host}:{port}/{db} failed')
         print(f'flush {protocol}://{host}:{port}/{db} succeed')
     elif meta_url.startswith('mysql://'):
         create_mysql_db(meta_url)
