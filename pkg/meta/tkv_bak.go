@@ -488,7 +488,7 @@ func (m *kvMeta) dumpChangeLog(ctx Context, opt *DumpOption, ch chan<- *dumpedRe
 		end := m.logKey(maxKey + 1)
 		changelogs := make([]*pb.ChangeLog, 0, kvDumpBatchSize)
 		tx.scan(begin, end, false, func(k, v []byte) bool {
-			ver := binary.BigEndian.Uint64(k[3:])
+			ver := binary.BigEndian.Uint64(k[4:])
 			changelogs = append(changelogs, &pb.ChangeLog{
 				Version: int64(ver),
 				Entry:   v,
