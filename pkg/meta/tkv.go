@@ -207,8 +207,9 @@ All keys:
   Niiiiiiii          detached inde
   QDiiiiiiii         directory quota
   Raaaa			     POSIX acl
-  KDaaaa			 delegation token
-  LOGiiiiiiii        changelog
+  ! The "X" prefix represents extensibility features.
+  XKDaaaa			 delegation token
+  XLOGiiiiiiii       changelog
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
@@ -284,11 +285,11 @@ func (m *kvMeta) aclKey(id uint32) []byte {
 }
 
 func (m *kvMeta) krbTokenKey(id uint32) []byte {
-	return m.fmtKey("KD", id)
+	return m.fmtKey("XKD", id)
 }
 
 func (m *kvMeta) logKey(id uint64) []byte {
-	return m.fmtKey("LOG", id)
+	return m.fmtKey("XLOG", id)
 }
 
 func (m *kvMeta) parseACLId(key string) uint32 {
@@ -895,7 +896,7 @@ func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
 	scanRange := func(begin, end []byte) uint64 {
 		var maxKey uint64
 		tx.scan(begin, end, true, func(k, v []byte) bool {
-			maxKey = binary.BigEndian.Uint64(k[3:])
+			maxKey = binary.BigEndian.Uint64(k[4:])
 			return true
 		})
 		return maxKey
@@ -939,7 +940,7 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 			begin := m.logKey(m.client.rewind(uint64(last), 1))
 			now := uint32(time.Now().Unix())
 			kt.scan(begin, end, false, func(k, v []byte) bool {
-				id := binary.BigEndian.Uint64(k[3:]) // "LOG"
+				id := binary.BigEndian.Uint64(k[4:])
 				if saw[id] == 0 {
 					saw[id] = now
 					last = int64(id)
@@ -3868,7 +3869,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			begin := m.logKey(m.client.rewind(maxKey, 1))
 			end := m.logKey(maxKey + 1)
 			tx.scan(begin, end, false, func(k, v []byte) bool {
-				ver := binary.BigEndian.Uint64(k[3:])
+				ver := binary.BigEndian.Uint64(k[4:])
 				changeLogs = append(changeLogs, &DumpedChangeLog{
 					Version: int64(ver),
 					Entry:   string(v),
@@ -4964,8 +4965,8 @@ func (m *kvMeta) doDeleteTokens(ctx Context, ids []uint32) syscall.Errno {
 
 func (m *kvMeta) doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno) {
 	tokens = make(map[uint32][]byte)
-	err := m.client.scan(m.fmtKey("KD"), func(k, v []byte) bool {
-		rb := utils.FromBuffer(k[2:])
+	err := m.client.scan(m.fmtKey("XKD"), func(k, v []byte) bool {
+		rb := utils.FromBuffer(k[3:])
 		id := rb.Get32()
 		tokens[id] = v
 		return true
