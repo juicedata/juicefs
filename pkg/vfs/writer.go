@@ -63,6 +63,10 @@ type sliceWriter struct {
 	notify  *utils.Cond
 	started time.Time
 	lastMod time.Time
+
+	growing   bool
+	committed bool
+	dep       *sliceWriter
 }
 
 func (s *sliceWriter) prepareID(ctx meta.Context, retry bool) {
@@ -192,6 +196,9 @@ func (c *chunkWriter) commitThread() {
 				go s.flushData()
 			}
 		}
+		for s.dep != nil && !s.dep.committed {
+			f.commitcond.WaitWithTimeout(time.Millisecond * 100)
+		}
 		err := s.err
 		f.Unlock()
 
@@ -214,6 +221,10 @@ func (c *chunkWriter) commitThread() {
 			f.err = err
 			logger.Errorf("write inode:%d indx:%d %s", f.inode, c.indx, err)
 		}
+		s.committed = true
+		if s.growing {
+			f.commitcond.Broadcast()
+		}
 		c.slices = c.slices[1:]
 	}
 	f.freeChunk(c)
@@ -231,8 +242,9 @@ type fileWriter struct {
 	refs         uint16
 	chunks       map[uint32]*chunkWriter
 
-	flushcond *utils.Cond // wait for chunks==nil (flush)
-	writecond *utils.Cond // wait for flushwaiting==0 (write)
+	flushcond  *utils.Cond // wait for chunks==nil (flush)
+	writecond  *utils.Cond // wait for flushwaiting==0 (write)
+	commitcond *utils.Cond // wait for committed==true of dependency slice (commit)
 }
 
 // protected by file
@@ -272,7 +284,28 @@ func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data 
 			f.refs++
 			f.w.Unlock()
 			go c.commitThread()
+			if uint64(indx)*meta.ChunkSize >= f.length {
+				// first slice of a new chunk, try to find the last slice of the last chunk as dependency
+				var lastChunk *chunkWriter
+				for i, c := range f.chunks {
+					if i < indx && (lastChunk == nil || i > lastChunk.indx) {
+						lastChunk = c
+					}
+				}
+				if lastChunk != nil {
+					var lastSlice *sliceWriter
+					for _, s := range lastChunk.slices {
+						if s.growing {
+							lastSlice = s
+						}
+					}
+					s.dep = lastSlice
+				}
+			}
 		}
+	}
+	if !s.growing && uint64(indx)*meta.ChunkSize+uint64(off)+uint64(len(data)) > f.length {
+		s.growing = true
 	}
 	return s.write(ctx, off-s.off, data)
 }
@@ -492,6 +525,7 @@ func (w *dataWriter) Open(inode Ino, len uint64) FileWriter {
 		}
 		f.flushcond = utils.NewCond(f)
 		f.writecond = utils.NewCond(f)
+		f.commitcond = utils.NewCond(f)
 		w.files[inode] = f
 	}
 	f.refs++
