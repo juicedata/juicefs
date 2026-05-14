@@ -303,8 +303,7 @@ func (m *kvMeta) krbTokenKey(id uint32) []byte {
 
 type tkvChangelogClient interface {
 	logKey(m *kvMeta, id uint64) []byte
-	parseLogID(key []byte) uint64
-	scanLogRange(m *kvMeta, tx *kvTxn, beginID, endID uint64, keysOnly bool, handler func(k, v []byte) bool)
+	scanLogRange(m *kvMeta, tx *kvTxn, beginID, endID uint64, keysOnly bool, handler func(id uint64, k, v []byte) bool)
 }
 
 func (m *kvMeta) logKey(id uint64) []byte {
@@ -314,19 +313,14 @@ func (m *kvMeta) logKey(id uint64) []byte {
 	return m.fmtKey("XLOG", id)
 }
 
-func (m *kvMeta) parseLogID(key []byte) uint64 {
-	if c, ok := m.client.(tkvChangelogClient); ok {
-		return c.parseLogID(key)
-	}
-	return binary.BigEndian.Uint64(key[4:])
-}
-
-func (m *kvMeta) scanLogRange(tx *kvTxn, beginID, endID uint64, keysOnly bool, handler func(k, v []byte) bool) {
+func (m *kvMeta) scanLogRange(tx *kvTxn, beginID, endID uint64, keysOnly bool, handler func(id uint64, k, v []byte) bool) {
 	if c, ok := m.client.(tkvChangelogClient); ok {
 		c.scanLogRange(m, tx, beginID, endID, keysOnly, handler)
 		return
 	}
-	tx.scan(m.logKey(beginID), m.logKey(endID), keysOnly, handler)
+	tx.scan(m.logKey(beginID), m.logKey(endID), keysOnly, func(k, v []byte) bool {
+		return handler(binary.BigEndian.Uint64(k[4:]), k, v)
+	})
 }
 
 func (m *kvMeta) parseACLId(key string) uint32 {
@@ -932,8 +926,8 @@ const changelogProbeFallbacks = 5
 func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
 	scanRange := func(beginID, endID uint64) uint64 {
 		var maxKey uint64
-		m.scanLogRange(tx, beginID, endID, true, func(k, v []byte) bool {
-			if id := m.parseLogID(k); id > maxKey {
+		m.scanLogRange(tx, beginID, endID, true, func(id uint64, k, v []byte) bool {
+			if id > maxKey {
 				maxKey = id
 			}
 			return true
@@ -976,8 +970,7 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 			var err error
 			beginID := m.client.rewind(uint64(last), 1)
 			now := uint32(time.Now().Unix())
-			m.scanLogRange(kt, beginID, ^uint64(0), false, func(k, v []byte) bool {
-				id := m.parseLogID(k)
+			m.scanLogRange(kt, beginID, ^uint64(0), false, func(id uint64, k, v []byte) bool {
 				if saw[id] == 0 {
 					saw[id] = now
 					last = int64(id)
@@ -1014,7 +1007,7 @@ func (m *kvMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines 
 	if maxLines > 0 {
 		var total int64
 		err := m.client.simpleTxn(ctx, func(kt *kvTxn) error {
-			m.scanLogRange(kt, 0, ^uint64(0), true, func(k, v []byte) bool {
+			m.scanLogRange(kt, 0, ^uint64(0), true, func(id uint64, k, v []byte) bool {
 				total++
 				return true
 			})
@@ -1047,11 +1040,10 @@ func (m *kvMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines 
 		var nextStartID uint64
 
 		err := m.client.simpleTxn(ctx, func(kt *kvTxn) error {
-			m.scanLogRange(kt, startID, ^uint64(0), maxAge <= 0, func(k, v []byte) bool {
+			m.scanLogRange(kt, startID, ^uint64(0), maxAge <= 0, func(id uint64, k, v []byte) bool {
 				if len(batch) >= batchLimit {
 					return false
 				}
-				id := m.parseLogID(k)
 				nextStartID = id + 1
 				scanned++
 				var expired bool
@@ -3910,9 +3902,9 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 				return nil
 			}
 			beginID := m.client.rewind(maxKey, 1)
-			m.scanLogRange(tx, beginID, maxKey+1, false, func(k, v []byte) bool {
+			m.scanLogRange(tx, beginID, maxKey+1, false, func(id uint64, k, v []byte) bool {
 				changeLogs = append(changeLogs, &DumpedChangeLog{
-					Version: int64(m.parseLogID(k)),
+					Version: int64(id),
 					Entry:   string(v),
 				})
 				return true

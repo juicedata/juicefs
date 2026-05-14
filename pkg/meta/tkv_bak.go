@@ -486,9 +486,9 @@ func (m *kvMeta) dumpChangeLog(ctx Context, opt *DumpOption, ch chan<- *dumpedRe
 		}
 		beginID := m.client.rewind(maxKey, 1)
 		changelogs := make([]*pb.ChangeLog, 0, kvDumpBatchSize)
-		m.scanLogRange(tx, beginID, maxKey+1, false, func(k, v []byte) bool {
+		m.scanLogRange(tx, beginID, maxKey+1, false, func(id uint64, k, v []byte) bool {
 			changelogs = append(changelogs, &pb.ChangeLog{
-				Version: int64(m.parseLogID(k)),
+				Version: int64(id),
 				Entry:   v,
 			})
 			return true

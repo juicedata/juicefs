@@ -129,19 +129,14 @@ func (c *prefixClient) logKey(m *kvMeta, id uint64) []byte {
 	return m.fmtKey("XLOG", id)
 }
 
-func (c *prefixClient) parseLogID(key []byte) uint64 {
-	if cc, ok := c.tkvClient.(tkvChangelogClient); ok {
-		return cc.parseLogID(key)
-	}
-	return binary.BigEndian.Uint64(key[4:])
-}
-
-func (c *prefixClient) scanLogRange(m *kvMeta, tx *kvTxn, beginID, endID uint64, keysOnly bool, handler func(k, v []byte) bool) {
+func (c *prefixClient) scanLogRange(m *kvMeta, tx *kvTxn, beginID, endID uint64, keysOnly bool, handler func(id uint64, k, v []byte) bool) {
 	if cc, ok := c.tkvClient.(tkvChangelogClient); ok {
 		cc.scanLogRange(m, tx, beginID, endID, keysOnly, handler)
 		return
 	}
-	tx.scan(m.fmtKey("XLOG", beginID), m.fmtKey("XLOG", endID), keysOnly, handler)
+	tx.scan(m.fmtKey("XLOG", beginID), m.fmtKey("XLOG", endID), keysOnly, func(k, v []byte) bool {
+		return handler(binary.BigEndian.Uint64(k[4:]), k, v)
+	})
 }
 
 func withPrefix(client tkvClient, prefix []byte) tkvClient {
