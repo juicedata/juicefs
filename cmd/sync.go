@@ -234,6 +234,23 @@ func syncActionFlags() []cli.Flag {
 			Name:  "dry",
 			Usage: "don't copy file",
 		},
+		&cli.StringFlag{
+			Name:  "mountpoint",
+			Usage: "the mount point for current volume (to follow symlink)",
+		},
+		&cli.BoolFlag{
+			Name:  "enable-checkpoint",
+			Usage: "enable checkpoint for resumable sync",
+		},
+		&cli.BoolFlag{
+			Name:  "checkpoint-force-reset",
+			Usage: "start from scratch and overwrite existing checkpoint",
+		},
+		&cli.StringFlag{
+			Name:  "checkpoint-interval",
+			Value: "10s",
+			Usage: "interval to save checkpoint (default: 10s)",
+		},
 	})
 }
 

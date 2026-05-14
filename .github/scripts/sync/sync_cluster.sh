@@ -7,7 +7,6 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
-dpkg -s gawk || .github/scripts/apt_install.sh gawk
 start_minio(){
     if ! docker ps | grep "minio/minio"; then
         docker run -d -p 9000:9000 --name minio \
@@ -141,6 +140,7 @@ test_sync_delete_src_and_update(){
     sudo -u juicedata meta_url=$META_URL ./juicefs sync minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --delete-src --update --dirs --check-change \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     set +o pipefail
     diff data/ /jfs/data/
@@ -148,6 +148,7 @@ test_sync_delete_src_and_update(){
     sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --delete-src --dirs --check-change \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     set +o pipefail
     if ./mc ls myminio/data/ | grep -q .; then
@@ -174,6 +175,7 @@ test_sync_delete_dst(){
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-dst --match-full-path --exclude='retain' --include='*' \
          ./empty/ jfs://meta_url/data/  --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-new \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     [ ! -f /jfs/data/retain ] && echo "Error: retain file was incorrectly deleted" && exit 1 || true
@@ -185,31 +187,60 @@ test_sync_with_random_test(){
     mkdir /jfs/test || true
     mkdir /jfs/test2 || true
     current_time=$(date -d "1 minute ago" "+%Y-%m-%d %H:%M:%S")
-    ./random-test runOp -baseDir /jfs/test -files 100000 -ops 1000000 -threads 50 -dirSize 100 -duration 30s -createOp 30,uniform \
+    ./random-test runOp -baseDir /jfs/test -files 100000 -ops 1000000 -threads 50 -dirSize 100 -duration 60s -createOp 30,uniform \
     -deleteOp 5,end --linkOp 10,uniform --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform
     chmod -R 777 /jfs/test
     chmod -R 777 /jfs/test2
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
+    run_id=1
+    for sig in INT KILL INT; do
+        sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-new --links --dirs --start-time "$current_time" \
+         --enable-checkpoint --checkpoint-interval 2s \
+         >sync.log 2>&1 &
+        sync_pid=$!
+        sleep 2
+        signal_cluster_sync_child "$sync_pid" "$sig"
+        wait "$sync_pid" || true
+        # Clean up stale worker processes (especially after SIGKILL which can't gracefully shutdown workers)
+        sudo -u juicedata ssh -o ConnectTimeout=3 juicedata@172.20.0.2 "pkill -9 -f 'juicefs'" 2>/dev/null || true
+        sudo -u juicedata ssh -o ConnectTimeout=3 juicedata@172.20.0.3 "pkill -9 -f 'juicefs'" 2>/dev/null || true
+        sleep 1
+        checkpoint_count=$(find /jfs/test2 -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+        if [ "$checkpoint_count" -eq 0 ]; then
+            echo "checkpoint file should exist after interrupted cluster sync run $run_id"
+            exit 1
+        fi
+        run_id=$((run_id + 1))
+    done
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs jfs://meta_url/test/ jfs://meta_url/test2/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-new --links --dirs --start-time "$current_time" \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
+    diff -ur --no-dereference --exclude='.jfs.file*.tmp.*' /jfs/test /jfs/test2
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all --links --start-time 2199-12-30 \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true 
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --dirs \
          --list-threads 10 --list-depth 5 --check-all --links --start-time "$current_time" \
+         --enable-checkpoint --checkpoint-interval 2s \
          >sync.log 2>&1
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     [ -z "$(ls -A /jfs/test)" ] || exit 1
-    rm -rf empty || mkdir empty
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-dst --match-full-path  --include='*' \
+    echo "delete src test passed"
+    rm -rf empty || true
+    mkdir empty || true
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync --mountpoint /jfs --delete-dst --match-full-path  --include='*' \
          ./empty/ jfs://meta_url/test2/ --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-change --dirs --links --start-time "$current_time" \
-         >sync.log 2>&1
+         --enable-checkpoint --checkpoint-interval 2s \
+         2>&1 | tee sync.log
     grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     [ -z "$(ls -A /jfs/test2)" ] || exit 1
 }
@@ -227,7 +258,8 @@ test_sync_files_from_file(){
     sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all --check-change --links --dirs --files-from files \
-         >sync.log 2>&1
+         --enable-checkpoint --checkpoint-interval 2s \
+         2>&1 | tee sync.log
     grep "panic\|<FATAL>\|ERROR" sync.log && echo "panic or fatal or error in sync.log" && exit 1 || true
 }
 
@@ -301,9 +333,10 @@ check_sync_log(){
         echo "file_copied not equal, $file_copied, $file_count"
         exit 1
     fi
-    count2=$(cat sync.log | grep 172.20.0.2 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+    count2=$(grep 172.20.0.2 sync.log | grep "receive stats" | awk '{if (match($0, /Copied:[0-9]+/)) sum += substr($0, RSTART + 7, RLENGTH - 7)} END {print sum + 0}')
     [ -z "$count2" ] && count2=0
-    count3=$(cat sync.log | grep 172.20.0.3 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+#    count3=$(cat sync.log | grep 172.20.0.3 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+    count3=$(grep 172.20.0.3 sync.log | grep "receive stats" | awk '{if (match($0, /Copied:[0-9]+/)) sum += substr($0, RSTART + 7, RLENGTH - 7)} END {print sum + 0}')
     [ -z "$count3" ] && count3=0
     count1=$((file_count - count2 - count3))
     echo "count1, $count1, count2, $count2, count3, $count3"
@@ -313,6 +346,19 @@ check_sync_log(){
         echo "count is less than min_count, $count1, $count2, $count3, $min_count"
         exit 1
     fi
+}
+
+signal_cluster_sync_child(){
+    local sync_pid=$1
+    local signal=$2
+    local juicefs_pid=""
+    for _ in $(seq 1 5); do
+        juicefs_pid=$(ps -o pid= --ppid "$sync_pid" | head -n 1 | tr -d ' ')
+        [ -n "$juicefs_pid" ] && break
+        sleep 1
+    done
+    [ -z "$juicefs_pid" ] && echo "failed to find juicefs sync child process" && exit 1
+    kill -$signal "$juicefs_pid" || true
 }
 
 prepare_test(){
@@ -329,5 +375,50 @@ start_gateway(){
     ./mc alias set juicegw http://172.20.0.1:9005 minioadmin minioadmin --api S3v4
 }
 
+skip_test_checkpoint_cluster_save_on_check_change_failure(){
+    # Issue #6890: cluster sync with --check-change that fails should save checkpoint
+    # Use long checkpoint-interval so only explicit save-on-failure creates the checkpoint.
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    mkdir -p /jfs/data
+    for i in $(seq 1 2000); do
+        dd if=/dev/urandom of=/jfs/data/file$i bs=64K count=1 status=none
+    done
+    chmod -R 777 /jfs/data
+    (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
+    # Background modifier: continuously append to source files via FUSE
+    (while true; do
+        for i in $(seq 1 300); do
+            echo "m" >> /jfs/data/file$i 2>/dev/null
+        done
+    done) &
+    modifier_pid=$!
+    # Cluster sync with --check-change + long checkpoint interval → should fail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/data/ \
+         minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-change \
+         --enable-checkpoint --checkpoint-interval 60s \
+         > sync1.log 2>&1 || true
+    kill $modifier_pid 2>/dev/null
+    wait $modifier_pid 2>/dev/null || true
+    # Verify check-change failure
+    grep -i "changed during sync\|failed to handle" sync1.log || (echo "expected check-change failure" && exit 1)
+    # Key assertion: checkpoint should be saved on failure (issue #6890)
+    checkpoint_count=$(./mc find myminio/data1/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count" -eq 0 ]; then
+        echo "FAIL: checkpoint should be saved when cluster sync fails (issue #6890)"
+        exit 1
+    fi
+    # Resume (source no longer changing) should succeed
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/data/ \
+         minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-change \
+         --enable-checkpoint --checkpoint-interval 2s \
+         > sync2.log 2>&1
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+    ./mc rm -r --force myminio/data1
+}
 
 source .github/scripts/common/run_test.sh && run_test $@

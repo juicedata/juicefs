@@ -58,7 +58,7 @@ func TestCluster(t *testing.T) {
 	todo := make(chan object.Object, 100)
 	var conf Config
 	conf.Workers = []string{workerAddr}
-	addr, err := startManager(&conf, todo)
+	addr, err := startManager(&conf, todo, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
