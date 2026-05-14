@@ -20,6 +20,7 @@
 package meta
 
 import (
+	"container/heap"
 	"context"
 	"encoding/binary"
 	"math"
@@ -114,7 +115,7 @@ func newTikvClient(addr string) (tkvClient, error) {
 	}
 
 	prefix := strings.TrimLeft(tUrl.Path, "/")
-	return withPrefix(&tikvClient{client: client.KVStore, gcInterval: interval}, append([]byte(prefix), 0xFD)), nil
+	return withPrefix(&tikvClient{client: client.KVStore, gcInterval: interval, changeLogShards: tiKVChangeLogShards()}, append([]byte(prefix), 0xFD)), nil
 }
 
 type tikvTxn struct {
@@ -208,10 +209,24 @@ func (tx *tikvTxn) id() uint64 {
 	return tx.StartTS()
 }
 
-const tiKVChangeLogShards = 64
+const defaultTiKVChangeLogShards = 64
+
+func tiKVChangeLogShards() int {
+	const envName = "JFS_TKV_CHANGELOG_SHARDS"
+	s := os.Getenv(envName)
+	if s == "" {
+		return defaultTiKVChangeLogShards
+	}
+	shards, err := strconv.Atoi(s)
+	if err != nil || shards <= 0 || shards > 256 {
+		logger.Warnf("invalid %s: %s, use %d", envName, s, defaultTiKVChangeLogShards)
+		return defaultTiKVChangeLogShards
+	}
+	return shards
+}
 
 func (c *tikvClient) logKey(m *kvMeta, id uint64) []byte {
-	shard := byte((id ^ (id >> 18)) % tiKVChangeLogShards)
+	shard := byte((id ^ (id >> 18)) % uint64(c.changeLogShards))
 	return m.fmtKey("XLOG", shard, id)
 }
 
@@ -219,34 +234,56 @@ func parseTiKVLogID(key []byte) uint64 {
 	return binary.BigEndian.Uint64(key[5:])
 }
 
+type logMergeItem struct {
+	id    uint64
+	shard int
+}
+
+type logMergeHeap struct {
+	items []logMergeItem
+}
+
+func (h *logMergeHeap) Len() int           { return len(h.items) }
+func (h *logMergeHeap) Less(i, j int) bool { return h.items[i].id < h.items[j].id }
+func (h *logMergeHeap) Swap(i, j int)      { h.items[i], h.items[j] = h.items[j], h.items[i] }
+func (h *logMergeHeap) Push(x any)         { h.items = append(h.items, x.(logMergeItem)) }
+func (h *logMergeHeap) Pop() any {
+	n := len(h.items)
+	item := h.items[n-1]
+	h.items = h.items[:n-1]
+	return item
+}
+
 func (c *tikvClient) scanLogRange(m *kvMeta, tx *kvTxn, beginID, endID uint64, keysOnly bool, handler func(id uint64, k, v []byte) bool) {
 	itx := tx.kvtxn.(iterKvTxn)
-	iters := make([]kvIterator, tiKVChangeLogShards)
-	for shard := byte(0); shard < tiKVChangeLogShards; shard++ {
+	shards := c.changeLogShards
+	iters := make([]kvIterator, shards)
+	for shard := 0; shard < shards; shard++ {
 		iters[shard] = itx.iter(m.fmtKey("XLOG", byte(shard), beginID), m.fmtKey("XLOG", byte(shard), endID), keysOnly)
 		defer iters[shard].Close()
 	}
-	for {
-		next := -1
-		var nextID uint64
-		for i, it := range iters {
-			if !it.Valid() {
-				continue
-			}
+
+	h := &logMergeHeap{}
+	for i, it := range iters {
+		if it.Valid() {
 			id := parseTiKVLogID(it.Key())
-			if next < 0 || id < nextID {
-				next = i
-				nextID = id
-			}
+			h.items = append(h.items, logMergeItem{id: id, shard: i})
 		}
-		if next < 0 {
+	}
+	heap.Init(h)
+
+	for h.Len() > 0 {
+		item := heap.Pop(h).(logMergeItem)
+		it := iters[item.shard]
+		if !handler(item.id, it.Key(), it.Value()) {
 			return
 		}
-		if !handler(nextID, iters[next].Key(), iters[next].Value()) {
-			return
-		}
-		if err := iters[next].Next(); err != nil {
+		if err := it.Next(); err != nil {
 			panic(err)
+		}
+		if it.Valid() {
+			id := parseTiKVLogID(it.Key())
+			heap.Push(h, logMergeItem{id: id, shard: item.shard})
 		}
 	}
 }
@@ -270,8 +307,9 @@ func (c *tikvClient) rewind(id uint64, factor int) uint64 {
 }
 
 type tikvClient struct {
-	client     *tikv.KVStore
-	gcInterval time.Duration
+	client          *tikv.KVStore
+	gcInterval      time.Duration
+	changeLogShards int
 }
 
 func (c *tikvClient) name() string {
