@@ -56,6 +56,18 @@ type kvtxn interface {
 	id() uint64
 }
 
+type kvIterator interface {
+	Valid() bool
+	Key() []byte
+	Value() []byte
+	Next() error
+	Close()
+}
+
+type iterKvTxn interface {
+	iter(begin, end []byte, keysOnly bool) kvIterator
+}
+
 type tkvClient interface {
 	name() string
 	simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) error // should only be used for point get scenarios
@@ -210,6 +222,7 @@ All keys:
   ! The "X" prefix represents extensibility features.
   XKDaaaa			 delegation token
   XLOGiiiiiiii       changelog
+  XLOGsiiiiiiii      TiKV changelog
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
@@ -288,8 +301,26 @@ func (m *kvMeta) krbTokenKey(id uint32) []byte {
 	return m.fmtKey("XKD", id)
 }
 
+type tkvChangelogClient interface {
+	logKey(m *kvMeta, id uint64) []byte
+	scanLogRange(m *kvMeta, tx *kvTxn, beginID, endID uint64, keysOnly bool, handler func(id uint64, k, v []byte) bool)
+}
+
 func (m *kvMeta) logKey(id uint64) []byte {
+	if c, ok := m.client.(tkvChangelogClient); ok {
+		return c.logKey(m, id)
+	}
 	return m.fmtKey("XLOG", id)
+}
+
+func (m *kvMeta) scanLogRange(tx *kvTxn, beginID, endID uint64, keysOnly bool, handler func(id uint64, k, v []byte) bool) {
+	if c, ok := m.client.(tkvChangelogClient); ok {
+		c.scanLogRange(m, tx, beginID, endID, keysOnly, handler)
+		return
+	}
+	tx.scan(m.logKey(beginID), m.logKey(endID), keysOnly, func(k, v []byte) bool {
+		return handler(binary.BigEndian.Uint64(k[4:]), k, v)
+	})
 }
 
 func (m *kvMeta) parseACLId(key string) uint32 {
@@ -893,10 +924,12 @@ func (m *kvMeta) genLog(tx *kvTxn, ts time.Time, op string, args ...any) {
 const changelogProbeFallbacks = 5
 
 func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
-	scanRange := func(begin, end []byte) uint64 {
+	scanRange := func(beginID, endID uint64) uint64 {
 		var maxKey uint64
-		tx.scan(begin, end, true, func(k, v []byte) bool {
-			maxKey = binary.BigEndian.Uint64(k[4:])
+		m.scanLogRange(tx, beginID, endID, true, func(id uint64, k, v []byte) bool {
+			if id > maxKey {
+				maxKey = id
+			}
 			return true
 		})
 		return maxKey
@@ -904,21 +937,20 @@ func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
 
 	upper := tx.id()
 	if upper == 0 {
-		return scanRange(m.logKey(0), m.logKey(^uint64(0)))
+		return scanRange(0, ^uint64(0))
 	}
 
 	beginID := m.client.rewind(upper, 1)
-	end := m.logKey(upper)
+	endID := upper
 	for i := 0; i <= changelogProbeFallbacks; i++ {
-		begin := m.logKey(beginID)
-		if maxKey := scanRange(begin, end); maxKey != 0 {
+		if maxKey := scanRange(beginID, endID); maxKey != 0 {
 			return maxKey
 		}
-		end = begin
+		endID = beginID
 		beginID = m.client.rewind(beginID, 1<<i)
 	}
 
-	return scanRange(m.logKey(0), m.logKey(^uint64(0)))
+	return scanRange(0, ^uint64(0))
 }
 
 func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
@@ -930,17 +962,15 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 		logger.Infof("last version is %d", last)
 	}
 	saw := make(map[uint64]uint32)
-	end := m.logKey(^uint64(0))
 	for {
 		if ctx.Canceled() {
 			return context.Canceled
 		}
 		err := m.client.simpleTxn(context.Background(), func(kt *kvTxn) error {
 			var err error
-			begin := m.logKey(m.client.rewind(uint64(last), 1))
+			beginID := m.client.rewind(uint64(last), 1)
 			now := uint32(time.Now().Unix())
-			kt.scan(begin, end, false, func(k, v []byte) bool {
-				id := binary.BigEndian.Uint64(k[4:])
+			m.scanLogRange(kt, beginID, ^uint64(0), false, func(id uint64, k, v []byte) bool {
 				if saw[id] == 0 {
 					saw[id] = now
 					last = int64(id)
@@ -969,13 +999,15 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 }
 
 func (m *kvMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines int64) error {
-	end := m.logKey(^uint64(0))
+	if maxAge <= 0 && maxLines <= 0 {
+		return nil
+	}
 
 	var lineDeleteCount int64
 	if maxLines > 0 {
 		var total int64
 		err := m.client.simpleTxn(ctx, func(kt *kvTxn) error {
-			kt.scan(m.logKey(0), end, true, func(k, v []byte) bool {
+			m.scanLogRange(kt, 0, ^uint64(0), true, func(id uint64, k, v []byte) bool {
 				total++
 				return true
 			})
@@ -1000,17 +1032,19 @@ func (m *kvMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines 
 	const batchLimit = 1000
 	var deleted int64
 	var scanned int64
-	startKey := m.logKey(0)
+	startID := uint64(0)
 
 	for {
 		var batch [][]byte
 		done := false
+		var nextStartID uint64
 
 		err := m.client.simpleTxn(ctx, func(kt *kvTxn) error {
-			kt.scan(startKey, end, maxAge <= 0, func(k, v []byte) bool {
+			m.scanLogRange(kt, startID, ^uint64(0), maxAge <= 0, func(id uint64, k, v []byte) bool {
 				if len(batch) >= batchLimit {
 					return false
 				}
+				nextStartID = id + 1
 				scanned++
 				var expired bool
 				if maxAge > 0 {
@@ -1018,7 +1052,6 @@ func (m *kvMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines 
 					expired = e == nil && t.Before(cutoff)
 				}
 				overLimit := lineDeleteCount > 0 && scanned <= lineDeleteCount
-
 				if !expired && !overLimit {
 					done = true
 					return false
@@ -1041,10 +1074,12 @@ func (m *kvMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines 
 				return e
 			}
 			deleted += int64(len(batch))
-			startKey = append(batch[len(batch)-1], 0)
+		}
+		if nextStartID > startID {
+			startID = nextStartID
 		}
 
-		if done || len(batch) == 0 {
+		if done || len(batch) < batchLimit {
 			break
 		}
 	}
@@ -3866,12 +3901,10 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			if maxKey == 0 {
 				return nil
 			}
-			begin := m.logKey(m.client.rewind(maxKey, 1))
-			end := m.logKey(maxKey + 1)
-			tx.scan(begin, end, false, func(k, v []byte) bool {
-				ver := binary.BigEndian.Uint64(k[4:])
+			beginID := m.client.rewind(maxKey, 1)
+			m.scanLogRange(tx, beginID, maxKey+1, false, func(id uint64, k, v []byte) bool {
 				changeLogs = append(changeLogs, &DumpedChangeLog{
-					Version: int64(ver),
+					Version: int64(id),
 					Entry:   string(v),
 				})
 				return true
