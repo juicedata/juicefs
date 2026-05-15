@@ -1165,22 +1165,22 @@ func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) er
 	}
 	return try(3, func() (err error) {
 		// TODO: use relative path based on option
-		err = dst.(object.SupportSymlink).Symlink(p, key)
-		if errors.Is(err, os.ErrExist) {
-			if cPath, err2 := dst.(object.SupportSymlink).Readlink(key); err2 == nil && p == cPath {
-				return nil
+		if err := dst.(object.SupportSymlink).Symlink(p, key); err != nil {
+			if info, err := dst.Head(key); err == nil && info.IsSymlink() {
+				if cPath, err2 := dst.(object.SupportSymlink).Readlink(key); err2 == nil && p == cPath {
+					return nil
+				}
 			}
 			if err := dst.Delete(key); err != nil {
-				logger.Debugf("Deleted %s from %s failed %s", key, dst, err)
+				logger.Errorf("Deleted %s from %s failed %s", key, dst, err)
 				return err
 			}
-			err = dst.(object.SupportSymlink).Symlink(p, key)
-			if err != nil {
+			if err := dst.(object.SupportSymlink).Symlink(p, key); err != nil {
 				logger.Warnf("symlink %s to %s error %s", p, key, err)
 				return err
 			}
 		}
-		return err
+		return nil
 	})
 }
 
