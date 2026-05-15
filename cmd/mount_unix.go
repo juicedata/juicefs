@@ -40,6 +40,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -77,10 +78,8 @@ func showThreadStack(agentAddr string) {
 		_ = resp.Body.Close()
 		return nil
 	}
-	if err := fn(1); err == nil {
-		if err := fn(2); err != nil {
-			logger.Warnf("list goroutines debug=2 from %s: %s", agentAddr, err)
-		}
+	if err := fn(1); err != nil {
+		logger.Warnf("list goroutines debug=1 from %s: %s", agentAddr, err)
 	}
 }
 
@@ -92,19 +91,31 @@ func devMinor(dev uint64) uint32 {
 }
 
 func processExists(pid int) bool {
-	time.Sleep(time.Second)
 	p, _ := os.FindProcess(pid)
 	return p.Signal(syscall.Signal(0)) == nil
+}
+
+func waitProcessExit(pid int, timeout, interval time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !processExists(pid) {
+			return true
+		}
+		time.Sleep(interval)
+	}
+	return !processExists(pid)
 }
 
 func killMountProcess(pid int, dev uint64, lastActive *int64) {
 	if pid > 0 {
 		logger.Infof("watchdog: kill %d", pid)
 		err := syscall.Kill(pid, syscall.SIGABRT)
-		if err != nil || processExists(pid) {
+		if err != nil {
 			logger.Warnf("kill %d with SIGABRT: %v", pid, err)
+		} else if !waitProcessExit(pid, 30*time.Second, 500*time.Millisecond) {
+			logger.Warnf("process %d is still alive after SIGABRT grace period", pid)
 			err = syscall.Kill(pid, syscall.SIGKILL)
-			if err != nil || processExists(pid) {
+			if err != nil || !waitProcessExit(pid, 5*time.Second, 200*time.Millisecond) {
 				logger.Warnf("kill %d with SIGKILL: %v", pid, err)
 			}
 		}
@@ -206,6 +217,7 @@ func watchdog(ctx context.Context, mp string) {
 	var pid int
 	var agentAddr string
 	var dev uint64
+	var mu sync.Mutex
 	go func() {
 		time.Sleep(time.Millisecond * 100) // wait for child process
 		for ctx.Err() == nil {
@@ -217,6 +229,7 @@ func watchdog(ctx context.Context, mp string) {
 			err := syscall.Stat(filepath.Join(mp, confName), &confStat)
 			ino, _ := vfs.GetInternalNodeByName(confName)
 			if err == nil && confStat.Ino == uint64(ino) {
+				mu.Lock()
 				if dev == 0 && runtime.GOOS == "linux" {
 					var st syscall.Stat_t
 					if err := syscall.Stat(mp, &st); err == nil && st.Ino == 1 {
@@ -224,48 +237,68 @@ func watchdog(ctx context.Context, mp string) {
 					}
 				}
 				if pid == 0 {
+					mu.Unlock()
 					_, conf, err := loadConfig(mp)
+					mu.Lock()
 					if err == nil {
 						logger.Infof("watching %q, pid %d", mp, conf.Pid)
 						pid = conf.Pid
 						agentAddr = conf.Port.DebugAgent
 					} else {
 						logger.Warnf("load config: %s", err)
+						mu.Unlock()
 						continue
 					}
 				}
+				mu.Unlock()
 			}
 			atomic.StoreInt64(&lastActive, time.Now().Unix())
 			time.Sleep(time.Second * 5)
 		}
 	}()
 	for ctx.Err() == nil {
-		now := time.Now().Unix()
-		if atomic.LoadInt64(&lastActive)+30 < now {
-			logger.Infof("mount point %q is not active for %s, start another check thread", mp, time.Since(time.Unix(atomic.LoadInt64(&lastActive), 0)))
-			go printThreadsStack(pid)
-			showThreadStack(agentAddr)
+		la := atomic.LoadInt64(&lastActive)
+		if time.Since(time.Unix(la, 0)) > time.Second*30 {
+			logger.Infof("mount point %q is not active for %s, start another check thread", mp, time.Since(time.Unix(la, 0)))
+			var pid_copy int
+			var agentAddr_copy string
+			mu.Lock()
+			pid_copy = pid
+			agentAddr_copy = agentAddr
+			mu.Unlock()
+			go printThreadsStack(pid_copy)
+			go showThreadStack(agentAddr_copy)
 			time.Sleep(time.Minute)
 			// double check
 			if ctx.Err() != nil {
 				break
 			}
-			if atomic.LoadInt64(&lastActive)+60 < time.Now().Unix() {
-				logger.Infof("mount point %q is not active for %s, print the stacks again", mp, time.Since(time.Unix(atomic.LoadInt64(&lastActive), 0)))
-				go printThreadsStack(pid)
-				showThreadStack(agentAddr)
-				time.Sleep(time.Second * 30)
-				if ctx.Err() != nil {
-					break
-				}
-				if atomic.LoadInt64(&lastActive)+60 < time.Now().Unix() {
-					logger.Infof("mount point %q is not active for %s", mp, time.Since(time.Unix(atomic.LoadInt64(&lastActive), 0)))
-					killMountProcess(pid, dev, &lastActive)
-					atomic.StoreInt64(&lastActive, time.Now().Unix())
-					pid = 0
-					dev = 0
-				}
+			if n := atomic.LoadInt64(&lastActive); n != la {
+				logger.Infof("last active time is updated from %d to %d (delta %ds), re-check", la, n, n-la)
+				continue
 			}
+			logger.Infof("mount point %q is not active for %s, print the stacks again", mp, time.Since(time.Unix(la, 0)))
+			mu.Lock()
+			pid_copy = pid
+			agentAddr_copy = agentAddr
+			mu.Unlock()
+			go printThreadsStack(pid_copy)
+			go showThreadStack(agentAddr_copy)
+			time.Sleep(time.Second * 30)
+			if ctx.Err() != nil {
+				break
+			}
+			if n := atomic.LoadInt64(&lastActive); n != la {
+				logger.Infof("last active time is updated from %d to %d (delta %ds), re-check", la, n, n-la)
+				continue
+			}
+			logger.Infof("mount point %q is not active for %s", mp, time.Since(time.Unix(la, 0)))
+			mu.Lock()
+			killMountProcess(pid, dev, &lastActive)
+			atomic.StoreInt64(&lastActive, time.Now().Unix())
+			pid = 0
+			dev = 0
+			mu.Unlock()
 		}
 		time.Sleep(time.Second * 10)
 	}
