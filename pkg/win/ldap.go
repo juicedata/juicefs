@@ -34,11 +34,11 @@ var (
 	procLdapBindSW       = modWldap32.NewProc("ldap_bind_sW")
 	procLdapUnbind       = modWldap32.NewProc("ldap_unbind")
 	procLdapSearchSW     = modWldap32.NewProc("ldap_search_sW")
-	procLdapFirstEntryW  = modWldap32.NewProc("ldap_first_entryW")
+	procLdapFirstEntry   = modWldap32.NewProc("ldap_first_entry")
 	procLdapGetValuesW   = modWldap32.NewProc("ldap_get_valuesW")
 	procLdapCountValuesW = modWldap32.NewProc("ldap_count_valuesW")
 	procLdapValueFreeW   = modWldap32.NewProc("ldap_value_freeW")
-	procLdapMsgFreeW     = modWldap32.NewProc("ldap_msgfreeW")
+	procLdapMsgFree      = modWldap32.NewProc("ldap_msgfree")
 )
 
 // from winldap.h
@@ -118,9 +118,9 @@ func LdapGetValue(
 	if int32(r1) != LDAP_SUCCESS {
 		return "", fmt.Errorf("ldap_search_sW failed: %d", r1)
 	}
-	defer procLdapMsgFreeW.Call(msg)
+	defer procLdapMsgFree.Call(msg)
 
-	entry, _, _ := procLdapFirstEntryW.Call(handle, msg)
+	entry, _, _ := procLdapFirstEntry.Call(handle, msg)
 	if entry == 0 {
 		return "", fmt.Errorf("no entries found")
 	}
