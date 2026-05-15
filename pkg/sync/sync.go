@@ -1083,7 +1083,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 
 			if config.Links && obj.IsSymlink() {
 				if err = copyLink(src, dst, key); err != nil {
-					logger.Errorf("copy link failed: %s", err)
+					logger.Errorf("copy link %s failed: %s", key, err)
 				}
 			} else {
 				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
@@ -1158,16 +1158,30 @@ func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, c
 }
 
 func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) error {
-	if p, err := src.(object.SupportSymlink).Readlink(key); err != nil {
+	var p string
+	var err error
+	if p, err = src.(object.SupportSymlink).Readlink(key); err != nil {
 		return err
-	} else {
-		if err := dst.Delete(key); err != nil {
-			logger.Debugf("Deleted %s from %s ", key, dst)
-			return err
-		}
-		// TODO: use relative path based on option
-		return dst.(object.SupportSymlink).Symlink(p, key)
 	}
+	return try(3, func() (err error) {
+		// TODO: use relative path based on option
+		if err := dst.(object.SupportSymlink).Symlink(p, key); err != nil {
+			if info, err := dst.Head(key); err == nil && info.IsSymlink() {
+				if cPath, err2 := dst.(object.SupportSymlink).Readlink(key); err2 == nil && p == cPath {
+					return nil
+				}
+			}
+			if err := dst.Delete(key); err != nil {
+				logger.Errorf("delete %s from %s failed: %s", key, dst, err)
+				return err
+			}
+			if err := dst.(object.SupportSymlink).Symlink(p, key); err != nil {
+				logger.Warnf("symlink %s to %s error %s", p, key, err)
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 type objWithSize struct {
