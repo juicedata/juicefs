@@ -1172,7 +1172,7 @@ func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) er
 				}
 			}
 			if err := dst.Delete(key); err != nil {
-				logger.Errorf("Deleted %s from %s failed %s", key, dst, err)
+				logger.Errorf("delete %s from %s failed: %s", key, dst, err)
 				return err
 			}
 			if err := dst.(object.SupportSymlink).Symlink(p, key); err != nil {
