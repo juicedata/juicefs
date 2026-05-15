@@ -201,6 +201,7 @@ func gateway(c *cli.Context) error {
 		os.Setenv("JUICEFS_META_READ_ONLY", "1")
 	} else {
 		if _, err := jfsGateway.GetBucketInfo(context.Background(), minio.MinioMetaBucket); errors.As(err, &minio.BucketNotFound{}) {
+			logger.Infof("MinioMetaBucket %s not found, creating it ...", minio.MinioMetaBucket)
 			if err := jfsGateway.MakeBucketWithLocation(context.Background(), minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
 				logger.Warnf("init MinioMetaBucket error %s: %s", minio.MinioMetaBucket, err)
 			}
