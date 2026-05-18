@@ -249,12 +249,8 @@ func watchdog(ctx context.Context, mp string) {
 		la := atomic.LoadInt64(&lastActive)
 		if time.Since(time.Unix(la, 0)) > time.Second*30 {
 			logger.Infof("mount point %q is not active for %s, start another check thread", mp, time.Since(time.Unix(la, 0)))
-			var pid_copy int
-			var agentAddr_copy string
-			pid_copy = pid
-			agentAddr_copy = agentAddr
-			go printThreadsStack(pid_copy)
-			go showThreadStack(agentAddr_copy)
+			go printThreadsStack(pid)
+			go showThreadStack(agentAddr)
 			time.Sleep(time.Minute)
 			// double check
 			if ctx.Err() != nil {
@@ -265,10 +261,8 @@ func watchdog(ctx context.Context, mp string) {
 				continue
 			}
 			logger.Infof("mount point %q is not active for %s, print the stacks again", mp, time.Since(time.Unix(la, 0)))
-			pid_copy = pid
-			agentAddr_copy = agentAddr
-			go printThreadsStack(pid_copy)
-			go showThreadStack(agentAddr_copy)
+			go printThreadsStack(pid)
+			go showThreadStack(agentAddr)
 			time.Sleep(time.Second * 30)
 			if ctx.Err() != nil {
 				break
