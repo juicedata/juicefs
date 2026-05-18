@@ -76,8 +76,10 @@ func showThreadStack(agentAddr string) {
 		_ = resp.Body.Close()
 		return nil
 	}
-	if err := fn(1); err != nil {
-		logger.Warnf("list goroutines debug=1 from %s: %s", agentAddr, err)
+	if err := fn(1); err == nil {
+		if err := fn(2); err != nil {
+			logger.Warnf("list goroutines debug=2 from %s: %s", agentAddr, err)
+		}
 	}
 }
 
