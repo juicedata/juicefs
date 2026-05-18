@@ -349,6 +349,7 @@ type baseMeta struct {
 	groupQuotaUsedSpaceG  *prometheus.GaugeVec
 	groupQuotaUsedInodesG *prometheus.GaugeVec
 
+	trashOverdueG prometheus.Gauge
 	bgjobDels     *prometheus.CounterVec
 	bgjobDuration *prometheus.HistogramVec
 
@@ -511,6 +512,10 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			[]string{"gid"},
 		),
 
+		trashOverdueG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "trash_cleanup_overdue_seconds",
+			Help: "Seconds since the oldest trash entry expired, or 0 if none are overdue.",
+		}),
 		bgjobDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "juicefs_bgjob_duration_seconds",
@@ -565,6 +570,7 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 		subdir = ""
 	}
 	m.subdirInfoG.WithLabelValues(subdir).Set(1)
+	reg.MustRegister(m.trashOverdueG)
 
 	go func() {
 		for {
@@ -3064,6 +3070,7 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 			return
 		case <-time.After(utils.JitterIt(time.Hour)):
 		}
+		m.trashOverdueG.Set(0) // cleanup to not expose stale overdue metrics
 		if st := m.en.doGetAttr(ctx, TrashInode, nil); st != 0 {
 			if st != syscall.ENOENT {
 				logger.Warnf("getattr inode %d: %s", TrashInode, st)
@@ -3182,6 +3189,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			entries = entries[1:]
 			continue
 		}
+		m.trashOverdueG.Set(max(edge.Sub(ts).Seconds(), 0)) // entries are sorted ascendingly
 		if !ts.Before(edge) {
 			break
 		}
