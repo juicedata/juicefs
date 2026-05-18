@@ -1188,24 +1188,26 @@ func (m *kvMeta) deleteKeys(keys ...[]byte) error {
 }
 
 func (m *kvMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	buf, err := m.get(m.entryKey(parent, name))
-	if err != nil {
-		return errno(err)
-	}
-	if buf == nil {
-		return syscall.ENOENT
-	}
-	foundType, foundIno := m.parseEntry(buf)
-	a, err := m.get(m.inodeKey(foundIno))
-	if a != nil {
-		m.parseAttr(a, attr)
-		m.of.Update(foundIno, attr)
-	} else if err == nil {
-		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
-		*attr = Attr{Typ: foundType}
-	}
-	*inode = foundIno
-	return errno(err)
+	return errno(m.client.simpleTxn(ctx, func(tx *kvTxn) error {
+		buf := tx.get(m.entryKey(parent, name))
+		if buf == nil {
+			return syscall.ENOENT
+		}
+		foundType, foundIno := m.parseEntry(buf)
+		*inode = foundIno
+		if m.conf.OpenCache > 0 && m.of.Check(foundIno, attr) {
+			return nil
+		}
+		a := tx.get(m.inodeKey(foundIno))
+		if a != nil {
+			m.parseAttr(a, attr)
+			m.of.Update(foundIno, attr)
+		} else {
+			logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
+			*attr = Attr{Typ: foundType}
+		}
+		return nil
+	}, 0))
 }
 
 func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
