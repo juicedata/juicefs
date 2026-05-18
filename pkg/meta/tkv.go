@@ -1195,6 +1195,9 @@ func (m *kvMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		}
 		foundType, foundIno := m.parseEntry(buf)
 		*inode = foundIno
+		if attr == nil {
+			return nil // found inode but caller doesn't want attr
+		}
 		if m.conf.OpenCache > 0 && m.of.Check(foundIno, attr) {
 			return nil
 		}
