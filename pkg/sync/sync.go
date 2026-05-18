@@ -863,12 +863,11 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 	return part, tmpChksum, err
 }
 
-func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload, calChksum bool) (uint32, error) {
+func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime time.Time, upload *object.MultipartUpload, calChksum bool, mgr *CheckpointManager) (uint32, error) {
 	limits := dst.Limits()
 	if size > limits.MaxPartSize*int64(upload.MaxCount) {
 		return 0, fmt.Errorf("object size %d is too large to copy", size)
 	}
-
 	partSize := choosePartSize(upload, size)
 	n := int((size-1)/partSize) + 1
 	logger.Debugf("Copying data of %s as %d parts (size: %d): %s", key, n, partSize, upload.UploadID)
@@ -878,16 +877,34 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	chksums := make([]chksumWithSz, n)
 	var err error
 
+	var state *multipartUploadState
+	if mgr != nil {
+		state = mgr.EnsureMultipartUploadState(key, size, mtime, partSize, upload)
+	}
+
 	for i := 0; i < n; i++ {
-		go func(num int) {
-			sz := partSize
-			if num == n-1 {
-				sz = size - int64(num)*partSize
+		sz := partSize
+		if i == n-1 {
+			sz = size - int64(i)*partSize
+		}
+		if state != nil {
+			if p, chksum, ok := mgr.GetMultipartPart(state, i+1, calChksum); ok {
+				parts[i] = p
+				errs <- nil
+				if calChksum {
+					chksums[i] = chksumWithSz{chksum, sz}
+				}
+				continue
 			}
+		}
+		go func(num int) {
 			var copyErr error
 			var chksum uint32
 			parts[num], chksum, copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort, calChksum)
 			chksums[num] = chksumWithSz{chksum, sz}
+			if copyErr == nil && state != nil {
+				mgr.MarkMultipartPart(state, parts[num], chksum, calChksum)
+			}
 			errs <- copyErr
 		}(i)
 	}
@@ -902,8 +919,16 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 		err = try(3, func() error { return dst.CompleteUpload(ctx, key, upload.UploadID, parts) })
 	}
 	if err != nil {
-		dst.AbortUpload(ctx, key, upload.UploadID)
+		if mgr == nil {
+			dst.AbortUpload(ctx, key, upload.UploadID)
+		} else if _, e := src.Head(ctx, key); os.IsNotExist(e) {
+			dst.AbortUpload(ctx, key, upload.UploadID)
+			mgr.FinishMultipartUpload(key)
+		}
 		return 0, fmt.Errorf("multipart: %s", err)
+	}
+	if mgr != nil {
+		mgr.FinishMultipartUpload(key)
 	}
 	var chksum uint32
 	if calChksum {
@@ -924,6 +949,10 @@ func InitForCopyData() {
 }
 
 func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
+	return copyData(src, dst, key, size, time.Time{}, calChksum, nil)
+}
+
+func copyData(src, dst object.ObjectStorage, key string, size int64, mtime time.Time, calChksum bool, checkpointMgr *CheckpointManager) (uint32, error) {
 	start := time.Now()
 	var err error
 	var srcChksum uint32
@@ -934,19 +963,26 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 		})
 	} else {
 		var upload *object.MultipartUpload
-		if upload, err = dst.CreateMultipartUpload(ctx, key); err == nil {
-			srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
-		} else if err == utils.ErrNotSUP {
-			err = try(3, func() (err error) {
-				srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
-				return
-			})
-		} else { // other error retry
-			if err = try(2, func() error {
-				upload, err = dst.CreateMultipartUpload(ctx, key)
-				return err
-			}); err == nil {
-				srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
+		if checkpointMgr != nil {
+			upload = checkpointMgr.FindMultipartUpload(key, size, mtime)
+		}
+		if upload != nil {
+			srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, checkpointMgr)
+		} else {
+			if upload, err = dst.CreateMultipartUpload(ctx, key); err == nil {
+				srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, checkpointMgr)
+			} else if err == utils.ErrNotSUP {
+				err = try(3, func() (err error) {
+					srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
+					return
+				})
+			} else { // other error retry
+				if err = try(2, func() error {
+					upload, err = dst.CreateMultipartUpload(ctx, key)
+					return err
+				}); err == nil {
+					srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, checkpointMgr)
+				}
 			}
 		}
 	}
@@ -1079,7 +1115,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 					logger.Errorf("copy link failed: %s", err)
 				}
 			} else {
-				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
+				srcChksum, err = copyData(src, dst, key, obj.Size(), obj.Mtime(), config.CheckAll || config.CheckNew, checkpointMgr)
 			}
 			if errors.Is(err, utils.ErrExtlink) {
 				logger.Warnf("Skip external link %s: %s", key, err)
@@ -1947,7 +1983,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			logger.Infof("Force reset checkpoint, starting fresh")
 		} else if ckpt, err := checkpointMgr.Load(); err == nil {
 			if checkpointMgr.ValidateConfig(config) {
-				if len(ckpt.PrefixState) > 0 || len(ckpt.SrcDelayDel) > 0 || len(ckpt.DstDelayDel) > 0 {
+				if len(ckpt.PrefixState) > 0 || len(ckpt.MultipartUploads) > 0 || len(ckpt.SrcDelayDel) > 0 || len(ckpt.DstDelayDel) > 0 {
 					checkpoint = ckpt
 					config.Limit = ckpt.Config.Limit
 					ckpt.Config = config

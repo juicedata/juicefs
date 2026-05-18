@@ -112,20 +112,30 @@ type CheckpointStats struct {
 	Handled      int64 `json:"handled"`
 }
 
+type multipartUploadState struct {
+	Upload    *object.MultipartUpload `json:"upload"`
+	Size      int64                   `json:"size"`
+	Mtime     time.Time               `json:"mtime"`
+	Parts     map[int]*object.Part    `json:"parts"`
+	Checksums map[int]uint32          `json:"checksums,omitempty"`
+}
+
 // Checkpoint represents the complete checkpoint state
 type Checkpoint struct {
 	sync.RWMutex
-	PrefixState map[string]*PrefixState `json:"prefix_state"`
-	Config      *Config                 `json:"config"`
-	Stats       CheckpointStats         `json:"stats"`
-	SrcDelayDel []string                `json:"src_delay_del,omitempty"`
-	DstDelayDel []string                `json:"dst_delay_del,omitempty"`
-	UpdatedAt   time.Time               `json:"updated_at"`
+	PrefixState      map[string]*PrefixState          `json:"prefix_state"`
+	MultipartUploads map[string]*multipartUploadState `json:"multipart_uploads,omitempty"`
+	Config           *Config                          `json:"config"`
+	Stats            CheckpointStats                  `json:"stats"`
+	SrcDelayDel      []string                         `json:"src_delay_del,omitempty"`
+	DstDelayDel      []string                         `json:"dst_delay_del,omitempty"`
+	UpdatedAt        time.Time                        `json:"updated_at"`
 }
 
 // CheckpointManager manages checkpoint persistence
 type CheckpointManager struct {
 	saveMu           sync.Mutex
+	multipartMu      sync.RWMutex
 	dst              object.ObjectStorage
 	checkpoint       *Checkpoint
 	checkpointKey    string
@@ -139,9 +149,10 @@ type CheckpointManager struct {
 
 func newCheckpoint(config *Config) *Checkpoint {
 	return &Checkpoint{
-		PrefixState: make(map[string]*PrefixState),
-		Config:      config,
-		UpdatedAt:   time.Now(),
+		PrefixState:      make(map[string]*PrefixState),
+		MultipartUploads: make(map[string]*multipartUploadState),
+		Config:           config,
+		UpdatedAt:        time.Now(),
 	}
 }
 
@@ -262,7 +273,9 @@ func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
 	for _, state := range ckpt.PrefixState {
 		state.RLock()
 	}
+	m.multipartMu.RLock()
 	data, err := json.Marshal(ckpt)
+	m.multipartMu.RUnlock()
 	for _, state := range ckpt.PrefixState {
 		state.RUnlock()
 	}
@@ -393,10 +406,86 @@ func (m *CheckpointManager) MarkListDone(prefix string) {
 	})
 }
 
+func (m *CheckpointManager) FindMultipartUpload(key string, size int64, mtime time.Time) *object.MultipartUpload {
+	m.multipartMu.RLock()
+	defer m.multipartMu.RUnlock()
+	state := m.checkpoint.MultipartUploads[key]
+	if state == nil || state.Upload.UploadID == "" || state.Size != size || !state.Mtime.Equal(mtime) ||
+		state.Upload.MinPartSize <= 0 || state.Upload.MaxCount <= 0 {
+		return nil
+	}
+	upload := state.Upload
+	return upload
+}
+
+func (m *CheckpointManager) EnsureMultipartUploadState(key string, size int64, mtime time.Time, partSize int64, upload *object.MultipartUpload) *multipartUploadState {
+	m.multipartMu.Lock()
+	defer m.multipartMu.Unlock()
+	if m.checkpoint.MultipartUploads == nil {
+		m.checkpoint.MultipartUploads = make(map[string]*multipartUploadState)
+	}
+	if state := m.checkpoint.MultipartUploads[key]; state != nil &&
+		state.Upload.UploadID == upload.UploadID &&
+		state.Size == size && state.Mtime.Equal(mtime) &&
+		state.Upload.MinPartSize > 0 && state.Upload.MaxCount > 0 {
+		return state
+	}
+	savedUpload := *upload
+	savedUpload.MinPartSize = int(partSize)
+	state := &multipartUploadState{
+		Upload:    &savedUpload,
+		Size:      size,
+		Mtime:     mtime,
+		Parts:     make(map[int]*object.Part),
+		Checksums: make(map[int]uint32),
+	}
+	m.checkpoint.MultipartUploads[key] = state
+	return state
+}
+
+func (m *CheckpointManager) MarkMultipartPart(state *multipartUploadState, part *object.Part, chksum uint32, calChksum bool) {
+	saved := *part
+
+	m.multipartMu.Lock()
+	defer m.multipartMu.Unlock()
+	state.Parts[part.Num] = &saved
+	if calChksum {
+		if state.Checksums == nil {
+			state.Checksums = make(map[int]uint32)
+		}
+		state.Checksums[part.Num] = chksum
+	}
+}
+
+func (m *CheckpointManager) GetMultipartPart(state *multipartUploadState, num int, calChksum bool) (*object.Part, uint32, bool) {
+	m.multipartMu.RLock()
+	defer m.multipartMu.RUnlock()
+	part := state.Parts[num]
+	if part == nil {
+		return nil, 0, false
+	}
+	saved := *part
+	if !calChksum {
+		return &saved, 0, true
+	}
+	chksum, ok := state.Checksums[num]
+	if !ok {
+		return nil, 0, false
+	}
+	return &saved, chksum, true
+}
+
+func (m *CheckpointManager) FinishMultipartUpload(key string) {
+	m.multipartMu.Lock()
+	defer m.multipartMu.Unlock()
+	delete(m.checkpoint.MultipartUploads, key)
+}
+
 // MarkCompleted removes a key from PendingKeys after successful completion
 func (m *CheckpointManager) MarkCompleted(key string) {
 	prefixVal, ok := m.keyPrefix.LoadAndDelete(key)
 	if !ok {
+		m.FinishMultipartUpload(key)
 		return
 	}
 	prefix := prefixVal.(string)
@@ -405,6 +494,7 @@ func (m *CheckpointManager) MarkCompleted(key string) {
 		delete(state.PendingKeys, key)
 		delete(state.FailedKeys, key)
 	})
+	m.FinishMultipartUpload(key)
 }
 
 // MarkFailed moves a key from PendingKeys to FailedKeys
