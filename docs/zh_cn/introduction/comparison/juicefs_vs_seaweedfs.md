@@ -147,7 +147,7 @@ SeaweedFS 当前[支持部分 S3 API](https://github.com/seaweedfs/seaweedfs/wik
 
 ### HDFS
 
-JuiceFS [完整兼容 HDFS API](../../deployment/hadoop_java_sdk.md)。包括 Hadoop 2.x 和 Hadoop 3.x，以及 Hadoop 生态系统中的各种组件。SeaweedFS 则是提供了对 HDFS API 的[基础兼容](https://github.com/seaweedfs/seaweedfs/wiki/Hadoop-Compatible-File-System)，一些更加高级的操作如如 truncate、concat、checksum 和扩展属性等则尚未支持。
+JuiceFS [完整兼容 HDFS API](../../deployment/hadoop_java_sdk.md)。包括 Hadoop 2.x 和 Hadoop 3.x，以及 Hadoop 生态系统中的各种组件。SeaweedFS 则是提供了对 HDFS API 的[基础兼容](https://github.com/seaweedfs/seaweedfs/wiki/Hadoop-Compatible-File-System)，一些更加高级的操作如 truncate、concat、checksum 和扩展属性等则尚未支持。
 
 ### CSI 驱动
 
