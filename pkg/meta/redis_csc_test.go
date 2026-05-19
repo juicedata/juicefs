@@ -4,6 +4,7 @@ package meta
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -122,6 +123,26 @@ func TestRedisCache(t *testing.T) {
 		require.NotEqual(t, cache.entryTerm(parent), entry.term)
 	})
 
+	t.Run("entry term expires after idle", func(t *testing.T) {
+		cache := newRedisCache("jfs", 1000, 10*time.Millisecond, 0)
+		parent := Ino(106)
+
+		require.Equal(t, uint64(1), cache.bumpEntryTerm(parent))
+		time.Sleep(11 * cache.expiry)
+		require.Equal(t, uint64(0), cache.entryTerm(parent))
+	})
+
+	t.Run("entry term refreshes on access", func(t *testing.T) {
+		cache := newRedisCache("jfs", 1000, 10*time.Millisecond, 0)
+		parent := Ino(107)
+
+		require.Equal(t, uint64(1), cache.bumpEntryTerm(parent))
+		time.Sleep(6 * cache.expiry)
+		require.Equal(t, uint64(1), cache.entryTerm(parent))
+		time.Sleep(6 * cache.expiry)
+		require.Equal(t, uint64(1), cache.entryTerm(parent))
+	})
+
 	t.Run("entry mark refill requires current generation", func(t *testing.T) {
 		cache := m.cache
 		parent := Ino(107)
@@ -154,5 +175,76 @@ func TestRedisCache(t *testing.T) {
 		require.False(t, added)
 		_, ok := cache.entryCache.Get(name)
 		require.False(t, ok)
+	})
+
+	t.Run("stale entry is not used while entry term is active", func(t *testing.T) {
+		cache := newRedisCache("jfs", 1000, 20*time.Millisecond, 0)
+		parent := Ino(110)
+		name := cache.entryName(parent, "f")
+		cache.entryCache.Add(name, &cachedEntry{ino: 111, term: cache.entryTerm(parent), Attr: Attr{Typ: TypeFile}})
+
+		cache.bumpEntryTerm(parent)
+		entry, ok := cache.entryCache.Get(name)
+		require.True(t, ok)
+		require.False(t, entry.term >= cache.entryTerm(parent) && !entry.isMark())
+	})
+
+	t.Run("old entry expires before idle entry term", func(t *testing.T) {
+		cache := newRedisCache("jfs", 1000, 10*time.Millisecond, 0)
+		parent := Ino(112)
+		name := cache.entryName(parent, "f")
+		cache.entryCache.Add(name, &cachedEntry{ino: 113, term: cache.entryTerm(parent), Attr: Attr{Typ: TypeFile}})
+		cache.bumpEntryTerm(parent)
+
+		time.Sleep(2 * cache.expiry)
+		_, ok := cache.entryCache.Get(name)
+		require.False(t, ok)
+		require.Equal(t, uint64(1), cache.entryTerm(parent))
+	})
+
+	t.Run("active entry term outlives repeated stale entry checks", func(t *testing.T) {
+		cache := newRedisCache("jfs", 1000, 10*time.Millisecond, 0)
+		parent := Ino(114)
+		name := cache.entryName(parent, "f")
+		cache.entryCache.Add(name, &cachedEntry{ino: 115, term: cache.entryTerm(parent), Attr: Attr{Typ: TypeFile}})
+		cache.bumpEntryTerm(parent)
+
+		for range 3 {
+			time.Sleep(4 * cache.expiry)
+			entry, ok := cache.entryCache.Get(name)
+			if ok {
+				require.False(t, entry.term >= cache.entryTerm(parent) && !entry.isMark())
+			} else {
+				require.Equal(t, uint64(1), cache.entryTerm(parent))
+			}
+		}
+		require.Equal(t, uint64(1), cache.entryTerm(parent))
+	})
+
+	t.Run("concurrent stale refills cannot overwrite newer mark", func(t *testing.T) {
+		cache := newRedisCache("jfs", 1000, time.Second, 0)
+		parent := Ino(116)
+		name := cache.entryName(parent, "f")
+		oldTerm := cache.entryTerm(parent)
+		cache.entryCache.Add(name, &cachedEntry{term: oldTerm})
+		newTerm := cache.bumpEntryTerm(parent)
+		cache.entryCache.Add(name, &cachedEntry{term: newTerm})
+
+		var wg sync.WaitGroup
+		for i := 0; i < 8; i++ {
+			wg.Add(1)
+			go func(ino Ino) {
+				defer wg.Done()
+				cache.entryCache.AddIf(name, &cachedEntry{ino: ino, term: oldTerm}, func(oldEntry *cachedEntry, exists bool) bool {
+					return exists && oldEntry.isMark() && oldEntry.term == oldTerm && cache.entryTerm(parent) == oldTerm
+				})
+			}(Ino(117 + i))
+		}
+		wg.Wait()
+
+		entry, ok := cache.entryCache.Get(name)
+		require.True(t, ok)
+		require.True(t, entry.isMark())
+		require.Equal(t, newTerm, entry.term)
 	})
 }

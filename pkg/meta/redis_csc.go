@@ -25,7 +25,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unsafe"
 
@@ -56,9 +55,7 @@ type redisCache struct {
 
 	inodeCache *expirable.LRU[Ino, []byte]
 	entryCache *expirable.LRU[string, *cachedEntry]
-
-	entryTermMu sync.RWMutex
-	entryTerms  map[Ino]uint64
+	entryTerms *expirable.LRU[Ino, uint64]
 }
 
 func newRedisCache(prefix string, cap int, expiry time.Duration, preload int) *redisCache {
@@ -70,7 +67,7 @@ func newRedisCache(prefix string, cap int, expiry time.Duration, preload int) *r
 		preload:    preload,
 		inodeCache: expirable.NewLRU[Ino, []byte](cap, nil, expiry),
 		entryCache: expirable.NewLRU[string, *cachedEntry](cap, nil, expiry),
-		entryTerms: make(map[Ino]uint64),
+		entryTerms: expirable.NewLRU[Ino, uint64](0, nil, 10*expiry),
 	}
 }
 
@@ -121,22 +118,18 @@ func (c *redisCache) entryName(parent Ino, name string) string {
 }
 
 func (c *redisCache) entryTerm(parent Ino) uint64 {
-	c.entryTermMu.RLock()
-	defer c.entryTermMu.RUnlock()
-	return c.entryTerms[parent]
+	term, ok := c.entryTerms.Get(parent)
+	if !ok {
+		return 0
+	}
+	c.entryTerms.Add(parent, term)
+	return term
 }
 
 func (c *redisCache) bumpEntryTerm(parent Ino) uint64 {
-	c.entryTermMu.Lock()
-	defer c.entryTermMu.Unlock()
-	c.entryTerms[parent]++
-	return c.entryTerms[parent]
-}
-
-func (c *redisCache) resetEntryTerms() {
-	c.entryTermMu.Lock()
-	defer c.entryTermMu.Unlock()
-	c.entryTerms = make(map[Ino]uint64)
+	term, _ := c.entryTerms.Get(parent)
+	c.entryTerms.Add(parent, term+1)
+	return term + 1
 }
 
 func (c *redisCache) HandlePushNotification(ctx context.Context, handlerCtx push.NotificationHandlerContext, notification []interface{}) error {
@@ -146,10 +139,16 @@ func (c *redisCache) HandlePushNotification(ctx context.Context, handlerCtx push
 	if typ, ok := notification[0].(string); !ok || typ != "invalidate" {
 		return nil
 	}
-	iKeys := notification[1].([]interface{})
+	iKeys, ok := notification[1].([]interface{})
+	if !ok {
+		return nil
+	}
 	var key string
 	for _, iKey := range iKeys {
-		key = iKey.(string)
+		key, ok = iKey.(string)
+		if !ok {
+			continue
+		}
 		typ := c.parse(key)
 		switch typ {
 		case keyTypInode:
@@ -304,7 +303,7 @@ func (c *redisCache) onInvalidateConnect(ctx context.Context, cn *redis.Conn) er
 	// clear all caches on reconnect
 	c.inodeCache.Purge()
 	c.entryCache.Purge()
-	c.resetEntryTerms()
+	c.entryTerms.Purge()
 	// use the pubsub connection to handle tracking and invalidate
 	_ = cn.Do(ctx, "CLIENT", "TRACKING", "OFF").Err()
 	if err := cn.Do(ctx, "CLIENT", "TRACKING", "ON", "BCAST", "PREFIX", c.prefix+"i", "PREFIX", c.prefix+"d").Err(); err != nil {
