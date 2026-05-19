@@ -350,7 +350,28 @@ type TreeSummary struct {
 	Size     uint64
 	Files    uint64
 	Dirs     uint64
+	Duration time.Duration
 	Children []*TreeSummary `json:",omitempty"`
+}
+
+// TreeSort is the key used to rank children before picking the top N.
+type TreeSort uint8
+
+const (
+	SortBySize TreeSort = iota // zero value keeps the historical behavior
+	SortByInodes
+	SortByCost
+)
+
+func (s *TreeSummary) sortKey(by TreeSort) uint64 {
+	switch by {
+	case SortByInodes:
+		return s.Files + s.Dirs
+	case SortByCost:
+		return uint64(s.Duration)
+	default:
+		return s.Size
+	}
 }
 
 type SessionInfo struct {
@@ -516,7 +537,7 @@ type Meta interface {
 	// Get summary of a node; for a directory it will accumulate all its child nodes
 	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno
 	// GetTreeSummary returns a summary in tree structure
-	GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, updateProgress func(count uint64, bytes uint64)) syscall.Errno
+	GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, sortBy TreeSort, updateProgress func(count uint64, bytes uint64)) syscall.Errno
 	// Clone a file or directory
 	Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno
 	// GetPaths returns all paths of an inode
