@@ -2900,6 +2900,16 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 func testCheckAndRepair(t *testing.T, m Meta) {
 	var checkInode, d1Inode, d2Inode, d3Inode, d4Inode Ino
 	dirAttr := &Attr{Mode: 0644, Full: true, Typ: TypeDirectory, Nlink: 3}
+	if st := m.Lookup(Background(), RootInode, "check", &checkInode, dirAttr, false); st == 0 {
+		var count uint64
+		if st := m.Remove(Background(), RootInode, "check", true, 1, &count); st != 0 {
+			t.Fatalf("pre-cleanup check dir: %s", st)
+		}
+	}
+	defer func() {
+		var count uint64
+		m.Remove(Background(), RootInode, "check", true, 1, &count)
+	}()
 	if st := m.Mkdir(Background(), RootInode, "check", 0640, 022, 0, &checkInode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
