@@ -44,17 +44,18 @@ import (
 
 // Stat has the counters to represent the progress.
 type Stat struct {
-	Copied        int64    // the number of copied files
-	CopiedBytes   int64    // total amount of copied data in bytes
-	Checked       int64    // the number of checked files
-	CheckedBytes  int64    // total amount of checked data in bytes
-	Deleted       int64    // the number of deleted files
-	Skipped       int64    // the number of files skipped
-	SkippedBytes  int64    // total amount of skipped data in bytes
-	Failed        int64    // the number of files that fail to copy
-	DelayDelDir   []string // the directories that need to be deleted
-	CompletedKeys []string `json:"completed_keys,omitempty"` // checkpoint: keys completed by this worker
-	FailedKeys    []string `json:"failed_keys,omitempty"`    // checkpoint: keys failed by this worker
+	Copied           int64                            // the number of copied files
+	CopiedBytes      int64                            // total amount of copied data in bytes
+	Checked          int64                            // the number of checked files
+	CheckedBytes     int64                            // total amount of checked data in bytes
+	Deleted          int64                            // the number of deleted files
+	Skipped          int64                            // the number of files skipped
+	SkippedBytes     int64                            // total amount of skipped data in bytes
+	Failed           int64                            // the number of files that fail to copy
+	DelayDelDir      []string                         // the directories that need to be deleted
+	CompletedKeys    []string                         `json:"completed_keys,omitempty"` // checkpoint: keys completed by this worker
+	FailedKeys       []string                         `json:"failed_keys,omitempty"`    // checkpoint: keys failed by this worker
+	MultipartUploads map[string]*multipartUploadState `json:"multipart_uploads,omitempty"`
 }
 
 var completionMu sync.Mutex
@@ -99,7 +100,28 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 
 var sendStatMu sync.Mutex
 
-func sendStats(addr string) {
+func getMultipartUploads(checkpointMgr *CheckpointManager) map[string]*multipartUploadState {
+	if checkpointMgr == nil {
+		return nil
+	}
+	checkpointMgr.multipartMu.RLock()
+	defer checkpointMgr.multipartMu.RUnlock()
+	if len(checkpointMgr.checkpoint.MultipartUploads) == 0 {
+		return nil
+	}
+	uploads := make(map[string]*multipartUploadState, len(checkpointMgr.checkpoint.MultipartUploads))
+	for key, state := range checkpointMgr.checkpoint.MultipartUploads {
+		if cp := cloneMultipartUploadState(state); cp != nil {
+			uploads[key] = cp
+		}
+	}
+	if len(uploads) == 0 {
+		return nil
+	}
+	return uploads
+}
+
+func sendStats(addr string, checkpointMgr *CheckpointManager) {
 	sendStatMu.Lock()
 	defer sendStatMu.Unlock()
 	var r Stat
@@ -127,6 +149,7 @@ func sendStats(addr string) {
 	if failed != nil {
 		r.Failed = failed.Current()
 	}
+	r.MultipartUploads = getMultipartUploads(checkpointMgr)
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
@@ -184,7 +207,7 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 				break LOOP
 			}
 		}
-		d, err := marshalObjects(objs)
+		d, err := marshalObjects(objs, checkpointMgr)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -213,6 +236,9 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
 		srcDelayDelMu.Unlock()
 		if checkpointMgr != nil {
+			for key, state := range r.MultipartUploads {
+				checkpointMgr.PutMultipartCheckpoint(key, state)
+			}
 			for _, key := range r.CompletedKeys {
 				checkpointMgr.MarkCompleted(key)
 			}
@@ -387,7 +413,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 	}
 }
 
-func marshalObjects(objs []object.Object) ([]byte, error) {
+func marshalObjects(objs []object.Object, checkpointMgr *CheckpointManager) ([]byte, error) {
 	var arr []map[string]interface{}
 	for _, o := range objs {
 		nsize := o.Size()
@@ -396,12 +422,17 @@ func marshalObjects(objs []object.Object) ([]byte, error) {
 		if nsize != o.Size() {
 			obj["nsize"] = nsize
 		}
+		if checkpointMgr != nil && o.Size() >= maxBlock && (nsize == o.Size() || nsize == markChecksum) {
+			if cp := checkpointMgr.GetMultipartCheckpoint(o.Key()); cp != nil {
+				obj["multipart_checkpoint"] = cp
+			}
+		}
 		arr = append(arr, obj)
 	}
 	return json.MarshalIndent(arr, "", " ")
 }
 
-func unmarshalObjects(d []byte) ([]object.Object, error) {
+func unmarshalObjects(d []byte, checkpointMgr *CheckpointManager) ([]object.Object, error) {
 	var arr []map[string]interface{}
 	err := json.Unmarshal(d, &arr)
 	if err != nil {
@@ -413,12 +444,21 @@ func unmarshalObjects(d []byte) ([]object.Object, error) {
 		if nsize, ok := m["nsize"]; ok {
 			obj = withSize(obj, int64(nsize.(float64)))
 		}
+		if checkpointMgr != nil {
+			if cpRaw, ok := m["multipart_checkpoint"]; ok {
+				cpBytes, _ := json.Marshal(cpRaw)
+				var cp multipartUploadState
+				if err := json.Unmarshal(cpBytes, &cp); err == nil {
+					checkpointMgr.PutMultipartCheckpoint(obj.Key(), &cp)
+				}
+			}
+		}
 		objs = append(objs, obj)
 	}
 	return objs, nil
 }
 
-func fetchJobs(tasks chan<- object.Object, config *Config) {
+func fetchJobs(tasks chan<- object.Object, config *Config, checkpointMgr *CheckpointManager) {
 	for {
 		url := fmt.Sprintf("http://%s/fetch", config.Manager)
 		ans, err := httpRequest(url, nil)
@@ -428,7 +468,7 @@ func fetchJobs(tasks chan<- object.Object, config *Config) {
 			continue
 		}
 		var jobs []object.Object
-		jobs, err = unmarshalObjects(ans)
+		jobs, err = unmarshalObjects(ans, checkpointMgr)
 		if err != nil {
 			logger.Errorf("Unmarshal %s: %s", string(ans), err)
 			time.Sleep(time.Second)

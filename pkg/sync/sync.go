@@ -968,7 +968,12 @@ func copyData(src, dst object.ObjectStorage, key string, size int64, mtime time.
 		}
 		if upload != nil {
 			srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, checkpointMgr)
-		} else {
+			if err != nil {
+				checkpointMgr.FinishMultipartUpload(key)
+				upload = nil
+			}
+		}
+		if upload == nil {
 			if upload, err = dst.CreateMultipartUpload(ctx, key); err == nil {
 				srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, checkpointMgr)
 			} else if err == utils.ErrNotSUP {
@@ -1973,7 +1978,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	var checkpointMgr *CheckpointManager
 	var checkpoint *Checkpoint
 
-	if config.EnableCheckpoint && config.Manager == "" {
+	if config.EnableCheckpoint {
 		checkpointMgr = NewCheckpointManager(src, dst, config)
 		if config.CheckpointForceReset {
 			if err := checkpointMgr.DeleteCheckpoint(); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -2175,9 +2180,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				}
 			}
 		} else {
-			sendStats(config.Manager)
+			sendStats(config.Manager, checkpointMgr)
 			for len(srcDelayDel) > 0 {
-				sendStats(config.Manager)
+				sendStats(config.Manager, checkpointMgr)
 			}
 			logger.Infof("This worker process has already completed its tasks")
 		}
@@ -2254,10 +2259,10 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}
 		close(tasks)
 	} else {
-		go fetchJobs(tasks, config)
+		go fetchJobs(tasks, config, checkpointMgr)
 		go func() {
 			for {
-				sendStats(config.Manager)
+				sendStats(config.Manager, checkpointMgr)
 				time.Sleep(time.Second)
 			}
 		}()

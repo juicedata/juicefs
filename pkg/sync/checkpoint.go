@@ -139,6 +139,7 @@ type CheckpointManager struct {
 	dst              object.ObjectStorage
 	checkpoint       *Checkpoint
 	checkpointKey    string
+	isManager        bool
 	stopChan         chan struct{}
 	stopOnce         sync.Once
 	periodicDone     chan struct{}
@@ -158,13 +159,16 @@ func newCheckpoint(config *Config) *Checkpoint {
 
 // NewCheckpointManager creates a new checkpoint manager
 func NewCheckpointManager(src, dst object.ObjectStorage, config *Config) *CheckpointManager {
-	key := generateCheckpointKey(src.String(), dst.String(), config)
-	return &CheckpointManager{
-		dst:           dst,
-		checkpoint:    newCheckpoint(config),
-		checkpointKey: key,
-		stopChan:      make(chan struct{}),
+	m := &CheckpointManager{
+		checkpoint: newCheckpoint(config),
+		isManager:  config == nil || config.Manager == "",
+		stopChan:   make(chan struct{}),
 	}
+	if m.isManager {
+		m.dst = dst
+		m.checkpointKey = generateCheckpointKey(src.String(), dst.String(), config)
+	}
+	return m
 }
 
 // generateCheckpointKey creates a unique key based on src, dst and config.
@@ -230,6 +234,9 @@ func (m *CheckpointManager) cleanupCheckpointTmp() {
 
 // Load loads checkpoint from object storage
 func (m *CheckpointManager) Load() (*Checkpoint, error) {
+	if !m.isManager {
+		return m.checkpoint, nil
+	}
 	go m.cleanupCheckpointTmp()
 	obj, err := m.dst.Get(ctx, m.checkpointKey, 0, -1)
 	if err != nil {
@@ -257,6 +264,9 @@ func (m *CheckpointManager) Load() (*Checkpoint, error) {
 
 // Save saves checkpoint to object storage
 func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
+	if !m.isManager {
+		return nil
+	}
 	if ckpt.Config != nil && ckpt.Config.Dry {
 		return nil
 	}
@@ -401,6 +411,9 @@ func (m *CheckpointManager) updatePrefixState(prefix string, update func(*Prefix
 }
 
 func (m *CheckpointManager) MarkListDone(prefix string) {
+	if m == nil || !m.isManager {
+		return
+	}
 	m.updatePrefixState(prefix, func(state *PrefixState) {
 		state.ListDone = true
 	})
@@ -416,6 +429,45 @@ func (m *CheckpointManager) FindMultipartUpload(key string, size int64, mtime ti
 	}
 	upload := state.Upload
 	return upload
+}
+
+func cloneMultipartUploadState(state *multipartUploadState) *multipartUploadState {
+	if state == nil || state.Upload == nil {
+		return nil
+	}
+	parts := make(map[int]*object.Part, len(state.Parts))
+	maps.Copy(parts, state.Parts)
+	var checksums map[int]uint32
+	if len(state.Checksums) > 0 {
+		checksums = make(map[int]uint32, len(state.Checksums))
+		maps.Copy(checksums, state.Checksums)
+	}
+	return &multipartUploadState{
+		Upload:    state.Upload,
+		Size:      state.Size,
+		Mtime:     state.Mtime,
+		Parts:     parts,
+		Checksums: checksums,
+	}
+}
+
+func (m *CheckpointManager) GetMultipartCheckpoint(key string) *multipartUploadState {
+	m.multipartMu.RLock()
+	defer m.multipartMu.RUnlock()
+	state := m.checkpoint.MultipartUploads[key]
+	if state == nil || state.Upload.UploadID == "" || state.Upload.MinPartSize <= 0 || state.Upload.MaxCount <= 0 {
+		return nil
+	}
+	return cloneMultipartUploadState(state)
+}
+
+func (m *CheckpointManager) PutMultipartCheckpoint(key string, state *multipartUploadState) {
+	m.multipartMu.Lock()
+	if m.checkpoint.MultipartUploads == nil {
+		m.checkpoint.MultipartUploads = make(map[string]*multipartUploadState)
+	}
+	m.checkpoint.MultipartUploads[key] = state
+	m.multipartMu.Unlock()
 }
 
 func (m *CheckpointManager) EnsureMultipartUploadState(key string, size int64, mtime time.Time, partSize int64, upload *object.MultipartUpload) *multipartUploadState {
@@ -483,6 +535,13 @@ func (m *CheckpointManager) FinishMultipartUpload(key string) {
 
 // MarkCompleted removes a key from PendingKeys after successful completion
 func (m *CheckpointManager) MarkCompleted(key string) {
+	if m == nil {
+		return
+	}
+	if !m.isManager {
+		m.FinishMultipartUpload(key)
+		return
+	}
 	prefixVal, ok := m.keyPrefix.LoadAndDelete(key)
 	if !ok {
 		m.FinishMultipartUpload(key)
@@ -499,6 +558,9 @@ func (m *CheckpointManager) MarkCompleted(key string) {
 
 // MarkFailed moves a key from PendingKeys to FailedKeys
 func (m *CheckpointManager) MarkFailed(key string) {
+	if m == nil || !m.isManager {
+		return
+	}
 	prefixVal, ok := m.keyPrefix.Load(key)
 	if !ok {
 		return
@@ -516,6 +578,9 @@ func (m *CheckpointManager) MarkFailed(key string) {
 }
 
 func (m *CheckpointManager) AddPendingKey(prefix string, obj object.Object) {
+	if m == nil || !m.isManager {
+		return
+	}
 	m.updatePrefixState(prefix, func(state *PrefixState) {
 		state.PendingKeys[obj.Key()] = obj
 		state.LastListedKey = obj.Key()
@@ -524,13 +589,16 @@ func (m *CheckpointManager) AddPendingKey(prefix string, obj object.Object) {
 }
 
 func (m *CheckpointManager) UpdateLastListedKey(prefix string, obj object.Object) {
+	if m == nil || !m.isManager {
+		return
+	}
 	m.updatePrefixState(prefix, func(state *PrefixState) {
 		state.LastListedKey = obj.Key()
 	})
 }
 
 func (m *CheckpointManager) TrackKey(key, prefix string) {
-	if m == nil {
+	if m == nil || !m.isManager {
 		return
 	}
 	m.keyPrefix.Store(key, prefix)
@@ -538,7 +606,7 @@ func (m *CheckpointManager) TrackKey(key, prefix string) {
 
 // GetLastListedKey returns the last listed key for a prefix, or "" if not tracked.
 func (m *CheckpointManager) GetLastListedKey(prefix string) string {
-	if m == nil {
+	if m == nil || !m.isManager {
 		return ""
 	}
 	m.checkpoint.RLock()
@@ -554,7 +622,7 @@ func (m *CheckpointManager) GetLastListedKey(prefix string) string {
 
 // RestorePrefix restores pending+failed keys for a prefix, merging failed into pending.
 func (m *CheckpointManager) RestorePrefix(prefix string) (objs []object.Object, listDone bool, listDepth int, found bool) {
-	if m == nil {
+	if m == nil || !m.isManager {
 		return nil, false, 0, false
 	}
 	m.checkpoint.RLock()
@@ -585,6 +653,9 @@ func (m *CheckpointManager) RestorePrefix(prefix string) (objs []object.Object, 
 
 // ListPrefixes returns a snapshot of all prefix keys currently tracked in checkpoint.
 func (m *CheckpointManager) ListPrefixes() []string {
+	if m == nil || !m.isManager {
+		return nil
+	}
 	m.checkpoint.RLock()
 	defer m.checkpoint.RUnlock()
 	prefixes := make([]string, 0, len(m.checkpoint.PrefixState))
@@ -596,7 +667,7 @@ func (m *CheckpointManager) ListPrefixes() []string {
 
 // RegisterChildPrefix registers a child prefix discovered during listing.
 func (m *CheckpointManager) RegisterChildPrefix(childPrefix string, listDepth int) {
-	if m == nil {
+	if m == nil || !m.isManager {
 		return
 	}
 	state := m.GetOrCreatePrefixState(childPrefix)
@@ -616,6 +687,9 @@ func (m *CheckpointManager) Stop() {
 
 // DeleteCheckpoint removes the checkpoint file from storage.
 func (m *CheckpointManager) DeleteCheckpoint() error {
+	if !m.isManager {
+		return nil
+	}
 	m.saveMu.Lock()
 	defer m.saveMu.Unlock()
 	return m.dst.Delete(ctx, m.checkpointKey)
@@ -627,6 +701,9 @@ func (m *CheckpointManager) Reset(config *Config) {
 }
 
 func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
+	if !m.isManager {
+		return
+	}
 	done := make(chan struct{})
 	m.periodicDone = done
 	go func() {
@@ -650,6 +727,9 @@ func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
 }
 
 func (m *CheckpointManager) SaveOnSignal() {
+	if !m.isManager {
+		return
+	}
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -677,14 +757,6 @@ func trackCheckpointCompletion(key string, err error, mgr *CheckpointManager, co
 	if errors.Is(err, os.ErrNotExist) {
 		failed = false
 	}
-	if mgr != nil {
-		if failed {
-			mgr.MarkFailed(key)
-		} else {
-			mgr.MarkCompleted(key)
-		}
-		return
-	}
 	if config.Manager != "" {
 		completionMu.Lock()
 		if failed {
@@ -693,5 +765,13 @@ func trackCheckpointCompletion(key string, err error, mgr *CheckpointManager, co
 			completedKeysBuf = append(completedKeysBuf, key)
 		}
 		completionMu.Unlock()
+		return
+	}
+	if mgr != nil {
+		if failed {
+			mgr.MarkFailed(key)
+		} else {
+			mgr.MarkCompleted(key)
+		}
 	}
 }

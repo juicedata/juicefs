@@ -67,7 +67,7 @@ func TestCluster(t *testing.T) {
 	// worker
 	conf.Manager = addr
 	mytodo := make(chan object.Object, 100)
-	go fetchJobs(mytodo, &conf)
+	go fetchJobs(mytodo, &conf, nil)
 
 	todo <- &obj{key: "test"}
 	close(todo)
@@ -89,11 +89,11 @@ func TestMarshal(t *testing.T) {
 		withSize(&file{obj{key: "test2", size: 200}}, -1),
 		withSize(&file{obj{key: "test3", size: 200, isSymlink: true}}, -1),
 	}
-	d, err := marshalObjects(objs)
+	d, err := marshalObjects(objs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	objs2, e := unmarshalObjects(d)
+	objs2, e := unmarshalObjects(d, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
