@@ -67,7 +67,7 @@ func newRedisCache(prefix string, cap int, expiry time.Duration, preload int) *r
 		preload:    preload,
 		inodeCache: expirable.NewLRU[Ino, []byte](cap, nil, expiry),
 		entryCache: expirable.NewLRU[string, *cachedEntry](cap, nil, expiry),
-		entryTerms: expirable.NewLRU[Ino, uint64](0, nil, 10*expiry),
+		entryTerms: expirable.NewLRU[Ino, uint64](0, nil, 10*expiry), // no size limit, cleanup only based on expiry
 	}
 }
 
@@ -269,16 +269,19 @@ func (c *redisCache) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 }
 
 func (c *redisCache) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
-	return func(ctx context.Context, cmds []redis.Cmder) error {
-		for _, cmd := range cmds {
-			_ = c.beforeProcess(cmd, true)
+	return nil
+	/*
+		return func(ctx context.Context, cmds []redis.Cmder) error {
+			for _, cmd := range cmds {
+				_ = c.beforeProcess(cmd, true)
+			}
+			err := next(ctx, cmds)
+			for _, cmd := range cmds {
+				c.afterProcess(cmd)
+			}
+			return err
 		}
-		err := next(ctx, cmds)
-		for _, cmd := range cmds {
-			c.afterProcess(cmd)
-		}
-		return err
-	}
+	*/
 }
 
 func (c *redisCache) close() {
