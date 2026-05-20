@@ -111,6 +111,9 @@ func getMultipartUploads(checkpointMgr *CheckpointManager) map[string]*multipart
 	}
 	uploads := make(map[string]*multipartUploadState, len(checkpointMgr.checkpoint.MultipartUploads))
 	for key, state := range checkpointMgr.checkpoint.MultipartUploads {
+		if len(state.Parts) == 0 {
+			continue
+		}
 		if cp := cloneMultipartUploadState(state); cp != nil {
 			uploads[key] = cp
 		}
@@ -180,6 +183,20 @@ func sendStats(addr string, checkpointMgr *CheckpointManager) {
 		if failed != nil {
 			failed.IncrInt64(-r.Failed)
 		}
+		if checkpointMgr != nil {
+			checkpointMgr.multipartMu.Lock()
+			for key, sent := range r.MultipartUploads {
+				state := checkpointMgr.checkpoint.MultipartUploads[key]
+				if state == nil {
+					continue
+				}
+				for num := range sent.Parts {
+					delete(state.Parts, num)
+					delete(state.Checksums, num)
+				}
+			}
+			checkpointMgr.multipartMu.Unlock()
+		}
 	}
 }
 
@@ -207,7 +224,18 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 				break LOOP
 			}
 		}
-		d, err := marshalObjects(objs, checkpointMgr)
+		if checkpointMgr != nil {
+			for i, o := range objs {
+				nsize := o.Size()
+				base := withoutSize(o)
+				if base.Size() >= maxBlock && (nsize == base.Size() || nsize == markChecksum) {
+					if cp := checkpointMgr.GetMultipartCheckpoint(base.Key()); cp != nil {
+						objs[i] = withMultipart(o, cp)
+					}
+				}
+			}
+		}
+		d, err := marshalObjects(objs)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -413,26 +441,26 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 	}
 }
 
-func marshalObjects(objs []object.Object, checkpointMgr *CheckpointManager) ([]byte, error) {
+func marshalObjects(objs []object.Object) ([]byte, error) {
 	var arr []map[string]interface{}
 	for _, o := range objs {
+		cp := multipartCheckpoint(o)
+		o = withoutMultipart(o)
 		nsize := o.Size()
 		o = withoutSize(o)
 		obj := object.MarshalObject(o)
 		if nsize != o.Size() {
 			obj["nsize"] = nsize
 		}
-		if checkpointMgr != nil && o.Size() >= maxBlock && (nsize == o.Size() || nsize == markChecksum) {
-			if cp := checkpointMgr.GetMultipartCheckpoint(o.Key()); cp != nil {
-				obj["multipart_checkpoint"] = cp
-			}
+		if cp != nil {
+			obj["multipart_checkpoint"] = cp
 		}
 		arr = append(arr, obj)
 	}
 	return json.MarshalIndent(arr, "", " ")
 }
 
-func unmarshalObjects(d []byte, checkpointMgr *CheckpointManager) ([]object.Object, error) {
+func unmarshalObjects(d []byte) ([]object.Object, error) {
 	var arr []map[string]interface{}
 	err := json.Unmarshal(d, &arr)
 	if err != nil {
@@ -444,12 +472,12 @@ func unmarshalObjects(d []byte, checkpointMgr *CheckpointManager) ([]object.Obje
 		if nsize, ok := m["nsize"]; ok {
 			obj = withSize(obj, int64(nsize.(float64)))
 		}
-		if checkpointMgr != nil {
-			if cpRaw, ok := m["multipart_checkpoint"]; ok {
-				cpBytes, _ := json.Marshal(cpRaw)
+		if cpRaw, ok := m["multipart_checkpoint"]; ok {
+			cpBytes, err := json.Marshal(cpRaw)
+			if err == nil {
 				var cp multipartUploadState
 				if err := json.Unmarshal(cpBytes, &cp); err == nil {
-					checkpointMgr.PutMultipartCheckpoint(obj.Key(), &cp)
+					obj = withMultipart(obj, &cp)
 				}
 			}
 		}
@@ -468,7 +496,7 @@ func fetchJobs(tasks chan<- object.Object, config *Config, checkpointMgr *Checkp
 			continue
 		}
 		var jobs []object.Object
-		jobs, err = unmarshalObjects(ans, checkpointMgr)
+		jobs, err = unmarshalObjects(ans)
 		if err != nil {
 			logger.Errorf("Unmarshal %s: %s", string(ans), err)
 			time.Sleep(time.Second)
@@ -480,6 +508,12 @@ func fetchJobs(tasks chan<- object.Object, config *Config, checkpointMgr *Checkp
 			break
 		}
 		for _, obj := range jobs {
+			if cp := multipartCheckpoint(obj); cp != nil {
+				if checkpointMgr != nil {
+					checkpointMgr.PutMultipartCheckpoint(obj.Key(), cp)
+				}
+				obj = withoutMultipart(obj)
+			}
 			tasks <- obj
 		}
 	}

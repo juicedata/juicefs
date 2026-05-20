@@ -89,11 +89,11 @@ func TestMarshal(t *testing.T) {
 		withSize(&file{obj{key: "test2", size: 200}}, -1),
 		withSize(&file{obj{key: "test3", size: 200, isSymlink: true}}, -1),
 	}
-	d, err := marshalObjects(objs, nil)
+	d, err := marshalObjects(objs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	objs2, e := unmarshalObjects(d, nil)
+	objs2, e := unmarshalObjects(d)
 	if e != nil {
 		t.Fatal(e)
 	}

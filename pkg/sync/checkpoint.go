@@ -463,11 +463,27 @@ func (m *CheckpointManager) GetMultipartCheckpoint(key string) *multipartUploadS
 
 func (m *CheckpointManager) PutMultipartCheckpoint(key string, state *multipartUploadState) {
 	m.multipartMu.Lock()
+	defer m.multipartMu.Unlock()
 	if m.checkpoint.MultipartUploads == nil {
 		m.checkpoint.MultipartUploads = make(map[string]*multipartUploadState)
 	}
-	m.checkpoint.MultipartUploads[key] = state
-	m.multipartMu.Unlock()
+	saved := m.checkpoint.MultipartUploads[key]
+	if saved == nil || saved.Upload.UploadID != state.Upload.UploadID || saved.Size != state.Size || !saved.Mtime.Equal(state.Mtime) {
+		m.checkpoint.MultipartUploads[key] = state
+		return
+	}
+	if saved.Parts == nil {
+		saved.Parts = make(map[int]*object.Part)
+	}
+	for num, part := range state.Parts {
+		saved.Parts[num] = part
+	}
+	if len(state.Checksums) > 0 {
+		if saved.Checksums == nil {
+			saved.Checksums = make(map[int]uint32)
+		}
+		maps.Copy(saved.Checksums, state.Checksums)
+	}
 }
 
 func (m *CheckpointManager) EnsureMultipartUploadState(key string, size int64, mtime time.Time, partSize int64, upload *object.MultipartUpload) *multipartUploadState {

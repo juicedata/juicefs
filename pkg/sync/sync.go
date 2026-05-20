@@ -1235,11 +1235,48 @@ func (o *fileWithSize) Size() int64 {
 	return o.nsize
 }
 
+type objWithMultipart struct {
+	object.Object
+	checkpoint *multipartUploadState
+}
+
+type fileWithMultipart struct {
+	object.File
+	checkpoint *multipartUploadState
+}
+
 func withSize(o object.Object, nsize int64) object.Object {
 	if f, ok := o.(object.File); ok {
 		return &fileWithSize{f, nsize}
 	}
 	return &objWithSize{o, nsize}
+}
+
+func withMultipart(o object.Object, checkpoint *multipartUploadState) object.Object {
+	if f, ok := o.(object.File); ok {
+		return &fileWithMultipart{f, checkpoint}
+	}
+	return &objWithMultipart{o, checkpoint}
+}
+
+func multipartCheckpoint(o object.Object) *multipartUploadState {
+	switch w := o.(type) {
+	case *objWithMultipart:
+		return w.checkpoint
+	case *fileWithMultipart:
+		return w.checkpoint
+	}
+	return nil
+}
+
+func withoutMultipart(o object.Object) object.Object {
+	switch w := o.(type) {
+	case *objWithMultipart:
+		return w.Object
+	case *fileWithMultipart:
+		return w.File
+	}
+	return o
 }
 
 func withoutSize(o object.Object) object.Object {
