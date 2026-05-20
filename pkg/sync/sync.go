@@ -1318,7 +1318,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
 		}
 
-		if !config.Dirs && obj.IsDir() {
+		if !config.Dirs && obj.IsDir() && (!config.Links || !obj.IsSymlink()) {
 			if checkpointMgr != nil {
 				checkpointMgr.UpdateLastListedKey(prefix, obj)
 			}
@@ -1776,7 +1776,7 @@ func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStora
 		logger.Warnf("head %s from %s: %s", key, src, err)
 		return err
 	}
-	if obj.IsDir() {
+	if obj.IsDir() && (!config.Links || !obj.IsSymlink()) {
 		// only `files-from` will hit this case
 		if !strings.HasSuffix(key, "/") {
 			return errDirSuffix
