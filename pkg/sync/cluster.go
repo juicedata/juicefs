@@ -106,22 +106,65 @@ func getMultipartUploads(checkpointMgr *CheckpointManager) map[string]*multipart
 	}
 	checkpointMgr.multipartMu.RLock()
 	defer checkpointMgr.multipartMu.RUnlock()
-	if len(checkpointMgr.checkpoint.MultipartUploads) == 0 {
+	if len(checkpointMgr.dirtyMultipartParts) == 0 {
 		return nil
 	}
-	uploads := make(map[string]*multipartUploadState, len(checkpointMgr.checkpoint.MultipartUploads))
-	for key, state := range checkpointMgr.checkpoint.MultipartUploads {
-		if len(state.Parts) == 0 {
+	uploads := make(map[string]*multipartUploadState, len(checkpointMgr.dirtyMultipartParts))
+	for key, dirtyParts := range checkpointMgr.dirtyMultipartParts {
+		state := checkpointMgr.checkpoint.MultipartUploads[key]
+		if !validMultipartUploadState(state) || len(dirtyParts) == 0 {
 			continue
 		}
-		if cp := cloneMultipartUploadState(state); cp != nil {
-			uploads[key] = cp
+		parts := make(map[int]*object.Part, len(dirtyParts))
+		var checksums map[int]uint32
+		for num := range dirtyParts {
+			part := state.Parts[num]
+			if part == nil {
+				continue
+			}
+			parts[num] = part
+			if chksum, ok := state.Checksums[num]; ok {
+				if checksums == nil {
+					checksums = make(map[int]uint32)
+				}
+				checksums[num] = chksum
+			}
+		}
+		if len(parts) == 0 {
+			continue
+		}
+		uploads[key] = &multipartUploadState{
+			Upload:    state.Upload,
+			Size:      state.Size,
+			Mtime:     state.Mtime,
+			Parts:     parts,
+			Checksums: checksums,
 		}
 	}
 	if len(uploads) == 0 {
 		return nil
 	}
 	return uploads
+}
+
+func clearSentMultipartParts(checkpointMgr *CheckpointManager, uploads map[string]*multipartUploadState) {
+	if checkpointMgr == nil || len(uploads) == 0 {
+		return
+	}
+	checkpointMgr.multipartMu.Lock()
+	defer checkpointMgr.multipartMu.Unlock()
+	for key, sent := range uploads {
+		dirtyParts := checkpointMgr.dirtyMultipartParts[key]
+		if dirtyParts == nil {
+			continue
+		}
+		for num := range sent.Parts {
+			delete(dirtyParts, num)
+		}
+		if len(dirtyParts) == 0 {
+			delete(checkpointMgr.dirtyMultipartParts, key)
+		}
+	}
 }
 
 func sendStats(addr string, checkpointMgr *CheckpointManager) {
@@ -183,20 +226,7 @@ func sendStats(addr string, checkpointMgr *CheckpointManager) {
 		if failed != nil {
 			failed.IncrInt64(-r.Failed)
 		}
-		if checkpointMgr != nil {
-			checkpointMgr.multipartMu.Lock()
-			for key, sent := range r.MultipartUploads {
-				state := checkpointMgr.checkpoint.MultipartUploads[key]
-				if state == nil {
-					continue
-				}
-				for num := range sent.Parts {
-					delete(state.Parts, num)
-					delete(state.Checksums, num)
-				}
-			}
-			checkpointMgr.multipartMu.Unlock()
-		}
+		clearSentMultipartParts(checkpointMgr, r.MultipartUploads)
 	}
 }
 

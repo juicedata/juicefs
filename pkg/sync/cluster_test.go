@@ -81,6 +81,54 @@ func TestCluster(t *testing.T) {
 	}
 }
 
+func TestMultipartCheckpointFromManagerIsNotReportedAsDirty(t *testing.T) {
+	conf := Config{Manager: "127.0.0.1:1"}
+	mgr := NewCheckpointManager(nil, nil, &conf)
+	mtime := time.Now()
+	state := &multipartUploadState{
+		Upload: &object.MultipartUpload{
+			UploadID:    "upload-id",
+			MinPartSize: 5 << 20,
+			MaxCount:    10000,
+		},
+		Size:  maxBlock,
+		Mtime: mtime,
+		Parts: map[int]*object.Part{
+			1: {Num: 1, Size: 5 << 20, ETag: "part-1"},
+		},
+		Checksums: map[int]uint32{1: 123},
+	}
+	mgr.PutMultipartCheckpoint("large", state)
+
+	if uploads := getMultipartUploads(mgr); uploads != nil {
+		t.Fatalf("manager-provided multipart checkpoint should not be reported as dirty: %+v", uploads)
+	}
+	if part, chksum, ok := mgr.GetMultipartPart(mgr.checkpoint.MultipartUploads["large"], 1, true); !ok || part.ETag != "part-1" || chksum != 123 {
+		t.Fatalf("manager-provided multipart checkpoint should remain available, part=%+v checksum=%d ok=%v", part, chksum, ok)
+	}
+}
+
+func TestSentMultipartStatsClearOnlyDirtyMarks(t *testing.T) {
+	conf := Config{Manager: "127.0.0.1:1"}
+	mgr := NewCheckpointManager(nil, nil, &conf)
+	mtime := time.Now()
+	upload := &object.MultipartUpload{UploadID: "upload-id", MinPartSize: 5 << 20, MaxCount: 10000}
+	state := mgr.EnsureMultipartUploadState("large", maxBlock, mtime, 5<<20, upload)
+	mgr.MarkMultipartPart("large", state, &object.Part{Num: 1, Size: 5 << 20, ETag: "part-1"}, 123, true)
+
+	uploads := getMultipartUploads(mgr)
+	if len(uploads) != 1 || uploads["large"] == nil || uploads["large"].Parts[1] == nil {
+		t.Fatalf("expected dirty multipart part to be reported, got %+v", uploads)
+	}
+	clearSentMultipartParts(mgr, uploads)
+	if uploads := getMultipartUploads(mgr); uploads != nil {
+		t.Fatalf("dirty multipart marks should be cleared after successful stats send: %+v", uploads)
+	}
+	if part, chksum, ok := mgr.GetMultipartPart(state, 1, true); !ok || part.ETag != "part-1" || chksum != 123 {
+		t.Fatalf("clearing dirty marks should not remove local checkpoint part, part=%+v checksum=%d ok=%v", part, chksum, ok)
+	}
+}
+
 func TestMarshal(t *testing.T) {
 	mtime := time.Now()
 	var objs = []object.Object{

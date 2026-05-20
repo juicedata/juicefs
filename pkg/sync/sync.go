@@ -903,7 +903,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 			parts[num], chksum, copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort, calChksum)
 			chksums[num] = chksumWithSz{chksum, sz}
 			if copyErr == nil && state != nil {
-				mgr.MarkMultipartPart(state, parts[num], chksum, calChksum)
+				mgr.MarkMultipartPart(key, state, parts[num], chksum, calChksum)
 			}
 			errs <- copyErr
 		}(i)
