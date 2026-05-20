@@ -20,6 +20,7 @@ package object
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -330,6 +331,19 @@ func (t *httpConnMaxAgeTransport) maxConnsPerHost() int {
 		return t.base.MaxIdleConnsPerHost
 	}
 	return 2
+}
+
+// jitterHTTPConnMaxAge spreads retirement times so a large batch of
+// connections does not age out at exactly the same moment.
+func jitterHTTPConnMaxAge(maxAge time.Duration) time.Duration {
+	if maxAge <= 0 {
+		return 0
+	}
+	delta := maxAge / 10
+	if delta <= 0 {
+		return maxAge
+	}
+	return maxAge - delta + time.Duration(rand.Int63n(int64(2*delta)))
 }
 
 // keyAndAddr validates the request target and returns both the pool key and the

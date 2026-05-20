@@ -52,19 +52,6 @@ func parseHTTPConnMaxAge() time.Duration {
 	return maxAge
 }
 
-// jitterHTTPConnMaxAge spreads retirement times so a large batch of connections
-// does not age out at exactly the same moment.
-func jitterHTTPConnMaxAge(maxAge time.Duration) time.Duration {
-	if maxAge <= 0 {
-		return 0
-	}
-	delta := maxAge / 10
-	if delta <= 0 {
-		return maxAge
-	}
-	return maxAge - delta + time.Duration(rand.Int63n(int64(2*delta)))
-}
-
 // splitIPsByVersion keeps IPv6 and IPv4 addresses separate so dialing can
 // preserve the existing happy-eyeballs style fallback order.
 func splitIPsByVersion(ips []net.IP) ([]net.IP, []net.IP) {
