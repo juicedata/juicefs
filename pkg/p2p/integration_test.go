@@ -164,7 +164,7 @@ func TestIntegration_PreCachedBlocksServedAfterScan(t *testing.T) {
 	}
 	w1 := NewWarmup(config1, nil, nil)
 
-	if n := w1.scanExistingCache(); n != 1 {
+	if n, _ := w1.scanExistingCache(); n != 1 {
 		t.Fatalf("scanExistingCache: got %d, want 1", n)
 	}
 	ln1, err := net.Listen("tcp", "127.0.0.1:0")

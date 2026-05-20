@@ -353,12 +353,15 @@ func TestFetcher_FetchBlock_SkipsExistingWithMatchingSize(t *testing.T) {
 	f := NewFetcher(storage, cacheDir, 4*1024*1024, http.DefaultClient, nil)
 
 	block := &Block{Key: key, Size: len(data)}
-	fromPeer, err := f.FetchBlock(context.Background(), block)
+	fromPeer, written, err := f.FetchBlock(context.Background(), block)
 	if err != nil {
 		t.Fatalf("FetchBlock: unexpected error: %v", err)
 	}
 	if fromPeer {
 		t.Error("FetchBlock: fromPeer should be false on cache hit")
+	}
+	if !written {
+		t.Error("FetchBlock: written should be true on cache hit")
 	}
 	if got := storage.getCalls.Load(); got != 0 {
 		t.Errorf("storage.Get called %d times on cache hit, want 0", got)
@@ -399,7 +402,7 @@ func TestFetcher_FetchBlock_CacheHitForTrailerLayouts(t *testing.T) {
 			f := NewFetcher(storage, cacheDir, 4*1024*1024, http.DefaultClient, nil)
 
 			block := &Block{Key: key, Size: c.logical}
-			if _, err := f.FetchBlock(context.Background(), block); err != nil {
+			if _, _, err := f.FetchBlock(context.Background(), block); err != nil {
 				t.Fatalf("FetchBlock: %v", err)
 			}
 			if got := storage.getCalls.Load(); got != 0 {
@@ -424,7 +427,7 @@ func TestFetcher_FetchBlock_RefetchesWhenSizeMismatches(t *testing.T) {
 	f := NewFetcher(storage, cacheDir, 4*1024*1024, http.DefaultClient, nil)
 
 	block := &Block{Key: key, Size: len(fresh)}
-	if _, err := f.FetchBlock(context.Background(), block); err != nil {
+	if _, _, err := f.FetchBlock(context.Background(), block); err != nil {
 		t.Fatalf("FetchBlock: unexpected error: %v", err)
 	}
 	if got := storage.getCalls.Load(); got != 1 {
@@ -522,7 +525,7 @@ func TestRunWorkers_AbandonsImmediatelyOnNotFound(t *testing.T) {
 	queue.Close()
 	wg.Wait()
 
-	_, _, _, failed, _, _ := f.Stats()
+	_, _, _, _, failed, _, _ := f.Stats()
 	if failed != 1 {
 		t.Errorf("Failed counter = %d, want 1", failed)
 	}
@@ -640,6 +643,155 @@ func (s *flakyStorage) Delete(_ context.Context, key string, _ ...object.AttrGet
 
 func (s *flakyStorage) Head(_ context.Context, _ string) (object.Object, error) {
 	return nil, fmt.Errorf("not implemented")
+}
+
+// TestFetcher_FetchBlock_CacheHitBypassesCacheSizeCap asserts that the
+// cache-hit fast path runs before the cap check. A block already on disk
+// costs zero new bytes, so guarding it would force a phantom skip on every
+// worker pass over an already-warmed block — defeating warmup completion
+// when the cap is set tight relative to existing cache.
+func TestFetcher_FetchBlock_CacheHitBypassesCacheSizeCap(t *testing.T) {
+	cacheDir := t.TempDir()
+	key := "chunks/0/0/42_0_22"
+	data := []byte("already-cached-content") // 22 bytes
+	writeRawBlock(t, cacheDir, key, data)
+
+	storage := newTrackingStorage()
+	f := NewFetcher(storage, cacheDir, 4*1024*1024, http.DefaultClient, nil)
+	f.SetCacheSize(1) // intentionally tighter than data size
+
+	block := &Block{Key: key, Size: len(data)}
+	_, written, err := f.FetchBlock(context.Background(), block)
+	if err != nil {
+		t.Fatalf("FetchBlock: unexpected error: %v", err)
+	}
+	if !written {
+		t.Error("written = false on cache hit, want true")
+	}
+	if got := f.stats.FromCache.Load(); got != 1 {
+		t.Errorf("FromCache = %d, want 1", got)
+	}
+	if got := f.stats.SkippedFull.Load(); got != 0 {
+		t.Errorf("SkippedFull = %d, want 0 when fast-path satisfied", got)
+	}
+}
+
+// TestRunWorkers_SkippedBlocksDoNotAnnounce asserts that blocks skipped by
+// the cache-size cap are marked terminal (warmup completes) but are NOT
+// announced via MarkLocal — announcing would make peers fetch from a node
+// that does not actually hold the block, returning 404 and burning a round
+// trip before they fall back to storage.
+func TestRunWorkers_SkippedBlocksDoNotAnnounce(t *testing.T) {
+	storage := newTrackingStorage()
+	storage.data["skip-me"] = []byte("payload")
+
+	f := NewFetcher(storage, t.TempDir(), 4194304, http.DefaultClient, nil)
+	tracker := NewAvailabilityTracker()
+	f.SetAvailability(tracker)
+	f.SetCacheSize(1) // any 7-byte block exceeds the cap
+
+	block := &Block{Key: "skip-me", Size: 7}
+	queue := NewFetchQueue(1)
+	queue.PushAll([]*Block{block})
+
+	wg := f.RunWorkers(context.Background(), queue, tracker, 1)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for !block.IsTerminal() {
+		if time.Now().After(deadline) {
+			t.Fatalf("block did not reach terminal state in time")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	queue.Close()
+	wg.Wait()
+
+	if block.State() != BlockDone {
+		t.Errorf("block state = %d, want BlockDone (skipped blocks complete the warmup)", block.State())
+	}
+	if got := tracker.LocalDoneCount(); got != 0 {
+		t.Errorf("LocalDoneCount = %d, want 0 (skipped blocks must not be announced)", got)
+	}
+	if got := f.stats.SkippedFull.Load(); got != 1 {
+		t.Errorf("SkippedFull = %d, want 1", got)
+	}
+}
+
+// TestFetcher_FetchBlock_CacheSizeCapStopsWritesAfterLimit verifies that
+// once cumulative successful writes reach the configured cacheSize, further
+// blocks are skipped without I/O. The cap is the *only* protection against
+// the cache subtree growing unbounded — without it, a user pointing warmup
+// at a multi-TB dataset has no way to opt into a smaller working set.
+func TestFetcher_FetchBlock_CacheSizeCapStopsWritesAfterLimit(t *testing.T) {
+	storage := newTrackingStorage()
+	storage.data["a"] = make([]byte, 60)
+	storage.data["b"] = make([]byte, 60)
+
+	f := NewFetcher(storage, t.TempDir(), 4*1024*1024, http.DefaultClient, nil)
+	f.SetCacheSize(100) // first 60-byte block fits, second pushes past 100
+
+	for _, key := range []string{"a", "b"} {
+		_, _, err := f.FetchBlock(context.Background(), &Block{Key: key, Size: 60})
+		if err != nil {
+			t.Fatalf("FetchBlock %q: %v", key, err)
+		}
+	}
+
+	if got := f.stats.FromStorage.Load(); got != 1 {
+		t.Errorf("FromStorage = %d, want 1 (only the first block fits)", got)
+	}
+	if got := f.stats.SkippedFull.Load(); got != 1 {
+		t.Errorf("SkippedFull = %d, want 1 (second block exceeds cap)", got)
+	}
+}
+
+// TestFetcher_FetchBlock_CacheSizeZeroIsUnlimited locks in the contract that
+// zero (or unset) cacheSize disables the cap. A regression here would silently
+// brick existing deployments that rely on the unbounded default.
+func TestFetcher_FetchBlock_CacheSizeZeroIsUnlimited(t *testing.T) {
+	storage := newTrackingStorage()
+	storage.data["big"] = make([]byte, 1<<20) // 1 MiB
+
+	f := NewFetcher(storage, t.TempDir(), 4*1024*1024, http.DefaultClient, nil)
+	// SetCacheSize NOT called — defaults to 0 (unlimited).
+
+	_, written, err := f.FetchBlock(context.Background(), &Block{Key: "big", Size: 1 << 20})
+	if err != nil {
+		t.Fatalf("FetchBlock: %v", err)
+	}
+	if !written {
+		t.Error("written=false despite unlimited cap")
+	}
+	if got := f.stats.SkippedFull.Load(); got != 0 {
+		t.Errorf("SkippedFull = %d, want 0 with cacheSize=0", got)
+	}
+}
+
+// TestFetcher_AddCacheUsed_SeedsCounter exercises the path where the warmup
+// scans pre-existing cache files at startup and pre-populates the byte
+// counter so the cap accounts for files this run did not write. Without
+// seeding, a run reusing a near-full cache from a prior session would let
+// the warmup write up to (cacheSize) more bytes on top — doubling actual
+// usage.
+func TestFetcher_AddCacheUsed_SeedsCounter(t *testing.T) {
+	storage := newTrackingStorage()
+	storage.data["new"] = make([]byte, 20)
+
+	f := NewFetcher(storage, t.TempDir(), 4*1024*1024, http.DefaultClient, nil)
+	f.SetCacheSize(100)
+	f.AddCacheUsed(95) // simulate scan finding 95 bytes pre-cached
+
+	// 95 + 20 = 115 > 100 → must skip.
+	_, written, err := f.FetchBlock(context.Background(), &Block{Key: "new", Size: 20})
+	if err != nil {
+		t.Fatalf("FetchBlock: %v", err)
+	}
+	if written {
+		t.Error("written=true despite seeded counter exceeding cap")
+	}
+	if got := f.stats.SkippedFull.Load(); got != 1 {
+		t.Errorf("SkippedFull = %d, want 1", got)
+	}
 }
 
 func TestIsStorageNotFound(t *testing.T) {

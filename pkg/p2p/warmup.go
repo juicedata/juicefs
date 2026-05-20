@@ -71,6 +71,9 @@ func NewWarmup(config WarmupConfig, m meta.Meta, storage object.ObjectStorage) *
 	}
 	fetcher := NewFetcher(storage, config.CacheDir, config.BlockSize, httpClient, compressor)
 	fetcher.SetAvailability(availability)
+	if config.CacheSize > 0 {
+		fetcher.SetCacheSize(config.CacheSize)
+	}
 	if config.DownloadLimit > 0 {
 		// 0.85 dampening / 10% burst — same convention as pkg/chunk and
 		// pkg/sync, keeps observed rate close to the cap without large bursts.
@@ -119,10 +122,18 @@ func (w *Warmup) Run(ctx context.Context, paths []string) error {
 		}
 	}()
 	logger.Infof("P2P server listening on %s (uuid=%s)", w.listenAddr, w.uuid)
+	if w.config.CacheSize > 0 {
+		logger.Infof("cache-size cap: %s (pass --cache-size 0 for unlimited)", humanize.IBytes(uint64(w.config.CacheSize)))
+	} else {
+		logger.Warnf("cache-size cap disabled (--cache-size 0); warmup will keep writing until the disk fills")
+	}
 
-	// 1b. Announce pre-cached blocks via /available and skip them in the fetch.
-	if n := w.scanExistingCache(); n > 0 {
-		logger.Infof("found %d pre-cached blocks in %s", n, w.config.CacheDir)
+	// 1b. Announce pre-cached blocks via /available and skip them in the
+	// fetch. The byte total seeds the fetcher's cache-size accounting so the
+	// cap applies to total on-disk bytes, not just bytes this run wrote.
+	if n, bytes := w.scanExistingCache(); n > 0 {
+		logger.Infof("found %d pre-cached blocks (%s) in %s", n, humanize.IBytes(uint64(bytes)), w.config.CacheDir)
+		w.fetcher.AddCacheUsed(bytes)
 	}
 
 	// 2. Initial peer discovery + filter self. MinPeers counts total peers
@@ -219,9 +230,12 @@ func (w *Warmup) Run(ctx context.Context, paths []string) error {
 	monitorCancel()
 
 	// 10. Print final stats.
-	fromPeers, fromStorage, fromCache, failed, bytesPeer, bytesStorage := w.fetcher.Stats()
-	logger.Infof("warmup complete: %d blocks (%d from peers, %d from storage, %d from cache, %d failed)",
-		total, fromPeers, fromStorage, fromCache, failed)
+	fromPeers, fromStorage, fromCache, skippedFull, failed, bytesPeer, bytesStorage := w.fetcher.Stats()
+	logger.Infof("warmup complete: %d blocks (%d from peers, %d from storage, %d from cache, %d skipped, %d failed)",
+		total, fromPeers, fromStorage, fromCache, skippedFull, failed)
+	if skippedFull > 0 {
+		logger.Warnf("%d blocks not cached: --cache-size cap reached; raise it or shrink the warmup path set to cover more", skippedFull)
+	}
 	logger.Infof("bytes transferred: %s from peers, %s from storage",
 		humanize.IBytes(uint64(bytesPeer)), humanize.IBytes(uint64(bytesStorage)))
 	elapsed := time.Since(startTime)
@@ -408,14 +422,17 @@ func maxCacheFileSize(logical int) int64 {
 }
 
 // scanExistingCache walks {cacheDir}/raw and announces well-formed block
-// files via the availability tracker, returning the count. Missing roots are
-// treated as empty. Files failing validCacheFileSize are skipped — primarily
-// truncated cache files left by a SIGKILL/OOM mid-write (CacheBlock's
-// os.WriteFile is not atomic), which would otherwise mislead peers into
-// fetching unusable bytes.
-func (w *Warmup) scanExistingCache() int {
+// files via the availability tracker, returning the count and total bytes of
+// accepted files. Missing roots are treated as empty. Files failing
+// validCacheFileSize are skipped — primarily truncated cache files left by a
+// SIGKILL/OOM mid-write (CacheBlock's os.WriteFile is not atomic), which
+// would otherwise mislead peers into fetching unusable bytes. The byte
+// total seeds Fetcher.cacheUsed so --cache-size accounts for files
+// pre-existing on disk, not just what this run writes.
+func (w *Warmup) scanExistingCache() (int, int64) {
 	root := filepath.Join(w.config.CacheDir, "raw")
 	count := 0
+	var bytes int64
 	skipped := 0
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -443,6 +460,7 @@ func (w *Warmup) scanExistingCache() int {
 
 		w.availability.MarkLocal(key)
 		count++
+		bytes += fi.Size()
 		return nil
 	})
 	if err != nil {
@@ -451,7 +469,7 @@ func (w *Warmup) scanExistingCache() int {
 	if skipped > 0 {
 		logger.Infof("scanExistingCache: skipped %d cache files with unexpected size", skipped)
 	}
-	return count
+	return count, bytes
 }
 
 // filterSelf removes our own address from peers via /uuid probe and records
@@ -607,7 +625,7 @@ func (w *Warmup) monitorProgress(ctx context.Context, blocks []*Block, queue *Fe
 			done, failed := countTerminalBlocks(blocks)
 			w.server.SetProgress(total, done)
 			pending := queue.Len()
-			_, _, _, _, bytesPeer, bytesStore := w.fetcher.Stats()
+			_, _, _, _, _, bytesPeer, bytesStore := w.fetcher.Stats()
 			elapsed := now.Sub(prevTime).Seconds()
 			var peerRate, storeRate uint64
 			if elapsed > 0 {

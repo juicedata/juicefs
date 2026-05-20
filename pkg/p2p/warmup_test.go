@@ -82,7 +82,7 @@ func TestWarmup_ScanExistingCache_PopulatesTracker(t *testing.T) {
 	}
 	w := NewWarmup(config, nil, nil)
 
-	n := w.scanExistingCache()
+	n, _ := w.scanExistingCache()
 	if n != 3 {
 		t.Errorf("scanExistingCache returned %d, want 3", n)
 	}
@@ -131,7 +131,7 @@ func TestWarmup_ScanExistingCache_RejectsWrongSizedFiles(t *testing.T) {
 	}
 	w := NewWarmup(config, nil, nil)
 
-	n := w.scanExistingCache()
+	n, _ := w.scanExistingCache()
 	if n != 2 {
 		t.Errorf("scanExistingCache returned %d, want 2 (only the two well-formed files)", n)
 	}
@@ -207,12 +207,44 @@ func TestWarmup_ScanExistingCache_MissingDir(t *testing.T) {
 	}
 	w := NewWarmup(config, nil, nil)
 
-	n := w.scanExistingCache()
+	n, _ := w.scanExistingCache()
 	if n != 0 {
 		t.Errorf("scanExistingCache on missing dir: got %d, want 0", n)
 	}
 	if got := w.availability.LocalDoneCount(); got != 0 {
 		t.Errorf("tracker should be empty on missing dir, got %d entries", got)
+	}
+}
+
+// TestWarmup_ScanExistingCache_AccumulatesBytes locks in the byte total used
+// to seed Fetcher.cacheUsed. Without an accurate seed, --cache-size only
+// caps NEW writes — leaving a run that inherits a near-full cache free to
+// double actual usage before the cap kicks in.
+func TestWarmup_ScanExistingCache_AccumulatesBytes(t *testing.T) {
+	cacheDir := t.TempDir()
+	writeRawBlock(t, cacheDir, "chunks/0/0/1_0_100", make([]byte, 100))
+	writeRawBlock(t, cacheDir, "chunks/0/0/1_1_100", make([]byte, 100+4)) // checksum trailer
+	writeRawBlock(t, cacheDir, "chunks/5/7/9999_0_2048", make([]byte, 2048))
+	// Corrupt file — must not contribute to the byte total.
+	writeRawBlock(t, cacheDir, "chunks/0/0/2_0_4194304", make([]byte, 1024))
+
+	config := WarmupConfig{
+		ListenAddr:           ":0",
+		DiscoveryInterval:    time.Second,
+		AvailabilityInterval: time.Second,
+		Threads:              2,
+		CacheDir:             cacheDir,
+		BlockSize:            4 * 1024 * 1024,
+	}
+	w := NewWarmup(config, nil, nil)
+
+	n, bytes := w.scanExistingCache()
+	if n != 3 {
+		t.Errorf("scanExistingCache count = %d, want 3", n)
+	}
+	const wantBytes = int64(100 + (100 + 4) + 2048)
+	if bytes != wantBytes {
+		t.Errorf("scanExistingCache bytes = %d, want %d (corrupt file excluded)", bytes, wantBytes)
 	}
 }
 

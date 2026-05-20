@@ -64,6 +64,7 @@ Examples:
 			&cli.BoolFlag{Name: "keep-alive", Usage: "keep serving blocks to peers after warmup completes (until SIGTERM/SIGINT)"},
 			&cli.StringFlag{Name: "keep-alive-timeout", Value: "0", Usage: "auto-shutdown after this duration in keep-alive mode (0=wait for SIGTERM); ignored without --keep-alive"},
 			&cli.StringFlag{Name: "cache-dir", Usage: "cache directory (default: from volume format)"},
+			&cli.StringFlag{Name: "cache-size", Value: "100G", Usage: "hard cap on total cached bytes at cache-dir (e.g. 100G, 50000 = 50000 MiB); 0 disables the cap. Counts pre-existing files. Matches mount's --cache-size default."},
 			&cli.StringFlag{Name: "download-limit", Usage: "bandwidth limit for download from object storage in Mbps per peer (e.g. 800 or 1G); peer-to-peer transfers are not throttled"},
 		},
 	}
@@ -146,6 +147,7 @@ func p2pWarmup(c *cli.Context) error {
 		Compress:   format.Compression,
 
 		DownloadLimit: utils.ParseMbps(c, "download-limit") * 1e6 / 8,
+		CacheSize:     int64(utils.ParseBytes(c, "cache-size", 'M')),
 	}
 
 	// Set up context with signal cancellation.

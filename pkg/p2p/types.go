@@ -118,6 +118,12 @@ type WarmupConfig struct {
 	// DownloadLimit is the object-storage download cap in bytes/second
 	// (0 = unlimited). Peer-to-peer transfers are not throttled.
 	DownloadLimit int64
+
+	// CacheSize is the hard cap on cumulative cached bytes (0 = unlimited).
+	// Counted as: bytes from pre-existing files at scan + bytes written
+	// during this run. Workers race the load-check-add window so peak
+	// usage may exceed CacheSize by up to Threads * BlockSize.
+	CacheSize int64
 }
 
 // keepAliveTimeoutIgnored reports whether KeepAliveTimeout is set without
