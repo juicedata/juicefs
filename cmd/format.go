@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"net/http"
 	_ "net/http/pprof"
 	"net/url"
 	"os"
@@ -244,7 +243,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 			if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
 				return nil, err
 			}
-			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = tlsSkipVerify
+			object.GetHttpTransport().TLSClientConfig.InsecureSkipVerify = tlsSkipVerify
 			values.Del("tls-insecure-skip-verify")
 			u.RawQuery = values.Encode()
 			format.Bucket = u.String()
@@ -268,8 +267,8 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 				return nil, fmt.Errorf("error appending CA cert to pool")
 			}
 
-			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.RootCAs = certPool
-			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
+			object.GetHttpTransport().TLSClientConfig.RootCAs = certPool
+			object.GetHttpTransport().TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
 		}
 	}
 
