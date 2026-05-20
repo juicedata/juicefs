@@ -1103,6 +1103,9 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 }
 
 func (n *jfsObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) (err error) {
+	if len(uploadID) < subDirPrefix {
+		return minio.InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
+	}
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
