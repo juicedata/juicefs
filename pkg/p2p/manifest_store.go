@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/object"
 )
 
 // uploadManifest builds a Manifest for the given paths/blocks and uploads it
@@ -88,6 +90,22 @@ func (w *Warmup) fetchManifestBytes(ctx context.Context, key string) ([]byte, er
 	}
 	defer rc.Close()
 	return io.ReadAll(rc)
+}
+
+// DeleteManifest removes the manifest object identified by paths + config
+// (or by name when non-empty) from object storage. Returns the key it
+// attempted to delete so the caller can log it precisely. "Not found" is
+// treated as success — operators retry cleanup commands and the second
+// call should not be an error.
+func DeleteManifest(ctx context.Context, blob object.ObjectStorage, paths []string, blockSize int, hashPrefix bool, name string) (string, error) {
+	key := ManifestKey(paths, blockSize, hashPrefix, name)
+	if blob == nil {
+		return key, fmt.Errorf("DeleteManifest: nil object storage")
+	}
+	if err := blob.Delete(ctx, key); err != nil && !isStorageNotFound(err) {
+		return key, fmt.Errorf("delete manifest %q: %w", key, err)
+	}
+	return key, nil
 }
 
 // tryFetchValidManifest does a single Get on the manifest object and returns

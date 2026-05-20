@@ -381,3 +381,69 @@ func TestWarmup_DownloadManifest_TimesOut(t *testing.T) {
 		t.Fatal("downloadManifest should have timed out")
 	}
 }
+
+// TestDeleteManifest_RemovesExisting locks in that DeleteManifest computes
+// the same key as upload/download and actually wipes the object. Operators
+// invoking `p2p-warmup --delete-manifest` rely on this — a wrong key would
+// silently leave orphans, and silence is the worst failure mode for
+// cleanup commands.
+func TestDeleteManifest_RemovesExisting(t *testing.T) {
+	storage := newTrackingStorage()
+	paths := []string{"/models/llama"}
+	const blockSize = 4 * 1024 * 1024
+	const hashPrefix = false
+	key := ManifestKey(paths, blockSize, hashPrefix, "")
+
+	// Seed the storage with a fake manifest body so we can observe deletion.
+	storage.data[key] = []byte("fake-manifest-payload")
+
+	gotKey, err := DeleteManifest(context.Background(), storage, paths, blockSize, hashPrefix, "")
+	if err != nil {
+		t.Fatalf("DeleteManifest: unexpected error: %v", err)
+	}
+	if gotKey != key {
+		t.Errorf("returned key = %q, want %q", gotKey, key)
+	}
+	if _, exists := storage.data[key]; exists {
+		t.Errorf("manifest still present at %q after DeleteManifest", key)
+	}
+}
+
+// TestDeleteManifest_NotFoundIsSuccess asserts idempotency — deleting a key
+// that does not exist is not an error. Otherwise running the command twice
+// (e.g. retry after a flake) would fail the second time, contradicting the
+// "clean up an orphan" mental model.
+func TestDeleteManifest_NotFoundIsSuccess(t *testing.T) {
+	storage := newTrackingStorage()
+	paths := []string{"/nothing-here"}
+
+	gotKey, err := DeleteManifest(context.Background(), storage, paths, 4*1024*1024, false, "")
+	if err != nil {
+		t.Errorf("DeleteManifest on missing key: got %v, want nil (idempotent)", err)
+	}
+	if gotKey == "" {
+		t.Error("returned key should not be empty even on no-op delete")
+	}
+}
+
+// TestDeleteManifest_NamedManifest verifies the --manifest-name path uses the
+// caller-supplied basename rather than content-addressable hash, so cleanup
+// of a named manifest does not depend on knowing the original paths.
+func TestDeleteManifest_NamedManifest(t *testing.T) {
+	storage := newTrackingStorage()
+	const name = "nightly"
+	key := ManifestKey(nil, 0, false, name) // name path ignores paths/blockSize/hashPrefix
+	storage.data[key] = []byte("payload")
+
+	// Pass deliberately wrong paths/blocksize — name should override.
+	gotKey, err := DeleteManifest(context.Background(), storage, []string{"/anything"}, 99, true, name)
+	if err != nil {
+		t.Fatalf("DeleteManifest: %v", err)
+	}
+	if gotKey != key {
+		t.Errorf("returned key = %q, want %q (name should override hash inputs)", gotKey, key)
+	}
+	if _, exists := storage.data[key]; exists {
+		t.Errorf("named manifest still present at %q", key)
+	}
+}

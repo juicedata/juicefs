@@ -58,6 +58,7 @@ Examples:
 			&cli.BoolFlag{Name: "disable-manifest-sharing", Usage: "force every peer to resolve metadata independently (escape hatch for debugging)"},
 			&cli.StringFlag{Name: "leader-timeout", Value: "10m", Usage: "follower max wait for the leader's manifest before erroring out"},
 			&cli.StringFlag{Name: "manifest-name", Usage: "manifest object basename under p2p_warmup/ (default: content-addressable hash). All peers must pass the same value to agree on the key."},
+			&cli.BoolFlag{Name: "delete-manifest", Usage: "delete the manifest matching the other flags (paths, --manifest-name) from object storage and exit without warming"},
 			// General flags
 			&cli.IntFlag{Name: "threads", Aliases: []string{"p"}, Value: 50, Usage: "concurrent fetch workers"},
 			&cli.StringFlag{Name: "file", Aliases: []string{"f"}, Usage: "file containing a list of paths"},
@@ -113,6 +114,19 @@ func p2pWarmup(c *cli.Context) error {
 	blob, err := createStorage(*format)
 	if err != nil {
 		return err
+	}
+
+	// Maintenance mode: delete the manifest matching these args and exit.
+	// Done before any warmup wiring so a typo doesn't accidentally start
+	// the heavy machinery.
+	if c.Bool("delete-manifest") {
+		name := strings.TrimSpace(c.String("manifest-name"))
+		key, err := p2p.DeleteManifest(context.Background(), blob, paths, format.BlockSize*1024, format.HashPrefix, name)
+		if err != nil {
+			return err
+		}
+		logger.Infof("deleted manifest %q", key)
+		return nil
 	}
 
 	// Determine cache directory.
