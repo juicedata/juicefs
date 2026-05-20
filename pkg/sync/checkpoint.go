@@ -422,13 +422,14 @@ func (m *CheckpointManager) MarkListDone(prefix string) {
 func (m *CheckpointManager) FindMultipartUpload(key string, size int64, mtime time.Time) *object.MultipartUpload {
 	m.multipartMu.RLock()
 	defer m.multipartMu.RUnlock()
-	state := m.checkpoint.MultipartUploads[key]
-	if state == nil || state.Upload.UploadID == "" || state.Size != size || !state.Mtime.Equal(mtime) ||
-		state.Upload.MinPartSize <= 0 || state.Upload.MaxCount <= 0 {
-		return nil
+	if state, ok := m.checkpoint.MultipartUploads[key]; ok {
+		if state.Upload.UploadID == "" || state.Size != size || !state.Mtime.Equal(mtime) ||
+			state.Upload.MinPartSize <= 0 || state.Upload.MaxCount <= 0 {
+			return nil
+		}
+		return state.Upload
 	}
-	upload := state.Upload
-	return upload
+	return nil
 }
 
 func cloneMultipartUploadState(state *multipartUploadState) *multipartUploadState {
@@ -451,14 +452,17 @@ func cloneMultipartUploadState(state *multipartUploadState) *multipartUploadStat
 	}
 }
 
-func (m *CheckpointManager) GetMultipartCheckpoint(key string) *multipartUploadState {
+func (m *CheckpointManager) GetMultipartCheckpoint(key string, size int64, mtime time.Time) *multipartUploadState {
 	m.multipartMu.RLock()
 	defer m.multipartMu.RUnlock()
-	state := m.checkpoint.MultipartUploads[key]
-	if state == nil || state.Upload.UploadID == "" || state.Upload.MinPartSize <= 0 || state.Upload.MaxCount <= 0 {
-		return nil
+	if state, ok := m.checkpoint.MultipartUploads[key]; ok {
+		if state == nil || state.Upload.UploadID == "" || state.Size != size || !state.Mtime.Equal(mtime) ||
+			state.Upload.MinPartSize <= 0 || state.Upload.MaxCount <= 0 {
+			return nil
+		}
+		return cloneMultipartUploadState(state)
 	}
-	return cloneMultipartUploadState(state)
+	return nil
 }
 
 func (m *CheckpointManager) PutMultipartCheckpoint(key string, state *multipartUploadState) {

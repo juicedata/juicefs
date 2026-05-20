@@ -229,7 +229,7 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 				nsize := o.Size()
 				base := withoutSize(o)
 				if base.Size() >= maxBlock && (nsize == base.Size() || nsize == markChecksum) {
-					if cp := checkpointMgr.GetMultipartCheckpoint(base.Key()); cp != nil {
+					if cp := checkpointMgr.GetMultipartCheckpoint(base.Key(), base.Size(), base.Mtime()); cp != nil {
 						objs[i] = withMultipart(o, cp)
 					}
 				}
