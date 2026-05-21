@@ -266,7 +266,7 @@ func (s *wSlice) SetWriteback(enabled bool) {
 
 func (s *wSlice) WriteAt(p []byte, off int64) (n int, err error) {
 	if int(off)+len(p) > chunkSize {
-		return 0, fmt.Errorf("write out of chunk boudary: %d > %d", int(off)+len(p), chunkSize)
+		return 0, fmt.Errorf("write out of chunk boundary: %d > %d", int(off)+len(p), chunkSize)
 	}
 	if off < int64(s.uploaded) {
 		return 0, fmt.Errorf("Cannot overwrite uploaded block: %d < %d", off, s.uploaded)
