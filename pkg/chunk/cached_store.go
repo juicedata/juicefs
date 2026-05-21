@@ -1186,10 +1186,7 @@ func (store *cachedStore) Remove(id uint64, length int) error {
 func (store *cachedStore) FillCache(id uint64, length uint32) error {
 	r := sliceForRead(id, int(length), store)
 	keys := r.keys()
-	parallel := store.conf.MaxDownload
-	if parallel <= 0 {
-		parallel = 1
-	}
+	parallel := max(store.conf.MaxDownload, 1)
 	var (
 		wg   sync.WaitGroup
 		mu   sync.Mutex
@@ -1205,20 +1202,18 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 			logger.Warnf("Invalid size: %s %d", k, size)
 			continue
 		}
-		wg.Add(1)
 		sem <- struct{}{}
-		go func(key string, sz int) {
-			defer wg.Done()
+		wg.Go(func() {
 			defer func() { <-sem }()
-			p := NewOffPage(sz)
+			p := NewOffPage(size)
 			defer p.Release()
-			if e := store.load(context.TODO(), key, p, true, true); e != nil {
-				logger.Warnf("Failed to load key: %s %s", key, e)
+			if e := store.load(context.TODO(), k, p, true, true); e != nil {
+				logger.Warnf("Failed to load key: %s %s", k, e)
 				mu.Lock()
 				ferr = e
 				mu.Unlock()
 			}
-		}(k, size)
+		})
 	}
 	wg.Wait()
 	return ferr
