@@ -867,7 +867,10 @@ func (cache *cacheStore) uploadStaging() {
 	var toFree int64
 	usage := cache.curFreeRatio()
 	if usage.br < cache.freeRatio || usage.fr < cache.freeRatio {
-		toFree = int64(float64(usage.spaceCap)*float64(cache.freeRatio) - math.Min(float64(usage.br), float64(usage.fr)))
+		toFree = int64((float64(cache.freeRatio) - math.Min(float64(usage.br), float64(usage.fr))) * float64(usage.spaceCap))
+	}
+	if toFree <= 0 {
+		return
 	}
 	cache.Lock()
 	defer cache.Unlock()
