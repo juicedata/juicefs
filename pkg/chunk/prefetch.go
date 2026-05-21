@@ -28,16 +28,12 @@ type prefetcher struct {
 }
 
 func newPrefetcher(parallel int, fetch func(string)) *prefetcher {
-	bufSize := parallel * 4
-	if bufSize < 10 {
-		bufSize = 10
-	}
 	p := &prefetcher{
-		pending: make(chan string, bufSize),
+		pending: make(chan string, max(parallel*4, 10)),
 		busy:    make(map[string]bool),
 		op:      fetch,
 	}
-	for i := 0; i < parallel; i++ {
+	for range parallel {
 		go p.do()
 	}
 	return p
