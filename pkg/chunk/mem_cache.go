@@ -188,7 +188,7 @@ func (c *memcache) cleanupExpire() {
 		cutoff := time.Now().Add(-c.cacheExpire)
 		for k, v := range c.pages {
 			cnt++
-			if cnt > 1e3 {
+			if cnt > expireBatchSize {
 				break
 			}
 			if v.atime.Before(cutoff) {

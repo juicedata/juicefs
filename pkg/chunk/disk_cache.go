@@ -56,6 +56,8 @@ var (
 	errStageConcurrency = errors.New("concurrent staging limit reached")
 )
 
+const expireBatchSize = 50_000
+
 type cacheKey struct {
 	id   uint64
 	indx uint32
@@ -382,7 +384,7 @@ func (cache *cacheStore) cleanupExpire() {
 		cache.Lock()
 		for k, v := range cache.keys.randomIter() {
 			cnt++
-			if cnt > 1e3 {
+			if cnt > expireBatchSize {
 				break
 			}
 			if v.size < 0 {
