@@ -1131,13 +1131,17 @@ func (store *cachedStore) scanDelayedStaging() {
 	}
 	cutoff := time.Now().Add(-store.conf.UploadDelay)
 	store.pendingMutex.Lock()
-	defer store.pendingMutex.Unlock()
+	candidates := make([]*pendingItem, 0, len(store.pendingKeys))
 	for _, item := range store.pendingKeys {
-		store.pendingMutex.Unlock()
-		if item.ts.Before(cutoff) && item.uploading.CompareAndSwap(false, true) {
+		if item.ts.Before(cutoff) {
+			candidates = append(candidates, item)
+		}
+	}
+	store.pendingMutex.Unlock()
+	for _, item := range candidates {
+		if item.uploading.CompareAndSwap(false, true) {
 			store.pendingCh <- item
 		}
-		store.pendingMutex.Lock()
 	}
 }
 
