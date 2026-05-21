@@ -149,7 +149,7 @@ func TestScanCached(t *testing.T) {
 	cfg := defaultConf
 	cfg.CacheEviction = EvictionNone
 	cache := &cacheStore{
-		opTs: make(map[time.Duration]func() error),
+		opTs: make(map[uint64]pendingOp),
 	}
 	cache.state = newDCState(dcUnchanged, cache)
 	cache.keys, err = NewKeyIndex(&cfg)

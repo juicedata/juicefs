@@ -70,6 +70,11 @@ type pendingFile struct {
 	dropCache bool
 }
 
+type pendingOp struct {
+	ts time.Duration
+	fn func() error
+}
+
 type cacheStore struct {
 	id         string
 	totalPages int64
@@ -95,8 +100,9 @@ type cacheStore struct {
 	checksum  string // checksum level
 	uploader  func(key, path string, force bool) bool
 
-	opTs map[time.Duration]func() error
-	opMu sync.Mutex
+	opSeq atomic.Uint64
+	opTs  map[uint64]pendingOp
+	opMu  sync.Mutex
 
 	state     dcState
 	stateLock sync.Mutex
@@ -135,7 +141,7 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64
 		pending:             make(chan pendingFile, pendingPages),
 		pages:               make(map[string]*Page),
 		uploader:            uploader,
-		opTs:                make(map[time.Duration]func() error),
+		opTs:                make(map[uint64]pendingOp),
 		stagedBlockCooldown: config.CacheExpire / 2,
 	}
 	c.stateLock = sync.Mutex{}
@@ -259,13 +265,13 @@ func (cache *cacheStore) checkErr(f func() error) error {
 		return err
 	}
 
-	start := utils.Clock()
+	id := cache.opSeq.Add(1)
 	cache.opMu.Lock()
-	cache.opTs[start] = f
+	cache.opTs[id] = pendingOp{ts: utils.Clock(), fn: f}
 	cache.opMu.Unlock()
 	err := f()
 	cache.opMu.Lock()
-	delete(cache.opTs, start)
+	delete(cache.opTs, id)
 	cache.opMu.Unlock()
 
 	if err != nil {
@@ -288,11 +294,11 @@ func (c *cacheStore) checkTimeout() {
 		now := utils.Clock()
 		cutOff := now - maxIODur
 		c.opMu.Lock()
-		for ts := range c.opTs {
-			if ts < cutOff {
-				logger.Warnf("IO operation %s on %s is timeout after %s, ", getFunctionName(c.opTs[ts]), c.dir, now-ts)
+		for id, op := range c.opTs {
+			if op.ts < cutOff {
+				logger.Warnf("IO operation %s on %s is timeout after %s, ", getFunctionName(op.fn), c.dir, now-op.ts)
 				c.state.onIOErr()
-				delete(c.opTs, ts)
+				delete(c.opTs, id)
 			}
 		}
 		c.opMu.Unlock()
