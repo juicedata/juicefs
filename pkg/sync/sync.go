@@ -47,14 +47,15 @@ import (
 
 // The max number of key per listing request
 const (
-	maxResults      = 1000
-	defaultPartSize = 5 << 20
-	bufferSize      = 32 << 10
-	maxBlock        = defaultPartSize * 2
-	markDeleteSrc   = -1
-	markDeleteDst   = -2
-	markCopyPerms   = -3
-	markChecksum    = -4
+	maxResults                   = 1000
+	defaultPartSize              = 5 << 20
+	bufferSize                   = 32 << 10
+	maxBlock                     = defaultPartSize * 2
+	multipartCheckpointThreshold = 4 << 30
+	markDeleteSrc                = -1
+	markDeleteDst                = -2
+	markCopyPerms                = -3
+	markChecksum                 = -4
 )
 
 var (
@@ -956,6 +957,9 @@ func copyData(src, dst object.ObjectStorage, key string, size int64, mtime time.
 	start := time.Now()
 	var err error
 	var srcChksum uint32
+	if size <= multipartCheckpointThreshold {
+		uploads = nil
+	}
 	if size < maxBlock {
 		err = try(3, func() (err error) {
 			srcChksum, err = doCopySingle(src, dst, key, size, calChksum)

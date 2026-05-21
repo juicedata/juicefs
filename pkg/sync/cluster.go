@@ -112,7 +112,7 @@ func getMultipartUploads(uploads *workerMultipartUploads) map[string]*multipartU
 	dirtyUploads := make(map[string]*multipartUploadState, len(uploads.dirtyParts))
 	for key, dirtyParts := range uploads.dirtyParts {
 		state := uploads.uploads[key]
-		if !validMultipartUploadState(state) || len(dirtyParts) == 0 {
+		if !state.isValid() || len(dirtyParts) == 0 {
 			continue
 		}
 		parts := make(map[int]object.Part, len(dirtyParts))
@@ -258,7 +258,7 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 			for i, o := range objs {
 				nsize := o.Size()
 				base := withoutSize(o)
-				if base.Size() >= maxBlock && (nsize == base.Size() || nsize == markChecksum) {
+				if base.Size() > multipartCheckpointThreshold && (nsize == base.Size() || nsize == markChecksum) {
 					if cp := checkpointMgr.GetMultipartCheckpoint(base.Key(), base.Size(), base.Mtime()); cp != nil {
 						objs[i] = withMultipart(o, cp)
 					}

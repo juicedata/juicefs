@@ -168,14 +168,13 @@ func newCheckpoint(config *Config) *Checkpoint {
 // NewCheckpointManager creates a new checkpoint manager
 func NewCheckpointManager(src, dst object.ObjectStorage, config *Config) *CheckpointManager {
 	checkpoint := newCheckpoint(config)
-	m := &CheckpointManager{
+	return &CheckpointManager{
 		multipartUploadStore: newMultipartUploadStore(checkpoint.MultipartUploads),
 		dst:                  dst,
 		checkpoint:           checkpoint,
 		checkpointKey:        generateCheckpointKey(src.String(), dst.String(), config),
 		stopChan:             make(chan struct{}),
 	}
-	return m
 }
 
 // generateCheckpointKey creates a unique key based on src, dst and config.
@@ -424,15 +423,6 @@ func (m *CheckpointManager) MarkListDone(prefix string) {
 	})
 }
 
-func validMultipartUploadState(state *multipartUploadState) bool {
-	return state != nil && state.Upload.UploadID != "" &&
-		state.Upload.MinPartSize > 0 && state.Upload.MaxCount > 0
-}
-
-func matchedMultipartUploadState(state *multipartUploadState, size int64, mtime time.Time) bool {
-	return validMultipartUploadState(state) && state.Size == size && state.Mtime.Equal(mtime)
-}
-
 type multipartUploadStore struct {
 	sync.RWMutex
 	uploads map[string]*multipartUploadState
@@ -443,6 +433,15 @@ func newMultipartUploadStore(uploads map[string]*multipartUploadState) *multipar
 		uploads = make(map[string]*multipartUploadState)
 	}
 	return &multipartUploadStore{uploads: uploads}
+}
+
+func (state *multipartUploadState) isValid() bool {
+	return state != nil && state.Upload.UploadID != "" &&
+		state.Upload.MinPartSize > 0 && state.Upload.MaxCount > 0
+}
+
+func (state *multipartUploadState) isMatched(size int64, mtime time.Time) bool {
+	return state.isValid() && state.Size == size && state.Mtime.Equal(mtime)
 }
 
 func (s *multipartUploadStore) reset(uploads map[string]*multipartUploadState) {
@@ -457,7 +456,7 @@ func (s *multipartUploadStore) reset(uploads map[string]*multipartUploadState) {
 func (s *multipartUploadStore) FindMultipartUpload(key string, size int64, mtime time.Time) *object.MultipartUpload {
 	s.RLock()
 	defer s.RUnlock()
-	if state := s.uploads[key]; matchedMultipartUploadState(state, size, mtime) {
+	if state := s.uploads[key]; state.isMatched(size, mtime) {
 		return &state.Upload
 	}
 	return nil
@@ -466,14 +465,14 @@ func (s *multipartUploadStore) FindMultipartUpload(key string, size int64, mtime
 func (s *multipartUploadStore) GetMultipartCheckpoint(key string, size int64, mtime time.Time) *multipartUploadState {
 	s.RLock()
 	defer s.RUnlock()
-	if state := s.uploads[key]; matchedMultipartUploadState(state, size, mtime) {
+	if state := s.uploads[key]; state.isMatched(size, mtime) {
 		return state
 	}
 	return nil
 }
 
 func (s *multipartUploadStore) PutMultipartCheckpoint(key string, state *multipartUploadState) {
-	if !validMultipartUploadState(state) {
+	if !state.isValid() {
 		return
 	}
 	s.Lock()
@@ -504,7 +503,7 @@ func (s *multipartUploadStore) EnsureMultipartUploadState(key string, size int64
 	if s.uploads == nil {
 		s.uploads = make(map[string]*multipartUploadState)
 	}
-	if state := s.uploads[key]; matchedMultipartUploadState(state, size, mtime) && state.Upload.UploadID == upload.UploadID {
+	if state := s.uploads[key]; state.isMatched(size, mtime) && state.Upload.UploadID == upload.UploadID {
 		return state
 	}
 	savedUpload := *upload
@@ -521,7 +520,7 @@ func (s *multipartUploadStore) EnsureMultipartUploadState(key string, size int64
 }
 
 func (s *multipartUploadStore) MarkMultipartPart(key string, state *multipartUploadState, part *object.Part, chksum uint32, calChksum bool) {
-	if !validMultipartUploadState(state) || part == nil {
+	if !state.isValid() || part == nil {
 		return
 	}
 
@@ -540,7 +539,7 @@ func (s *multipartUploadStore) MarkMultipartPart(key string, state *multipartUpl
 }
 
 func (s *multipartUploadStore) GetMultipartPart(state *multipartUploadState, num int, calChksum bool) (*object.Part, uint32, bool) {
-	if !validMultipartUploadState(state) {
+	if !state.isValid() {
 		return nil, 0, false
 	}
 	s.RLock()
@@ -578,7 +577,7 @@ func newWorkerMultipartUploads() *workerMultipartUploads {
 }
 
 func (w *workerMultipartUploads) MarkMultipartPart(key string, state *multipartUploadState, part *object.Part, chksum uint32, calChksum bool) {
-	if !validMultipartUploadState(state) || part == nil {
+	if !state.isValid() || part == nil {
 		return
 	}
 
