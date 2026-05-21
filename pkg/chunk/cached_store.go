@@ -573,7 +573,7 @@ func (c *Config) SelfCheck(uuid string) {
 		c.MaxUpload = 1
 	}
 	if c.UploadLimit > 0 && int64(c.MaxUpload*c.BlockSize) > c.UploadLimit*int64(c.GetTimeout/time.Second)/2 {
-		logger.Warnf("max-upload %d may exceed bandwidth limit (bw: %d Mbps)", c.MaxUpload, c.UploadDelay*8>>20)
+		logger.Warnf("max-upload %d may exceed bandwidth limit (bw: %d Mbps)", c.MaxUpload, (c.UploadLimit*8)>>20)
 	}
 	if c.MaxDownload <= 0 {
 		logger.Warnf("max-downloads should be greater than 0, set it to 200")
