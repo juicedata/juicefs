@@ -1021,7 +1021,13 @@ func (store *cachedStore) shouldCache(size int) bool {
 
 func parseObjOrigSize(key string) int {
 	p := strings.LastIndexByte(key, '_')
-	l, _ := strconv.Atoi(key[p+1:])
+	if p < 0 || p+1 >= len(key) {
+		return 0
+	}
+	l, err := strconv.Atoi(key[p+1:])
+	if err != nil || l <= 0 {
+		return 0
+	}
 	return l
 }
 
@@ -1047,6 +1053,10 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}
 
 	blen := parseObjOrigSize(key)
+	if blen <= 0 || blen > store.conf.BlockSize {
+		logger.Warnf("invalid staging block size %d for key %s, drop it", blen, key)
+		return
+	}
 	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
 		if store.isPendingValid(key) {
