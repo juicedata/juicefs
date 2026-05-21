@@ -82,49 +82,51 @@ func TestCluster(t *testing.T) {
 }
 
 func TestMultipartCheckpointFromManagerIsNotReportedAsDirty(t *testing.T) {
-	conf := Config{Manager: "127.0.0.1:1"}
-	mgr := NewCheckpointManager(nil, nil, &conf)
+	uploads := newWorkerMultipartUploads()
 	mtime := time.Now()
 	state := &multipartUploadState{
-		Upload: &object.MultipartUpload{
+		Upload: object.MultipartUpload{
 			UploadID:    "upload-id",
 			MinPartSize: 5 << 20,
 			MaxCount:    10000,
 		},
 		Size:  maxBlock,
 		Mtime: mtime,
-		Parts: map[int]*object.Part{
+		Parts: map[int]object.Part{
 			1: {Num: 1, Size: 5 << 20, ETag: "part-1"},
 		},
 		Checksums: map[int]uint32{1: 123},
 	}
-	mgr.PutMultipartCheckpoint("large", state)
+	uploads.PutMultipartCheckpoint("large", state)
 
-	if uploads := getMultipartUploads(mgr); uploads != nil {
-		t.Fatalf("manager-provided multipart checkpoint should not be reported as dirty: %+v", uploads)
+	if dirty := getMultipartUploads(uploads); dirty != nil {
+		t.Fatalf("manager-provided multipart checkpoint should not be reported as dirty: %+v", dirty)
 	}
-	if part, chksum, ok := mgr.GetMultipartPart(mgr.checkpoint.MultipartUploads["large"], 1, true); !ok || part.ETag != "part-1" || chksum != 123 {
+	if part, chksum, ok := uploads.GetMultipartPart(uploads.uploads["large"], 1, true); !ok || part.ETag != "part-1" || chksum != 123 {
 		t.Fatalf("manager-provided multipart checkpoint should remain available, part=%+v checksum=%d ok=%v", part, chksum, ok)
 	}
 }
 
 func TestSentMultipartStatsClearOnlyDirtyMarks(t *testing.T) {
-	conf := Config{Manager: "127.0.0.1:1"}
-	mgr := NewCheckpointManager(nil, nil, &conf)
+	uploads := newWorkerMultipartUploads()
 	mtime := time.Now()
 	upload := &object.MultipartUpload{UploadID: "upload-id", MinPartSize: 5 << 20, MaxCount: 10000}
-	state := mgr.EnsureMultipartUploadState("large", maxBlock, mtime, 5<<20, upload)
-	mgr.MarkMultipartPart("large", state, &object.Part{Num: 1, Size: 5 << 20, ETag: "part-1"}, 123, true)
+	state := uploads.EnsureMultipartUploadState("large", maxBlock, mtime, 5<<20, upload)
+	uploads.MarkMultipartPart("large", state, &object.Part{Num: 1, Size: 5 << 20, ETag: "part-1"}, 123, true)
 
-	uploads := getMultipartUploads(mgr)
-	if len(uploads) != 1 || uploads["large"] == nil || uploads["large"].Parts[1] == nil {
-		t.Fatalf("expected dirty multipart part to be reported, got %+v", uploads)
+	dirty := getMultipartUploads(uploads)
+	state = dirty["large"]
+	if len(dirty) != 1 || state == nil {
+		t.Fatalf("expected dirty multipart part to be reported, got %+v", dirty)
 	}
-	clearSentMultipartParts(mgr, uploads)
-	if uploads := getMultipartUploads(mgr); uploads != nil {
-		t.Fatalf("dirty multipart marks should be cleared after successful stats send: %+v", uploads)
+	if _, ok := state.Parts[1]; !ok {
+		t.Fatalf("expected dirty multipart part to be reported, got %+v", dirty)
 	}
-	if part, chksum, ok := mgr.GetMultipartPart(state, 1, true); !ok || part.ETag != "part-1" || chksum != 123 {
+	clearSentMultipartParts(uploads, dirty)
+	if dirty := getMultipartUploads(uploads); dirty != nil {
+		t.Fatalf("dirty multipart marks should be cleared after successful stats send: %+v", dirty)
+	}
+	if part, chksum, ok := uploads.GetMultipartPart(state, 1, true); !ok || part.ETag != "part-1" || chksum != 123 {
 		t.Fatalf("clearing dirty marks should not remove local checkpoint part, part=%+v checksum=%d ok=%v", part, chksum, ok)
 	}
 }

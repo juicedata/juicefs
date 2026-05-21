@@ -100,26 +100,26 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 
 var sendStatMu sync.Mutex
 
-func getMultipartUploads(checkpointMgr *CheckpointManager) map[string]*multipartUploadState {
-	if checkpointMgr == nil {
+func getMultipartUploads(uploads *workerMultipartUploads) map[string]*multipartUploadState {
+	if uploads == nil {
 		return nil
 	}
-	checkpointMgr.multipartMu.RLock()
-	defer checkpointMgr.multipartMu.RUnlock()
-	if len(checkpointMgr.dirtyMultipartParts) == 0 {
+	uploads.RLock()
+	defer uploads.RUnlock()
+	if len(uploads.dirtyParts) == 0 {
 		return nil
 	}
-	uploads := make(map[string]*multipartUploadState, len(checkpointMgr.dirtyMultipartParts))
-	for key, dirtyParts := range checkpointMgr.dirtyMultipartParts {
-		state := checkpointMgr.checkpoint.MultipartUploads[key]
+	dirtyUploads := make(map[string]*multipartUploadState, len(uploads.dirtyParts))
+	for key, dirtyParts := range uploads.dirtyParts {
+		state := uploads.uploads[key]
 		if !validMultipartUploadState(state) || len(dirtyParts) == 0 {
 			continue
 		}
-		parts := make(map[int]*object.Part, len(dirtyParts))
+		parts := make(map[int]object.Part, len(dirtyParts))
 		var checksums map[int]uint32
 		for num := range dirtyParts {
-			part := state.Parts[num]
-			if part == nil {
+			part, ok := state.Parts[num]
+			if !ok {
 				continue
 			}
 			parts[num] = part
@@ -133,7 +133,7 @@ func getMultipartUploads(checkpointMgr *CheckpointManager) map[string]*multipart
 		if len(parts) == 0 {
 			continue
 		}
-		uploads[key] = &multipartUploadState{
+		dirtyUploads[key] = &multipartUploadState{
 			Upload:    state.Upload,
 			Size:      state.Size,
 			Mtime:     state.Mtime,
@@ -141,20 +141,20 @@ func getMultipartUploads(checkpointMgr *CheckpointManager) map[string]*multipart
 			Checksums: checksums,
 		}
 	}
-	if len(uploads) == 0 {
+	if len(dirtyUploads) == 0 {
 		return nil
 	}
-	return uploads
+	return dirtyUploads
 }
 
-func clearSentMultipartParts(checkpointMgr *CheckpointManager, uploads map[string]*multipartUploadState) {
-	if checkpointMgr == nil || len(uploads) == 0 {
+func clearSentMultipartParts(workerUploads *workerMultipartUploads, uploads map[string]*multipartUploadState) {
+	if workerUploads == nil || len(uploads) == 0 {
 		return
 	}
-	checkpointMgr.multipartMu.Lock()
-	defer checkpointMgr.multipartMu.Unlock()
+	workerUploads.Lock()
+	defer workerUploads.Unlock()
 	for key, sent := range uploads {
-		dirtyParts := checkpointMgr.dirtyMultipartParts[key]
+		dirtyParts := workerUploads.dirtyParts[key]
 		if dirtyParts == nil {
 			continue
 		}
@@ -162,12 +162,12 @@ func clearSentMultipartParts(checkpointMgr *CheckpointManager, uploads map[strin
 			delete(dirtyParts, num)
 		}
 		if len(dirtyParts) == 0 {
-			delete(checkpointMgr.dirtyMultipartParts, key)
+			delete(workerUploads.dirtyParts, key)
 		}
 	}
 }
 
-func sendStats(addr string, checkpointMgr *CheckpointManager) {
+func sendStats(addr string, multipartUploads *workerMultipartUploads) {
 	sendStatMu.Lock()
 	defer sendStatMu.Unlock()
 	var r Stat
@@ -195,7 +195,7 @@ func sendStats(addr string, checkpointMgr *CheckpointManager) {
 	if failed != nil {
 		r.Failed = failed.Current()
 	}
-	r.MultipartUploads = getMultipartUploads(checkpointMgr)
+	r.MultipartUploads = getMultipartUploads(multipartUploads)
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
@@ -226,7 +226,7 @@ func sendStats(addr string, checkpointMgr *CheckpointManager) {
 		if failed != nil {
 			failed.IncrInt64(-r.Failed)
 		}
-		clearSentMultipartParts(checkpointMgr, r.MultipartUploads)
+		clearSentMultipartParts(multipartUploads, r.MultipartUploads)
 	}
 }
 
@@ -516,7 +516,7 @@ func unmarshalObjects(d []byte) ([]object.Object, error) {
 	return objs, nil
 }
 
-func fetchJobs(tasks chan<- object.Object, config *Config, checkpointMgr *CheckpointManager) {
+func fetchJobs(tasks chan<- object.Object, config *Config, uploads multipartUploads) {
 	for {
 		url := fmt.Sprintf("http://%s/fetch", config.Manager)
 		ans, err := httpRequest(url, nil)
@@ -539,8 +539,8 @@ func fetchJobs(tasks chan<- object.Object, config *Config, checkpointMgr *Checkp
 		}
 		for _, obj := range jobs {
 			if cp := multipartCheckpoint(obj); cp != nil {
-				if checkpointMgr != nil {
-					checkpointMgr.PutMultipartCheckpoint(obj.Key(), cp)
+				if uploads != nil {
+					uploads.PutMultipartCheckpoint(obj.Key(), cp)
 				}
 				obj = withoutMultipart(obj)
 			}

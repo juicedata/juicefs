@@ -863,7 +863,7 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 	return part, tmpChksum, err
 }
 
-func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime time.Time, upload *object.MultipartUpload, calChksum bool, mgr *CheckpointManager) (uint32, error) {
+func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime time.Time, upload *object.MultipartUpload, calChksum bool, uploads multipartUploads) (uint32, error) {
 	limits := dst.Limits()
 	if size > limits.MaxPartSize*int64(upload.MaxCount) {
 		return 0, fmt.Errorf("object size %d is too large to copy", size)
@@ -878,8 +878,8 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 	var err error
 
 	var state *multipartUploadState
-	if mgr != nil {
-		state = mgr.EnsureMultipartUploadState(key, size, mtime, partSize, upload)
+	if uploads != nil {
+		state = uploads.EnsureMultipartUploadState(key, size, mtime, partSize, upload)
 	}
 
 	for i := 0; i < n; i++ {
@@ -888,7 +888,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 			sz = size - int64(i)*partSize
 		}
 		if state != nil {
-			if p, chksum, ok := mgr.GetMultipartPart(state, i+1, calChksum); ok {
+			if p, chksum, ok := uploads.GetMultipartPart(state, i+1, calChksum); ok {
 				parts[i] = p
 				errs <- nil
 				if calChksum {
@@ -903,7 +903,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 			parts[num], chksum, copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort, calChksum)
 			chksums[num] = chksumWithSz{chksum, sz}
 			if copyErr == nil && state != nil {
-				mgr.MarkMultipartPart(key, state, parts[num], chksum, calChksum)
+				uploads.MarkMultipartPart(key, state, parts[num], chksum, calChksum)
 			}
 			errs <- copyErr
 		}(i)
@@ -919,16 +919,16 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 		err = try(3, func() error { return dst.CompleteUpload(ctx, key, upload.UploadID, parts) })
 	}
 	if err != nil {
-		if mgr == nil {
+		if uploads == nil {
 			dst.AbortUpload(ctx, key, upload.UploadID)
 		} else if _, e := src.Head(ctx, key); os.IsNotExist(e) {
 			dst.AbortUpload(ctx, key, upload.UploadID)
-			mgr.FinishMultipartUpload(key)
+			uploads.FinishMultipartUpload(key)
 		}
 		return 0, fmt.Errorf("multipart: %s", err)
 	}
-	if mgr != nil {
-		mgr.FinishMultipartUpload(key)
+	if uploads != nil {
+		uploads.FinishMultipartUpload(key)
 	}
 	var chksum uint32
 	if calChksum {
@@ -952,7 +952,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 	return copyData(src, dst, key, size, time.Time{}, calChksum, nil)
 }
 
-func copyData(src, dst object.ObjectStorage, key string, size int64, mtime time.Time, calChksum bool, checkpointMgr *CheckpointManager) (uint32, error) {
+func copyData(src, dst object.ObjectStorage, key string, size int64, mtime time.Time, calChksum bool, uploads multipartUploads) (uint32, error) {
 	start := time.Now()
 	var err error
 	var srcChksum uint32
@@ -963,19 +963,20 @@ func copyData(src, dst object.ObjectStorage, key string, size int64, mtime time.
 		})
 	} else {
 		var upload *object.MultipartUpload
-		if checkpointMgr != nil {
-			upload = checkpointMgr.FindMultipartUpload(key, size, mtime)
+		if uploads != nil {
+			upload = uploads.FindMultipartUpload(key, size, mtime)
 		}
 		if upload != nil {
-			srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, checkpointMgr)
+			srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, uploads)
 			if err != nil {
-				checkpointMgr.FinishMultipartUpload(key)
+				dst.AbortUpload(ctx, key, upload.UploadID)
+				uploads.FinishMultipartUpload(key)
 				upload = nil
 			}
 		}
 		if upload == nil {
 			if upload, err = dst.CreateMultipartUpload(ctx, key); err == nil {
-				srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, checkpointMgr)
+				srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, uploads)
 			} else if err == utils.ErrNotSUP {
 				err = try(3, func() (err error) {
 					srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
@@ -986,7 +987,7 @@ func copyData(src, dst object.ObjectStorage, key string, size int64, mtime time.
 					upload, err = dst.CreateMultipartUpload(ctx, key)
 					return err
 				}); err == nil {
-					srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, checkpointMgr)
+					srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, uploads)
 				}
 			}
 		}
@@ -1042,7 +1043,7 @@ func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
 	}
 }
 
-func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager) {
+func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager, uploads multipartUploads) {
 	for {
 		obj, done := fetchTask(tasks)
 		if obj == nil {
@@ -1120,7 +1121,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 					logger.Errorf("copy link failed: %s", err)
 				}
 			} else {
-				srcChksum, err = copyData(src, dst, key, obj.Size(), obj.Mtime(), config.CheckAll || config.CheckNew, checkpointMgr)
+				srcChksum, err = copyData(src, dst, key, obj.Size(), obj.Mtime(), config.CheckAll || config.CheckNew, uploads)
 			}
 			if errors.Is(err, utils.ErrExtlink) {
 				logger.Warnf("Skip external link %s: %s", key, err)
@@ -2014,51 +2015,57 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 func Sync(src, dst object.ObjectStorage, config *Config) error {
 	var checkpointMgr *CheckpointManager
 	var checkpoint *Checkpoint
+	var uploads multipartUploads
+	var workerUploads *workerMultipartUploads
 
 	if config.EnableCheckpoint {
-		checkpointMgr = NewCheckpointManager(src, dst, config)
-		if config.CheckpointForceReset {
-			if err := checkpointMgr.DeleteCheckpoint(); err != nil && !errors.Is(err, os.ErrNotExist) {
-				logger.Warnf("Failed to delete existing checkpoint: %v", err)
-			}
-			checkpointMgr.Reset(config)
-			logger.Infof("Force reset checkpoint, starting fresh")
-		} else if ckpt, err := checkpointMgr.Load(); err == nil {
-			if checkpointMgr.ValidateConfig(config) {
-				if len(ckpt.PrefixState) > 0 || len(ckpt.MultipartUploads) > 0 || len(ckpt.SrcDelayDel) > 0 || len(ckpt.DstDelayDel) > 0 {
-					checkpoint = ckpt
-					config.Limit = ckpt.Config.Limit
-					ckpt.Config = config
-					if len(ckpt.SrcDelayDel) > 0 {
-						logger.Infof("Checkpoint has %d pending deletes in source", len(ckpt.SrcDelayDel))
-						srcDelayDelMu.Lock()
-						srcDelayDel = append([]string(nil), ckpt.SrcDelayDel...)
-						srcDelayDelMu.Unlock()
+		if config.Manager == "" {
+			checkpointMgr = NewCheckpointManager(src, dst, config)
+			uploads = checkpointMgr
+			if config.CheckpointForceReset {
+				if err := checkpointMgr.DeleteCheckpoint(); err != nil && !errors.Is(err, os.ErrNotExist) {
+					logger.Warnf("Failed to delete existing checkpoint: %v", err)
+				}
+				checkpointMgr.Reset(config)
+				logger.Infof("Force reset checkpoint, starting fresh")
+			} else if ckpt, err := checkpointMgr.Load(); err == nil {
+				if checkpointMgr.ValidateConfig(config) {
+					if len(ckpt.PrefixState) > 0 || len(ckpt.MultipartUploads) > 0 || len(ckpt.SrcDelayDel) > 0 || len(ckpt.DstDelayDel) > 0 {
+						checkpoint = ckpt
+						config.Limit = ckpt.Config.Limit
+						ckpt.Config = config
+						if len(ckpt.SrcDelayDel) > 0 {
+							logger.Infof("Checkpoint has %d pending deletes in source", len(ckpt.SrcDelayDel))
+							srcDelayDelMu.Lock()
+							srcDelayDel = append([]string(nil), ckpt.SrcDelayDel...)
+							srcDelayDelMu.Unlock()
+						}
+						if len(ckpt.DstDelayDel) > 0 {
+							dstDelayDelMu.Lock()
+							dstDelayDel = append([]string(nil), ckpt.DstDelayDel...)
+							dstDelayDelMu.Unlock()
+						}
+						logger.Infof("Loaded checkpoint from %s", ckpt.UpdatedAt.Format(time.RFC3339))
+					} else {
+						logger.Infof("Loaded empty checkpoint, starting fresh")
 					}
-					if len(ckpt.DstDelayDel) > 0 {
-						dstDelayDelMu.Lock()
-						dstDelayDel = append([]string(nil), ckpt.DstDelayDel...)
-						dstDelayDelMu.Unlock()
-					}
-					logger.Infof("Loaded checkpoint from %s", ckpt.UpdatedAt.Format(time.RFC3339))
 				} else {
-					logger.Infof("Loaded empty checkpoint, starting fresh")
+					logger.Warnf("Checkpoint config mismatch, starting fresh")
+					checkpointMgr.Reset(config)
 				}
 			} else {
-				logger.Warnf("Checkpoint config mismatch, starting fresh")
-				checkpointMgr.Reset(config)
+				if !errors.Is(err, os.ErrNotExist) {
+					logger.Warnf("Failed to load checkpoint: %v", err)
+				} else {
+					logger.Infof("No checkpoint found, starting fresh")
+				}
 			}
-		} else {
-			if !errors.Is(err, os.ErrNotExist) {
-				logger.Warnf("Failed to load checkpoint: %v", err)
-			} else {
-				logger.Infof("No checkpoint found, starting fresh")
-			}
-		}
 
-		if checkpointMgr != nil {
 			checkpointMgr.StartPeriodicSave(config.CheckpointInterval)
 			checkpointMgr.SaveOnSignal()
+		} else {
+			workerUploads = newWorkerMultipartUploads()
+			uploads = workerUploads
 		}
 	}
 
@@ -2217,9 +2224,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				}
 			}
 		} else {
-			sendStats(config.Manager, checkpointMgr)
+			sendStats(config.Manager, workerUploads)
 			for len(srcDelayDel) > 0 {
-				sendStats(config.Manager, checkpointMgr)
+				sendStats(config.Manager, workerUploads)
 			}
 			logger.Infof("This worker process has already completed its tasks")
 		}
@@ -2258,7 +2265,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			worker(tasks, src, dst, config, checkpointMgr)
+			worker(tasks, src, dst, config, checkpointMgr, uploads)
 		}()
 	}
 
@@ -2296,10 +2303,10 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}
 		close(tasks)
 	} else {
-		go fetchJobs(tasks, config, checkpointMgr)
+		go fetchJobs(tasks, config, uploads)
 		go func() {
 			for {
-				sendStats(config.Manager, checkpointMgr)
+				sendStats(config.Manager, workerUploads)
 				time.Sleep(time.Second)
 			}
 		}()
