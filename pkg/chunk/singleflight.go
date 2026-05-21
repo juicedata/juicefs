@@ -52,9 +52,11 @@ func (con *Controller) Execute(key string, fn func() (*Page, error)) (*Page, err
 	c.val, c.err = fn()
 
 	con.Lock()
-	for i := 0; i < c.dups; i++ {
-		// Acquire for the pending Execute
-		c.val.Acquire()
+	if c.val != nil {
+		for i := 0; i < c.dups; i++ {
+			// Acquire for the pending Execute
+			c.val.Acquire()
+		}
 	}
 	delete(con.rs, key)
 	con.Unlock()
