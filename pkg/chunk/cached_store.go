@@ -1186,7 +1186,16 @@ func (store *cachedStore) Remove(id uint64, length int) error {
 func (store *cachedStore) FillCache(id uint64, length uint32) error {
 	r := sliceForRead(id, int(length), store)
 	keys := r.keys()
-	var err error
+	parallel := store.conf.MaxDownload
+	if parallel <= 0 {
+		parallel = 1
+	}
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		ferr error
+		sem  = make(chan struct{}, parallel)
+	)
 	for _, k := range keys {
 		if _, existed := store.bcache.exist(k); existed { // already cached
 			continue
@@ -1196,14 +1205,23 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 			logger.Warnf("Invalid size: %s %d", k, size)
 			continue
 		}
-		p := NewOffPage(size)
-		if e := store.load(context.TODO(), k, p, true, true); e != nil {
-			logger.Warnf("Failed to load key: %s %s", k, e)
-			err = e
-		}
-		p.Release()
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(key string, sz int) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			p := NewOffPage(sz)
+			defer p.Release()
+			if e := store.load(context.TODO(), key, p, true, true); e != nil {
+				logger.Warnf("Failed to load key: %s %s", key, e)
+				mu.Lock()
+				ferr = e
+				mu.Unlock()
+			}
+		}(k, size)
 	}
-	return err
+	wg.Wait()
+	return ferr
 }
 
 func (store *cachedStore) EvictCache(id uint64, length uint32) error {
