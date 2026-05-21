@@ -657,12 +657,13 @@ func (cache *cacheStore) remove(key string, staging bool) {
 
 func (cache *cacheStore) load(key string) (ReadCloser, error) {
 	cache.Lock()
-	defer cache.Unlock()
 	if p, ok := cache.pages[key]; ok {
+		cache.Unlock()
 		return NewPageReader(p), nil
 	}
 	k := cache.getCacheKey(key)
 	if cache.scanned && cache.keys.get(k) == nil {
+		cache.Unlock()
 		return nil, errNotCached
 	}
 	cache.Unlock()
@@ -677,26 +678,29 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 		return err
 	})
 
-	cache.Lock()
 	if err != nil {
+		cache.Lock()
 		if it := cache.keys.remove(k, false); it != nil {
 			cache.used -= int64(it.size + 4096)
 		}
+		cache.Unlock()
 	}
 	return f, err
 }
 
 func (cache *cacheStore) exist(key string) (bool, error) {
 	cache.Lock()
-	defer cache.Unlock()
 	if _, ok := cache.pages[key]; ok {
+		cache.Unlock()
 		return true, nil
 	}
 	k := cache.getCacheKey(key)
 	if cache.scanned && cache.keys.get(k) == nil {
+		cache.Unlock()
 		return false, errNotCached
 	}
 	cache.Unlock()
+
 	var err error
 	err = cache.checkErr(func() error {
 		_, err = os.Stat(cache.cachePath(key))
@@ -706,12 +710,14 @@ func (cache *cacheStore) exist(key string) (bool, error) {
 		return err
 	})
 
-	cache.Lock()
 	if err == nil {
 		return true, nil
-	} else if it := cache.keys.remove(k, false); it != nil {
+	}
+	cache.Lock()
+	if it := cache.keys.remove(k, false); it != nil {
 		cache.used -= int64(it.size + 4096)
 	}
+	cache.Unlock()
 	return false, err
 }
 
