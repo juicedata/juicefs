@@ -23,7 +23,6 @@ import (
 	"hash/fnv"
 	"io"
 	"io/fs"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -878,11 +877,12 @@ func (cache *cacheStore) uploadStaging() {
 	if !cache.scanned || cache.uploader == nil {
 		return
 	}
-	var toFree int64
 	usage := cache.curFreeRatio()
-	if usage.br < cache.freeRatio || usage.fr < cache.freeRatio {
-		toFree = int64((float64(cache.freeRatio) - math.Min(float64(usage.br), float64(usage.fr))) * float64(usage.spaceCap))
+	curFree := min(usage.br, usage.fr)
+	if curFree >= cache.freeRatio {
+		return
 	}
+	toFree := int64(float64(cache.freeRatio-curFree) * float64(usage.spaceCap))
 	if toFree <= 0 {
 		return
 	}
