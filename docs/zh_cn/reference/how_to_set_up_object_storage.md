@@ -907,7 +907,7 @@ $ sudo docker run -d --name minio \
 
 容器创建成功以后使用以下地址访问：
 
-- **MinIO API**：[http://127.0.0.1:9000](http://127.0.0.1:9000)，这也是 JuiceFS 访问对象存储时所使用的的 API
+- **MinIO API**：[http://127.0.0.1:9000](http://127.0.0.1:9000)，这也是 JuiceFS 访问对象存储时所使用的 API
 - **MinIO 管理界面**：[http://127.0.0.1:9900](http://127.0.0.1:9900)，用于管理对象存储本身，与 JuiceFS 无关
 
 对象存储初始的 Access Key 和 Secret Key 均为 `minioadmin`。
