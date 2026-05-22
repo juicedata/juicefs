@@ -28,9 +28,9 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"runtime"
 	"runtime/debug"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -5113,6 +5113,18 @@ func (m *dbMeta) getTxnBatchNum() int {
 	}
 }
 
+// getCloneBatchNum returns the number of entries to process per doBatchClone transaction.
+// Uses INSERT ON DUPLICATE KEY UPDATE for chunk_ref instead of CASE WHEN, so there is no
+// SQL-length penalty for large batches. MySQL can safely use getTxnBatchNum() (3449).
+func (m *dbMeta) getCloneBatchNum() int {
+	if v := os.Getenv("JFS_CLONE_BATCH"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return m.getTxnBatchNum()
+}
+
 func (m *dbMeta) checkAddr() error {
 	tables, err := m.db.DBMetas()
 	if err != nil {
@@ -5416,227 +5428,274 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		dstNode node
 	}
 
-	cloneInfos := make([]*cloneInfo, len(entries))
-	srcInodes := make([]Ino, 0, len(entries))
-	srcInodeSet := make(map[Ino]struct{}, len(entries))
-	for i, e := range entries {
-		dstIno, err := m.nextInode()
-		if err != nil {
-			return errno(err)
-		}
-		cloneInfos[i] = &cloneInfo{srcIno: e.Inode, dstIno: dstIno, name: e.Name}
-		if _, exists := srcInodeSet[e.Inode]; !exists {
-			srcInodeSet[e.Inode] = struct{}{}
-			srcInodes = append(srcInodes, e.Inode)
-		}
-	}
+	*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
-	err := m.txn(func(s *xorm.Session) error {
-		nowNano := time.Now().UnixNano()
-		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
+	cloneBatch := m.getCloneBatchNum()
+	for batchStart := 0; batchStart < len(entries); batchStart += cloneBatch {
+		batchEnd := min(batchStart+cloneBatch, len(entries))
+		batchEntries := entries[batchStart:batchEnd]
 
-		if _, err := m.validateCloneTarget(ctx, s, dstParent); err != nil {
-			return err
-		}
-
-		var srcNodes []node
-		if err := s.In("inode", srcInodes).ForUpdate().Find(&srcNodes); err != nil {
-			return err
-		}
-		srcNodeMap := make(map[Ino]*node, len(srcNodes))
-		for i := range srcNodes {
-			srcNodeMap[srcNodes[i].Inode] = &srcNodes[i]
+		cloneInfos := make([]*cloneInfo, len(batchEntries))
+		srcInodes := make([]Ino, 0, len(batchEntries))
+		srcInodeSet := make(map[Ino]struct{}, len(batchEntries))
+		for i, e := range batchEntries {
+			dstIno, err := m.nextInode()
+			if err != nil {
+				return errno(err)
+			}
+			cloneInfos[i] = &cloneInfo{srcIno: e.Inode, dstIno: dstIno, name: e.Name}
+			if _, exists := srcInodeSet[e.Inode]; !exists {
+				srcInodeSet[e.Inode] = struct{}{}
+				srcInodes = append(srcInodes, e.Inode)
+			}
 		}
 
-		nodesIns := make([]interface{}, 0, len(entries))
-		edgesIns := make([]interface{}, 0, len(entries))
-		fileInodes := make([]Ino, 0)
-		symlinkInodes := make([]Ino, 0)
-		symlinkClones := make([]*cloneInfo, 0)
-		for _, info := range cloneInfos {
-			sn, ok := srcNodeMap[info.srcIno]
-			if !ok {
-				return syscall.ENOENT
-			}
-			if sn.Type == TypeDirectory {
-				return syscall.EINVAL
-			}
-			var attr Attr
-			m.parseAttr(sn, &attr)
-			if st := m.Access(ctx, info.srcIno, MODE_MASK_R, &attr); st != 0 {
-				return st
-			}
+		var subResult batchCloneResult
+		err := m.txn(func(s *xorm.Session) error {
+			tLast := time.Now()
+			nowNano := tLast.UnixNano()
+			subResult = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
-			info.dstNode = *sn
-			info.dstNode.Inode = info.dstIno
-			info.dstNode.Parent = dstParent
-			if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-				info.dstNode.Uid = ctx.Uid()
-				info.dstNode.Gid = ctx.Gid()
-				info.dstNode.Mode &= ^cumask
-				info.dstNode.setAtime(nowNano)
-				info.dstNode.setMtime(nowNano)
-				info.dstNode.setCtime(nowNano)
-			}
-			if sn.Type == TypeFile && sn.Nlink > 1 {
-				info.dstNode.Nlink = 1
-			}
-
-			nodesIns = append(nodesIns, &info.dstNode)
-			edgesIns = append(edgesIns, &edge{
-				Parent: dstParent,
-				Name:   info.name,
-				Inode:  info.dstIno,
-				Type:   sn.Type,
-			})
-
-			switch sn.Type {
-			case TypeFile:
-				if sn.Length > 0 {
-					fileInodes = append(fileInodes, info.srcIno)
-				}
-			case TypeSymlink:
-				symlinkInodes = append(symlinkInodes, info.srcIno)
-				symlinkClones = append(symlinkClones, info)
-			}
-
-			entrySpace := align4K(sn.Length)
-			if sn.Type == TypeFile {
-				result.length += int64(sn.Length)
-			}
-			result.space += entrySpace
-			result.inodes++
-			result.deltas.add(&ugQuotaDelta{
-				Uid:    info.dstNode.Uid,
-				Gid:    info.dstNode.Gid,
-				Space:  entrySpace,
-				Inodes: 1,
-			})
-		}
-
-		if err := mustInsert(s, nodesIns...); err != nil {
-			return err
-		}
-		if err := mustInsert(s, edgesIns...); err != nil {
-			if isDuplicateEntryErr(err) {
-				return syscall.EEXIST
-			}
-			return err
-		}
-
-		chunkRefCounts := make(map[uint64]int)
-		if len(fileInodes) > 0 {
-			var srcChunks []chunk
-			if err := s.In("inode", fileInodes).ForUpdate().Find(&srcChunks); err != nil {
+			if _, err := m.validateCloneTarget(ctx, s, dstParent); err != nil {
 				return err
 			}
-			chunksByInode := make(map[Ino][]chunk, len(fileInodes))
-			for _, c := range srcChunks {
-				chunksByInode[c.Inode] = append(chunksByInode[c.Inode], c)
-			}
-			chunksIns := make([]interface{}, 0, len(srcChunks))
-			for i := range cloneInfos {
-				for _, c := range chunksByInode[cloneInfos[i].srcIno] {
-					chunksIns = append(chunksIns, &chunk{
-						Inode: cloneInfos[i].dstIno, Indx: c.Indx, Slices: c.Slices,
-					})
-					for _, sli := range readSliceBuf(c.Slices) {
-						if sli.id > 0 {
-							chunkRefCounts[sli.id]++
-						}
-					}
-				}
-			}
-			if err := mustInsert(s, chunksIns...); err != nil {
-				return err
-			}
-		}
 
-		if len(symlinkInodes) > 0 {
-			var srcSymlinks []symlink
-			if err := s.In("inode", symlinkInodes).Find(&srcSymlinks); err != nil {
+			var srcNodes []node
+			if err := s.In("inode", srcInodes).ForUpdate().Find(&srcNodes); err != nil {
 				return err
 			}
-			symlinkMap := make(map[Ino][]byte, len(srcSymlinks))
-			for _, sl := range srcSymlinks {
-				symlinkMap[sl.Inode] = sl.Target
+			selectNodesDur := time.Since(tLast); tLast = time.Now()
+			srcNodeMap := make(map[Ino]*node, len(srcNodes))
+			for i := range srcNodes {
+				srcNodeMap[srcNodes[i].Inode] = &srcNodes[i]
 			}
-			symlinksIns := make([]interface{}, 0, len(symlinkClones))
-			for i := range symlinkClones {
-				if target, ok := symlinkMap[symlinkClones[i].srcIno]; ok {
-					symlinksIns = append(symlinksIns, &symlink{Inode: symlinkClones[i].dstIno, Target: target})
-				} else {
+
+			nodesIns := make([]*node, 0, len(batchEntries))
+			edgesIns := make([]*edge, 0, len(batchEntries))
+			fileInodes := make([]Ino, 0)
+			symlinkInodes := make([]Ino, 0)
+			symlinkClones := make([]*cloneInfo, 0)
+			for _, info := range cloneInfos {
+				sn, ok := srcNodeMap[info.srcIno]
+				if !ok {
 					return syscall.ENOENT
 				}
-			}
-			if err := mustInsert(s, symlinksIns...); err != nil {
-				return err
-			}
-		}
-
-		var srcXattrs []xattr
-		if err := s.In("inode", srcInodes).Find(&srcXattrs); err != nil {
-			return err
-		}
-		if len(srcXattrs) > 0 {
-			xattrsByInode := make(map[Ino][]xattr)
-			for _, x := range srcXattrs {
-				xattrsByInode[x.Inode] = append(xattrsByInode[x.Inode], x)
-			}
-			xattrsIns := make([]interface{}, 0, len(srcXattrs))
-			for i := range cloneInfos {
-				for _, x := range xattrsByInode[cloneInfos[i].srcIno] {
-					xattrsIns = append(xattrsIns, &xattr{Inode: cloneInfos[i].dstIno, Name: x.Name, Value: x.Value})
+				if sn.Type == TypeDirectory {
+					return syscall.EINVAL
 				}
-			}
-			if err := mustInsert(s, xattrsIns...); err != nil {
-				return err
-			}
-		}
-
-		if err := func() error {
-			if len(chunkRefCounts) == 0 {
-				return nil
-			}
-			chunkIds := make([]uint64, 0, len(chunkRefCounts))
-			for id := range chunkRefCounts {
-				chunkIds = append(chunkIds, id)
-			}
-			slices.Sort(chunkIds)
-
-			batchSize := m.getTxnBatchNum()
-			for start := 0; start < len(chunkIds); start += batchSize {
-				end := min(start+batchSize, len(chunkIds))
-				batch := chunkIds[start:end]
-				var sb strings.Builder
-				args := make([]interface{}, 0, len(batch)*3)
-				fmt.Fprintf(&sb, "UPDATE %schunk_ref SET refs = refs + CASE ", m.tablePrefix)
-				for _, id := range batch {
-					sb.WriteString("WHEN chunkid = ? THEN ? ")
-					args = append(args, id, chunkRefCounts[id])
+				var attr Attr
+				m.parseAttr(sn, &attr)
+				if st := m.Access(ctx, info.srcIno, MODE_MASK_R, &attr); st != 0 {
+					return st
 				}
-				sb.WriteString("ELSE 0 END WHERE chunkid IN (")
-				for i, id := range batch {
-					if i > 0 {
-						sb.WriteString(",")
+
+				info.dstNode = *sn
+				info.dstNode.Inode = info.dstIno
+				info.dstNode.Parent = dstParent
+				if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+					info.dstNode.Uid = ctx.Uid()
+					info.dstNode.Gid = ctx.Gid()
+					info.dstNode.Mode &= ^cumask
+					info.dstNode.setAtime(nowNano)
+					info.dstNode.setMtime(nowNano)
+					info.dstNode.setCtime(nowNano)
+				}
+				if sn.Type == TypeFile && sn.Nlink > 1 {
+					info.dstNode.Nlink = 1
+				}
+
+				nodesIns = append(nodesIns, &info.dstNode)
+				edgesIns = append(edgesIns, &edge{
+					Parent: dstParent,
+					Name:   info.name,
+					Inode:  info.dstIno,
+					Type:   sn.Type,
+				})
+
+				switch sn.Type {
+				case TypeFile:
+					if sn.Length > 0 {
+						fileInodes = append(fileInodes, info.srcIno)
 					}
-					sb.WriteString("?")
-					args = append(args, id)
+				case TypeSymlink:
+					symlinkInodes = append(symlinkInodes, info.srcIno)
+					symlinkClones = append(symlinkClones, info)
 				}
-				sb.WriteString(")")
-				if _, err := s.Exec(append([]interface{}{sb.String()}, args...)...); err != nil {
+
+				entrySpace := align4K(sn.Length)
+				if sn.Type == TypeFile {
+					subResult.length += int64(sn.Length)
+				}
+				subResult.space += entrySpace
+				subResult.inodes++
+				subResult.deltas.add(&ugQuotaDelta{
+					Uid:    info.dstNode.Uid,
+					Gid:    info.dstNode.Gid,
+					Space:  entrySpace,
+					Inodes: 1,
+				})
+			}
+
+			txnBatch := m.getTxnBatchNum()
+			for start := 0; start < len(nodesIns); start += txnBatch {
+				end := min(start+txnBatch, len(nodesIns))
+				if _, err := s.Insert(nodesIns[start:end]); err != nil {
 					return err
 				}
 			}
-			return nil
-		}(); err != nil {
-			return err
-		}
+			for start := 0; start < len(edgesIns); start += txnBatch {
+				end := min(start+txnBatch, len(edgesIns))
+				if _, err := s.Insert(edgesIns[start:end]); err != nil {
+					if isDuplicateEntryErr(err) {
+						return syscall.EEXIST
+					}
+					return err
+				}
+			}
+			nodeEdgeInsertDur := time.Since(tLast); tLast = time.Now()
 
-		return nil
-	})
-	if err != nil {
-		return errno(err)
+			type chunkRefMeta struct {
+				size  uint32
+				count int
+			}
+			chunkRefMap := make(map[uint64]*chunkRefMeta)
+			var selectChunksDur, chunkInsertDur, chunkRefInsertDur time.Duration
+			if len(fileInodes) > 0 {
+				var srcChunks []chunk
+				if err := s.In("inode", fileInodes).ForUpdate().Find(&srcChunks); err != nil {
+					return err
+				}
+				selectChunksDur = time.Since(tLast); tLast = time.Now()
+				chunksByInode := make(map[Ino][]chunk, len(fileInodes))
+				for _, c := range srcChunks {
+					chunksByInode[c.Inode] = append(chunksByInode[c.Inode], c)
+				}
+				chunksIns := make([]*chunk, 0, len(srcChunks))
+				for i := range cloneInfos {
+					for _, c := range chunksByInode[cloneInfos[i].srcIno] {
+						chunksIns = append(chunksIns, &chunk{
+							Inode: cloneInfos[i].dstIno, Indx: c.Indx, Slices: c.Slices,
+						})
+						for _, sli := range readSliceBuf(c.Slices) {
+							if sli.id > 0 {
+								if e, ok := chunkRefMap[sli.id]; ok {
+									e.count++
+								} else {
+									chunkRefMap[sli.id] = &chunkRefMeta{size: sli.size, count: 1}
+								}
+							}
+						}
+					}
+				}
+				for start := 0; start < len(chunksIns); start += txnBatch {
+					end := min(start+txnBatch, len(chunksIns))
+					if _, err := s.Insert(chunksIns[start:end]); err != nil {
+						return err
+					}
+				}
+				chunkInsertDur = time.Since(tLast); tLast = time.Now()
+			}
+
+			if len(symlinkInodes) > 0 {
+				var srcSymlinks []symlink
+				if err := s.In("inode", symlinkInodes).Find(&srcSymlinks); err != nil {
+					return err
+				}
+				symlinkMap := make(map[Ino][]byte, len(srcSymlinks))
+				for _, sl := range srcSymlinks {
+					symlinkMap[sl.Inode] = sl.Target
+				}
+				symlinksIns := make([]interface{}, 0, len(symlinkClones))
+				for i := range symlinkClones {
+					if target, ok := symlinkMap[symlinkClones[i].srcIno]; ok {
+						symlinksIns = append(symlinksIns, &symlink{Inode: symlinkClones[i].dstIno, Target: target})
+					} else {
+						return syscall.ENOENT
+					}
+				}
+				if err := mustInsert(s, symlinksIns...); err != nil {
+					return err
+				}
+			}
+
+			var srcXattrs []xattr
+			if err := s.In("inode", srcInodes).Find(&srcXattrs); err != nil {
+				return err
+			}
+			if len(srcXattrs) > 0 {
+				xattrsByInode := make(map[Ino][]xattr)
+				for _, x := range srcXattrs {
+					xattrsByInode[x.Inode] = append(xattrsByInode[x.Inode], x)
+				}
+				xattrsIns := make([]interface{}, 0, len(srcXattrs))
+				for i := range cloneInfos {
+					for _, x := range xattrsByInode[cloneInfos[i].srcIno] {
+						xattrsIns = append(xattrsIns, &xattr{Inode: cloneInfos[i].dstIno, Name: x.Name, Value: x.Value})
+					}
+				}
+				if err := mustInsert(s, xattrsIns...); err != nil {
+					return err
+				}
+			}
+
+			if len(chunkRefMap) > 0 {
+				// MySQL prepared statements have a 65535-parameter limit.
+				// Each row uses 3 params (chunkid, size, refs), so cap at 21845 rows per statement.
+				const maxODKURows = 21845
+				type chunkRefEntry struct {
+					id    uint64
+					size  uint32
+					count int
+				}
+				refEntries := make([]chunkRefEntry, 0, len(chunkRefMap))
+				for id, entry := range chunkRefMap {
+					refEntries = append(refEntries, chunkRefEntry{id, entry.size, entry.count})
+				}
+				for batchStart := 0; batchStart < len(refEntries); batchStart += maxODKURows {
+					batchEnd := batchStart + maxODKURows
+					if batchEnd > len(refEntries) {
+						batchEnd = len(refEntries)
+					}
+					batch := refEntries[batchStart:batchEnd]
+					var sb strings.Builder
+					args := make([]interface{}, 0, len(batch)*3)
+					fmt.Fprintf(&sb, "INSERT INTO %schunk_ref (chunkid, size, refs) VALUES ", m.tablePrefix)
+					for i, e := range batch {
+						if i > 0 {
+							sb.WriteString(",")
+						}
+						sb.WriteString("(?,?,?)")
+						args = append(args, e.id, e.size, e.count)
+					}
+					switch m.Name() {
+					case "mysql":
+						sb.WriteString(" ON DUPLICATE KEY UPDATE refs = refs + VALUES(refs)")
+					default: // sqlite3, postgres
+						fmt.Fprintf(&sb, " ON CONFLICT(chunkid) DO UPDATE SET refs = %schunk_ref.refs + EXCLUDED.refs", m.tablePrefix)
+					}
+					if _, err := s.Exec(append([]interface{}{sb.String()}, args...)...); err != nil {
+						return err
+					}
+				}
+				chunkRefInsertDur = time.Since(tLast); tLast = time.Now()
+			}
+			logger.Infof("doBatchClone batch=%d: selectNodes=%.0fms nodeEdgeInsert=%.0fms selectChunks=%.0fms chunkInsert=%.0fms chunkRefInsert=%.0fms chunkRefs=%d",
+				len(batchEntries),
+				selectNodesDur.Seconds()*1000, nodeEdgeInsertDur.Seconds()*1000,
+				selectChunksDur.Seconds()*1000, chunkInsertDur.Seconds()*1000, chunkRefInsertDur.Seconds()*1000,
+				len(chunkRefMap))
+
+			return nil
+		})
+		if err != nil {
+			return errno(err)
+		}
+		result.length += subResult.length
+		result.space += subResult.space
+		result.inodes += subResult.inodes
+		for _, delta := range subResult.deltas {
+			result.deltas.add(delta)
+		}
 	}
 	return 0
 }
