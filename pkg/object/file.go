@@ -45,7 +45,10 @@ type filestore struct {
 }
 
 func (d *filestore) Symlink(oldName, newName string) error {
-	p := d.path(newName)
+	p, err := d.path(newName)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(filepath.Dir(p)); err != nil && os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
 			return err
@@ -57,7 +60,11 @@ func (d *filestore) Symlink(oldName, newName string) error {
 }
 
 func (d *filestore) Readlink(name string) (string, error) {
-	return os.Readlink(d.path(name))
+	p, err := d.path(name)
+	if err != nil {
+		return "", err
+	}
+	return os.Readlink(p)
 }
 
 func (d *filestore) String() string {
@@ -67,15 +74,42 @@ func (d *filestore) String() string {
 	return "file://" + d.root
 }
 
-func (d *filestore) path(key string) string {
+// path resolves an object-storage key to an on-disk path while preventing
+// the resolved path from escaping the configured root via ".." segments.
+// filepath.Join / filepath.Clean collapse ".." after the join, so without
+// this guard a key like "../../etc/shadow" would land outside d.root and
+// turn a metadata-engine compromise (or operator-supplied key in the
+// file:// sync target) into arbitrary local read/write.
+func (d *filestore) path(key string) (string, error) {
+	var p string
 	if strings.HasSuffix(d.root, dirSuffix) {
-		return filepath.Join(d.root, key)
+		p = filepath.Join(d.root, key)
+	} else {
+		p = filepath.Clean(d.root + key)
 	}
-	return filepath.Clean(d.root + key)
+	// ToSlash normalises separators so the comparison is OS-agnostic and
+	// also blocks Windows-style "..\\" segments smuggled in by callers
+	// that originate on a different OS.
+	pSlash := filepath.ToSlash(p)
+	if strings.HasPrefix(pSlash, filepath.ToSlash(d.root)) {
+		return p, nil
+	}
+	// Accept the legitimate "key == root" case (e.g. List/Head of the
+	// bucket prefix itself with an empty key): filepath.Clean strips
+	// the trailing slash from a trailing-slash root, so the prefix
+	// check above misses this one form even though the resolved path
+	// hasn't escaped anywhere.
+	if pSlash == filepath.ToSlash(filepath.Clean(d.root)) {
+		return p, nil
+	}
+	return "", fmt.Errorf("invalid key %q: resolved path %q escapes root %q", key, p, d.root)
 }
 
 func (d *filestore) Head(ctx context.Context, key string) (Object, error) {
-	p := d.path(key)
+	p, err := d.path(key)
+	if err != nil {
+		return nil, err
+	}
 	fi, err := os.Lstat(p)
 	if err != nil {
 		return nil, err
@@ -118,7 +152,10 @@ type SectionReaderCloser struct {
 }
 
 func (d *filestore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	p := d.path(key)
+	p, err := d.path(key)
+	if err != nil {
+		return nil, err
+	}
 
 	f, err := os.Open(p)
 	if err != nil {
@@ -145,7 +182,10 @@ func (d *filestore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	p := d.path(key)
+	p, err := d.path(key)
+	if err != nil {
+		return err
+	}
 
 	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
 		return os.MkdirAll(p, os.FileMode(0777))
@@ -208,8 +248,11 @@ func (d *filestore) Copy(ctx context.Context, dst, src string) error {
 }
 
 func (d *filestore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	err := os.Remove(d.path(key))
-	if err != nil && os.IsNotExist(err) {
+	p, err := d.path(key)
+	if err != nil {
+		return err
+	}
+	if err = os.Remove(p); err != nil && os.IsNotExist(err) {
 		err = nil
 	}
 	return err
@@ -340,12 +383,18 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 }
 
 func (d *filestore) Chmod(key string, mode os.FileMode) error {
-	p := d.path(key)
+	p, err := d.path(key)
+	if err != nil {
+		return err
+	}
 	return os.Chmod(p, mode)
 }
 
 func (d *filestore) Chown(key string, owner, group string) error {
-	p := d.path(key)
+	p, err := d.path(key)
+	if err != nil {
+		return err
+	}
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
 	if uid == -1 || gid == -1 {

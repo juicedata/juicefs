@@ -53,6 +53,63 @@ func TestDisk2(t *testing.T) {
 	testFileSystem(t, s)
 }
 
+func TestFilestorePathTraversal(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	// Bait file outside the root — Get/Delete must not be able to reach it.
+	outside := root + string(os.PathSeparator) + "outside_bait.txt"
+	if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
+		t.Fatalf("seed bait: %s", err)
+	}
+	defer os.Remove(outside)
+
+	d := &filestore{root: root + "/inner/"}
+	if err := os.MkdirAll(d.root, 0o755); err != nil {
+		t.Fatalf("mkdir inner: %s", err)
+	}
+
+	for _, key := range []string{
+		"../outside_bait.txt",
+		"../../etc/shadow",
+		"sub/../../outside_bait.txt",
+	} {
+		if _, err := d.Get(ctx, key, 0, -1); err == nil {
+			t.Errorf("Get(%q) should have been rejected", key)
+		}
+		if err := d.Put(ctx, key, bytes.NewReader([]byte("x"))); err == nil {
+			t.Errorf("Put(%q) should have been rejected", key)
+		}
+		if err := d.Delete(ctx, key); err == nil {
+			t.Errorf("Delete(%q) should have been rejected", key)
+		}
+		if _, err := d.Head(ctx, key); err == nil {
+			t.Errorf("Head(%q) should have been rejected", key)
+		}
+	}
+
+	// Bait file must be untouched after the rejected calls above.
+	if b, err := os.ReadFile(outside); err != nil || string(b) != "secret" {
+		t.Errorf("bait file was modified or removed: data=%q err=%v", b, err)
+	}
+
+	// Sanity: a legitimate key still works.
+	if err := d.Put(ctx, "ok.txt", bytes.NewReader([]byte("hi"))); err != nil {
+		t.Fatalf("legitimate Put failed: %s", err)
+	}
+	if _, err := d.Head(ctx, "ok.txt"); err != nil {
+		t.Fatalf("legitimate Head failed: %s", err)
+	}
+
+	// Regression guard: the empty key against a trailing-slash root
+	// resolves via filepath.Join to the cleaned root (no trailing
+	// slash), which a naive HasPrefix check would reject. pkg/sync
+	// drives this exact call on every job start; an over-eager
+	// traversal check broke TestSync and sync_encrypt in CI.
+	if _, err := d.path(""); err != nil {
+		t.Fatalf("empty key against trailing-slash root must be allowed: %s", err)
+	}
+}
+
 func TestSftp2(t *testing.T) { //skip mutate
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
