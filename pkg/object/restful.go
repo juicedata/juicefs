@@ -148,44 +148,82 @@ func dialRandom(ctx context.Context, dialer *net.Dialer, network string, ips []n
 	return nil, lastErr
 }
 
-func init() {
+// newSharedTransport builds the default *http.Transport used by every
+// backend. Exported indirectly via NewHTTPTransport so a backend that
+// needs to customise TLS (or hands the transport to a third-party SDK
+// that does) can take an independent clone rather than mutating the
+// shared instance.
+func newSharedTransport() *http.Transport {
 	dialer := &net.Dialer{Timeout: time.Second * 10}
-	httpClient = &http.Client{
-		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			TLSHandshakeTimeout:   time.Second * 20,
-			ResponseHeaderTimeout: time.Second * 30,
-			IdleConnTimeout:       time.Second * 300,
-			MaxIdleConnsPerHost:   500,
-			ReadBufferSize:        32 << 10,
-			WriteBufferSize:       32 << 10,
-			DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
-				host, port, err := net.SplitHostPort(address)
-				if err != nil {
-					return nil, err
-				}
-				if ip := net.ParseIP(host); ip != nil {
-					return dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-				}
-				ips, err := resolver.Fetch(host)
-				if err != nil {
-					return nil, err
-				}
-				if len(ips) == 0 {
-					return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
-				}
-				ipv6, ipv4 := splitIPsByVersion(ips)
-				return dialParallel(ctx, dialer, network, ipv6, ipv4, port)
-			},
-			DisableCompression: true,
-			TLSClientConfig:    &tls.Config{},
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		TLSHandshakeTimeout:   time.Second * 20,
+		ResponseHeaderTimeout: time.Second * 30,
+		IdleConnTimeout:       time.Second * 300,
+		// MaxIdleConns was previously unset, defaulting to 100 in
+		// net/http and silently capping total idle reuse below the
+		// per-host 500. Bump to 5000 to actually exercise the
+		// per-host budget across many backend hosts/buckets.
+		MaxIdleConns:        5000,
+		MaxIdleConnsPerHost: 500,
+		// ForceAttemptHTTP2 lets ALPN negotiate h2 on servers that
+		// offer it; falls back to HTTP/1.1 cleanly when the server
+		// (or middlebox) doesn't.
+		ForceAttemptHTTP2: true,
+		ReadBufferSize:    32 << 10,
+		WriteBufferSize:   32 << 10,
+		DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(address)
+			if err != nil {
+				return nil, err
+			}
+			if ip := net.ParseIP(host); ip != nil {
+				return dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+			}
+			ips, err := resolver.Fetch(host)
+			if err != nil {
+				return nil, err
+			}
+			if len(ips) == 0 {
+				return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+			}
+			ipv6, ipv4 := splitIPsByVersion(ips)
+			return dialParallel(ctx, dialer, network, ipv6, ipv4, port)
 		},
+		DisableCompression: true,
+		TLSClientConfig:    &tls.Config{},
+	}
+}
+
+func init() {
+	httpClient = &http.Client{
+		Transport: newSharedTransport(),
+		// Client-level Timeout is a coarse safety net for connections
+		// that get stuck mid-body-read past every finer-grained timeout
+		// on the transport. Per-request bounds belong on the caller's
+		// ctx (context.WithTimeout).
 		Timeout: time.Hour,
 	}
 }
 
 func GetHttpClient() *http.Client {
 	return httpClient
+}
+
+// NewHTTPTransport returns a deep clone of the package-shared
+// *http.Transport. Backends that pass a *http.Transport into a
+// third-party SDK (e.g. OBS, Swift) MUST use this rather than
+// httpClient.Transport.(*http.Transport) directly — those SDKs are
+// free to mutate fields such as TLSClientConfig.InsecureSkipVerify,
+// and a mutation on the shared transport corrupts every other
+// backend in the same process.
+func NewHTTPTransport() *http.Transport {
+	if t, ok := httpClient.Transport.(*http.Transport); ok {
+		return t.Clone()
+	}
+	// Shouldn't happen in practice — fall back to a fresh transport
+	// rather than panic on the type assertion.
+	return newSharedTransport()
 }
 
 func cleanup(response *http.Response) {
