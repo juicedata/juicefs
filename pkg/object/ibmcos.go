@@ -165,11 +165,11 @@ func (s *ibmcos) Head(ctx context.Context, key string) (Object, error) {
 	}
 	return &obj{
 		key,
-		*r.ContentLength,
-		*r.LastModified,
+		aws.Int64Value(r.ContentLength),
+		aws.TimeValue(r.LastModified),
 		strings.HasSuffix(key, "/"),
-		*r.StorageClass,
-		*r.Restore,
+		aws.StringValue(r.StorageClass),
+		aws.StringValue(r.Restore),
 	}, nil
 }
 
@@ -204,23 +204,32 @@ func (s *ibmcos) List(ctx context.Context, prefix, start, token, delimiter strin
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		oKey, err := decodeKey(*o.Key, resp.EncodingType)
+		rawKey := aws.StringValue(o.Key)
+		oKey, err := decodeKey(rawKey, resp.EncodingType)
 		if err != nil {
-			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
+			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", rawKey)
 		}
-		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass, ""}
+		objs[i] = &obj{
+			oKey,
+			aws.Int64Value(o.Size),
+			aws.TimeValue(o.LastModified),
+			strings.HasSuffix(oKey, "/"),
+			aws.StringValue(o.StorageClass),
+			"",
+		}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			prefix, err := decodeKey(*p.Prefix, resp.EncodingType)
+			rawPrefix := aws.StringValue(p.Prefix)
+			prefix, err := decodeKey(rawPrefix, resp.EncodingType)
 			if err != nil {
-				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
+				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", rawPrefix)
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, *resp.IsTruncated, *resp.NextMarker, nil
+	return objs, aws.BoolValue(resp.IsTruncated), aws.StringValue(resp.NextMarker), nil
 }
 
 func (s *ibmcos) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
@@ -239,7 +248,11 @@ func (s *ibmcos) CreateMultipartUpload(ctx context.Context, key string) (*Multip
 	if err != nil {
 		return nil, err
 	}
-	return &MultipartUpload{UploadID: *resp.UploadId, MinPartSize: 5 << 20, MaxCount: 10000}, nil
+	uploadID := aws.StringValue(resp.UploadId)
+	if uploadID == "" {
+		return nil, fmt.Errorf("ibmcos: CreateMultipartUpload returned empty UploadId for %s", key)
+	}
+	return &MultipartUpload{UploadID: uploadID, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
 func (s *ibmcos) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
@@ -255,7 +268,7 @@ func (s *ibmcos) UploadPart(ctx context.Context, key string, uploadID string, nu
 	if err != nil {
 		return nil, err
 	}
-	return &Part{Num: num, ETag: *resp.ETag}, nil
+	return &Part{Num: num, ETag: aws.StringValue(resp.ETag)}, nil
 }
 
 func (s *ibmcos) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
@@ -300,13 +313,9 @@ func (s *ibmcos) ListUploads(ctx context.Context, marker string) ([]*PendingPart
 	}
 	parts := make([]*PendingPart, len(result.Uploads))
 	for i, u := range result.Uploads {
-		parts[i] = &PendingPart{*u.Key, *u.UploadId, *u.Initiated}
+		parts[i] = &PendingPart{aws.StringValue(u.Key), aws.StringValue(u.UploadId), aws.TimeValue(u.Initiated)}
 	}
-	var nextMarker string
-	if result.NextKeyMarker != nil {
-		nextMarker = *result.NextKeyMarker
-	}
-	return parts, nextMarker, nil
+	return parts, aws.StringValue(result.NextKeyMarker), nil
 }
 
 func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {

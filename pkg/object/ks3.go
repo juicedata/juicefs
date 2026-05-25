@@ -42,6 +42,20 @@ import (
 
 const s3StorageClassHdr = "X-Amz-Storage-Class"
 
+// ks3DerefTime returns *p when non-nil, else the zero time. The ks3 SDK does
+// not ship a nil-safe pointer helper for time.Time.
+func ks3DerefTime(p *time.Time) time.Time {
+	if p == nil {
+		return time.Time{}
+	}
+	return *p
+}
+
+// ks3DerefBool returns *p when non-nil, else false.
+func ks3DerefBool(p *bool) bool {
+	return p != nil && *p
+}
+
 type ks3 struct {
 	bucket string
 	s3     *s3.S3
@@ -92,11 +106,11 @@ func (s *ks3) Head(ctx context.Context, key string) (Object, error) {
 	}
 	return &obj{
 		key,
-		*r.ContentLength,
-		*r.LastModified,
+		aws.ToLong(r.ContentLength),
+		ks3DerefTime(r.LastModified),
 		strings.HasSuffix(key, "/"),
 		sc,
-		*r.Restore,
+		aws.ToString(r.Restore),
 	}, nil
 }
 
@@ -200,27 +214,32 @@ func (s *ks3) List(ctx context.Context, prefix, start, token, delimiter string, 
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		oKey, err := decodeKey(*o.Key, resp.EncodingType)
+		rawKey := aws.ToString(o.Key)
+		oKey, err := decodeKey(rawKey, resp.EncodingType)
 		if err != nil {
-			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
+			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", rawKey)
 		}
-		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass, ""}
+		objs[i] = &obj{
+			oKey,
+			aws.ToLong(o.Size),
+			ks3DerefTime(o.LastModified),
+			strings.HasSuffix(oKey, "/"),
+			aws.ToString(o.StorageClass),
+			"",
+		}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			prefix, err := decodeKey(*p.Prefix, resp.EncodingType)
+			rawPrefix := aws.ToString(p.Prefix)
+			prefix, err := decodeKey(rawPrefix, resp.EncodingType)
 			if err != nil {
-				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
+				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", rawPrefix)
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	var nextMarker string
-	if resp.NextMarker != nil {
-		nextMarker = *resp.NextMarker
-	}
-	return objs, *resp.IsTruncated, nextMarker, nil
+	return objs, ks3DerefBool(resp.IsTruncated), aws.ToString(resp.NextMarker), nil
 }
 
 func (s *ks3) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
@@ -239,7 +258,11 @@ func (s *ks3) CreateMultipartUpload(ctx context.Context, key string) (*Multipart
 	if err != nil {
 		return nil, err
 	}
-	return &MultipartUpload{UploadID: *resp.UploadID, MinPartSize: 5 << 20, MaxCount: 10000}, nil
+	uploadID := aws.ToString(resp.UploadID)
+	if uploadID == "" {
+		return nil, fmt.Errorf("ks3: CreateMultipartUpload returned empty UploadID for %s", key)
+	}
+	return &MultipartUpload{UploadID: uploadID, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
 func (s *ks3) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
@@ -255,7 +278,7 @@ func (s *ks3) UploadPart(ctx context.Context, key string, uploadID string, num i
 	if err != nil {
 		return nil, err
 	}
-	return &Part{Num: num, ETag: *resp.ETag}, nil
+	return &Part{Num: num, ETag: aws.ToString(resp.ETag)}, nil
 }
 
 func (s *ks3) Restore(ctx context.Context, key string, days int32) error {
@@ -281,7 +304,10 @@ func (s *ks3) UploadPartCopy(ctx context.Context, key string, uploadID string, n
 	if err != nil {
 		return nil, err
 	}
-	return &Part{Num: num, ETag: *resp.CopyPartResult.ETag}, nil
+	if resp.CopyPartResult == nil {
+		return nil, fmt.Errorf("ks3: UploadPartCopy returned no CopyPartResult for %s part %d", key, num)
+	}
+	return &Part{Num: num, ETag: aws.ToString(resp.CopyPartResult.ETag)}, nil
 }
 
 func (s *ks3) AbortUpload(ctx context.Context, key string, uploadID string) {
@@ -322,13 +348,9 @@ func (s *ks3) ListUploads(ctx context.Context, marker string) ([]*PendingPart, s
 	}
 	parts := make([]*PendingPart, len(result.Uploads))
 	for i, u := range result.Uploads {
-		parts[i] = &PendingPart{*u.Key, *u.UploadID, *u.Initiated}
+		parts[i] = &PendingPart{aws.ToString(u.Key), aws.ToString(u.UploadID), ks3DerefTime(u.Initiated)}
 	}
-	var nextMarker string
-	if result.NextKeyMarker != nil {
-		nextMarker = *result.NextKeyMarker
-	}
-	return parts, nextMarker, nil
+	return parts, aws.ToString(result.NextKeyMarker), nil
 }
 
 var ks3Regions = map[string]string{
