@@ -19,6 +19,7 @@ package object
 import (
 	"context"
 	"net"
+	"net/http"
 	"testing"
 	"time"
 )
@@ -107,6 +108,45 @@ func TestDialParallel_BothFail(t *testing.T) {
 		"0")
 	if err == nil {
 		t.Fatal("expected error when both groups fail, got nil")
+	}
+}
+
+func TestSharedHTTPTransportTuning(t *testing.T) {
+	tr, ok := httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("httpClient.Transport is not *http.Transport: %T", httpClient.Transport)
+	}
+	if tr.MaxIdleConns < tr.MaxIdleConnsPerHost {
+		t.Fatalf("MaxIdleConns=%d must be >= MaxIdleConnsPerHost=%d, otherwise per-host reuse is silently capped",
+			tr.MaxIdleConns, tr.MaxIdleConnsPerHost)
+	}
+	if tr.MaxIdleConnsPerHost < 500 {
+		t.Fatalf("MaxIdleConnsPerHost dropped below historical 500: %d", tr.MaxIdleConnsPerHost)
+	}
+	if !tr.ForceAttemptHTTP2 {
+		t.Fatalf("ForceAttemptHTTP2 should be true so ALPN can negotiate h2 on servers that offer it")
+	}
+}
+
+func TestNewHTTPTransportReturnsIsolatedClone(t *testing.T) {
+	a := NewHTTPTransport()
+	b := NewHTTPTransport()
+	if a == b {
+		t.Fatalf("NewHTTPTransport returned the same *http.Transport twice — clones must be independent")
+	}
+	if a.TLSClientConfig == b.TLSClientConfig {
+		t.Fatalf("TLSClientConfig must be independent across clones to avoid cross-backend corruption")
+	}
+	// Mutating one clone's TLS config must not bleed into the shared
+	// transport or any other clone — this is the exact corruption
+	// path that motivated extracting the helper.
+	a.TLSClientConfig.InsecureSkipVerify = true
+	if b.TLSClientConfig.InsecureSkipVerify {
+		t.Fatalf("mutating clone a's TLSClientConfig leaked into clone b")
+	}
+	shared := httpClient.Transport.(*http.Transport)
+	if shared.TLSClientConfig.InsecureSkipVerify {
+		t.Fatalf("mutating a clone's TLSClientConfig leaked into the shared httpClient transport")
 	}
 }
 
