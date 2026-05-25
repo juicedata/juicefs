@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"math/rand"
 	"strings"
 	"time"
 )
@@ -99,6 +100,53 @@ func (s *sharded) GetTier(ctx context.Context) Tier {
 
 const maxResults = 10000
 
+const (
+	listInitialBackoff = 100 * time.Millisecond
+	listMaxBackoff     = 30 * time.Second
+	listMaxAttempts    = 10
+)
+
+// listWithRetry retries store.List under transient failures with exponential
+// backoff plus full jitter, bounded by listMaxAttempts and listMaxBackoff.
+// It returns immediately if ctx is cancelled; context errors are not retried.
+// On non-retryable exhaustion the last underlying error is returned so callers
+// can surface it through the nil sentinel on their output channel.
+func listWithRetry(ctx context.Context, store ObjectStorage, prefix, marker, token string, limit int64, followLink bool) (objs []Object, hasMore bool, nextToken string, err error) {
+	backoff := listInitialBackoff
+	for attempt := 0; attempt < listMaxAttempts; attempt++ {
+		objs, hasMore, nextToken, err = store.List(ctx, prefix, marker, token, "", limit, followLink)
+		if err == nil {
+			return
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return
+		}
+		if attempt == listMaxAttempts-1 {
+			break
+		}
+		logger.Warnf("Fail to list %s marker %q (attempt %d/%d): %s",
+			store, marker, attempt+1, listMaxAttempts, err)
+		// Full-jitter backoff: sleep a uniform random value in [0, backoff)
+		// then double the cap. Mirrors the AWS "Exponential Backoff and
+		// Jitter" recommendation and prevents N parallel listers from
+		// synchronising their retries.
+		wait := time.Duration(rand.Int63n(int64(backoff)))
+		if backoff < listMaxBackoff {
+			backoff *= 2
+			if backoff > listMaxBackoff {
+				backoff = listMaxBackoff
+			}
+		}
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+			return
+		case <-time.After(wait):
+		}
+	}
+	return
+}
+
 // ListAll lists all keys that starts at marker from object storage.
 func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink, sort bool) (<-chan Object, error) {
 	if ch, err := store.ListAll(ctx, prefix, marker, followLink); err == nil {
@@ -142,15 +190,12 @@ func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, fo
 			marker = lastkey
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
-			var nextToken2 string
-			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
-			for err != nil {
-				logger.Warnf("Fail to list: %s, retry again", err.Error())
-				// slow down
-				time.Sleep(time.Millisecond * 100)
-				objs, hasMore, nextToken, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
+			objs, hasMore, nextToken, err = listWithRetry(ctx, store, prefix, marker, nextToken, maxResults, followLink)
+			if err != nil {
+				logger.Errorf("Can't list %s marker %q: %s", store, marker, err)
+				out <- nil
+				return
 			}
-			nextToken = nextToken2
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 		}
 	}()
