@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/emmansun/gmsm/pkcs8"
@@ -309,14 +310,46 @@ func (e *dataEncryptor) MaxOverhead() int {
 	return 2 + 1 + wrappedKeyLen + aead.NonceSize() + aead.Overhead()
 }
 
-type encrypted struct {
-	ObjectStorage
-	enc Encryptor
+// DefaultEncryptedMaxObjectSize is the upper bound NewEncrypted enforces on
+// Put inputs. Because the non-chunked wrapper buffers the full plaintext
+// (Put) and full ciphertext (Get) in memory, callers must keep individual
+// objects well below available RAM. Override at runtime with the
+// JFS_ENCRYPTED_MAX_OBJECT_SIZE environment variable (in bytes).
+const DefaultEncryptedMaxObjectSize = 64 << 20 // 64 MiB
+
+// ErrEncryptedObjectTooLarge is returned by (*encrypted).Put when the input
+// stream exceeds the configured maximum object size.
+var ErrEncryptedObjectTooLarge = errors.New("encrypted object exceeds configured maximum size")
+
+func encryptedMaxObjectSize() int64 {
+	if v := os.Getenv("JFS_ENCRYPTED_MAX_OBJECT_SIZE"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	return DefaultEncryptedMaxObjectSize
 }
 
-// NewEncrypted returns a encrypted object storage
+type encrypted struct {
+	ObjectStorage
+	enc           Encryptor
+	maxObjectSize int64
+}
+
+// NewEncrypted returns an object storage wrapper that encrypts every object
+// as a single ciphertext blob.
+//
+// Deprecated: this wrapper decrypts the full ciphertext into memory on every
+// Get (ignoring the requested range until after decryption) and buffers the
+// full plaintext on every Put. It is only safe for objects whose size is
+// small relative to available memory. New callers should use
+// [NewChunkedEncrypted], which streams fixed-size chunks and honours
+// ranged reads. Put rejects inputs larger than
+// [DefaultEncryptedMaxObjectSize] (overridable via the
+// JFS_ENCRYPTED_MAX_OBJECT_SIZE environment variable) to guard against
+// accidental OOMs.
 func NewEncrypted(o ObjectStorage, enc Encryptor) ObjectStorage {
-	return &encrypted{o, enc}
+	return &encrypted{ObjectStorage: o, enc: enc, maxObjectSize: encryptedMaxObjectSize()}
 }
 
 func (e *encrypted) String() string {
@@ -349,9 +382,17 @@ func (e *encrypted) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	plain, err := io.ReadAll(in)
+	// Bound the read so an oversized stream cannot OOM the process. We allow
+	// one extra byte past the limit so that exactly-at-limit inputs succeed
+	// and over-limit inputs are detectable without scanning the rest of the
+	// stream.
+	limited := &io.LimitedReader{R: in, N: e.maxObjectSize + 1}
+	plain, err := io.ReadAll(limited)
 	if err != nil {
 		return err
+	}
+	if int64(len(plain)) > e.maxObjectSize {
+		return fmt.Errorf("%w: %q over %d bytes", ErrEncryptedObjectTooLarge, key, e.maxObjectSize)
 	}
 	ciphertext, err := e.enc.Encrypt(plain)
 	if err != nil {

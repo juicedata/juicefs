@@ -23,6 +23,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -401,5 +402,27 @@ func TestEncryptedStore(t *testing.T) {
 	_, err = es.Get(ctx, "emptyfile", 0, -1)
 	if err == nil || !strings.Contains(err.Error(), "the object is corrupted") {
 		t.Fail()
+	}
+}
+
+func TestEncryptedPutSizeCap(t *testing.T) {
+	ctx := context.Background()
+	s, _ := CreateStorage("mem", "", "", "", "")
+	kc := NewRSAEncryptor(rsaKey)
+	dc, _ := NewDataEncryptor(kc, AES256GCM_RSA)
+	es := NewEncrypted(s, dc).(*encrypted)
+	es.maxObjectSize = 1 << 10 // shrink the cap for the test
+
+	// At-limit input must succeed.
+	atLimit := bytes.Repeat([]byte("a"), int(es.maxObjectSize))
+	if err := es.Put(ctx, "ok", bytes.NewReader(atLimit)); err != nil {
+		t.Fatalf("expected at-limit Put to succeed, got %v", err)
+	}
+
+	// One byte over the limit must be rejected without buffering the rest.
+	tooBig := bytes.Repeat([]byte("a"), int(es.maxObjectSize)+1)
+	err := es.Put(ctx, "toobig", bytes.NewReader(tooBig))
+	if !errors.Is(err, ErrEncryptedObjectTooLarge) {
+		t.Fatalf("expected ErrEncryptedObjectTooLarge, got %v", err)
 	}
 }

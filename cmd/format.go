@@ -299,6 +299,13 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		if err != nil {
 			return nil, err
 		}
+		// nolint:staticcheck // NewEncrypted is deprecated for new use
+		// cases but is intentionally retained here: this path encrypts
+		// JuiceFS data blocks, which are capped at 16 MiB by
+		// fixObjectSize and are therefore well below the
+		// DefaultEncryptedMaxObjectSize cap. Switching to
+		// NewChunkedEncrypted here would change the on-disk format and
+		// break backward compatibility with every existing bucket.
 		blob = object.NewEncrypted(blob, encryptor)
 	}
 	return blob, nil

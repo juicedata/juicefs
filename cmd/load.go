@@ -132,6 +132,11 @@ func open(src string, key string, algo string) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
+		// nolint:staticcheck // NewEncrypted is deprecated for new use
+		// cases but is intentionally retained here: load reads a single
+		// metadata dump file and only calls Get (the Put size cap added
+		// alongside the deprecation does not apply). The in-memory
+		// decryption is acceptable for the dump-restore tool.
 		blob := object.NewEncrypted(fileBlob, encryptor)
 		fp, ioErr = blob.Get(context.Background(), filepath.Base(srcAbsPath), 0, -1)
 	} else {
