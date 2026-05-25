@@ -194,17 +194,92 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return err
 }
 
+// s3CopyObjectMaxSize is S3's documented upper bound for a single
+// CopyObject call. Sources larger than this must be copied via
+// UploadPartCopy.
+const s3CopyObjectMaxSize int64 = 5 << 30 // 5 GiB
+
+// s3CopyPartSize is the per-part size used by the multipart-copy
+// fallback. Each UploadPartCopy may copy up to 5 GiB; we use 1 GiB so
+// any single part roundtrip stays bounded (and a retry only re-does
+// 1 GiB of work). Even at the S3 maximum object size (5 TiB) this
+// produces 5120 parts, comfortably below the 10000-part hard limit.
+const s3CopyPartSize int64 = 1 << 30 // 1 GiB
+
+// s3CopyPlan returns the (offset, partSize) sequence copyMultipart uses
+// to walk a source of the given size. Split out as a pure function so
+// the part-sizing math can be unit-tested without round-tripping S3.
+func s3CopyPlan(size int64) [][2]int64 {
+	if size <= 0 {
+		return nil
+	}
+	parts := make([][2]int64, 0, (size+s3CopyPartSize-1)/s3CopyPartSize)
+	for off := int64(0); off < size; {
+		ps := s3CopyPartSize
+		if size-off < ps {
+			ps = size - off
+		}
+		parts = append(parts, [2]int64{off, ps})
+		off += ps
+	}
+	return parts
+}
+
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
 	sc := getOrDefaultScValue(s.GetStorageClass(ctx), string(types.StorageClassStandard))
-	src = s.bucket + "/" + src
-	params := &s3.CopyObjectInput{
+	// CopyObject is capped at 5 GiB per source — anything larger must
+	// be copied via UploadPartCopy. Probe the size first; if Head fails
+	// (NoSuchKey, IAM denies HeadObject, etc.) fall through to
+	// CopyObject so the original error surface is preserved.
+	if head, herr := s.Head(ctx, src); herr == nil && head.Size() > s3CopyObjectMaxSize {
+		return s.copyMultipart(ctx, dst, src, head.Size(), sc)
+	}
+	copySource := s.bucket + "/" + src
+	_, err := s.s3.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:       &s.bucket,
 		Key:          &dst,
-		CopySource:   &src,
+		CopySource:   &copySource,
 		StorageClass: types.StorageClass(sc),
-	}
-	_, err := s.s3.CopyObject(ctx, params)
+	})
 	return err
+}
+
+// copyMultipart implements server-side copy for sources larger than
+// s3CopyObjectMaxSize via UploadPartCopy. CreateMultipartUpload is
+// issued inline (rather than via s.CreateMultipartUpload) so we can
+// honour the per-ctx storage class that Copy resolved, matching the
+// original CopyObject behaviour.
+func (s *s3client) copyMultipart(ctx context.Context, dst, src string, size int64, sc string) error {
+	createResp, err := s.s3.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket:       &s.bucket,
+		Key:          &dst,
+		StorageClass: types.StorageClass(sc),
+	})
+	if err != nil {
+		return fmt.Errorf("s3 multipart copy create %q: %w", dst, err)
+	}
+	uploadID := aws.ToString(createResp.UploadId)
+	if uploadID == "" {
+		return fmt.Errorf("s3 multipart copy create %q: empty UploadId", dst)
+	}
+
+	plan := s3CopyPlan(size)
+	parts := make([]*Part, 0, len(plan))
+	for i, seg := range plan {
+		num := i + 1
+		p, perr := s.UploadPartCopy(ctx, dst, uploadID, num, src, seg[0], seg[1])
+		if perr != nil {
+			s.AbortUpload(ctx, dst, uploadID)
+			return fmt.Errorf("s3 multipart copy part %d of %d for %q: %w", num, len(plan), dst, perr)
+		}
+		parts = append(parts, p)
+	}
+
+	if err := s.CompleteUpload(ctx, dst, uploadID, parts); err != nil {
+		s.AbortUpload(ctx, dst, uploadID)
+		return fmt.Errorf("s3 multipart copy complete %q: %w", dst, err)
+	}
+	return nil
 }
 
 func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
