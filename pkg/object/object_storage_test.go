@@ -1042,6 +1042,88 @@ func TestNameString(t *testing.T) {
 	}
 }
 
+// failingStore wraps an ObjectStorage and returns failingErr from List once
+// the underlying store has been called nFailAfter times. Used to assert
+// ListAllWithDelimiter both surfaces the error to the caller and unwinds
+// its prefetch goroutines instead of leaking them.
+type failingStore struct {
+	ObjectStorage
+	mu         sync.Mutex
+	calls      int
+	nFailAfter int
+	failingErr error
+}
+
+func (f *failingStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	f.mu.Lock()
+	f.calls++
+	c := f.calls
+	f.mu.Unlock()
+	if c > f.nFailAfter {
+		return nil, false, "", f.failingErr
+	}
+	return f.ObjectStorage.List(ctx, prefix, marker, token, delimiter, limit, followLink)
+}
+
+func TestListAllWithDelimiterPropagatesErrors(t *testing.T) {
+	ctx := context.Background()
+	s, _ := CreateStorage("mem", "", "", "", "")
+	for _, k := range []string{"a/", "a/1", "a/2", "b/", "b/1", "c/", "c/1", "d/", "d/1"} {
+		if err := s.Put(ctx, k, bytes.NewReader([]byte("x"))); err != nil {
+			t.Fatalf("seed %s: %s", k, err)
+		}
+	}
+
+	fs := &failingStore{ObjectStorage: s, nFailAfter: 2, failingErr: fmt.Errorf("injected list failure")}
+	ch, err := ListAllWithDelimiter(ctx, fs, "", "", "", true)
+	if err != nil {
+		t.Fatalf("ListAllWithDelimiter setup failed: %s", err)
+	}
+	sawNil := false
+	for obj := range ch {
+		if obj == nil {
+			sawNil = true
+		}
+	}
+	if !sawNil {
+		t.Fatalf("expected the nil error sentinel to be delivered, channel closed cleanly instead")
+	}
+}
+
+func TestListAllWithDelimiterContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	s, _ := CreateStorage("mem", "", "", "", "")
+	for i := 0; i < 50; i++ {
+		key := fmt.Sprintf("dir%02d/file", i)
+		if err := s.Put(ctx, key, bytes.NewReader([]byte("x"))); err != nil {
+			t.Fatalf("seed: %s", err)
+		}
+	}
+
+	ch, err := ListAllWithDelimiter(ctx, s, "", "", "", true)
+	if err != nil {
+		t.Fatalf("ListAllWithDelimiter setup failed: %s", err)
+	}
+	// Drain one entry, then cancel and assert the channel closes within a
+	// reasonable time — the original cond-var implementation could leak the
+	// 10 prefetcher goroutines here because they had no link to ctx.
+	<-ch
+	cancel()
+	done := make(chan struct{})
+	go func() {
+		for range ch {
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("ListAllWithDelimiter did not drain within 5s after ctx cancel")
+	}
+}
+
 func TestListAllWithDelimiterDeepStart(t *testing.T) {
 	ctx := context.Background()
 	cases := []struct {

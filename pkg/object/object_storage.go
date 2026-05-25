@@ -18,6 +18,7 @@ package object
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -30,6 +31,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 var ctx = context.Background()
@@ -196,23 +198,6 @@ var bufPool = sync.Pool{
 	},
 }
 
-type listThread struct {
-	sync.Mutex
-	cond      *utils.Cond
-	ready     bool
-	err       error
-	entries   []Object
-	nextToken string
-	hasMore   bool
-}
-
-func (l *listThread) reset() {
-	l.err = nil
-	l.entries = nil
-	l.nextToken = ""
-	l.hasMore = false
-}
-
 func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
 	marker := start
 	if start != "" && strings.HasPrefix(start, prefix) {
@@ -228,19 +213,49 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 	}
 
 	listed := make(chan Object, 10240)
-	var walk func(string, []Object) error
-	walk = func(prefix string, entries []Object) error {
-		var concurrent = 10
-		var err error
-		threads := make([]listThread, concurrent)
+
+	// prefetch is one worker's pre-fetched child-listing for a single entry.
+	type prefetch struct {
+		entries   []Object
+		hasMore   bool
+		nextToken string
+		err       error
+	}
+
+	var walk func(ctx context.Context, prefix string, entries []Object) error
+	walk = func(ctx context.Context, prefix string, entries []Object) error {
+		if len(entries) == 0 {
+			return nil
+		}
+		concurrent := 10
+		if concurrent > len(entries) {
+			concurrent = len(entries)
+		}
+
+		// One capacity-1 channel per worker preserves the producer's
+		// in-order consumption (it reads produce[i%concurrent] for entry i)
+		// while letting each worker stay one step ahead.
+		produce := make([]chan prefetch, concurrent)
+		for c := range produce {
+			produce[c] = make(chan prefetch, 1)
+		}
+
+		// walkCtx is cancelled when the producer exits — either on error,
+		// because an entry is past `end`, or because every entry has been
+		// consumed. The explicit cancel before g.Wait below unblocks any
+		// workers that are otherwise stuck trying to deliver into produce[c].
+		walkCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		g, gctx := errgroup.WithContext(walkCtx)
+
 		for c := 0; c < concurrent; c++ {
-			t := &threads[c]
-			t.cond = utils.NewCond(t)
-			go func(c int) {
+			c := c
+			g.Go(func() error {
+				defer close(produce[c])
 				for i := c; i < len(entries); i += concurrent {
 					key := entries[i].Key()
 					if end != "" && key >= end {
-						break
+						return nil
 					}
 					if key < start && !strings.HasPrefix(start, key) {
 						continue
@@ -248,29 +263,32 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
-					t.entries, t.hasMore, t.nextToken, t.err = store.List(ctx, key, "\x00", t.nextToken, "/", 1000, followLink) // exclude itself
-					t.Lock()
-					t.ready = true
-					t.cond.Signal()
-					for t.ready {
-						t.cond.WaitWithTimeout(time.Second)
-						if err != nil {
-							t.Unlock()
-							return
-						}
+					var p prefetch
+					p.entries, p.hasMore, p.nextToken, p.err = store.List(gctx, key, "\x00", "", "/", 1000, followLink)
+					select {
+					case produce[c] <- p:
+					case <-gctx.Done():
+						return gctx.Err()
 					}
-					t.Unlock()
 				}
-			}(c)
+				return nil
+			})
 		}
 
+		var walkErr error
+	loop:
 		for i, e := range entries {
 			key := e.Key()
 			if end != "" && key >= end {
-				return nil
+				break
 			}
 			if key >= start {
-				listed <- e
+				select {
+				case listed <- e:
+				case <-gctx.Done():
+					walkErr = gctx.Err()
+					break loop
+				}
 			} else if !strings.HasPrefix(start, key) {
 				continue
 			}
@@ -278,45 +296,55 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 				continue
 			}
 
-			t := &threads[i%concurrent]
-			t.Lock()
-			for !t.ready {
-				t.cond.WaitWithTimeout(time.Millisecond * 10)
-			}
-			if t.err != nil {
-				err = t.err
-				t.Unlock()
-				return err
-			}
-			for t.hasMore {
-				var more []Object
-				startAfter := t.entries[len(t.entries)-1].Key()
-				more, t.hasMore, t.nextToken, t.err = store.List(ctx, key, startAfter, t.nextToken, "/", 1e9, followLink)
-				if t.err != nil {
-					err = t.err
-					t.Unlock()
-					return err
+			var p prefetch
+			select {
+			case got, ok := <-produce[i%concurrent]:
+				if !ok {
+					walkErr = errors.New("list prefetcher closed before delivering result")
+					break loop
 				}
-				t.entries = append(t.entries, more...)
+				p = got
+			case <-gctx.Done():
+				walkErr = gctx.Err()
+				break loop
 			}
-			t.ready = false
-			t.cond.Signal()
-			children := t.entries
-			t.reset()
-			t.Unlock()
-
-			err = walk(key, children)
-			if err != nil {
-				return err
+			if p.err != nil {
+				walkErr = p.err
+				break loop
+			}
+			children := p.entries
+			for p.hasMore {
+				if len(children) == 0 {
+					walkErr = fmt.Errorf("List(%s) returned hasMore=true with no entries", key)
+					break loop
+				}
+				var more []Object
+				startAfter := children[len(children)-1].Key()
+				more, p.hasMore, p.nextToken, p.err = store.List(gctx, key, startAfter, p.nextToken, "/", 1e9, followLink)
+				if p.err != nil {
+					walkErr = p.err
+					break loop
+				}
+				children = append(children, more...)
+			}
+			if cerr := walk(gctx, key, children); cerr != nil {
+				walkErr = cerr
+				break loop
 			}
 		}
-		return nil
+
+		// Cancel before Wait so any worker blocked on produce[c] <- p exits
+		// promptly instead of waiting for the parent ctx.
+		cancel()
+		if werr := g.Wait(); werr != nil && walkErr == nil && !errors.Is(werr, context.Canceled) {
+			walkErr = werr
+		}
+		return walkErr
 	}
 
 	go func() {
 		defer close(listed)
-		err := walk(prefix, entries)
-		if err != nil {
+		if err := walk(ctx, prefix, entries); err != nil {
 			listed <- nil
 		}
 	}()
