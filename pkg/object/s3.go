@@ -33,6 +33,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/middleware"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -456,6 +457,37 @@ func defaultPathStyle() bool {
 	return v == "" || v == "0" || v == "false"
 }
 
+// s3DefaultMaxRetries is the package-wide cap on attempts for the AWS-SDK-v2
+// powered adapters (s3/minio/wasabi/scw/eos/oos/qiniu/space). Five matches the
+// SDK's default and is plenty to ride out a typical 503 SlowDown burst.
+const s3DefaultMaxRetries = 5
+
+// s3DefaultMaxBackoff caps the per-attempt sleep so a single request cannot
+// stall a caller for minutes under heavy throttling. Total wall time is at
+// most ~ s3DefaultMaxRetries * s3DefaultMaxBackoff.
+const s3DefaultMaxBackoff = 10 * time.Second
+
+// configureS3Retryer installs the package-wide retry policy on a v2 SDK
+// s3.Options. The previous setting of RetryMaxAttempts=1 effectively
+// disabled SDK retries, so 503 SlowDown, 429 TooManyRequests, RequestTimeout
+// and transient DNS hiccups surfaced as user-visible failures on every
+// Get/Put/Delete/Head. ListAllWithDelimiter has its own (now-bounded) retry
+// loop but the per-operation calls did not.
+//
+// We use the SDK's adaptive retryer (capped exponential backoff with full
+// jitter, plus a client-side token bucket that slows down further when the
+// remote returns throttle errors). MaxBackoff is bounded so a single
+// operation cannot stall for minutes; total attempts are capped via
+// RetryMaxAttempts.
+func configureS3Retryer(options *s3.Options) {
+	options.Retryer = retry.NewAdaptiveMode(func(o *retry.AdaptiveModeOptions) {
+		o.StandardOptions = append(o.StandardOptions, func(so *retry.StandardOptions) {
+			so.MaxBackoff = s3DefaultMaxBackoff
+		})
+	})
+	options.RetryMaxAttempts = s3DefaultMaxRetries
+}
+
 var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
 var OVHCompileRegexp = `^s3\.(\w*)(\.\w*)?\.cloud\.ovh\.net$`
 
@@ -556,7 +588,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
 		})
-		options.RetryMaxAttempts = 1
+		configureS3Retryer(options)
 	})
 
 	disable100Continue := strings.EqualFold(uri.Query().Get("disable-100-continue"), "true")

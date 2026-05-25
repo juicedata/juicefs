@@ -24,6 +24,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 )
 
 // flakyStore wraps an ObjectStorage and forces List to fail the first
@@ -102,6 +105,24 @@ func TestListWithRetryContextCanceled(t *testing.T) {
 	}
 	if elapsed > 5*time.Second {
 		t.Fatalf("did not honour cancel promptly: %s", elapsed)
+	}
+}
+
+func TestConfigureS3RetryerInstallsMultiAttemptRetryer(t *testing.T) {
+	var opts s3.Options
+	configureS3Retryer(&opts)
+	if opts.RetryMaxAttempts <= 1 {
+		t.Fatalf("expected RetryMaxAttempts > 1, got %d", opts.RetryMaxAttempts)
+	}
+	if opts.Retryer == nil {
+		t.Fatalf("expected non-nil Retryer")
+	}
+	// The installed retryer must classify a canonical S3 throttle error as
+	// retryable; otherwise the helper would be silently ineffective for the
+	// exact failure modes the audit cares about.
+	throttle := &smithy.GenericAPIError{Code: "SlowDown", Message: "Please reduce your request rate."}
+	if !opts.Retryer.IsErrorRetryable(throttle) {
+		t.Fatalf("retryer did not flag SlowDown as retryable")
 	}
 }
 
