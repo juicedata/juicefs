@@ -754,7 +754,6 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		return nil, 0, fmt.Errorf("part %d: %s", num, err)
 	}
 	logger.Debugf("Copied data of %s part %d in %s", key, num, time.Since(start))
-	copiedBytes.IncrInt64(sz)
 	return part, chksum, nil
 }
 
@@ -883,8 +882,12 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 			var chksum uint32
 			parts[num], chksum, copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort, calChksum)
 			chksums[num] = chksumWithSz{chksum, sz}
-			if copyErr == nil && state != nil {
-				uploads.MarkMultipartPart(key, state, parts[num], chksum, calChksum)
+			if copyErr == nil {
+				if state != nil {
+					uploads.MarkMultipartPart(key, state, parts[num], chksum, calChksum)
+				} else {
+					copiedBytes.IncrInt64(sz)
+				}
 			}
 			errs <- copyErr
 		}(i)
