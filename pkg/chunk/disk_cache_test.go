@@ -658,9 +658,11 @@ func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
 	conf := defaultConf
 	conf.CacheExpire = time.Hour
 	conf.CacheEviction = EvictionNone
+	conf.CacheScanInterval = -1
 	m := new(cacheManagerMetrics)
 	m.initMetrics()
 	cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
+	cache.scanned = true
 	key := "0_0_4"
 
 	PatchConvey("mock time.Now to avoid drift", t, func() {
