@@ -711,7 +711,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	} else if !strings.HasSuffix(object, sep) && !fi.IsDir() {
 		isObject = true
 	}
-	if !n.gConf.HeadDir && !isObject {
+	if !n.gConf.HeadDir && !isObject || (strings.HasSuffix(object, sep) && !fi.IsDir()) {
 		err = jfsToObjectErr(ctx, syscall.ENOENT, bucket, object)
 		return
 	}
