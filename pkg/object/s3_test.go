@@ -17,9 +17,12 @@
 package object
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -27,6 +30,13 @@ import (
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/stretchr/testify/assert"
 )
+
+// readerOnly hides any ReadSeeker / ReadCloser methods an underlying
+// reader might satisfy so seekableBody is forced down its non-seeker
+// branch. Used by the tests below.
+type readerOnly struct{ r io.Reader }
+
+func (r readerOnly) Read(p []byte) (int, error) { return r.r.Read(p) }
 
 func TestS3CopyPlanBoundaries(t *testing.T) {
 	tests := []struct {
@@ -133,6 +143,109 @@ func TestIsS3NotFound(t *testing.T) {
 	wrapped := fmt.Errorf("delete object: %w", &types.NoSuchKey{})
 	if !isS3NotFound(wrapped) {
 		t.Errorf("wrapped types.NoSuchKey not recognised through errors.As")
+	}
+}
+
+func TestSeekableBodyFastPathForSeekers(t *testing.T) {
+	// A reader that already satisfies io.ReadSeeker must be returned
+	// unchanged (no buffering, no temp file). This is the hot path
+	// for the typical JuiceFS Put where the body is a *bytes.Reader.
+	src := bytes.NewReader([]byte("hello"))
+	body, cleanup, err := seekableBody(src)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	defer cleanup()
+	if body != src {
+		t.Fatalf("expected the original *bytes.Reader to be returned, got a copy")
+	}
+}
+
+func TestSeekableBodyInMemoryPath(t *testing.T) {
+	// Body strictly smaller than the threshold stays in memory.
+	want := bytes.Repeat([]byte{0xab}, s3SeekableBodyThreshold/2)
+	body, cleanup, err := seekableBody(readerOnly{bytes.NewReader(want)})
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	defer cleanup()
+	if _, ok := body.(*os.File); ok {
+		t.Fatalf("small body landed on disk; expected in-memory buffer")
+	}
+	got, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("read body: %s", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("body content mismatch: got %d bytes, want %d", len(got), len(want))
+	}
+}
+
+func TestSeekableBodyExactThreshold(t *testing.T) {
+	// A body of exactly s3SeekableBodyThreshold bytes also stays in
+	// memory (the +1 probe byte hits EOF). This is the boundary the
+	// previous io.ReadAll path effectively had no upper bound on.
+	want := bytes.Repeat([]byte{0xcd}, s3SeekableBodyThreshold)
+	body, cleanup, err := seekableBody(readerOnly{bytes.NewReader(want)})
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	defer cleanup()
+	if _, ok := body.(*os.File); ok {
+		t.Fatalf("at-threshold body landed on disk; expected in-memory buffer")
+	}
+	got, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("read body: %s", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("body content mismatch")
+	}
+}
+
+func TestSeekableBodyTempFilePath(t *testing.T) {
+	// One byte over the threshold spills to disk. Verify (1) the
+	// returned body is a temp file, (2) its content matches input
+	// exactly, (3) Seek-back works (needed for both checksum re-read
+	// and SDK retry), and (4) cleanup removes the temp file.
+	want := bytes.Repeat([]byte{0xef}, s3SeekableBodyThreshold+1)
+	body, cleanup, err := seekableBody(readerOnly{bytes.NewReader(want)})
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	f, ok := body.(*os.File)
+	if !ok {
+		t.Fatalf("over-threshold body did not spill to disk; got %T", body)
+	}
+	tmpPath := f.Name()
+	if _, err := os.Stat(tmpPath); err != nil {
+		t.Fatalf("temp file %q missing while cleanup is pending: %s", tmpPath, err)
+	}
+
+	got, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("read body: %s", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("body content mismatch: got %d bytes, want %d", len(got), len(want))
+	}
+
+	// Seek back and re-read — exercises the same path the SDK takes
+	// on retry.
+	if _, err := body.Seek(0, io.SeekStart); err != nil {
+		t.Fatalf("seek back: %s", err)
+	}
+	got2, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("re-read body: %s", err)
+	}
+	if !bytes.Equal(got2, want) {
+		t.Fatalf("re-read content mismatch")
+	}
+
+	cleanup()
+	if _, err := os.Stat(tmpPath); !os.IsNotExist(err) {
+		t.Fatalf("cleanup did not remove temp file %q: err=%v", tmpPath, err)
 	}
 }
 

@@ -157,16 +157,11 @@ func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getter
 
 func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	sc := s.GetStorageClass(ctx)
-	var body io.ReadSeeker
-	if b, ok := in.(io.ReadSeeker); ok {
-		body = b
-	} else {
-		data, err := io.ReadAll(in)
-		if err != nil {
-			return err
-		}
-		body = bytes.NewReader(data)
+	body, cleanup, err := seekableBody(in)
+	if err != nil {
+		return err
 	}
+	defer cleanup()
 	mimeType := utils.GuessMimeType(key)
 	params := &s3.PutObjectInput{
 		Bucket:            &s.bucket,
@@ -194,6 +189,72 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 		attrs.SetRequestID(reqID)
 	}
 	return err
+}
+
+// s3SeekableBodyThreshold is the upper bound on in-memory buffering
+// performed by seekableBody. Bodies up to this size are held in a
+// bytes.Reader; anything larger spools to a temp file. 1 MiB matches
+// the typical JuiceFS chunk size — chunked Puts already arrive as
+// *bytes.Reader (no buffering at all), so this threshold only governs
+// atypical callers (jfs sync of large objects, custom integrations).
+const s3SeekableBodyThreshold = 1 << 20 // 1 MiB
+
+// seekableBody returns a re-readable body for the given reader. If in
+// is already an io.ReadSeeker it is returned as-is; otherwise the
+// content is buffered to memory for inputs <= s3SeekableBodyThreshold
+// and spooled to a temp file for larger inputs.
+//
+// A seekable body is required for both (a) the package-level CRC32
+// metadata that generateChecksum re-reads after the SDK has consumed
+// the body, and (b) AWS-SDK-v2 retry semantics — the SDK rewinds the
+// body on retry, which would otherwise fail with a non-seekable stream
+// (especially relevant after AUDIT-008 enabled retries for these
+// adapters). Buffering to a temp file caps process memory at
+// s3SeekableBodyThreshold no matter how large the upstream stream is.
+//
+// The returned cleanup function must always be called (e.g. via
+// defer). It is a no-op for the seeker fast path and the in-memory
+// path; for the temp-file path it closes the file and removes it.
+func seekableBody(in io.Reader) (io.ReadSeeker, func(), error) {
+	if b, ok := in.(io.ReadSeeker); ok {
+		return b, func() {}, nil
+	}
+	// Peek one byte beyond the in-memory threshold so we can tell
+	// "exactly fits in memory" from "exceeds threshold" without a
+	// separate probe read.
+	buf := &bytes.Buffer{}
+	n, err := io.CopyN(buf, in, s3SeekableBodyThreshold+1)
+	if err == io.EOF {
+		// Body fits comfortably in memory.
+		_ = n
+		return bytes.NewReader(buf.Bytes()), func() {}, nil
+	}
+	if err != nil {
+		return nil, func() {}, err
+	}
+	// Spool the rest to a temp file. We write the bytes already in
+	// `buf` first, then stream-copy the remainder of `in`.
+	f, err := os.CreateTemp("", "juicefs-s3-put-*")
+	if err != nil {
+		return nil, func() {}, err
+	}
+	cleanup := func() {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+	}
+	if _, err := io.Copy(f, buf); err != nil {
+		cleanup()
+		return nil, func() {}, err
+	}
+	if _, err := io.Copy(f, in); err != nil {
+		cleanup()
+		return nil, func() {}, err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		cleanup()
+		return nil, func() {}, err
+	}
+	return f, cleanup, nil
 }
 
 // s3CopyObjectMaxSize is S3's documented upper bound for a single
