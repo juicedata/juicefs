@@ -318,13 +318,24 @@ func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
 func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 	buf := make([]byte, 0, 128<<10)
 	var lastcheck = time.Now()
+	defer func() {
+		if f != nil {
+			_ = f.Close()
+		}
+	}()
 	for {
-		line := <-logBuffer
+		line, ok := <-logBuffer
+		if !ok {
+			return
+		}
 		buf = append(buf[:0], []byte(line)...)
 	LOOP:
 		for len(buf) < (128 << 10) {
 			select {
-			case line = <-logBuffer:
+			case line, ok = <-logBuffer:
+				if !ok {
+					break LOOP
+				}
 				buf = append(buf, []byte(line)...)
 			default:
 				break LOOP
