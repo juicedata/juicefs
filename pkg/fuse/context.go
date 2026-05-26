@@ -112,11 +112,11 @@ func (c *fuseContext) CheckPermission() bool {
 }
 
 func (c *fuseContext) Canceled() bool {
-	if c.Duration() < time.Second {
-		return false
-	}
 	if c.canceled {
 		return true
+	}
+	if c.Duration() < time.Second {
+		return false
 	}
 	select {
 	case <-c.cancel:
