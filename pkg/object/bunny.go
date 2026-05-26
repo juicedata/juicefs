@@ -72,10 +72,30 @@ func (b *bunnyClient) Put(ctx context.Context, key string, in io.Reader, getters
 // Delete a object.
 func (b *bunnyClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := b.client.Delete(key, false)
-	if err != nil && err.Error() == "Not Found" {
+	if err != nil && isBunnyNotFound(err) {
 		err = nil
 	}
 	return err
+}
+
+// isBunnyNotFound reports whether err is bunny.net's "object does not
+// exist" failure. The bunny SDK collapses any non-2xx response into
+// errors.New(string(resp.Header.StatusMessage())) (see
+// l0wl3vel/bunny-storage-go-sdk client.go:Delete), so the HTTP status
+// code is lost by the time we see it and we have to compare on the
+// status text. EqualFold + TrimSpace is more tolerant than the
+// previous exact "Not Found" equality check, which broke the moment
+// any upstream proxy normalised the status text differently.
+//
+// A proper typed-error path requires an SDK change.
+func isBunnyNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.TrimSpace(err.Error())
+	return strings.EqualFold(msg, "Not Found") ||
+		strings.EqualFold(msg, "404 Not Found") ||
+		strings.EqualFold(msg, "Object Not Found")
 }
 
 func (b *bunnyClient) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {

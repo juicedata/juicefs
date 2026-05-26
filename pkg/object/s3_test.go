@@ -17,8 +17,14 @@
 package object
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -77,6 +83,56 @@ func TestS3CopyObjectMaxSizeBoundary(t *testing.T) {
 	// refactor cannot silently shift it.
 	if s3CopyObjectMaxSize != 5<<30 {
 		t.Fatalf("s3CopyObjectMaxSize=%d, want %d (5 GiB)", s3CopyObjectMaxSize, int64(5<<30))
+	}
+}
+
+func TestIsS3NotFound(t *testing.T) {
+	// Typed not-found error from the v2 SDK.
+	if !isS3NotFound(&types.NoSuchKey{}) {
+		t.Errorf("types.NoSuchKey not recognised")
+	}
+
+	// Generic smithy APIError with the canonical code.
+	if !isS3NotFound(&smithy.GenericAPIError{Code: "NoSuchKey", Message: "The specified key does not exist."}) {
+		t.Errorf("smithy.GenericAPIError{Code: NoSuchKey} not recognised")
+	}
+	if !isS3NotFound(&smithy.GenericAPIError{Code: "NotFound"}) {
+		t.Errorf("smithy.GenericAPIError{Code: NotFound} not recognised (e.g. HeadObject result)")
+	}
+
+	// Gateway 404 with no NoSuchKey code — the case the previous
+	// substring check missed.
+	resp404 := &smithyhttp.ResponseError{
+		Response: &smithyhttp.Response{Response: &http.Response{StatusCode: 404}},
+		Err:      errors.New("gateway returned 404"),
+	}
+	if !isS3NotFound(resp404) {
+		t.Errorf("smithyhttp.ResponseError with 404 status not recognised")
+	}
+
+	// Unrelated errors must NOT be flagged as not-found.
+	if isS3NotFound(nil) {
+		t.Errorf("nil error must not be flagged as not-found")
+	}
+	if isS3NotFound(errors.New("connection reset")) {
+		t.Errorf("opaque non-API error flagged as not-found")
+	}
+	if isS3NotFound(&smithy.GenericAPIError{Code: "AccessDenied"}) {
+		t.Errorf("AccessDenied incorrectly flagged as not-found")
+	}
+	resp500 := &smithyhttp.ResponseError{
+		Response: &smithyhttp.Response{Response: &http.Response{StatusCode: 500}},
+		Err:      errors.New("internal"),
+	}
+	if isS3NotFound(resp500) {
+		t.Errorf("500 status incorrectly flagged as not-found")
+	}
+
+	// Wrapped errors must still match — the whole point of using
+	// errors.As over substring matching.
+	wrapped := fmt.Errorf("delete object: %w", &types.NoSuchKey{})
+	if !isS3NotFound(wrapped) {
+		t.Errorf("wrapped types.NoSuchKey not recognised through errors.As")
 	}
 }
 

@@ -22,6 +22,7 @@ package object
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -162,10 +163,25 @@ func (q *bosclient) Copy(ctx context.Context, dst, src string) error {
 
 func (q *bosclient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := q.c.DeleteObject(q.bucket, key)
-	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
+	if err != nil && isBosNotFound(err) {
 		err = nil
 	}
 	return err
+}
+
+// isBosNotFound reports whether err is BOS's "object does not exist"
+// failure. Matches the typed pattern already used by bosclient.Head
+// (line 83) rather than the fragile substring check the previous
+// Delete relied on.
+func isBosNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var se *bce.BceServiceError
+	if errors.As(err, &se) {
+		return se.StatusCode == http.StatusNotFound || se.Code == "NoSuchKey"
+	}
+	return false
 }
 
 func (q *bosclient) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {

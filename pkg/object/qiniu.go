@@ -21,6 +21,7 @@ package object
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,6 +38,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/qiniu/go-sdk/v7/auth"
+	qiniuclient "github.com/qiniu/go-sdk/v7/client"
 	"github.com/qiniu/go-sdk/v7/storage"
 )
 
@@ -88,12 +90,27 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-var notexist = "no such file or directory"
+// isQiniuNotFound reports whether err is Qiniu's "object does not
+// exist" failure. Replaces the previous strings.Contains check on the
+// literal "no such file or directory" payload, which would silently
+// break if Qiniu ever rewords the message. Qiniu's API returns HTTP
+// 612 for missing entries; 404 is also accepted for compatible
+// gateways that translate to the canonical status.
+func isQiniuNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var ei *qiniuclient.ErrorInfo
+	if errors.As(err, &ei) {
+		return ei.Code == 612 || ei.Code == http.StatusNotFound
+	}
+	return false
+}
 
 func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
 	r, err := q.bm.Stat(q.bucket, key)
 	if err != nil {
-		if strings.Contains(err.Error(), notexist) {
+		if isQiniuNotFound(err) {
 			err = os.ErrNotExist
 		}
 		return nil, err
@@ -138,7 +155,7 @@ func (q *qiniu) CreateMultipartUpload(ctx context.Context, key string) (*Multipa
 
 func (q *qiniu) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := q.bm.Delete(q.bucket, key)
-	if err != nil && strings.Contains(err.Error(), notexist) {
+	if err != nil && isQiniuNotFound(err) {
 		return nil
 	}
 	return err

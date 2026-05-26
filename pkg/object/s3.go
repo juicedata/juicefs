@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"regexp"
@@ -41,6 +42,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -282,6 +284,34 @@ func (s *s3client) copyMultipart(ctx context.Context, dst, src string, size int6
 	return nil
 }
 
+// isS3NotFound reports whether err represents an S3 (or S3-compatible)
+// "object does not exist" failure. Replaces a fragile
+// strings.Contains(err.Error(), "NoSuchKey") that swallowed only the
+// canonical AWS error code and would silently miss both gateway 404s
+// (Wasabi, MinIO with custom error renderers, on-prem proxies) and any
+// future SDK message rewording.
+func isS3NotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var nsk *types.NoSuchKey
+	if errors.As(err, &nsk) {
+		return true
+	}
+	var ae smithy.APIError
+	if errors.As(err, &ae) {
+		switch ae.ErrorCode() {
+		case "NoSuchKey", "NotFound", "NoSuchBucket":
+			return true
+		}
+	}
+	var re *smithyhttp.ResponseError
+	if errors.As(err, &re) && re.HTTPStatusCode() == http.StatusNotFound {
+		return true
+	}
+	return false
+}
+
 func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
@@ -294,7 +324,7 @@ func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter
 		if errors.As(err, &re) {
 			attrs.SetRequestID(re.ServiceRequestID())
 		}
-		if strings.Contains(err.Error(), "NoSuchKey") {
+		if isS3NotFound(err) {
 			err = nil
 		}
 	} else {
