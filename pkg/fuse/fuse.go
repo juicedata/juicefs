@@ -392,6 +392,9 @@ func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entries, readAt, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, true)
+	if err != 0 {
+		return fuse.Status(err)
+	}
 	ctx.start = readAt
 	var de fuse.DirEntry
 	for i, e := range entries {
