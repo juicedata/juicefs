@@ -2602,6 +2602,18 @@ func testOpenCache(t *testing.T, m Meta) {
 	if attr.Uid != 1 {
 		t.Fatalf("attr uid should be 1: %+v", *attr)
 	}
+
+	var lookupIno Ino
+	lookupAttr := new(Attr)
+	if st := m.Lookup(ctx, 1, "f", &lookupIno, lookupAttr, false); st != 0 {
+		t.Fatalf("lookup f with open cache: %s", st)
+	}
+	if lookupIno != inode {
+		t.Fatalf("lookup inode: got %d, want %d", lookupIno, inode)
+	}
+	if lookupAttr.Uid != 1 {
+		t.Fatalf("lookup attr uid with open cache: got %d, want 1", lookupAttr.Uid)
+	}
 }
 
 func testReadOnly(t *testing.T, m Meta) {
