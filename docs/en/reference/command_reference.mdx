@@ -1098,10 +1098,10 @@ juicefs tier [subcommand] [command options] META-URL [PATH]
 juicefs tier list redis://localhost
 
 # Set tier for a single file
-juicefs tier set redis://localhost --id 1 /path/to/file
+juicefs tier set redis://localhost --tier 1 /path/to/file
 
 # Recursively set tier for a directory
-juicefs tier set redis://localhost --id 2 /path/to/dir -r
+juicefs tier set redis://localhost --tier 2 /path/to/dir -r
 
 # Restore archived objects
 juicefs tier restore redis://localhost /path/to/dir -r
@@ -1119,6 +1119,6 @@ juicefs tier restore redis://localhost /path/to/dir -r
 
 | Item | Description |
 |-|-|
-|`--id value`|Tier ID (0-3). `0` is the default tier (reserved). `1` to `3` are user‑configurable. Required for `tier set`.|
+|`--tier value`|Tier ID (0-3). `0` is the default tier (reserved). `1` to `3` are user‑configurable. Required for `tier set`.|
 |`--recursive, -r`|Recursively process all files and subdirectories under the target directory (default: false).|
 |`--force, -f`|Force rewriting objects to the tier's current storage class, even if the tier ID remains unchanged (default: false). Use after changing `--storage-class` to migrate existing objects.|

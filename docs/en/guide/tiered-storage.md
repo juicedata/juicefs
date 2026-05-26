@@ -9,7 +9,7 @@ Starting with JuiceFS 1.4, tiered storage lets you map individual files or direc
 ## Key concepts
 
 - **tier**: The tier identifier, ranging from `0` to `3`.
-  - `0` is the default tier (reserved value).
+  - `0` is the default tier.
   - `1` to `3` are user‑configurable tiers.
 - **storage-class**: The storage class assigned to a tier, for example, `STANDARD_IA`, `INTELLIGENT_TIERING`, or `GLACIER_IR`.
 - **Tier attribute on a file/directory**: Stored in metadata; it determines which storage class is used for subsequent writes or object migrations.
@@ -36,14 +36,12 @@ List the current mappings:
 juicefs tier list redis://localhost
 ```
 
-`id=0` is always displayed as `default`.
-
 ## 2. Set a tier on a file or directory
 
 ### A single file
 
 ```shell
-juicefs tier set redis://localhost --id 1 /path/to/file
+juicefs tier set redis://localhost --tier 1 /path/to/file
 ```
 
 ### A directory (non‑recursive, only the directory entry)
@@ -51,7 +49,7 @@ juicefs tier set redis://localhost --id 1 /path/to/file
 When you set a storage tier on a directory, any new files or subdirectories created inside it later will inherit the tier of the parent directory, automatically using the corresponding storage type.
 
 ```shell
-juicefs tier set redis://localhost --id 2 /path/to/dir
+juicefs tier set redis://localhost --tier 2 /path/to/dir
 ```
 
 Without `-r`, only the directory inode is updated; files and subdirectories inside it are unchanged.
@@ -59,7 +57,7 @@ Without `-r`, only the directory inode is updated; files and subdirectories insi
 ### A directory (recursive)
 
 ```shell
-juicefs tier set redis://localhost --id 2 /path/to/dir -r
+juicefs tier set redis://localhost --tier 2 /path/to/dir -r
 ```
 
 Recursive mode processes all files and subdirectories under the target directory.
@@ -67,8 +65,8 @@ Recursive mode processes all files and subdirectories under the target directory
 ### Reset to the default tier (tier 0)
 
 ```shell
-juicefs tier set redis://localhost --id 0 /path/to/file
-juicefs tier set redis://localhost --id 0 /path/to/dir -r
+juicefs tier set redis://localhost --tier 0 /path/to/file
+juicefs tier set redis://localhost --tier 0 /path/to/dir -r
 ```
 
 ## 3. Rewrite objects after a mapping change (`--force`)
@@ -78,7 +76,7 @@ If you change a tier's `storage-class` from A to B, the files' metadata tier‑i
 Use `--force` to trigger a re-write, copying the objects to the new storage class:
 
 ```shell
-juicefs tier set redis://localhost --id 2 /path/to/dir -r --force
+juicefs tier set redis://localhost --tier 2 /path/to/dir -r --force
 ```
 
 ## 4. Restore archive objects
@@ -109,6 +107,6 @@ Key fields to look for:
 ## Notes
 
 - `tier set` only accepts file and directory paths.
-- `--id` accepts values `0` to `3`; when using --tier in configuration, only `1` to `3` are allowed.
+- `--tier` accepts values `0` to `3`; when using --tier in configuration, only `0` to `3` are allowed.
 - In writeback-cache mode (`--writeback`), `tier set` may fail if the file's data has not yet been uploaded to object storage. Wait for the upload to complete, then retry.
 - Changing `--storage-class` does **not** automatically migrate existing objects. You must run `tier set ... --force` manually.

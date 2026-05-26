@@ -36,14 +36,12 @@ juicefs config redis://localhost --tier 3 --storage-class GLACIER_IR -y
 juicefs tier list redis://localhost
 ```
 
-输出中 `id=0` 对应 `default`。
-
 ## 2. 为文件或目录设置 tier
 
 ### 设置单个文件
 
 ```shell
-juicefs tier set redis://localhost --id 1 /path/to/file
+juicefs tier set redis://localhost --tier 1 /path/to/file
 ```
 
 ### 设置目录（仅目录本身）
@@ -51,7 +49,7 @@ juicefs tier set redis://localhost --id 1 /path/to/file
 为目录本身设置存储层级的作用是当后续有新文件或子目录创建在该目录下时，会继承其父目录的 tier，从而自动使用对应的存储类型。
 
 ```shell
-juicefs tier set redis://localhost --id 2 /path/to/dir
+juicefs tier set redis://localhost --tier 2 /path/to/dir
 ```
 
 不带 `-r` 时，仅修改目标目录自身，不会递归处理子目录和文件。
@@ -59,7 +57,7 @@ juicefs tier set redis://localhost --id 2 /path/to/dir
 ### 递归设置目录
 
 ```shell
-juicefs tier set redis://localhost --id 2 /path/to/dir -r
+juicefs tier set redis://localhost --tier 2 /path/to/dir -r
 ```
 
 递归模式会处理目录树中的文件与子目录。
@@ -67,8 +65,8 @@ juicefs tier set redis://localhost --id 2 /path/to/dir -r
 ### 重置回默认层（tier 0）
 
 ```shell
-juicefs tier set redis://localhost --id 0 /path/to/file
-juicefs tier set redis://localhost --id 0 /path/to/dir -r
+juicefs tier set redis://localhost --tier 0 /path/to/file
+juicefs tier set redis://localhost --tier 0 /path/to/dir -r
 ```
 
 ## 3. 变更 tier 映射后的重写（`--force`）
@@ -77,7 +75,7 @@ juicefs tier set redis://localhost --id 0 /path/to/dir -r
 此时可用 `--force` 触发重写，把对象改写到新的存储类型：
 
 ```shell
-juicefs tier set redis://localhost --id 2 /path/to/dir -r --force
+juicefs tier set redis://localhost --tier 2 /path/to/dir -r --force
 ```
 
 ## 4. 归档类对象恢复
@@ -108,6 +106,6 @@ juicefs info /mountpoint/path/to/file
 ## 注意事项
 
 1. `tier set` 仅支持文件和目录路径。
-2. `--id` 仅允许 `0~3`；其中 `--tier` 配置时仅允许 `1~3`。
+2. `--tier` 仅允许 `0~3`；其中 `--tier` 配置时仅允许 `1~3`。
 3. 在写回缓存（writeback）场景下，若文件数据尚未上传到对象存储，`tier set` 可能失败；待数据上传完成后再重试。
 4. 修改 `--storage-class` 不会自动迁移历史对象，需要手动执行 `tier set ... --force`。
