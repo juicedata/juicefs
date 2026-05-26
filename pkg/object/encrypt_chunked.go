@@ -114,15 +114,36 @@ type limitedReadCloser struct {
 	io.Closer
 }
 
+// chunkBufPool is the subset of sync.Pool that chunkDecryptReader needs.
+// Promoting the field to an interface lets tests substitute a counting
+// pool that detects double-Put and leaks (see TestChunkDecryptReader
+// PoolBalance) without forcing them to fish through the live sync.Pool
+// internals.
+type chunkBufPool interface {
+	Get() any
+	Put(any)
+}
+
 type chunkDecryptReader struct {
-	r        io.ReadCloser
-	enc      *dataEncryptor
-	buf      []byte
-	pool     *sync.Pool
-	skip     int64
+	r    io.ReadCloser
+	enc  *dataEncryptor
+	buf  []byte
+	pool chunkBufPool
+	skip int64
+	// chunkBuf is the SOLE owner-tracker for a buffer borrowed from
+	// pool: non-nil iff this reader currently holds one. Every code
+	// path in Read either releases the buffer via putChunkBuf (errors
+	// and full-consume) or leaves it owned in chunkBuf for the next
+	// Read or Close to drain (partial-consume).
 	chunkBuf *[]byte
 }
 
+// putChunkBuf returns the borrowed chunk buffer to the pool and clears
+// every reference to it (including r.buf, which is a sub-slice into
+// chunkBuf and would otherwise dangle). Idempotent: safe to call when
+// no buffer is held. This is the SOLE call site that returns a chunk
+// buffer to the pool — chunkDecryptReader.Read never calls pool.Put
+// directly, so there is exactly one ownership-transfer rule to audit.
 func (r *chunkDecryptReader) putChunkBuf() {
 	if r.chunkBuf != nil {
 		r.pool.Put(r.chunkBuf)
@@ -132,6 +153,8 @@ func (r *chunkDecryptReader) putChunkBuf() {
 }
 
 func (r *chunkDecryptReader) Read(p []byte) (int, error) {
+	// Carry-over plaintext from a previous Read whose caller buffer
+	// was too small. Drain it before fetching another ciphertext chunk.
 	if len(r.buf) > 0 {
 		n := copy(p, r.buf)
 		r.buf = r.buf[n:]
@@ -140,29 +163,32 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 		}
 		return n, nil
 	}
-	chunkBuf := r.pool.Get().(*[]byte)
-	defer func() {
-		if len(r.buf) == 0 {
-			r.pool.Put(chunkBuf)
-		}
-	}()
 
-	n, err := io.ReadFull(r.r, *chunkBuf)
-	chunk := (*chunkBuf)[:n]
+	// Borrow a chunk buffer. Assigning to r.chunkBuf immediately makes
+	// the reader the canonical owner; every exit point below either
+	// calls putChunkBuf (errors and full-consume) or leaves r.chunkBuf
+	// set so the next Read / Close releases it (partial-consume).
+	r.chunkBuf = r.pool.Get().(*[]byte)
+
+	n, err := io.ReadFull(r.r, *r.chunkBuf)
+	chunk := (*r.chunkBuf)[:n]
 	if err != io.ErrUnexpectedEOF && err != nil {
+		r.putChunkBuf()
 		return 0, err
 	}
-
 	if len(chunk) < chunkHeaderSize {
+		r.putChunkBuf()
 		return 0, fmt.Errorf("Decrypt: truncated chunk header")
 	}
 	ctLen := int(binary.BigEndian.Uint32(chunk[:chunkHeaderSize]))
 	if chunkHeaderSize+ctLen > len(chunk) {
+		r.putChunkBuf()
 		return 0, fmt.Errorf("Decrypt: chunk data truncated: need %d, have %d", chunkHeaderSize+ctLen, len(chunk))
 	}
 
 	plain, decErr := r.enc.Decrypt(chunk[chunkHeaderSize : chunkHeaderSize+ctLen])
 	if decErr != nil {
+		r.putChunkBuf()
 		return 0, fmt.Errorf("Decrypt: %s", decErr)
 	}
 
@@ -170,6 +196,7 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 		skip := r.skip
 		r.skip = 0
 		if skip >= int64(len(plain)) {
+			r.putChunkBuf()
 			return 0, io.EOF
 		}
 		plain = plain[skip:]
@@ -177,8 +204,12 @@ func (r *chunkDecryptReader) Read(p []byte) (int, error) {
 
 	n = copy(p, plain)
 	if n < len(plain) {
+		// Partial consume: keep the chunk borrowed; the next Read or
+		// Close will release it via putChunkBuf.
 		r.buf = plain[n:]
-		r.chunkBuf = chunkBuf
+	} else {
+		// Fully consumed: release immediately.
+		r.putChunkBuf()
 	}
 	return n, nil
 }
