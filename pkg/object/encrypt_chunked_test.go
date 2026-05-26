@@ -101,8 +101,12 @@ func TestChunkDecryptReaderPoolBalance(t *testing.T) {
 		encChunkSize:  encSize,
 	}
 	ce.plainPool = sync.Pool{New: func() any { buf := make([]byte, plainChunkSize); return &buf }}
-	// encChunkPool is unused by writes; Put uses plainPool. For reads we
-	// inject our tracked pool directly into the decrypt reader below.
+	ce.encChunkPool = sync.Pool{New: func() any { buf := make([]byte, encSize); return &buf }}
+	// For the decrypt path we inject our tracked pool directly into the
+	// reader below so we can audit every Get/Put. ce.encChunkPool above
+	// is the pool the encrypt-side Put uses internally; we don't need to
+	// track its balance here because the encrypt-side has its own
+	// dedicated pool-balance test.
 
 	// A body that spans multiple chunks plus a partial tail — exercises
 	// both full-chunk and partial-chunk paths.
@@ -182,6 +186,177 @@ func TestChunkDecryptReaderPoolBalance(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, dr.Close())
 	check("close-before-drain")
+}
+
+// TestChunkEncryptReaderPoolBalance is the encrypt-side mirror of
+// TestChunkDecryptReaderPoolBalance: after the refactor that pools
+// chunk buffers across writes, every Read/Close codepath must Put one
+// buffer for every Get. Exercises partial-consume (one-byte reads),
+// full-consume (chunk-sized buffer), and Close-before-drain.
+func TestChunkEncryptReaderPoolBalance(t *testing.T) {
+	dc, err := NewDataEncryptor(NewRSAEncryptor(rsaKey), AES256GCM_RSA)
+	require.NoError(t, err)
+
+	overhead := dc.MaxOverhead()
+	encSize := plainChunkSize + chunkHeaderSize + int64(overhead)
+	pool := newTrackedPool(int(encSize))
+	ce := &chunkedEncrypted{enc: dc, overhead: overhead, encChunkSize: encSize}
+	ce.plainPool = sync.Pool{New: func() any { buf := make([]byte, plainChunkSize); return &buf }}
+
+	const bodySize = plainChunkSize*2 + 1024
+	body := make([]byte, bodySize)
+	for i := range body {
+		body[i] = byte((i * 11) % 251)
+	}
+
+	openEncryptReader := func() *chunkEncryptReader {
+		return &chunkEncryptReader{
+			r:         bytes.NewReader(body),
+			enc:       dc,
+			overhead:  overhead,
+			plainPool: &ce.plainPool,
+			encPool:   pool,
+		}
+	}
+
+	check := func(label string) {
+		if got := pool.doublePu.Load(); got != 0 {
+			t.Fatalf("%s: %d double-Put detected", label, got)
+		}
+		if got := pool.alien.Load(); got != 0 {
+			t.Fatalf("%s: %d alien-buf Put detected", label, got)
+		}
+		if got := pool.liveCount(); got != 0 {
+			t.Fatalf("%s: %d buffer(s) leaked from the pool", label, got)
+		}
+		if g, p := pool.gets.Load(), pool.puts.Load(); g != p {
+			t.Fatalf("%s: Gets=%d Puts=%d (must be equal)", label, g, p)
+		}
+	}
+
+	reset := func() {
+		pool.gets.Store(0)
+		pool.puts.Store(0)
+		pool.doublePu.Store(0)
+		pool.alien.Store(0)
+		pool.mu.Lock()
+		pool.live = map[*[]byte]bool{}
+		pool.mu.Unlock()
+	}
+
+	// (1) Partial-consume: one byte at a time exercises the leftover-buf
+	// branch, which is where the previous implementation would have
+	// re-used a stale `chunk` slice across Reads.
+	cr := openEncryptReader()
+	one := make([]byte, 1)
+	for {
+		_, err := cr.Read(one)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+	}
+	require.NoError(t, cr.Close())
+	check("partial-consume")
+	reset()
+
+	// (2) Full-consume: a buffer bigger than the encrypted chunk size
+	// drains each chunk in one Read, exercising the immediate-release
+	// branch.
+	cr = openEncryptReader()
+	big := make([]byte, int(encSize)+1)
+	for {
+		_, err := cr.Read(big)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+	}
+	require.NoError(t, cr.Close())
+	check("full-consume")
+	reset()
+
+	// (3) Close-before-drain: read partway, then Close. The borrowed
+	// chunk buffer must come back to the pool, not leak. This is the
+	// case the original deferred-Put pattern in chunkEncryptReader
+	// would have leaked under the new pooled design.
+	cr = openEncryptReader()
+	mid := make([]byte, 1024)
+	_, err = cr.Read(mid)
+	require.NoError(t, err)
+	require.NoError(t, cr.Close())
+	check("close-before-drain")
+}
+
+// TestChunkedEncryptedRoundTripUnderPoolReuse drives several
+// concurrent Put + Get pairs through a real chunkedEncrypted (with
+// the production sync.Pool) to catch any cross-chunk corruption
+// introduced by sharing encChunkPool with the encrypt side. If the
+// padding-zeroing step in chunkEncryptReader.Read were ever skipped,
+// the decryptor would still produce the right plaintext (it only
+// reads ct[:ctLen]) but a subtle round-trip such as a partial Get
+// could land bytes from a stale chunk in the wrong place.
+func TestChunkedEncryptedRoundTripUnderPoolReuse(t *testing.T) {
+	ctx := context.Background()
+	mem, err := CreateStorage("mem", "", "", "", "")
+	require.NoError(t, err)
+	dc, err := NewDataEncryptor(NewRSAEncryptor(rsaKey), AES256GCM_RSA)
+	require.NoError(t, err)
+	store := NewChunkedEncrypted(mem, dc)
+
+	keys := []string{"a", "b", "c", "d"}
+	bodies := make(map[string][]byte, len(keys))
+	for i, k := range keys {
+		// Each body is a different size and contents so cross-chunk
+		// contamination would be visible.
+		size := plainChunkSize + 17*(i+1)
+		buf := make([]byte, size)
+		for j := range buf {
+			buf[j] = byte((j*13 + i*101) % 251)
+		}
+		bodies[k] = buf
+		require.NoError(t, store.Put(ctx, k, bytes.NewReader(buf)))
+	}
+
+	for _, k := range keys {
+		r, err := store.Get(ctx, k, 0, -1)
+		require.NoError(t, err)
+		got, err := io.ReadAll(r)
+		require.NoError(t, err)
+		require.NoError(t, r.Close())
+		require.Equal(t, bodies[k], got, "round-trip mismatch for %s", k)
+	}
+}
+
+// BenchmarkChunkEncryptReaderPut measures the encrypt-side throughput
+// of a multi-chunk Put through the chunked-encrypted wrapper. Run with
+//
+//	go test -tags nogspt -bench BenchmarkChunkEncryptReaderPut \
+//	    -benchmem ./pkg/object/
+//
+// to confirm the AUDIT-014 fix reduces per-chunk allocations
+// (previously: one ~1 MiB `make` per chunk inside Read).
+func BenchmarkChunkEncryptReaderPut(b *testing.B) {
+	mem, err := CreateStorage("mem", "", "", "", "")
+	if err != nil {
+		b.Fatal(err)
+	}
+	dc, err := NewDataEncryptor(NewRSAEncryptor(rsaKey), AES256GCM_RSA)
+	if err != nil {
+		b.Fatal(err)
+	}
+	store := NewChunkedEncrypted(mem, dc)
+	body := make([]byte, 16*plainChunkSize) // 16 MiB → 16 chunks
+	for i := range body {
+		body[i] = byte(i % 251)
+	}
+	b.SetBytes(int64(len(body)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := store.Put(context.Background(), "k", bytes.NewReader(body)); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 func TestChunkedEncryptedConcurrentGet(t *testing.T) {

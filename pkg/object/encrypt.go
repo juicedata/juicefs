@@ -225,35 +225,62 @@ func asn1LenLen(contentLen int) int {
 }
 
 func (e *dataEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
+	buf := make([]byte, e.MaxOverhead()+len(plaintext))
+	n, err := e.EncryptInto(buf, plaintext)
+	if err != nil {
+		return nil, err
+	}
+	return buf[:n], nil
+}
+
+// EncryptInto encrypts plaintext using a freshly generated data key
+// and writes the envelope (wrapped-key length || nonce length ||
+// wrapped key || nonce || ciphertext+AEAD tag) directly into dst.
+// Returns the total number of bytes written.
+//
+// dst must have len >= MaxOverhead() + len(plaintext); shorter dst
+// returns io.ErrShortBuffer.
+//
+// Exposing this in-place form lets chunked encryption avoid one
+// per-chunk allocation and one memcpy by sealing straight into a
+// pooled chunk buffer instead of through an intermediate slice.
+func (e *dataEncryptor) EncryptInto(dst, plaintext []byte) (int, error) {
 	key := make([]byte, e.keyLen)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
-		return nil, err
+		return 0, err
 	}
 	cipherkey, err := e.keyEncryptor.Encrypt(key)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	aead, err := e.aead(key)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	nonce := make([]byte, aead.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
+	nonceSize := aead.NonceSize()
+	headerSize := 3 + len(cipherkey) + nonceSize
+	need := headerSize + len(plaintext) + aead.Overhead()
+	if len(dst) < need {
+		return 0, io.ErrShortBuffer
 	}
-
-	headerSize := 3 + len(cipherkey) + len(nonce)
-	buf := make([]byte, headerSize+len(plaintext)+aead.Overhead())
-	buf[0] = byte(len(cipherkey) >> 8)
-	buf[1] = byte(len(cipherkey) & 0xFF)
-	buf[2] = byte(len(nonce))
-	p := buf[3:]
+	dst[0] = byte(len(cipherkey) >> 8)
+	dst[1] = byte(len(cipherkey) & 0xFF)
+	dst[2] = byte(nonceSize)
+	p := dst[3:]
 	copy(p, cipherkey)
 	p = p[len(cipherkey):]
-	copy(p, nonce)
-	p = p[len(nonce):]
+	// Write the nonce straight into its final position in dst rather
+	// than allocating + copying. Seal only reads nonce once (at the
+	// start of the GHASH/Poly1305 initialisation) so placing it in
+	// dst's earlier region cannot interfere with the ciphertext that
+	// Seal appends to p[:0].
+	nonce := p[:nonceSize]
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return 0, err
+	}
+	p = p[nonceSize:]
 	ciphertext := aead.Seal(p[:0], nonce, plaintext, nil)
-	return buf[:headerSize+len(ciphertext)], nil
+	return headerSize + len(ciphertext), nil
 }
 
 func (e *dataEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {

@@ -220,35 +220,54 @@ func (r *chunkDecryptReader) Close() error {
 }
 
 type chunkEncryptReader struct {
-	r        io.Reader
-	enc      *dataEncryptor
-	overhead int
-	pool     *sync.Pool
-	buf      []byte
+	r         io.Reader
+	enc       *dataEncryptor
+	overhead  int
+	plainPool *sync.Pool
+	encPool   chunkBufPool
+	buf       []byte
+	// chunkBuf is borrowed from encPool while buf points into it.
+	// Follows the same explicit-ownership rule as chunkDecryptReader:
+	// every codepath that drops the partial-consume invariant calls
+	// putChunkBuf, the SOLE caller of encPool.Put.
+	chunkBuf *[]byte
 	done     bool
 }
 
 func (e *chunkedEncrypted) newChunkEncryptReader(r io.Reader) *chunkEncryptReader {
 	return &chunkEncryptReader{
-		r:        r,
-		enc:      e.enc,
-		overhead: e.overhead,
-		pool:     &e.plainPool,
+		r:         r,
+		enc:       e.enc,
+		overhead:  e.overhead,
+		plainPool: &e.plainPool,
+		encPool:   &e.encChunkPool,
+	}
+}
+
+func (cr *chunkEncryptReader) putChunkBuf() {
+	if cr.chunkBuf != nil {
+		cr.encPool.Put(cr.chunkBuf)
+		cr.chunkBuf = nil
+		cr.buf = nil
 	}
 }
 
 func (cr *chunkEncryptReader) Read(p []byte) (int, error) {
+	// Carry-over from a previous Read whose caller buffer was too small.
 	if len(cr.buf) > 0 {
 		n := copy(p, cr.buf)
 		cr.buf = cr.buf[n:]
+		if len(cr.buf) == 0 {
+			cr.putChunkBuf()
+		}
 		return n, nil
 	}
 	if cr.done {
 		return 0, io.EOF
 	}
 
-	plain := cr.pool.Get().(*[]byte)
-	defer cr.pool.Put(plain)
+	plain := cr.plainPool.Get().(*[]byte)
+	defer cr.plainPool.Put(plain)
 
 	n, readErr := io.ReadFull(cr.r, *plain)
 	if n == 0 {
@@ -259,22 +278,44 @@ func (cr *chunkEncryptReader) Read(p []byte) (int, error) {
 		return 0, readErr
 	}
 
-	ct, err := cr.enc.Encrypt((*plain)[:n])
+	// Borrow a chunk buffer and encrypt straight into it. This
+	// replaces the previous `chunk := make(...)` + extra copy, saving
+	// ~1 MiB of fresh allocation and one memcpy per chunk.
+	cr.chunkBuf = cr.encPool.Get().(*[]byte)
+	fixedCtLen := n + cr.overhead
+	totalLen := chunkHeaderSize + fixedCtLen
+	if totalLen > len(*cr.chunkBuf) {
+		cr.putChunkBuf()
+		return 0, fmt.Errorf("encrypt_chunked: chunkBuf too small: have %d, need %d", len(*cr.chunkBuf), totalLen)
+	}
+	chunk := (*cr.chunkBuf)[:totalLen]
+
+	ctLen, err := cr.enc.EncryptInto(chunk[chunkHeaderSize:], (*plain)[:n])
 	if err != nil {
+		cr.putChunkBuf()
 		return 0, err
 	}
-	fixedCtLen := n + cr.overhead
-	if len(ct) > fixedCtLen {
-		return 0, fmt.Errorf("encrypt_chunked: ciphertext %d exceeds capacity %d", len(ct), fixedCtLen)
+	if ctLen > fixedCtLen {
+		cr.putChunkBuf()
+		return 0, fmt.Errorf("encrypt_chunked: ciphertext %d exceeds capacity %d", ctLen, fixedCtLen)
 	}
-
-	chunk := make([]byte, chunkHeaderSize+fixedCtLen)
-	binary.BigEndian.PutUint32(chunk[:chunkHeaderSize], uint32(len(ct)))
-	copy(chunk[chunkHeaderSize:], ct)
+	binary.BigEndian.PutUint32(chunk[:chunkHeaderSize], uint32(ctLen))
+	// Zero the padding region so we don't leak stale pool bytes onto
+	// the wire. The decryptor only reads ct[:ctLen] (the header tells
+	// it the length), but the trailing fixedCtLen-ctLen bytes are
+	// still transmitted to the backend and would otherwise carry
+	// whatever ciphertext the encPool buffer held from a prior use.
+	padStart := chunkHeaderSize + ctLen
+	for i := padStart; i < totalLen; i++ {
+		chunk[i] = 0
+	}
 
 	copied := copy(p, chunk)
 	if copied < len(chunk) {
+		// Partial consume: keep chunkBuf borrowed; next Read drains it.
 		cr.buf = chunk[copied:]
+	} else {
+		cr.putChunkBuf()
 	}
 
 	if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
@@ -285,8 +326,19 @@ func (cr *chunkEncryptReader) Read(p []byte) (int, error) {
 	return copied, nil
 }
 
+// Close releases any chunk buffer still held by this reader. The
+// underlying ObjectStorage.Put signatures take io.Reader (not
+// io.ReadCloser) so the inner storage doesn't call Close on its own;
+// chunkedEncrypted.Put / UploadPart invoke it explicitly via defer.
+func (cr *chunkEncryptReader) Close() error {
+	cr.putChunkBuf()
+	return nil
+}
+
 func (e *chunkedEncrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	return e.ObjectStorage.Put(ctx, key, e.newChunkEncryptReader(in), getters...)
+	cr := e.newChunkEncryptReader(in)
+	defer cr.Close()
+	return e.ObjectStorage.Put(ctx, key, cr, getters...)
 }
 
 type sizedObj struct {
@@ -356,7 +408,9 @@ func (e *chunkedEncrypted) Limits() Limits {
 }
 
 func (e *chunkedEncrypted) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
-	data, err := io.ReadAll(e.newChunkEncryptReader(bytes.NewReader(body)))
+	cr := e.newChunkEncryptReader(bytes.NewReader(body))
+	defer cr.Close()
+	data, err := io.ReadAll(cr)
 	if err != nil {
 		return nil, err
 	}
