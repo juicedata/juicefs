@@ -455,15 +455,11 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 				info.TierStr = "unknown"
 			} else {
 				info.TierID = attr.Tier
-				if info.TierID == 0 {
-					info.TierStr = "default"
+				if t, ok := v.Meta.GetFormat().Tiers.GetSc(attr.Tier); ok {
+					info.TierStr = t
 				} else {
-					if t, ok := v.Meta.GetFormat().Tiers.GetSc(attr.Tier); ok {
-						info.TierStr = t
-					} else {
-						logger.Warnf("unknown storage class id %d of inode %d", attr.Tier, inode)
-						info.TierStr = "unknown"
-					}
+					logger.Warnf("unknown storage class id %d of inode %d", attr.Tier, inode)
+					info.TierStr = "unknown"
 				}
 			}
 			info.Paths = v.Meta.GetPaths(ctx, inode)
@@ -493,10 +489,11 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 				if lastObjKey != "" {
 					if objInfo, err := v.Store.BlobStorage().Head(context.Background(), lastObjKey); err == nil {
 						info.RestoreStatus = objInfo.Status()
-						if info.TierID != 0 && objInfo.StorageClass() != info.TierStr {
+						if info.TierID != 0 && objInfo.StorageClass() != info.TierStr ||
+							(info.TierID == 0 && info.TierStr != "" && objInfo.StorageClass() != info.TierStr) {
 							info.TierStr = fmt.Sprintf("expected(%s),actual(%s)", info.TierStr, objInfo.StorageClass())
 						}
-						if info.TierID == 0 {
+						if info.TierID == 0 && info.TierStr == "" {
 							info.TierStr = fmt.Sprintf("actual(%s)", objInfo.StorageClass())
 						}
 					} else {

@@ -18,7 +18,6 @@ package object
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -339,17 +338,16 @@ type TierKey struct{}
 const defaultRestoreDays = 3
 
 type SupportTier interface {
-	SetTier(init Tiers)
+	SetTier(init Tiers) error
 	GetStorageClass(ctx context.Context) string
 }
 
 type tierStorage struct {
-	sc    string
 	tiers map[uint8]Tier
 }
 
 func (b *tierStorage) GetStorageClass(ctx context.Context) string {
-	sc := b.sc
+	sc := b.tiers[0].Sc
 	if id, ok := ctx.Value(TierKey{}).(uint8); ok {
 		if t, ok := b.tiers[id]; ok {
 			sc = t.Sc
@@ -360,45 +358,17 @@ func (b *tierStorage) GetStorageClass(ctx context.Context) string {
 	return sc
 }
 
-func (b *tierStorage) SetTier(init Tiers) {
+func (b *tierStorage) SetTier(init Tiers) error {
 	if init == nil {
-		init = Tiers{}
+		init = NewTiers("")
 	}
 	b.tiers = init
+	return nil
 }
 
 type Tier struct {
 	ID uint8  `json:"ID"`
 	Sc string `json:"StorageClass"`
-}
-
-func (t Tier) GetHumanSc() string {
-	if t.ID == 0 {
-		return "default"
-	}
-	return t.Sc
-}
-
-type tierAlias Tier
-
-func (t *Tier) UnmarshalJSON(data []byte) error {
-	var aux tierAlias
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	if aux.ID == 0 {
-		aux.Sc = ""
-	}
-	*t = Tier(aux)
-	return nil
-}
-
-func (t Tier) MarshalJSON() ([]byte, error) {
-	aux := tierAlias(t)
-	if aux.ID == 0 {
-		aux.Sc = "default"
-	}
-	return json.Marshal(aux)
 }
 
 type Tiers map[uint8]Tier
@@ -417,9 +387,12 @@ func (t Tiers) GetSc(id uint8) (string, bool) {
 	return tInfo.Sc, ok
 }
 
-func NewTiers() Tiers {
+func NewTiers(defaultSc string) Tiers {
 	t := make(Tiers)
-	t[0] = Tier{}
+	t[0] = Tier{
+		ID: 0,
+		Sc: defaultSc,
+	}
 	return t
 }
 

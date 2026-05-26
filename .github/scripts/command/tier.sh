@@ -135,9 +135,9 @@ setup_tier_volume()
     ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s
 
     # configure tier 1~3 before using juicefs tier commands
-    ./juicefs config "$META_URL" --tier-id 1 --tier-sc STANDARD_IA -y
-    ./juicefs config "$META_URL" --tier-id 2 --tier-sc INTELLIGENT_TIERING -y
-    ./juicefs config "$META_URL" --tier-id 3 --tier-sc GLACIER_IR -y
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING -y
+    ./juicefs config "$META_URL" --tier 3 --storage-class GLACIER_IR -y
 }
 
 setup_tier_volume_writeback()
@@ -160,9 +160,9 @@ setup_tier_volume_writeback()
     ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s \
         --writeback --upload-delay "$upload_delay"
 
-    ./juicefs config "$META_URL" --tier-id 1 --tier-sc STANDARD_IA -y
-    ./juicefs config "$META_URL" --tier-id 2 --tier-sc INTELLIGENT_TIERING -y
-    ./juicefs config "$META_URL" --tier-id 3 --tier-sc GLACIER_IR -y
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING -y
+    ./juicefs config "$META_URL" --tier 3 --storage-class GLACIER_IR -y
 }
 
 get_tier_token()
@@ -243,7 +243,7 @@ assert_config_tier_sc_fail()
 {
     local id=$1
     local sc=$2
-    if ./juicefs config "$META_URL" --tier-id "$id" --tier-sc "$sc" -y; then
+    if ./juicefs config "$META_URL" --tier "$id" --storage-class "$sc" -y; then
         echo "<FATAL>: expect config failure but succeeded, id=$id storage-class=$sc"
         exit 1
     fi
@@ -419,7 +419,7 @@ test_tier_config_all_storage_classes()
 
     for sc in "${storage_classes[@]}"; do
         echo "Testing config with storage class: $sc"
-        ./juicefs config "$META_URL" --tier-id 2 --tier-sc "$sc" -y || {
+        ./juicefs config "$META_URL" --tier 2 --storage-class "$sc" -y || {
             echo "<FATAL>: config failed for storage class $sc"
             exit 1
         }
@@ -541,7 +541,7 @@ test_tier_change_mapping_after_set()
     assert_tier_sc /jfs/reconf/file INTELLIGENT_TIERING
     assert_object_storage_class_by_path /jfs/reconf/file INTELLIGENT_TIERING
 
-    ./juicefs config "$META_URL" --tier-id 2 --tier-sc STANDARD_IA -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class STANDARD_IA -y
     sleep 5
     assert_tier_id /jfs/reconf/file 2
     assert_tier_sc_expected_actual /jfs/reconf/file STANDARD_IA INTELLIGENT_TIERING
@@ -561,7 +561,7 @@ test_tier_invalid_mapping_reapply()
     dd if=/dev/urandom of=/jfs/invalid_map_case/root.bin bs=1M count=8 status=none
     dd if=/dev/urandom of=/jfs/invalid_map_case/a/b/child.bin bs=1M count=8 status=none
 
-    ./juicefs config "$META_URL" --tier-id 2 --tier-sc GLACIER_IR -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class GLACIER_IR -y
     sleep 5
     tier_set_no_err "$META_URL" --id 2 /invalid_map_case -r
     assert_tier_sc /jfs/invalid_map_case GLACIER_IR
@@ -572,7 +572,7 @@ test_tier_invalid_mapping_reapply()
     assert_object_storage_class_by_path /jfs/invalid_map_case/root.bin GLACIER_IR
     assert_object_storage_class_by_path /jfs/invalid_map_case/a/b/child.bin GLACIER_IR
 
-    ./juicefs config "$META_URL" --tier-id 2 --tier-sc INTELLIGENT_TIERING -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING -y
     sleep 5
     assert_tier_sc_expected_actual /jfs/invalid_map_case/root.bin INTELLIGENT_TIERING GLACIER_IR
     assert_tier_sc_expected_actual /jfs/invalid_map_case/a/b/child.bin INTELLIGENT_TIERING GLACIER_IR
@@ -622,14 +622,14 @@ test_tier_config_change_then_set()
     mkdir -p /jfs/rewrite_case
     dd if=/dev/urandom of=/jfs/rewrite_case/file.bin bs=1M count=8 status=none
 
-    ./juicefs config "$META_URL" --tier-id 2 --tier-sc INTELLIGENT_TIERING -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING -y
     sleep 5
     tier_set_no_err "$META_URL" --id 2 /rewrite_case/file.bin
     assert_tier_id /jfs/rewrite_case/file.bin 2
     assert_tier_sc /jfs/rewrite_case/file.bin INTELLIGENT_TIERING
     assert_object_storage_class_by_path /jfs/rewrite_case/file.bin INTELLIGENT_TIERING
 
-    ./juicefs config "$META_URL" --tier-id 2 --tier-sc STANDARD_IA -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class STANDARD_IA -y
     sleep 5
     assert_tier_sc_expected_actual /jfs/rewrite_case/file.bin STANDARD_IA INTELLIGENT_TIERING
     assert_object_storage_class_by_path /jfs/rewrite_case/file.bin INTELLIGENT_TIERING
@@ -652,13 +652,13 @@ test_tier_mixed_tree_reapply_after_mapping_change()
     mkdir -p /jfs/mixed_case/dir1/dir2
     dd if=/dev/urandom of=/jfs/mixed_case/dir1/old.bin bs=1M count=8 status=none
 
-    ./juicefs config "$META_URL" --tier-id 2 --tier-sc STANDARD_IA -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class STANDARD_IA -y
     sleep 5
     tier_set_no_err "$META_URL" --id 2 /mixed_case -r
     assert_tier_sc /jfs/mixed_case/dir1/old.bin STANDARD_IA
     assert_object_storage_class_by_path /jfs/mixed_case/dir1/old.bin STANDARD_IA
 
-    ./juicefs config "$META_URL" --tier-id 2 --tier-sc INTELLIGENT_TIERING -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING -y
     sleep 5
     assert_tier_sc_expected_actual /jfs/mixed_case/dir1/old.bin INTELLIGENT_TIERING STANDARD_IA
     assert_object_storage_class_by_path /jfs/mixed_case/dir1/old.bin STANDARD_IA
@@ -683,8 +683,8 @@ test_tier_glacier_deep_archive_restore()
     echo "deepdata1" > /jfs/archive_case/deep/c.txt
     echo "deepdata2" > /jfs/archive_case/deep/d.txt
 
-    # --- Part 1: GLACIER (tier-id 3) ---
-    ./juicefs config "$META_URL" --tier-id 3 --tier-sc GLACIER -y
+    # --- Part 1: GLACIER (tier 3) ---
+    ./juicefs config "$META_URL" --tier 3 --storage-class GLACIER -y
     sleep 5
     tier_set_no_err "$META_URL" --id 3 /archive_case/glacier -r
     assert_tier_id /jfs/archive_case/glacier/a.txt 3
@@ -697,7 +697,7 @@ test_tier_glacier_deep_archive_restore()
     ./juicefs tier restore "$META_URL" /archive_case/glacier -r
 
 
-    ./juicefs config "$META_URL" --tier-id 2 --tier-sc DEEP_ARCHIVE -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class DEEP_ARCHIVE -y
     sleep 5
     tier_set_no_err "$META_URL" --id 2 /archive_case/deep -r
     assert_tier_id /jfs/archive_case/deep/c.txt 2

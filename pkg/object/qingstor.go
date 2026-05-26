@@ -246,8 +246,8 @@ func (q *qingstor) ListAll(ctx context.Context, prefix, marker string, followLin
 
 func (q *qingstor) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	var input qs.InitiateMultipartUploadInput
-	if q.sc != "" {
-		input.XQSStorageClass = &q.sc
+	if sc := q.tiers[0].Sc; sc != "" {
+		input.XQSStorageClass = &sc
 	}
 	r, err := q.bucket.InitiateMultipartUploadWithContext(ctx, key, &input)
 	if err != nil {
@@ -323,11 +323,6 @@ func (q *qingstor) ListUploads(ctx context.Context, marker string) ([]*PendingPa
 		nextMarker = *result.NextKeyMarker
 	}
 	return parts, nextMarker, nil
-}
-
-func (q *qingstor) SetStorageClass(sc string) error {
-	q.sc = sc
-	return nil
 }
 
 func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

@@ -78,22 +78,14 @@ func (s *sharded) Delete(ctx context.Context, key string, getters ...AttrGetter)
 	return s.pick(key).Delete(ctx, key, getters...)
 }
 
-func (s *sharded) SetStorageClass(sc string) error {
+func (s *sharded) SetTier(init Tiers) error {
 	var err = notSupported
 	for _, o := range s.stores {
-		if os, ok := o.(SupportStorageClass); ok {
-			err = os.SetStorageClass(sc)
+		if o, ok := o.(SupportTier); ok {
+			err = o.SetTier(init)
 		}
 	}
 	return err
-}
-
-func (s *sharded) SetTier(init Tiers) {
-	for _, o := range s.stores {
-		if o, ok := o.(SupportTier); ok {
-			o.SetTier(init)
-		}
-	}
 }
 
 func (s *sharded) GetStorageClass(ctx context.Context) string {

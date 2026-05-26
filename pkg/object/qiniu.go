@@ -52,7 +52,7 @@ func (q *qiniu) String() string {
 	return fmt.Sprintf("qiniu://%s/", q.bucket)
 }
 
-func (q *qiniu) SetStorageClass(_ string) error {
+func (q *qiniu) SetTier(_ Tiers) error {
 	return notSupported
 }
 

@@ -94,7 +94,7 @@ func (b *wasb) Get(ctx context.Context, key string, off, limit int64, getters ..
 	}
 	attrs := ApplyGetters(getters...)
 	// TODO fire another property request to get the actual storage class
-	attrs.SetRequestID(aws.ToString(download.RequestID)).SetStorageClass(b.sc)
+	attrs.SetRequestID(aws.ToString(download.RequestID)).SetStorageClass(b.tiers[0].Sc)
 	return download.Body, err
 }
 
@@ -141,8 +141,8 @@ func (b *wasb) Copy(ctx context.Context, dst, src string) error {
 	dstCli := b.container.NewBlobClient(dst)
 	srcCli := b.container.NewBlobClient(src)
 	options := &blob2.CopyFromURLOptions{}
-	if b.sc != "" {
-		options.Tier = str2Tier(b.sc)
+	if b.tiers[0].Sc != "" {
+		options.Tier = str2Tier(b.tiers[0].Sc)
 	}
 
 	var srcURL string
@@ -214,11 +214,6 @@ func (b *wasb) List(ctx context.Context, prefix, startAfter, token, delimiter st
 		nextMarker = *page.NextMarker
 	}
 	return objs, pager.More(), nextMarker, nil
-}
-
-func (b *wasb) SetStorageClass(sc string) error {
-	b.sc = sc
-	return nil
 }
 
 // Restore Azure does not support restoring to a temporary read-only state; it can only directly permanently change the tier.

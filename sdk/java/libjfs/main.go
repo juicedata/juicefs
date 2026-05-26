@@ -339,56 +339,57 @@ func freeHandle(fd int32) {
 }
 
 type javaConf struct {
-	MetaURL             string `json:"meta"`
-	Bucket              string `json:"bucket"`
-	StorageClass        string `json:"storageClass"`
-	ReadOnly            bool   `json:"readOnly"`
-	NoSession           bool   `json:"noSession"`
-	NoBGJob             bool   `json:"noBGJob"`
-	OpenCache           string `json:"openCache"`
-	BackupMeta          string `json:"backupMeta"`
-	BackupSkipTrash     bool   `json:"backupSkipTrash"`
-	Heartbeat           string `json:"heartbeat"`
-	CacheDir            string `json:"cacheDir"`
-	CacheSize           string `json:"cacheSize"`
-	CacheItems          int64  `json:"cacheItems"`
-	FreeSpace           string `json:"freeSpace"`
-	AutoCreate          bool   `json:"autoCreate"`
-	CacheFullBlock      bool   `json:"cacheFullBlock"`
-	CacheChecksum       string `json:"cacheChecksum"`
-	CacheEviction       string `json:"cacheEviction"`
-	CacheScanInterval   string `json:"cacheScanInterval"`
-	CacheExpire         string `json:"cacheExpire"`
-	Writeback           bool   `json:"writeback"`
-	MemorySize          string `json:"memorySize"`
-	Prefetch            int    `json:"prefetch"`
-	Readahead           string `json:"readahead"`
-	UploadLimit         string `json:"uploadLimit"`
-	DownloadLimit       string `json:"downloadLimit"`
-	MaxUploads          int    `json:"maxUploads"`
-	MaxDownloads        int    `json:"maxDownloads"`
-	MaxDeletes          int    `json:"maxDeletes"`
-	SkipDirNlink        int    `json:"skipDirNlink"`
-	SkipDirMtime        string `json:"skipDirMtime"`
-	IORetries           int    `json:"ioRetries"`
-	GetTimeout          string `json:"getTimeout"`
-	PutTimeout          string `json:"putTimeout"`
-	FastResolve         bool   `json:"fastResolve"`
-	AttrTimeout         string `json:"attrTimeout"`
-	EntryTimeout        string `json:"entryTimeout"`
-	DirEntryTimeout     string `json:"dirEntryTimeout"`
-	Debug               bool   `json:"debug"`
-	NoUsageReport       bool   `json:"noUsageReport"`
-	AccessLog           string `json:"accessLog"`
-	PushGateway         string `json:"pushGateway"`
-	PushInterval        string `json:"pushInterval"`
-	PushAuth            string `json:"pushAuth"`
-	PushLabels          string `json:"pushLabels"`
-	PushGraphite        string `json:"pushGraphite"`
-	PushRemoteWrite     string `json:"pushRemoteWrite"`
-	PushRemoteWriteAuth string `json:"pushRemoteWriteAuth"`
-	Caller              int    `json:"caller"`
-	Subdir              string `json:"subdir"`
+	MetaURL             string       `json:"meta"`
+	Bucket              string       `json:"bucket"`
+	StorageClass        string       `json:"storageClass"`
+	Tiers               object.Tiers `json:"tiers"`
+	ReadOnly            bool         `json:"readOnly"`
+	NoSession           bool         `json:"noSession"`
+	NoBGJob             bool         `json:"noBGJob"`
+	OpenCache           string       `json:"openCache"`
+	BackupMeta          string       `json:"backupMeta"`
+	BackupSkipTrash     bool         `json:"backupSkipTrash"`
+	Heartbeat           string       `json:"heartbeat"`
+	CacheDir            string       `json:"cacheDir"`
+	CacheSize           string       `json:"cacheSize"`
+	CacheItems          int64        `json:"cacheItems"`
+	FreeSpace           string       `json:"freeSpace"`
+	AutoCreate          bool         `json:"autoCreate"`
+	CacheFullBlock      bool         `json:"cacheFullBlock"`
+	CacheChecksum       string       `json:"cacheChecksum"`
+	CacheEviction       string       `json:"cacheEviction"`
+	CacheScanInterval   string       `json:"cacheScanInterval"`
+	CacheExpire         string       `json:"cacheExpire"`
+	Writeback           bool         `json:"writeback"`
+	MemorySize          string       `json:"memorySize"`
+	Prefetch            int          `json:"prefetch"`
+	Readahead           string       `json:"readahead"`
+	UploadLimit         string       `json:"uploadLimit"`
+	DownloadLimit       string       `json:"downloadLimit"`
+	MaxUploads          int          `json:"maxUploads"`
+	MaxDownloads        int          `json:"maxDownloads"`
+	MaxDeletes          int          `json:"maxDeletes"`
+	SkipDirNlink        int          `json:"skipDirNlink"`
+	SkipDirMtime        string       `json:"skipDirMtime"`
+	IORetries           int          `json:"ioRetries"`
+	GetTimeout          string       `json:"getTimeout"`
+	PutTimeout          string       `json:"putTimeout"`
+	FastResolve         bool         `json:"fastResolve"`
+	AttrTimeout         string       `json:"attrTimeout"`
+	EntryTimeout        string       `json:"entryTimeout"`
+	DirEntryTimeout     string       `json:"dirEntryTimeout"`
+	Debug               bool         `json:"debug"`
+	NoUsageReport       bool         `json:"noUsageReport"`
+	AccessLog           string       `json:"accessLog"`
+	PushGateway         string       `json:"pushGateway"`
+	PushInterval        string       `json:"pushInterval"`
+	PushAuth            string       `json:"pushAuth"`
+	PushLabels          string       `json:"pushLabels"`
+	PushGraphite        string       `json:"pushGraphite"`
+	PushRemoteWrite     string       `json:"pushRemoteWrite"`
+	PushRemoteWriteAuth string       `json:"pushRemoteWriteAuth"`
+	Caller              int          `json:"caller"`
+	Subdir              string       `json:"subdir"`
 
 	AuthMethod string `json:"authMethod,omitempty"`
 	RealUser   string `json:"realUser,omitempty"`
@@ -652,8 +653,11 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			if jConf.Bucket != "" {
 				format.Bucket = jConf.Bucket
 			}
-			if jConf.StorageClass != "" {
-				format.StorageClass = jConf.StorageClass
+			if jConf.Tiers[0].Sc != "" {
+				format.Tiers[0] = object.Tier{
+					ID: 0,
+					Sc: jConf.Tiers[0].Sc,
+				}
 			}
 		})
 		if err != nil {

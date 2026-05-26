@@ -44,7 +44,7 @@ func (s *space) Limits() Limits {
 	return s.s3client.Limits()
 }
 
-func (s *space) SetStorageClass(sc string) error {
+func (s *space) SetTier(_ Tiers) error {
 	return notSupported
 }
 

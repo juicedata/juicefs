@@ -297,7 +297,7 @@ func (s *s3client) CreateMultipartUpload(ctx context.Context, key string) (*Mult
 	params := &s3.CreateMultipartUploadInput{
 		Bucket:       &s.bucket,
 		Key:          &key,
-		StorageClass: types.StorageClass(s.sc),
+		StorageClass: types.StorageClass(s.tiers[0].Sc),
 	}
 	resp, err := s.s3.CreateMultipartUpload(ctx, params)
 	if err != nil {
@@ -392,11 +392,6 @@ func (s *s3client) Restore(ctx context.Context, key string) error {
 		},
 	})
 	return err
-}
-
-func (s *s3client) SetStorageClass(sc string) error {
-	s.sc = sc
-	return nil
 }
 
 func autoS3Region(bucketName, accessKey, secretKey, token string) (string, error) {

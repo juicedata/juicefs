@@ -362,7 +362,9 @@ func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters .
 
 func (e *encrypted) SetTier(init Tiers) {
 	if o, ok := e.ObjectStorage.(SupportTier); ok {
-		o.SetTier(init)
+		if err := o.SetTier(init); err != nil {
+			logger.Warnf("Set storage tier: %s", err)
+		}
 	}
 }
 

@@ -338,7 +338,9 @@ func (e *chunkedEncrypted) UploadPartCopy(ctx context.Context, key string, uploa
 
 func (e *chunkedEncrypted) SetTier(init Tiers) {
 	if o, ok := e.ObjectStorage.(SupportTier); ok {
-		o.SetTier(init)
+		if err := o.SetTier(init); err != nil {
+			logger.Warnf("Set storage tier: %s", err)
+		}
 	}
 }
 

@@ -232,8 +232,8 @@ func (s *ks3) CreateMultipartUpload(ctx context.Context, key string) (*Multipart
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
-	if s.sc != "" {
-		params.StorageClass = aws.String(s.sc)
+	if s.tiers[0].Sc != "" {
+		params.StorageClass = aws.String(s.tiers[0].Sc)
 	}
 	resp, err := s.s3.CreateMultipartUploadWithContext(ctx, params)
 	if err != nil {
@@ -329,11 +329,6 @@ func (s *ks3) ListUploads(ctx context.Context, marker string) ([]*PendingPart, s
 		nextMarker = *result.NextKeyMarker
 	}
 	return parts, nextMarker, nil
-}
-
-func (s *ks3) SetStorageClass(sc string) error {
-	s.sc = sc
-	return nil
 }
 
 var ks3Regions = map[string]string{
