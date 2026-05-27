@@ -43,6 +43,8 @@ $ juicefs tier set redis://localhost --tier 1 /dir1
 $ juicefs tier set redis://localhost --tier 2 /dir1 -r
 $ juicefs tier set redis://localhost --tier 3 /file1
 $ juicefs tier set redis://localhost --tier 0 /file1
+$ juicefs tier restore redis://localhost /file1
+$ juicefs tier restore redis://localhost /file1 --days 7
 $ juicefs tier restore redis://localhost /dir1`,
 		Subcommands: []*cli.Command{
 			{
@@ -91,7 +93,7 @@ $ juicefs tier restore redis://localhost /dir1`,
 			&cli.IntFlag{
 				Name:  "days",
 				Value: object.DefaultRestoreDays,
-				Usage: "number of days to restore objects from cold storage",
+				Usage: "the duration within which the restored object remains in the restored state",
 			},
 		},
 	}
