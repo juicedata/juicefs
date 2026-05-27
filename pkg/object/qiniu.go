@@ -53,6 +53,8 @@ func (q *qiniu) String() string {
 }
 
 func (q *qiniu) SetTier(_ Tiers) error {
+	// avoid panic when GetStorageClass
+	q.tiers = NewTiers("")
 	return notSupported
 }
 

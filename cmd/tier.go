@@ -94,6 +94,15 @@ $ juicefs tier restore redis://localhost /dir1`,
 				Name:  "days",
 				Value: object.DefaultRestoreDays,
 				Usage: "the duration within which the restored object remains in the restored state",
+				Action: func(ctx *cli.Context, i int) error {
+					if !ctx.IsSet("days") {
+						return nil
+					}
+					if v < 1 {
+						return fmt.Errorf("--days should be at least 1")
+					}
+					return nil
+				},
 			},
 		},
 	}

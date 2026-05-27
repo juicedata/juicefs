@@ -45,6 +45,8 @@ func (s *space) Limits() Limits {
 }
 
 func (s *space) SetTier(_ Tiers) error {
+	// avoid panic when GetStorageClass
+	s.tiers = NewTiers("")
 	return notSupported
 }
 
