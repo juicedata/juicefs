@@ -903,10 +903,9 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 			parts[num], chksum, copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort, calChksum)
 			chksums[num] = chksumWithSz{chksum, sz}
 			if copyErr == nil {
+				copiedBytes.IncrInt64(sz)
 				if state != nil {
 					uploads.MarkMultipartPart(key, state, parts[num], chksum, calChksum)
-				} else {
-					copiedBytes.IncrInt64(sz)
 				}
 			}
 			errs <- copyErr
@@ -2345,7 +2344,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		delWg.Add(1)
 		go func() {
 			if checkpointMgr != nil && config.DeleteDst {
-				dstDelayDel = append(dstDelayDel, checkpointMgr.checkpointKey)
+				delayDelFunc(checkpointMgr.dst, []string{checkpointMgr.checkpointKey})
 			}
 			delayDelFunc(dst, dstDelayDel)
 			delWg.Done()
