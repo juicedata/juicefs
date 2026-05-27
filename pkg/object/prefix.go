@@ -68,13 +68,13 @@ func DirStorage(s ObjectStorage) ObjectStorage {
 	}
 	switch t := s.(type) {
 	case *withPrefix:
-		dir := path.Dir(t.prefix)
+		dir := path.Clean(path.Dir(t.prefix))
 		if dir == "." {
 			return t.os
 		}
 		return &withPrefix{os: t.os, prefix: dir + "/"}
 	case *filestore:
-		dir := path.Dir(t.root)
+		dir := path.Clean(path.Dir(t.root))
 		return &filestore{root: dir + "/"}
 	}
 	return s
