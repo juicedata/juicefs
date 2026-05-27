@@ -2344,7 +2344,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		delWg.Add(1)
 		go func() {
 			if checkpointMgr != nil && config.DeleteDst {
-				dstDelayDel = append(dstDelayDel, checkpointMgr.checkpointKey)
+				delayDelFunc(checkpointMgr.dst, []string{checkpointMgr.checkpointKey})
 			}
 			delayDelFunc(dst, dstDelayDel)
 			delWg.Done()
