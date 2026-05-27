@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -556,14 +555,13 @@ func (fs *FileSystem) BatchDeleteEntries(ctx meta.Context, parent string, ps []s
 	}
 	var entries []*meta.Entry
 	for _, p := range ps {
-		fi, e := fs.Stat(ctx, p)
-		if errors.Is(e, syscall.ENOENT) {
-			continue
+		var inode Ino
+		var attr meta.Attr
+		name := path.Base(p)
+		if err = fs.lookup(ctx, parentInfo.inode, name, &inode, &attr); err != 0 {
+			return
 		}
-		if e != 0 {
-			return e
-		}
-		entries = append(entries, &meta.Entry{Inode: fi.Inode(), Name: []byte(fi.Name()), Attr: fi.Attr()})
+		entries = append(entries, &meta.Entry{Inode: inode, Name: []byte(name), Attr: &attr})
 	}
 	if len(entries) == 0 {
 		return 0
