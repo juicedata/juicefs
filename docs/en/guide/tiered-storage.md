@@ -107,6 +107,6 @@ Key fields to look for:
 ## Notes
 
 - `tier set` only accepts file and directory paths.
-- `--tier` accepts values `0` to `3`; when using --tier in configuration, only `0` to `3` are allowed.
+- `--tier` only `0` to `3` are allowed.
 - In writeback-cache mode (`--writeback`), `tier set` may fail if the file's data has not yet been uploaded to object storage. Wait for the upload to complete, then retry.
 - Changing `--storage-class` does **not** automatically migrate existing objects. You must run `tier set ... --force` manually.
