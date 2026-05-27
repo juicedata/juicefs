@@ -170,7 +170,7 @@ func NewCheckpointManager(src, dst object.ObjectStorage, config *Config) *Checkp
 	checkpoint := newCheckpoint(config)
 	return &CheckpointManager{
 		multipartUploadStore: newMultipartUploadStore(checkpoint.MultipartUploads),
-		dst:                  dst,
+		dst:                  object.DirStorage(dst),
 		checkpoint:           checkpoint,
 		checkpointKey:        generateCheckpointKey(src.String(), dst.String(), config),
 		stopChan:             make(chan struct{}),
@@ -196,11 +196,7 @@ func generateCheckpointKey(src, dst string, config *Config) string {
 		fmt.Fprintf(h, "|%s|%s", strings.Join(config.Include, ","), strings.Join(config.Exclude, ","))
 	}
 	hash := h.Sum(nil)
-	dstPath := strings.TrimSuffix(strings.TrimSuffix(dst, "(encrypted-chunked)"), "(encrypted)")
-	if strings.HasSuffix(dstPath, "/") {
-		return fmt.Sprintf("%s.%x.json", checkpointPrefix, hash)
-	}
-	return fmt.Sprintf("/%s.%x.json", checkpointPrefix, hash)
+	return fmt.Sprintf("%s.%x.json", checkpointPrefix, hash)
 }
 
 func (m *CheckpointManager) isCheckpointKey(key string) bool {
