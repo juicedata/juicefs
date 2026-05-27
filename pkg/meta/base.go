@@ -722,9 +722,8 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 		}
 	}
 	if format.Tiers == nil {
-		format.Tiers = object.NewTiers()
+		format.Tiers = object.NewTiers(format.StorageClass)
 	}
-	format.Tiers[0] = object.Tier{}
 	m.Lock()
 	m.fmt = format
 	m.Unlock()

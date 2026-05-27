@@ -39,10 +39,12 @@ func cmdTier() *cli.Command {
 		Description: `
 Examples:
 $ juicefs tier list redis://localhost
-$ juicefs tier set redis://localhost --id 1 /dir1
-$ juicefs tier set redis://localhost --id 2 /dir1 -r
-$ juicefs tier set redis://localhost --id 3 /file1
-$ juicefs tier set redis://localhost --id 0 /file1
+$ juicefs tier set redis://localhost --tier 1 /dir1
+$ juicefs tier set redis://localhost --tier 2 /dir1 -r
+$ juicefs tier set redis://localhost --tier 3 /file1
+$ juicefs tier set redis://localhost --tier 0 /file1
+$ juicefs tier restore redis://localhost /file1
+$ juicefs tier restore redis://localhost /file1 --days 7
 $ juicefs tier restore redis://localhost /dir1`,
 		Subcommands: []*cli.Command{
 			{
@@ -66,14 +68,14 @@ $ juicefs tier restore redis://localhost /dir1`,
 		},
 		Flags: []cli.Flag{
 			&cli.IntFlag{
-				Name:  "id",
-				Usage: "tier id (0-3, 0 is reserved for default tier)",
+				Name:  "tier",
+				Usage: "tier (0-3, 0 is reserved for default tier)",
 				Action: func(ctx *cli.Context, v int) error {
-					if !ctx.IsSet("id") {
+					if !ctx.IsSet("tier") {
 						return nil
 					}
 					if v < 0 || v > 3 {
-						return fmt.Errorf("-id should be between 0 and 3")
+						return fmt.Errorf("--tier should be between 0 and 3")
 					}
 					return nil
 				},
@@ -86,7 +88,21 @@ $ juicefs tier restore redis://localhost /dir1`,
 			&cli.BoolFlag{
 				Name:    "force",
 				Aliases: []string{"f"},
-				Usage:   "force rewriting objects to the tier's current storage class (useful after --tier-sc config changes), even when the tier id is unchanged",
+				Usage:   "force rewriting objects to the tier's current storage class (useful after --storage-class config changes), even when the tier id is unchanged",
+			},
+			&cli.IntFlag{
+				Name:  "days",
+				Value: object.DefaultRestoreDays,
+				Usage: "the duration within which the restored object remains in the restored state",
+				Action: func(ctx *cli.Context, v int) error {
+					if !ctx.IsSet("days") {
+						return nil
+					}
+					if v < 1 {
+						return fmt.Errorf("--days should be at least 1")
+					}
+					return nil
+				},
 			},
 		},
 	}
@@ -101,9 +117,9 @@ func listTier(ctx *cli.Context) error {
 		logger.Fatalf("load setting: %s", err)
 	}
 	results := make([][]string, 0, 1+len(format.Tiers))
-	results = append(results, []string{"id", "storageClass"})
+	results = append(results, []string{"tier", "storageClass"})
 	for id, t := range format.Tiers {
-		results = append(results, []string{fmt.Sprintf("%d", id), t.GetHumanSc()})
+		results = append(results, []string{fmt.Sprintf("%d", id), t.Sc})
 	}
 	dataRows := results[1:]
 	sort.Slice(dataRows, func(i, j int) bool {
@@ -118,10 +134,10 @@ func setTier(ctx *cli.Context) error {
 	setup(ctx, 2)
 	removePassword(ctx.Args().Get(0))
 	path := ctx.Args().Get(1)
-	if !ctx.IsSet("id") {
-		logger.Fatal("missing required flag: -id")
+	if !ctx.IsSet("tier") {
+		logger.Fatal("missing required flag: --tier")
 	}
-	id := ctx.Uint("id")
+	id := ctx.Uint("tier")
 	m := meta.NewClient(ctx.Args().Get(0), nil)
 	format, err := m.Load(true)
 	if err != nil {
@@ -145,7 +161,7 @@ func setTier(ctx *cli.Context) error {
 		logger.Fatal("only file and directory are supported to set storage tier")
 	}
 	oldTier := format.Tiers[attr.Tier]
-	logger.Infof("set storage tier of %q from %d(%s) to %d(%s)", path, attr.Tier, oldTier.GetHumanSc(), id, newTier.GetHumanSc())
+	logger.Infof("set storage tier of %q from %d(%s) to %d(%s)", path, attr.Tier, oldTier.Sc, id, newTier.Sc)
 	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
@@ -186,7 +202,7 @@ func setTier(ctx *cli.Context) error {
 			}
 		}
 		if err = metaFunc(ino); err != nil {
-			return fmt.Errorf("set tier for inode %d tierID:%d failed: %w", ino, newTier.ID, err)
+			return fmt.Errorf("set tier for inode %d tier:%d failed: %w", ino, newTier.ID, err)
 		}
 
 	default:
@@ -199,6 +215,7 @@ func objRestore(ctx *cli.Context) error {
 	setup(ctx, 2)
 	removePassword(ctx.Args().Get(0))
 	path := ctx.Args().Get(1)
+	days := ctx.Int("days")
 	m := meta.NewClient(ctx.Args().Get(0), nil)
 	format, err := m.Load(true)
 	if err != nil {
@@ -223,7 +240,7 @@ func objRestore(ctx *cli.Context) error {
 	}
 
 	objectFunc := func(key string) error {
-		return blob.Restore(context.Background(), key)
+		return blob.Restore(context.Background(), key, int32(days))
 	}
 	if attr.Typ == meta.TypeFile {
 		err = visitEntry(m, format, ino, attr, objectFunc, nil, nil)

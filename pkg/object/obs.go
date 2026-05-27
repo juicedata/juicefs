@@ -69,7 +69,7 @@ func (s *obsClient) Create(ctx context.Context) error {
 	params.Bucket = s.bucket
 	params.Location = s.region
 	params.AvailableZone = "3az"
-	params.StorageClass = obs.StorageClassType(s.sc)
+	params.StorageClass = obs.StorageClassType(s.tiers[0].Sc)
 	_, err := s.c.CreateBucket(params)
 	if err != nil && isExists(err) {
 		err = nil
@@ -187,11 +187,11 @@ func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
 	_, err := s.c.CopyObject(params)
 	return err
 }
-func (s *obsClient) Restore(ctx context.Context, key string) error {
+func (s *obsClient) Restore(ctx context.Context, key string, days int32) error {
 	_, err := s.c.RestoreObject(&obs.RestoreObjectInput{
 		Bucket: s.bucket,
 		Key:    key,
-		Days:   defaultRestoreDays,
+		Days:   int(days),
 		Tier:   "Standard",
 	})
 	return err
@@ -250,7 +250,7 @@ func (s *obsClient) CreateMultipartUpload(ctx context.Context, key string) (*Mul
 	params := &obs.InitiateMultipartUploadInput{}
 	params.Bucket = s.bucket
 	params.Key = key
-	params.StorageClass = obs.StorageClassType(s.sc)
+	params.StorageClass = obs.StorageClassType(s.tiers[0].Sc)
 	resp, err := s.c.InitiateMultipartUpload(params)
 	if err != nil {
 		return nil, err
@@ -334,11 +334,6 @@ func (s *obsClient) ListUploads(ctx context.Context, marker string) ([]*PendingP
 		nextMarker = result.NextKeyMarker
 	}
 	return parts, nextMarker, nil
-}
-
-func (s *obsClient) SetStorageClass(sc string) error {
-	s.sc = sc
-	return nil
 }
 
 func autoOBSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {

@@ -31,10 +31,11 @@ type withPrefix struct {
 	prefix string
 }
 
-func (s *withPrefix) SetTier(init Tiers) {
+func (s *withPrefix) SetTier(init Tiers) error {
 	if o, ok := s.os.(SupportTier); ok {
-		o.SetTier(init)
+		return o.SetTier(init)
 	}
+	return notSupported
 }
 
 func (s *withPrefix) GetStorageClass(ctx context.Context) string {
@@ -78,13 +79,6 @@ func DirStorage(s ObjectStorage) ObjectStorage {
 		return &filestore{root: dir + "/"}
 	}
 	return s
-}
-
-func (s *withPrefix) SetStorageClass(sc string) error {
-	if o, ok := s.os.(SupportStorageClass); ok {
-		return o.SetStorageClass(sc)
-	}
-	return notSupported
 }
 
 func (s *withPrefix) Symlink(oldName, newName string) error {
@@ -254,11 +248,12 @@ func (p *withPrefix) ListUploads(ctx context.Context, marker string) ([]*Pending
 	return parts, nextMarker, err
 }
 
-func (p *withPrefix) Restore(ctx context.Context, key string) error {
-	return p.os.Restore(ctx, p.prefix+key)
+func (p *withPrefix) Restore(ctx context.Context, key string, days int32) error {
+	return p.os.Restore(ctx, p.prefix+key, days)
 }
 
 var _ ObjectStorage = (*withPrefix)(nil)
+var _ SupportTier = (*withPrefix)(nil)
 
 func IsFileSystem(object ObjectStorage) bool {
 	if o, ok := object.(*withPrefix); ok {

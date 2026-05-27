@@ -56,7 +56,7 @@ func (t *tosClient) Limits() Limits {
 }
 
 func (t *tosClient) Create(ctx context.Context) error {
-	_, err := t.client.CreateBucketV2(ctx, &tos.CreateBucketV2Input{Bucket: t.bucket, StorageClass: enum.StorageClassType(t.sc)})
+	_, err := t.client.CreateBucketV2(ctx, &tos.CreateBucketV2Input{Bucket: t.bucket, StorageClass: enum.StorageClassType(t.tiers[0].Sc)})
 	if e, ok := err.(*tos.TosServerError); ok {
 		if e.Code == codes.BucketAlreadyOwnedByYou || e.Code == codes.BucketAlreadyExists {
 			return nil
@@ -197,7 +197,7 @@ func (t *tosClient) CreateMultipartUpload(ctx context.Context, key string) (*Mul
 	resp, err := t.client.CreateMultipartUploadV2(ctx, &tos.CreateMultipartUploadV2Input{
 		Bucket:       t.bucket,
 		Key:          key,
-		StorageClass: enum.StorageClassType(t.sc),
+		StorageClass: enum.StorageClassType(t.tiers[0].Sc),
 	})
 	if err != nil {
 		return nil, err
@@ -287,19 +287,14 @@ func (t *tosClient) Copy(ctx context.Context, dst, src string) error {
 	})
 	return err
 }
-func (t *tosClient) Restore(ctx context.Context, key string) error {
+func (t *tosClient) Restore(ctx context.Context, key string, days int32) error {
 	_, err := t.client.RestoreObject(ctx, &tos.RestoreObjectInput{
 		Bucket:               t.bucket,
 		Key:                  key,
-		Days:                 defaultRestoreDays,
+		Days:                 int(days),
 		RestoreJobParameters: &tos.RestoreJobParameters{Tier: enum.TierStandard},
 	})
 	return err
-}
-
-func (t *tosClient) SetStorageClass(sc string) error {
-	t.sc = sc
-	return nil
 }
 
 func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

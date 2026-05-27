@@ -297,7 +297,7 @@ func (s *s3client) CreateMultipartUpload(ctx context.Context, key string) (*Mult
 	params := &s3.CreateMultipartUploadInput{
 		Bucket:       &s.bucket,
 		Key:          &key,
-		StorageClass: types.StorageClass(s.sc),
+		StorageClass: types.StorageClass(s.tiers[0].Sc),
 	}
 	resp, err := s.s3.CreateMultipartUpload(ctx, params)
 	if err != nil {
@@ -382,21 +382,16 @@ func (s *s3client) ListUploads(ctx context.Context, marker string) ([]*PendingPa
 	return parts, nextMarker, nil
 }
 
-func (s *s3client) Restore(ctx context.Context, key string) error {
+func (s *s3client) Restore(ctx context.Context, key string, days int32) error {
 	_, err := s.s3.RestoreObject(ctx, &s3.RestoreObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 		RestoreRequest: &types.RestoreRequest{
-			Days:                 aws.Int32(defaultRestoreDays),
+			Days:                 aws.Int32(days),
 			GlacierJobParameters: &types.GlacierJobParameters{Tier: types.TierStandard},
 		},
 	})
 	return err
-}
-
-func (s *s3client) SetStorageClass(sc string) error {
-	s.sc = sc
-	return nil
 }
 
 func autoS3Region(bucketName, accessKey, secretKey, token string) (string, error) {

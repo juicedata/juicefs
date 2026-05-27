@@ -174,7 +174,10 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 			format.Storage = c.String("storage")
 		}
 		if c.IsSet("storage-class") {
-			format.StorageClass = c.String("storage-class")
+			format.Tiers[0] = object.Tier{
+				ID: 0,
+				Sc: c.String("storage-class"),
+			}
 		}
 		if c.IsSet("upload-limit") {
 			format.UploadLimit = utils.ParseMbps(c, "upload-limit")
@@ -462,8 +465,8 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 			patch(new)
 		}
 		old := &holder.fmt
-		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken || new.StorageClass != old.StorageClass || !reflect.DeepEqual(new.Tiers, old.Tiers) {
-			logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q tiers=%v", new.Storage, new.Bucket, new.AccessKey, new.StorageClass, new.Tiers)
+		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken || new.Tiers[0].Sc != old.Tiers[0].Sc || !reflect.DeepEqual(new.Tiers, old.Tiers) {
+			logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q tiers=%v", new.Storage, new.Bucket, new.AccessKey, new.Tiers[0].Sc, new.Tiers)
 			newBlob, err := createStorage(*new)
 			if err != nil {
 				logger.Warnf("object storage: %s", err)

@@ -18,10 +18,6 @@ package object
 
 const DefaultStorageClass = "STANDARD"
 
-type SupportStorageClass interface {
-	SetStorageClass(sc string) error
-}
-
 // A generic way to get attributes from different object storage clients
 type ResponseAttrs struct {
 	storageClass *string

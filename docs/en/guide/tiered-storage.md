@@ -8,10 +8,10 @@ Starting with JuiceFS 1.4, tiered storage lets you map individual files or direc
 
 ## Key concepts
 
-- **tier-id**: The tier identifier, ranging from `0` to `3`.
-  - `0` is the default tier (reserved value).
+- **tier**: The tier identifier, ranging from `0` to `3`.
+  - `0` is the default tier.
   - `1` to `3` are user‑configurable tiers.
-- **tier-sc**: The storage class assigned to a tier-id, for example, `STANDARD_IA`, `INTELLIGENT_TIERING`, or `GLACIER_IR`.
+- **storage-class**: The storage class assigned to a tier, for example, `STANDARD_IA`, `INTELLIGENT_TIERING`, or `GLACIER_IR`.
 - **Tier attribute on a file/directory**: Stored in metadata; it determines which storage class is used for subsequent writes or object migrations.
 
 ## Prerequisites
@@ -25,9 +25,9 @@ Starting with JuiceFS 1.4, tiered storage lets you map individual files or direc
 Assign a storage class to each tier (`1` to `3`):
 
 ```shell
-juicefs config redis://localhost --tier-id 1 --tier-sc STANDARD_IA -y
-juicefs config redis://localhost --tier-id 2 --tier-sc INTELLIGENT_TIERING -y
-juicefs config redis://localhost --tier-id 3 --tier-sc GLACIER_IR -y
+juicefs config redis://localhost --tier 1 --storage-class STANDARD_IA -y
+juicefs config redis://localhost --tier 2 --storage-class INTELLIGENT_TIERING -y
+juicefs config redis://localhost --tier 3 --storage-class GLACIER_IR -y
 ```
 
 List the current mappings:
@@ -36,22 +36,20 @@ List the current mappings:
 juicefs tier list redis://localhost
 ```
 
-`id=0` is always displayed as `default`.
-
 ## 2. Set a tier on a file or directory
 
 ### A single file
 
 ```shell
-juicefs tier set redis://localhost --id 1 /path/to/file
+juicefs tier set redis://localhost --tier 1 /path/to/file
 ```
 
 ### A directory (non‑recursive, only the directory entry)
 
-When you set a storage tier on a directory, any new files or subdirectories created inside it later will inherit the tier-id of the parent directory, automatically using the corresponding storage type.
+When you set a storage tier on a directory, any new files or subdirectories created inside it later will inherit the tier of the parent directory, automatically using the corresponding storage type.
 
 ```shell
-juicefs tier set redis://localhost --id 2 /path/to/dir
+juicefs tier set redis://localhost --tier 2 /path/to/dir
 ```
 
 Without `-r`, only the directory inode is updated; files and subdirectories inside it are unchanged.
@@ -59,7 +57,7 @@ Without `-r`, only the directory inode is updated; files and subdirectories insi
 ### A directory (recursive)
 
 ```shell
-juicefs tier set redis://localhost --id 2 /path/to/dir -r
+juicefs tier set redis://localhost --tier 2 /path/to/dir -r
 ```
 
 Recursive mode processes all files and subdirectories under the target directory.
@@ -67,18 +65,18 @@ Recursive mode processes all files and subdirectories under the target directory
 ### Reset to the default tier (tier 0)
 
 ```shell
-juicefs tier set redis://localhost --id 0 /path/to/file
-juicefs tier set redis://localhost --id 0 /path/to/dir -r
+juicefs tier set redis://localhost --tier 0 /path/to/file
+juicefs tier set redis://localhost --tier 0 /path/to/dir -r
 ```
 
 ## 3. Rewrite objects after a mapping change (`--force`)
 
-If you change a tier-id's `tier-sc` from A to B, the files' metadata tier‑id remains unchanged, but the objects in object storage are still stored as A.
+If you change a tier's `storage-class` from A to B, the files' metadata tier‑id remains unchanged, but the objects in object storage are still stored as A.
 
 Use `--force` to trigger a re-write, copying the objects to the new storage class:
 
 ```shell
-juicefs tier set redis://localhost --id 2 /path/to/dir -r --force
+juicefs tier set redis://localhost --tier 2 /path/to/dir -r --force
 ```
 
 ## 4. Restore archive objects
@@ -101,14 +99,14 @@ juicefs info /mountpoint/path/to/file
 
 Key fields to look for:
 
-- `tier: <id>-><storage-class>` — the tier-id stored in metadata and its mapped storage class.
+- `tier: <id>-><storage-class>` — the tier stored in metadata and its mapped storage class.
 - `restore-status` — indicates whether the object is in an unfrozen state and when the active copy expires.
 - `expected(...),actual(...)` — shown when the metadata mapping and the object's actual storage class differ. This signals that `tier set --force` is needed to rewrite the objects.
-- `actual(...)` — shown for files with `tier-id=0`, displaying the object's actual storage class.
+- `actual(...)` — shown for files with `tier=0`, displaying the object's actual storage class.
 
 ## Notes
 
 - `tier set` only accepts file and directory paths.
-- `--id` accepts values `0` to `3`; when using --tier-id in configuration, only `1` to `3` are allowed.
+- `--tier` only `0` to `3` are allowed.
 - In writeback-cache mode (`--writeback`), `tier set` may fail if the file's data has not yet been uploaded to object storage. Wait for the upload to complete, then retry.
-- Changing `--tier-sc` does **not** automatically migrate existing objects. You must run `tier set ... --force` manually.
+- Changing `--storage-class` does **not** automatically migrate existing objects. You must run `tier set ... --force` manually.

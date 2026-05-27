@@ -127,9 +127,9 @@ func (c *COS) Get(ctx context.Context, key string, off, limit int64, getters ...
 	return resp.Body, nil
 }
 
-func (c *COS) Restore(ctx context.Context, key string) error {
+func (c *COS) Restore(ctx context.Context, key string, days int32) error {
 	_, err := c.c.Object.PostRestore(ctx, key, &cos.ObjectRestoreOptions{
-		Days: defaultRestoreDays,
+		Days: int(days),
 		Tier: &cos.CASJobParameters{
 			Tier: "Standard",
 		},
@@ -220,8 +220,8 @@ func (c *COS) ListAll(ctx context.Context, prefix, marker string, followLink boo
 
 func (c *COS) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	var options cos.InitiateMultipartUploadOptions
-	if c.sc != "" {
-		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosStorageClass: c.sc}
+	if c.tiers[0].Sc != "" {
+		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosStorageClass: c.tiers[0].Sc}
 	}
 	resp, _, err := c.c.Object.InitiateMultipartUpload(ctx, key, &options)
 	if err != nil {
@@ -275,11 +275,6 @@ func (c *COS) ListUploads(ctx context.Context, marker string) ([]*PendingPart, s
 		parts[i] = &PendingPart{u.Key, u.UploadID, t}
 	}
 	return parts, result.NextKeyMarker, nil
-}
-
-func (c *COS) SetStorageClass(sc string) error {
-	c.sc = sc
-	return nil
 }
 
 func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {

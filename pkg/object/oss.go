@@ -61,9 +61,9 @@ func (o *ossClient) Limits() Limits {
 
 func (o *ossClient) Create(ctx context.Context) error {
 	var configuration *oss.CreateBucketConfiguration
-	if o.sc != "" {
+	if o.tiers[0].Sc != "" {
 		configuration = &oss.CreateBucketConfiguration{
-			StorageClass: oss.StorageClassType(o.sc),
+			StorageClass: oss.StorageClassType(o.tiers[0].Sc),
 		}
 	}
 	_, err := o.client.PutBucket(ctx, &oss.PutBucketRequest{
@@ -158,12 +158,12 @@ func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	return err
 }
 
-func (o *ossClient) Restore(ctx context.Context, key string) error {
+func (o *ossClient) Restore(ctx context.Context, key string, days int32) error {
 	_, err := o.client.RestoreObject(ctx, &oss.RestoreObjectRequest{
 		Bucket: oss.Ptr(o.bucket),
 		Key:    oss.Ptr(key),
 		RestoreRequest: &oss.RestoreRequest{
-			Days: defaultRestoreDays,
+			Days: days,
 			Tier: oss.Ptr("Standard"),
 		},
 	})
@@ -240,7 +240,7 @@ func (o *ossClient) CreateMultipartUpload(ctx context.Context, key string) (*Mul
 	result, err := o.client.InitiateMultipartUpload(ctx, &oss.InitiateMultipartUploadRequest{
 		Bucket:       &o.bucket,
 		Key:          &key,
-		StorageClass: oss.StorageClassType(o.sc),
+		StorageClass: oss.StorageClassType(o.tiers[0].Sc),
 	})
 	if err != nil {
 		return nil, err
@@ -316,11 +316,6 @@ func (o *ossClient) ListUploads(ctx context.Context, marker string) ([]*PendingP
 		parts[i] = &PendingPart{oss.ToString(result.Key), oss.ToString(result.UploadId), oss.ToTime(u.LastModified)}
 	}
 	return parts, string(result.NextPartNumberMarker), nil
-}
-
-func (o *ossClient) SetStorageClass(sc string) error {
-	o.sc = sc
-	return nil
 }
 
 func autoOSSEndpoint(bucketName string, provider credentials.CredentialsProvider) (string, error) {

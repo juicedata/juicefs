@@ -87,7 +87,7 @@ func (g *gs) Create(ctx context.Context) error {
 
 	err := g.getClient().Bucket(g.bucket).Create(ctx, projectID, &storage.BucketAttrs{
 		Name:         g.bucket,
-		StorageClass: g.sc,
+		StorageClass: g.tiers[0].Sc,
 		Location:     g.region,
 	})
 	if err != nil && strings.Contains(err.Error(), "You already own this bucket") {
@@ -122,7 +122,7 @@ func (g *gs) Get(ctx context.Context, key string, off, limit int64, getters ...A
 	}
 	// TODO fire another attr request to get the actual storage class
 	attrs := ApplyGetters(getters...)
-	attrs.SetStorageClass(g.sc)
+	attrs.SetStorageClass(g.tiers[0].Sc)
 	return reader, nil
 }
 
@@ -189,13 +189,8 @@ func (g *gs) List(ctx context.Context, prefix, start, token, delimiter string, l
 	return objs, nextPageToken != "", nextPageToken, nil
 }
 
-func (g *gs) SetStorageClass(sc string) error {
-	g.sc = sc
-	return nil
-}
-
 // Restore GCS does not support restoring objects to a temporary readable state.
-func (g *gs) Restore(ctx context.Context, key string) error {
+func (g *gs) Restore(ctx context.Context, key string, days int32) error {
 	return notSupported
 }
 func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

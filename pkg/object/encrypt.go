@@ -360,10 +360,13 @@ func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters .
 	return e.ObjectStorage.Put(ctx, key, bytes.NewReader(ciphertext), getters...)
 }
 
-func (e *encrypted) SetTier(init Tiers) {
+func (e *encrypted) SetTier(init Tiers) error {
 	if o, ok := e.ObjectStorage.(SupportTier); ok {
-		o.SetTier(init)
+		if err := o.SetTier(init); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (e *encrypted) GetStorageClass(ctx context.Context) string {
@@ -374,3 +377,4 @@ func (e *encrypted) GetStorageClass(ctx context.Context) string {
 }
 
 var _ ObjectStorage = (*encrypted)(nil)
+var _ SupportTier = (*encrypted)(nil)

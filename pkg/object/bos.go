@@ -59,15 +59,10 @@ func (q *bosclient) Limits() Limits {
 	}
 }
 
-func (q *bosclient) SetStorageClass(sc string) error {
-	q.sc = sc
-	return nil
-}
-
 func (q *bosclient) Create(ctx context.Context) error {
 	_, err := q.c.PutBucket(q.bucket)
-	if err == nil && q.sc != "" {
-		if err := q.c.PutBucketStorageclass(q.bucket, q.sc); err != nil {
+	if err == nil && q.tiers[0].Sc != "" {
+		if err := q.c.PutBucketStorageclass(q.bucket, q.tiers[0].Sc); err != nil {
 			logger.Warnf("failed to set storage class: %v", err)
 		}
 	}
@@ -155,8 +150,8 @@ func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters .
 	return err
 }
 
-func (q *bosclient) Restore(ctx context.Context, key string) error {
-	return q.c.RestoreObject(q.bucket, key, defaultRestoreDays, api.RESTORE_TIER_STANDARD)
+func (q *bosclient) Restore(ctx context.Context, key string, days int32) error {
+	return q.c.RestoreObject(q.bucket, key, int(days), api.RESTORE_TIER_STANDARD)
 }
 
 func (q *bosclient) Copy(ctx context.Context, dst, src string) error {
@@ -200,8 +195,8 @@ func (q *bosclient) List(ctx context.Context, prefix, start, token, delimiter st
 
 func (q *bosclient) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	args := new(api.InitiateMultipartUploadArgs)
-	if q.sc != "" {
-		args.StorageClass = q.sc
+	if q.tiers[0].Sc != "" {
+		args.StorageClass = q.tiers[0].Sc
 	}
 	r, err := q.c.InitiateMultipartUpload(q.bucket, key, "", args)
 	if err != nil {

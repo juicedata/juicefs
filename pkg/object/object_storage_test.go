@@ -78,17 +78,12 @@ func listAll(ctx context.Context, s ObjectStorage, prefix, marker string, limit 
 
 func setStorageClass(o ObjectStorage) string {
 	sc := getScStr(o)
-	if osc, ok := o.(SupportStorageClass); ok {
-		err := osc.SetStorageClass(sc)
-		if err != nil {
-			sc = ""
-		}
-	}
-
 	if os, ok := o.(SupportTier); ok {
-		tiers := NewTiers()
+		tiers := NewTiers(sc)
 		tiers[1] = Tier{ID: 1, Sc: sc}
-		os.SetTier(tiers)
+		if err := os.SetTier(tiers); err != nil {
+			logger.Warnf("Set storage tier: %s", err)
+		}
 	}
 	return sc
 }
@@ -1198,7 +1193,6 @@ func TestStorj(t *testing.T) { //skip mutate
 	}
 	testStorage(t, s)
 }
-
 
 func TestMain(m *testing.M) {
 	if envFile := os.Getenv("JUICEFS_ENV_FILE_FOR_TEST"); envFile != "" {

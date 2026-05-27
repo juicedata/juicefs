@@ -550,10 +550,10 @@ func doSync(c *cli.Context) error {
 		object.Shutdown(dst)
 	}()
 	if config.StorageClass != "" {
-		if os, ok := dst.(object.SupportStorageClass); ok {
-			err := os.SetStorageClass(config.StorageClass)
-			if err != nil {
-				logger.Errorf("set storage class %q: %s", config.StorageClass, err)
+		if os, ok := dst.(object.SupportTier); ok {
+			tiers := object.NewTiers(config.StorageClass)
+			if err := os.SetTier(tiers); err != nil {
+				logger.Warnf("Set storage tier: %s", err)
 			}
 		}
 	}

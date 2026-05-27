@@ -110,19 +110,15 @@ func configManagementFlags() []cli.Flag {
 			Name:  "changelog-max-lines",
 			Usage: "max number of changelog entries to keep; 0 means unlimited",
 		},
-		&cli.StringFlag{
-			Name:  "tier-sc",
-			Usage: "storage class for storage tier (e.g. STANDARD_IA for AWS S3)",
-		},
 		&cli.IntFlag{
-			Name:  "tier-id",
-			Usage: "tier id (1-3; 0 is reserved for default tier when unset)",
+			Name:  "tier",
+			Usage: "tier (0-3; 0 is default tier when unset)",
 			Action: func(ctx *cli.Context, v int) error {
-				if !ctx.IsSet("tier-id") {
+				if !ctx.IsSet("tier") {
 					return nil
 				}
-				if v <= 0 || v > 3 {
-					return fmt.Errorf("tier-id should be between 1 and 3")
+				if v < 0 || v > 3 {
+					return fmt.Errorf("tier should be between 0 and 3")
 				}
 				return nil
 			},
@@ -228,12 +224,18 @@ func config(ctx *cli.Context) error {
 				storage = true
 			}
 		case "access-key":
+			if ctx.IsSet("tier") {
+				continue
+			}
 			if new := ctx.String(flag); new != format.AccessKey {
 				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.AccessKey, new))
 				format.AccessKey = new
 				storage = true
 			}
 		case "secret-key": // always update
+			if ctx.IsSet("tier") {
+				continue
+			}
 			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
 			if err := format.Decrypt(); err != nil && strings.Contains(err.Error(), "secret was removed") {
 				logger.Warnf("decrypt secrets: %s", err)
@@ -241,6 +243,9 @@ func config(ctx *cli.Context) error {
 			format.SecretKey = ctx.String(flag)
 			storage = true
 		case "session-token": // always update
+			if ctx.IsSet("tier") {
+				continue
+			}
 			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
 			if err := format.Decrypt(); err != nil && strings.Contains(err.Error(), "secret was removed") {
 				logger.Warnf("decrypt secrets: %s", err)
@@ -248,10 +253,17 @@ func config(ctx *cli.Context) error {
 			format.SessionToken = ctx.String(flag)
 			storage = true
 		case "storage-class": // always update
-			if new := ctx.String(flag); new != format.StorageClass {
-				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.StorageClass, new))
-				format.StorageClass = new
+			if ctx.IsSet("tier") {
+				continue
+			}
+			if new := ctx.String(flag); new != format.Tiers[0].Sc {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Tiers[0].Sc, new))
+				format.Tiers[0] = object.Tier{
+					ID: 0,
+					Sc: new,
+				}
 				storage = true
+				tier = true
 			}
 		case "upload-limit":
 			if new := utils.ParseMbps(ctx, flag); new != format.UploadLimit {
@@ -358,23 +370,16 @@ func config(ctx *cli.Context) error {
 			format.KerbConf = readKerbConf(ctx.String(flag))
 			format.MinClientVersion = "1.4.0-A"
 			clientVer = true
-		case "tier-id":
-			if !ctx.IsSet("tier-sc") {
-				logger.Fatalf("missing required flag: --tier-sc")
+		case "tier":
+			if ctx.IsSet("bucket") || ctx.IsSet("access-key") || ctx.IsSet("secret-key") || ctx.IsSet("session-token") {
+				logger.Fatalf("Current tiered storage does not support multi-bucket mode")
 			}
-			newSc = ctx.String("tier-sc")
+			if !ctx.IsSet("storage-class") {
+				logger.Fatalf("missing required flag: --storage-class")
+			}
+			newSc = ctx.String("storage-class")
 			newTierID = uint8(ctx.Int(flag))
 			oldTier, findTier = format.Tiers[newTierID]
-			if newSc == "" {
-				if !findTier {
-					msg.WriteString(fmt.Sprintf("storage class for tier %d is not defined in the config", newTierID))
-					break
-				}
-				delete(format.Tiers, newTierID)
-				msg.WriteString(fmt.Sprintf("remove tier %d\n", newTierID))
-				tier = true
-				break
-			}
 			if findTier && oldTier.Sc == newSc {
 				break
 			}
@@ -458,7 +463,7 @@ func config(ctx *cli.Context) error {
 		}
 		if tier {
 			if findTier && oldTier.Sc != newSc {
-				fmt.Printf("existing tier will be overwritten: %s=>%s\n", oldTier.GetHumanSc(), newSc)
+				fmt.Printf("existing tier will be overwritten: %s=>%s\n", oldTier.Sc, newSc)
 				if !yes && !userConfirmed() {
 					return fmt.Errorf("Aborted.")
 				}

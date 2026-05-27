@@ -54,9 +54,10 @@ func (s *ibmcos) String() string {
 func (s *ibmcos) Create(ctx context.Context) error {
 	input := &s3.CreateBucketInput{Bucket: &s.bucket}
 	// https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-classes&code=go
-	if s.sc != "" {
+
+	if sc := s.tiers[0].Sc; sc != "" {
 		input.CreateBucketConfiguration = &s3.CreateBucketConfiguration{
-			LocationConstraint: &s.sc,
+			LocationConstraint: &sc,
 		}
 	}
 	_, err := s.s3.CreateBucket(input)
@@ -99,11 +100,11 @@ func (s *ibmcos) Get(ctx context.Context, key string, off, limit int64, getters 
 	return resp.Body, nil
 }
 
-func (s *ibmcos) Restore(ctx context.Context, key string) error {
+func (s *ibmcos) Restore(ctx context.Context, key string, days int32) error {
 	_, err := s.s3.RestoreObject(&s3.RestoreObjectInput{
 		Bucket:         aws.String(s.bucket),
 		Key:            aws.String(key),
-		RestoreRequest: &s3.RestoreRequest{Days: aws.Int64(defaultRestoreDays)},
+		RestoreRequest: &s3.RestoreRequest{Days: aws.Int64(int64(days))},
 	})
 	return err
 }
@@ -231,8 +232,8 @@ func (s *ibmcos) CreateMultipartUpload(ctx context.Context, key string) (*Multip
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
-	if s.sc != "" {
-		params.SetStorageClass(s.sc)
+	if s.tiers[0].Sc != "" {
+		params.SetStorageClass(s.tiers[0].Sc)
 	}
 	resp, err := s.s3.CreateMultipartUploadWithContext(ctx, params)
 	if err != nil {
@@ -306,11 +307,6 @@ func (s *ibmcos) ListUploads(ctx context.Context, marker string) ([]*PendingPart
 		nextMarker = *result.NextKeyMarker
 	}
 	return parts, nextMarker, nil
-}
-
-func (s *ibmcos) SetStorageClass(sc string) error {
-	s.sc = sc
-	return nil
 }
 
 func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {

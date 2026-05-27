@@ -75,38 +75,38 @@ func (c *Config) SelfCheck() {
 }
 
 type Format struct {
-	Name             string
-	UUID             string
-	Storage          string
-	StorageClass     string       `json:",omitempty"`
-	Tiers            object.Tiers `json:",omitempty"`
-	Bucket           string
-	AccessKey        string `json:",omitempty"`
-	SecretKey        string `json:",omitempty"`
-	SessionToken     string `json:",omitempty"`
-	BlockSize        int
-	Compression      string `json:",omitempty"`
-	Shards           int    `json:",omitempty"`
-	HashPrefix       bool   `json:",omitempty"`
-	Capacity         uint64 `json:",omitempty"`
-	Inodes           uint64 `json:",omitempty"`
-	EncryptKey       string `json:",omitempty"`
-	EncryptAlgo      string `json:",omitempty"`
-	KeyEncrypted     bool   `json:",omitempty"`
-	UploadLimit      int64  `json:",omitempty"` // Mbps
-	DownloadLimit    int64  `json:",omitempty"` // Mbps
-	TrashDays        int
-	MetaVersion      int    `json:",omitempty"`
-	MinClientVersion string `json:",omitempty"`
-	MaxClientVersion string `json:",omitempty"`
-	DirStats         bool   `json:",omitempty"`
-	UserGroupQuota   bool   `json:",omitempty"`
-	EnableACL        bool
-	RangerRestUrl    string `json:",omitempty"`
-	RangerService    string `json:",omitempty"`
-	ChangeLog         bool  `json:",omitempty"`
-	ChangeLogMaxAge   int64 `json:",omitempty"`
-	ChangeLogMaxLines int64 `json:",omitempty"`
+	Name              string
+	UUID              string
+	Storage           string
+	StorageClass      string `json:",omitempty"`
+	Tiers             object.Tiers
+	Bucket            string
+	AccessKey         string `json:",omitempty"`
+	SecretKey         string `json:",omitempty"`
+	SessionToken      string `json:",omitempty"`
+	BlockSize         int
+	Compression       string `json:",omitempty"`
+	Shards            int    `json:",omitempty"`
+	HashPrefix        bool   `json:",omitempty"`
+	Capacity          uint64 `json:",omitempty"`
+	Inodes            uint64 `json:",omitempty"`
+	EncryptKey        string `json:",omitempty"`
+	EncryptAlgo       string `json:",omitempty"`
+	KeyEncrypted      bool   `json:",omitempty"`
+	UploadLimit       int64  `json:",omitempty"` // Mbps
+	DownloadLimit     int64  `json:",omitempty"` // Mbps
+	TrashDays         int
+	MetaVersion       int    `json:",omitempty"`
+	MinClientVersion  string `json:",omitempty"`
+	MaxClientVersion  string `json:",omitempty"`
+	DirStats          bool   `json:",omitempty"`
+	UserGroupQuota    bool   `json:",omitempty"`
+	EnableACL         bool
+	RangerRestUrl     string `json:",omitempty"`
+	RangerService     string `json:",omitempty"`
+	ChangeLog         bool   `json:",omitempty"`
+	ChangeLogMaxAge   int64  `json:",omitempty"`
+	ChangeLogMaxLines int64  `json:",omitempty"`
 
 	//kerberos
 	KerbConf string `json:",omitempty"`
