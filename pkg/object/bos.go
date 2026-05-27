@@ -150,8 +150,8 @@ func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters .
 	return err
 }
 
-func (q *bosclient) Restore(ctx context.Context, key string) error {
-	return q.c.RestoreObject(q.bucket, key, defaultRestoreDays, api.RESTORE_TIER_STANDARD)
+func (q *bosclient) Restore(ctx context.Context, key string, days int32) error {
+	return q.c.RestoreObject(q.bucket, key, int(days), api.RESTORE_TIER_STANDARD)
 }
 
 func (q *bosclient) Copy(ctx context.Context, dst, src string) error {

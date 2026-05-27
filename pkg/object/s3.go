@@ -382,12 +382,12 @@ func (s *s3client) ListUploads(ctx context.Context, marker string) ([]*PendingPa
 	return parts, nextMarker, nil
 }
 
-func (s *s3client) Restore(ctx context.Context, key string) error {
+func (s *s3client) Restore(ctx context.Context, key string, days int32) error {
 	_, err := s.s3.RestoreObject(ctx, &s3.RestoreObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 		RestoreRequest: &types.RestoreRequest{
-			Days:                 aws.Int32(defaultRestoreDays),
+			Days:                 aws.Int32(days),
 			GlacierJobParameters: &types.GlacierJobParameters{Tier: types.TierStandard},
 		},
 	})

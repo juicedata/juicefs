@@ -215,8 +215,8 @@ func (p *withPrefix) ListUploads(ctx context.Context, marker string) ([]*Pending
 	return parts, nextMarker, err
 }
 
-func (p *withPrefix) Restore(ctx context.Context, key string) error {
-	return p.os.Restore(ctx, p.prefix+key)
+func (p *withPrefix) Restore(ctx context.Context, key string, days int32) error {
+	return p.os.Restore(ctx, p.prefix+key, days)
 }
 
 var _ ObjectStorage = (*withPrefix)(nil)

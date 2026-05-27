@@ -158,12 +158,12 @@ func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	return err
 }
 
-func (o *ossClient) Restore(ctx context.Context, key string) error {
+func (o *ossClient) Restore(ctx context.Context, key string, days int32) error {
 	_, err := o.client.RestoreObject(ctx, &oss.RestoreObjectRequest{
 		Bucket: oss.Ptr(o.bucket),
 		Key:    oss.Ptr(key),
 		RestoreRequest: &oss.RestoreRequest{
-			Days: defaultRestoreDays,
+			Days: days,
 			Tier: oss.Ptr("Standard"),
 		},
 	})

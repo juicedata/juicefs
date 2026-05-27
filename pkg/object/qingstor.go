@@ -106,7 +106,7 @@ func (q *qingstor) Get(ctx context.Context, key string, off, limit int64, getter
 	}
 	return output.Body, nil
 }
-func (q *qingstor) Restore(ctx context.Context, key string) error {
+func (q *qingstor) Restore(ctx context.Context, key string, days int32) error {
 	return notSupported
 }
 

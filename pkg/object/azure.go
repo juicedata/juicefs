@@ -217,7 +217,7 @@ func (b *wasb) List(ctx context.Context, prefix, startAfter, token, delimiter st
 }
 
 // Restore Azure does not support restoring to a temporary read-only state; it can only directly permanently change the tier.
-func (b *wasb) Restore(ctx context.Context, key string) error {
+func (b *wasb) Restore(ctx context.Context, key string, days int32) error {
 	return notSupported
 }
 

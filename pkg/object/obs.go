@@ -187,11 +187,11 @@ func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
 	_, err := s.c.CopyObject(params)
 	return err
 }
-func (s *obsClient) Restore(ctx context.Context, key string) error {
+func (s *obsClient) Restore(ctx context.Context, key string, days int32) error {
 	_, err := s.c.RestoreObject(&obs.RestoreObjectInput{
 		Bucket: s.bucket,
 		Key:    key,
-		Days:   defaultRestoreDays,
+		Days:   int(days),
 		Tier:   "Standard",
 	})
 	return err

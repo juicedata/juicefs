@@ -88,6 +88,11 @@ $ juicefs tier restore redis://localhost /dir1`,
 				Aliases: []string{"f"},
 				Usage:   "force rewriting objects to the tier's current storage class (useful after --storage-class config changes), even when the tier id is unchanged",
 			},
+			&cli.IntFlag{
+				Name:  "days",
+				Value: object.DefaultRestoreDays,
+				Usage: "number of days to restore objects from cold storage",
+			},
 		},
 	}
 }
@@ -199,6 +204,7 @@ func objRestore(ctx *cli.Context) error {
 	setup(ctx, 2)
 	removePassword(ctx.Args().Get(0))
 	path := ctx.Args().Get(1)
+	days := ctx.Int("days")
 	m := meta.NewClient(ctx.Args().Get(0), nil)
 	format, err := m.Load(true)
 	if err != nil {
@@ -223,7 +229,7 @@ func objRestore(ctx *cli.Context) error {
 	}
 
 	objectFunc := func(key string) error {
-		return blob.Restore(context.Background(), key)
+		return blob.Restore(context.Background(), key, int32(days))
 	}
 	if attr.Typ == meta.TypeFile {
 		err = visitEntry(m, format, ino, attr, objectFunc, nil, nil)

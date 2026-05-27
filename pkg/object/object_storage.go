@@ -158,7 +158,7 @@ func (s DefaultObjectStorage) ListAll(ctx context.Context, prefix, marker string
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) Restore(ctx context.Context, key string) error {
+func (s DefaultObjectStorage) Restore(ctx context.Context, key string, days int32) error {
 	return notSupported
 }
 
@@ -335,7 +335,7 @@ func TmpFilePath(parent, name string) string {
 
 type TierKey struct{}
 
-const defaultRestoreDays = 3
+const DefaultRestoreDays = 3
 
 type SupportTier interface {
 	SetTier(init Tiers) error

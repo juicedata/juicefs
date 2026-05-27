@@ -127,9 +127,9 @@ func (c *COS) Get(ctx context.Context, key string, off, limit int64, getters ...
 	return resp.Body, nil
 }
 
-func (c *COS) Restore(ctx context.Context, key string) error {
+func (c *COS) Restore(ctx context.Context, key string, days int32) error {
 	_, err := c.c.Object.PostRestore(ctx, key, &cos.ObjectRestoreOptions{
-		Days: defaultRestoreDays,
+		Days: int(days),
 		Tier: &cos.CASJobParameters{
 			Tier: "Standard",
 		},

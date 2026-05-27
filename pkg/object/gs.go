@@ -190,7 +190,7 @@ func (g *gs) List(ctx context.Context, prefix, start, token, delimiter string, l
 }
 
 // Restore GCS does not support restoring objects to a temporary readable state.
-func (g *gs) Restore(ctx context.Context, key string) error {
+func (g *gs) Restore(ctx context.Context, key string, days int32) error {
 	return notSupported
 }
 func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

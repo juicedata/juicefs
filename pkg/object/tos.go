@@ -287,11 +287,11 @@ func (t *tosClient) Copy(ctx context.Context, dst, src string) error {
 	})
 	return err
 }
-func (t *tosClient) Restore(ctx context.Context, key string) error {
+func (t *tosClient) Restore(ctx context.Context, key string, days int32) error {
 	_, err := t.client.RestoreObject(ctx, &tos.RestoreObjectInput{
 		Bucket:               t.bucket,
 		Key:                  key,
-		Days:                 defaultRestoreDays,
+		Days:                 int(days),
 		RestoreJobParameters: &tos.RestoreJobParameters{Tier: enum.TierStandard},
 	})
 	return err

@@ -258,12 +258,12 @@ func (s *ks3) UploadPart(ctx context.Context, key string, uploadID string, num i
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
-func (s *ks3) Restore(ctx context.Context, key string) error {
+func (s *ks3) Restore(ctx context.Context, key string, days int32) error {
 	_, err := s.s3.RestoreObject(&s3.RestoreObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 		RestoreRequest: &s3.RestoreRequest{
-			Days: aws.Long(defaultRestoreDays),
+			Days: aws.Long(int64(days)),
 		},
 	})
 	return err

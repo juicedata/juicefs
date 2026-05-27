@@ -100,11 +100,11 @@ func (s *ibmcos) Get(ctx context.Context, key string, off, limit int64, getters 
 	return resp.Body, nil
 }
 
-func (s *ibmcos) Restore(ctx context.Context, key string) error {
+func (s *ibmcos) Restore(ctx context.Context, key string, days int32) error {
 	_, err := s.s3.RestoreObject(&s3.RestoreObjectInput{
 		Bucket:         aws.String(s.bucket),
 		Key:            aws.String(key),
-		RestoreRequest: &s3.RestoreRequest{Days: aws.Int64(defaultRestoreDays)},
+		RestoreRequest: &s3.RestoreRequest{Days: aws.Int64(int64(days))},
 	})
 	return err
 }
