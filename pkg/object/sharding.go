@@ -240,3 +240,6 @@ func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage
 	}
 	return &sharded{stores: stores}, nil
 }
+
+var _ SupportTier = (*sharded)(nil)
+var _ ObjectStorage = (*sharded)(nil)

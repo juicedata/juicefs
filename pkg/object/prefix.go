@@ -253,6 +253,7 @@ func (p *withPrefix) Restore(ctx context.Context, key string, days int32) error 
 }
 
 var _ ObjectStorage = (*withPrefix)(nil)
+var _ SupportTier = (*withPrefix)(nil)
 
 func IsFileSystem(object ObjectStorage) bool {
 	if o, ok := object.(*withPrefix); ok {
