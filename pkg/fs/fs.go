@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -318,13 +317,24 @@ func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
 func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 	buf := make([]byte, 0, 128<<10)
 	var lastcheck = time.Now()
+	defer func() {
+		if f != nil {
+			_ = f.Close()
+		}
+	}()
 	for {
-		line := <-logBuffer
+		line, ok := <-logBuffer
+		if !ok {
+			return
+		}
 		buf = append(buf[:0], []byte(line)...)
 	LOOP:
 		for len(buf) < (128 << 10) {
 			select {
-			case line = <-logBuffer:
+			case line, ok = <-logBuffer:
+				if !ok {
+					break LOOP
+				}
 				buf = append(buf, []byte(line)...)
 			default:
 				break LOOP
@@ -545,14 +555,16 @@ func (fs *FileSystem) BatchDeleteEntries(ctx meta.Context, parent string, ps []s
 	}
 	var entries []*meta.Entry
 	for _, p := range ps {
-		fi, e := fs.Stat(ctx, p)
-		if errors.Is(e, syscall.ENOENT) {
-			continue
+		var inode Ino
+		var attr meta.Attr
+		name := path.Base(p)
+		if err = fs.lookup(ctx, parentInfo.inode, name, &inode, &attr); err != 0 {
+			if err == syscall.ENOENT {
+				continue
+			}
+			return
 		}
-		if e != 0 {
-			return e
-		}
-		entries = append(entries, &meta.Entry{Inode: fi.Inode(), Name: []byte(fi.Name()), Attr: fi.Attr()})
+		entries = append(entries, &meta.Entry{Inode: inode, Name: []byte(name), Attr: &attr})
 	}
 	if len(entries) == 0 {
 		return 0

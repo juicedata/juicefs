@@ -66,13 +66,20 @@ func showThreadStack(agentAddr string) {
 	client := http.Client{
 		Timeout: 10 * time.Second,
 	}
-	resp, err := client.Get(fmt.Sprintf("http://%s/debug/pprof/goroutine?debug=2", agentAddr))
-	if err != nil {
-		logger.Warnf("list goroutine from %s: %s", agentAddr, err)
-	} else {
+	fn := func(level int) error {
+		resp, err := client.Get(fmt.Sprintf("http://%s/debug/pprof/goroutine?debug=%d", agentAddr, level))
+		if err != nil {
+			return err
+		}
 		grs, _ := io.ReadAll(resp.Body)
-		logger.Infof("list goroutines from %s:\n%s", agentAddr, string(grs))
+		logger.Infof("list goroutines (debug=%d) from %s:\n%s", level, agentAddr, string(grs))
 		_ = resp.Body.Close()
+		return nil
+	}
+	if err := fn(1); err == nil {
+		if err := fn(2); err != nil {
+			logger.Warnf("list goroutines debug=2 from %s: %s", agentAddr, err)
+		}
 	}
 }
 
@@ -83,16 +90,34 @@ func devMinor(dev uint64) uint32 {
 	return uint32(minor)
 }
 
+func processExists(pid int) bool {
+	p, _ := os.FindProcess(pid)
+	return p.Signal(syscall.Signal(0)) == nil
+}
+
+func waitProcessExit(pid int, timeout, interval time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !processExists(pid) {
+			return true
+		}
+		time.Sleep(interval)
+	}
+	return !processExists(pid)
+}
+
 func killMountProcess(pid int, dev uint64, lastActive *int64) {
 	if pid > 0 {
 		logger.Infof("watchdog: kill %d", pid)
 		err := syscall.Kill(pid, syscall.SIGABRT)
 		if err != nil {
-			logger.Warnf("kill %d: %s", pid, err)
+			logger.Warnf("kill %d with SIGABRT: %v", pid, err)
+		} else if !waitProcessExit(pid, 30*time.Second, 500*time.Millisecond) {
+			logger.Warnf("process %d is still alive after SIGABRT grace period. Kill it: %d", pid, pid)
 			_ = syscall.Kill(pid, syscall.SIGKILL)
 		}
 		// double check
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second * 30)
 		if atomic.LoadInt64(lastActive)+30 > time.Now().Unix() {
 			return
 		}
@@ -105,23 +130,6 @@ func killMountProcess(pid int, dev uint64, lastActive *int64) {
 	if err == nil {
 		waiting, err := strconv.Atoi(strings.TrimSpace(string(data)))
 		if err == nil && waiting > 0 {
-			tids, err := os.ReadDir(fmt.Sprintf("/proc/%d/task", pid))
-			if err != nil {
-				logger.Warnf("watchdog: read tasks of process %d: %v", pid, err)
-			} else {
-				for _, tid := range tids {
-					stackPath := fmt.Sprintf("/proc/%d/task/%s/stack", pid, tid.Name())
-					stack, err := os.ReadFile(stackPath)
-					if err != nil {
-						continue
-					}
-					stackText := strings.TrimSpace(string(stack))
-					if stackText == "" {
-						continue
-					}
-					logger.Warnf("watchdog: potential hung task kernel stack (pid=%d tid=%s):\n%s", pid, tid.Name(), stackText)
-				}
-			}
 			fuseMu.Lock()
 			if fuseFd > 0 {
 				_ = syscall.Close(fuseFd)
@@ -160,14 +168,54 @@ func loadConfig(path string) (string, *vfs.Config, error) {
 	return "", nil, fmt.Errorf("%s is not inside JuiceFS", path)
 }
 
+func printThreadsStack(pid int) {
+	if pid <= 1 {
+		return
+	}
+	start := time.Now()
+	tids, err := os.ReadDir(fmt.Sprintf("/proc/%d/task", pid))
+	if err != nil {
+		logger.Warnf("list tasks of pid %d: %s", pid, err)
+		return
+	}
+	var b strings.Builder
+	for _, tid := range tids {
+		readThreadStats(pid, tid.Name(), &b)
+	}
+	logger.Infof("print kernel stacks of process %d takes %s:\n%s", pid, time.Since(start), b.String())
+}
+
+func readThreadStats(pid int, tid string, b *strings.Builder) {
+	dpath := fmt.Sprintf("/proc/%d/task/%s", pid, tid)
+	data, err := os.ReadFile(dpath + "/status")
+	if err != nil {
+		fmt.Fprintf(b, "%s failed: %s\n", dpath, err)
+		return
+	}
+	for _, s := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(s, "State:") {
+			fmt.Fprintf(b, "%s %s\n", dpath, s)
+			break
+		}
+	}
+	if data, err = os.ReadFile(dpath + "/stack"); err == nil {
+		b.WriteString(string(data))
+	}
+	if data, err = os.ReadFile(dpath + "/schedstat"); err == nil {
+		fmt.Fprintf(b, "schedstat: %s", data)
+	}
+	if data, err = os.ReadFile(dpath + "/syscall"); err == nil {
+		fmt.Fprintf(b, "syscall: %s", data)
+	}
+}
+
 func watchdog(ctx context.Context, mp string) {
-	var lastActive int64
+	var lastActive int64 = time.Now().Unix()
 	var pid int
 	var agentAddr string
 	var dev uint64
 	go func() {
 		time.Sleep(time.Millisecond * 100) // wait for child process
-		atomic.StoreInt64(&lastActive, time.Now().Unix())
 		for ctx.Err() == nil {
 			var confName = ".config"
 			if !vfs.IsSpecialName(confName) {
@@ -200,19 +248,36 @@ func watchdog(ctx context.Context, mp string) {
 		}
 	}()
 	for ctx.Err() == nil {
-		now := time.Now().Unix()
-		if atomic.LoadInt64(&lastActive)+30 < now {
-			showThreadStack(agentAddr)
-			time.Sleep(time.Second * 30)
+		la := atomic.LoadInt64(&lastActive)
+		if time.Since(time.Unix(la, 0)) > time.Second*30 {
+			logger.Infof("mount point %q is not active for %s, start another check thread", mp, time.Since(time.Unix(la, 0)))
+			go printThreadsStack(pid)
+			go showThreadStack(agentAddr)
+			time.Sleep(time.Minute)
 			// double check
-			if atomic.LoadInt64(&lastActive)+60 < time.Now().Unix() && ctx.Err() == nil {
-				logger.Infof("mount point %q is not active for %s", mp, time.Since(time.Unix(atomic.LoadInt64(&lastActive), 0)))
-				showThreadStack(agentAddr)
-				killMountProcess(pid, dev, &lastActive)
-				atomic.StoreInt64(&lastActive, time.Now().Unix())
-				pid = 0
-				dev = 0
+			if ctx.Err() != nil {
+				break
 			}
+			if n := atomic.LoadInt64(&lastActive); n != la {
+				logger.Infof("last active time is updated from %d to %d (delta %ds), re-check", la, n, n-la)
+				continue
+			}
+			logger.Infof("mount point %q is not active for %s, print the stacks again", mp, time.Since(time.Unix(la, 0)))
+			go printThreadsStack(pid)
+			go showThreadStack(agentAddr)
+			time.Sleep(time.Second * 30)
+			if ctx.Err() != nil {
+				break
+			}
+			if n := atomic.LoadInt64(&lastActive); n != la {
+				logger.Infof("last active time is updated from %d to %d (delta %ds), re-check", la, n, n-la)
+				continue
+			}
+			logger.Infof("mount point %q is not active for %s", mp, time.Since(time.Unix(la, 0)))
+			killMountProcess(pid, dev, &lastActive)
+			atomic.StoreInt64(&lastActive, time.Now().Unix())
+			pid = 0
+			dev = 0
 		}
 		time.Sleep(time.Second * 10)
 	}

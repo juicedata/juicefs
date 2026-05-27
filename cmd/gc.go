@@ -294,7 +294,17 @@ func gc(ctx *cli.Context) error {
 		if obj.IsDir() {
 			continue
 		}
-		if obj.Mtime().After(maxMtime) || obj.Mtime().Unix() == 0 {
+		if obj.Size() == 0 || obj.Mtime().Unix() == 0 {
+			headObj, err := blob.Head(ctx.Context, obj.Key())
+			if err != nil {
+				logger.Warnf("head %s: %s", obj.Key(), err)
+				bar.Increment()
+				skipped.IncrInt64(obj.Size())
+				continue
+			}
+			obj = headObj
+		}
+		if obj.Mtime().After(maxMtime) {
 			logger.Debugf("ignore new block: %s %s", obj.Key(), obj.Mtime())
 			bar.Increment()
 			skipped.IncrInt64(obj.Size())

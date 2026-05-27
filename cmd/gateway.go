@@ -202,7 +202,7 @@ func gateway(c *cli.Context) error {
 	} else {
 		if _, err := jfsGateway.GetBucketInfo(context.Background(), minio.MinioMetaBucket); errors.As(err, &minio.BucketNotFound{}) {
 			if err := jfsGateway.MakeBucketWithLocation(context.Background(), minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
-				logger.Fatalf("init MinioMetaBucket error %s: %s", minio.MinioMetaBucket, err)
+				logger.Warnf("init MinioMetaBucket error %s: %s", minio.MinioMetaBucket, err)
 			}
 		}
 	}

@@ -711,7 +711,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	} else if !strings.HasSuffix(object, sep) && !fi.IsDir() {
 		isObject = true
 	}
-	if !n.gConf.HeadDir && !isObject {
+	if !n.gConf.HeadDir && !isObject || (strings.HasSuffix(object, sep) && !fi.IsDir()) {
 		err = jfsToObjectErr(ctx, syscall.ENOENT, bucket, object)
 		return
 	}
@@ -1103,6 +1103,9 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 }
 
 func (n *jfsObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) (err error) {
+	if len(uploadID) < subDirPrefix {
+		return minio.InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
+	}
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
@@ -1173,8 +1176,10 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	var etag string
 	if err = n.putObject(ctx, bucket, p, r, opts, func(tmpName string) {
 		etag = r.MD5CurrentHexString()
-		if n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0) != 0 {
-			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmpName, s3Etag, etag, 0)
+		if n.gConf.KeepEtag {
+			if n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0) != 0 {
+				logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmpName, s3Etag, etag, 0)
+			}
 		}
 	}); err != nil {
 		err = jfsToObjectErr(ctx, err, bucket, object)

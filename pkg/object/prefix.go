@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
+	"strings"
 	"time"
 )
 
@@ -46,6 +48,37 @@ func (s *withPrefix) GetStorageClass(ctx context.Context) string {
 // WithPrefix return an object storage that add a prefix to keys.
 func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 	return &withPrefix{os, prefix}
+}
+
+// DirStorage returns an ObjectStorage representing the parent directory of s.
+// If s already represents a directory (String() ends with "/"), it is returned unchanged.
+// For file-like storages, returns a new storage rooted at the parent directory.
+func DirStorage(s ObjectStorage) ObjectStorage {
+	switch t := s.(type) {
+	case *encrypted:
+		return &encrypted{ObjectStorage: DirStorage(t.ObjectStorage), enc: t.enc}
+	case *chunkedEncrypted:
+		return NewChunkedEncrypted(DirStorage(t.ObjectStorage), t.enc)
+	case *chunkedEncryptedFS:
+		return NewChunkedEncrypted(DirStorage(t.chunkedEncrypted.ObjectStorage), t.enc)
+	case *chunkedEncryptedFSSymlink:
+		return NewChunkedEncrypted(DirStorage(t.chunkedEncryptedFS.chunkedEncrypted.ObjectStorage), t.enc)
+	}
+	if strings.HasSuffix(s.String(), "/") {
+		return s
+	}
+	switch t := s.(type) {
+	case *withPrefix:
+		dir := path.Clean(path.Dir(t.prefix))
+		if dir == "." {
+			return t.os
+		}
+		return &withPrefix{os: t.os, prefix: dir + "/"}
+	case *filestore:
+		dir := path.Clean(path.Dir(t.root))
+		return &filestore{root: dir + "/"}
+	}
+	return s
 }
 
 func (s *withPrefix) Symlink(oldName, newName string) error {

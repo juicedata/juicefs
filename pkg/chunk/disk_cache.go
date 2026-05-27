@@ -23,7 +23,6 @@ import (
 	"hash/fnv"
 	"io"
 	"io/fs"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -342,18 +341,25 @@ func (cache *cacheStore) stats() (int64, int64) {
 	return int64(len(cache.pages) + cache.keys.len()), cache.used + cache.usedMemory()
 }
 
+func (cache *cacheStore) isFull(usage DiskFreeRatio, stage bool) bool {
+	if stage {
+		return usage.br < cache.freeRatio/2 || (usage.inodeCap > 0 && usage.fr < cache.freeRatio/2)
+	}
+	return usage.br < cache.freeRatio || (usage.inodeCap > 0 && usage.fr < cache.freeRatio)
+}
+
 func (cache *cacheStore) checkFreeSpace() {
 	for cache.available() {
 		usage := cache.curFreeRatio()
-		cache.stageFull = usage.br < cache.freeRatio/2 || (usage.inodeCap > 0 && usage.fr < cache.freeRatio/2)
-		cache.rawFull = usage.br < cache.freeRatio || (usage.inodeCap > 0 && usage.fr < cache.freeRatio)
+		cache.stageFull = cache.isFull(usage, true)
+		cache.rawFull = cache.isFull(usage, false)
 		if cache.rawFull && cache.keys.name() != EvictionNone {
 			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(usage.br*100), int(usage.fr*100))
 			cache.Lock()
 			cache.cleanupFull()
 			cache.Unlock()
 			usage = cache.curFreeRatio()
-			cache.rawFull = usage.br < cache.freeRatio || (usage.inodeCap > 0 && usage.fr < cache.freeRatio)
+			cache.rawFull = cache.isFull(usage, false)
 		}
 		if cache.rawFull {
 			cache.uploadStaging()
@@ -796,6 +802,20 @@ func (cache *cacheStore) uploaded(key string, size int) {
 	cache.add(key, int32(size), 0)
 }
 
+func (cache *cacheStore) spaceToFree(usage DiskFreeRatio) int64 {
+	if usage.br < cache.freeRatio {
+		return int64(float64(usage.spaceCap) * float64(cache.freeRatio-usage.br))
+	}
+	return 0
+}
+
+func (cache *cacheStore) inodesToFree(usage DiskFreeRatio) int64 {
+	if usage.fr < cache.freeRatio {
+		return int64(float64(usage.inodeCap) * float64(cache.freeRatio-usage.fr))
+	}
+	return 0
+}
+
 // locked
 func (cache *cacheStore) cleanupFull() {
 	if !cache.available() {
@@ -811,20 +831,18 @@ func (cache *cacheStore) cleanupFull() {
 	// make sure we have enough free space after cleanup
 	usage := cache.curFreeRatio()
 	cache.Lock()
-	if usage.br < cache.freeRatio {
-		toFree := int64(float32(usage.spaceCap) * (cache.freeRatio - usage.br))
+	if toFree := cache.spaceToFree(usage); toFree > 0 {
 		if toFree > cache.used {
 			goal = 0
 		} else if cache.used-toFree < goal {
 			goal = (cache.used - toFree) * 95 / 100
 		}
 	}
-	if usage.fr < cache.freeRatio {
-		toFree := int(float32(usage.inodeCap) * (cache.freeRatio - usage.fr))
-		if toFree > cache.keys.len() {
+	if toFree := cache.inodesToFree(usage); toFree > 0 {
+		if toFree > int64(cache.keys.len()) {
 			num = 0
 		} else {
-			num = int64(cache.keys.len()-toFree) * 99 / 100
+			num = (int64(cache.keys.len()) - toFree) * 99 / 100
 		}
 	}
 	if int64(cache.keys.len()) <= num && cache.used <= goal {
@@ -864,10 +882,11 @@ func (cache *cacheStore) uploadStaging() {
 	if !cache.scanned || cache.uploader == nil {
 		return
 	}
-	var toFree int64
 	usage := cache.curFreeRatio()
-	if usage.br < cache.freeRatio || usage.fr < cache.freeRatio {
-		toFree = int64(float64(usage.spaceCap)*float64(cache.freeRatio) - math.Min(float64(usage.br), float64(usage.fr)))
+	spaceToFree := cache.spaceToFree(usage)
+	inodeToFree := cache.inodesToFree(usage)
+	if spaceToFree <= 0 && inodeToFree <= 0 {
+		return
 	}
 	cache.Lock()
 	defer cache.Unlock()
@@ -898,11 +917,12 @@ func (cache *cacheStore) uploadStaging() {
 			logger.Debugf("upload %s, age: %d", key, uint32(time.Now().Unix())-lastValue.atime)
 			cache.Lock()
 			// the size in keys should be updated
-			toFree -= int64(-lastValue.size + 4096)
+			spaceToFree -= int64(-lastValue.size + 4096)
+			inodeToFree--
 			cnt = 0
 		}
 
-		if toFree < 0 {
+		if spaceToFree <= 0 && inodeToFree <= 0 {
 			break
 		}
 	}
