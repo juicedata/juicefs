@@ -559,6 +559,9 @@ func (fs *FileSystem) BatchDeleteEntries(ctx meta.Context, parent string, ps []s
 		var attr meta.Attr
 		name := path.Base(p)
 		if err = fs.lookup(ctx, parentInfo.inode, name, &inode, &attr); err != 0 {
+			if err == syscall.ENOENT {
+				continue
+			}
 			return
 		}
 		entries = append(entries, &meta.Entry{Inode: inode, Name: []byte(name), Attr: &attr})
