@@ -370,7 +370,6 @@ type Tier struct {
 	ID uint8  `json:"ID"`
 	Sc string `json:"StorageClass"`
 }
-
 type Tiers map[uint8]Tier
 
 func (t Tiers) GetID(sc string) (uint8, bool) {

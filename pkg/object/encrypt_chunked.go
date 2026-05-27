@@ -336,12 +336,13 @@ func (e *chunkedEncrypted) UploadPartCopy(ctx context.Context, key string, uploa
 	return nil, notSupported
 }
 
-func (e *chunkedEncrypted) SetTier(init Tiers) {
+func (e *chunkedEncrypted) SetTier(init Tiers) error {
 	if o, ok := e.ObjectStorage.(SupportTier); ok {
 		if err := o.SetTier(init); err != nil {
-			logger.Warnf("Set storage tier: %s", err)
+			return err
 		}
 	}
+	return nil
 }
 
 func (e *chunkedEncrypted) GetStorageClass(ctx context.Context) string {
@@ -366,3 +367,5 @@ type chunkedEncryptedFSSymlink struct {
 }
 
 var _ SupportSymlink = (*chunkedEncryptedFSSymlink)(nil)
+
+var _ SupportTier = (*chunkedEncryptedFSSymlink)(nil)

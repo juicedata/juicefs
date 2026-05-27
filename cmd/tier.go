@@ -75,7 +75,7 @@ $ juicefs tier restore redis://localhost /dir1`,
 						return nil
 					}
 					if v < 0 || v > 3 {
-						return fmt.Errorf("-id should be between 0 and 3")
+						return fmt.Errorf("--tier should be between 0 and 3")
 					}
 					return nil
 				},

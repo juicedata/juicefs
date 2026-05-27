@@ -117,7 +117,7 @@ func configManagementFlags() []cli.Flag {
 				if !ctx.IsSet("tier") {
 					return nil
 				}
-				if v > 3 {
+				if v < 0 || v > 3 {
 					return fmt.Errorf("tier should be between 0 and 3")
 				}
 				return nil

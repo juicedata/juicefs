@@ -722,13 +722,7 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 		}
 	}
 	if format.Tiers == nil {
-		format.Tiers = object.NewTiers("")
-	}
-	if format.StorageClass != "" {
-		format.Tiers[0] = object.Tier{0, format.StorageClass}
-	}
-	if _, ok := format.Tiers[0]; !ok {
-		format.Tiers[0] = object.Tier{0, ""}
+		format.Tiers = object.NewTiers(format.StorageClass)
 	}
 	m.Lock()
 	m.fmt = format
