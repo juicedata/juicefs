@@ -39,6 +39,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/juicedata/juicefs/pkg/win"
 	"github.com/winfsp/cgofuse/fuse"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 
 	"github.com/urfave/cli/v2"
@@ -87,6 +88,10 @@ type juice struct {
 	logBuffer chan string
 
 	attrCacheTimeout time.Duration
+
+	// reports real host disk stats instead of  uiceFS metadata engine stats (which default to 1PB for cloud storage).
+	mountLocal  bool
+	hostVolRoot string // Host volume root path (e.g., "C:\\") for GetDiskFreeSpaceEx
 }
 
 // Init is called when the file system is created.
@@ -122,6 +127,27 @@ func (j *juice) newContext() vfs.LogContext {
 
 // Statfs gets file system statistics.
 func (j *juice) Statfs(path string, stat *fuse.Statfs_t) int {
+	if j.mountLocal && j.hostVolRoot != "" {
+		pathPtr, err := windows.UTF16PtrFromString(j.hostVolRoot)
+		if err == nil {
+			var freeBytesAvailable, totalBytes, totalFreeBytes uint64
+			if err := windows.GetDiskFreeSpaceEx(pathPtr, &freeBytesAvailable, &totalBytes, &totalFreeBytes); err == nil {
+				var bsize uint64 = 4096
+				stat.Namemax = 255
+				stat.Frsize = 4096
+				stat.Bsize = bsize
+				stat.Blocks = totalBytes / bsize
+				stat.Bfree = totalFreeBytes / bsize
+				stat.Bavail = freeBytesAvailable / bsize
+				stat.Files = 1 << 20
+				stat.Ffree = 1 << 20
+				stat.Favail = 1 << 20
+				return 0
+			}
+		}
+		logger.Warnf("Failed to get host disk stats for %s, falling back to metadata stats", j.hostVolRoot)
+	}
+
 	ctx := j.newContext()
 	// defer trace(path)(stat)
 	var totalspace, availspace, iused, iavail uint64
@@ -1082,6 +1108,15 @@ func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFi
 	jfs.disableSymlink = os.Getenv("JUICEFS_ENABLE_SYMLINK") != "1"
 	jfs.asRoot = asRoot
 	jfs.delayClose = delayCloseSec
+	if c.Bool("as-local-volume") {
+		jfs.mountLocal = true
+		if cwd, err := os.Getwd(); err == nil {
+			jfs.hostVolRoot = filepath.VolumeName(cwd) + `\`
+			logger.Infof("Local drive mode: reporting disk stats from host volume %s", jfs.hostVolRoot)
+		} else {
+			logger.Warnf("Local drive mode: failed to determine host volume root: %v", err)
+		}
+	}
 	host := fuse.NewFileSystemHost(&jfs)
 	jfs.host = host
 	var options = "volname=" + volAlias
