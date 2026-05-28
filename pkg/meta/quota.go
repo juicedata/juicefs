@@ -841,6 +841,25 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 
 		}
 	}
+
+	if err := m.en.doScanSustainedInodes(ctx, func(uid, gid uint32, length uint64) error {
+		u, g := uint64(uid), uint64(gid)
+		if userUsage[u] == nil {
+			userUsage[u] = &Summary{}
+		}
+		if groupUsage[g] == nil {
+			groupUsage[g] = &Summary{}
+		}
+		space := align4K(length)
+		userUsage[u].Size += uint64(space)
+		userUsage[u].Files++
+		groupUsage[g].Size += uint64(space)
+		groupUsage[g].Files++
+		return nil
+	}); err != nil {
+		logger.Warnf("scan sustained inodes for user/group quota: %v", err)
+	}
+
 	return userUsage, groupUsage, nil
 }
 

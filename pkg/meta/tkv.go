@@ -2566,6 +2566,31 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	return 0
 }
 
+func (m *kvMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
+	vals, err := m.scanKeys(ctx, m.fmtKey("SS"))
+	if err != nil {
+		return err
+	}
+	var attr Attr
+	for _, k := range vals {
+		b := utils.FromBuffer(k[2:])
+		if b.Len() != 16 {
+			logger.Warnf("Invalid sustainedKey: %v", k)
+			continue
+		}
+		_ = b.Get64()
+		inode := m.decodeInode(b.Get(8))
+		if eno := m.doGetAttr(ctx, inode, &attr); eno != 0 {
+			logger.Warnf("Get attr of sustained inode %d: %s", inode, eno)
+			continue
+		}
+		if err := fn(attr.Uid, attr.Gid, attr.Length); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var attr Attr
 	var newSpace int64
@@ -3595,29 +3620,15 @@ func (m *kvMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
-	// need add sustained file size
-	vals, err := m.scanKeys(ctx, m.fmtKey("SS"))
-	if err != nil {
+	if err := m.doScanSustainedInodes(ctx, func(uid, gid uint32, length uint64) error {
+		used += align4K(length)
+		inodes++
+		return nil
+	}); err != nil {
 		return err
 	}
-	var attr Attr
-	for _, k := range vals {
-		b := utils.FromBuffer(k[2:])
-		if b.Len() != 16 {
-			logger.Warnf("Invalid sustainedKey: %v", k)
-			continue
-		}
-		_ = b.Get64()
-		inode := m.decodeInode(b.Get(8))
-		if eno := m.doGetAttr(ctx, inode, &attr); eno != 0 {
-			logger.Warnf("Get attr of inode %d: %s", inode, eno)
-			continue
-		}
-		used += align4K(attr.Length)
-		inodes += 1
-	}
 	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inodes)
-	err = m.setValue(m.counterKey(totalInodes), packCounter(inodes))
+	err := m.setValue(m.counterKey(totalInodes), packCounter(inodes))
 	if err != nil {
 		return fmt.Errorf("set total inodes: %w", err)
 	}

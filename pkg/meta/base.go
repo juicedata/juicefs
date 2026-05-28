@@ -104,6 +104,8 @@ type engine interface {
 	doFindDetachedNodes(t time.Time) []Ino
 	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
 
+	doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error
+
 	doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error)
 	// set quota, return true if there is no quota exists before
 	doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (created bool, err error)
