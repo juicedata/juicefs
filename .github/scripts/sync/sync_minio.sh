@@ -158,6 +158,66 @@ wait_gateway_ready(){
     fi
 }
 
+create_sparse_marker_file(){
+    local file_path=$1
+    local file_size=$2
+    python3 - "$file_path" "$file_size" <<'PY'
+import sys
+
+path = sys.argv[1]
+size = int(sys.argv[2])
+markers = [
+    (0, b"juicefs-multipart-checkpoint-begin\n"),
+    (size // 2, b"juicefs-multipart-checkpoint-middle\n"),
+    (size - len(b"juicefs-multipart-checkpoint-end\n"), b"juicefs-multipart-checkpoint-end\n"),
+]
+
+with open(path, "wb") as f:
+    f.truncate(size)
+    for offset, data in markers:
+        f.seek(offset)
+        f.write(data)
+PY
+}
+
+assert_checkpoint_contains_multipart_state(){
+    local checkpoint_file=$1
+    local object_key=$2
+    local expected_size=$3
+    python3 - "$checkpoint_file" "$object_key" "$expected_size" <<'PY'
+import json
+import sys
+
+checkpoint_file, object_key, expected_size = sys.argv[1], sys.argv[2], int(sys.argv[3])
+with open(checkpoint_file, "r", encoding="utf-8") as f:
+    checkpoint = json.load(f)
+
+uploads = checkpoint.get("multipart_uploads") or {}
+state = uploads.get(object_key)
+if not state:
+    raise SystemExit(f"missing multipart checkpoint for {object_key}")
+
+upload = state.get("upload") or {}
+upload_id = upload.get("UploadID")
+if not upload_id:
+    raise SystemExit(f"missing upload id for {object_key}")
+
+if state.get("size") != expected_size:
+    raise SystemExit(f"unexpected checkpoint size: {state.get('size')} != {expected_size}")
+
+parts = state.get("parts") or {}
+if not parts:
+    raise SystemExit(f"missing uploaded parts for {object_key}")
+
+print(upload_id)
+PY
+}
+
+get_minio_object_size(){
+    local target=$1
+    ./mc stat --json "$target" | python3 -c 'import json, sys; payload = json.load(sys.stdin); size = payload.get("size"); metadata = payload.get("metadata") or {}; size = metadata.get("content-length") if size is None else size; assert size is not None, "unable to get object size from mc stat output"; print(int(size))'
+}
+
 # ---- sync encryption / decryption tests (minio) ----
 
 setup_sync_encrypt_keys(){
@@ -499,6 +559,56 @@ test_checkpoint_minio_big_file_resume(){
     ./mc cp myminio/myjfs/bigfile /tmp/bigfile_ckpt2
     cmp /tmp/bigfile_ckpt /tmp/bigfile_ckpt2 || (echo "big file content mismatch after checkpoint resume" && exit 1)
     rm -f /tmp/bigfile_ckpt /tmp/bigfile_ckpt2
+}
+
+test_checkpoint_minio_multipart_resume(){
+    # Test: multipart upload checkpoint should persist upload state and resume for >4GiB objects
+    prepare_test
+    local key="multipart-checkpoint.bin"
+    local size=$((5 * 1024 * 1024 * 1024 + 17 * 1024 * 1024))
+    local checkpoint_json=/tmp/minio-multipart-checkpoint.json
+    rm -f "$checkpoint_json"
+    create_sparse_marker_file "/jfs/$key" "$size"
+
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --threads 1 --list-threads 1 --debug \
+        --enable-checkpoint --checkpoint-interval 60s \
+        >sync1.log 2>&1 &
+    sync_pid=$!
+    sleep 4
+    kill -INT $sync_pid || true
+    wait $sync_pid || true
+
+    checkpoint_file=$(./mc find myminio/myjfs/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
+    if [ -z "$checkpoint_file" ]; then
+        echo "checkpoint file should exist after interrupted multipart minio sync"
+        cat sync1.log
+        exit 1
+    fi
+
+    ./mc cat "$checkpoint_file" > "$checkpoint_json"
+    upload_id=$(assert_checkpoint_contains_multipart_state "$checkpoint_json" "$key" "$size")
+    [ -n "$upload_id" ] || (echo "multipart upload id should not be empty" && exit 1)
+
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
+        --threads 1 --list-threads 1 --debug \
+        --enable-checkpoint --checkpoint-interval 2s \
+        >sync2.log 2>&1
+
+    checkpoint_count=$(./mc find myminio/myjfs/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count" -ne 0 ]; then
+        echo "checkpoint file should be deleted after multipart minio sync resumes successfully"
+        cat sync2.log
+        exit 1
+    fi
+
+    dst_size=$(get_minio_object_size "myminio/myjfs/$key")
+    if [ "$dst_size" -ne "$size" ]; then
+        echo "multipart minio object size mismatch: $dst_size vs $size"
+        exit 1
+    fi
+
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
 }
 
 test_checkpoint_minio_signal_save(){
