@@ -650,10 +650,10 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 
 		blob, err := cmd.NewReloadableStorage(format, m, func(f *meta.Format) {
 			if jConf.Bucket != "" {
-				format.Bucket = jConf.Bucket
+				f.Bucket = jConf.Bucket
 			}
 			if jConf.StorageClass != "" {
-				format.Tiers[0] = object.Tier{
+				f.Tiers[0] = object.Tier{
 					ID: 0,
 					Sc: jConf.StorageClass,
 				}
