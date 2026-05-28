@@ -145,7 +145,6 @@ func (j *juice) Statfs(path string, stat *fuse.Statfs_t) int {
 				return 0
 			}
 		}
-		logger.Warnf("Failed to get host disk stats for %s, falling back to metadata stats", j.hostVolRoot)
 	}
 
 	ctx := j.newContext()
@@ -1112,9 +1111,6 @@ func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFi
 		jfs.mountLocal = true
 		if cwd, err := os.Getwd(); err == nil {
 			jfs.hostVolRoot = filepath.VolumeName(cwd) + `\`
-			logger.Infof("Local drive mode: reporting disk stats from host volume %s", jfs.hostVolRoot)
-		} else {
-			logger.Warnf("Local drive mode: failed to determine host volume root: %v", err)
 		}
 	}
 	host := fuse.NewFileSystemHost(&jfs)
