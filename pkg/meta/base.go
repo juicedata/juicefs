@@ -254,10 +254,11 @@ type baseMeta struct {
 	fsStatsLock sync.Mutex
 	*fsStat
 
-	parentMu   sync.Mutex     // protect dirParents
-	quotaMu    sync.RWMutex   // protect dirQuotas
-	dirParents map[Ino]Ino    // directory inode -> parent inode
-	dirQuotas  map[Ino]*Quota // directory inode -> quota
+	parentMu        sync.Mutex     // protect dirParents
+	quotaMu         sync.RWMutex   // protect dirQuotas
+	dirParents      map[Ino]Ino    // directory inode -> parent inode
+	dirQuotas       map[Ino]*Quota // directory inode -> quota
+	quotasFlushLock sync.Mutex     // prevent concurrent doFlushQuotas
 
 	freeMu           sync.Mutex
 	freeInodes       freeID

@@ -416,6 +416,8 @@ func (m *baseMeta) doFlushQuotas() {
 	if !m.getFormat().DirStats {
 		return
 	}
+	m.quotasFlushLock.Lock()
+	defer m.quotasFlushLock.Unlock()
 
 	var quotas []*iQuota
 	m.quotaMu.RLock()
