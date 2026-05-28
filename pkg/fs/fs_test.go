@@ -272,7 +272,78 @@ func TestFileSystem(t *testing.T) {
 	}
 }
 
-func createTestFS(t *testing.T) *FileSystem {
+func TestBatchDeleteEntries(t *testing.T) {
+	jfs := createTestFS(t)
+	ctx := meta.NewContext(1, 1, []uint32{2})
+
+	if err := jfs.MkdirAll(ctx, "/batch/dir", 0777, 022); err != 0 {
+		t.Fatalf("mkdir /batch/dir: %s", err)
+	}
+	for _, p := range []string{"/batch/dir/file1", "/batch/dir/file2"} {
+		f, err := jfs.Create(ctx, p, 0666, 022)
+		if err != 0 {
+			t.Fatalf("create %s: %s", p, err)
+		}
+		if err := f.Close(ctx); err != 0 {
+			t.Fatalf("close %s: %s", p, err)
+		}
+	}
+	if err := jfs.Mkdir(ctx, "/batch/dir/subdir", 0777, 022); err != 0 {
+		t.Fatalf("mkdir /batch/dir/subdir: %s", err)
+	}
+	if err := jfs.Symlink(ctx, "missing-target", "/batch/dir/link"); err != 0 {
+		t.Fatalf("symlink: %s", err)
+	}
+
+	err := jfs.BatchDeleteEntries(ctx, "/batch/dir", []string{
+		"/batch/dir/file1",
+		"/batch/dir/missing",
+		"/batch/dir/subdir",
+		"/batch/dir/link",
+	})
+	if err != 0 {
+		t.Fatalf("batch delete: %s", err)
+	}
+	if _, err := jfs.Stat(ctx, "/batch/dir/file1"); err != syscall.ENOENT {
+		t.Fatalf("file1 should be deleted: %s", err)
+	}
+	if _, err := jfs.Lstat(ctx, "/batch/dir/link"); err != syscall.ENOENT {
+		t.Fatalf("symlink should be deleted: %s", err)
+	}
+	if _, err := jfs.Stat(ctx, "/batch/dir/file2"); err != 0 {
+		t.Fatalf("file2 should remain: %s", err)
+	}
+	if fi, err := jfs.Stat(ctx, "/batch/dir/subdir"); err != 0 || !fi.IsDir() {
+		t.Fatalf("subdir should remain: %s %+v", err, fi)
+	}
+}
+
+func TestBatchDeleteEntriesChecksParentWriteAndSearchPermission(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mode uint16
+	}{
+		{name: "no-write", mode: 0555},
+		{name: "no-search", mode: 0222},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			jfs := createTestFS(t)
+			ctx := meta.NewContext(1, 1, []uint32{2})
+			parent := "/protected-" + tc.name
+			if err := jfs.Mkdir(ctx, parent, tc.mode, 000); err != 0 {
+				t.Fatalf("mkdir %s: %s", parent, err)
+			}
+
+			userCtx := meta.NewContext(2, 2, []uint32{3})
+			err := jfs.BatchDeleteEntries(userCtx, parent, []string{parent + "/missing"})
+			if err != syscall.EACCES {
+				t.Fatalf("batch delete without parent write and search permission: %s", err)
+			}
+		})
+	}
+}
+
+func createTestFS(t testing.TB) *FileSystem {
 	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
 		Name:      "test",
