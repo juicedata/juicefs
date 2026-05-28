@@ -100,3 +100,123 @@ func TestGatewayLock(t *testing.T) {
 	rwLocker.RUnlock()
 
 }
+
+func newTestGateway(t *testing.T, conf Config) (*jfsObjects, *fs.FileSystem, string) {
+	t.Helper()
+
+	m := meta.NewClient("memkv://", nil)
+	format := &meta.Format{
+		Name:      "test",
+		BlockSize: 4096,
+		Capacity:  1 << 30,
+		DirStats:  true,
+	}
+	if err := m.Init(format, true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+	vfsConf := vfs.Config{
+		Meta: meta.DefaultConf(),
+		Chunk: &chunk.Config{
+			BlockSize:   format.BlockSize << 10,
+			MaxUpload:   1,
+			MaxDownload: 200,
+			BufferSize:  100 << 20,
+		},
+		DirEntryTimeout: time.Millisecond * 100,
+		EntryTimeout:    time.Millisecond * 100,
+		AttrTimeout:     time.Millisecond * 100,
+	}
+	objStore, _ := object.CreateStorage("mem", "", "", "", "")
+	store := chunk.NewCachedStore(objStore, *vfsConf.Chunk, nil)
+	jfs, err := fs.NewFileSystem(&vfsConf, m, store, nil)
+	if err != nil {
+		t.Fatalf("initialize failed: %s", err)
+	}
+	conf.Bucket = format.Name
+	if conf.Umask == 0 {
+		conf.Umask = 022
+	}
+	jfsObj := &jfsObjects{
+		fs:       jfs,
+		conf:     &vfsConf,
+		listPool: minio.NewTreeWalkPool(time.Minute * 30),
+		gConf:    &conf,
+		nsMutex:  minio.NewNSLock(false),
+	}
+	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+	return jfsObj, jfs, format.Name
+}
+
+func createTestFile(t *testing.T, jfs *fs.FileSystem, name string) {
+	t.Helper()
+	f, eno := jfs.Create(mctx, name, 0666, 022)
+	if eno != 0 {
+		t.Fatalf("create %s: %s", name, eno)
+	}
+	if eno = f.Close(mctx); eno != 0 {
+		t.Fatalf("close %s: %s", name, eno)
+	}
+}
+
+func assertHeadObject(t *testing.T, jfsObj *jfsObjects, bucket, object string, wantFound bool) {
+	t.Helper()
+	_, err := jfsObj.GetObjectInfo(context.Background(), bucket, object, minio.ObjectOptions{})
+	if wantFound {
+		if err != nil {
+			t.Fatalf("head %s should succeed: %s", object, err)
+		}
+		return
+	}
+	if err == nil {
+		t.Fatalf("head %s should fail", object)
+	}
+	if !errors.As(err, &minio.ObjectNotFound{}) {
+		t.Fatalf("head %s should return ObjectNotFound, got %T: %s", object, err, err)
+	}
+}
+
+func TestGetObjectInfo(t *testing.T) {
+	t.Run("head file slash fails with head dir", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{HeadDir: true})
+		createTestFile(t, jfs, "/file")
+
+		assertHeadObject(t, jfsObj, bucket, "file", true)
+		assertHeadObject(t, jfsObj, bucket, "file/", false)
+	})
+
+	t.Run("put file under implicit directory", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		if eno := jfs.Mkdir(mctx, "/dir1", 0777, 022); eno != 0 {
+			t.Fatalf("mkdir dir1: %s", eno)
+		}
+		createTestFile(t, jfs, "/dir1/key1")
+
+		assertHeadObject(t, jfsObj, bucket, "dir1", false)
+		assertHeadObject(t, jfsObj, bucket, "dir1/", false)
+		assertHeadObject(t, jfsObj, bucket, "dir1/key1", true)
+	})
+
+	t.Run("put explicit directory object", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		if eno := jfs.MkdirAll(mctx, "/dir1/key1", 0777, 022); eno != 0 {
+			t.Fatalf("mkdir dir1/key1: %s", eno)
+		}
+		jfsObj.setFileAtime("/dir1/key1", 0)
+
+		assertHeadObject(t, jfsObj, bucket, "dir1/key1", false)
+		assertHeadObject(t, jfsObj, bucket, "dir1/key1/", true)
+	})
+
+	t.Run("head dir allows implicit directories but not file slash", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{HeadDir: true})
+		if eno := jfs.Mkdir(mctx, "/dir1", 0777, 022); eno != 0 {
+			t.Fatalf("mkdir dir1: %s", eno)
+		}
+		createTestFile(t, jfs, "/dir1/key1")
+
+		assertHeadObject(t, jfsObj, bucket, "dir1", true)
+		assertHeadObject(t, jfsObj, bucket, "dir1/", true)
+		assertHeadObject(t, jfsObj, bucket, "dir1/key1", true)
+		assertHeadObject(t, jfsObj, bucket, "dir1/key1/", false)
+	})
+}
