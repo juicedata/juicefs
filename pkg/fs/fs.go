@@ -553,6 +553,9 @@ func (fs *FileSystem) BatchDeleteEntries(ctx meta.Context, parent string, ps []s
 	if errno != 0 {
 		return errno
 	}
+	if errno = fs.m.Access(ctx, parentInfo.inode, meta.MODE_MASK_W|meta.MODE_MASK_X, parentInfo.attr); errno != 0 {
+		return errno
+	}
 	var entries []*meta.Entry
 	for _, p := range ps {
 		var inode Ino
