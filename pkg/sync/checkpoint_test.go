@@ -21,6 +21,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"strings"
 	gosync "sync"
 	"testing"
 	"time"
@@ -554,4 +555,38 @@ func TestProduceFromListOverlappingPrefixes(t *testing.T) {
 	}
 
 	assertDstHasKeys(t, dst, "dir/sub/y", "dir/sub/pending")
+}
+
+func TestCheckpointPlacedAtParentForFileDst(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "src", "", "", "")
+	base, _ := object.CreateStorage("mem", "base", "", "", "")
+	fileDst := object.WithPrefix(base, "subdir/target")
+
+	mgr := NewCheckpointManager(src, fileDst, nil)
+
+	if strings.HasPrefix(mgr.checkpointKey, "/") {
+		t.Errorf("checkpoint key should not start with '/': %q", mgr.checkpointKey)
+	}
+	if !strings.HasSuffix(mgr.dst.String(), "/") {
+		t.Errorf("checkpointMgr.dst should be a directory (end with /): %q", mgr.dst.String())
+	}
+
+	ckpt := &Checkpoint{PrefixState: make(map[string]*PrefixState)}
+	if err := mgr.Save(ckpt); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	loader := NewCheckpointManager(src, fileDst, nil)
+	if _, err := loader.Load(); err != nil {
+		t.Errorf("Load via file-like dst should succeed: %v", err)
+	}
+
+	expectedBaseKey := "subdir/" + mgr.checkpointKey
+	if _, err := base.Head(ctx, expectedBaseKey); err != nil {
+		t.Errorf("checkpoint not found at expected base path %q: %v", expectedBaseKey, err)
+	}
+	wrongBaseKey := "subdir/target" + mgr.checkpointKey
+	if _, err := base.Head(ctx, wrongBaseKey); err == nil {
+		t.Errorf("checkpoint should NOT exist at wrong path %q", wrongBaseKey)
+	}
 }
