@@ -3760,10 +3760,13 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 
 func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	var indexes []chunk
-	_ = m.simpleTxn(Background(), func(s *xorm.Session) error {
+	if err := m.simpleTxn(Background(), func(s *xorm.Session) error {
 		indexes = nil
 		return s.Cols("indx").Find(&indexes, &chunk{Inode: inode})
-	})
+	}); err != nil {
+		logger.Warnf("delete chunks of inode %d length %d: find chunks: %s", inode, length, err)
+		return
+	}
 	for _, c := range indexes {
 		err := m.deleteChunk(inode, c.Indx)
 		if err != nil {
