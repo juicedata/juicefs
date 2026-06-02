@@ -339,8 +339,8 @@ func (m *dbMeta) sqlConv(sql string) string {
 }
 
 func (m *dbMeta) initStatement() {
-	m.statement["SELECT length FROM node WHERE inode IN (SELECT inode FROM sustained)"] =
-		fmt.Sprintf("SELECT length FROM %snode WHERE inode IN (SELECT inode FROM %ssustained)", m.tablePrefix, m.tablePrefix)
+	m.statement["SELECT n.uid, n.gid, n.length FROM node n WHERE n.inode IN (SELECT inode FROM sustained)"] =
+		fmt.Sprintf("SELECT n.uid, n.gid, n.length FROM %snode n WHERE n.inode IN (SELECT inode FROM %ssustained)", m.tablePrefix, m.tablePrefix)
 	m.statement["update counter set value=value + ? where name='totalInodes'"] =
 		fmt.Sprintf("update %scounter set value=value + ? where name='totalInodes'", m.tablePrefix)
 	m.statement["update counter set value= value + ? where name='usedSpace'"] =

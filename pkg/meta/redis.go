@@ -856,9 +856,6 @@ func (m *redisMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 	return m.rdb.Set(ctx, m.usedSpaceKey(), strconv.FormatInt(used, 10), 0).Err()
 }
 
-// redisMeta updates the usage in each transaction
-func (m *redisMeta) doFlushStats() {}
-
 func (m *redisMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
 	var inoKeys []string
 	if err := m.scan(ctx, m.prefix+"session*", func(keys []string) error {
@@ -909,7 +906,8 @@ func (m *redisMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, 
 	return nil
 }
 
-
+// redisMeta updates the usage in each transaction
+func (m *redisMeta) doFlushStats() {}
 
 func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, returnedIno *int64, returnedAttr *string) syscall.Errno {
 	if err != nil {
