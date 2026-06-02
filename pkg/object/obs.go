@@ -196,6 +196,7 @@ func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
 	var err error
 	if t.GetURLEncodedTag() != "" {
 		params.Metadata = map[string]string{}
+		// One of the object's metadata, storage class, or encryption attributes must be changed to successfully make a request
 		params.Metadata["Placeholder"] = "Placeholder"
 		_, err = s.c.CopyObject(params,
 			obs.WithHeader(obsTaggingHeader, []string{t.GetURLEncodedTag()}),
