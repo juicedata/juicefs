@@ -3259,30 +3259,32 @@ func (m *dbMeta) doRefreshSession() error {
 
 func (m *dbMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
 	return m.simpleTxn(ctx, func(s *xorm.Session) error {
-		rows, err := s.QueryString(m.sqlConv("SELECT n.uid, n.gid, n.length FROM node n WHERE n.inode IN (SELECT inode FROM sustained)"))
-		if err != nil {
-			return err
-		}
-		for _, row := range rows {
-			uid, err := strconv.ParseUint(row["uid"], 10, 32)
+		/*
+			rows, err := s.QueryString(m.sqlConv("SELECT n.uid, n.gid, n.length FROM node n WHERE n.inode IN (SELECT inode FROM sustained)"))
 			if err != nil {
-				logger.Warnf("parse sustained uid: %v", err)
-				continue
-			}
-			gid, err := strconv.ParseUint(row["gid"], 10, 32)
-			if err != nil {
-				logger.Warnf("parse sustained gid: %v", err)
-				continue
-			}
-			length, err := strconv.ParseUint(row["length"], 10, 64)
-			if err != nil {
-				logger.Warnf("parse sustained length: %v", err)
-				continue
-			}
-			if err := fn(uint32(uid), uint32(gid), length); err != nil {
 				return err
 			}
-		}
+			for _, row := range rows {
+				uid, err := strconv.ParseUint(row["uid"], 10, 32)
+				if err != nil {
+					logger.Warnf("parse sustained uid: %v", err)
+					continue
+				}
+				gid, err := strconv.ParseUint(row["gid"], 10, 32)
+				if err != nil {
+					logger.Warnf("parse sustained gid: %v", err)
+					continue
+				}
+				length, err := strconv.ParseUint(row["length"], 10, 64)
+				if err != nil {
+					logger.Warnf("parse sustained length: %v", err)
+					continue
+				}
+				if err := fn(uint32(uid), uint32(gid), length); err != nil {
+					return err
+				}
+			}
+		*/
 		return nil
 	})
 }
