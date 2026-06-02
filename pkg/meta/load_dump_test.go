@@ -370,9 +370,9 @@ func testLoadDump(t *testing.T, name, addr string) {
 
 func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
-	// testLoadDump(t, "mysql", "mysql://root:@/dev")
-	//testLoadDump(t, "badger", "badger://jfs-load-dump")
-	//testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
+	testLoadDump(t, "mysql", "mysql://root:@/dev")
+	testLoadDump(t, "badger", "badger://jfs-load-dump")
+	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }
 
 func testDumpV2(t *testing.T, m Meta, result string, opt *DumpOption) {
