@@ -113,13 +113,9 @@ func (b *wasb) Put(ctx context.Context, key string, data io.Reader, getters ...A
 	if t.Sc != "" {
 		options.AccessTier = str2Tier(t.Sc)
 	}
-	if t.Tag != "" && strings.Contains(t.Tag, "=") {
-		options.Tags = map[string]string{}
-		k := strings.SplitN(t.Tag, "=", 2)[0]
-		v := strings.SplitN(t.Tag, "=", 2)[1]
-		if k != "" {
-			options.Tags[k] = v
-		}
+	if t.Tag != "" && ValidateTag(t.Tag) {
+		parts := strings.SplitN(t.Tag, "=", 2)
+		options.Tags = map[string]string{parts[0]: parts[1]}
 	}
 	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
 	attrs := ApplyGetters(getters...)

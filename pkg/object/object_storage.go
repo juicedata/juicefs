@@ -391,20 +391,6 @@ func (t Tier) GetURLEncodedTag() string {
 
 type Tiers map[uint8]Tier
 
-//func (t Tiers) GetID(sc string) (uint8, bool) {
-//	for k, v := range t {
-//		if v.Sc == sc {
-//			return k, true
-//		}
-//	}
-//	return 0, false
-//}
-//
-//func (t Tiers) GetSc(id uint8) (string, bool) {
-//	tInfo, ok := t[id]
-//	return tInfo.Sc, ok
-//}
-
 func NewTiers(defaultSc string) Tiers {
 	t := make(Tiers)
 	t[0] = Tier{

@@ -145,7 +145,7 @@ func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters .
 		args.StorageClass = t.Sc
 	}
 	if t.GetURLEncodedTag() != "" {
-		// "k1=v1&k2=v2"
+		// "k1=v1"
 		args.ObjectTagging = t.GetURLEncodedTag()
 	}
 	_, err = q.c.PutObject(q.bucket, key, body, args)

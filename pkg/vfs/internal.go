@@ -455,12 +455,12 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 				info.TierInfo.ID = 0
 				info.TierInfo.Sc = "unknown"
 			} else {
-				info.TierInfo.ID = attr.Tier
 				if t, ok := v.Meta.GetFormat().Tiers[attr.Tier]; ok {
 					info.TierInfo = t
 				} else {
 					logger.Warnf("unknown tier id %d of inode %d", attr.Tier, inode)
 					info.TierInfo.Sc = "unknown"
+					info.TierInfo.ID = attr.Tier
 				}
 			}
 			info.Paths = v.Meta.GetPaths(ctx, inode)
