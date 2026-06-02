@@ -41,6 +41,8 @@ import (
 )
 
 const obsDefaultRegion = "cn-north-1"
+const obsTaggingHeader = "x-amz-tagging"
+const obsTaggingDirectiveHeader = "x-amz-tagging-directive"
 
 type obsClient struct {
 	bucket    string
@@ -165,8 +167,13 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	params.ContentType = mimeType
 	t := s.GetTier(ctx)
 	params.StorageClass = obs.StorageClassType(t.Sc)
-	resp, err := s.c.PutObject(params)
-	// todo: impl tag
+	var resp *obs.PutObjectOutput
+	var err error
+	if t.GetURLEncodedTag() != "" {
+		resp, err = s.c.PutObject(params, obs.WithHeader(obsTaggingHeader, []string{t.GetURLEncodedTag()}))
+	} else {
+		resp, err = s.c.PutObject(params)
+	}
 	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
@@ -186,7 +193,16 @@ func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
 	params.CopySourceBucket = s.bucket
 	params.CopySourceKey = src
 	params.StorageClass = obs.StorageClassType(sc)
-	_, err := s.c.CopyObject(params)
+	var err error
+	if t.GetURLEncodedTag() != "" {
+		params.Metadata = map[string]string{}
+		params.Metadata["Placeholder"] = "Placeholder"
+		_, err = s.c.CopyObject(params,
+			obs.WithHeader(obsTaggingHeader, []string{t.GetURLEncodedTag()}),
+			obs.WithHeader(obsTaggingDirectiveHeader, []string{"REPLACE"}))
+	} else {
+		_, err = s.c.CopyObject(params)
+	}
 	return err
 }
 func (s *obsClient) Restore(ctx context.Context, key string, days int32) error {
