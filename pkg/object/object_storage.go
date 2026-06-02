@@ -381,7 +381,7 @@ func ValidateTag(tag string) bool {
 	return parts[0] != "" && parts[1] != ""
 }
 func (t Tier) GetURLEncodedTag() string {
-	if ValidateTag(t.Tag) {
+	if t.Tag != "" && ValidateTag(t.Tag) {
 		k := strings.SplitN(t.Tag, "=", 2)[0]
 		v := strings.SplitN(t.Tag, "=", 2)[1]
 		return url.QueryEscape(k) + "=" + url.QueryEscape(v)
