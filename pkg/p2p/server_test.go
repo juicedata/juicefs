@@ -85,6 +85,120 @@ func TestServer_Status_Completed(t *testing.T) {
 	}
 }
 
+func TestServer_Status_ExtendedFields(t *testing.T) {
+	tracker := NewAvailabilityTracker()
+	srv := NewServer("u1", tracker, t.TempDir())
+	srv.SetProgress(6400, 6400)
+	srv.SetRole("leader")
+	srv.SetPeers(12)
+	srv.SetStats(5800, 600, 0, 0, 0, 95563022336, 11811160064)
+
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	rr := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	var body struct {
+		Completed bool `json:"completed"`
+		Progress  struct {
+			Total int64 `json:"total"`
+			Done  int64 `json:"done"`
+		} `json:"progress"`
+		Role    string `json:"role"`
+		Peers   int64  `json:"peers"`
+		Sources struct {
+			FromPeers   int64 `json:"from_peers"`
+			FromStorage int64 `json:"from_storage"`
+			FromCache   int64 `json:"from_cache"`
+			Skipped     int64 `json:"skipped"`
+			Failed      int64 `json:"failed"`
+		} `json:"sources"`
+		Bytes struct {
+			FromPeers   int64 `json:"from_peers"`
+			FromStorage int64 `json:"from_storage"`
+		} `json:"bytes"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+
+	// Baseline fields remain unchanged.
+	if !body.Completed {
+		t.Error("expected completed=true")
+	}
+	if body.Progress.Total != 6400 || body.Progress.Done != 6400 {
+		t.Errorf("progress = %d/%d, want 6400/6400", body.Progress.Done, body.Progress.Total)
+	}
+
+	// Additive fields.
+	if body.Role != "leader" {
+		t.Errorf("role = %q, want %q", body.Role, "leader")
+	}
+	if body.Peers != 12 {
+		t.Errorf("peers = %d, want 12", body.Peers)
+	}
+	if body.Sources.FromPeers != 5800 {
+		t.Errorf("sources.from_peers = %d, want 5800", body.Sources.FromPeers)
+	}
+	if body.Sources.FromStorage != 600 {
+		t.Errorf("sources.from_storage = %d, want 600", body.Sources.FromStorage)
+	}
+	if body.Sources.FromCache != 0 || body.Sources.Skipped != 0 || body.Sources.Failed != 0 {
+		t.Errorf("sources zero-fields = cache:%d skipped:%d failed:%d, want all 0",
+			body.Sources.FromCache, body.Sources.Skipped, body.Sources.Failed)
+	}
+	if body.Bytes.FromPeers != 95563022336 {
+		t.Errorf("bytes.from_peers = %d, want 95563022336", body.Bytes.FromPeers)
+	}
+	if body.Bytes.FromStorage != 11811160064 {
+		t.Errorf("bytes.from_storage = %d, want 11811160064", body.Bytes.FromStorage)
+	}
+}
+
+// A freshly constructed Server (before any role/stats push) must still serve a
+// well-formed /status: baseline fields present, additive fields at their zero
+// values. Operators poll /status from the first probe, before election runs.
+func TestServer_Status_DefaultsBeforePush(t *testing.T) {
+	tracker := NewAvailabilityTracker()
+	srv := NewServer("u1", tracker, t.TempDir())
+
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	rr := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	var body struct {
+		Completed bool   `json:"completed"`
+		Role      string `json:"role"`
+		Peers     int64  `json:"peers"`
+		Sources   struct {
+			FromPeers int64 `json:"from_peers"`
+		} `json:"sources"`
+		Bytes struct {
+			FromPeers int64 `json:"from_peers"`
+		} `json:"bytes"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if body.Completed {
+		t.Error("expected completed=false for a fresh server")
+	}
+	if body.Role != "" {
+		t.Errorf("role = %q, want empty before election", body.Role)
+	}
+	if body.Peers != 0 || body.Sources.FromPeers != 0 || body.Bytes.FromPeers != 0 {
+		t.Errorf("expected zero-valued additive fields, got peers:%d sources.from_peers:%d bytes.from_peers:%d",
+			body.Peers, body.Sources.FromPeers, body.Bytes.FromPeers)
+	}
+}
+
 func TestServer_Available(t *testing.T) {
 	tracker := NewAvailabilityTracker()
 	tracker.MarkLocal("key1")

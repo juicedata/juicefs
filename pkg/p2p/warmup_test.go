@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -483,6 +484,32 @@ func TestPolling_SkipsSelf(t *testing.T) {
 
 	if _, ok := known[w.externalAddr]; ok {
 		t.Errorf("self-address %q ended up in known set", w.externalAddr)
+	}
+}
+
+func TestPolling_PushesLivePeerCountToStatus(t *testing.T) {
+	// Each sweep refreshes /status with the self-excluded peer count. Bogus
+	// addresses are fine: the count comes from the discovery set before any
+	// poll, so connection failures don't affect it.
+	w := pollTestWarmup(t)
+	setDiscoveryPeers(w, []string{w.externalAddr, "10.0.0.1:1", "10.0.0.2:2"})
+
+	lastSeen := make(map[string]int64)
+	failures := make(map[string]int)
+	known := make(map[string]struct{})
+	w.pollAvailabilityOnce(context.Background(), lastSeen, failures, known)
+
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	rr := httptest.NewRecorder()
+	w.server.Handler().ServeHTTP(rr, req)
+	var body struct {
+		Peers int64 `json:"peers"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode /status: %v", err)
+	}
+	if body.Peers != 2 {
+		t.Errorf("/status peers = %d, want 2 (3 discovered minus self)", body.Peers)
 	}
 }
 

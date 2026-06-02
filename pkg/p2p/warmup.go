@@ -171,6 +171,15 @@ func (w *Warmup) Run(ctx context.Context, paths []string) error {
 		logger.Warnf("--keep-alive-timeout=%s is set but --keep-alive is not; the timeout will be ignored and the process will exit immediately after warmup. Pass --keep-alive to enable post-warmup serving.", w.config.KeepAliveTimeout)
 	}
 
+	// Publish the leader role + initial peer count to /status (peers is refreshed later by the availability poll).
+	manifestSharing := w.config.MinPeers > 1 && !w.config.DisableManifestSharing
+	role := "leader"
+	if manifestSharing && !isLeader(peers, w.effectiveAddr()) {
+		role = "follower"
+	}
+	w.server.SetRole(role)
+	w.server.SetPeers(len(peers))
+
 	// 3. Resolve metadata. With manifest sharing on, only the leader scans
 	// meta; followers download the leader's manifest from object storage —
 	// collapsing meta-engine load from O(N peers × M files) to O(M files).
@@ -231,6 +240,10 @@ func (w *Warmup) Run(ctx context.Context, paths []string) error {
 
 	// 10. Print final stats.
 	fromPeers, fromStorage, fromCache, skippedFull, failed, bytesPeer, bytesStorage := w.fetcher.Stats()
+	// Push the terminal snapshot: the progress monitor stops at monitorCancel
+	// above, so without this the keep-alive-phase /status would report the
+	// last 5s-tick numbers instead of the final totals.
+	w.server.SetStats(fromPeers, fromStorage, fromCache, skippedFull, failed, bytesPeer, bytesStorage)
 	logger.Infof("warmup complete: %d blocks (%d from peers, %d from storage, %d from cache, %d skipped, %d failed)",
 		total, fromPeers, fromStorage, fromCache, skippedFull, failed)
 	if skippedFull > 0 {
@@ -587,6 +600,9 @@ func (w *Warmup) pollAvailabilityOnce(ctx context.Context, lastSeen map[string]i
 		known[addr] = struct{}{}
 	}
 
+	// Refresh /status with the current live (self-excluded) peer count.
+	w.server.SetPeers(len(current))
+
 	for addr := range current {
 		sinceMs := lastSeen[addr]
 		updatedAt, err := w.fetcher.PollAvailability(ctx, addr, sinceMs)
@@ -625,7 +641,8 @@ func (w *Warmup) monitorProgress(ctx context.Context, blocks []*Block, queue *Fe
 			done, failed := countTerminalBlocks(blocks)
 			w.server.SetProgress(total, done)
 			pending := queue.Len()
-			_, _, _, _, _, bytesPeer, bytesStore := w.fetcher.Stats()
+			fromPeers, fromStorage, fromCache, skippedFull, failedFetch, bytesPeer, bytesStore := w.fetcher.Stats()
+			w.server.SetStats(fromPeers, fromStorage, fromCache, skippedFull, failedFetch, bytesPeer, bytesStore)
 			elapsed := now.Sub(prevTime).Seconds()
 			var peerRate, storeRate uint64
 			if elapsed > 0 {

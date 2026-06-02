@@ -18,6 +18,18 @@ type Server struct {
 	cacheDir     string
 	totalBlocks  atomic.Int64
 	doneBlocks   atomic.Int64
+
+	// Additive /status fields, pushed by the orchestrator like SetProgress.
+	// Lock-free: slow probe reads never contend with the per-tick writers.
+	role         atomic.Value // string; "" until election decides
+	peers        atomic.Int64 // currently alive discovered peers (excluding self)
+	fromPeers    atomic.Int64
+	fromStorage  atomic.Int64
+	fromCache    atomic.Int64
+	skipped      atomic.Int64
+	failed       atomic.Int64
+	bytesPeer    atomic.Int64
+	bytesStorage atomic.Int64
 }
 
 // NewServer creates a Server with the given identity, tracker, and cache directory.
@@ -33,6 +45,31 @@ func NewServer(uuid string, availability *AvailabilityTracker, cacheDir string) 
 func (s *Server) SetProgress(total, done int) {
 	s.totalBlocks.Store(int64(total))
 	s.doneBlocks.Store(int64(done))
+}
+
+// SetRole records this node's leader-election role ("leader" or "follower").
+// Set once, after election decides.
+func (s *Server) SetRole(role string) {
+	s.role.Store(role)
+}
+
+// SetPeers records the number of currently alive discovered peers (excluding
+// self). Pushed periodically as discovery adds and drops peers.
+func (s *Server) SetPeers(n int) {
+	s.peers.Store(int64(n))
+}
+
+// SetStats records a snapshot of Fetcher.Stats() for /status. Argument order
+// matches Fetcher.Stats's return order so the orchestrator can forward it
+// directly.
+func (s *Server) SetStats(fromPeers, fromStorage, fromCache, skipped, failed, bytesPeer, bytesStorage int64) {
+	s.fromPeers.Store(fromPeers)
+	s.fromStorage.Store(fromStorage)
+	s.fromCache.Store(fromCache)
+	s.skipped.Store(skipped)
+	s.failed.Store(failed)
+	s.bytesPeer.Store(bytesPeer)
+	s.bytesStorage.Store(bytesStorage)
 }
 
 // Handler returns an http.ServeMux wired with all server routes.
@@ -51,22 +88,53 @@ func (s *Server) handleUUID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"uuid": s.uuid})
 }
 
-// handleStatus reports overall download progress.
-// GET /status → {"completed": bool, "progress": {"total": N, "done": N}}
+// handleStatus reports overall download progress plus role, live peer count,
+// and per-source block/byte counts, letting consumers read warmup state
+// directly instead of parsing logs. Bytes are raw int64; consumers format them.
+// GET /status → {"completed", "progress":{"total","done"}, "role", "peers",
+//                "sources":{...}, "bytes":{...}}
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	total := s.totalBlocks.Load()
 	done := s.doneBlocks.Load()
 	completed := total > 0 && done >= total
 
+	// atomic.Value.Load is nil until the first SetRole; report "" so the field
+	// is always present and parseable.
+	role, _ := s.role.Load().(string)
+
 	type progress struct {
 		Total int64 `json:"total"`
 		Done  int64 `json:"done"`
+	}
+	type sources struct {
+		FromPeers   int64 `json:"from_peers"`
+		FromStorage int64 `json:"from_storage"`
+		FromCache   int64 `json:"from_cache"`
+		Skipped     int64 `json:"skipped"`
+		Failed      int64 `json:"failed"`
+	}
+	type bytesXfer struct {
+		FromPeers   int64 `json:"from_peers"`
+		FromStorage int64 `json:"from_storage"`
 	}
 	writeJSON(w, map[string]interface{}{
 		"completed": completed,
 		"progress": progress{
 			Total: total,
 			Done:  done,
+		},
+		"role":  role,
+		"peers": s.peers.Load(),
+		"sources": sources{
+			FromPeers:   s.fromPeers.Load(),
+			FromStorage: s.fromStorage.Load(),
+			FromCache:   s.fromCache.Load(),
+			Skipped:     s.skipped.Load(),
+			Failed:      s.failed.Load(),
+		},
+		"bytes": bytesXfer{
+			FromPeers:   s.bytesPeer.Load(),
+			FromStorage: s.bytesStorage.Load(),
 		},
 	})
 }
