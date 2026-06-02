@@ -108,14 +108,22 @@ func str2Tier(tier string) *blob2.AccessTier {
 }
 
 func (b *wasb) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
-	sc := b.GetStorageClass(ctx)
+	t := b.GetTier(ctx)
 	options := azblob.UploadStreamOptions{}
-	if sc != "" {
-		options.AccessTier = str2Tier(sc)
+	if t.Sc != "" {
+		options.AccessTier = str2Tier(t.Sc)
+	}
+	if t.Tag != "" && strings.Contains(t.Tag, "=") {
+		options.Tags = map[string]string{}
+		k := strings.SplitN(t.Tag, "=", 2)[0]
+		v := strings.SplitN(t.Tag, "=", 2)[1]
+		if k != "" {
+			options.Tags[k] = v
+		}
 	}
 	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
 	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(aws.ToString(resp.RequestID)).SetStorageClass(sc)
+	attrs.SetRequestID(aws.ToString(resp.RequestID)).SetStorageClass(t.Sc)
 	return err
 }
 

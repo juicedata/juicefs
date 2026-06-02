@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
@@ -259,8 +260,7 @@ type InfoResponse struct {
 	Objects       []*chunkObj
 	PLocks        []meta.PLockItem
 	FLocks        []meta.FLockItem
-	TierID        uint8
-	TierStr       string
+	TierInfo      object.Tier
 	RestoreStatus string
 }
 
@@ -449,17 +449,18 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		} else {
 			var attr meta.Attr
 			eno := v.Meta.GetAttr(ctx, inode, &attr)
+			info.TierInfo = object.Tier{}
 			if eno != 0 {
 				logger.Warnf("GetAttr of %d: %s", inode, eno)
-				info.TierID = 0
-				info.TierStr = "unknown"
+				info.TierInfo.ID = 0
+				info.TierInfo.Sc = "unknown"
 			} else {
-				info.TierID = attr.Tier
-				if t, ok := v.Meta.GetFormat().Tiers.GetSc(attr.Tier); ok {
-					info.TierStr = t
+				info.TierInfo.ID = attr.Tier
+				if t, ok := v.Meta.GetFormat().Tiers[attr.Tier]; ok {
+					info.TierInfo = t
 				} else {
-					logger.Warnf("unknown storage class id %d of inode %d", attr.Tier, inode)
-					info.TierStr = "unknown"
+					logger.Warnf("unknown tier id %d of inode %d", attr.Tier, inode)
+					info.TierInfo.Sc = "unknown"
 				}
 			}
 			info.Paths = v.Meta.GetPaths(ctx, inode)
@@ -489,12 +490,12 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 				if lastObjKey != "" {
 					if objInfo, err := v.Store.BlobStorage().Head(context.Background(), lastObjKey); err == nil {
 						info.RestoreStatus = objInfo.Status()
-						if info.TierID != 0 && objInfo.StorageClass() != info.TierStr ||
-							(info.TierID == 0 && info.TierStr != "" && objInfo.StorageClass() != info.TierStr) {
-							info.TierStr = fmt.Sprintf("expected(%s),actual(%s)", info.TierStr, objInfo.StorageClass())
+						if info.TierInfo.ID != 0 && objInfo.StorageClass() != info.TierInfo.Sc ||
+							(info.TierInfo.ID == 0 && info.TierInfo.Sc != "" && objInfo.StorageClass() != info.TierInfo.Sc) {
+							info.TierInfo.Sc = fmt.Sprintf("expected(%s),actual(%s)", info.TierInfo.Sc, objInfo.StorageClass())
 						}
-						if info.TierID == 0 && info.TierStr == "" {
-							info.TierStr = fmt.Sprintf("actual(%s)", objInfo.StorageClass())
+						if info.TierInfo.ID == 0 && info.TierInfo.Sc == "" {
+							info.TierInfo.Sc = fmt.Sprintf("actual(%s)", objInfo.StorageClass())
 						}
 					} else {
 						logger.Warnf("Failed to get object info by Head for key %q (get restore status): %v", lastObjKey, err)

@@ -117,9 +117,9 @@ func listTier(ctx *cli.Context) error {
 		logger.Fatalf("load setting: %s", err)
 	}
 	results := make([][]string, 0, 1+len(format.Tiers))
-	results = append(results, []string{"tier", "storageClass"})
+	results = append(results, []string{"tier", "storageClass", "tag"})
 	for id, t := range format.Tiers {
-		results = append(results, []string{fmt.Sprintf("%d", id), t.Sc})
+		results = append(results, []string{fmt.Sprintf("%d", id), t.Sc, t.Tag})
 	}
 	dataRows := results[1:]
 	sort.Slice(dataRows, func(i, j int) bool {
@@ -143,9 +143,9 @@ func setTier(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-	newTier := format.Tiers[uint8(id)]
-	if id != 0 && newTier.Sc == "" {
-		logger.Fatalf("storage tier %d is not defined in the format", id)
+	newTier, ok := format.Tiers[uint8(id)]
+	if !ok {
+		logger.Fatalf("unknown tier %d", id)
 	}
 	var ino meta.Ino
 	var attr meta.Attr
@@ -161,7 +161,7 @@ func setTier(ctx *cli.Context) error {
 		logger.Fatal("only file and directory are supported to set storage tier")
 	}
 	oldTier := format.Tiers[attr.Tier]
-	logger.Infof("set storage tier of %q from %d(%s) to %d(%s)", path, attr.Tier, oldTier.Sc, id, newTier.Sc)
+	logger.Infof("set storage tier of %q from %d(storage-class: %s;tag: %s) to %d(storage-class: %s;tag: %s)", path, attr.Tier, oldTier.Sc, oldTier.Tag, id, newTier.Sc, newTier.Tag)
 	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
@@ -175,9 +175,11 @@ func setTier(ctx *cli.Context) error {
 	}
 
 	objectFunc := func(key string) error {
-		if head, err := blob.Head(context.Background(), key); err == nil {
-			if newTier.Sc == head.StorageClass() {
-				return nil
+		if !ctx.Bool("force") {
+			if head, err := blob.Head(context.Background(), key); err == nil {
+				if newTier.Sc == head.StorageClass() {
+					return nil
+				}
 			}
 		}
 
@@ -187,7 +189,7 @@ func setTier(ctx *cli.Context) error {
 	}
 	checkFunc := func(ino meta.Ino, oriTier uint8) bool {
 		if id == uint(oriTier) && !ctx.Bool("force") {
-			logger.Debugf("inode:%d storage tier is already %d, no change needed", ino, oriTier)
+			logger.Infof("inode:%d storage tier is already %d, no change needed", ino, oriTier)
 			return true
 		}
 		return false

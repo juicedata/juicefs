@@ -369,11 +369,11 @@ func (e *encrypted) SetTier(init Tiers) error {
 	return nil
 }
 
-func (e *encrypted) GetStorageClass(ctx context.Context) string {
+func (e *encrypted) GetTier(ctx context.Context) Tier {
 	if o, ok := e.ObjectStorage.(SupportTier); ok {
-		return o.GetStorageClass(ctx)
+		return o.GetTier(ctx)
 	}
-	return ""
+	return Tier{}
 }
 
 var _ ObjectStorage = (*encrypted)(nil)

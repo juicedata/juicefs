@@ -142,6 +142,10 @@ func formatStorageFlags() []cli.Flag {
 			Name:  "storage-class",
 			Usage: "the default storage class",
 		},
+		&cli.StringFlag{
+			Name:  "tag",
+			Usage: "custom tag when uploading object storage (e.g. --tag key=value)",
+		},
 	})
 }
 

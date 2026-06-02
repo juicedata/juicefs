@@ -163,9 +163,10 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	params.ContentLength = vlen
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
-	sc := s.GetStorageClass(ctx)
-	params.StorageClass = obs.StorageClassType(sc)
+	t := s.GetTier(ctx)
+	params.StorageClass = obs.StorageClassType(t.Sc)
 	resp, err := s.c.PutObject(params)
+	// todo: impl tag
 	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
@@ -177,7 +178,8 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 }
 
 func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(s.GetStorageClass(ctx), string(obs.StorageClassStandard))
+	t := s.GetTier(ctx)
+	sc := getOrDefaultScValue(t.Sc, string(obs.StorageClassStandard))
 	params := &obs.CopyObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = dst

@@ -110,7 +110,7 @@ func (s *ibmcos) Restore(ctx context.Context, key string, days int32) error {
 }
 
 func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	sc := s.GetStorageClass(ctx)
+	t := s.GetTier(ctx)
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -128,18 +128,22 @@ func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...A
 		Body:        body,
 		ContentType: &mimeType,
 	}
-	if sc != "" {
-		params.SetStorageClass(sc)
+	if t.Sc != "" {
+		params.SetStorageClass(t.Sc)
+	}
+	if t.GetURLEncodedTag() != "" {
+		params.Tagging = aws.String(t.GetURLEncodedTag())
 	}
 	var reqID string
 	_, err := s.s3.PutObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
 	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(reqID).SetStorageClass(sc)
+	attrs.SetRequestID(reqID).SetStorageClass(t.Sc)
 	return err
 }
 
 func (s *ibmcos) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(s.GetStorageClass(ctx), DefaultStorageClass)
+	t := s.GetTier(ctx)
+	sc := getOrDefaultScValue(t.Sc, DefaultStorageClass)
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
@@ -147,6 +151,10 @@ func (s *ibmcos) Copy(ctx context.Context, dst, src string) error {
 		CopySource: &src,
 	}
 	params.SetStorageClass(sc)
+	if t.GetURLEncodedTag() != "" {
+		params.SetTaggingDirective(s3.TaggingDirectiveReplace)
+		params.SetTagging(t.GetURLEncodedTag())
+	}
 	_, err := s.s3.CopyObjectWithContext(ctx, params)
 	return err
 }

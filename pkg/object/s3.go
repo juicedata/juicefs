@@ -153,7 +153,7 @@ func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getter
 }
 
 func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	sc := s.GetStorageClass(ctx)
+	t := s.GetTier(ctx)
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -170,15 +170,18 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 		Key:               &key,
 		Body:              body,
 		ContentType:       &mimeType,
-		StorageClass:      types.StorageClass(sc),
+		StorageClass:      types.StorageClass(t.Sc),
 		ChecksumAlgorithm: "", // X-Amz-Content-Sha256: UNSIGNED-PAYLOAD
+	}
+	if t.GetURLEncodedTag() != "" {
+		params.Tagging = aws.String(t.GetURLEncodedTag())
 	}
 	if !s.disableChecksum {
 		checksum := generateChecksum(body)
 		params.Metadata = map[string]string{checksumAlgr: checksum}
 	}
 	attrs := ApplyGetters(getters...)
-	attrs.SetStorageClass(sc)
+	attrs.SetStorageClass(t.Sc)
 	resp, err := s.s3.PutObject(ctx, params)
 	if err != nil {
 		var re s3.ResponseError
@@ -194,13 +197,18 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(s.GetStorageClass(ctx), string(types.StorageClassStandard))
+	t := s.GetTier(ctx)
+	sc := getOrDefaultScValue(t.Sc, string(types.StorageClassStandard))
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,
 		Key:          &dst,
 		CopySource:   &src,
 		StorageClass: types.StorageClass(sc),
+	}
+	if t.GetURLEncodedTag() != "" {
+		params.TaggingDirective = types.TaggingDirectiveReplace
+		params.Tagging = aws.String(t.GetURLEncodedTag())
 	}
 	_, err := s.s3.CopyObject(ctx, params)
 	return err

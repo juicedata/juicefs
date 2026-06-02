@@ -127,15 +127,14 @@ func (g *gs) Get(ctx context.Context, key string, off, limit int64, getters ...A
 }
 
 func (g *gs) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
-	sc := g.GetStorageClass(ctx)
+	t := g.GetTier(ctx)
 	writer := g.getClient().Bucket(g.bucket).Object(key).NewWriter(ctx)
-	writer.StorageClass = sc
-
+	writer.StorageClass = t.Sc
 	// If you upload small objects (< 16MiB), you should set ChunkSize
 	// to a value slightly larger than the objects' sizes to avoid memory bloat.
 	// This is especially important if you are uploading many small objects concurrently.
 	writer.ChunkSize = 5 << 20
-
+	// todo: The lifecycle rules of GCS do not support filtering using tags
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
 	_, err := io.CopyBuffer(writer, data, *buf)
@@ -143,12 +142,13 @@ func (g *gs) Put(ctx context.Context, key string, data io.Reader, getters ...Att
 		return err
 	}
 	attrs := ApplyGetters(getters...)
-	attrs.SetStorageClass(sc)
+	attrs.SetStorageClass(t.Sc)
 	return writer.Close()
 }
 
 func (g *gs) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(g.GetStorageClass(ctx), DefaultStorageClass)
+	t := g.GetTier(ctx)
+	sc := getOrDefaultScValue(t.Sc, DefaultStorageClass)
 	client := g.getClient()
 	srcObj := client.Bucket(g.bucket).Object(src)
 	dstObj := client.Bucket(g.bucket).Object(dst)

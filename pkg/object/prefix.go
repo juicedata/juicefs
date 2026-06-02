@@ -38,11 +38,11 @@ func (s *withPrefix) SetTier(init Tiers) error {
 	return notSupported
 }
 
-func (s *withPrefix) GetStorageClass(ctx context.Context) string {
+func (s *withPrefix) GetTier(ctx context.Context) Tier {
 	if o, ok := s.os.(SupportTier); ok {
-		return o.GetStorageClass(ctx)
+		return o.GetTier(ctx)
 	}
-	return ""
+	return Tier{}
 }
 
 // WithPrefix return an object storage that add a prefix to keys.

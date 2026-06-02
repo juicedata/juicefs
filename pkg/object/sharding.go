@@ -88,13 +88,13 @@ func (s *sharded) SetTier(init Tiers) error {
 	return err
 }
 
-func (s *sharded) GetStorageClass(ctx context.Context) string {
+func (s *sharded) GetTier(ctx context.Context) Tier {
 	for _, o := range s.stores {
 		if o, ok := o.(SupportTier); ok {
-			return o.GetStorageClass(ctx)
+			return o.GetTier(ctx)
 		}
 	}
-	return ""
+	return Tier{}
 }
 
 const maxResults = 10000

@@ -42,6 +42,8 @@ const (
 	cosRequestIDKey       = "X-Cos-Request-Id"
 	cosStorageClassHeader = "X-Cos-Storage-Class"
 	cosRestoreStatus      = "x-cos-restore-status"
+	cosTag                = "x-cos-tagging"
+	cosTagDirective       = "x-cos-tagging-directive"
 )
 
 type COS struct {
@@ -138,7 +140,7 @@ func (c *COS) Restore(ctx context.Context, key string, days int32) error {
 }
 
 func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	sc := c.GetStorageClass(ctx)
+	t := c.GetTier(ctx)
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{
@@ -146,24 +148,39 @@ func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 		})
 		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosMetaXXX: &header}
 	}
-	if sc != "" {
+	if t.Sc != "" {
 		if options.ObjectPutHeaderOptions == nil {
 			options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{}
 		}
-		options.ObjectPutHeaderOptions.XCosStorageClass = sc
+		options.ObjectPutHeaderOptions.XCosStorageClass = t.Sc
+	}
+	if t.GetURLEncodedTag() != "" {
+		if options.ObjectPutHeaderOptions == nil {
+			options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{}
+		}
+		options.ObjectPutHeaderOptions.XOptionHeader = &http.Header{}
+		options.ObjectPutHeaderOptions.XOptionHeader.Add(cosTag, t.GetURLEncodedTag())
 	}
 	resp, err := c.c.Object.Put(ctx, key, in, &options)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(sc)
+		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(t.Sc)
 	}
 	return err
 }
 
 func (c *COS) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(c.GetStorageClass(ctx), DefaultStorageClass)
+	t := c.GetTier(ctx)
+	sc := getOrDefaultScValue(t.Sc, DefaultStorageClass)
 	var opt cos.ObjectCopyOptions
-	opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{XCosStorageClass: sc}
+	opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{
+		XCosStorageClass: sc,
+	}
+	if t.GetURLEncodedTag() != "" {
+		opt.ObjectCopyHeaderOptions.XOptionHeader = &http.Header{}
+		opt.ObjectCopyHeaderOptions.XOptionHeader.Add(cosTag, t.GetURLEncodedTag())
+		opt.ObjectCopyHeaderOptions.XOptionHeader.Add(cosTagDirective, "Replaced")
+	}
 	source := fmt.Sprintf("%s/%s", c.endpoint, src)
 	_, _, err := c.c.Object.Copy(ctx, dst, source, &opt)
 	return err
