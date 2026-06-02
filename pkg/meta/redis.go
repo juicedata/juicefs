@@ -857,52 +857,54 @@ func (m *redisMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 }
 
 func (m *redisMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
-	var inoKeys []string
-	if err := m.scan(ctx, m.prefix+"session*", func(keys []string) error {
-		for i := 0; i < len(keys); i += 2 {
-			key := keys[i]
-			if key == "sessions" {
-				continue
-			}
-			inodes, err := m.rdb.SMembers(ctx, key).Result()
-			if err != nil {
-				logger.Warnf("SMembers %s: %s", key, err)
-				continue
-			}
-			for _, sinode := range inodes {
-				ino, err := strconv.ParseInt(sinode, 10, 64)
-				if err != nil {
-					logger.Warnf("invalid sustained: %s->%s", key, sinode)
+	/*
+		var inoKeys []string
+		if err := m.scan(ctx, m.prefix+"session*", func(keys []string) error {
+			for i := 0; i < len(keys); i += 2 {
+				key := keys[i]
+				if key == "sessions" {
 					continue
 				}
-				inoKeys = append(inoKeys, m.inodeKey(Ino(ino)))
+				inodes, err := m.rdb.SMembers(ctx, key).Result()
+				if err != nil {
+					logger.Warnf("SMembers %s: %s", key, err)
+					continue
+				}
+				for _, sinode := range inodes {
+					ino, err := strconv.ParseInt(sinode, 10, 64)
+					if err != nil {
+						logger.Warnf("invalid sustained: %s->%s", key, sinode)
+						continue
+					}
+					inoKeys = append(inoKeys, m.inodeKey(Ino(ino)))
+				}
 			}
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	batch := 1000
-	for i := 0; i < len(inoKeys); i += batch {
-		end := i + batch
-		if end > len(inoKeys) {
-			end = len(inoKeys)
-		}
-		values, err := m.rdb.MGet(ctx, inoKeys[i:end]...).Result()
-		if err != nil {
+			return nil
+		}); err != nil {
 			return err
 		}
-		var attr Attr
-		for _, v := range values {
-			if v != nil {
-				m.parseAttr([]byte(v.(string)), &attr)
-				if err := fn(attr.Uid, attr.Gid, attr.Length); err != nil {
-					return err
+
+		batch := 1000
+		for i := 0; i < len(inoKeys); i += batch {
+			end := i + batch
+			if end > len(inoKeys) {
+				end = len(inoKeys)
+			}
+			values, err := m.rdb.MGet(ctx, inoKeys[i:end]...).Result()
+			if err != nil {
+				return err
+			}
+			var attr Attr
+			for _, v := range values {
+				if v != nil {
+					m.parseAttr([]byte(v.(string)), &attr)
+					if err := fn(attr.Uid, attr.Gid, attr.Length); err != nil {
+						return err
+					}
 				}
 			}
 		}
-	}
+	*/
 	return nil
 }
 

@@ -2567,27 +2567,29 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 }
 
 func (m *kvMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
-	vals, err := m.scanKeys(ctx, m.fmtKey("SS"))
-	if err != nil {
-		return err
-	}
-	var attr Attr
-	for _, k := range vals {
-		b := utils.FromBuffer(k[2:])
-		if b.Len() != 16 {
-			logger.Warnf("Invalid sustainedKey: %v", k)
-			continue
-		}
-		_ = b.Get64()
-		inode := m.decodeInode(b.Get(8))
-		if eno := m.doGetAttr(ctx, inode, &attr); eno != 0 {
-			logger.Warnf("Get attr of sustained inode %d: %s", inode, eno)
-			continue
-		}
-		if err := fn(attr.Uid, attr.Gid, attr.Length); err != nil {
+	/*
+		vals, err := m.scanKeys(ctx, m.fmtKey("SS"))
+		if err != nil {
 			return err
 		}
-	}
+		var attr Attr
+		for _, k := range vals {
+			b := utils.FromBuffer(k[2:])
+			if b.Len() != 16 {
+				logger.Warnf("Invalid sustainedKey: %v", k)
+				continue
+			}
+			_ = b.Get64()
+			inode := m.decodeInode(b.Get(8))
+			if eno := m.doGetAttr(ctx, inode, &attr); eno != 0 {
+				logger.Warnf("Get attr of sustained inode %d: %s", inode, eno)
+				continue
+			}
+			if err := fn(attr.Uid, attr.Gid, attr.Length); err != nil {
+				return err
+			}
+		}
+	*/
 	return nil
 }
 
