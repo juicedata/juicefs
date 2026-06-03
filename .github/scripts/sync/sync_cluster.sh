@@ -412,6 +412,66 @@ signal_cluster_sync_child(){
     kill -$signal "$juicefs_pid" || true
 }
 
+create_sparse_marker_file(){
+    local file_path=$1
+    local file_size=$2
+    python3 - "$file_path" "$file_size" <<'PY'
+import sys
+
+path = sys.argv[1]
+size = int(sys.argv[2])
+markers = [
+    (0, b"juicefs-cluster-multipart-begin\n"),
+    (size // 2, b"juicefs-cluster-multipart-middle\n"),
+    (size - len(b"juicefs-cluster-multipart-end\n"), b"juicefs-cluster-multipart-end\n"),
+]
+
+with open(path, "wb") as f:
+    f.truncate(size)
+    for offset, data in markers:
+        f.seek(offset)
+        f.write(data)
+PY
+}
+
+assert_checkpoint_contains_multipart_state(){
+    local checkpoint_file=$1
+    local object_key=$2
+    local expected_size=$3
+    python3 - "$checkpoint_file" "$object_key" "$expected_size" <<'PY'
+import json
+import sys
+
+checkpoint_file, object_key, expected_size = sys.argv[1], sys.argv[2], int(sys.argv[3])
+with open(checkpoint_file, "r", encoding="utf-8") as f:
+    checkpoint = json.load(f)
+
+uploads = checkpoint.get("multipart_uploads") or {}
+state = uploads.get(object_key)
+if not state:
+    raise SystemExit(f"missing multipart checkpoint for {object_key}")
+
+upload = state.get("upload") or {}
+upload_id = upload.get("UploadID")
+if not upload_id:
+    raise SystemExit(f"missing upload id for {object_key}")
+
+if state.get("size") != expected_size:
+    raise SystemExit(f"unexpected checkpoint size: {state.get('size')} != {expected_size}")
+
+parts = state.get("parts") or {}
+if not parts:
+    raise SystemExit(f"missing uploaded parts for {object_key}")
+
+print(upload_id)
+PY
+}
+
+get_minio_object_size(){
+    local target=$1
+    ./mc stat --json "$target" | python3 -c 'import json, sys; payload = json.load(sys.stdin); size = payload.get("size"); metadata = payload.get("metadata") or {}; size = metadata.get("content-length") if size is None else size; assert size is not None, "unable to get object size from mc stat output"; print(int(size))'
+}
+
 prepare_test(){
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
@@ -868,6 +928,67 @@ test_checkpoint_force_reset_cluster(){
         cat sync2.log
         exit 1
     fi
+    grep "panic:\|<FATAL>\|ERROR" sync2.log && echo "panic or fatal or ERROR in sync2.log" && exit 1 || true
+}
+
+test_checkpoint_cluster_multipart_resume(){
+    # Test: cluster checkpoint should persist multipart state and resume >4GiB uploads
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    mkdir -p /jfs/src
+    chmod 777 /jfs /jfs/src
+
+    local key="multipart-cluster.bin"
+    local size=$((5 * 1024 * 1024 * 1024 + 17 * 1024 * 1024))
+    local checkpoint_json=/tmp/cluster-multipart-checkpoint.json
+    rm -f "$checkpoint_json"
+    create_sparse_marker_file "/jfs/src/$key" "$size"
+    chmod 666 "/jfs/src/$key"
+
+    (./mc rb myminio/multipartckpt > /dev/null 2>&1 --force || true) && ./mc mb myminio/multipartckpt
+
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync jfs://meta_url/src/ \
+         minio://minioadmin:minioadmin@172.20.0.1:9000/multipartckpt/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --threads 1 --list-threads 1 --list-depth 1 --debug \
+         --enable-checkpoint --checkpoint-interval 60s \
+         >sync1.log 2>&1 &
+    sync_pid=$!
+    sleep 4
+    signal_cluster_sync_child "$sync_pid" INT
+    wait "$sync_pid" || true
+
+    checkpoint_file=$(./mc find myminio/multipartckpt/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
+    if [ -z "$checkpoint_file" ]; then
+        echo "checkpoint file should exist after interrupted cluster multipart sync"
+        cat sync1.log
+        exit 1
+    fi
+
+    ./mc cat "$checkpoint_file" > "$checkpoint_json"
+    upload_id=$(assert_checkpoint_contains_multipart_state "$checkpoint_json" "$key" "$size")
+    [ -n "$upload_id" ] || (echo "cluster multipart upload id should not be empty" && exit 1)
+
+    sudo -u juicedata meta_url=$CLUSTER_META_URL ./juicefs sync jfs://meta_url/src/ \
+         minio://minioadmin:minioadmin@172.20.0.1:9000/multipartckpt/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --threads 1 --list-threads 1 --list-depth 1 --debug \
+         --enable-checkpoint --checkpoint-interval 2s \
+         >sync2.log 2>&1
+
+    checkpoint_count=$(./mc find myminio/multipartckpt/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
+    if [ "$checkpoint_count" -ne 0 ]; then
+        echo "checkpoint file should be deleted after cluster multipart resume succeeds"
+        cat sync2.log
+        exit 1
+    fi
+
+    dst_size=$(get_minio_object_size "myminio/multipartckpt/$key")
+    if [ "$dst_size" -ne "$size" ]; then
+        echo "cluster multipart object size mismatch: $dst_size vs $size"
+        exit 1
+    fi
+
     grep "panic:\|<FATAL>\|ERROR" sync2.log && echo "panic or fatal or ERROR in sync2.log" && exit 1 || true
 }
 

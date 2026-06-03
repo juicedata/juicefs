@@ -750,7 +750,12 @@ run_sub_dir_uid_gid_case(){
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_1" "echo a | tee -a /jfs/uid_cap" 2>error.log \
         && echo "uid capacity quota should block write via subdir mount" && exit 1 || true
-    grep -i "Disk quota exceeded" error.log || (echo "uid subdir capacity quota not enforced" && exit 1)
+    grep -i "Disk quota exceeded" error.log || (
+        echo "uid subdir capacity quota not enforced"
+        echo "=== Backend quota state (uid $TEST_UID_1) ==="
+        ./juicefs quota get $META_URL --uid "$TEST_UID_1" 2>&1 || true
+        exit 1
+    )
 
     ./juicefs rmr /jfs/uid_cap --skip-trash
     sleep $DIR_QUOTA_FLUSH_INTERVAL
@@ -759,7 +764,12 @@ run_sub_dir_uid_gid_case(){
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_1" "touch /jfs/uid_inode_overflow" 2>error.log \
         && echo "uid inode quota should block create via subdir mount" && exit 1 || true
-    grep -i "Disk quota exceeded" error.log || (echo "uid subdir inode quota not enforced" && exit 1)
+    grep -i "Disk quota exceeded" error.log || (
+        echo "uid subdir inode quota not enforced"
+        echo "=== Backend quota state (uid $TEST_UID_1) ==="
+        ./juicefs quota get $META_URL --uid "$TEST_UID_1" 2>&1 || true
+        exit 1
+    )
 
     run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/gid_cap bs=1G count=1"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
