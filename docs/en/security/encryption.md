@@ -131,7 +131,7 @@ JuiceFS supports two encryption algorithm combinations, which can be specified v
 
 - `aes256gcm-rsa` (default): Uses AES-256-GCM + RSA (or other private key)
 - `chacha20-rsa`: Uses ChaCha20-Poly1305 + RSA (or other private key)
-- `sm4gcm`: Uses SM4-GCM + SM2 (or other private key)
+- `sm4gcm`: Uses SM4-GCM + SM2 (or other private key) <VersionAdd>1.4.0</VersionAdd>
 
 1. Set passphrase using environment variable
 
