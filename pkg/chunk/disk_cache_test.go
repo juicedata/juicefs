@@ -654,18 +654,18 @@ func TestLruEviction(t *testing.T) {
 }
 
 func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
-	dir := t.TempDir()
-	conf := defaultConf
-	conf.CacheExpire = time.Hour
-	conf.CacheEviction = EvictionNone
-	conf.CacheScanInterval = -1
-	m := new(cacheManagerMetrics)
-	m.initMetrics()
-	cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
-	cache.scanned = true
-	key := "0_0_4"
+	PatchConvey("cooldown > 0: atime is shifted back by cooldown duration", t, func() {
+		dir := t.TempDir()
+		conf := defaultConf
+		conf.CacheExpire = time.Hour
+		conf.CacheEviction = EvictionNone
+		conf.CacheScanInterval = -1
+		m := new(cacheManagerMetrics)
+		m.initMetrics()
+		cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
+		cache.scanned = true
+		key := "0_0_4"
 
-	PatchConvey("mock time.Now to avoid drift", t, func() {
 		fixedTime := time.Date(2025, 1, 28, 12, 0, 0, 0, time.UTC)
 		Mock(time.Now).Return(fixedTime).Build()
 		path, err := cache.stage(key, []byte("test"), 0)
@@ -673,6 +673,33 @@ func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
 		require.NotEmpty(t, path)
 		expectedCooldownAtime := uint32(fixedTime.Add(-conf.CacheExpire / 2).Unix())
 		require.Equal(t, expectedCooldownAtime, cache.keys.peekAtime(cache.getCacheKey(key)))
+
+		rc, err := cache.load(key)
+		require.NoError(t, err)
+		require.NotNil(t, rc)
+		defer rc.Close()
+		require.Equal(t, uint32(fixedTime.Unix()), cache.keys.peekAtime(cache.getCacheKey(key)))
+	})
+
+	PatchConvey("cooldown == 0: atime is set to 0", t, func() {
+		dir := t.TempDir()
+		conf := defaultConf
+		conf.CacheExpire = 0 // stagedBlockCooldown = CacheExpire/2 = 0
+		conf.CacheEviction = EvictionNone
+		conf.CacheScanInterval = -1
+		m := new(cacheManagerMetrics)
+		m.initMetrics()
+		cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
+		cache.scanned = true
+		key := "0_0_4"
+
+		fixedTime := time.Date(2025, 1, 28, 12, 0, 0, 0, time.UTC)
+		Mock(time.Now).Return(fixedTime).Build()
+		path, err := cache.stage(key, []byte("test"), 0)
+		require.NoError(t, err)
+		require.NotEmpty(t, path)
+		require.Equal(t, uint32(0), cache.keys.peekAtime(cache.getCacheKey(key)))
+
 		rc, err := cache.load(key)
 		require.NoError(t, err)
 		require.NotNil(t, rc)

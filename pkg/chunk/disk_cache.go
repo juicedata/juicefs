@@ -100,7 +100,7 @@ type cacheStore struct {
 	state     dcState
 	stateLock sync.Mutex
 
-	// newBlockCooldown reduces the initial access time for newly cached staged blocks.
+	// stagedBlockCooldown reduces the initial access time for newly cached staged blocks.
 	// This helps prevent a surge of writes from evicting active read blocks.
 	stagedBlockCooldown time.Duration
 }
@@ -789,7 +789,11 @@ func (cache *cacheStore) stage(key string, data []byte, tierID uint8) (string, e
 			path := cache.cachePath(key)
 			cache.createDir(filepath.Dir(path))
 			if err = os.Link(stagingPath, path); err == nil {
-				cache.add(key, -int32(len(data)), uint32(time.Now().Add(-cache.stagedBlockCooldown).Unix()))
+				var atime uint32
+				if cache.stagedBlockCooldown > 0 {
+					atime = uint32(time.Now().Add(-cache.stagedBlockCooldown).Unix())
+				}
+				cache.add(key, -int32(len(data)), atime)
 			} else {
 				logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
 			}
