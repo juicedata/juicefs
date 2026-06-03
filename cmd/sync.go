@@ -481,7 +481,11 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			store = object.WithPrefix(store, u.Path[1:])
 		}
 	}
-
+	if os, ok := store.(object.SupportTier); ok {
+		if err := os.InitTiers(object.NewTiers("")); err != nil {
+			logger.Warnf("Set storage tier: %s", err)
+		}
+	}
 	return store, nil
 }
 
