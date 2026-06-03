@@ -481,10 +481,15 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
-	err = n.delObj(bucket, object)
+	err = n.withCheckedTargetConditions(ctx, bucket, object, func() error {
+		return n.delObj(bucket, object)
+	})
 	info.Bucket = bucket
 	info.Name = object
-	return info, jfsToObjectErr(ctx, err, bucket, object)
+	if err != nil {
+		return info, err
+	}
+	return info, nil
 }
 
 func (n *jfsObjects) delObj(bucket string, object string) error {
@@ -598,9 +603,13 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 
 	if minio.IsStringEqual(src, dst) {
 		// if we copy the same object for set metadata
-		err = n.setObjMeta(dst, srcInfo.UserDefined)
-		if err != nil {
-			logger.Errorf("set object metadata error, path: %s error %s", dst, err)
+		if err = n.withCheckedTargetConditions(ctx, dstBucket, dstObject, func() error {
+			if metaErr := n.setObjMeta(dst, srcInfo.UserDefined); metaErr != nil {
+				logger.Errorf("set object metadata error, path: %s error %s", dst, metaErr)
+			}
+			return nil
+		}); err != nil {
+			return info, err
 		}
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
@@ -653,17 +662,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		logger.Errorf("set object metadata error, path: %s error %s", dst, err)
 	}
 
-	eno = n.fs.Rename(mctx, tmp, dst, 0)
-	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(dst)); err != nil {
-			logger.Errorf("mkdirAll %s: %s", path.Dir(dst), err)
-			err = jfsToObjectErr(ctx, err, dstBucket, dstObject)
-			return
-		}
-		eno = n.fs.Rename(mctx, tmp, dst, 0)
-	}
-	if eno != 0 {
-		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
+	if err = n.commitPreparedObject(ctx, dstBucket, dstObject, tmp, dst, dstBucket, dstObject); err != nil {
 		logger.Errorf("rename %s to %s: %s", tmp, dst, err)
 		return
 	}
@@ -783,7 +782,7 @@ func (n *jfsObjects) mkdirAll(ctx context.Context, p string) error {
 	return eno
 }
 
-func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions, applyObjTaggingFunc func(tmpName string)) (err error) {
+func (n *jfsObjects) putObject(ctx context.Context, bucket, object, dst string, r *minio.PutObjReader, opts minio.ObjectOptions, applyObjTaggingFunc func(tmpName string)) (err error) {
 	uuid := minio.MustGetUUID()
 	tmpname := n.tpath(bucket, "tmp", uuid[:subDirPrefix], uuid)
 	f, eno := n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
@@ -832,17 +831,8 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 
 	applyObjTaggingFunc(tmpname)
 
-	eno = n.fs.Rename(mctx, tmpname, object, 0)
-	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(object)); err != nil {
-			logger.Errorf("mkdirAll %s: %s", path.Dir(object), err)
-			err = jfsToObjectErr(ctx, err, bucket, object)
-			return
-		}
-		eno = n.fs.Rename(mctx, tmpname, object, 0)
-	}
-	if eno != 0 {
-		err = jfsToObjectErr(ctx, eno, bucket, object)
+	if err = n.commitPreparedObject(ctx, bucket, object, tmpname, dst, bucket, object); err != nil {
+		logger.Errorf("rename %s to %s: %s", tmpname, dst, err)
 	}
 	return
 }
@@ -870,7 +860,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 		// if the put object is a directory, set its atime to 0
 		n.setFileAtime(p, 0)
 	} else {
-		if err = n.putObject(ctx, bucket, p, r, opts, func(tmpName string) {
+		if err = n.putObject(ctx, bucket, object, p, r, opts, func(tmpName string) {
 			etag = r.MD5CurrentHexString()
 			if n.gConf.KeepEtag && !strings.HasSuffix(object, sep) {
 				if eno := n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0); eno != 0 {
@@ -1174,7 +1164,7 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	}
 	p := n.ppath(bucket, uploadID, strconv.Itoa(partID))
 	var etag string
-	if err = n.putObject(ctx, bucket, p, r, opts, func(tmpName string) {
+	if err = n.putObject(ctx, bucket, object, p, r, opts, func(tmpName string) {
 		etag = r.MD5CurrentHexString()
 		if n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0) != 0 {
 			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmpName, s3Etag, etag, 0)
@@ -1286,19 +1276,8 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	}
 
 	name := n.path(bucket, object)
-	eno = n.fs.Rename(mctx, tmp, name, 0)
-	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(name)); err != nil {
-			logger.Errorf("mkdirAll %s: %s", path.Dir(name), err)
-			_ = n.fs.Delete(mctx, tmp)
-			err = jfsToObjectErr(ctx, err, bucket, object, uploadID)
-			return
-		}
-		eno = n.fs.Rename(mctx, tmp, name, 0)
-	}
-	if eno != 0 {
+	if err = n.commitPreparedObject(ctx, bucket, object, tmp, name, bucket, object, uploadID); err != nil {
 		_ = n.fs.Delete(mctx, tmp)
-		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 		logger.Errorf("Rename %s -> %s: %s", tmp, name, err)
 		return
 	}

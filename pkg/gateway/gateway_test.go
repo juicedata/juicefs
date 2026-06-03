@@ -17,9 +17,15 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,18 +35,25 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	minio "github.com/minio/minio/cmd"
+	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/hash"
 )
 
-func TestGatewayLock(t *testing.T) {
+func newTestGatewayObjects(t *testing.T, keepEtag bool) (*jfsObjects, string) {
+	t.Helper()
+
 	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
-		Name:      "test",
+		Name:      "test-bucket",
 		BlockSize: 4096,
 		Capacity:  1 << 30,
 		DirStats:  true,
 	}
-	_ = m.Init(format, true)
-	var conf = vfs.Config{
+	if err := m.Init(format, true); err != nil {
+		t.Fatalf("init meta failed: %v", err)
+	}
+
+	conf := vfs.Config{
 		Meta: meta.DefaultConf(),
 		Chunk: &chunk.Config{
 			BlockSize:   format.BlockSize << 10,
@@ -52,17 +65,39 @@ func TestGatewayLock(t *testing.T) {
 		EntryTimeout:    time.Millisecond * 100,
 		AttrTimeout:     time.Millisecond * 100,
 	}
-	objStore, _ := object.CreateStorage("mem", "", "", "", "")
+	objStore, err := object.CreateStorage("mem", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create storage failed: %v", err)
+	}
 	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
 	jfs, err := fs.NewFileSystem(&conf, m, store, nil)
 	if err != nil {
-		t.Fatalf("initialize  failed: %s", err)
+		t.Fatalf("initialize filesystem failed: %s", err)
 	}
-	jfsObj := &jfsObjects{fs: jfs, conf: &conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), gConf: &Config{Umask: 022}, nsMutex: minio.NewNSLock(false)}
-	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+
+	layer, err := NewJFSGateway(jfs, &conf, &Config{Bucket: format.Name, KeepEtag: keepEtag, Umask: 022})
+	if err != nil {
+		t.Fatalf("initialize gateway failed: %s", err)
+	}
+	jfsObj := layer.(*jfsObjects)
 	if err := jfs.Mkdir(mctx, minio.MinioMetaBucket, 0777, 022); err != 0 {
-		t.Fatalf("mkdir failed: %s", err)
+		t.Fatalf("mkdir meta bucket failed: %s", err)
 	}
+	return jfsObj, format.Name
+}
+
+func mustPutObjReader(t *testing.T, data []byte) *minio.PutObjReader {
+	t.Helper()
+	sum := md5.Sum(data)
+	hr, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), hex.EncodeToString(sum[:]), "", int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return minio.NewPutObjReader(hr)
+}
+
+func TestGatewayLock(t *testing.T) {
+	jfsObj, _ := newTestGatewayObjects(t, false)
 
 	rwLocker := jfsObj.NewNSLock(minio.MinioMetaBucket, minio.MinioMetaLockFile)
 
@@ -98,7 +133,219 @@ func TestGatewayLock(t *testing.T) {
 		t.Fatalf("GetRLock should return timeout error: %s", err)
 	}
 	rwLocker.RUnlock()
+}
 
+func TestConditionalPutObject(t *testing.T) {
+	jfsObj, bucket := newTestGatewayObjects(t, true)
+	ctx := context.Background()
+
+	initial, err := jfsObj.PutObject(ctx, bucket, "existing.txt", mustPutObjReader(t, []byte("alpha")), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("put initial object: %v", err)
+	}
+
+	if _, err = jfsObj.PutObject(
+		WithTargetConditions(ctx, Conditions{IfNoneMatch: []string{"*"}}),
+		bucket,
+		"create-only.txt",
+		mustPutObjReader(t, []byte("new")),
+		minio.ObjectOptions{},
+	); err != nil {
+		t.Fatalf("put new object with If-None-Match=* failed: %v", err)
+	}
+
+	if _, err = jfsObj.PutObject(
+		WithTargetConditions(ctx, Conditions{IfNoneMatch: []string{"*"}}),
+		bucket,
+		"existing.txt",
+		mustPutObjReader(t, []byte("beta")),
+		minio.ObjectOptions{},
+	); !errors.As(err, &minio.PreConditionFailed{}) {
+		t.Fatalf("put existing object with If-None-Match=* should fail, got: %v", err)
+	}
+
+	if _, err = jfsObj.PutObject(
+		WithTargetConditions(ctx, Conditions{IfMatch: []string{"does-not-match"}}),
+		bucket,
+		"existing.txt",
+		mustPutObjReader(t, []byte("beta")),
+		minio.ObjectOptions{},
+	); !errors.As(err, &minio.PreConditionFailed{}) {
+		t.Fatalf("put existing object with mismatched If-Match should fail, got: %v", err)
+	}
+
+	updated, err := jfsObj.PutObject(
+		WithTargetConditions(ctx, Conditions{IfMatch: []string{initial.ETag}}),
+		bucket,
+		"existing.txt",
+		mustPutObjReader(t, []byte("beta")),
+		minio.ObjectOptions{},
+	)
+	if err != nil {
+		t.Fatalf("put existing object with matching If-Match failed: %v", err)
+	}
+	if updated.ETag == initial.ETag {
+		t.Fatalf("expected overwrite to produce a new ETag, got %q", updated.ETag)
+	}
+}
+
+func TestConditionalDeleteObject(t *testing.T) {
+	jfsObj, bucket := newTestGatewayObjects(t, true)
+	ctx := context.Background()
+
+	obj, err := jfsObj.PutObject(ctx, bucket, "delete-me.txt", mustPutObjReader(t, []byte("alpha")), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("put initial object: %v", err)
+	}
+
+	if _, err = jfsObj.DeleteObject(
+		WithTargetConditions(ctx, Conditions{IfMatch: []string{"does-not-match"}}),
+		bucket,
+		"delete-me.txt",
+		minio.ObjectOptions{},
+	); !errors.As(err, &minio.PreConditionFailed{}) {
+		t.Fatalf("delete with mismatched If-Match should fail, got: %v", err)
+	}
+
+	if _, err = jfsObj.GetObjectInfo(ctx, bucket, "delete-me.txt", minio.ObjectOptions{}); err != nil {
+		t.Fatalf("object should still exist after failed delete: %v", err)
+	}
+
+	if _, err = jfsObj.DeleteObject(
+		WithTargetConditions(ctx, Conditions{IfMatch: []string{obj.ETag}}),
+		bucket,
+		"delete-me.txt",
+		minio.ObjectOptions{},
+	); err != nil {
+		t.Fatalf("delete with matching If-Match failed: %v", err)
+	}
+
+	if _, err = jfsObj.GetObjectInfo(ctx, bucket, "delete-me.txt", minio.ObjectOptions{}); !errors.As(err, &minio.ObjectNotFound{}) {
+		t.Fatalf("expected object to be deleted, got: %v", err)
+	}
+
+	if _, err = jfsObj.DeleteObject(
+		WithTargetConditions(ctx, Conditions{IfMatch: []string{obj.ETag}}),
+		bucket,
+		"delete-me.txt",
+		minio.ObjectOptions{},
+	); !errors.As(err, &minio.ObjectNotFound{}) {
+		t.Fatalf("delete missing object with If-Match should report not found, got: %v", err)
+	}
+}
+
+func TestConditionalCompleteMultipartUpload(t *testing.T) {
+	jfsObj, bucket := newTestGatewayObjects(t, true)
+	ctx := context.Background()
+
+	existing, err := jfsObj.PutObject(ctx, bucket, "multipart.txt", mustPutObjReader(t, []byte("alpha")), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("put initial object: %v", err)
+	}
+
+	uploadID, err := jfsObj.NewMultipartUpload(ctx, bucket, "multipart.txt", minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("new multipart upload failed: %v", err)
+	}
+	part, err := jfsObj.PutObjectPart(ctx, bucket, "multipart.txt", uploadID, 1, mustPutObjReader(t, []byte("beta")), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("put multipart part failed: %v", err)
+	}
+	parts := []minio.CompletePart{{PartNumber: 1, ETag: part.ETag}}
+
+	if _, err = jfsObj.CompleteMultipartUpload(
+		WithTargetConditions(ctx, Conditions{IfNoneMatch: []string{"*"}}),
+		bucket,
+		"multipart.txt",
+		uploadID,
+		parts,
+		minio.ObjectOptions{},
+	); !errors.As(err, &minio.PreConditionFailed{}) {
+		t.Fatalf("complete multipart with If-None-Match=* should fail, got: %v", err)
+	}
+
+	info, err := jfsObj.GetObjectInfo(ctx, bucket, "multipart.txt", minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("get existing object failed: %v", err)
+	}
+	if info.ETag != existing.ETag {
+		t.Fatalf("failed complete should leave original object unchanged, got ETag %q want %q", info.ETag, existing.ETag)
+	}
+
+	uploadID, err = jfsObj.NewMultipartUpload(ctx, bucket, "multipart.txt", minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("second multipart upload failed: %v", err)
+	}
+	part, err = jfsObj.PutObjectPart(ctx, bucket, "multipart.txt", uploadID, 1, mustPutObjReader(t, []byte("gamma")), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("second put multipart part failed: %v", err)
+	}
+
+	result, err := jfsObj.CompleteMultipartUpload(
+		WithTargetConditions(ctx, Conditions{IfMatch: []string{existing.ETag}}),
+		bucket,
+		"multipart.txt",
+		uploadID,
+		[]minio.CompletePart{{PartNumber: 1, ETag: part.ETag}},
+		minio.ObjectOptions{},
+	)
+	if err != nil {
+		t.Fatalf("complete multipart with matching If-Match failed: %v", err)
+	}
+	if result.ETag == existing.ETag {
+		t.Fatalf("expected completed multipart upload to replace the original object")
+	}
+}
+
+func TestConditionalRequestMiddlewareRewritesWriteFailures(t *testing.T) {
+	tests := []struct {
+		name           string
+		method         string
+		downstream     int
+		downstreamBody string
+	}{
+		{name: "internal-error", method: http.MethodPut, downstream: http.StatusInternalServerError, downstreamBody: `<Error><Code>InternalError</Code></Error>`},
+		{name: "success-no-content", method: http.MethodDelete, downstream: http.StatusNoContent},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := ConditionalRequestMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if _, ok := TargetConditionsFromContext(r.Context()); !ok {
+					t.Fatalf("expected conditional headers in request context")
+				}
+				markConditionalFailure(r.Context(), http.StatusPreconditionFailed, "PreconditionFailed", "At least one of the pre-conditions you specified did not hold")
+				w.Header().Set(xhttp.AmzRequestID, "request-id")
+				if tc.downstreamBody != "" {
+					w.Header().Set("Content-Type", "application/xml")
+				}
+				w.WriteHeader(tc.downstream)
+				if tc.downstreamBody != "" {
+					_, _ = w.Write([]byte(tc.downstreamBody))
+				}
+			}))
+
+			req := httptest.NewRequest(tc.method, "/bucket/object", nil)
+			req.Header.Set(xhttp.IfNoneMatch, "*")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusPreconditionFailed {
+				t.Fatalf("expected middleware to rewrite status to 412, got %d", rec.Code)
+			}
+			if got := rec.Header().Get(xhttp.AmzRequestID); got != "request-id" {
+				t.Fatalf("expected request ID header to be preserved, got %q", got)
+			}
+			if body := rec.Body.String(); !strings.Contains(body, "<Code>PreconditionFailed</Code>") {
+				t.Fatalf("expected rewritten S3 error body, got %q", body)
+			}
+		})
+	}
+}
+
+func TestMain(m *testing.M) {
+	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+	os.Exit(m.Run())
 }
 
 func newTestGateway(t *testing.T, conf Config) (*jfsObjects, *fs.FileSystem, string) {

@@ -233,6 +233,7 @@ func gateway(c *cli.Context) error {
 			},
 		},
 	}
+	registerGatewayConditionalMiddleware()
 	return app.Run(args)
 }
 
