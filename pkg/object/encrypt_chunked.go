@@ -73,6 +73,9 @@ func (e *chunkedEncrypted) calcPlainSize(encSize int64) int64 {
 	if encSize <= 0 {
 		return 0
 	}
+	if encSize <= chunkHeaderSize+int64(e.overhead) {
+		return encSize
+	}
 	fullChunks := encSize / e.encChunkSize
 	remainder := encSize % e.encChunkSize
 	plainSize := fullChunks * plainChunkSize

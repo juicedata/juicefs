@@ -373,6 +373,51 @@ func TestSyncLink(t *testing.T) {
 	}
 }
 
+func TestSyncFilesFromSymlinkDirWithLinks(t *testing.T) {
+	for _, entry := range []string{"dir-link"} { // TODO: "dir-link/" would failed
+		t.Run(entry, func(t *testing.T) {
+			srcDir := t.TempDir()
+			dstDir := t.TempDir()
+			filesFrom := srcDir + "/files-from"
+			if err := os.WriteFile(filesFrom, []byte(entry+"\ndir1\n"), 0644); err != nil {
+				t.Fatalf("write files-from: %s", err)
+			}
+
+			src, _ := object.CreateStorage("file", srcDir+"/", "", "", "")
+			if err := src.Put(ctx, "dir1/file1", bytes.NewReader([]byte("test"))); err != nil {
+				t.Fatalf("put file: %s", err)
+			}
+			if err := src.(object.SupportSymlink).Symlink("dir1", "dir-link"); err != nil {
+				t.Fatalf("symlink dir-link: %s", err)
+			}
+
+			dst, _ := object.CreateStorage("file", dstDir+"/", "", "", "")
+			if err := Sync(src, dst, &Config{
+				Threads:     2,
+				ListThreads: 1,
+				Links:       true,
+				Quiet:       true,
+				FilesFrom:   filesFrom,
+				Limit:       -1,
+				MaxSize:     math.MaxInt64,
+			}); err != nil {
+				t.Fatalf("sync: %s", err)
+			}
+
+			target, err := os.Readlink(dstDir + "/dir-link")
+			if err != nil {
+				t.Fatalf("readlink dir-link: %s", err)
+			}
+			if target != "dir1" {
+				t.Fatalf("dir-link target = %q, want %q", target, "dir1")
+			}
+			if _, err := dst.Head(ctx, "dir1/file1"); err != nil {
+				t.Fatalf("head dir1/file1: %s", err)
+			}
+		})
+	}
+}
+
 func TestSyncLinkWithOutFollow(t *testing.T) {
 	defer func() {
 		_ = os.RemoveAll("/tmp/a")

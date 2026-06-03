@@ -7,8 +7,11 @@ META_URL=$(get_meta_url $META)
 source .github/scripts/common/common.sh
 
 AWS_BUCKET=${AWS_BUCKET:-tiertest-${META}}
-AWS_BUCKET=$(printf '%s' "$AWS_BUCKET" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9.-' '-')
+AWS_BUCKET_SUFFIX=${AWS_BUCKET_SUFFIX:-${GITHUB_RUN_ID:-$(date +%s)}-${GITHUB_RUN_ATTEMPT:-$RANDOM}}
+AWS_BUCKET=$(printf '%s-%s' "$AWS_BUCKET" "$AWS_BUCKET_SUFFIX" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9.-' '-')
 AWS_BUCKET=${AWS_BUCKET#-}
+AWS_BUCKET=${AWS_BUCKET%-}
+AWS_BUCKET=${AWS_BUCKET:0:63}
 AWS_BUCKET=${AWS_BUCKET%-}
 AWS_REGION=${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}
 AWS_ACCESS_KEY_VALUE=${AWS_ACCESS_KEY_ID:-${AWS_ACEESS_KEY:-}}

@@ -127,7 +127,7 @@ JuiceFS 支持三种加密算法组合，可以通过 `--encrypt-algo` 选项指
 
 - `aes256gcm-rsa`（默认）：使用 AES-256-GCM + RSA（或其他私钥）
 - `chacha20-rsa`：使用 ChaCha20-Poly1305 + RSA（或其他私钥）
-- `sm4gcm`: 使用 SM4-GCM + SM2（或其他私钥）
+- `sm4gcm`: 使用 SM4-GCM + SM2（或其他私钥）<VersionAdd>1.4.0</VersionAdd>
 
 1. 用环境变量设置 Passphrase
 
