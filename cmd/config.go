@@ -178,11 +178,10 @@ func config(ctx *cli.Context) error {
 	var quota, storage, trash, clientVer, tier bool
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
-	var newSc string
 	var targetTierID uint8
-	var currentTier object.Tier
+	var currentTier *object.Tier
 	var findTier bool
-	var newTag string
+	var newTier *object.Tier
 
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
@@ -393,32 +392,37 @@ func config(ctx *cli.Context) error {
 			targetTierID = uint8(ctx.Int(flag))
 			currentTier, findTier = format.Tiers[targetTierID]
 			if !findTier {
-				currentTier = object.Tier{ID: targetTierID}
+				currentTier = &object.Tier{ID: targetTierID}
+			}
+			newTier = &object.Tier{
+				ID:  targetTierID,
+				Sc:  currentTier.Sc,
+				Tag: currentTier.Tag,
 			}
 			var change bool
 			if ctx.IsSet("storage-class") {
 				change = true
-				newSc = ctx.String("storage-class")
-				if !findTier || currentTier.Sc != newSc {
-					msg.WriteString(fmt.Sprintf("set tier %d storage-class: %s\n", targetTierID, newSc))
-					format.Tiers[targetTierID] = object.Tier{ID: targetTierID, Sc: newSc, Tag: currentTier.Tag}
+				newTier.Sc = ctx.String("storage-class")
+				if !findTier || currentTier.Sc != newTier.Sc {
+					msg.WriteString(fmt.Sprintf("set tier %d storage-class: %s\n", targetTierID, newTier.Sc))
 					tier = true
 				}
 			}
 
 			if ctx.IsSet("tag") {
 				change = true
-				newTag = ctx.String("tag")
-				if !object.ValidateTag(newTag) {
-					logger.Fatalf("Invalid tag format: %s", newTag)
+				newTier.Tag = ctx.String("tag")
+				if !object.ValidateTag(newTier.Tag) {
+					logger.Fatalf("Invalid tag format: %s", newTier.Tag)
 				}
-				if !findTier || currentTier.Tag != newTag {
-					msg.WriteString(fmt.Sprintf("set tier %d tag: %s\n", targetTierID, newTag))
-					format.Tiers[targetTierID] = object.Tier{ID: targetTierID, Sc: currentTier.Sc, Tag: newTag}
+				if !findTier || currentTier.Tag != newTier.Tag {
+					msg.WriteString(fmt.Sprintf("set tier %d tag: %s\n", targetTierID, newTier.Tag))
 					tier = true
 				}
 			}
-			if !change {
+			if change {
+				format.Tiers[targetTierID] = newTier
+			} else {
 				logger.Fatalf("missing required flag: --storage-class or --tag")
 			}
 		}
@@ -494,14 +498,14 @@ func config(ctx *cli.Context) error {
 			}
 		}
 		if tier {
-			if findTier && (currentTier.Sc != newSc || currentTier.Tag != newTag) {
+			if findTier && (currentTier.Sc != newTier.Sc || currentTier.Tag != newTier.Tag) {
 				fmt.Printf("existing tier will be overwritten: \n")
 				fmt.Printf("tier: %d\n", currentTier.ID)
-				if ctx.IsSet("storage-class") && currentTier.Sc != newSc {
-					fmt.Printf("storage class: %s => %s\n", currentTier.Sc, newSc)
+				if ctx.IsSet("storage-class") && currentTier.Sc != newTier.Sc {
+					fmt.Printf("storage class: %s => %s\n", currentTier.Sc, newTier.Sc)
 				}
-				if ctx.IsSet("tag") && currentTier.Tag != newTag {
-					fmt.Printf("tag: %s => %s\n", currentTier.Tag, newTag)
+				if ctx.IsSet("tag") && currentTier.Tag != newTier.Tag {
+					fmt.Printf("tag: %s => %s\n", currentTier.Tag, newTier.Tag)
 				}
 				if !yes && !userConfirmed() {
 					return fmt.Errorf("Aborted.")

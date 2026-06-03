@@ -338,15 +338,15 @@ type TierKey struct{}
 const DefaultRestoreDays = 3
 
 type SupportTier interface {
-	SetTier(init Tiers) error
-	GetTier(ctx context.Context) Tier
+	InitTiers(init Tiers) error
+	GetTier(ctx context.Context) *Tier
 }
 
 type tierStorage struct {
-	tiers map[uint8]Tier
+	tiers map[uint8]*Tier
 }
 
-func (b *tierStorage) GetTier(ctx context.Context) Tier {
+func (b *tierStorage) GetTier(ctx context.Context) *Tier {
 	if id, ok := ctx.Value(TierKey{}).(uint8); ok {
 		if t, ok := b.tiers[id]; ok {
 			return t
@@ -356,7 +356,7 @@ func (b *tierStorage) GetTier(ctx context.Context) Tier {
 	return b.tiers[0]
 }
 
-func (b *tierStorage) SetTier(init Tiers) error {
+func (b *tierStorage) InitTiers(init Tiers) error {
 	if init == nil {
 		init = NewTiers("")
 	}
@@ -365,9 +365,11 @@ func (b *tierStorage) SetTier(init Tiers) error {
 }
 
 type Tier struct {
-	ID  uint8  `json:"ID"`
-	Sc  string `json:"StorageClass"`
-	Tag string `json:"Tag"`
+	ID         uint8  `json:"ID"`
+	Sc         string `json:"StorageClass"`
+	Tag        string `json:"Tag"`
+	encodedTag *string
+	once       sync.Once
 }
 
 func ValidateTag(tag string) bool {
@@ -380,20 +382,33 @@ func ValidateTag(tag string) bool {
 	parts := strings.SplitN(tag, "=", 2)
 	return parts[0] != "" && parts[1] != ""
 }
-func (t Tier) GetURLEncodedTag() string {
-	if t.Tag != "" && ValidateTag(t.Tag) {
-		k := strings.SplitN(t.Tag, "=", 2)[0]
-		v := strings.SplitN(t.Tag, "=", 2)[1]
-		return url.QueryEscape(k) + "=" + url.QueryEscape(v)
+
+func (t *Tier) GetURLEncodedTag() string {
+	t.once.Do(func() {
+		if t.Tag == "" || !ValidateTag(t.Tag) {
+			return
+		}
+
+		parts := strings.SplitN(t.Tag, "=", 2)
+		if len(parts) != 2 {
+			return
+		}
+
+		str := url.QueryEscape(parts[0]) + "=" + url.QueryEscape(parts[1])
+		t.encodedTag = &str
+	})
+
+	if t.encodedTag == nil {
+		return ""
 	}
-	return ""
+	return *t.encodedTag
 }
 
-type Tiers map[uint8]Tier
+type Tiers map[uint8]*Tier
 
 func NewTiers(defaultSc string) Tiers {
 	t := make(Tiers)
-	t[0] = Tier{
+	t[0] = &Tier{
 		ID: 0,
 		Sc: defaultSc,
 	}

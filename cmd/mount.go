@@ -174,7 +174,7 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 			format.Storage = c.String("storage")
 		}
 		if c.IsSet("storage-class") {
-			format.Tiers[0] = object.Tier{
+			format.Tiers[0] = &object.Tier{
 				ID: 0,
 				Sc: c.String("storage-class"),
 			}

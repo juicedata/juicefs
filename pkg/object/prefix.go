@@ -31,18 +31,18 @@ type withPrefix struct {
 	prefix string
 }
 
-func (s *withPrefix) SetTier(init Tiers) error {
+func (s *withPrefix) InitTiers(init Tiers) error {
 	if o, ok := s.os.(SupportTier); ok {
-		return o.SetTier(init)
+		return o.InitTiers(init)
 	}
 	return notSupported
 }
 
-func (s *withPrefix) GetTier(ctx context.Context) Tier {
+func (s *withPrefix) GetTier(ctx context.Context) *Tier {
 	if o, ok := s.os.(SupportTier); ok {
 		return o.GetTier(ctx)
 	}
-	return Tier{}
+	return &Tier{}
 }
 
 // WithPrefix return an object storage that add a prefix to keys.

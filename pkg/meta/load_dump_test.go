@@ -370,7 +370,7 @@ func testLoadDump(t *testing.T, name, addr string) {
 
 func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
-	testLoadDump(t, "mysql", "mysql://root:@/dev")
+	testLoadDump(t, "sqlite3", "sqlite:///tmp/sqlite3.db")
 	testLoadDump(t, "badger", "badger://jfs-load-dump")
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }

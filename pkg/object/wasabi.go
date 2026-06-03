@@ -40,7 +40,7 @@ func (s *wasabi) String() string {
 	return fmt.Sprintf("wasabi://%s/", s.s3client.bucket)
 }
 
-func (s *wasabi) SetTier(init Tiers) error {
+func (s *wasabi) InitTiers(init Tiers) error {
 	return notSupported
 }
 

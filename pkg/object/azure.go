@@ -137,6 +137,14 @@ func (b *wasb) Copy(ctx context.Context, dst, src string) error {
 			if _, err := blobClient.SetTier(ctx, *tier, &blob2.SetTierOptions{}); err != nil {
 				return err
 			}
+			if t.Tag != "" && ValidateTag(t.Tag) {
+				parts := strings.SplitN(t.Tag, "=", 2)
+				if len(parts) == 2 {
+					if _, err := blobClient.SetTags(ctx, map[string]string{parts[0]: parts[1]}, nil); err != nil {
+						return err
+					}
+				}
+			}
 		} else {
 			return fmt.Errorf("invalid tier id: %d", id)
 		}

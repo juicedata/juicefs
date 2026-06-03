@@ -287,7 +287,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	}
 	blob = object.WithPrefix(blob, format.Name+"/")
 	if os, ok := blob.(object.SupportTier); ok {
-		if err := os.SetTier(format.Tiers); err != nil {
+		if err := os.InitTiers(format.Tiers); err != nil {
 			logger.Warnf("Set storage tier: %s", err)
 		}
 	}
@@ -504,7 +504,7 @@ func format(c *cli.Context) error {
 			KerbConf:         readKerbConf(c.String("kerberos-config-file")),
 		}
 		if sc := c.String("storage-class"); sc != "" {
-			format.Tiers[0] = object.Tier{
+			format.Tiers[0] = &object.Tier{
 				ID: 0,
 				Sc: sc,
 			}

@@ -280,15 +280,18 @@ func (t *tosClient) ListUploads(ctx context.Context, marker string) ([]*PendingP
 func (t *tosClient) Copy(ctx context.Context, dst, src string) error {
 	tier := t.GetTier(ctx)
 	sc := getOrDefaultScValue(tier.Sc, string(enum.StorageClassStandard))
-	_, err := t.client.CopyObject(ctx, &tos.CopyObjectInput{
-		SrcBucket:        t.bucket,
-		Bucket:           t.bucket,
-		SrcKey:           src,
-		Key:              dst,
-		StorageClass:     enum.StorageClassType(sc),
-		TaggingDirective: enum.TaggingDirectiveReplace,
-		Tagging:          tier.GetURLEncodedTag(),
-	})
+	input := &tos.CopyObjectInput{
+		SrcBucket:    t.bucket,
+		Bucket:       t.bucket,
+		SrcKey:       src,
+		Key:          dst,
+		StorageClass: enum.StorageClassType(sc),
+	}
+	if tier.GetURLEncodedTag() != "" {
+		input.Tagging = tier.GetURLEncodedTag()
+		input.TaggingDirective = enum.TaggingDirectiveReplace
+	}
+	_, err := t.client.CopyObject(ctx, input)
 	return err
 }
 func (t *tosClient) Restore(ctx context.Context, key string, days int32) error {

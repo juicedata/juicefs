@@ -186,7 +186,7 @@ func objbench(ctx *cli.Context) error {
 	storageClass := ctx.String("storage-class")
 	if os, ok := blob.(object.SupportTier); ok && storageClass != "" {
 		tiers := object.NewTiers(storageClass)
-		if err := os.SetTier(tiers); err != nil {
+		if err := os.InitTiers(tiers); err != nil {
 			logger.Warnf("Set storage tier: %s", err)
 		}
 	}
