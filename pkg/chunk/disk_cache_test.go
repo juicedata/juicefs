@@ -154,7 +154,7 @@ func TestScanCached(t *testing.T) {
 	cache.state = newDCState(dcUnchanged, cache)
 	cache.keys, err = NewKeyIndex(&cfg)
 	require.NoError(t, err)
-	cache.dir = "/tmp/jfstest_scan"
+	cache.dir = t.TempDir()
 	rawDir := filepath.Join(cache.dir, cacheDir)
 	if err := os.MkdirAll(rawDir, 0755); err != nil {
 		t.Fatalf("mkdir %s: %s", rawDir, err)
@@ -165,7 +165,6 @@ func TestScanCached(t *testing.T) {
 			_ = f.Close()
 		}
 	}
-	defer os.RemoveAll(rawDir)
 	cache.scanCached(true)
 	require.Equal(t, num, cache.keys.len())
 }
@@ -375,11 +374,9 @@ func shutdownStore(s *cacheStore) {
 
 func TestCacheManager(t *testing.T) {
 	conf := defaultConf
-	conf.CacheDir = "/tmp/diskCache0:/tmp/diskCache1:/tmp/diskCache2"
+	dir0, dir1, dir2 := t.TempDir(), t.TempDir(), t.TempDir()
+	conf.CacheDir = dir0 + ":" + dir1 + ":" + dir2
 	conf.AutoCreate = true
-	defer os.RemoveAll("/tmp/diskCache0")
-	defer os.RemoveAll("/tmp/diskCache1")
-	defer os.RemoveAll("/tmp/diskCache2")
 	manager := newCacheManager(&conf, nil, nil)
 	require.True(t, !manager.isEmpty())
 
