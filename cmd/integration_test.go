@@ -82,6 +82,7 @@ func TestIntegration(t *testing.T) {
 	startWebdav(t)
 	_ = os.Chdir("../integration")
 	makeCmd := exec.Command("make")
+	makeCmd.Env = append(os.Environ(), "MOUNT_POINT="+testMountPoint)
 	out, err := makeCmd.CombinedOutput()
 	if err != nil {
 		t.Logf("std out:\n%s\n", string(out))
