@@ -189,7 +189,7 @@ func setTier(ctx *cli.Context) error {
 	}
 	checkFunc := func(ino meta.Ino, oriTier uint8) bool {
 		if id == uint(oriTier) && !ctx.Bool("force") {
-			logger.Infof("inode:%d storage tier is already %d, no change needed", ino, oriTier)
+			logger.Debugf("inode:%d storage tier is already %d, no change needed", ino, oriTier)
 			return true
 		}
 		return false
