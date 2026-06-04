@@ -366,7 +366,12 @@ func (b *tierStorage) InitTiers(init Tiers) error {
 		init = NewTiers("")
 	}
 	for id, t := range init {
-		t.encodedTag = encodeTag(t.Tag)
+		if t.Tag != "" && !ValidateTag(t.Tag) {
+			logger.Warnf("invalid tag %q for tier %d; ignore it", t.Tag, id)
+			t.encodedTag = ""
+		} else {
+			t.encodedTag = encodeTag(t.Tag)
+		}
 		init[id] = t
 	}
 	b.tiers = init
