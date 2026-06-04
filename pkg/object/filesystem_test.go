@@ -46,8 +46,7 @@ func testKeysEqual(objs []Object, expectedKeys []string) error {
 }
 
 func TestDisk2(t *testing.T) {
-	diskPath := "/tmp/abc/"
-	_ = os.RemoveAll(diskPath)
+	diskPath := t.TempDir() + "/"
 	s, _ := newDisk(diskPath, "", "", "")
 	s = WithPrefix(s, "prefix/")
 	testFileSystem(t, s)
