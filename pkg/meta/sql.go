@@ -4306,15 +4306,20 @@ func (m *dbMeta) buildQuotaUpsertSQL(table, conflictCols string, insertCols, upd
 	prefixedTable := m.tablePrefix + table
 	placeholders := strings.Repeat("?,", len(insertCols)-1) + "?"
 
+	driver := m.Name()
 	var setClauses []string
 	for _, col := range updateCols {
-		setClauses = append(setClauses,
-			fmt.Sprintf("%s = CASE WHEN ? >= 0 THEN ? ELSE %s.%s END", col, prefixedTable, col))
+		if driver == "postgres" {
+			setClauses = append(setClauses,
+				fmt.Sprintf("%s = CASE WHEN ?::bigint >= 0 THEN ?::bigint ELSE %s.%s END", col, prefixedTable, col))
+		} else {
+			setClauses = append(setClauses,
+				fmt.Sprintf("%s = CASE WHEN ? >= 0 THEN ? ELSE %s.%s END", col, prefixedTable, col))
+		}
 	}
 	setPart := strings.Join(setClauses, ", ")
 
 	var conflictClause string
-	driver := m.Name()
 	if driver == "sqlite3" || driver == "postgres" {
 		conflictClause = fmt.Sprintf("ON CONFLICT (%s) DO UPDATE SET", conflictCols)
 	} else {
@@ -4383,13 +4388,13 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 		var insertCols []string
 		var insertArgs []interface{}
 
-		switch {
-		case qtype == DirQuotaType:
+		switch qtype {
+		case DirQuotaType:
 			table = "dir_quota"
 			conflictCols = "inode"
 			insertCols = []string{"inode", "max_space", "max_inodes", "used_space", "used_inodes"}
 			insertArgs = []interface{}{Ino(key), quota.MaxSpace, quota.MaxInodes, insertUsedSpace, insertUsedInodes}
-		case qtype == UserQuotaType || qtype == GroupQuotaType:
+		case UserQuotaType, GroupQuotaType:
 			table = "user_group_quota"
 			conflictCols = "qtype, qkey"
 			insertCols = []string{"qtype", "qkey", "max_space", "max_inodes", "used_space", "used_inodes"}
