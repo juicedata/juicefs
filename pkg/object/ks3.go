@@ -141,19 +141,23 @@ func (s *ks3) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 		Body:        body,
 		ContentType: &mimeType,
 	}
-	sc := s.GetStorageClass(ctx)
-	if sc != "" {
-		params.StorageClass = aws.String(sc)
+	t := s.GetTier(ctx)
+	if t.Sc != "" {
+		params.StorageClass = aws.String(t.Sc)
+	}
+	if t.encodedTag != "" {
+		params.Tagging = aws.String(t.encodedTag)
 	}
 	resp, err := s.s3.PutObjectWithContext(ctx, params)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey])).SetStorageClass(sc)
+		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey])).SetStorageClass(t.Sc)
 	}
 	return err
 }
 func (s *ks3) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(s.GetStorageClass(ctx), s3.StorageClassStandard)
+	t := s.GetTier(ctx)
+	sc := getOrDefaultScValue(t.Sc, s3.StorageClassStandard)
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
@@ -161,6 +165,10 @@ func (s *ks3) Copy(ctx context.Context, dst, src string) error {
 		CopySource: &src,
 	}
 	params.StorageClass = aws.String(sc)
+	if t.encodedTag != "" {
+		params.Tagging = aws.String(t.encodedTag)
+		params.TaggingDirective = aws.String("REPLACE")
+	}
 	_, err := s.s3.CopyObjectWithContext(ctx, params)
 	return err
 }

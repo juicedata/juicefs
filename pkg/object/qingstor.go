@@ -156,15 +156,16 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 		ContentLength: &vlen,
 		ContentType:   &mimeType,
 	}
-	sc := q.GetStorageClass(ctx)
-	if sc != "" {
+	t := q.GetTier(ctx)
+	if t.Sc != "" {
 		// XQSStorageClass's available values: STANDARD, STANDARD_IA
-		input.XQSStorageClass = &sc
+		input.XQSStorageClass = &t.Sc
 	}
+	// todo: The lifecycle rules of qingstor do not support filtering using tags
 	out, err := q.bucket.PutObjectWithContext(ctx, key, input)
 	if out != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(aws.ToString(out.RequestID)).SetStorageClass(sc)
+		attrs.SetRequestID(aws.ToString(out.RequestID)).SetStorageClass(t.Sc)
 	}
 	if err != nil {
 		return err
@@ -176,7 +177,7 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (q *qingstor) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(q.GetStorageClass(ctx), DefaultStorageClass)
+	sc := getOrDefaultScValue(q.GetTier(ctx).Sc, DefaultStorageClass)
 	source := fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, src)
 	input := &qs.PutObjectInput{
 		XQSCopySource:   &source,

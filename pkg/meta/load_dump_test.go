@@ -370,7 +370,7 @@ func testLoadDump(t *testing.T, name, addr string) {
 
 func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
-	// testLoadDump(t, "mysql", "mysql://root:@/dev")
+	testLoadDump(t, "sqlite3", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-sqlite3.db"))
 	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-load-dump"))
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }

@@ -108,14 +108,18 @@ func str2Tier(tier string) *blob2.AccessTier {
 }
 
 func (b *wasb) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
-	sc := b.GetStorageClass(ctx)
+	t := b.GetTier(ctx)
 	options := azblob.UploadStreamOptions{}
-	if sc != "" {
-		options.AccessTier = str2Tier(sc)
+	if t.Sc != "" {
+		options.AccessTier = str2Tier(t.Sc)
+	}
+	if t.Tag != "" && ValidateTag(t.Tag) {
+		parts := strings.SplitN(t.Tag, "=", 2)
+		options.Tags = map[string]string{parts[0]: parts[1]}
 	}
 	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
 	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(aws.ToString(resp.RequestID)).SetStorageClass(sc)
+	attrs.SetRequestID(aws.ToString(resp.RequestID)).SetStorageClass(t.Sc)
 	return err
 }
 
@@ -132,6 +136,14 @@ func (b *wasb) Copy(ctx context.Context, dst, src string) error {
 			}
 			if _, err := blobClient.SetTier(ctx, *tier, &blob2.SetTierOptions{}); err != nil {
 				return err
+			}
+			if t.Tag != "" && ValidateTag(t.Tag) {
+				parts := strings.SplitN(t.Tag, "=", 2)
+				if len(parts) == 2 {
+					if _, err := blobClient.SetTags(ctx, map[string]string{parts[0]: parts[1]}, nil); err != nil {
+						return err
+					}
+				}
 			}
 		} else {
 			return fmt.Errorf("invalid tier id: %d", id)

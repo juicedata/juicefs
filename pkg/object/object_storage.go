@@ -347,53 +347,71 @@ type TierKey struct{}
 const DefaultRestoreDays = 3
 
 type SupportTier interface {
-	SetTier(init Tiers) error
-	GetStorageClass(ctx context.Context) string
+	InitTiers(init Tiers) error
+	GetTier(ctx context.Context) Tier
 }
 
 type tierStorage struct {
 	tiers map[uint8]Tier
 }
 
-func (b *tierStorage) GetStorageClass(ctx context.Context) string {
-	sc := b.tiers[0].Sc
+func (b *tierStorage) GetTier(ctx context.Context) Tier {
 	if id, ok := ctx.Value(TierKey{}).(uint8); ok {
 		if t, ok := b.tiers[id]; ok {
-			sc = t.Sc
-		} else {
-			logger.Warnf("invalid tier id: %d", id)
+			return t
 		}
+		logger.Warnf("invalid tier id: %d", id)
 	}
-	return sc
+	return b.tiers[0]
 }
 
-func (b *tierStorage) SetTier(init Tiers) error {
+func (b *tierStorage) InitTiers(init Tiers) error {
 	if init == nil {
 		init = NewTiers("")
+	}
+	for id, t := range init {
+		if t.Tag != "" && !ValidateTag(t.Tag) {
+			logger.Warnf("invalid tag %q for tier %d; ignore it", t.Tag, id)
+			t.encodedTag = ""
+		} else {
+			t.encodedTag = encodeTag(t.Tag)
+		}
+		init[id] = t
 	}
 	b.tiers = init
 	return nil
 }
 
-type Tier struct {
-	ID uint8  `json:"ID"`
-	Sc string `json:"StorageClass"`
-}
-type Tiers map[uint8]Tier
-
-func (t Tiers) GetID(sc string) (uint8, bool) {
-	for k, v := range t {
-		if v.Sc == sc {
-			return k, true
-		}
+func encodeTag(tag string) string {
+	if tag == "" || !ValidateTag(tag) {
+		return ""
 	}
-	return 0, false
+	parts := strings.SplitN(tag, "=", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	return url.QueryEscape(parts[0]) + "=" + url.QueryEscape(parts[1])
 }
 
-func (t Tiers) GetSc(id uint8) (string, bool) {
-	tInfo, ok := t[id]
-	return tInfo.Sc, ok
+type Tier struct {
+	ID         uint8  `json:"ID"`
+	Sc         string `json:"StorageClass"`
+	Tag        string `json:"Tag"`
+	encodedTag string
 }
+
+func ValidateTag(tag string) bool {
+	if tag == "" {
+		return true
+	}
+	if strings.Count(tag, "=") != 1 {
+		return false
+	}
+	parts := strings.SplitN(tag, "=", 2)
+	return parts[0] != "" && parts[1] != ""
+}
+
+type Tiers map[uint8]Tier
 
 func NewTiers(defaultSc string) Tiers {
 	t := make(Tiers)

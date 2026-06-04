@@ -132,12 +132,15 @@ func (o *ossClient) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	sc := o.GetStorageClass(ctx)
+	t := o.GetTier(ctx)
 	req := &oss.PutObjectRequest{
 		Bucket:       &o.bucket,
 		Key:          &key,
-		StorageClass: oss.StorageClassType(sc),
+		StorageClass: oss.StorageClassType(t.Sc),
 		Body:         in,
+	}
+	if t.encodedTag != "" {
+		req.Tagging = oss.Ptr(t.encodedTag)
 	}
 	if ins, ok := in.(io.ReadSeeker); ok {
 		req.Metadata = make(map[string]string)
@@ -154,7 +157,7 @@ func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters .
 		reqId = result.Headers.Get(oss.HeaderOssRequestID)
 	}
 	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(reqId).SetStorageClass(sc)
+	attrs.SetRequestID(reqId).SetStorageClass(t.Sc)
 	return err
 }
 
@@ -171,13 +174,18 @@ func (o *ossClient) Restore(ctx context.Context, key string, days int32) error {
 }
 
 func (o *ossClient) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(o.GetStorageClass(ctx), string(oss.StorageClassStandard))
+	t := o.GetTier(ctx)
+	sc := getOrDefaultScValue(t.Sc, string(oss.StorageClassStandard))
 	var req = &oss.CopyObjectRequest{
 		SourceBucket: &o.bucket,
 		Bucket:       &o.bucket,
 		SourceKey:    &src,
 		Key:          &dst,
 		StorageClass: oss.StorageClassType(sc),
+	}
+	if t.encodedTag != "" {
+		req.Tagging = oss.Ptr(t.encodedTag)
+		req.TaggingDirective = oss.Ptr("Replace")
 	}
 	_, err := o.client.CopyObject(ctx, req)
 	return err

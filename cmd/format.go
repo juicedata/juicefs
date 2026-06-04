@@ -142,6 +142,10 @@ func formatStorageFlags() []cli.Flag {
 			Name:  "storage-class",
 			Usage: "the default storage class",
 		},
+		&cli.StringFlag{
+			Name:  "tag",
+			Usage: "custom tag when uploading object storage (e.g. --tag key=value)",
+		},
 	})
 }
 
@@ -230,7 +234,6 @@ func fixObjectSize(s uint64) uint64 {
 }
 
 func createStorage(format meta.Format) (object.ObjectStorage, error) {
-
 	if err := format.Decrypt(); err != nil {
 		return nil, fmt.Errorf("format decrypt: %s", err)
 	}
@@ -283,7 +286,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	}
 	blob = object.WithPrefix(blob, format.Name+"/")
 	if os, ok := blob.(object.SupportTier); ok {
-		if err := os.SetTier(format.Tiers); err != nil {
+		if err := os.InitTiers(format.Tiers); err != nil {
 			logger.Warnf("Set storage tier: %s", err)
 		}
 	}

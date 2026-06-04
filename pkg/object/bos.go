@@ -140,13 +140,17 @@ func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters .
 		return err
 	}
 	args := new(api.PutObjectArgs)
-	sc := q.GetStorageClass(ctx)
-	if sc != "" {
-		args.StorageClass = sc
+	t := q.GetTier(ctx)
+	if t.Sc != "" {
+		args.StorageClass = t.Sc
+	}
+	if t.encodedTag != "" {
+		// "k1=v1"
+		args.ObjectTagging = t.encodedTag
 	}
 	_, err = q.c.PutObject(q.bucket, key, body, args)
 	attrs := ApplyGetters(getters...)
-	attrs.SetStorageClass(sc)
+	attrs.SetStorageClass(t.Sc)
 	return err
 }
 
@@ -155,8 +159,16 @@ func (q *bosclient) Restore(ctx context.Context, key string, days int32) error {
 }
 
 func (q *bosclient) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(q.GetStorageClass(ctx), api.STORAGE_CLASS_STANDARD)
-	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: sc}})
+	tier := q.GetTier(ctx)
+	sc := getOrDefaultScValue(tier.Sc, api.STORAGE_CLASS_STANDARD)
+	args := &api.CopyObjectArgs{
+		ObjectMeta: api.ObjectMeta{StorageClass: sc},
+	}
+	if tier.encodedTag != "" {
+		args.ObjectTagging = tier.encodedTag
+		args.TaggingDirective = api.METADATA_DIRECTIVE_REPLACE
+	}
+	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, args)
 	return err
 }
 

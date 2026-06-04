@@ -41,6 +41,8 @@ import (
 )
 
 const obsDefaultRegion = "cn-north-1"
+const obsTaggingHeader = "x-amz-tagging"
+const obsTaggingDirectiveHeader = "x-amz-tagging-directive"
 
 type obsClient struct {
 	bucket    string
@@ -163,9 +165,15 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	params.ContentLength = vlen
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
-	sc := s.GetStorageClass(ctx)
-	params.StorageClass = obs.StorageClassType(sc)
-	resp, err := s.c.PutObject(params)
+	t := s.GetTier(ctx)
+	params.StorageClass = obs.StorageClassType(t.Sc)
+	var resp *obs.PutObjectOutput
+	var err error
+	if t.encodedTag != "" {
+		resp, err = s.c.PutObject(params, obs.WithHeader(obsTaggingHeader, []string{t.encodedTag}))
+	} else {
+		resp, err = s.c.PutObject(params)
+	}
 	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
@@ -177,14 +185,25 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 }
 
 func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(s.GetStorageClass(ctx), string(obs.StorageClassStandard))
+	t := s.GetTier(ctx)
+	sc := getOrDefaultScValue(t.Sc, string(obs.StorageClassStandard))
 	params := &obs.CopyObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = dst
 	params.CopySourceBucket = s.bucket
 	params.CopySourceKey = src
 	params.StorageClass = obs.StorageClassType(sc)
-	_, err := s.c.CopyObject(params)
+	var err error
+	if t.encodedTag != "" {
+		params.Metadata = map[string]string{}
+		// One of the object's metadata, storage class, or encryption attributes must be changed to successfully make a request
+		params.Metadata["Placeholder"] = "Placeholder"
+		_, err = s.c.CopyObject(params,
+			obs.WithHeader(obsTaggingHeader, []string{t.encodedTag}),
+			obs.WithHeader(obsTaggingDirectiveHeader, []string{"REPLACE"}))
+	} else {
+		_, err = s.c.CopyObject(params)
+	}
 	return err
 }
 func (s *obsClient) Restore(ctx context.Context, key string, days int32) error {
