@@ -2400,8 +2400,8 @@ public class JuiceFileSystemImpl extends FileSystem {
       throw new IOException(String.format("get delegation token failed, return code %d", r));
     }
     int id = tokenBuf.getInt(0);
-    long issueDate = tokenBuf.getLongLong(4);
-    long maxDate = tokenBuf.getLongLong(12);
+    long issueDate = TimeUnit.SECONDS.toMillis(tokenBuf.getLongLong(4));
+    long maxDate = TimeUnit.SECONDS.toMillis(tokenBuf.getLongLong(12));
     int pwdLen = r - 20;
     byte[] pwd = new byte[pwdLen];
     tokenBuf.get(20, pwd, 0, pwdLen);
