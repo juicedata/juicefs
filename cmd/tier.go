@@ -147,6 +147,7 @@ func setTier(ctx *cli.Context) error {
 	if !ok {
 		logger.Fatalf("unknown tier %d", id)
 	}
+	newTier.ID = uint8(id)
 	var ino meta.Ino
 	var attr meta.Attr
 	eno := m.Resolve(meta.Background(), meta.RootInode, path, &ino, &attr, true)
