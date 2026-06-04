@@ -169,8 +169,8 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	params.StorageClass = obs.StorageClassType(t.Sc)
 	var resp *obs.PutObjectOutput
 	var err error
-	if tag := t.GetURLEncodedTag(); tag != "" {
-		resp, err = s.c.PutObject(params, obs.WithHeader(obsTaggingHeader, []string{tag}))
+	if t.encodedTag != "" {
+		resp, err = s.c.PutObject(params, obs.WithHeader(obsTaggingHeader, []string{t.encodedTag}))
 	} else {
 		resp, err = s.c.PutObject(params)
 	}
@@ -194,12 +194,12 @@ func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
 	params.CopySourceKey = src
 	params.StorageClass = obs.StorageClassType(sc)
 	var err error
-	if tag := t.GetURLEncodedTag(); tag != "" {
+	if t.encodedTag != "" {
 		params.Metadata = map[string]string{}
 		// One of the object's metadata, storage class, or encryption attributes must be changed to successfully make a request
 		params.Metadata["Placeholder"] = "Placeholder"
 		_, err = s.c.CopyObject(params,
-			obs.WithHeader(obsTaggingHeader, []string{tag}),
+			obs.WithHeader(obsTaggingHeader, []string{t.encodedTag}),
 			obs.WithHeader(obsTaggingDirectiveHeader, []string{"REPLACE"}))
 	} else {
 		_, err = s.c.CopyObject(params)

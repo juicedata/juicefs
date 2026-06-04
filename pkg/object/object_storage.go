@@ -366,7 +366,7 @@ func (b *tierStorage) InitTiers(init Tiers) error {
 		init = NewTiers("")
 	}
 	for id, t := range init {
-		t.tag = computeEncodedTag(t.Tag)
+		t.encodedTag = computeEncodedTag(t.Tag)
 		init[id] = t
 	}
 	b.tiers = init
@@ -385,10 +385,10 @@ func computeEncodedTag(tag string) string {
 }
 
 type Tier struct {
-	ID  uint8  `json:"ID"`
-	Sc  string `json:"StorageClass"`
-	Tag string `json:"Tag"`
-	tag string
+	ID         uint8  `json:"ID"`
+	Sc         string `json:"StorageClass"`
+	Tag        string `json:"Tag"`
+	encodedTag string
 }
 
 func ValidateTag(tag string) bool {
@@ -400,10 +400,6 @@ func ValidateTag(tag string) bool {
 	}
 	parts := strings.SplitN(tag, "=", 2)
 	return parts[0] != "" && parts[1] != ""
-}
-
-func (t Tier) GetURLEncodedTag() string {
-	return t.tag
 }
 
 type Tiers map[uint8]Tier

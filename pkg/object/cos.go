@@ -154,12 +154,12 @@ func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 		}
 		options.ObjectPutHeaderOptions.XCosStorageClass = t.Sc
 	}
-	if tag := t.GetURLEncodedTag(); tag != "" {
+	if t.encodedTag != "" {
 		if options.ObjectPutHeaderOptions == nil {
 			options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{}
 		}
 		options.ObjectPutHeaderOptions.XOptionHeader = &http.Header{}
-		options.ObjectPutHeaderOptions.XOptionHeader.Add(cosTag, tag)
+		options.ObjectPutHeaderOptions.XOptionHeader.Add(cosTag, t.encodedTag)
 	}
 	resp, err := c.c.Object.Put(ctx, key, in, &options)
 	if resp != nil {
@@ -176,9 +176,9 @@ func (c *COS) Copy(ctx context.Context, dst, src string) error {
 	opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{
 		XCosStorageClass: sc,
 	}
-	if tag := t.GetURLEncodedTag(); tag != "" {
+	if t.encodedTag != "" {
 		opt.ObjectCopyHeaderOptions.XOptionHeader = &http.Header{}
-		opt.ObjectCopyHeaderOptions.XOptionHeader.Add(cosTag, tag)
+		opt.ObjectCopyHeaderOptions.XOptionHeader.Add(cosTag, t.encodedTag)
 		opt.ObjectCopyHeaderOptions.XOptionHeader.Add(cosTagDirective, "Replaced")
 	}
 	source := fmt.Sprintf("%s/%s", c.endpoint, src)

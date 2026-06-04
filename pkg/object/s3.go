@@ -173,8 +173,8 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 		StorageClass:      types.StorageClass(t.Sc),
 		ChecksumAlgorithm: "", // X-Amz-Content-Sha256: UNSIGNED-PAYLOAD
 	}
-	if tag := t.GetURLEncodedTag(); tag != "" {
-		params.Tagging = aws.String(tag)
+	if t.encodedTag != "" {
+		params.Tagging = aws.String(t.encodedTag)
 	}
 	if !s.disableChecksum {
 		checksum := generateChecksum(body)
@@ -206,9 +206,9 @@ func (s *s3client) Copy(ctx context.Context, dst, src string) error {
 		CopySource:   &src,
 		StorageClass: types.StorageClass(sc),
 	}
-	if tag := t.GetURLEncodedTag(); tag != "" {
+	if t.encodedTag != "" {
 		params.TaggingDirective = types.TaggingDirectiveReplace
-		params.Tagging = aws.String(tag)
+		params.Tagging = aws.String(t.encodedTag)
 	}
 	_, err := s.s3.CopyObject(ctx, params)
 	return err

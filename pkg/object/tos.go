@@ -109,7 +109,7 @@ func (t *tosClient) Put(ctx context.Context, key string, in io.Reader, getters .
 		Content: in,
 	}
 	if tier.Tag != "" {
-		input.Tagging = tier.GetURLEncodedTag()
+		input.Tagging = tier.encodedTag
 	}
 	resp, err := t.client.PutObjectV2(ctx, input)
 	if resp != nil {
@@ -290,8 +290,8 @@ func (t *tosClient) Copy(ctx context.Context, dst, src string) error {
 		Key:          dst,
 		StorageClass: enum.StorageClassType(sc),
 	}
-	if tag := tier.GetURLEncodedTag(); tag != "" {
-		input.Tagging = tag
+	if tier.encodedTag != "" {
+		input.Tagging = tier.encodedTag
 		input.TaggingDirective = enum.TaggingDirectiveReplace
 	}
 	_, err := t.client.CopyObject(ctx, input)
