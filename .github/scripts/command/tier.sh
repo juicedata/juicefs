@@ -386,6 +386,9 @@ assert_info_no_empty_object_name()
         exit 1
     fi
     # print raw info for diagnostics when tier set fails after all retries
+    echo "=== diagnostic: juicefs info ==="
+    ./juicefs info  "$path" || true
+    # print raw info for diagnostics when tier set fails after all retries
     echo "=== diagnostic: juicefs info --raw ==="
     ./juicefs info --raw "$path" || true
 }
