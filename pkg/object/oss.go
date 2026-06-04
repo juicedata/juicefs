@@ -191,14 +191,17 @@ func (o *ossClient) List(prefix, start, token, delimiter string, limit int64, fo
 	if limit > 1000 {
 		limit = 1000
 	}
-	result, err := o.client.ListObjectsV2(ctx, &oss.ListObjectsV2Request{
-		Bucket:            &o.bucket,
-		Prefix:            &prefix,
-		StartAfter:        &start,
-		ContinuationToken: &token,
-		Delimiter:         &delimiter,
-		MaxKeys:           int32(limit),
-	})
+	request := &oss.ListObjectsV2Request{
+		Bucket:     &o.bucket,
+		Prefix:     &prefix,
+		StartAfter: &start,
+		Delimiter:  &delimiter,
+		MaxKeys:    int32(limit),
+	}
+	if token != "" {
+		request.ContinuationToken = &token
+	}
+	result, err := o.client.ListObjectsV2(ctx, request)
 	if err != nil {
 		return nil, false, "", err
 	}
