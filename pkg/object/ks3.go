@@ -30,8 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/ks3sdklib/aws-sdk-go/aws"
 	"github.com/ks3sdklib/aws-sdk-go/aws/awserr"
@@ -200,7 +198,8 @@ func (s *ks3) List(prefix, start, token, delimiter string, limit int64, followLi
 		o := resp.Contents[i]
 		oKey, err := url.QueryUnescape(*o.Key)
 		if err != nil {
-			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
+			logger.Warnf("Failed to URL decode key %q: %s, using raw key", *o.Key, err)
+			oKey = *o.Key
 		}
 		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
 	}
@@ -208,7 +207,8 @@ func (s *ks3) List(prefix, start, token, delimiter string, limit int64, followLi
 		for _, p := range resp.CommonPrefixes {
 			prefix, err := url.QueryUnescape(*p.Prefix)
 			if err != nil {
-				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
+				logger.Warnf("Failed to URL decode commonPrefix %q: %s, using raw prefix", *p.Prefix, err)
+				prefix = *p.Prefix
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}

@@ -250,7 +250,8 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 		o := resp.Contents[i]
 		oKey, err := url.QueryUnescape(*o.Key)
 		if err != nil {
-			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
+			logger.Warnf("Failed to URL decode key %q: %s, using raw key", *o.Key, err)
+			oKey = *o.Key
 		}
 		if !strings.HasPrefix(oKey, prefix) || oKey < start {
 			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, start)
@@ -267,7 +268,8 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 		for _, p := range resp.CommonPrefixes {
 			prefix, err := url.QueryUnescape(*p.Prefix)
 			if err != nil {
-				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
+				logger.Warnf("Failed to URL decode commonPrefix %q: %s, using raw prefix", *p.Prefix, err)
+				prefix = *p.Prefix
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
