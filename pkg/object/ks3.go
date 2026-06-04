@@ -145,8 +145,8 @@ func (s *ks3) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 	if t.Sc != "" {
 		params.StorageClass = aws.String(t.Sc)
 	}
-	if t.GetURLEncodedTag() != "" {
-		params.Tagging = aws.String(t.GetURLEncodedTag())
+	if tag := t.GetURLEncodedTag(); tag != "" {
+		params.Tagging = aws.String(tag)
 	}
 	resp, err := s.s3.PutObjectWithContext(ctx, params)
 	if resp != nil {
@@ -165,8 +165,8 @@ func (s *ks3) Copy(ctx context.Context, dst, src string) error {
 		CopySource: &src,
 	}
 	params.StorageClass = aws.String(sc)
-	if t.GetURLEncodedTag() != "" {
-		params.Tagging = aws.String(t.GetURLEncodedTag())
+	if tag := t.GetURLEncodedTag(); tag != "" {
+		params.Tagging = aws.String(tag)
 		params.TaggingDirective = aws.String("REPLACE")
 	}
 	_, err := s.s3.CopyObjectWithContext(ctx, params)

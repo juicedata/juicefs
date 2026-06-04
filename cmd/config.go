@@ -179,9 +179,9 @@ func config(ctx *cli.Context) error {
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
 	var targetTierID uint8
-	var currentTier *object.Tier
+	var currentTier object.Tier
 	var findTier bool
-	var newTier *object.Tier
+	var newTier object.Tier
 
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
@@ -392,9 +392,9 @@ func config(ctx *cli.Context) error {
 			targetTierID = uint8(ctx.Int(flag))
 			currentTier, findTier = format.Tiers[targetTierID]
 			if !findTier {
-				currentTier = &object.Tier{ID: targetTierID}
+				currentTier = object.Tier{ID: targetTierID}
 			}
-			newTier = &object.Tier{
+			newTier = object.Tier{
 				ID:  targetTierID,
 				Sc:  currentTier.Sc,
 				Tag: currentTier.Tag,

@@ -234,7 +234,6 @@ func fixObjectSize(s uint64) uint64 {
 }
 
 func createStorage(format meta.Format) (object.ObjectStorage, error) {
-
 	if err := format.Decrypt(); err != nil {
 		return nil, fmt.Errorf("format decrypt: %s", err)
 	}
@@ -504,7 +503,7 @@ func format(c *cli.Context) error {
 			KerbConf:         readKerbConf(c.String("kerberos-config-file")),
 		}
 		if sc := c.String("storage-class"); sc != "" {
-			format.Tiers[0] = &object.Tier{
+			format.Tiers[0] = object.Tier{
 				ID: 0,
 				Sc: sc,
 			}

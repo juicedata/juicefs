@@ -653,7 +653,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 				f.Bucket = jConf.Bucket
 			}
 			if jConf.StorageClass != "" {
-				f.Tiers[0] = &object.Tier{
+				f.Tiers[0] = object.Tier{
 					ID: 0,
 					Sc: jConf.StorageClass,
 				}

@@ -131,8 +131,8 @@ func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...A
 	if t.Sc != "" {
 		params.SetStorageClass(t.Sc)
 	}
-	if t.GetURLEncodedTag() != "" {
-		params.Tagging = aws.String(t.GetURLEncodedTag())
+	if tag := t.GetURLEncodedTag(); tag != "" {
+		params.Tagging = aws.String(tag)
 	}
 	var reqID string
 	_, err := s.s3.PutObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
@@ -151,9 +151,9 @@ func (s *ibmcos) Copy(ctx context.Context, dst, src string) error {
 		CopySource: &src,
 	}
 	params.SetStorageClass(sc)
-	if t.GetURLEncodedTag() != "" {
+	if tag := t.GetURLEncodedTag(); tag != "" {
 		params.SetTaggingDirective(s3.TaggingDirectiveReplace)
-		params.SetTagging(t.GetURLEncodedTag())
+		params.SetTagging(tag)
 	}
 	_, err := s.s3.CopyObjectWithContext(ctx, params)
 	return err

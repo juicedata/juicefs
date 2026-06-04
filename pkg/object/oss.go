@@ -139,8 +139,8 @@ func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters .
 		StorageClass: oss.StorageClassType(t.Sc),
 		Body:         in,
 	}
-	if t.GetURLEncodedTag() != "" {
-		req.Tagging = oss.Ptr(t.GetURLEncodedTag())
+	if tag := t.GetURLEncodedTag(); tag != "" {
+		req.Tagging = oss.Ptr(tag)
 	}
 	if ins, ok := in.(io.ReadSeeker); ok {
 		req.Metadata = make(map[string]string)
@@ -183,8 +183,8 @@ func (o *ossClient) Copy(ctx context.Context, dst, src string) error {
 		Key:          &dst,
 		StorageClass: oss.StorageClassType(sc),
 	}
-	if t.GetURLEncodedTag() != "" {
-		req.Tagging = oss.Ptr(t.GetURLEncodedTag())
+	if tag := t.GetURLEncodedTag(); tag != "" {
+		req.Tagging = oss.Ptr(tag)
 		req.TaggingDirective = oss.Ptr("Replace")
 	}
 	_, err := o.client.CopyObject(ctx, req)

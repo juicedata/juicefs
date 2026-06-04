@@ -287,8 +287,8 @@ func (t *tosClient) Copy(ctx context.Context, dst, src string) error {
 		Key:          dst,
 		StorageClass: enum.StorageClassType(sc),
 	}
-	if tier.GetURLEncodedTag() != "" {
-		input.Tagging = tier.GetURLEncodedTag()
+	if tag := tier.GetURLEncodedTag(); tag != "" {
+		input.Tagging = tag
 		input.TaggingDirective = enum.TaggingDirectiveReplace
 	}
 	_, err := t.client.CopyObject(ctx, input)

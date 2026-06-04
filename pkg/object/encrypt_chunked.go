@@ -348,11 +348,11 @@ func (e *chunkedEncrypted) InitTiers(init Tiers) error {
 	return nil
 }
 
-func (e *chunkedEncrypted) GetTier(ctx context.Context) *Tier {
+func (e *chunkedEncrypted) GetTier(ctx context.Context) Tier {
 	if o, ok := e.ObjectStorage.(SupportTier); ok {
 		return o.GetTier(ctx)
 	}
-	return &Tier{}
+	return Tier{}
 }
 
 var _ ObjectStorage = (*chunkedEncrypted)(nil)

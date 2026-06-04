@@ -144,9 +144,9 @@ func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters .
 	if t.Sc != "" {
 		args.StorageClass = t.Sc
 	}
-	if t.GetURLEncodedTag() != "" {
+	if tag := t.GetURLEncodedTag(); tag != "" {
 		// "k1=v1"
-		args.ObjectTagging = t.GetURLEncodedTag()
+		args.ObjectTagging = tag
 	}
 	_, err = q.c.PutObject(q.bucket, key, body, args)
 	attrs := ApplyGetters(getters...)
@@ -164,8 +164,8 @@ func (q *bosclient) Copy(ctx context.Context, dst, src string) error {
 	args := &api.CopyObjectArgs{
 		ObjectMeta: api.ObjectMeta{StorageClass: sc},
 	}
-	if tier.GetURLEncodedTag() != "" {
-		args.ObjectTagging = tier.GetURLEncodedTag()
+	if tag := tier.GetURLEncodedTag(); tag != "" {
+		args.ObjectTagging = tag
 		args.TaggingDirective = api.METADATA_DIRECTIVE_REPLACE
 	}
 	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, args)

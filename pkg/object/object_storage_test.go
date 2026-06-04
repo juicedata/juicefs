@@ -80,7 +80,7 @@ func setStorageClass(o ObjectStorage) string {
 	sc := getScStr(o)
 	if os, ok := o.(SupportTier); ok {
 		tiers := NewTiers(sc)
-		tiers[1] = &Tier{ID: 1, Sc: sc}
+		tiers[1] = Tier{ID: 1, Sc: sc}
 		if err := os.InitTiers(tiers); err != nil {
 			logger.Warnf("Set storage tier: %s", err)
 		}

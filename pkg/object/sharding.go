@@ -88,13 +88,13 @@ func (s *sharded) InitTiers(init Tiers) error {
 	return err
 }
 
-func (s *sharded) GetTier(ctx context.Context) *Tier {
+func (s *sharded) GetTier(ctx context.Context) Tier {
 	for _, o := range s.stores {
 		if o, ok := o.(SupportTier); ok {
 			return o.GetTier(ctx)
 		}
 	}
-	return &Tier{}
+	return Tier{}
 }
 
 const maxResults = 10000

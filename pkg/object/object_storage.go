@@ -339,14 +339,14 @@ const DefaultRestoreDays = 3
 
 type SupportTier interface {
 	InitTiers(init Tiers) error
-	GetTier(ctx context.Context) *Tier
+	GetTier(ctx context.Context) Tier
 }
 
 type tierStorage struct {
-	tiers map[uint8]*Tier
+	tiers map[uint8]Tier
 }
 
-func (b *tierStorage) GetTier(ctx context.Context) *Tier {
+func (b *tierStorage) GetTier(ctx context.Context) Tier {
 	if id, ok := ctx.Value(TierKey{}).(uint8); ok {
 		if t, ok := b.tiers[id]; ok {
 			return t
@@ -360,16 +360,30 @@ func (b *tierStorage) InitTiers(init Tiers) error {
 	if init == nil {
 		init = NewTiers("")
 	}
+	for id, t := range init {
+		t.tag = computeEncodedTag(t.Tag)
+		init[id] = t
+	}
 	b.tiers = init
 	return nil
 }
 
+func computeEncodedTag(tag string) string {
+	if tag == "" || !ValidateTag(tag) {
+		return ""
+	}
+	parts := strings.SplitN(tag, "=", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	return url.QueryEscape(parts[0]) + "=" + url.QueryEscape(parts[1])
+}
+
 type Tier struct {
-	ID         uint8  `json:"ID"`
-	Sc         string `json:"StorageClass"`
-	Tag        string `json:"Tag"`
-	encodedTag *string
-	once       sync.Once
+	ID  uint8  `json:"ID"`
+	Sc  string `json:"StorageClass"`
+	Tag string `json:"Tag"`
+	tag string
 }
 
 func ValidateTag(tag string) bool {
@@ -383,32 +397,15 @@ func ValidateTag(tag string) bool {
 	return parts[0] != "" && parts[1] != ""
 }
 
-func (t *Tier) GetURLEncodedTag() string {
-	t.once.Do(func() {
-		if t.Tag == "" || !ValidateTag(t.Tag) {
-			return
-		}
-
-		parts := strings.SplitN(t.Tag, "=", 2)
-		if len(parts) != 2 {
-			return
-		}
-
-		str := url.QueryEscape(parts[0]) + "=" + url.QueryEscape(parts[1])
-		t.encodedTag = &str
-	})
-
-	if t.encodedTag == nil {
-		return ""
-	}
-	return *t.encodedTag
+func (t Tier) GetURLEncodedTag() string {
+	return t.tag
 }
 
-type Tiers map[uint8]*Tier
+type Tiers map[uint8]Tier
 
 func NewTiers(defaultSc string) Tiers {
 	t := make(Tiers)
-	t[0] = &Tier{
+	t[0] = Tier{
 		ID: 0,
 		Sc: defaultSc,
 	}
