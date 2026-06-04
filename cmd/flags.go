@@ -111,6 +111,10 @@ func storageFlags() []cli.Flag {
 			Usage: "the storage class for data written by current client",
 		},
 		&cli.StringFlag{
+			Name:  "tag",
+			Usage: "custom tag when uploading object storage (e.g. --tag key=value)",
+		},
+		&cli.StringFlag{
 			Name:  "get-timeout",
 			Value: "60s",
 			Usage: "the timeout to download an object",
