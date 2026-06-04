@@ -41,6 +41,7 @@ func (s *wasabi) String() string {
 }
 
 func (s *wasabi) InitTiers(init Tiers) error {
+	s.tiers = NewTiers("")
 	return notSupported
 }
 
