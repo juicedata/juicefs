@@ -366,14 +366,14 @@ func (b *tierStorage) InitTiers(init Tiers) error {
 		init = NewTiers("")
 	}
 	for id, t := range init {
-		t.encodedTag = computeEncodedTag(t.Tag)
+		t.encodedTag = encodeTag(t.Tag)
 		init[id] = t
 	}
 	b.tiers = init
 	return nil
 }
 
-func computeEncodedTag(tag string) string {
+func encodeTag(tag string) string {
 	if tag == "" || !ValidateTag(tag) {
 		return ""
 	}

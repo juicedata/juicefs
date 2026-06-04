@@ -163,7 +163,11 @@ func info(ctx *cli.Context) error {
 				fmt.Printf("\t%s\n", p)
 			}
 		}
-		fmt.Printf("   tier: %d->%s tag: %s\n", resp.TierInfo.ID, resp.TierInfo.Sc, resp.TierInfo.Tag)
+		var tagStr string
+		if resp.TierInfo.Tag != "" {
+			tagStr = fmt.Sprintf("tag: %s", resp.TierInfo.Tag)
+		}
+		fmt.Printf("   tier: %d->%s %s\n", resp.TierInfo.ID, resp.TierInfo.Sc, tagStr)
 		if resp.RestoreStatus != "" {
 			fmt.Printf("   restore status: %s\n", resp.RestoreStatus)
 		}

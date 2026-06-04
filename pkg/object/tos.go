@@ -108,7 +108,7 @@ func (t *tosClient) Put(ctx context.Context, key string, in io.Reader, getters .
 		},
 		Content: in,
 	}
-	if tier.Tag != "" {
+	if tier.encodedTag != "" {
 		input.Tagging = tier.encodedTag
 	}
 	resp, err := t.client.PutObjectV2(ctx, input)
