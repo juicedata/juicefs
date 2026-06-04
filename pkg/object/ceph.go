@@ -233,7 +233,7 @@ func (c *ceph) ListAll(_ context.Context, prefix, marker string, followLink bool
 				if key == "" || key <= marker || !strings.HasPrefix(key, prefix) {
 					continue
 				}
-				objs <- &obj{key, 0, time.Time{}, key[len(key)-1] == '/', ""}
+				objs <- &obj{key, 0, time.Time{}, key[len(key)-1] == '/', "", ""}
 			}
 			iter.Close()
 			c.release(ctx)
