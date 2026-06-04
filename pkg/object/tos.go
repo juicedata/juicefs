@@ -99,16 +99,19 @@ func (t *tosClient) Put(ctx context.Context, key string, in io.Reader, getters .
 		}
 	}
 	tier := t.GetTier(ctx)
-	resp, err := t.client.PutObjectV2(ctx, &tos.PutObjectV2Input{
+	input := &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,
 			Key:          key,
 			StorageClass: enum.StorageClassType(tier.Sc),
 			Meta:         meta,
-			Tagging:      tier.GetURLEncodedTag(),
 		},
 		Content: in,
-	})
+	}
+	if tier.Tag != "" {
+		input.Tagging = tier.GetURLEncodedTag()
+	}
+	resp, err := t.client.PutObjectV2(ctx, input)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestID).SetStorageClass(tier.Sc)
