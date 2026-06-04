@@ -173,23 +173,21 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 		if c.IsSet("storage") {
 			format.Storage = c.String("storage")
 		}
-		getOrDefault := func(val, def string) string {
-			if val == "" {
-				return def
+		or := func(x, y string) string {
+			if x != "" {
+				return x
 			}
-			return val
+			return y
 		}
-		if c.IsSet("storage-class") || c.IsSet("tag") {
-			t := c.String("tag")
-			if c.IsSet("tag") && !object.ValidateTag(t) {
-				logger.Warnf("Invalid tag format: %s", t)
-				t = ""
-			}
-			format.Tiers[0] = object.Tier{
-				ID:  0,
-				Sc:  getOrDefault(c.String("storage-class"), format.Tiers[0].Sc),
-				Tag: getOrDefault(t, format.Tiers[0].Tag),
-			}
+		t := c.String("tag")
+		if !object.ValidateTag(t) {
+			logger.Warnf("Invalid tag format: %s", t)
+			t = ""
+		}
+		format.Tiers[0] = object.Tier{
+			ID:  0,
+			Sc:  or(c.String("storage-class"), format.Tiers[0].Sc),
+			Tag: or(t, format.Tiers[0].Tag),
 		}
 		if c.IsSet("upload-limit") {
 			format.UploadLimit = utils.ParseMbps(c, "upload-limit")
