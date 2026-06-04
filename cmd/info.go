@@ -164,10 +164,10 @@ func info(ctx *cli.Context) error {
 			}
 		}
 		var tagStr string
-		if resp.TierInfo.Tag != "" {
-			tagStr = fmt.Sprintf("tag: %s", resp.TierInfo.Tag)
+		if resp.Tier.Tag != "" {
+			tagStr = fmt.Sprintf("tag: %s", resp.Tier.Tag)
 		}
-		fmt.Printf("   tier: %d->%s %s\n", resp.TierInfo.ID, resp.TierInfo.Sc, tagStr)
+		fmt.Printf("   tier: %d->%s %s\n", resp.Tier.ID, resp.Tier.Sc, tagStr)
 		if resp.RestoreStatus != "" {
 			fmt.Printf("   restore status: %s\n", resp.RestoreStatus)
 		}

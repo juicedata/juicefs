@@ -260,7 +260,7 @@ type InfoResponse struct {
 	Objects       []*chunkObj
 	PLocks        []meta.PLockItem
 	FLocks        []meta.FLockItem
-	TierInfo      object.Tier
+	Tier          object.Tier
 	RestoreStatus string
 }
 
@@ -449,20 +449,20 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		} else {
 			var attr meta.Attr
 			eno := v.Meta.GetAttr(ctx, inode, &attr)
-			info.TierInfo = object.Tier{}
+			info.Tier = object.Tier{}
 			if eno != 0 {
 				logger.Warnf("GetAttr of %d: %s", inode, eno)
-				info.TierInfo.ID = 0
-				info.TierInfo.Sc = "unknown"
+				info.Tier.ID = 0
+				info.Tier.Sc = "unknown"
 			} else {
 				if t, ok := v.Meta.GetFormat().Tiers[attr.Tier]; ok {
-					info.TierInfo.ID = t.ID
-					info.TierInfo.Sc = t.Sc
-					info.TierInfo.Tag = t.Tag
+					info.Tier.ID = t.ID
+					info.Tier.Sc = t.Sc
+					info.Tier.Tag = t.Tag
 				} else {
 					logger.Warnf("unknown tier id %d of inode %d", attr.Tier, inode)
-					info.TierInfo.Sc = "unknown"
-					info.TierInfo.ID = attr.Tier
+					info.Tier.Sc = "unknown"
+					info.Tier.ID = attr.Tier
 				}
 			}
 			info.Paths = v.Meta.GetPaths(ctx, inode)
@@ -492,12 +492,12 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 				if lastObjKey != "" {
 					if objInfo, err := v.Store.BlobStorage().Head(context.Background(), lastObjKey); err == nil {
 						info.RestoreStatus = objInfo.Status()
-						if info.TierInfo.ID != 0 && objInfo.StorageClass() != info.TierInfo.Sc ||
-							(info.TierInfo.ID == 0 && info.TierInfo.Sc != "" && objInfo.StorageClass() != info.TierInfo.Sc) {
-							info.TierInfo.Sc = fmt.Sprintf("expected(%s),actual(%s)", info.TierInfo.Sc, objInfo.StorageClass())
+						if info.Tier.ID != 0 && objInfo.StorageClass() != info.Tier.Sc ||
+							(info.Tier.ID == 0 && info.Tier.Sc != "" && objInfo.StorageClass() != info.Tier.Sc) {
+							info.Tier.Sc = fmt.Sprintf("expected(%s),actual(%s)", info.Tier.Sc, objInfo.StorageClass())
 						}
-						if info.TierInfo.ID == 0 && info.TierInfo.Sc == "" {
-							info.TierInfo.Sc = fmt.Sprintf("actual(%s)", objInfo.StorageClass())
+						if info.Tier.ID == 0 && info.Tier.Sc == "" {
+							info.Tier.Sc = fmt.Sprintf("actual(%s)", objInfo.StorageClass())
 						}
 					} else {
 						logger.Warnf("Failed to get object info by Head for key %q (get restore status): %v", lastObjKey, err)
