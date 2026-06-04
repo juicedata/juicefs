@@ -170,6 +170,11 @@ func Register(name string, register Creator) {
 	storages[name] = register
 }
 
+func IsSupported(name string) bool {
+	_, ok := storages[name]
+	return ok
+}
+
 func CreateStorage(name, endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	f, ok := storages[name]
 	if ok {

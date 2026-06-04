@@ -162,7 +162,9 @@ func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters .
 		tmp = TmpFilePath(p, name)
 		defer func() {
 			if err != nil {
-				_ = os.Remove(tmp)
+				if e := os.Remove(tmp); e != nil && !os.IsNotExist(e) {
+					logger.Warnf("delete %s: %s", tmp, e)
+				}
 			}
 		}()
 	}
