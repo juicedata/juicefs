@@ -20,16 +20,16 @@
 package object
 
 import (
+	"path/filepath"
 	"os"
 	"testing"
 	"time"
 )
 
 func TestLChtimes(t *testing.T) {
-	filePath := "/tmp/LChtimesTestAfile1"
-	linkPath := "/tmp/LChtimesTestLink1"
-	os.Remove(filePath)
-	os.Remove(linkPath)
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "LChtimesTestAfile1")
+	linkPath := filepath.Join(tmpDir, "LChtimesTestLink1")
 	_, err := os.Create(filePath)
 	if err != nil {
 		t.Fatalf("create file failed: %s", err)

@@ -17,8 +17,6 @@
 package chunk
 
 import (
-	"fmt"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -44,7 +42,7 @@ func testDiskCacheState(t *testing.T, cacheNum int) {
 	genDirs := func(num int) []string {
 		dirs := make([]string, 0, num)
 		for i := 0; i < num; i++ {
-			dirs = append(dirs, fmt.Sprintf("/tmp/diskCache%d", i))
+			dirs = append(dirs, t.TempDir())
 		}
 		return dirs
 	}
@@ -53,11 +51,6 @@ func testDiskCacheState(t *testing.T, cacheNum int) {
 	dirs := genDirs(cacheNum)
 	conf.CacheDir = strings.Join(dirs, ":")
 	conf.AutoCreate = true
-	defer func() {
-		for _, dir := range dirs {
-			_ = os.RemoveAll(dir)
-		}
-	}()
 
 	manager := newCacheManager(&conf, nil, nil)
 	require.False(t, manager.isEmpty())

@@ -20,7 +20,9 @@
 package chunk
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 )
@@ -33,23 +35,24 @@ func TestInRootVolume(t *testing.T) {
 		t.Fatal("`/` is in root volume")
 	}
 	if inRootVolume(".") {
-		err := os.MkdirAll("./__test__", 0755)
+		testDir := filepath.Join(t.TempDir(), "__test__")
+		err := os.MkdirAll(testDir, 0755)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.RemoveAll("./__test__")
-		if !inRootVolume("./__test__") {
-			t.Fatal("`./__test__` is in root volume")
+		if !inRootVolume(testDir) {
+			t.Fatalf("%q is in root volume", testDir)
 		}
 	}
 	if !inRootVolume("/tmp") {
-		err := os.MkdirAll("/tmp/__jfs_test__", 0755)
+		tmpTestDir := filepath.Join("/tmp", "__jfs_test__"+fmt.Sprintf("%d", os.Getpid()))
+		err := os.MkdirAll(tmpTestDir, 0755)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.RemoveAll("/tmp/__jfs_test__")
-		if inRootVolume("/tmp/__jfs_test__") {
-			t.Fatal("`/tmp/__jfs_test__` is not in root volume")
+		defer os.RemoveAll(tmpTestDir)
+		if inRootVolume(tmpTestDir) {
+			t.Fatalf("%q is not in root volume", tmpTestDir)
 		}
 	}
 }

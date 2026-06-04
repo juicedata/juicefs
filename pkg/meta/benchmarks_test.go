@@ -18,6 +18,7 @@ package meta
 
 import (
 	"fmt"
+	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
@@ -28,10 +29,8 @@ import (
 
 const (
 	redisAddr = "redis://127.0.0.1/1"
-	sqlAddr   = "sqlite3://juicefs.db"
 	// sqlAddr = "mysql://root:@/juicefs" // MySQL
 	// sqlAddr = "mysql://root:@tcp(127.0.0.1:4000)/juicefs" // TiDB
-	tkvAddr = "badger://test_db"
 	// tkvAddr = "tikv://127.0.0.1:2379/juicefs"
 )
 
@@ -637,11 +636,13 @@ func BenchmarkRedis(b *testing.B) {
 }
 
 func BenchmarkSQL(b *testing.B) {
-	m := NewClient(sqlAddr, nil)
+	addr := "sqlite3://" + filepath.Join(b.TempDir(), "juicefs.db")
+	m := NewClient(addr, nil)
 	benchmarkAll(b, m)
 }
 
 func BenchmarkTKV(b *testing.B) {
-	m := NewClient(tkvAddr, nil)
+	addr := "badger://" + filepath.Join(b.TempDir(), "test_db")
+	m := NewClient(addr, nil)
 	benchmarkAll(b, m)
 }

@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -31,8 +32,7 @@ func TestSync(t *testing.T) {
 		t.Skip()
 	}
 	minioDir := "synctest"
-	localDir := "/tmp/synctest"
-	defer os.RemoveAll(localDir)
+	localDir := filepath.Join(t.TempDir(), "synctest")
 	storage, err := object.CreateStorage("minio", os.Getenv("MINIO_TEST_BUCKET"), os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"), "")
 	if err != nil {
 		t.Fatalf("create storage failed: %v", err)

@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -103,7 +104,7 @@ func testStore(t *testing.T, store ChunkStore) {
 
 var defaultConf = Config{
 	BlockSize:         1 << 20,
-	CacheDir:          filepath.Join(os.TempDir(), "diskCache"),
+	CacheDir:          filepath.Join(os.TempDir(), fmt.Sprintf("diskCache-%d", os.Getpid())),
 	CacheMode:         0600,
 	CacheSize:         10 << 20,
 	CacheChecksum:     CsNone,

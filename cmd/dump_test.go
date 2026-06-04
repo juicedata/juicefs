@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/redis/go-redis/v9"
@@ -33,6 +34,10 @@ func TestDumpAndLoad(t *testing.T) {
 	rdb := redis.NewClient(opt)
 	rdb.FlushDB(context.Background())
 
+	tmpDir := t.TempDir()
+	dumpFile := filepath.Join(tmpDir, "dump_test.json.gz")
+	dumpSubdirFile := filepath.Join(tmpDir, "dump_subdir_test.json")
+
 	t.Run("Test Load", func(t *testing.T) {
 		loadArgs := []string{"", "load", metaUrl, "./../pkg/meta/metadata.sample"}
 		err = Main(loadArgs)
@@ -44,12 +49,12 @@ func TestDumpAndLoad(t *testing.T) {
 		}
 	})
 	t.Run("Test dump", func(t *testing.T) {
-		dumpArgs := []string{"", "dump", metaUrl, "/tmp/dump_test.json.gz"}
+		dumpArgs := []string{"", "dump", metaUrl, dumpFile}
 		err := Main(dumpArgs)
 		if err != nil {
 			t.Fatalf("dump error: %v", err)
 		}
-		_, err = os.Stat("/tmp/dump_test.json.gz")
+		_, err = os.Stat(dumpFile)
 		if err != nil {
 			t.Fatalf("dump error: %v", err)
 		}
@@ -57,7 +62,7 @@ func TestDumpAndLoad(t *testing.T) {
 
 	rdb.FlushDB(context.Background())
 	t.Run("Test load compressed", func(t *testing.T) {
-		loadArgs := []string{"", "load", metaUrl, "/tmp/dump_test.json.gz"}
+		loadArgs := []string{"", "load", metaUrl, dumpFile}
 		err := Main(loadArgs)
 		if err != nil {
 			t.Fatalf("load error: %v", err)
@@ -68,12 +73,12 @@ func TestDumpAndLoad(t *testing.T) {
 	})
 
 	t.Run("Test dump with subdir", func(t *testing.T) {
-		dumpArgs := []string{"", "dump", metaUrl, "/tmp/dump_subdir_test.json", "--subdir", "d1"}
+		dumpArgs := []string{"", "dump", metaUrl, dumpSubdirFile, "--subdir", "d1"}
 		err := Main(dumpArgs)
 		if err != nil {
 			t.Fatalf("dump error: %v", err)
 		}
-		_, err = os.Stat("/tmp/dump_subdir_test.json")
+		_, err = os.Stat(dumpSubdirFile)
 		if err != nil {
 			t.Fatalf("dump error: %v", err)
 		}

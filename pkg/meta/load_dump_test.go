@@ -370,8 +370,8 @@ func testLoadDump(t *testing.T, name, addr string) {
 
 func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
-	testLoadDump(t, "sqlite3", "sqlite3:///tmp/sqlite3.db")
-	testLoadDump(t, "badger", "badger://jfs-load-dump")
+	testLoadDump(t, "sqlite3", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-sqlite3.db"))
+	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-load-dump"))
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }
 
@@ -443,7 +443,7 @@ func TestLoadDumpV2(t *testing.T) {
 	logger.SetLevel(logrus.DebugLevel)
 
 	engines := map[string][]string{
-		"sqlite3": {"sqlite3://dev.db", "sqlite3://dev2.db"},
+		"sqlite3": {"sqlite3://" + path.Join(t.TempDir(), "dev.db"), "sqlite3://" + path.Join(t.TempDir(), "dev2.db")},
 		// "mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
 		"redis":  {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
 		"badger": {"badger://" + path.Join(t.TempDir(), "jfs-load-duimp-testdb-bk1"), "badger://" + path.Join(t.TempDir(), "jfs-load-duimp-testdb-bk2")},
