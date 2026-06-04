@@ -28,10 +28,8 @@ import (
 
 func TestDownload(t *testing.T) {
 	key := "testDownload"
-	a, _ := object.CreateStorage("file", "/tmp/download/", "", "", "")
-	t.Cleanup(func() {
-		os.RemoveAll("/tmp/download/")
-	})
+	tmpDir := t.TempDir() + "/"
+	a, _ := object.CreateStorage("file", tmpDir, "", "", "")
 	type config struct {
 		concurrent int
 		fsize      int64

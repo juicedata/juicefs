@@ -27,6 +27,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
@@ -646,8 +647,8 @@ func TestMem(t *testing.T) {
 }
 
 func TestDisk(t *testing.T) {
-	_ = os.RemoveAll("/tmp/abc/")
-	s, _ := newDisk("/tmp/abc/", "", "", "")
+	diskPath := t.TempDir() + "/"
+	s, _ := newDisk(diskPath, "", "", "")
 	testStorage(t, s)
 }
 
@@ -995,7 +996,8 @@ func TestSharding(t *testing.T) {
 }
 
 func TestSQLite(t *testing.T) {
-	s, err := newSQLStore("sqlite3", "/tmp/teststore.db", "", "")
+	dbPath := filepath.Join(t.TempDir(), "teststore.db")
+	s, err := newSQLStore("sqlite3", dbPath, "", "")
 	if err != nil {
 		t.Fatalf("create: %s", err)
 	}

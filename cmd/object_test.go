@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -186,7 +187,7 @@ func TestJFS(t *testing.T) {
 		DirEntryTimeout: time.Millisecond * 100,
 		EntryTimeout:    time.Millisecond * 100,
 		AttrTimeout:     time.Millisecond * 100,
-		AccessLog:       "/tmp/juicefs.access.log",
+		AccessLog:       filepath.Join(t.TempDir(), "juicefs.access.log"),
 	}
 	objStore, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)

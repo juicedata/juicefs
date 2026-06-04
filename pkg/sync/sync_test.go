@@ -92,10 +92,8 @@ func deepEqualWithOutMtime(a, b object.Object) bool {
 
 // nolint:errcheck
 func TestSync(t *testing.T) {
-	defer func() {
-		_ = os.RemoveAll("/tmp/a")
-		_ = os.RemoveAll("/tmp/b")
-	}()
+	tmpA := t.TempDir() + "/"
+	tmpB := t.TempDir() + "/"
 	config := &Config{
 		Start:       "",
 		End:         "",
@@ -114,14 +112,14 @@ func TestSync(t *testing.T) {
 		Quiet:       true,
 	}
 	os.Args = []string{"--include", "a[1-9]", "--exclude", "a*", "--exclude", "c*"}
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
+	a, _ := object.CreateStorage("file", tmpA, "", "", "")
 	a.Put(ctx, "a1", bytes.NewReader([]byte("a1")))
 	a.Put(ctx, "a2", bytes.NewReader([]byte("a2")))
 	a.Put(ctx, "abc", bytes.NewReader([]byte("abc")))
 	a.Put(ctx, "c1", bytes.NewReader([]byte("c1")))
 	a.Put(ctx, "c2", bytes.NewReader([]byte("c2")))
 
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
+	b, _ := object.CreateStorage("file", tmpB, "", "", "")
 	b.Put(ctx, "a1", bytes.NewReader([]byte("a1")))
 	b.Put(ctx, "ba", bytes.NewReader([]byte("a1")))
 
@@ -181,10 +179,8 @@ func TestSync(t *testing.T) {
 
 // nolint:errcheck
 func TestSyncIncludeAndExclude(t *testing.T) {
-	defer func() {
-		_ = os.RemoveAll("/tmp/a")
-		_ = os.RemoveAll("/tmp/b")
-	}()
+	tmpA := t.TempDir() + "/"
+	tmpB := t.TempDir() + "/"
 	config := &Config{
 		Start:       "",
 		End:         "",
@@ -201,8 +197,8 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 		MaxSize:     math.MaxInt64,
 		Exclude:     []string{"1"},
 	}
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
+	a, _ := object.CreateStorage("file", tmpA, "", "", "")
+	b, _ := object.CreateStorage("file", tmpB, "", "", "")
 
 	simple := []string{"a1/z1/z2", "a2", "ab1", "ab2", "b1", "b2", "c1", "c2"}
 	testCases := []struct {
@@ -246,8 +242,8 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		_ = os.RemoveAll("/tmp/a/")
-		_ = os.RemoveAll("/tmp/b/")
+		_ = os.RemoveAll(tmpA)
+		_ = os.RemoveAll(tmpB)
 		os.Args = testCase.args
 		for _, k := range testCase.srcKey {
 			a.Put(ctx, k, bytes.NewReader([]byte(k)))
@@ -313,21 +309,19 @@ func TestParseRules(t *testing.T) {
 }
 
 func TestSyncLink(t *testing.T) {
-	defer func() {
-		_ = os.RemoveAll("/tmp/a")
-		_ = os.RemoveAll("/tmp/b")
-	}()
+	tmpA := t.TempDir() + "/"
+	tmpB := t.TempDir() + "/"
 
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
+	a, _ := object.CreateStorage("file", tmpA, "", "", "")
 	a.Put(ctx, "a1", bytes.NewReader([]byte("test")))
 	as := a.(object.SupportSymlink)
-	as.Symlink("/tmp/a/a1", "l1")
+	as.Symlink(tmpA+"a1", "l1")
 	as.Symlink("./../a1", "d1/l2")
 	as.Symlink("./../notExist", "l3")
 
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
+	b, _ := object.CreateStorage("file", tmpB, "", "", "")
 	bs := b.(object.SupportSymlink)
-	bs.Symlink("/tmp/b/a1", "l1")
+	bs.Symlink(tmpB+"a1", "l1")
 
 	if err := Sync(a, b, &Config{
 		Threads:     50,
@@ -344,7 +338,7 @@ func TestSyncLink(t *testing.T) {
 	}
 
 	l1, err := bs.Readlink("l1")
-	if err != nil || l1 != "/tmp/a/a1" {
+	if err != nil || l1 != tmpA+"a1" {
 		t.Fatalf("readlink: %s content: %s", err, l1)
 	}
 	content, err := b.Get(ctx, "l1", 0, -1)
@@ -419,18 +413,16 @@ func TestSyncFilesFromSymlinkDirWithLinks(t *testing.T) {
 }
 
 func TestSyncLinkWithOutFollow(t *testing.T) {
-	defer func() {
-		_ = os.RemoveAll("/tmp/a")
-		_ = os.RemoveAll("/tmp/b")
-	}()
+	tmpA := t.TempDir() + "/"
+	tmpB := t.TempDir() + "/"
 
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
+	a, _ := object.CreateStorage("file", tmpA, "", "", "")
 	a.Put(ctx, "a1", bytes.NewReader([]byte("test")))
 	as := a.(object.SupportSymlink)
-	as.Symlink("/tmp/a/a1", "l1")
+	as.Symlink(tmpA+"a1", "l1")
 	as.Symlink("./../notExist", "l3")
 
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
+	b, _ := object.CreateStorage("file", tmpB, "", "", "")
 
 	if err := Sync(a, b, &Config{
 		Threads:     50,
@@ -452,22 +444,22 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 		t.Fatalf("read content error: %s", err)
 	}
 
-	if lstat, err := os.Lstat("/tmp/b/l1"); err != nil && lstat.Mode()&os.ModeSymlink != 0 {
+	if lstat, err := os.Lstat(tmpB + "l1"); err != nil && lstat.Mode()&os.ModeSymlink != 0 {
 		t.Fatalf("should follow link")
 	}
-	if _, err := os.Stat("/tmp/b/l3"); !os.IsNotExist(err) {
+	if _, err := os.Stat(tmpB + "l3"); !os.IsNotExist(err) {
 		t.Fatalf("should not copy broken link")
 	}
 }
 
 func TestSingleLink(t *testing.T) {
-	defer func() {
-		_ = os.RemoveAll("/tmp/a")
-		_ = os.RemoveAll("/tmp/b")
-	}()
-	_ = os.Symlink("/tmp/aa", "/tmp/a")
-	a, _ := object.CreateStorage("file", "/tmp/a", "", "", "")
-	b, _ := object.CreateStorage("file", "/tmp/b", "", "", "")
+	tmpDir := t.TempDir()
+	tmpA := tmpDir + "/a"
+	tmpB := tmpDir + "/b"
+	tmpTarget := tmpDir + "/aa"
+	_ = os.Symlink(tmpTarget, tmpA)
+	a, _ := object.CreateStorage("file", tmpA, "", "", "")
+	b, _ := object.CreateStorage("file", tmpB, "", "", "")
 	if err := Sync(a, b, &Config{
 		Threads:     50,
 		ListThreads: 1,
@@ -481,31 +473,29 @@ func TestSingleLink(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
-	readlink, _ := os.Readlink("/tmp/a")
-	readlink2, err := os.Readlink("/tmp/b")
+	readlink, _ := os.Readlink(tmpA)
+	readlink2, err := os.Readlink(tmpB)
 	if err != nil {
 		t.Fatalf("sync err: %v", err)
 	}
 
-	if readlink != readlink2 || readlink != "/tmp/aa" {
+	if readlink != readlink2 || readlink != tmpTarget {
 		t.Fatalf("sync link failed")
 	}
 }
 
 func TestSyncCheckAllLink(t *testing.T) {
-	defer func() {
-		_ = os.RemoveAll("/tmp/a")
-		_ = os.RemoveAll("/tmp/b")
-	}()
+	tmpA := t.TempDir() + "/"
+	tmpB := t.TempDir() + "/"
 
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
+	a, _ := object.CreateStorage("file", tmpA, "", "", "")
 	a.Put(ctx, "a1", bytes.NewReader([]byte("test")))
 	as := a.(object.SupportSymlink)
-	as.Symlink("/tmp/a/a1", "l1")
+	as.Symlink(tmpA+"a1", "l1")
 
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
+	b, _ := object.CreateStorage("file", tmpB, "", "", "")
 	bs := b.(object.SupportSymlink)
-	bs.Symlink("/tmp/b/a1", "l1")
+	bs.Symlink(tmpB+"a1", "l1")
 
 	if err := Sync(a, b, &Config{
 		Threads:     50,
@@ -521,7 +511,7 @@ func TestSyncCheckAllLink(t *testing.T) {
 	}
 
 	l1, err := bs.Readlink("l1")
-	if err != nil || l1 != "/tmp/a/a1" {
+	if err != nil || l1 != tmpA+"a1" {
 		t.Fatalf("readlink: %s content: %s", err, l1)
 	}
 	content, err := b.Get(ctx, "l1", 0, -1)
@@ -534,17 +524,15 @@ func TestSyncCheckAllLink(t *testing.T) {
 }
 
 func TestSyncCheckNewLink(t *testing.T) {
-	defer func() {
-		_ = os.RemoveAll("/tmp/a")
-		_ = os.RemoveAll("/tmp/b")
-	}()
+	tmpA := t.TempDir() + "/"
+	tmpB := t.TempDir() + "/"
 
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
+	a, _ := object.CreateStorage("file", tmpA, "", "", "")
 	a.Put(ctx, "a1", bytes.NewReader([]byte("test")))
 	as := a.(object.SupportSymlink)
-	as.Symlink("/tmp/a/a1", "l1")
+	as.Symlink(tmpA+"a1", "l1")
 
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
+	b, _ := object.CreateStorage("file", tmpB, "", "", "")
 	bs := b.(object.SupportSymlink)
 
 	if err := Sync(a, b, &Config{
@@ -561,7 +549,7 @@ func TestSyncCheckNewLink(t *testing.T) {
 	}
 
 	l1, err := bs.Readlink("l1")
-	if err != nil || l1 != "/tmp/a/a1" {
+	if err != nil || l1 != tmpA+"a1" {
 		t.Fatalf("readlink: %s content: %s", err, l1)
 	}
 	content, err := b.Get(ctx, "l1", 0, -1)
@@ -574,14 +562,12 @@ func TestSyncCheckNewLink(t *testing.T) {
 }
 
 func TestLimits(t *testing.T) {
-	defer func() {
-		_ = os.RemoveAll("/tmp/a/")
-		_ = os.RemoveAll("/tmp/b/")
-		_ = os.RemoveAll("/tmp/c/")
-	}()
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
-	c, _ := object.CreateStorage("file", "/tmp/c/", "", "", "")
+	tmpA := t.TempDir() + "/"
+	tmpB := t.TempDir() + "/"
+	tmpC := t.TempDir() + "/"
+	a, _ := object.CreateStorage("file", tmpA, "", "", "")
+	b, _ := object.CreateStorage("file", tmpB, "", "", "")
+	c, _ := object.CreateStorage("file", tmpC, "", "", "")
 	put := func(storage object.ObjectStorage, keys []string) {
 		for _, key := range keys {
 			if key != "" {

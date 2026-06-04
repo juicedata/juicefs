@@ -19,6 +19,7 @@ package fs
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"syscall"
 	"testing"
@@ -363,7 +364,7 @@ func createTestFS(t testing.TB) *FileSystem {
 		DirEntryTimeout: time.Millisecond * 100,
 		EntryTimeout:    time.Millisecond * 100,
 		AttrTimeout:     time.Millisecond * 100,
-		AccessLog:       "/tmp/juicefs.access.log",
+		AccessLog:       filepath.Join(t.TempDir(), "juicefs.access.log"),
 	}
 	objStore, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
