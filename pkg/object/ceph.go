@@ -338,13 +338,11 @@ func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
 			logger.Warnf("Failed to set log_file to %s: %s", opt, err)
 		}
 	}
-	if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" {
-		if err := conn.ReadDefaultConfigFile(); err != nil {
-			return nil, fmt.Errorf("Can't read default config file: %s", err)
-		}
-		if err := conn.Connect(); err != nil {
-			return nil, fmt.Errorf("Can't connect to cluster %s: %s", cluster, err)
-		}
+	if err := conn.ReadDefaultConfigFile(); err != nil {
+		return nil, fmt.Errorf("Can't read default config file: %s", err)
+	}
+	if err := conn.Connect(); err != nil {
+		return nil, fmt.Errorf("Can't connect to cluster %s: %s", cluster, err)
 	}
 	return &ceph{
 		name: name,
