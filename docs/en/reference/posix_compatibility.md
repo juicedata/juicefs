@@ -171,7 +171,7 @@ iogen01 export LTPROOT; rwtest -N iogen01 -i 120s -s read,write -Da -Dv -n 2 500
 quota_remount_test01 quota_remount_test01.sh
 isofs isofs.sh
 
-# syscalls --> syscalls-jfs 
+## syscalls --> syscalls-jfs
 bpf_prog05 bpf_prog05
 cacheflush01 cacheflush01
 chown01_16 chown01_16
@@ -312,7 +312,7 @@ statx07 statx07
 io_uring02 io_uring02
 ```
 
-# syscalls --> syscalls-jfs
+## syscalls --> syscalls-jfs
 
 ```bash
 ioctl_fiemap01 ioctl_fiemap01
