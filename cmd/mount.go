@@ -181,10 +181,14 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 			}
 		}
 		if c.IsSet("tag") {
+			tag := c.String("tag")
+			if !object.ValidateTag(tag) {
+				logger.Warnf("Invalid tag format: %s", tag)
+			}
 			format.Tiers[0] = object.Tier{
 				ID:  0,
 				Sc:  format.Tiers[0].Sc,
-				Tag: c.String("tag"),
+				Tag: tag,
 			}
 		}
 		if c.IsSet("upload-limit") {
