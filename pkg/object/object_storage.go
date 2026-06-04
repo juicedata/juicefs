@@ -48,6 +48,10 @@ type SupportSymlink interface {
 	Readlink(name string) (string, error)
 }
 
+type SupportUploadPartStream interface {
+	UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error)
+}
+
 type File interface {
 	Object
 	Owner() string
