@@ -161,7 +161,9 @@ func setTier(ctx *cli.Context) error {
 		logger.Fatal("only file and directory are supported to set storage tier")
 	}
 	oldTier := format.Tiers[attr.Tier]
-	logger.Infof("set storage tier of %q from %d(storage-class: %s;tag: %s) to %d(storage-class: %s;tag: %s)", path, attr.Tier, oldTier.Sc, oldTier.Tag, id, newTier.Sc, newTier.Tag)
+	if oldTier != nil {
+		logger.Infof("set storage tier of %q from %d(storage-class: %s;tag: %s) to %d(storage-class: %s;tag: %s)", path, attr.Tier, oldTier.Sc, oldTier.Tag, id, newTier.Sc, newTier.Tag)
+	}
 	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
