@@ -141,7 +141,7 @@ func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ..
 		tmp = object.TmpFilePath(p, name)
 		defer func() {
 			if err != nil {
-				if e := j.jfs.Delete(ctx, tmp); e != 0 {
+				if e := j.jfs.Delete(ctx, tmp); e != 0 && !errors.Is(e, syscall.ENOENT) {
 					logger.Warnf("Failed to delete %s: %s", tmp, e)
 				}
 			}
