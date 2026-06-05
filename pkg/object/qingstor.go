@@ -22,7 +22,6 @@ package object
 import (
 	"bytes"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"io"
 	"net/http"
 	"net/url"
@@ -30,6 +29,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/qingstor/qingstor-sdk-go/v4/config"
@@ -70,13 +71,14 @@ func (q *qingstor) Head(key string) (Object, error) {
 		if e, ok := err.(*errors.QingStorError); ok && e.StatusCode == http.StatusNotFound {
 			return nil, os.ErrNotExist
 		}
+		return nil, err
 	}
 	return &obj{
 		key,
-		*r.ContentLength,
-		*r.LastModified,
+		aws.ToInt64(r.ContentLength),
+		aws.ToTime(r.LastModified),
 		strings.HasSuffix(key, "/"),
-		*r.XQSStorageClass,
+		aws.ToString(r.XQSStorageClass),
 	}, nil
 }
 
@@ -161,8 +163,8 @@ func (q *qingstor) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if err != nil {
 		return err
 	}
-	if *out.StatusCode != 201 {
-		return fmt.Errorf("unexpected code: %d", *out.StatusCode)
+	if code := aws.ToInt(out.StatusCode); code != 201 {
+		return fmt.Errorf("unexpected code: %d", code)
 	}
 	return nil
 }
@@ -179,8 +181,8 @@ func (q *qingstor) Copy(dst, src string) error {
 	if err != nil {
 		return err
 	}
-	if *out.StatusCode != 201 {
-		return fmt.Errorf("unexpected code: %d", *out.StatusCode)
+	if code := aws.ToInt(out.StatusCode); code != 201 {
+		return fmt.Errorf("unexpected code: %d", code)
 	}
 	return nil
 }
@@ -215,21 +217,22 @@ func (q *qingstor) List(prefix, start, token, delimiter string, limit int64, fol
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		k := out.Keys[i]
+		oKey := aws.ToString(k.Key)
 		objs[i] = &obj{
-			*k.Key,
-			*k.Size,
-			time.Unix(int64(*k.Modified), 0),
-			strings.HasSuffix(*k.Key, "/"),
-			*k.StorageClass,
+			oKey,
+			aws.ToInt64(k.Size),
+			time.Unix(int64(aws.ToInt(k.Modified)), 0),
+			strings.HasSuffix(oKey, "/"),
+			aws.ToString(k.StorageClass),
 		}
 	}
 	if delimiter != "" {
 		for _, p := range out.CommonPrefixes {
-			objs = append(objs, &obj{*p, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{aws.ToString(p), 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, *out.HasMore, *out.NextMarker, nil
+	return objs, aws.ToBool(out.HasMore), aws.ToString(out.NextMarker), nil
 }
 
 func (q *qingstor) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
@@ -245,7 +248,11 @@ func (q *qingstor) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &MultipartUpload{UploadID: *r.UploadID, MinPartSize: 4 << 20, MaxCount: 10000}, nil
+	uploadID := aws.ToString(r.UploadID)
+	if uploadID == "" {
+		return nil, fmt.Errorf("qingstor: InitiateMultipartUpload returned empty UploadID for %s", key)
+	}
+	return &MultipartUpload{UploadID: uploadID, MinPartSize: 4 << 20, MaxCount: 10000}, nil
 }
 
 func (q *qingstor) UploadPart(key string, uploadID string, num int, data []byte) (*Part, error) {
@@ -258,7 +265,7 @@ func (q *qingstor) UploadPart(key string, uploadID string, num int, data []byte)
 	if err != nil {
 		return nil, err
 	}
-	return &Part{Num: num, Size: len(data), ETag: strings.Trim(*r.ETag, "\"")}, nil
+	return &Part{Num: num, Size: len(data), ETag: strings.Trim(aws.ToString(r.ETag), "\"")}, nil
 }
 
 func (q *qingstor) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
@@ -272,7 +279,7 @@ func (q *qingstor) UploadPartCopy(key string, uploadID string, num int, srcKey s
 	if err != nil {
 		return nil, err
 	}
-	return &Part{Num: num, Size: int(size), ETag: strings.Trim(*r.ETag, "\"")}, nil
+	return &Part{Num: num, Size: int(size), ETag: strings.Trim(aws.ToString(r.ETag), "\"")}, nil
 }
 
 func (q *qingstor) AbortUpload(key string, uploadID string) {
@@ -308,13 +315,9 @@ func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
 	}
 	parts := make([]*PendingPart, len(result.Uploads))
 	for i, u := range result.Uploads {
-		parts[i] = &PendingPart{*u.Key, *u.UploadID, *u.Created}
+		parts[i] = &PendingPart{aws.ToString(u.Key), aws.ToString(u.UploadID), aws.ToTime(u.Created)}
 	}
-	var nextMarker string
-	if result.NextKeyMarker != nil {
-		nextMarker = *result.NextKeyMarker
-	}
-	return parts, nextMarker, nil
+	return parts, aws.ToString(result.NextKeyMarker), nil
 }
 
 func (q *qingstor) SetStorageClass(sc string) error {
