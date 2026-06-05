@@ -4337,10 +4337,8 @@ func (m *dbMeta) buildQuotaUpsertSQL(table, conflictCols string, insertCols, upd
 // upsertQuota executes an UPSERT for a quota row and returns whether a new row was created.
 func (m *dbMeta) upsertQuota(s *xorm.Session, table, conflictCols string,
 	insertCols []string, insertArgs []interface{}, quota *Quota) (bool, error) {
-
 	updateCols := []string{"max_space", "max_inodes", "used_space", "used_inodes"}
 	upsertSQL := m.buildQuotaUpsertSQL(table, conflictCols, insertCols, updateCols)
-
 	updateArgs := []interface{}{
 		quota.MaxSpace, quota.MaxSpace,
 		quota.MaxInodes, quota.MaxInodes,
@@ -4351,25 +4349,11 @@ func (m *dbMeta) upsertQuota(s *xorm.Session, table, conflictCols string,
 	allArgs = append(allArgs, upsertSQL)
 	allArgs = append(allArgs, insertArgs...)
 	allArgs = append(allArgs, updateArgs...)
-
 	r, e := s.Exec(allArgs...)
 	if e != nil {
 		return false, e
 	}
-	// RowsAffected semantics:
-	// - SQLite/Postgres: 1 = inserted, 1 = updated (both return 1 for upsert-update)
-	//   but ON CONFLICT DO UPDATE always reports 1 for either insert or update,
-	//   so we use changes() for SQLite and check via driver for Postgres.
-	// - MySQL (without CLIENT_FOUND_ROWS): 1 = inserted, 2 = updated, 0 = no change
 	n, _ := r.RowsAffected()
-	driver := m.Name()
-	if driver == "sqlite3" || driver == "postgres" {
-		// For SQLite/Postgres ON CONFLICT DO UPDATE, RowsAffected is 1 for both
-		// insert and update. Use a follow-up count to distinguish is not worth it;
-		// instead we do a cheap existence check before the upsert.
-		// The caller handles this for these drivers.
-		return n == 1, e
-	}
 	return n == 1, e
 }
 
@@ -4419,9 +4403,11 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				return err
 			}
 			created = !exist
-		}
-
-		if driver != "sqlite3" && driver != "postgres" {
+			_, e := m.upsertQuota(s, table, conflictCols, insertCols, insertArgs, quota)
+			if e != nil {
+				return e
+			}
+		} else {
 			var isCreated bool
 			var e error
 			isCreated, e = m.upsertQuota(s, table, conflictCols, insertCols, insertArgs, quota)
@@ -4429,17 +4415,10 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				return e
 			}
 			created = isCreated
-		} else {
-			_, e := m.upsertQuota(s, table, conflictCols, insertCols, insertArgs, quota)
-			if e != nil {
-				return e
-			}
 		}
-
 		m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes)
 		return nil
 	})
-
 	return created, err
 }
 
