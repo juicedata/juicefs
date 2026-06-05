@@ -2108,7 +2108,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		}
 		tx.delete(m.entryKey(parent, name))
 		tx.delete(m.dirStatKey(inode))
-		tx.delete(m.dirQuotaKey(inode))
+		if quotaKey := m.dirQuotaKey(inode); tx.get(quotaKey) != nil { // avoid creating massive tombstones for quota keys we never set.
+			tx.delete(quotaKey)
+		}
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
 			tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)
@@ -2377,7 +2379,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					}
 				}
 				if dtyp == TypeDirectory {
-					tx.delete(m.dirQuotaKey(dino))
+					if quotaKey := m.dirQuotaKey(dino); tx.get(quotaKey) != nil { // avoid creating massive tombstones for quota keys we never set.
+						tx.delete(quotaKey)
+					}
 				}
 			}
 		}
@@ -3525,40 +3529,43 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 }
 
 func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
-	quotaTypes := []struct {
-		prefix string
-		name   string
-	}{
-		{"QD", "dir"},
-		{"QU", "user"},
-		{"QG", "group"},
-	}
+	format := m.getFormat()
+	dirQuotas := make(map[uint64]*Quota)
+	userQuotas := make(map[uint64]*Quota)
+	groupQuotas := make(map[uint64]*Quota)
 
-	quotaMaps := make([]map[uint64]*Quota, 3)
-	for i, qt := range quotaTypes {
-		pairs, err := m.scanValues(ctx, m.fmtKey(qt.prefix), -1, nil)
+	if format.DirStats {
+		pairs, err := m.scanValues(ctx, m.fmtKey("QD"), -1, nil)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to load %s quotas: %w", qt.name, err)
+			return nil, nil, nil, fmt.Errorf("failed to load dir quotas: %w", err)
 		}
-		var quotas map[uint64]*Quota
-		if len(pairs) == 0 {
-			quotas = make(map[uint64]*Quota)
-		} else {
-			quotas = make(map[uint64]*Quota, len(pairs))
-			for k, v := range pairs {
-				var id uint64
-				if qt.prefix == "QD" {
-					id = uint64(m.decodeInode([]byte(k[2:]))) // skip prefix
-				} else {
-					id = binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
-				}
-				quotas[id] = m.parseQuota(v)
-			}
+		for k, v := range pairs {
+			id := uint64(m.decodeInode([]byte(k[2:]))) // skip prefix
+			dirQuotas[id] = m.parseQuota(v)
 		}
-		quotaMaps[i] = quotas
 	}
 
-	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
+	if format.UserGroupQuota {
+		pairs, err := m.scanValues(ctx, m.fmtKey("QU"), -1, nil)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to load user quotas: %w", err)
+		}
+		for k, v := range pairs {
+			id := binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
+			userQuotas[id] = m.parseQuota(v)
+		}
+
+		pairs, err = m.scanValues(ctx, m.fmtKey("QG"), -1, nil)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to load group quotas: %w", err)
+		}
+		for k, v := range pairs {
+			id := binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
+			groupQuotas[id] = m.parseQuota(v)
+		}
+	}
+
+	return dirQuotas, userQuotas, groupQuotas, nil
 }
 
 func (m *kvMeta) cleanUgUsage(ctx Context, qtype uint32) error {
