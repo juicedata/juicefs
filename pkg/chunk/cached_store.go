@@ -547,6 +547,7 @@ type Config struct {
 	Writeback              bool
 	WritebackThresholdSize int
 	UploadDelay            time.Duration
+	MaxStagingSize         int64 // upload staged blocks when the total staging size reaches this value, regardless of UploadDelay
 	UploadHours            string
 	HashPrefix             bool
 	BlockSize              int
@@ -1097,7 +1098,7 @@ func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.
 		store.pendingKeys[key] = item
 	}
 	store.pendingMutex.Unlock()
-	if force || store.canUpload() && time.Since(added) > store.conf.UploadDelay {
+	if force || store.canUpload() && (time.Since(added) > store.conf.UploadDelay || store.overStagingLimit()) {
 		if item.uploading.CompareAndSwap(false, true) {
 			select {
 			case store.pendingCh <- item:
@@ -1130,6 +1131,10 @@ func (store *cachedStore) scanDelayedStaging() {
 		return
 	}
 	cutoff := time.Now().Add(-store.conf.UploadDelay)
+	if store.overStagingLimit() {
+		// too much staged data: flush the whole backlog regardless of --upload-delay
+		cutoff = time.Now()
+	}
 	store.pendingMutex.Lock()
 	defer store.pendingMutex.Unlock()
 	for _, item := range store.pendingKeys {
@@ -1145,6 +1150,13 @@ func (store *cachedStore) uploader() {
 	for it := range store.pendingCh {
 		store.uploadStagingFile(it.key, it.fpath)
 	}
+}
+
+// overStagingLimit reports whether the total staged (not yet uploaded) data has reached
+// the configured --max-staging-size, in which case delayed blocks should be
+// uploaded regardless of --upload-delay to keep local cache usage bounded.
+func (store *cachedStore) overStagingLimit() bool {
+	return store.conf.MaxStagingSize > 0 && store.bcache.usedStaging() >= store.conf.MaxStagingSize
 }
 
 func (store *cachedStore) canUpload() bool {

@@ -219,6 +219,11 @@ func dataCacheFlags() []cli.Flag {
 			Usage: "delayed duration for uploading blocks",
 		},
 		&cli.StringFlag{
+			Name:  "max-staging-size",
+			Value: "0",
+			Usage: "upload staged blocks when the total staging size reaches this value (in MiB by default), regardless of `--upload-delay`; 0 means no limit",
+		},
+		&cli.StringFlag{
 			Name:  "upload-hours",
 			Usage: "(start-end) hour of a day between which the delayed blocks can be uploaded",
 		},

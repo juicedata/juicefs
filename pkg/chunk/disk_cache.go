@@ -425,6 +425,7 @@ func (cache *cacheStore) removeStage(key string) error {
 	if err = cache.removeFile(cache.stagePath(key)); err == nil {
 		cache.m.stageBlocks.Sub(1)
 		cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
+		cache.m.stageBytes.Add(-int64(parseObjOrigSize(key)))
 	}
 	// ignore ENOENT error
 	if err != nil && os.IsNotExist(err) {
@@ -778,6 +779,7 @@ func (cache *cacheStore) stage(key string, data []byte, tierID uint8) (string, e
 	if err == nil {
 		cache.m.stageBlocks.Add(1)
 		cache.m.stageBlockBytes.Add(float64(len(data)))
+		cache.m.stageBytes.Add(int64(len(data)))
 		cache.m.stageWriteBytes.Add(float64(len(data)))
 		if cache.enabled() {
 			path := cache.cachePath(key)
@@ -1026,6 +1028,7 @@ func (cache *cacheStore) scanStaging() {
 			logger.Debugf("Found staging block: %s", path)
 			cache.m.stageBlocks.Add(1)
 			cache.m.stageBlockBytes.Add(float64(origSize))
+			cache.m.stageBytes.Add(int64(origSize))
 			cache.uploader(key, path, false)
 			atomic.AddUint64(&count, 1)
 			atomic.AddUint64(&usage, uint64(origSize))
@@ -1099,6 +1102,7 @@ type CacheManager interface {
 	stage(key string, data []byte, tierID uint8) (string, error)
 	removeStage(key string) error
 	stats() (int64, int64)
+	usedStaging() int64
 	usedMemory() int64
 	isEmpty() bool
 	getMetrics() *cacheManagerMetrics
@@ -1152,6 +1156,11 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 
 func (m *cacheManager) getMetrics() *cacheManagerMetrics {
 	return m.metrics
+}
+
+// usedStaging returns the total bytes currently staged but not yet uploaded.
+func (m *cacheManager) usedStaging() int64 {
+	return m.metrics.stageBytes.Load()
 }
 
 func (m *cacheManager) cleanup() {

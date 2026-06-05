@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -267,6 +268,58 @@ func TestStoreDelayed(t *testing.T) {
 	time.Sleep(time.Second) // waiting for upload
 	if _, err := mem.Head(ctx, "chunks/0/0/10_0_1024"); err != nil {
 		t.Fatalf("head object 10_0_1024: %s", err)
+	}
+}
+
+func TestMaxStagingSize(t *testing.T) {
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
+	conf := defaultConf
+	_ = os.RemoveAll(conf.CacheDir)
+	conf.Writeback = true
+	conf.WritebackThresholdSize = conf.BlockSize + 1 // stage every full block
+	conf.UploadDelay = time.Hour                     // time-based upload won't fire during the test
+	conf.MaxStagingSize = 2 << 20                    // flush staged data once it reaches 2 MiB
+	store := NewCachedStore(mem, conf, nil)
+	time.Sleep(time.Second) // waiting for cache scanned
+
+	const n = 8
+	total := int64(n) * int64(conf.BlockSize)
+	for i := uint64(100); i < 100+n; i++ {
+		if err := forgetSlice(store, i, conf.BlockSize); err != nil {
+			t.Fatalf("write slice %d: %s", i, err)
+		}
+	}
+	defer func() {
+		for i := uint64(100); i < 100+n; i++ {
+			store.Remove(i, conf.BlockSize)
+		}
+	}()
+
+	// wait for threshold-triggered uploads to finish
+	cs := store.(*cachedStore)
+	deadline := time.Now().Add(5 * time.Second)
+	var uploaded int
+	for time.Now().Before(deadline) {
+		uploaded = 0
+		for i := uint64(100); i < 100+n; i++ {
+			key := fmt.Sprintf("chunks/0/0/%d_0_%d", i, conf.BlockSize)
+			if _, err := mem.Head(ctx, key); err == nil {
+				uploaded++
+			}
+		}
+		if uploaded >= n-1 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// staging must have been kept bounded by the staging limit instead of growing to `total`
+	if staged := cs.bcache.usedStaging(); staged >= total {
+		t.Fatalf("staged data not bounded by staging limit: staged %d, written %d", staged, total)
+	}
+	// without the staging limit nothing would be uploaded (delay is 1h); expect almost all blocks flushed
+	if uploaded < n-1 {
+		t.Fatalf("expected at least %d blocks uploaded by staging limit, got %d", n-1, uploaded)
 	}
 }
 

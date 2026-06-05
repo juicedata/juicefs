@@ -17,6 +17,8 @@
 package chunk
 
 import (
+	"sync/atomic"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -30,6 +32,9 @@ type cacheManagerMetrics struct {
 	stageBlocks     prometheus.Gauge
 	stageBlockBytes prometheus.Gauge
 	stageWriteBytes prometheus.Counter
+	// stageBytes mirrors stageBlockBytes as a runtime-readable counter of the
+	// total bytes currently staged but not yet uploaded (used by --max-staging-size).
+	stageBytes atomic.Int64
 }
 
 func newCacheManagerMetrics(reg prometheus.Registerer) *cacheManagerMetrics {
