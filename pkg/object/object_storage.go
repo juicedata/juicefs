@@ -124,7 +124,7 @@ func (s DefaultObjectStorage) Limits() Limits {
 	return Limits{IsSupportMultipartUpload: false, IsSupportUploadPartCopy: false}
 }
 
-func (s DefaultObjectStorage) Head(key string) (Object, error) {
+func (s DefaultObjectStorage) Head(ctx context.Context, key string) (Object, error) {
 	return nil, notSupported
 }
 
