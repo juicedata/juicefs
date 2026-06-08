@@ -2108,8 +2108,10 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		}
 		tx.delete(m.entryKey(parent, name))
 		tx.delete(m.dirStatKey(inode))
-		if quotaKey := m.dirQuotaKey(inode); tx.get(quotaKey) != nil { // avoid creating massive tombstones for quota keys we never set.
-			tx.delete(quotaKey)
+		if m.getFormat().DirStats {
+			if quotaKey := m.dirQuotaKey(inode); tx.get(quotaKey) != nil { // avoid creating massive tombstones for quota keys we never set.
+				tx.delete(quotaKey)
+			}
 		}
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
@@ -2378,7 +2380,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tx.deleteKeys(m.fmtKey("A", dino, "P"))
 					}
 				}
-				if dtyp == TypeDirectory {
+				if dtyp == TypeDirectory && m.getFormat().DirStats {
 					if quotaKey := m.dirQuotaKey(dino); tx.get(quotaKey) != nil { // avoid creating massive tombstones for quota keys we never set.
 						tx.delete(quotaKey)
 					}

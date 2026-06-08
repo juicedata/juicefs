@@ -2391,9 +2391,11 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 			pipe.HDel(ctx, m.dirDataLengthKey(), field)
 			pipe.HDel(ctx, m.dirUsedSpaceKey(), field)
 			pipe.HDel(ctx, m.dirUsedInodesKey(), field)
-			pipe.HDel(ctx, m.dirQuotaKey(), field)
-			pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
-			pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
+			if m.getFormat().DirStats {
+				pipe.HDel(ctx, m.dirQuotaKey(), field)
+				pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
+				pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
+			}
 			m.genLog(ctx, pipe, now, "RMDIR(%d,%s,%d):%d", parent, logEncode2(name), trash, inode)
 			return nil
 		})
@@ -2695,9 +2697,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					}
 					if dtyp == TypeDirectory {
 						field := dino.String()
-						pipe.HDel(ctx, m.dirQuotaKey(), field)
-						pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
-						pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
+						if m.getFormat().DirStats {
+							pipe.HDel(ctx, m.dirQuotaKey(), field)
+							pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
+							pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
+						}
 					}
 				}
 			}

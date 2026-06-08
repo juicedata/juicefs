@@ -2235,8 +2235,10 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 			logger.Warnf("remove dir usage of ino(%d): %s", e.Inode, err)
 			return err
 		}
-		if _, err = s.Delete(&dirQuota{Inode: e.Inode}); err != nil {
-			return err
+		if m.getFormat().DirStats {
+			if _, err = s.Delete(&dirQuota{Inode: e.Inode}); err != nil {
+				return err
+			}
 		}
 
 		if trash > 0 {
@@ -2587,7 +2589,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				if _, err := s.Delete(&edge{Parent: parentDst, Name: de.Name}); err != nil {
 					return err
 				}
-				if de.Type == TypeDirectory {
+				if de.Type == TypeDirectory && m.getFormat().DirStats {
 					if _, err = s.Delete(&dirQuota{Inode: dino}); err != nil {
 						return err
 					}
