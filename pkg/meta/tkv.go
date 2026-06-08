@@ -3534,34 +3534,28 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 	userQuotas := make(map[uint64]*Quota)
 	groupQuotas := make(map[uint64]*Quota)
 
-	if format.DirStats {
-		pairs, err := m.scanValues(ctx, m.fmtKey("QD"), -1, nil)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to load dir quotas: %w", err)
-		}
-		for k, v := range pairs {
-			id := uint64(m.decodeInode([]byte(k[2:]))) // skip prefix
-			dirQuotas[id] = m.parseQuota(v)
-		}
+	quotaTypes := []struct {
+		enabled bool
+		prefix  string
+		name    string
+		quotas  map[uint64]*Quota
+		decode  func(k string) uint64
+	}{
+		{format.DirStats, "QD", "dir", dirQuotas, func(k string) uint64 { return uint64(m.decodeInode([]byte(k[2:]))) }}, // skip prefix
+		{format.UserGroupQuota, "QU", "user", userQuotas, func(k string) uint64 { return binary.BigEndian.Uint64([]byte(k[2:])) }},
+		{format.UserGroupQuota, "QG", "group", groupQuotas, func(k string) uint64 { return binary.BigEndian.Uint64([]byte(k[2:])) }},
 	}
 
-	if format.UserGroupQuota {
-		pairs, err := m.scanValues(ctx, m.fmtKey("QU"), -1, nil)
+	for _, qt := range quotaTypes {
+		if !qt.enabled {
+			continue
+		}
+		pairs, err := m.scanValues(ctx, m.fmtKey(qt.prefix), -1, nil)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to load user quotas: %w", err)
+			return nil, nil, nil, fmt.Errorf("failed to load %q quotas: %w", qt.name, err)
 		}
 		for k, v := range pairs {
-			id := binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
-			userQuotas[id] = m.parseQuota(v)
-		}
-
-		pairs, err = m.scanValues(ctx, m.fmtKey("QG"), -1, nil)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to load group quotas: %w", err)
-		}
-		for k, v := range pairs {
-			id := binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
-			groupQuotas[id] = m.parseQuota(v)
+			qt.quotas[qt.decode(k)] = m.parseQuota(v)
 		}
 	}
 
