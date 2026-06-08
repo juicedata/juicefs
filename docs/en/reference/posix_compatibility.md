@@ -86,31 +86,20 @@ JuiceFS passed most of the file system related tests.
    cd /opt/ltp
    ```
 
-5. Create test configuration files. To simplify testing, delete pressure tests, filesystem-unrelated entries, and tests not run on JuiceFS from `runtest/fs` and `runtest/syscalls` (see [Appendix](#appendix), modified files are saved as `fs-jfs` and `syscalls-jfs`):
-
-   ```bash
-   # Generate fs-jfs: delete pressure tests and unrelated entries from fs
-   sed -e '/^gf01 /d' -e '/^gf02 /d' ... runtest/fs > runtest/fs-jfs
-
-   # Generate syscalls-jfs: delete filesystem-unrelated entries from syscalls
-   cp runtest/syscalls runtest/syscalls-jfs
-   sed -i -e '/^bpf_prog05 /d' ... runtest/syscalls-jfs
-
-   # Delete tests not run on JuiceFS (using .all_filesystems mechanism, run on other local filesystems)
-   sed -i -e '/^ioctl_fiemap01 /d' -e '/^fanotify13 /d' \
-       -e '/^mount03 /d' -e '/^mount08 /d' \
-       -e '/^openat02 /d' -e '/^unlink09 /d' runtest/syscalls-jfs
-   ```
+5. Create test configuration files. To simplify testing, delete pressure tests, filesystem-unrelated entries, and tests not run on JuiceFS from `runtest/fs` and `runtest/syscalls`, modified files are saved as `fs-jfs` and `syscalls-jfs` (see [Appendix](#appendix) for the detailed deletion list):
 
 6. Execute tests:
 
    ```bash
+   export LTPROOT=/opt/ltp
+   export PATH=/opt/ltp/testcases/bin:$PATH
    cd /mnt/jfs
    kirk --run-suite fs_bind --sut default --tmp-dir /mnt/jfs
    kirk --run-suite fs_perms_simple --sut default --tmp-dir /mnt/jfs
    kirk --run-suite smoketest --sut default --tmp-dir /mnt/jfs
    kirk --run-suite fs-jfs --sut default --tmp-dir /mnt/jfs
    kirk --run-suite syscalls-jfs --sut default --tmp-dir /mnt/jfs
+   kirk --run-suite fcntl-locktests --sut default --tmp-dir /mnt/jfs
    ```
 
 ### Test result
@@ -121,8 +110,9 @@ JuiceFS passed most of the file system related tests.
 | fs_perms_simple | 18 | 18 | 0 | 0 | 0 |
 | smoketest | 12 | 470 | 0 | 0 | 4 |
 | fs-jfs | 30 | 81 | 0 | 0 | 0 |
-| syscalls-jfs | 1368 | 15647 | 0 | 0 | 310 |
-| **Total** | **1523** | **18799** | **0** | **0** | **314** |
+| syscalls-jfs | 1368 | 15728 | 0 | 0 | 308 |
+| fcntl-locktests | 1 | 1 | 0 | 0 | 0 |
+| **Total** | **1524** | **18881** | **0** | **0** | **312** |
 
 All tests run on JuiceFS passed with 0 failures and 0 broken.
 
@@ -310,11 +300,6 @@ timerfd04 timerfd04
 perf_event_open02 perf_event_open02
 statx07 statx07
 io_uring02 io_uring02
-```
-
-## syscalls --> syscalls-jfs
-
-```bash
 ioctl_fiemap01 ioctl_fiemap01
 fanotify13 fanotify13
 mount03 mount03
