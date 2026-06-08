@@ -4395,15 +4395,20 @@ func (m *dbMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 }
 
 func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
+	format := m.getFormat()
 	var dirQuotasList []dirQuota
 	var userGroupQuotasList []userGroupQuota
 
 	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		if e := s.Find(&dirQuotasList); e != nil {
-			return e
+		if format.DirStats {
+			if e := s.Find(&dirQuotasList); e != nil {
+				return e
+			}
 		}
-		if e := s.Find(&userGroupQuotasList); e != nil {
-			return e
+		if format.UserGroupQuota {
+			if e := s.Find(&userGroupQuotasList); e != nil {
+				return e
+			}
 		}
 		return nil
 	})
