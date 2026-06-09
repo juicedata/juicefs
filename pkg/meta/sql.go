@@ -53,7 +53,7 @@ const MaxFieldsCountOfTable = 18 // node table
 
 type setting struct {
 	Name  string `xorm:"pk"`
-	Value string `xorm:"varchar(4096) notnull"`
+	Value string `xorm:"text notnull"`
 }
 
 type counter struct {
