@@ -511,7 +511,6 @@ func TestUnknownInodeStatsShouldNotMarkCacheAsRawFull(t *testing.T) {
 		m := new(cacheManagerMetrics)
 		m.initMetrics()
 		s := newCacheStore(m, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
-		defer shutdownStore(s)
 
 		require.Never(t, func() bool {
 			s.Lock()
