@@ -844,8 +844,8 @@ func (m *redisMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 	}
 
 	var inoKeys []string
-	if err := m.scan(ctx, m.prefix+"session*", func(keys []string) error {
-		for i := 0; i < len(keys); i += 2 {
+	if err := m.scan(ctx, "session*", func(keys []string) error {
+		for i := 0; i < len(keys); i += 1 {
 			key := keys[i]
 			if key == "sessions" {
 				continue
