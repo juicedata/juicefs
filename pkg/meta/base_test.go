@@ -5543,7 +5543,6 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 func testSustainedInodeQuotaDecrement(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
 	format := m.getBase().getFormat()
 	format.UserGroupQuota = true
-
 	uidKey := fmt.Sprintf("%d", uid)
 	gidKey := fmt.Sprintf("%d", gid)
 	if err := m.HandleQuota(ctx, QuotaSet, uidKey, UserQuotaType, map[string]*Quota{uidKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
@@ -5589,6 +5588,16 @@ func testSustainedInodeQuotaDecrement(t *testing.T, m Meta, ctx Context, parent 
 	if st := m.Unlink(ctx, parent, "sustained_inode_quota_file", true); st != 0 {
 		t.Fatalf("Unlink sustained file: %s", st)
 	}
+
+	uidAfterUnlink := getUsedInodes(UserQuotaType, uidKey)
+	gidAfterUnlink := getUsedInodes(GroupQuotaType, gidKey)
+	if uidAfterUnlink != uidBefore+1 {
+		t.Fatalf("user quota inode should remain increased after unlink (sustained): before=%d after_unlink=%d", uidBefore, uidAfterUnlink)
+	}
+	if gidAfterUnlink != gidBefore+1 {
+		t.Fatalf("group quota inode should remain increased after unlink (sustained): before=%d after_unlink=%d", gidBefore, gidAfterUnlink)
+	}
+
 	if st := m.Close(ctx, inode); st != 0 {
 		t.Fatalf("Close sustained file: %s", st)
 	}
