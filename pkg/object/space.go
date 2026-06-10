@@ -44,7 +44,7 @@ func (s *space) Limits() Limits {
 	return s.s3client.Limits()
 }
 
-func (s *space) SetTier(_ Tiers) error {
+func (s *space) InitTiers(_ Tiers) error {
 	// avoid panic when GetStorageClass
 	s.tiers = NewTiers("")
 	return notSupported

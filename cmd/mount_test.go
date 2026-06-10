@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -45,7 +46,9 @@ import (
 )
 
 const testMeta = "redis://127.0.0.1:6379/11"
-const testMountPoint = "/tmp/jfs-unit-test"
+
+var testMountPoint = filepath.Join(os.TempDir(), fmt.Sprintf("jfs-unit-test-%d", os.Getpid()))
+
 const testVolume = "test"
 
 // gomonkey may encounter the problem of insufficient permissions under mac, please solve it by viewing this link https://github.com/agiledragon/gomonkey/issues/70
@@ -211,11 +214,10 @@ func TestUpdateFstab(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.SkipNow()
 	}
-	mockFstab, err := os.CreateTemp("/tmp", "fstab")
+	mockFstab, err := os.CreateTemp(t.TempDir(), "fstab")
 	if err != nil {
 		t.Fatalf("cannot make temp file: %s", err)
 	}
-	defer os.Remove(mockFstab.Name())
 
 	patches := gomonkey.ApplyFunc(os.Rename, func(src, dest string) error {
 		content, err := os.ReadFile(mockFstab.Name())

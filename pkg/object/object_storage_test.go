@@ -27,6 +27,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
@@ -81,7 +82,7 @@ func setStorageClass(o ObjectStorage) string {
 	if os, ok := o.(SupportTier); ok {
 		tiers := NewTiers(sc)
 		tiers[1] = Tier{ID: 1, Sc: sc}
-		if err := os.SetTier(tiers); err != nil {
+		if err := os.InitTiers(tiers); err != nil {
 			logger.Warnf("Set storage tier: %s", err)
 		}
 	}
@@ -646,8 +647,8 @@ func TestMem(t *testing.T) {
 }
 
 func TestDisk(t *testing.T) {
-	_ = os.RemoveAll("/tmp/abc/")
-	s, _ := newDisk("/tmp/abc/", "", "", "")
+	diskPath := t.TempDir() + "/"
+	s, _ := newDisk(diskPath, "", "", "")
 	testStorage(t, s)
 }
 
@@ -995,7 +996,8 @@ func TestSharding(t *testing.T) {
 }
 
 func TestSQLite(t *testing.T) {
-	s, err := newSQLStore("sqlite3", "/tmp/teststore.db", "", "")
+	dbPath := filepath.Join(t.TempDir(), "teststore.db")
+	s, err := newSQLStore("sqlite3", dbPath, "", "")
 	if err != nil {
 		t.Fatalf("create: %s", err)
 	}

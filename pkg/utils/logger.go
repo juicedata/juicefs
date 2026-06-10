@@ -27,12 +27,12 @@ import (
 )
 
 var mu sync.Mutex
-var loggers = make(map[string]*logHandle)
+var loggers = make(map[string]*LogHandle)
 
 var syslogHook logrus.Hook
 var framePlaceHolder = runtime.Frame{Function: "???", File: "???", Line: 0}
 
-type logHandle struct {
+type LogHandle struct {
 	logrus.Logger
 
 	name     string
@@ -42,7 +42,7 @@ type logHandle struct {
 	colorful bool
 }
 
-func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
+func (l *LogHandle) Format(e *logrus.Entry) ([]byte, error) {
 	lvl := e.Level
 	if l.lvl != nil {
 		lvl = *l.lvl
@@ -116,12 +116,12 @@ func MethodName(fullFuncName string) string {
 }
 
 // for aws.Logger
-func (l *logHandle) Log(args ...interface{}) {
+func (l *LogHandle) Log(args ...interface{}) {
 	l.Debugln(args...)
 }
 
-func newLogger(name string) *logHandle {
-	l := &logHandle{Logger: *logrus.New(), name: name, pid: os.Getpid(), colorful: SupportANSIColor(os.Stderr.Fd())}
+func newLogger(name string) *LogHandle {
+	l := &LogHandle{Logger: *logrus.New(), name: name, pid: os.Getpid(), colorful: SupportANSIColor(os.Stderr.Fd())}
 	l.Formatter = l
 	if syslogHook != nil {
 		l.AddHook(syslogHook)
@@ -131,7 +131,7 @@ func newLogger(name string) *logHandle {
 }
 
 // GetLogger returns a logger mapped to `name`
-func GetLogger(name string) *logHandle {
+func GetLogger(name string) *LogHandle {
 	mu.Lock()
 	defer mu.Unlock()
 

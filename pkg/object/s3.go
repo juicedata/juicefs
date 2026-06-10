@@ -111,8 +111,8 @@ func (s *s3client) Head(ctx context.Context, key string) (Object, error) {
 	}
 	return &obj{
 		key,
-		*r.ContentLength,
-		*r.LastModified,
+		aws.ToInt64(r.ContentLength),
+		aws.ToTime(r.LastModified),
 		strings.HasSuffix(key, "/"),
 		getOrDefaultScValue(string(r.StorageClass), string(types.StorageClassStandard)),
 		aws.ToString(r.Restore),
@@ -153,7 +153,7 @@ func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getter
 }
 
 func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	sc := s.GetStorageClass(ctx)
+	t := s.GetTier(ctx)
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -170,15 +170,18 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 		Key:               &key,
 		Body:              body,
 		ContentType:       &mimeType,
-		StorageClass:      types.StorageClass(sc),
+		StorageClass:      types.StorageClass(t.Sc),
 		ChecksumAlgorithm: "", // X-Amz-Content-Sha256: UNSIGNED-PAYLOAD
+	}
+	if t.encodedTag != "" {
+		params.Tagging = aws.String(t.encodedTag)
 	}
 	if !s.disableChecksum {
 		checksum := generateChecksum(body)
 		params.Metadata = map[string]string{checksumAlgr: checksum}
 	}
 	attrs := ApplyGetters(getters...)
-	attrs.SetStorageClass(sc)
+	attrs.SetStorageClass(t.Sc)
 	resp, err := s.s3.PutObject(ctx, params)
 	if err != nil {
 		var re s3.ResponseError
@@ -194,13 +197,18 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
-	sc := getOrDefaultScValue(s.GetStorageClass(ctx), string(types.StorageClassStandard))
+	t := s.GetTier(ctx)
+	sc := getOrDefaultScValue(t.Sc, string(types.StorageClassStandard))
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,
 		Key:          &dst,
 		CopySource:   &src,
 		StorageClass: types.StorageClass(sc),
+	}
+	if t.encodedTag != "" {
+		params.TaggingDirective = types.TaggingDirectiveReplace
+		params.Tagging = aws.String(t.encodedTag)
 	}
 	_, err := s.s3.CopyObject(ctx, params)
 	return err
@@ -252,17 +260,18 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		oKey, err := decodeKey(*o.Key, aws.String(string(resp.EncodingType)))
+		rawKey := aws.ToString(o.Key)
+		oKey, err := decodeKey(rawKey, aws.String(string(resp.EncodingType)))
 		if err != nil {
-			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
+			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", rawKey)
 		}
 		if !strings.HasPrefix(oKey, prefix) || oKey < start {
 			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, start)
 		}
 		objs[i] = &obj{
 			oKey,
-			*o.Size,
-			*o.LastModified,
+			aws.ToInt64(o.Size),
+			aws.ToTime(o.LastModified),
 			strings.HasSuffix(oKey, "/"),
 			getOrDefaultScValue(string(o.StorageClass), string(types.ObjectStorageClassStandard)),
 			"",
@@ -270,23 +279,16 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			prefix, err := decodeKey(*p.Prefix, aws.String(string(resp.EncodingType)))
+			rawPrefix := aws.ToString(p.Prefix)
+			prefix, err := decodeKey(rawPrefix, aws.String(string(resp.EncodingType)))
 			if err != nil {
-				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
+				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", rawPrefix)
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	var isTruncated bool
-	if resp.IsTruncated != nil {
-		isTruncated = *resp.IsTruncated
-	}
-	var nextMarker string
-	if resp.NextContinuationToken != nil {
-		nextMarker = *resp.NextContinuationToken
-	}
-	return objs, isTruncated, nextMarker, nil
+	return objs, aws.ToBool(resp.IsTruncated), aws.ToString(resp.NextContinuationToken), nil
 }
 
 func (s *s3client) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
@@ -303,7 +305,11 @@ func (s *s3client) CreateMultipartUpload(ctx context.Context, key string) (*Mult
 	if err != nil {
 		return nil, err
 	}
-	return &MultipartUpload{UploadID: *resp.UploadId, MinPartSize: 5 << 20, MaxCount: 10000}, nil
+	uploadID := aws.ToString(resp.UploadId)
+	if uploadID == "" {
+		return nil, fmt.Errorf("s3: CreateMultipartUpload returned empty UploadId for %s", key)
+	}
+	return &MultipartUpload{UploadID: uploadID, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
 func (s *s3client) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
@@ -319,7 +325,7 @@ func (s *s3client) UploadPart(ctx context.Context, key string, uploadID string, 
 	if err != nil {
 		return nil, err
 	}
-	return &Part{Num: num, ETag: *resp.ETag}, nil
+	return &Part{Num: num, ETag: aws.ToString(resp.ETag)}, nil
 }
 
 func (s *s3client) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
@@ -334,7 +340,10 @@ func (s *s3client) UploadPartCopy(ctx context.Context, key string, uploadID stri
 	if err != nil {
 		return nil, err
 	}
-	return &Part{Num: num, ETag: *resp.CopyPartResult.ETag}, nil
+	if resp.CopyPartResult == nil {
+		return nil, fmt.Errorf("s3: UploadPartCopy returned no CopyPartResult for %s part %d", key, num)
+	}
+	return &Part{Num: num, ETag: aws.ToString(resp.CopyPartResult.ETag)}, nil
 }
 
 func (s *s3client) AbortUpload(ctx context.Context, key string, uploadID string) {
@@ -373,13 +382,9 @@ func (s *s3client) ListUploads(ctx context.Context, marker string) ([]*PendingPa
 	}
 	parts := make([]*PendingPart, len(result.Uploads))
 	for i, u := range result.Uploads {
-		parts[i] = &PendingPart{*u.Key, *u.UploadId, *u.Initiated}
+		parts[i] = &PendingPart{aws.ToString(u.Key), aws.ToString(u.UploadId), aws.ToTime(u.Initiated)}
 	}
-	var nextMarker string
-	if result.NextKeyMarker != nil {
-		nextMarker = *result.NextKeyMarker
-	}
-	return parts, nextMarker, nil
+	return parts, aws.ToString(result.NextKeyMarker), nil
 }
 
 func (s *s3client) Restore(ctx context.Context, key string, days int32) error {

@@ -54,7 +54,7 @@ const MaxFieldsCountOfTable = 19 // node table
 
 type setting struct {
 	Name  string `xorm:"pk"`
-	Value string `xorm:"varchar(4096) notnull"`
+	Value string `xorm:"text notnull"`
 }
 
 type counter struct {
@@ -1219,7 +1219,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 			return e.SafeToRetry()
 		}
 		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") ||
-			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access") ||
+			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "serialize access") ||
 			strings.Contains(msg, "bad connection") || errors.Is(err, io.EOF) // could not send data to client: No buffer space available
 	default:
 		return false
@@ -3779,10 +3779,13 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 
 func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	var indexes []chunk
-	_ = m.simpleTxn(Background(), func(s *xorm.Session) error {
+	if err := m.simpleTxn(Background(), func(s *xorm.Session) error {
 		indexes = nil
 		return s.Cols("indx").Find(&indexes, &chunk{Inode: inode})
-	})
+	}); err != nil {
+		logger.Warnf("delete chunks of inode %d length %d: find chunks: %s", inode, length, err)
+		return
+	}
 	for _, c := range indexes {
 		err := m.deleteChunk(inode, c.Indx)
 		if err != nil {
@@ -4411,15 +4414,20 @@ func (m *dbMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 }
 
 func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
+	format := m.getFormat()
 	var dirQuotasList []dirQuota
 	var userGroupQuotasList []userGroupQuota
 
 	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		if e := s.Find(&dirQuotasList); e != nil {
-			return e
+		if format.DirStats {
+			if e := s.Find(&dirQuotasList); e != nil {
+				return e
+			}
 		}
-		if e := s.Find(&userGroupQuotasList); e != nil {
-			return e
+		if format.UserGroupQuota {
+			if e := s.Find(&userGroupQuotasList); e != nil {
+				return e
+			}
 		}
 		return nil
 	})

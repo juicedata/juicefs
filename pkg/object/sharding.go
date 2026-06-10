@@ -78,23 +78,23 @@ func (s *sharded) Delete(ctx context.Context, key string, getters ...AttrGetter)
 	return s.pick(key).Delete(ctx, key, getters...)
 }
 
-func (s *sharded) SetTier(init Tiers) error {
+func (s *sharded) InitTiers(init Tiers) error {
 	var err = notSupported
 	for _, o := range s.stores {
 		if o, ok := o.(SupportTier); ok {
-			err = o.SetTier(init)
+			err = o.InitTiers(init)
 		}
 	}
 	return err
 }
 
-func (s *sharded) GetStorageClass(ctx context.Context) string {
+func (s *sharded) GetTier(ctx context.Context) Tier {
 	for _, o := range s.stores {
 		if o, ok := o.(SupportTier); ok {
-			return o.GetStorageClass(ctx)
+			return o.GetTier(ctx)
 		}
 	}
-	return ""
+	return Tier{}
 }
 
 const maxResults = 10000

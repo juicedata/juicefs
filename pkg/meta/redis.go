@@ -858,8 +858,8 @@ func (m *redisMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 
 func (m *redisMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
 	var inoKeys []string
-	if err := m.scan(ctx, m.prefix+"session*", func(keys []string) error {
-		for i := 0; i < len(keys); i += 2 {
+	if err := m.scan(ctx, "session*", func(keys []string) error {
+		for i := 0; i < len(keys); i += 1 {
 			key := keys[i]
 			if key == "sessions" {
 				continue
@@ -4485,23 +4485,31 @@ func (m *redisMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 }
 
 func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
+	format := m.getFormat()
+	dirQuotas := make(map[uint64]*Quota)
+	userQuotas := make(map[uint64]*Quota)
+	groupQuotas := make(map[uint64]*Quota)
+
 	quotaTypes := []struct {
-		qtype uint32
-		name  string
+		enabled bool
+		qtype   uint32
+		name    string
+		quotas  map[uint64]*Quota
 	}{
-		{DirQuotaType, "dir"},
-		{UserQuotaType, "user"},
-		{GroupQuotaType, "group"},
+		{format.DirStats, DirQuotaType, "dir", dirQuotas},
+		{format.UserGroupQuota, UserQuotaType, "user", userQuotas},
+		{format.UserGroupQuota, GroupQuotaType, "group", groupQuotas},
 	}
 
-	quotaMaps := make([]map[uint64]*Quota, 3)
-	for i, qt := range quotaTypes {
+	for _, qt := range quotaTypes {
+		if !qt.enabled {
+			continue
+		}
+
 		config, err := m.getQuotaKeys(qt.qtype)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to load %s quotas: %w", qt.name, err)
 		}
-
-		quotas := make(map[uint64]*Quota)
 		if err := m.hscan(ctx, config.usedInodesKey, func(keys []string) error {
 			for i := 0; i < len(keys); i += 2 {
 				key := keys[i]
@@ -4532,7 +4540,7 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 					return err
 				}
 
-				quotas[id] = &Quota{
+				qt.quotas[id] = &Quota{
 					MaxSpace:   maxSpace,
 					MaxInodes:  maxInodes,
 					UsedSpace:  usedSpace,
@@ -4543,10 +4551,9 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 		}); err != nil {
 			return nil, nil, nil, err
 		}
-		quotaMaps[i] = quotas
 	}
 
-	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
+	return dirQuotas, userQuotas, groupQuotas, nil
 }
 
 func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {

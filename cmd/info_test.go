@@ -27,12 +27,11 @@ import (
 )
 
 func TestInfo(t *testing.T) {
-	tmpFile, err := os.CreateTemp("/tmp", "")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "")
 	if err != nil {
 		t.Fatalf("create temporary file: %s", err)
 	}
 	defer tmpFile.Close()
-	defer os.Remove(tmpFile.Name())
 	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
 	// mock os.Stdout

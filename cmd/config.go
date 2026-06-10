@@ -178,10 +178,10 @@ func config(ctx *cli.Context) error {
 	var quota, storage, trash, clientVer, tier bool
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
-	var newSc string
-	var newTierID uint8
-	var oldTier object.Tier
+	var targetTierID uint8
+	var currentTier object.Tier
 	var findTier bool
+	var newTier object.Tier
 
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
@@ -258,10 +258,25 @@ func config(ctx *cli.Context) error {
 			}
 			if new := ctx.String(flag); new != format.Tiers[0].Sc {
 				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Tiers[0].Sc, new))
-				format.Tiers[0] = object.Tier{
-					ID: 0,
-					Sc: new,
-				}
+				newTier := format.Tiers[0]
+				newTier.Sc = new
+				format.Tiers[0] = newTier
+				storage = true
+				tier = true
+			}
+		case "tag":
+			if ctx.IsSet("tier") {
+				continue
+			}
+			new := ctx.String(flag)
+			if !object.ValidateTag(new) {
+				logger.Fatalf("Invalid tag format: %s", new)
+			}
+			if new != format.Tiers[0].Tag {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Tiers[0].Tag, new))
+				newTier := format.Tiers[0]
+				newTier.Tag = new
+				format.Tiers[0] = newTier
 				storage = true
 				tier = true
 			}
@@ -374,21 +389,42 @@ func config(ctx *cli.Context) error {
 			if ctx.IsSet("bucket") || ctx.IsSet("access-key") || ctx.IsSet("secret-key") || ctx.IsSet("session-token") {
 				logger.Fatalf("Current tiered storage does not support multi-bucket mode")
 			}
-			if !ctx.IsSet("storage-class") {
-				logger.Fatalf("missing required flag: --storage-class")
+			targetTierID = uint8(ctx.Int(flag))
+			currentTier, findTier = format.Tiers[targetTierID]
+			if !findTier {
+				currentTier = object.Tier{ID: targetTierID}
 			}
-			newSc = ctx.String("storage-class")
-			newTierID = uint8(ctx.Int(flag))
-			oldTier, findTier = format.Tiers[newTierID]
-			if findTier && oldTier.Sc == newSc {
-				break
+			newTier = object.Tier{
+				ID:  targetTierID,
+				Sc:  currentTier.Sc,
+				Tag: currentTier.Tag,
 			}
-			msg.WriteString(fmt.Sprintf("set tier %d: %s\n", newTierID, newSc))
-			format.Tiers[newTierID] = object.Tier{
-				ID: newTierID,
-				Sc: newSc,
+			var change bool
+			if ctx.IsSet("storage-class") {
+				change = true
+				newTier.Sc = ctx.String("storage-class")
+				if !findTier || currentTier.Sc != newTier.Sc {
+					msg.WriteString(fmt.Sprintf("set tier %d storage-class: %s\n", targetTierID, newTier.Sc))
+					tier = true
+				}
 			}
-			tier = true
+
+			if ctx.IsSet("tag") {
+				change = true
+				newTier.Tag = ctx.String("tag")
+				if !object.ValidateTag(newTier.Tag) {
+					logger.Fatalf("Invalid tag format: %s", newTier.Tag)
+				}
+				if !findTier || currentTier.Tag != newTier.Tag {
+					msg.WriteString(fmt.Sprintf("set tier %d tag: %s\n", targetTierID, newTier.Tag))
+					tier = true
+				}
+			}
+			if change {
+				format.Tiers[targetTierID] = newTier
+			} else {
+				logger.Fatalf("missing required flag: --storage-class or --tag")
+			}
 		}
 	}
 	if msg.Len() == 0 {
@@ -398,12 +434,12 @@ func config(ctx *cli.Context) error {
 
 	if !ctx.Bool("force") {
 		yes := ctx.Bool("yes")
-		if storage || (tier && newSc != "") {
+		if storage || tier {
 			blob, err := createStorage(*format)
 			if err != nil {
 				return err
 			}
-			if err = test(context.WithValue(context.Background(), object.TierKey{}, newTierID), blob); err != nil {
+			if err = test(context.WithValue(context.Background(), object.TierKey{}, targetTierID), blob); err != nil {
 				return err
 			}
 		}
@@ -462,8 +498,15 @@ func config(ctx *cli.Context) error {
 			}
 		}
 		if tier {
-			if findTier && oldTier.Sc != newSc {
-				fmt.Printf("existing tier will be overwritten: %s=>%s\n", oldTier.Sc, newSc)
+			if findTier && (currentTier.Sc != newTier.Sc || currentTier.Tag != newTier.Tag) {
+				fmt.Printf("existing tier will be overwritten: \n")
+				fmt.Printf("tier: %d\n", currentTier.ID)
+				if ctx.IsSet("storage-class") && currentTier.Sc != newTier.Sc {
+					fmt.Printf("storage class: %s => %s\n", currentTier.Sc, newTier.Sc)
+				}
+				if ctx.IsSet("tag") && currentTier.Tag != newTier.Tag {
+					fmt.Printf("tag: %s => %s\n", currentTier.Tag, newTier.Tag)
+				}
 				if !yes && !userConfirmed() {
 					return fmt.Errorf("Aborted.")
 				}

@@ -31,18 +31,18 @@ type withPrefix struct {
 	prefix string
 }
 
-func (s *withPrefix) SetTier(init Tiers) error {
+func (s *withPrefix) InitTiers(init Tiers) error {
 	if o, ok := s.os.(SupportTier); ok {
-		return o.SetTier(init)
+		return o.InitTiers(init)
 	}
 	return notSupported
 }
 
-func (s *withPrefix) GetStorageClass(ctx context.Context) string {
+func (s *withPrefix) GetTier(ctx context.Context) Tier {
 	if o, ok := s.os.(SupportTier); ok {
-		return o.GetStorageClass(ctx)
+		return o.GetTier(ctx)
 	}
-	return ""
+	return Tier{}
 }
 
 // WithPrefix return an object storage that add a prefix to keys.
@@ -88,6 +88,13 @@ func (s *withPrefix) Symlink(oldName, newName string) error {
 	return notSupported
 }
 
+func (s *withPrefix) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+	if w, ok := s.os.(SupportUploadPartStream); ok {
+		return w.UploadPartStream(s.prefix+key, uploadID, num, in)
+	}
+	return nil, notSupported
+}
+
 func (s *withPrefix) Readlink(name string) (string, error) {
 	if w, ok := s.os.(SupportSymlink); ok {
 		return w.Readlink(s.prefix + name)
@@ -107,12 +114,23 @@ func (p *withPrefix) Create(ctx context.Context) error {
 	return p.os.Create(ctx)
 }
 
+type withSys interface {
+	Sys() any
+}
+
 type withFile struct {
 	File
 	key string
 }
 
 func (f *withFile) Key() string { return f.key }
+
+func (f *withFile) Sys() any {
+	if s, ok := f.File.(withSys); ok {
+		return s.Sys()
+	}
+	return nil
+}
 
 type withObj struct {
 	Object

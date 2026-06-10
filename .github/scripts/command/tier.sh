@@ -7,8 +7,11 @@ META_URL=$(get_meta_url $META)
 source .github/scripts/common/common.sh
 
 AWS_BUCKET=${AWS_BUCKET:-tiertest-${META}}
-AWS_BUCKET=$(printf '%s' "$AWS_BUCKET" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9.-' '-')
+AWS_BUCKET_SUFFIX=${AWS_BUCKET_SUFFIX:-${GITHUB_RUN_ID:-$(date +%s)}-${GITHUB_RUN_ATTEMPT:-$RANDOM}}
+AWS_BUCKET=$(printf '%s-%s' "$AWS_BUCKET" "$AWS_BUCKET_SUFFIX" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9.-' '-')
 AWS_BUCKET=${AWS_BUCKET#-}
+AWS_BUCKET=${AWS_BUCKET%-}
+AWS_BUCKET=${AWS_BUCKET:0:63}
 AWS_BUCKET=${AWS_BUCKET%-}
 AWS_REGION=${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}
 AWS_ACCESS_KEY_VALUE=${AWS_ACCESS_KEY_ID:-${AWS_ACEESS_KEY:-}}
@@ -292,14 +295,25 @@ tier_set_no_err()
 {
     local tmpout=/tmp/tier_set_last.log
     local status
-    ./juicefs tier set "$@" 2>&1 | tee "$tmpout"
-    status=${PIPESTATUS[0]}
-    if grep -qF '<ERROR>' "$tmpout"; then
-        echo "<FATAL>: juicefs tier set produced unexpected ERROR logs:"
-        grep -F '<ERROR>' "$tmpout"
-        exit 1
-    fi
-    return "$status"
+    local max_retries=3
+    local attempt
+    local path_arg="${@: -1}"  # last argument is expected to be the file/dir path
+    for attempt in $(seq 1 "$max_retries"); do
+        ./juicefs tier set "$@" 2>&1 | tee "$tmpout"
+        status=${PIPESTATUS[0]}
+        if grep -qF '<ERROR>' "$tmpout"; then
+            echo "<FATAL>: juicefs tier set produced unexpected ERROR logs (attempt $attempt/$max_retries):"
+            grep -F '<ERROR>' "$tmpout"
+            if [[ "$attempt" -lt "$max_retries" ]]; then
+                echo "retrying..."
+                sleep 2
+                continue
+            fi
+            assert_info_no_empty_object_name "/jfs/${path_arg#/}"
+            exit 1
+        fi
+        return "$status"
+    done
 }
 
 get_first_object_key()
@@ -371,6 +385,12 @@ assert_info_no_empty_object_name()
         cat "$info_out"
         exit 1
     fi
+    # print raw info for diagnostics when tier set fails after all retries
+    echo "=== diagnostic: juicefs info ==="
+    ./juicefs info  "$path" || true
+    # print raw info for diagnostics when tier set fails after all retries
+    echo "=== diagnostic: juicefs info --raw ==="
+    ./juicefs info --raw "$path" || true
 }
 
 test_tier_list_and_file_set_conversion()

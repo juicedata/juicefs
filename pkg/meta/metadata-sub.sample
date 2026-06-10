@@ -6,11 +6,13 @@
     "Tiers": {
       "0": {
         "ID": 0,
-        "StorageClass": "default"
+        "StorageClass": "default",
+        "Tag": ""
       },
       "1": {
         "ID": 1,
-        "StorageClass": "STANDARD_IA"
+        "StorageClass": "STANDARD_IA",
+        "Tag": ""
       }
     },
     "Bucket": "/Users/juicefs/.juicefs/local/",
