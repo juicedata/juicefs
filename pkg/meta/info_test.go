@@ -16,7 +16,9 @@
 
 package meta
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestOlderThan(t *testing.T) {
 	v := redisVersion{"2.2.10", 2, 2}
