@@ -171,9 +171,9 @@ var CHARS = []byte("0123456789ABCDEF")
 
 func escape(original string) string {
 	// similar to url.Escape but backward compatible if no '%' in it
-	var escValue = make([]byte, 0, len(original))
+	var escValue []byte
 	for i, r := range original {
-		if r == utf8.RuneError || r < 32 || r == '%' || r == '"' || r == '\\' {
+		if r == utf8.RuneError || r <= 32 || r == '%' || r == '"' || r == '\\' {
 			if escValue == nil {
 				escValue = make([]byte, i, len(original)*2)
 				for j := 0; j < i; j++ {
