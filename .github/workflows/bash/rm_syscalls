@@ -11,11 +11,6 @@ bind05 bind05
 bind06 bind06
 bpf_prog05 bpf_prog05
 cacheflush01 cacheflush01
-chown01_16 chown01_16
-chown02_16 chown02_16
-chown03_16 chown03_16
-chown04_16 chown04_16
-chown05_16 chown05_16
 clock_adjtime01 clock_adjtime01
 clock_adjtime02 clock_adjtime02
 clock_getres01 clock_getres01
@@ -53,11 +48,7 @@ fanotify16 fanotify16
 fanotify17 fanotify17
 fanotify18 fanotify18
 fanotify19 fanotify19
-fchown01_16 fchown01_16
-fchown02_16 fchown02_16
-fchown03_16 fchown03_16
-fchown04_16 fchown04_16
-fchown05_16 fchown05_16
+
 fcntl06 fcntl06
 fcntl06_64 fcntl06_64
 fork01 fork01
@@ -116,9 +107,7 @@ kill10 kill10
 kill11 kill11
 kill12 kill12
 kill13 kill13
-lchown01_16 lchown01_16
-lchown02_16 lchown02_16
-lchown03_16 lchown03_16
+
 mbind02 mbind02
 mbind03 mbind03
 mbind04 mbind04
