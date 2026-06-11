@@ -5370,6 +5370,10 @@ func testUserGroupQuota(t *testing.T, m Meta) {
 		testSustainedInodeQuotaDecrement(t, m, ctx, parent, uid, gid)
 	})
 
+	t.Run("SustainedInodeBeforeQuotaEnabled", func(t *testing.T) {
+		testSustainedInodeBeforeQuotaEnabled(t, m, ctx, parent, uid, gid)
+	})
+
 	cleanupQuotaTest(ctx, m, parent, uid, gid)
 
 }
@@ -5612,6 +5616,97 @@ func testSustainedInodeQuotaDecrement(t *testing.T, m Meta, ctx Context, parent 
 	}
 	if gidAfterDelete != gidBefore {
 		t.Fatalf("group quota inode should return to baseline after sustained delete: before=%d after=%d", gidBefore, gidAfterDelete)
+	}
+
+	m.HandleQuota(ctx, QuotaDel, uidKey, UserQuotaType, nil, false, false, false)
+	m.HandleQuota(ctx, QuotaDel, gidKey, GroupQuotaType, nil, false, false, false)
+}
+
+// testSustainedInodeBeforeQuotaEnabled is a regression test for #7079: when a
+// file is created, opened, and unlinked (becoming a sustained inode) while
+// UserGroupQuota is disabled, and quota is subsequently enabled, the initial
+// usage scan must include the sustained inode so that closing the file later
+// does not decrement UsedInodes below zero.
+func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
+	// Ensure UserGroupQuota is disabled before this test so that the
+	// subsequent HandleQuota call is the one that triggers the scan.
+	format := m.getBase().getFormat()
+	format.UserGroupQuota = false
+	m.getBase().quotaMu.Lock()
+	m.getBase().userQuotas = make(map[uint64]*Quota)
+	m.getBase().groupQuotas = make(map[uint64]*Quota)
+	m.getBase().quotaMu.Unlock()
+
+	uidKey := fmt.Sprintf("%d", uid)
+	gidKey := fmt.Sprintf("%d", gid)
+
+	// Create a file owned by uid/gid while UserGroupQuota is disabled.
+	// Create also opens the file, so an Unlink will make it a sustained inode.
+	ownerCtx := &testContext{Context: context.Background(), uid: uid, gid: gid}
+	var inode Ino
+	var attr Attr
+	if st := m.Create(ownerCtx, parent, "pre_quota_sustained_file", 0644, 0, 0, &inode, &attr); st != 0 {
+		t.Fatalf("Create pre_quota_sustained_file: %s", st)
+	}
+
+	// Unlink the file while it is still open — it becomes a sustained inode.
+	if st := m.Unlink(ctx, parent, "pre_quota_sustained_file"); st != 0 {
+		t.Fatalf("Unlink pre_quota_sustained_file: %s", st)
+	}
+
+	// Enable UserGroupQuota by setting a quota for uid. The first-time enable
+	// triggers ScanUserGroupUsage, which must include the sustained inode.
+	if err := m.HandleQuota(ctx, QuotaSet, uidKey, UserQuotaType, map[string]*Quota{uidKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("Set user quota: %s", err)
+	}
+	// Set group quota (UserGroupQuota already enabled; no new scan needed).
+	if err := m.HandleQuota(ctx, QuotaSet, gidKey, GroupQuotaType, map[string]*Quota{gidKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("Set group quota: %s", err)
+	}
+	m.getBase().loadQuotas()
+
+	getUsage := func(qtype uint32, key string) (int64, int64) {
+		m.getBase().doFlushQuotas()
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, key, qtype, qs, false, false, false); err != nil {
+			t.Fatalf("Get quota %d/%s: %s", qtype, key, err)
+		}
+		q := qs[key]
+		if q == nil {
+			t.Fatalf("quota %d/%s not found", qtype, key)
+		}
+		return q.UsedInodes, q.UsedSpace
+	}
+
+	// The scan should have counted the sustained inode.
+	uidInodesBefore, _ := getUsage(UserQuotaType, uidKey)
+	gidInodesBefore, _ := getUsage(GroupQuotaType, gidKey)
+	if uidInodesBefore <= 0 {
+		t.Fatalf("user quota should include sustained inode after scan: got UsedInodes=%d", uidInodesBefore)
+	}
+	if gidInodesBefore <= 0 {
+		t.Fatalf("group quota should include sustained inode after scan: got UsedInodes=%d", gidInodesBefore)
+	}
+
+	// Close the sustained inode — before the fix this would decrement to negative.
+	if st := m.Close(ctx, inode); st != 0 {
+		t.Fatalf("Close pre_quota_sustained_file: %s", st)
+	}
+
+	// UsedInodes must not be negative after close.
+	uidInodesAfter, uidSpaceAfter := getUsage(UserQuotaType, uidKey)
+	gidInodesAfter, gidSpaceAfter := getUsage(GroupQuotaType, gidKey)
+	if uidInodesAfter < 0 {
+		t.Fatalf("user quota UsedInodes must not be negative after close: got %d (was %d before close)", uidInodesAfter, uidInodesBefore)
+	}
+	if gidInodesAfter < 0 {
+		t.Fatalf("group quota UsedInodes must not be negative after close: got %d (was %d before close)", gidInodesAfter, gidInodesBefore)
+	}
+	if uidSpaceAfter < 0 {
+		t.Fatalf("user quota UsedSpace must not be negative after close: got %d", uidSpaceAfter)
+	}
+	if gidSpaceAfter < 0 {
+		t.Fatalf("group quota UsedSpace must not be negative after close: got %d", gidSpaceAfter)
 	}
 
 	m.HandleQuota(ctx, QuotaDel, uidKey, UserQuotaType, nil, false, false, false)
