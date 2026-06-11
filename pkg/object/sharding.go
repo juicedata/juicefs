@@ -25,6 +25,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type sharded struct {
@@ -225,6 +227,14 @@ func (s *sharded) Restore(ctx context.Context, key string, days int32) error {
 	return s.pick(key).Restore(ctx, key, days)
 }
 
+func (s *sharded) SetLogLevel(level logrus.Level) {
+	for _, store := range s.stores {
+		if w, ok := store.(SetLogLevel); ok {
+			w.SetLogLevel(level)
+		}
+	}
+}
+
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {
 	stores := make([]ObjectStorage, shards)
 	var err error
@@ -243,3 +253,4 @@ func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage
 
 var _ SupportTier = (*sharded)(nil)
 var _ ObjectStorage = (*sharded)(nil)
+var _ SetLogLevel = (*sharded)(nil)

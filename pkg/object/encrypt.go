@@ -36,6 +36,7 @@ import (
 	"github.com/emmansun/gmsm/sm2"
 	"github.com/emmansun/gmsm/sm3"
 	"github.com/emmansun/gmsm/sm4"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -376,5 +377,12 @@ func (e *encrypted) GetTier(ctx context.Context) Tier {
 	return Tier{}
 }
 
+func (e *encrypted) SetLogLevel(level logrus.Level) {
+	if w, ok := e.ObjectStorage.(SetLogLevel); ok {
+		w.SetLogLevel(level)
+	}
+}
+
 var _ ObjectStorage = (*encrypted)(nil)
 var _ SupportTier = (*encrypted)(nil)
+var _ SetLogLevel = (*encrypted)(nil)

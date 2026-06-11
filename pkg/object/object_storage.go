@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/sirupsen/logrus"
 )
 
 var ctx = context.Background()
@@ -50,6 +51,10 @@ type SupportSymlink interface {
 
 type SupportUploadPartStream interface {
 	UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error)
+}
+
+type SetLogLevel interface {
+	SetLogLevel(level logrus.Level)
 }
 
 type File interface {

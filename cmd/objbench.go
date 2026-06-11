@@ -190,6 +190,9 @@ func objbench(ctx *cli.Context) error {
 			logger.Warnf("Set storage tier: %s", err)
 		}
 	}
+	if os, ok := blob.(object.SetLogLevel); ok {
+		os.SetLogLevel(logger.Level)
+	}
 	defer func() {
 		_ = blobOrigin.Delete(ctx.Context, prefix)
 	}()

@@ -42,6 +42,7 @@ import (
 	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const awsDefaultRegion = "us-east-1"
@@ -397,6 +398,14 @@ func (s *s3client) Restore(ctx context.Context, key string, days int32) error {
 		},
 	})
 	return err
+}
+
+func (s *s3client) SetLogLevel(level logrus.Level) {
+	if level >= logrus.DebugLevel {
+		opts := s.s3.Options()
+		opts.ClientLogMode = aws.LogSigning | aws.LogRequest | aws.LogResponse
+		s.s3 = s3.New(opts)
+	}
 }
 
 func autoS3Region(bucketName, accessKey, secretKey, token string) (string, error) {

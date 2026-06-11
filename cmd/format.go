@@ -290,6 +290,9 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 			logger.Warnf("Set storage tier: %s", err)
 		}
 	}
+	if os, ok := blob.(object.SetLogLevel); ok {
+		os.SetLogLevel(logger.Level)
+	}
 	if format.EncryptKey != "" {
 		privKey, err := object.ParsePrivateKeyFromPem([]byte(format.EncryptKey), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
 		if err != nil {

@@ -24,6 +24,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type withPrefix struct {
@@ -93,6 +95,12 @@ func (s *withPrefix) UploadPartStream(key string, uploadID string, num int, in i
 		return w.UploadPartStream(s.prefix+key, uploadID, num, in)
 	}
 	return nil, notSupported
+}
+
+func (s *withPrefix) SetLogLevel(level logrus.Level) {
+	if w, ok := s.os.(SetLogLevel); ok {
+		w.SetLogLevel(level)
+	}
 }
 
 func (s *withPrefix) Readlink(name string) (string, error) {
@@ -272,6 +280,7 @@ func (p *withPrefix) Restore(ctx context.Context, key string, days int32) error 
 
 var _ ObjectStorage = (*withPrefix)(nil)
 var _ SupportTier = (*withPrefix)(nil)
+var _ SetLogLevel = (*withPrefix)(nil)
 
 func IsFileSystem(object ObjectStorage) bool {
 	if o, ok := object.(*withPrefix); ok {

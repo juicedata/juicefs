@@ -392,7 +392,13 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 				user = parts[0]
 				pass = parts[1]
 			}
-			return object.CreateStorage("sftp", uri, user, pass, "")
+			st, err := object.CreateStorage("sftp", uri, user, pass, "")
+			if err == nil {
+				if os, ok := st.(object.SetLogLevel); ok {
+					os.SetLogLevel(logger.Level)
+				}
+			}
+			return st, err
 		}
 	}
 	uri, token := extractToken(uri)
@@ -485,6 +491,9 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		if err := os.InitTiers(object.NewTiers("")); err != nil {
 			logger.Warnf("Set storage tier: %s", err)
 		}
+	}
+	if os, ok := store.(object.SetLogLevel); ok {
+		os.SetLogLevel(logger.Level)
 	}
 	return store, nil
 }
