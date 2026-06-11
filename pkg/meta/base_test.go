@@ -5371,7 +5371,7 @@ func testUserGroupQuota(t *testing.T, m Meta) {
 	})
 
 	t.Run("SustainedInodeBeforeQuotaEnabled", func(t *testing.T) {
-		testSustainedInodeBeforeQuotaEnabled(t, m, ctx, parent)
+		testSustainedInodeBeforeQuotaEnabled(t, m, ctx, parent, uid, gid)
 	})
 
 	cleanupQuotaTest(ctx, m, parent, uid, gid)
@@ -5628,17 +5628,11 @@ func testSustainedInodeQuotaDecrement(t *testing.T, m Meta, ctx Context, parent 
 // usage scan must include the sustained inode so that closing the file later
 // does not decrement usage below zero.
 //
-// It uses a dedicated uid/gid that no other subtest touches, so the scanned
-// usage reflects exactly the one sustained inode. This is what makes the test
-// meaningful: with the shared uid/gid, other live inodes keep usage well above
-// zero, so the "goes negative" regression would be masked and the test would
-// pass with or without the fix. An empty file contributes 1 inode and
-// align4K(0)=4096 bytes, so the assertions can be exact.
-func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, parent Ino) {
-	const (
-		uid uint32 = 1234567
-		gid uint32 = 7654321
-	)
+// The test creates a file with the provided uid/gid, unlinks it while open
+// (making it a sustained inode), then enables quota. The scan must count the
+// sustained inode so that closing it later doesn't decrement usage negative.
+// An empty file contributes 1 inode and align4K(0)=4096 bytes.
+func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
 	uidKey := fmt.Sprintf("%d", uid)
 	gidKey := fmt.Sprintf("%d", gid)
 	const emptyFileSpace = int64(1 << 12) // align4K(0)
