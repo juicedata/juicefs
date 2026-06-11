@@ -415,8 +415,8 @@ func (j *juiceFS) Limits() object.Limits {
 
 func (j *juiceFS) CreateMultipartUpload(_ context.Context, key string) (*object.MultipartUpload, error) {
 	return &object.MultipartUpload{
-		MinPartSize: 4 << 30,
-		MaxCount:    10000000,
+		MinPartSize: j.Limits().MinPartSize,
+		MaxCount:    j.Limits().MaxPartCount,
 		UploadID:    uuid.NewString(),
 	}, nil
 }
