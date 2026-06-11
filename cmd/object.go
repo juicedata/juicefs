@@ -414,6 +414,9 @@ func (j *juiceFS) Limits() object.Limits {
 }
 
 func (j *juiceFS) CreateMultipartUpload(_ context.Context, key string) (*object.MultipartUpload, error) {
+	if vfs.IsSpecialName(key) {
+		return nil, fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
+	}
 	return &object.MultipartUpload{
 		MinPartSize: j.Limits().MinPartSize,
 		MaxCount:    j.Limits().MaxPartCount,
