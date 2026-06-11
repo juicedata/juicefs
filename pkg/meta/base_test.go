@@ -5371,7 +5371,7 @@ func testUserGroupQuota(t *testing.T, m Meta) {
 	})
 
 	t.Run("SustainedInodeBeforeQuotaEnabled", func(t *testing.T) {
-		testSustainedInodeBeforeQuotaEnabled(t, m, ctx, parent, uid, gid)
+		testSustainedInodeBeforeQuotaEnabled(t, m, ctx, parent)
 	})
 
 	cleanupQuotaTest(ctx, m, parent, uid, gid)
@@ -5626,8 +5626,23 @@ func testSustainedInodeQuotaDecrement(t *testing.T, m Meta, ctx Context, parent 
 // file is created, opened, and unlinked (becoming a sustained inode) while
 // UserGroupQuota is disabled, and quota is subsequently enabled, the initial
 // usage scan must include the sustained inode so that closing the file later
-// does not decrement UsedInodes below zero.
-func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
+// does not decrement usage below zero.
+//
+// It uses a dedicated uid/gid that no other subtest touches, so the scanned
+// usage reflects exactly the one sustained inode. This is what makes the test
+// meaningful: with the shared uid/gid, other live inodes keep usage well above
+// zero, so the "goes negative" regression would be masked and the test would
+// pass with or without the fix. An empty file contributes 1 inode and
+// align4K(0)=4096 bytes, so the assertions can be exact.
+func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, parent Ino) {
+	const (
+		uid uint32 = 1234567
+		gid uint32 = 7654321
+	)
+	uidKey := fmt.Sprintf("%d", uid)
+	gidKey := fmt.Sprintf("%d", gid)
+	const emptyFileSpace = int64(1 << 12) // align4K(0)
+
 	// Ensure UserGroupQuota is disabled before this test so that the
 	// subsequent HandleQuota call is the one that triggers the scan.
 	format := m.getBase().getFormat()
@@ -5637,11 +5652,9 @@ func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, par
 	m.getBase().groupQuotas = make(map[uint64]*Quota)
 	m.getBase().quotaMu.Unlock()
 
-	uidKey := fmt.Sprintf("%d", uid)
-	gidKey := fmt.Sprintf("%d", gid)
-
-	// Create a file owned by uid/gid while UserGroupQuota is disabled.
-	// Create also opens the file, so an Unlink will make it a sustained inode.
+	// Create a file owned by the dedicated uid/gid while UserGroupQuota is
+	// disabled. Create also opens the file, so a following Unlink turns it into
+	// a sustained inode.
 	ownerCtx := &testContext{Context: context.Background(), uid: uid, gid: gid}
 	var inode Ino
 	var attr Attr
@@ -5654,8 +5667,9 @@ func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, par
 		t.Fatalf("Unlink pre_quota_sustained_file: %s", st)
 	}
 
-	// Enable UserGroupQuota by setting a quota for uid. The first-time enable
-	// triggers ScanUserGroupUsage, which must include the sustained inode.
+	// Enable UserGroupQuota by setting a quota for the dedicated uid. Because no
+	// quota exists for it yet, this first-time enable triggers
+	// ScanUserGroupUsage, which must count the sustained inode.
 	if err := m.HandleQuota(ctx, QuotaSet, uidKey, UserQuotaType, map[string]*Quota{uidKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
 		t.Fatalf("Set user quota: %s", err)
 	}
@@ -5678,35 +5692,28 @@ func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, par
 		return q.UsedInodes, q.UsedSpace
 	}
 
-	// The scan should have counted the sustained inode.
-	uidInodesBefore, _ := getUsage(UserQuotaType, uidKey)
-	gidInodesBefore, _ := getUsage(GroupQuotaType, gidKey)
-	if uidInodesBefore <= 0 {
-		t.Fatalf("user quota should include sustained inode after scan: got UsedInodes=%d", uidInodesBefore)
+	// The scan must have counted exactly the one sustained inode. Any value
+	// other than 1 inode / one empty-file block means the sustained inode was
+	// missed (the #7079 regression) or counted incorrectly.
+	if inodes, space := getUsage(UserQuotaType, uidKey); inodes != 1 || space != emptyFileSpace {
+		t.Fatalf("user quota after scan should be 1 inode / %d bytes: got UsedInodes=%d UsedSpace=%d", emptyFileSpace, inodes, space)
 	}
-	if gidInodesBefore <= 0 {
-		t.Fatalf("group quota should include sustained inode after scan: got UsedInodes=%d", gidInodesBefore)
+	if inodes, space := getUsage(GroupQuotaType, gidKey); inodes != 1 || space != emptyFileSpace {
+		t.Fatalf("group quota after scan should be 1 inode / %d bytes: got UsedInodes=%d UsedSpace=%d", emptyFileSpace, inodes, space)
 	}
 
-	// Close the sustained inode — before the fix this would decrement to negative.
+	// Close the sustained inode — this releases it. Before the fix the scan
+	// missed it, so this decrement drove usage negative.
 	if st := m.Close(ctx, inode); st != 0 {
 		t.Fatalf("Close pre_quota_sustained_file: %s", st)
 	}
 
-	// UsedInodes must not be negative after close.
-	uidInodesAfter, uidSpaceAfter := getUsage(UserQuotaType, uidKey)
-	gidInodesAfter, gidSpaceAfter := getUsage(GroupQuotaType, gidKey)
-	if uidInodesAfter < 0 {
-		t.Fatalf("user quota UsedInodes must not be negative after close: got %d (was %d before close)", uidInodesAfter, uidInodesBefore)
+	// Usage must return exactly to zero, never negative.
+	if inodes, space := getUsage(UserQuotaType, uidKey); inodes != 0 || space != 0 {
+		t.Fatalf("user quota after close should be empty: got UsedInodes=%d UsedSpace=%d, want 0/0", inodes, space)
 	}
-	if gidInodesAfter < 0 {
-		t.Fatalf("group quota UsedInodes must not be negative after close: got %d (was %d before close)", gidInodesAfter, gidInodesBefore)
-	}
-	if uidSpaceAfter < 0 {
-		t.Fatalf("user quota UsedSpace must not be negative after close: got %d", uidSpaceAfter)
-	}
-	if gidSpaceAfter < 0 {
-		t.Fatalf("group quota UsedSpace must not be negative after close: got %d", gidSpaceAfter)
+	if inodes, space := getUsage(GroupQuotaType, gidKey); inodes != 0 || space != 0 {
+		t.Fatalf("group quota after close should be empty: got UsedInodes=%d UsedSpace=%d, want 0/0", inodes, space)
 	}
 
 	m.HandleQuota(ctx, QuotaDel, uidKey, UserQuotaType, nil, false, false, false)
