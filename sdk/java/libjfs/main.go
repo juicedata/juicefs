@@ -363,6 +363,7 @@ type javaConf struct {
 	MemorySize          string `json:"memorySize"`
 	Prefetch            int    `json:"prefetch"`
 	Readahead           string `json:"readahead"`
+	InitialReadahead    string `json:"initialReadahead"`
 	UploadLimit         string `json:"uploadLimit"`
 	DownloadLimit       string `json:"downloadLimit"`
 	MaxUploads          int    `json:"maxUploads"`
@@ -696,6 +697,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			PutTimeout:        utils.Duration(jConf.PutTimeout),
 			BufferSize:        utils.ParseBytesStr("memory-size", jConf.MemorySize, 'M'),
 			Readahead:         int(utils.ParseBytesStr("max-readahead", jConf.Readahead, 'M')),
+			InitReadahead:     int(utils.ParseBytesStr("initial-readahead", jConf.InitialReadahead, 'M')),
 		}
 		if chunkConf.UploadLimit == 0 {
 			chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
