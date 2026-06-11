@@ -858,12 +858,9 @@ func (m *redisMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 
 func (m *redisMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
 	var inoKeys []string
-	if err := m.scan(ctx, "session*", func(keys []string) error {
+	if err := m.scan(ctx, "session[0-9]*", func(keys []string) error {
 		for i := 0; i < len(keys); i += 1 {
 			key := keys[i]
-			if key == "sessions" {
-				continue
-			}
 			inodes, err := m.rdb.SMembers(ctx, key).Result()
 			if err != nil {
 				logger.Warnf("SMembers %s: %s", key, err)

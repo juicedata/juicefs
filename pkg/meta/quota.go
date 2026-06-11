@@ -663,7 +663,7 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	if err != nil {
 		return err
 	}
-	if !created {
+	if !created && !scan {
 		return nil
 	}
 	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, scan)

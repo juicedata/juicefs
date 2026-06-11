@@ -5622,23 +5622,16 @@ func testSustainedInodeQuotaDecrement(t *testing.T, m Meta, ctx Context, parent 
 	m.HandleQuota(ctx, QuotaDel, gidKey, GroupQuotaType, nil, false, false, false)
 }
 
-// testSustainedInodeBeforeQuotaEnabled is a regression test for #7079: when a
-// file is created, opened, and unlinked (becoming a sustained inode) while
-// UserGroupQuota is disabled, and quota is subsequently enabled, the initial
-// usage scan must include the sustained inode so that closing the file later
-// does not decrement usage below zero.
-//
-// The test creates a file with the provided uid/gid, unlinks it while open
-// (making it a sustained inode), then enables quota. The scan must count the
-// sustained inode so that closing it later doesn't decrement usage negative.
-// An empty file contributes 1 inode and align4K(0)=4096 bytes.
+// testSustainedInodeBeforeQuotaEnabled is a regression test for #7079.
+// A sustained inode created before UserGroupQuota is enabled must be counted by
+// the initial scan, otherwise Close may drive usage negative.
 func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
-	uidKey := fmt.Sprintf("%d", uid)
-	gidKey := fmt.Sprintf("%d", gid)
+	quotaUID := uint32(3001)
+	quotaGID := uint32(4001)
+	uidKey := fmt.Sprintf("%d", quotaUID)
+	gidKey := fmt.Sprintf("%d", quotaGID)
 	const emptyFileSpace = int64(1 << 12) // align4K(0)
 
-	// Ensure UserGroupQuota is disabled before this test so that the
-	// subsequent HandleQuota call is the one that triggers the scan.
 	format := m.getBase().getFormat()
 	format.UserGroupQuota = false
 	m.getBase().quotaMu.Lock()
@@ -5646,28 +5639,22 @@ func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, par
 	m.getBase().groupQuotas = make(map[uint64]*Quota)
 	m.getBase().quotaMu.Unlock()
 
-	// Create a file owned by the dedicated uid/gid while UserGroupQuota is
-	// disabled. Create also opens the file, so a following Unlink turns it into
-	// a sustained inode.
-	ownerCtx := &testContext{Context: context.Background(), uid: uid, gid: gid}
 	var inode Ino
 	var attr Attr
-	if st := m.Create(ownerCtx, parent, "pre_quota_sustained_file", 0644, 0, 0, &inode, &attr); st != 0 {
+	if st := m.Create(ctx, parent, "pre_quota_sustained_file", 0644, 0, 0, &inode, &attr); st != 0 {
 		t.Fatalf("Create pre_quota_sustained_file: %s", st)
 	}
+	if st := m.SetAttr(ctx, inode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: quotaUID, Gid: quotaGID}); st != 0 {
+		t.Fatalf("SetAttr pre_quota_sustained_file owner: %s", st)
+	}
 
-	// Unlink the file while it is still open — it becomes a sustained inode.
-	if st := m.Unlink(ctx, parent, "pre_quota_sustained_file"); st != 0 {
+	if st := m.Unlink(ctx, parent, "pre_quota_sustained_file", true); st != 0 {
 		t.Fatalf("Unlink pre_quota_sustained_file: %s", st)
 	}
 
-	// Enable UserGroupQuota by setting a quota for the dedicated uid. Because no
-	// quota exists for it yet, this first-time enable triggers
-	// ScanUserGroupUsage, which must count the sustained inode.
 	if err := m.HandleQuota(ctx, QuotaSet, uidKey, UserQuotaType, map[string]*Quota{uidKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
 		t.Fatalf("Set user quota: %s", err)
 	}
-	// Set group quota (UserGroupQuota already enabled; no new scan needed).
 	if err := m.HandleQuota(ctx, QuotaSet, gidKey, GroupQuotaType, map[string]*Quota{gidKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
 		t.Fatalf("Set group quota: %s", err)
 	}
@@ -5686,9 +5673,7 @@ func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, par
 		return q.UsedInodes, q.UsedSpace
 	}
 
-	// The scan must have counted exactly the one sustained inode. Any value
-	// other than 1 inode / one empty-file block means the sustained inode was
-	// missed (the #7079 regression) or counted incorrectly.
+	// Scan result should include the one sustained inode.
 	if inodes, space := getUsage(UserQuotaType, uidKey); inodes != 1 || space != emptyFileSpace {
 		t.Fatalf("user quota after scan should be 1 inode / %d bytes: got UsedInodes=%d UsedSpace=%d", emptyFileSpace, inodes, space)
 	}
@@ -5696,13 +5681,10 @@ func testSustainedInodeBeforeQuotaEnabled(t *testing.T, m Meta, ctx Context, par
 		t.Fatalf("group quota after scan should be 1 inode / %d bytes: got UsedInodes=%d UsedSpace=%d", emptyFileSpace, inodes, space)
 	}
 
-	// Close the sustained inode — this releases it. Before the fix the scan
-	// missed it, so this decrement drove usage negative.
 	if st := m.Close(ctx, inode); st != 0 {
 		t.Fatalf("Close pre_quota_sustained_file: %s", st)
 	}
 
-	// Usage must return exactly to zero, never negative.
 	if inodes, space := getUsage(UserQuotaType, uidKey); inodes != 0 || space != 0 {
 		t.Fatalf("user quota after close should be empty: got UsedInodes=%d UsedSpace=%d, want 0/0", inodes, space)
 	}
