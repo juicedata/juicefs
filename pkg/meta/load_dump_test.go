@@ -38,8 +38,9 @@ const subSampleFile = "metadata-sub.sample"
 
 func TestEscape(t *testing.T) {
 	cases := []struct {
-		value            []rune
-		gbkStart, gbkEnd int
+		value                []rune
+		gbkStart, gbkEnd     int
+		expectedEscapedValue string
 	}{
 		{value: []rune("%1F果汁数据科技有限公司%2B"), gbkStart: 0, gbkEnd: 0},
 		{value: []rune("果汁数据科技有限公司%1F"), gbkStart: 0, gbkEnd: 1},
@@ -51,6 +52,7 @@ func TestEscape(t *testing.T) {
 		{value: []rune("%果汁数据科%技有限公司%"), gbkStart: 1, gbkEnd: 4},
 		{value: []rune("\"果汁数据科\"技有限公司%"), gbkStart: 1, gbkEnd: 4},
 		{value: []rune("\\果汁数\\据科技有限公司"), gbkStart: 1, gbkEnd: 4},
+		{value: []rune("file name with spaces"), expectedEscapedValue: "file%20name%20with%20spaces"},
 	}
 	for _, c := range cases {
 		var v []byte
@@ -66,6 +68,9 @@ func TestEscape(t *testing.T) {
 		v = append(v, []byte(string(suffix))...)
 		s := escape(string(v))
 		t.Log("escape value: ", s)
+		if c.expectedEscapedValue != "" && s != c.expectedEscapedValue {
+			t.Fatalf("expected escaped value %q, but got %q", c.expectedEscapedValue, s)
+		}
 		r := unescape(s)
 		if !bytes.Equal(r, v) {
 			t.Fatalf("expected %v, but got %v", v, r)
