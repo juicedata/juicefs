@@ -257,7 +257,7 @@ func newBakSegment(val proto.Message) *BakSegment {
 			s.typ = uint32(segTypeAcl)
 		} else if v.Xattrs != nil {
 			s.typ = uint32(segTypeXattr)
-		} else if v.Quotas != nil {
+		} else if v.Quotas != nil || v.UserQuotas != nil || v.GroupQuotas != nil {
 			s.typ = uint32(segTypeQuota)
 		} else if v.Dirstats != nil {
 			s.typ = uint32(segTypeStat)
@@ -312,7 +312,7 @@ func (s *BakSegment) num() uint64 {
 		case segTypeStat:
 			return uint64(len(b.Dirstats))
 		case segTypeQuota:
-			return uint64(len(b.Quotas))
+			return uint64(len(b.Quotas) + len(b.UserQuotas) + len(b.GroupQuotas))
 		case segTypeParent:
 			return uint64(len(b.Parents))
 		case segTypeChangeLog:

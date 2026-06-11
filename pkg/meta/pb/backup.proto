@@ -111,6 +111,8 @@ message Batch {
   repeated Acl acls = 12;
   repeated Counter counters = 13;
   repeated ChangeLog changelogs = 14;
+  repeated Quota userQuotas = 15;
+  repeated Quota groupQuotas = 16;
 }
 
 message Footer {
