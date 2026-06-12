@@ -399,17 +399,21 @@ func (m *redisMeta) dumpQuotas(ctx Context, quotas *[]*pb.Quota, qtype uint32) e
 }
 
 func (m *redisMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
-	quotas := make([]*pb.Quota, 0, 128)
-	if err := m.dumpQuotas(ctx, &quotas, DirQuotaType); err != nil {
+	var dirQuotas, userQuotas, groupQuotas []*pb.Quota
+	if err := m.dumpQuotas(ctx, &dirQuotas, DirQuotaType); err != nil {
 		return err
 	}
-	if err := m.dumpQuotas(ctx, &quotas, UserQuotaType); err != nil {
+	if err := m.dumpQuotas(ctx, &userQuotas, UserQuotaType); err != nil {
 		return err
 	}
-	if err := m.dumpQuotas(ctx, &quotas, GroupQuotaType); err != nil {
+	if err := m.dumpQuotas(ctx, &groupQuotas, GroupQuotaType); err != nil {
 		return err
 	}
-	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Quotas: quotas}})
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{
+		Quotas:      dirQuotas,
+		UserQuotas:  userQuotas,
+		GroupQuotas: groupQuotas,
+	}})
 }
 
 func (m *redisMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
@@ -906,21 +910,38 @@ func (m *redisMeta) loadXattrs(ctx Context, msg proto.Message) error {
 }
 
 func (m *redisMeta) loadQuota(ctx Context, msg proto.Message) error {
+	batch := msg.(*pb.Batch)
 	pipe := m.rdb.Pipeline()
-	for _, pq := range msg.(*pb.Batch).Quotas {
-		quotaKeys, err := m.getQuotaKeys(pq.Type)
+
+	storeQuota := func(pq *pb.Quota, qtype uint32) error {
+		quotaKeys, err := m.getQuotaKeys(qtype)
 		if err != nil {
 			logger.Warnf("%v", err)
-			continue
+			return nil
 		}
 		idKey := strconv.FormatUint(pq.Key, 10)
 		pipe.HSet(ctx, quotaKeys.quotaKey, idKey, m.packQuota(pq.MaxSpace, pq.MaxInodes))
 		pipe.HSet(ctx, quotaKeys.usedInodesKey, idKey, pq.UsedInodes)
 		pipe.HSet(ctx, quotaKeys.usedSpaceKey, idKey, pq.UsedSpace)
 		if pipe.Len() >= redisPipeLimit {
-			if err := execPipe(ctx, pipe); err != nil {
-				return err
-			}
+			return execPipe(ctx, pipe)
+		}
+		return nil
+	}
+
+	for _, pq := range batch.Quotas {
+		if err := storeQuota(pq, pq.Type); err != nil {
+			return err
+		}
+	}
+	for _, pq := range batch.UserQuotas {
+		if err := storeQuota(pq, uint32(UserQuotaType)); err != nil {
+			return err
+		}
+	}
+	for _, pq := range batch.GroupQuotas {
+		if err := storeQuota(pq, uint32(GroupQuotaType)); err != nil {
+			return err
 		}
 	}
 	return execPipe(ctx, pipe)
