@@ -444,6 +444,7 @@ func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 	}
 	for _, q := range dirRows {
 		dirQuotas = append(dirQuotas, &pb.Quota{
+			Type:       uint32(DirQuotaType),
 			Key:        uint64(q.Inode),
 			MaxSpace:   q.MaxSpace,
 			MaxInodes:  q.MaxInodes,
@@ -462,6 +463,7 @@ func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 		}
 		for _, q := range rows {
 			pq := &pb.Quota{
+				Type:       uint32(qtype),
 				Key:        q.Qkey,
 				MaxSpace:   q.MaxSpace,
 				MaxInodes:  q.MaxInodes,
