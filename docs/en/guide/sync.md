@@ -319,6 +319,95 @@ parallel-ssh -h hosts.txt -i juicefs mount -d redis://10.10.0.8:6379/1 /jfs-dst 
 juicefs sync --worker host1,host2 /jfs-src /jfs-dst
 ```
 
+### Global traffic control {#global-traffic-control}
+
+`--bwlimit` caps the bandwidth of a single `juicefs sync` process. When you run multiple sync processes in parallel—especially with [distributed synchronization](#distributed-sync)—each process enforces its own local limit independently, so the aggregate bandwidth across all processes can greatly exceed the intended cap.
+
+`--traffic-control-url` solves this by pointing every sync process at a central HTTP server that acts as a shared token-bucket. All processes request bandwidth tokens from the server before transferring data, ensuring that the total throughput across all running instances never exceeds the server-configured rate.
+
+**HTTP API contract**
+
+The sync client and your traffic-control server communicate via a simple JSON-over-HTTP protocol:
+
+| Direction | Method | Path | Body | Description |
+|-----------|--------|------|------|-------------|
+| Request tokens | POST | `<url>` | `{"bytes": N}` | Ask for N bytes of bandwidth. N > 0. |
+| Return unused tokens | POST | `<url>` | `{"bytes": -N}` | Return N bytes that will not be used. N < 0. |
+
+**Response** (JSON):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `granted` | int64 | Bytes actually granted (equal to requested N for a blocking server). |
+| `expired` | int64 | Token validity in **milliseconds**. The client returns unused tokens before this deadline. |
+
+The client blocks on the POST until the server responds, so the server's internal rate limiter (e.g. a token bucket) is what enforces the global cap.
+
+**Reference server implementation**
+
+The following is a minimal Go server that enforces a 3 MB/s average rate with a 10 MB burst using [`github.com/juju/ratelimit`](https://github.com/juju/ratelimit):
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "io"
+    "log"
+    "net/http"
+
+    "github.com/juju/ratelimit"
+)
+
+var limiter *ratelimit.Bucket
+
+type req struct {
+    // Positive: request tokens. Negative: return unused tokens.
+    Bytes int64 `json:"bytes"`
+}
+type resp struct {
+    Granted int64 `json:"granted"` // bytes granted
+    Expired int64 `json:"expired"` // token validity in milliseconds
+}
+
+func tokenHandler(w http.ResponseWriter, r *http.Request) {
+    body, _ := io.ReadAll(r.Body)
+    var in req
+    json.Unmarshal(body, &in)
+    if in.Bytes > 0 {
+        limiter.Wait(in.Bytes) // blocks until tokens are available
+    } else {
+        limiter.Put(-in.Bytes) // return unused tokens
+    }
+    out, _ := json.Marshal(resp{Granted: in.Bytes, Expired: 1000})
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(out)
+}
+
+func main() {
+    // 3 MB/s average rate, 10 MB burst
+    limiter = ratelimit.NewBucketWithRate(3<<20, 10<<20)
+    http.HandleFunc("/token", tokenHandler)
+    fmt.Println("Starting traffic control server on :8080")
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+**Usage**
+
+Start the server on a host reachable by all sync processes, then pass its token endpoint to every `juicefs sync` call:
+
+```shell
+# Run the traffic control server (once, on any accessible host)
+go run traffic_control_server.go
+
+# Each sync process uses the same URL to share a global bandwidth cap
+juicefs sync --traffic-control-url http://10.0.0.1:8080/token s3://src/ s3://dst/
+```
+
+`--bwlimit` and `--traffic-control-url` can be used together: `--bwlimit` enforces a per-process ceiling while `--traffic-control-url` enforces the global ceiling.
+
 ## Observation {#observation}
 
 When using `sync` to transfer large files, the progress bar might move slowly or get stuck. If this happens, you can observe the progress using other methods.
