@@ -177,8 +177,22 @@ func (c *badgerClient) config(key string) interface{} {
 	return nil
 }
 
+// simpleTxn runs f in a read-only transaction: reads skip conflict
+// tracking, and writes are rejected with badger.ErrReadOnlyTxn.
 func (c *badgerClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
-	return c.txn(ctx, f, retry)
+	tx := &badgerTxn{c.client.NewTransaction(false), c}
+	defer tx.t.Discard()
+	defer func() {
+		if r := recover(); r != nil {
+			fe, ok := r.(error)
+			if ok {
+				err = fe
+			} else {
+				panic(r)
+			}
+		}
+	}()
+	return f(&kvTxn{tx, retry})
 }
 
 func (c *badgerClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
