@@ -329,6 +329,93 @@ parallel-ssh -h hosts.txt -i juicefs mount -d redis://10.10.0.8:6379/1 /jfs-dst 
 juicefs sync --worker host1,host2 /jfs-src /jfs-dst
 ```
 
+### 全局流量控制 {#global-traffic-control}
+
+`--bwlimit` 只对单个 `juicefs sync` 进程生效。当多个 sync 进程并发运行（例如使用[分布式同步](#distributed-sync)）时，每个进程各自独立执行限速，所有进程的总带宽之和可能远远超出预期上限。
+
+`--traffic-control-url` 解决了这一问题：将所有 sync 进程都指向同一个中央流量控制 HTTP 服务，每个进程在传输数据前向该服务请求令牌，从而保证所有实例的**总吞吐量**始终不超过服务端配置的速率上限。
+
+### HTTP API 协议
+
+sync 客户端与流量控制服务之间使用简单的 JSON over HTTP 协议通信：
+
+| 方向 | 方法 | 路径 | 请求体 | 说明 |
+|------|------|------|--------|------|
+| 申请令牌 | POST | `<url>` | `{"bytes": N}` | 请求 N 字节的带宽，N > 0 |
+| 归还未用令牌 | POST | `<url>` | `{"bytes": -N}` | 将 N 字节未使用的令牌归还服务端，N < 0 |
+
+**响应体**（JSON）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `granted` | int64 | 实际授予的字节数（阻塞式服务端等于请求量） |
+| `expired` | int64 | 令牌有效期，单位**毫秒**，客户端会在到期前归还未用令牌 |
+
+客户端会阻塞在 POST 请求直到服务端响应，因此服务端内部的令牌桶（或其他限速逻辑）即为全局限速的执行者。
+
+### 参考服务端实现
+
+以下是一个最简 Go 服务端示例，使用 [`github.com/juju/ratelimit`](https://github.com/juju/ratelimit) 实现平均 3 MB/s、突发 10 MB 的全局限速：
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "io"
+    "log"
+    "net/http"
+
+    "github.com/juju/ratelimit"
+)
+
+var limiter *ratelimit.Bucket
+
+type req struct {
+    // 正数：申请令牌；负数：归还未用令牌
+    Bytes int64 `json:"bytes"`
+}
+type resp struct {
+    Granted int64 `json:"granted"` // 授予字节数
+    Expired int64 `json:"expired"` // 令牌有效期（毫秒）
+}
+
+func tokenHandler(w http.ResponseWriter, r *http.Request) {
+    body, _ := io.ReadAll(r.Body)
+    var in req
+    json.Unmarshal(body, &in)
+    if in.Bytes > 0 {
+        limiter.Wait(in.Bytes) // 阻塞直到令牌可用
+    }
+    out, _ := json.Marshal(resp{Granted: in.Bytes, Expired: 1000})
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(out)
+}
+
+func main() {
+    // 平均 3 MB/s，突发上限 10 MB
+    limiter = ratelimit.NewBucketWithRate(3<<20, 10<<20)
+    http.HandleFunc("/token", tokenHandler)
+    fmt.Println("流量控制服务已启动，监听 :8080")
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+### 使用方法
+
+在所有 sync 进程可以访问到的主机上启动服务端，然后在每次 `juicefs sync` 调用时传入令牌端点地址：
+
+```shell
+# 在任意可访问的主机上启动流量控制服务（只需启动一次）
+go run traffic_control_server.go
+
+# 每个 sync 进程使用相同的 URL，共享全局带宽上限
+juicefs sync --traffic-control-url http://10.0.0.1:8080/token s3://src/ s3://dst/
+```
+
+`--bwlimit` 与 `--traffic-control-url` 可以同时使用：`--bwlimit` 为单个进程设置上限，`--traffic-control-url` 则在所有进程之间执行全局上限。
+
 ## 观测和监控 {#observation}
 
 简单来说，用 `sync` 命令拷贝大文件时，进度条可能会迟迟不更新，如果担心命令未能正常工作，可以用其他手段对传输情况进行观测。
