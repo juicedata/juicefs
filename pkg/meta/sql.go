@@ -4299,76 +4299,126 @@ func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 	return quota, err
 }
 
-func updateQuotaFields(quota *Quota, exist bool, maxSpace, maxInodes *int64, usedSpace, usedInodes *int64) []string {
-	updateColumns := make([]string, 0, 4)
-	if quota.MaxSpace >= 0 || !exist {
-		*maxSpace = quota.MaxSpace
-		updateColumns = append(updateColumns, "max_space")
+// buildQuotaUpsertSQL builds an UPSERT SQL for quota tables.
+// table: bare table name (e.g. "dir_quota"), conflictCols: conflict key columns,
+// insertCols: all columns in INSERT, updateCols: columns to conditionally update.
+func (m *dbMeta) buildQuotaUpsertSQL(table, conflictCols string, insertCols, updateCols []string) string {
+	prefixedTable := m.tablePrefix + table
+	placeholders := strings.Repeat("?,", len(insertCols)-1) + "?"
+
+	driver := m.Name()
+	var setClauses []string
+	for _, col := range updateCols {
+		if driver == "postgres" {
+			setClauses = append(setClauses,
+				fmt.Sprintf("%s = CASE WHEN ?::bigint >= 0 THEN ?::bigint ELSE %s.%s END", col, prefixedTable, col))
+		} else {
+			setClauses = append(setClauses,
+				fmt.Sprintf("%s = CASE WHEN ? >= 0 THEN ? ELSE %s.%s END", col, prefixedTable, col))
+		}
 	}
-	if quota.MaxInodes >= 0 || !exist {
-		*maxInodes = quota.MaxInodes
-		updateColumns = append(updateColumns, "max_inodes")
-	}
-	if quota.UsedSpace >= 0 {
-		*usedSpace = quota.UsedSpace
-		updateColumns = append(updateColumns, "used_space")
-	} else if !exist {
-		*usedSpace = 0
-		updateColumns = append(updateColumns, "used_space")
-	}
-	if quota.UsedInodes >= 0 {
-		*usedInodes = quota.UsedInodes
-		updateColumns = append(updateColumns, "used_inodes")
-	} else if !exist {
-		*usedInodes = 0
-		updateColumns = append(updateColumns, "used_inodes")
+	setPart := strings.Join(setClauses, ", ")
+
+	var conflictClause string
+	if driver == "sqlite3" || driver == "postgres" {
+		conflictClause = fmt.Sprintf("ON CONFLICT (%s) DO UPDATE SET", conflictCols)
+	} else {
+		conflictClause = "ON DUPLICATE KEY UPDATE"
 	}
 
-	return updateColumns
+	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) %s %s",
+		prefixedTable,
+		strings.Join(insertCols, ", "),
+		placeholders,
+		conflictClause,
+		setPart)
+}
+
+// upsertQuota executes an UPSERT for a quota row and returns whether a new row was created.
+func (m *dbMeta) upsertQuota(s *xorm.Session, table, conflictCols string,
+	insertCols []string, insertArgs []interface{}, quota *Quota) (bool, error) {
+	updateCols := []string{"max_space", "max_inodes", "used_space", "used_inodes"}
+	upsertSQL := m.buildQuotaUpsertSQL(table, conflictCols, insertCols, updateCols)
+	updateArgs := []interface{}{
+		quota.MaxSpace, quota.MaxSpace,
+		quota.MaxInodes, quota.MaxInodes,
+		quota.UsedSpace, quota.UsedSpace,
+		quota.UsedInodes, quota.UsedInodes,
+	}
+	allArgs := make([]interface{}, 0, 1+len(insertArgs)+len(updateArgs))
+	allArgs = append(allArgs, upsertSQL)
+	allArgs = append(allArgs, insertArgs...)
+	allArgs = append(allArgs, updateArgs...)
+	r, e := s.Exec(allArgs...)
+	if e != nil {
+		return false, e
+	}
+	n, _ := r.RowsAffected()
+	return n == 1, e
 }
 
 func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
 	var created bool
+	insertUsedSpace := quota.UsedSpace
+	if insertUsedSpace < 0 {
+		insertUsedSpace = 0
+	}
+	insertUsedInodes := quota.UsedInodes
+	if insertUsedInodes < 0 {
+		insertUsedInodes = 0
+	}
 	err := m.txn(func(s *xorm.Session) error {
-		if qtype == DirQuotaType {
-			origin := &dirQuota{Inode: Ino(key)}
-			exist, e := s.ForUpdate().Get(origin)
-			if e != nil {
-				return e
-			}
-			created = !exist
-			updateColumns := updateQuotaFields(quota, exist, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
-			if exist {
-				_, e = s.Cols(updateColumns...).Where("inode = ?", Ino(key)).Update(origin)
-			} else {
-				e = mustInsert(s, origin)
-			}
-			if e == nil {
-				m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, origin.MaxSpace, origin.MaxInodes)
-			}
-			return e
-		} else if qtype == UserQuotaType || qtype == GroupQuotaType {
-			origin := &userGroupQuota{Qtype: qtype, Qkey: key}
-			exist, e := s.ForUpdate().MustCols("qkey").Get(origin)
-			if e != nil {
-				return e
-			}
-			created = !exist
-			updateColumns := updateQuotaFields(quota, exist, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
-			if exist {
-				_, e = s.Cols(updateColumns...).Where("qtype = ? AND qkey = ?", qtype, key).Update(origin)
-			} else {
-				e = mustInsert(s, origin)
-			}
-			if e == nil {
-				m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, origin.MaxSpace, origin.MaxInodes)
-			}
-			return e
-		} else {
+		var table, conflictCols string
+		var insertCols []string
+		var insertArgs []interface{}
+
+		switch qtype {
+		case DirQuotaType:
+			table = "dir_quota"
+			conflictCols = "inode"
+			insertCols = []string{"inode", "max_space", "max_inodes", "used_space", "used_inodes"}
+			insertArgs = []interface{}{Ino(key), quota.MaxSpace, quota.MaxInodes, insertUsedSpace, insertUsedInodes}
+		case UserQuotaType, GroupQuotaType:
+			table = "user_group_quota"
+			conflictCols = "qtype, qkey"
+			insertCols = []string{"qtype", "qkey", "max_space", "max_inodes", "used_space", "used_inodes"}
+			insertArgs = []interface{}{qtype, key, quota.MaxSpace, quota.MaxInodes, insertUsedSpace, insertUsedInodes}
+		default:
 			return errors.Errorf("invalid quota type %d", qtype)
 		}
-	})
 
+		driver := m.Name()
+		if driver == "sqlite3" || driver == "postgres" {
+			// For SQLite/Postgres, ON CONFLICT DO UPDATE always returns RowsAffected=1
+			// for both insert and update, so we need a ForUpdate check to reliably
+			// determine whether the row was newly created.
+			var exist bool
+			var err error
+			if qtype == DirQuotaType {
+				exist, err = s.ForUpdate().Get(&dirQuota{Inode: Ino(key)})
+			} else {
+				exist, err = s.ForUpdate().MustCols("qkey").Get(&userGroupQuota{Qtype: qtype, Qkey: key})
+			}
+			if err != nil {
+				return err
+			}
+			created = !exist
+			_, e := m.upsertQuota(s, table, conflictCols, insertCols, insertArgs, quota)
+			if e != nil {
+				return e
+			}
+		} else {
+			var isCreated bool
+			var e error
+			isCreated, e = m.upsertQuota(s, table, conflictCols, insertCols, insertArgs, quota)
+			if e != nil {
+				return e
+			}
+			created = isCreated
+		}
+		m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes)
+		return nil
+	})
 	return created, err
 }
 
