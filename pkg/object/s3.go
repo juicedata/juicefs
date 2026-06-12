@@ -399,13 +399,21 @@ func (s *s3client) Restore(ctx context.Context, key string, days int32) error {
 	return err
 }
 
+var defaultChecksumOpts = []func(*config.LoadOptions) error{
+	config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
+	config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
+}
+
 func autoS3Region(bucketName, accessKey, secretKey, token string) (string, error) {
 	var cfg aws.Config
 	var err error
 	if accessKey != "" {
-		cfg, err = config.LoadDefaultConfig(ctx, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
+		var loadOpts []func(*config.LoadOptions) error
+		loadOpts = append(loadOpts, defaultChecksumOpts...)
+		loadOpts = append(loadOpts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
+		cfg, err = config.LoadDefaultConfig(ctx, loadOpts...)
 	} else {
-		cfg, err = config.LoadDefaultConfig(ctx)
+		cfg, err = config.LoadDefaultConfig(ctx, defaultChecksumOpts...)
 	}
 	if err != nil {
 		return "", err
@@ -586,15 +594,14 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		})
 	}
 	var cfg aws.Config
+	var loadOpts []func(*config.LoadOptions) error
+	loadOpts = append(loadOpts, defaultChecksumOpts...)
 	if accessKey == "anonymous" {
-		cfg, err = config.LoadDefaultConfig(ctx,
-			config.WithCredentialsProvider(aws.AnonymousCredentials{}))
+		loadOpts = append(loadOpts, config.WithCredentialsProvider(aws.AnonymousCredentials{}))
 	} else if accessKey != "" {
-		cfg, err = config.LoadDefaultConfig(ctx,
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
-	} else {
-		cfg, err = config.LoadDefaultConfig(ctx)
+		loadOpts = append(loadOpts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	}
+	cfg, err = config.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {
 		return nil, err
 	}
