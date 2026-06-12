@@ -325,7 +325,7 @@ juicefs sync --worker host1,host2 /jfs-src /jfs-dst
 
 `--traffic-control-url` solves this by pointing every sync process at a central HTTP server that acts as a shared token-bucket. All processes request bandwidth tokens from the server before transferring data, ensuring that the total throughput across all running instances never exceeds the server-configured rate.
 
-**HTTP API contract**
+### HTTP API contract
 
 The sync client and your traffic-control server communicate via a simple JSON-over-HTTP protocol:
 
@@ -343,7 +343,7 @@ The sync client and your traffic-control server communicate via a simple JSON-ov
 
 The client blocks on the POST until the server responds, so the server's internal rate limiter (e.g. a token bucket) is what enforces the global cap.
 
-**Reference server implementation**
+### Reference server implementation
 
 The following is a minimal Go server that enforces a 3 MB/s average rate with a 10 MB burst using [`github.com/juju/ratelimit`](https://github.com/juju/ratelimit):
 
@@ -392,7 +392,7 @@ func main() {
 }
 ```
 
-**Usage**
+### Usage
 
 Start the server on a host reachable by all sync processes, then pass its token endpoint to every `juicefs sync` call:
 
