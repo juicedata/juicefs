@@ -156,7 +156,7 @@ func selectionFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:    "update",
 			Aliases: []string{"u"},
-			Usage:   "skip files if the destination is newer",
+			Usage:   "update existing files only when the source mtime is newer; ignore size differences",
 		},
 		&cli.BoolFlag{
 			Name:    "force-update",
