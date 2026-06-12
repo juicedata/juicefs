@@ -663,38 +663,33 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	if err != nil {
 		return err
 	}
-	if !created {
+	if created && qtype == DirQuotaType {
+		return m.calcDirQuotaUsage(ctx, Ino(key), dpath, strict)
+	} else if scan && (qtype == UserQuotaType || qtype == GroupQuotaType) {
+		return m.ScanUserGroupUsage(ctx)
+	} else {
 		return nil
 	}
-	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, scan)
 }
 
-func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, strict bool, scan bool) error {
-	switch qtype {
-	case DirQuotaType:
-		wrapErr := func(e error) error {
-			return errors.Wrapf(e, "set quota usage for file(%s), please repair it later", dpath)
-		}
+func (m *baseMeta) calcDirQuotaUsage(ctx Context, ino Ino, dpath string, strict bool) error {
+	wrapErr := func(e error) error {
+		return errors.Wrapf(e, "set quota usage for file(%s), please repair it later", dpath)
+	}
 
-		var sum Summary
-		if st := m.GetSummary(ctx, Ino(key), &sum, true, strict); st != 0 {
-			return wrapErr(st)
-		}
+	var sum Summary
+	if st := m.GetSummary(ctx, ino, &sum, true, strict); st != 0 {
+		return wrapErr(st)
+	}
 
-		_, err := m.en.doSetQuota(ctx, DirQuotaType, key, &Quota{
-			UsedSpace:  int64(sum.Size) - align4K(0),
-			UsedInodes: int64(sum.Dirs+sum.Files) - 1,
-			MaxSpace:   -1,
-			MaxInodes:  -1,
-		})
-		if err != nil {
-			return wrapErr(err)
-		}
-		return nil
-	case UserQuotaType, GroupQuotaType:
-		if scan {
-			return m.ScanUserGroupUsage(ctx)
-		}
+	_, err := m.en.doSetQuota(ctx, DirQuotaType, uint64(ino), &Quota{
+		UsedSpace:  int64(sum.Size) - align4K(0),
+		UsedInodes: int64(sum.Dirs+sum.Files) - 1,
+		MaxSpace:   -1,
+		MaxInodes:  -1,
+	})
+	if err != nil {
+		return wrapErr(err)
 	}
 	return nil
 }
@@ -841,6 +836,25 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 
 		}
 	}
+
+	if err := m.en.doScanSustainedInodes(ctx, func(uid, gid uint32, length uint64) error {
+		u, g := uint64(uid), uint64(gid)
+		if userUsage[u] == nil {
+			userUsage[u] = &Summary{}
+		}
+		if groupUsage[g] == nil {
+			groupUsage[g] = &Summary{}
+		}
+		space := align4K(length)
+		userUsage[u].Size += uint64(space)
+		userUsage[u].Files++
+		groupUsage[g].Size += uint64(space)
+		groupUsage[g].Files++
+		return nil
+	}); err != nil {
+		logger.Warnf("scan sustained inodes for user/group quota: %v", err)
+	}
+
 	return userUsage, groupUsage, nil
 }
 
