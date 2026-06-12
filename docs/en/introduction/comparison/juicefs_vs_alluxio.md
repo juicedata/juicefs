@@ -10,9 +10,9 @@ Alluxio (/əˈlʌksio/) is a data access layer in the big data and machine learn
 The following table compares the main features of Alluxio and JuiceFS.
 
 | Features                  | Alluxio            | JuiceFS            |
-| --------                  | -------            | -------            |
+| ------------------------- | ------------------ | ------------------ |
 | Storage format            | Object             | Block              |
-| Cache granularity         | 64 MiB             | 4 MiB               |
+| Cache granularity         | 64 MiB             | 4 MiB              |
 | Multi-tier cache          | ✓                  | ✓                  |
 | Hadoop-compatible         | ✓                  | ✓                  |
 | S3-compatible             | ✓                  | ✓                  |
