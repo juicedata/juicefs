@@ -377,8 +377,6 @@ func tokenHandler(w http.ResponseWriter, r *http.Request) {
     json.Unmarshal(body, &in)
     if in.Bytes > 0 {
         limiter.Wait(in.Bytes) // blocks until tokens are available
-    } else {
-        limiter.Put(-in.Bytes) // return unused tokens
     }
     out, _ := json.Marshal(resp{Granted: in.Bytes, Expired: 1000})
     w.Header().Set("Content-Type", "application/json")
