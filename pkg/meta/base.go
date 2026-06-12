@@ -3981,6 +3981,12 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 			break
 		}
 		seg := newBakSegment(res.msg)
+		if seg == nil {
+			if res.release != nil {
+				res.release(res.msg)
+			}
+			continue
+		}
 		if err := bak.writeSegment(w, seg); err != nil {
 			logger.Errorf("write %d err: %v", seg.typ, err)
 			ctx.Cancel()

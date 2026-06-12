@@ -414,7 +414,7 @@ func (m *kvMeta) dumpACL(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) 
 
 func (m *kvMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	return m.txn(ctx, func(tx *kvTxn) error {
-		quotas := make([]*pb.Quota, 0, 128)
+		var dirQuotas, userQuotas, groupQuotas []*pb.Quota
 
 		tx.scan(m.fmtKey("QD"), nextKey(m.fmtKey("QD")), false, func(k, v []byte) bool {
 			q := &pb.Quota{}
@@ -425,7 +425,7 @@ func (m *kvMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 			q.MaxInodes = int64(b.Get64())
 			q.UsedSpace = int64(b.Get64())
 			q.UsedInodes = int64(b.Get64())
-			quotas = append(quotas, q)
+			dirQuotas = append(dirQuotas, q)
 			return true
 		})
 
@@ -438,7 +438,7 @@ func (m *kvMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 			q.MaxInodes = int64(b.Get64())
 			q.UsedSpace = int64(b.Get64())
 			q.UsedInodes = int64(b.Get64())
-			quotas = append(quotas, q)
+			userQuotas = append(userQuotas, q)
 			return true
 		})
 
@@ -451,10 +451,14 @@ func (m *kvMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 			q.MaxInodes = int64(b.Get64())
 			q.UsedSpace = int64(b.Get64())
 			q.UsedInodes = int64(b.Get64())
-			quotas = append(quotas, q)
+			groupQuotas = append(groupQuotas, q)
 			return true
 		})
-		return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Quotas: quotas}})
+		return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{
+			Quotas:      dirQuotas,
+			UserQuotas:  userQuotas,
+			GroupQuotas: groupQuotas,
+		}})
 	})
 }
 
@@ -615,26 +619,33 @@ func (m *kvMeta) loadXattrs(ctx Context, msg proto.Message, pairs *[]*pair) {
 
 func (m *kvMeta) loadQuota(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	for _, q := range batch.Quotas {
+
+	storeQ := func(q *pb.Quota, key []byte) {
 		b := utils.NewBuffer(32)
 		b.Put64(uint64(q.MaxSpace))
 		b.Put64(uint64(q.MaxInodes))
 		b.Put64(uint64(q.UsedSpace))
 		b.Put64(uint64(q.UsedInodes))
+		*pairs = append(*pairs, &pair{key, b.Bytes()})
+	}
 
-		var key []byte
+	for _, q := range batch.Quotas {
 		switch q.Type {
 		case uint32(DirQuotaType):
-			key = m.dirQuotaKey(Ino(q.Key))
+			storeQ(q, m.dirQuotaKey(Ino(q.Key)))
 		case uint32(UserQuotaType):
-			key = m.userQuotaKey(q.Key)
+			storeQ(q, m.userQuotaKey(q.Key))
 		case uint32(GroupQuotaType):
-			key = m.groupQuotaKey(q.Key)
+			storeQ(q, m.groupQuotaKey(q.Key))
 		default:
 			logger.Warnf("unknown quota type: %d", q.Type)
-			continue
 		}
-		*pairs = append(*pairs, &pair{key, b.Bytes()})
+	}
+	for _, q := range batch.UserQuotas {
+		storeQ(q, m.userQuotaKey(q.Key))
+	}
+	for _, q := range batch.GroupQuotas {
+		storeQ(q, m.groupQuotaKey(q.Key))
 	}
 }
 
