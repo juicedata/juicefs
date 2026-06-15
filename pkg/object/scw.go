@@ -71,8 +71,8 @@ func newScw(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		secretKey = os.Getenv("SCW_SECRET_KEY")
 	}
 
-	awsCfg, err := config.LoadDefaultConfig(ctx,
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
+	awsCfg, err := config.LoadDefaultConfig(ctx, append(defaultChecksumOpts(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %s", err)
 	}

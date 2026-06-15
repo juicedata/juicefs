@@ -399,9 +399,15 @@ func (s *s3client) Restore(ctx context.Context, key string, days int32) error {
 	return err
 }
 
-var defaultChecksumOpts = []func(*config.LoadOptions) error{
-	config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
-	config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
+func defaultChecksumOpts() []func(*config.LoadOptions) error {
+	if v := os.Getenv("JFS_S3_FORCE_CHECKSUM"); v != "" && v != "0" && strings.ToLower(v) != "false" {
+		logger.Infof("S3 SDK checksum calculation and validation are forced on all requests")
+		return nil
+	}
+	return []func(*config.LoadOptions) error{
+		config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
+		config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
+	}
 }
 
 func autoS3Region(bucketName, accessKey, secretKey, token string) (string, error) {
@@ -409,11 +415,11 @@ func autoS3Region(bucketName, accessKey, secretKey, token string) (string, error
 	var err error
 	if accessKey != "" {
 		var loadOpts []func(*config.LoadOptions) error
-		loadOpts = append(loadOpts, defaultChecksumOpts...)
+		loadOpts = append(loadOpts, defaultChecksumOpts()...)
 		loadOpts = append(loadOpts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 		cfg, err = config.LoadDefaultConfig(ctx, loadOpts...)
 	} else {
-		cfg, err = config.LoadDefaultConfig(ctx, defaultChecksumOpts...)
+		cfg, err = config.LoadDefaultConfig(ctx, defaultChecksumOpts()...)
 	}
 	if err != nil {
 		return "", err
@@ -595,7 +601,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	}
 	var cfg aws.Config
 	var loadOpts []func(*config.LoadOptions) error
-	loadOpts = append(loadOpts, defaultChecksumOpts...)
+	loadOpts = append(loadOpts, defaultChecksumOpts()...)
 	if accessKey == "anonymous" {
 		loadOpts = append(loadOpts, config.WithCredentialsProvider(aws.AnonymousCredentials{}))
 	} else if accessKey != "" {

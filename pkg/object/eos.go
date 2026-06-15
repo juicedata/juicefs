@@ -74,8 +74,8 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if token == "" {
 		token = os.Getenv("EOS_TOKEN")
 	}
-	cfg, err := config.LoadDefaultConfig(ctx,
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
+	cfg, err := config.LoadDefaultConfig(ctx, append(defaultChecksumOpts(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
