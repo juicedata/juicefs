@@ -842,15 +842,25 @@ func (m *redisMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
+	if err := m.doScanSustainedInodes(ctx, func(uid, gid uint32, length uint64) error {
+		used += align4K(length)
+		inodes++
+		return nil
+	}); err != nil {
+		return err
+	}
+	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inodes)
+	if err := m.rdb.Set(ctx, m.totalInodesKey(), strconv.FormatInt(inodes, 10), 0).Err(); err != nil {
+		return fmt.Errorf("set total inodes: %s", err)
+	}
+	return m.rdb.Set(ctx, m.usedSpaceKey(), strconv.FormatInt(used, 10), 0).Err()
+}
 
+func (m *redisMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
 	var inoKeys []string
-	if err := m.scan(ctx, "session*", func(keys []string) error {
+	if err := m.scan(ctx, "session[0-9]*", func(keys []string) error {
 		for i := 0; i < len(keys); i += 1 {
 			key := keys[i]
-			if key == "sessions" {
-				continue
-			}
-
 			inodes, err := m.rdb.SMembers(ctx, key).Result()
 			if err != nil {
 				logger.Warnf("SMembers %s: %s", key, err)
@@ -884,16 +894,13 @@ func (m *redisMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 		for _, v := range values {
 			if v != nil {
 				m.parseAttr([]byte(v.(string)), &attr)
-				used += align4K(attr.Length)
-				inodes += 1
+				if err := fn(attr.Uid, attr.Gid, attr.Length); err != nil {
+					return err
+				}
 			}
 		}
 	}
-	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inodes)
-	if err := m.rdb.Set(ctx, m.totalInodesKey(), strconv.FormatInt(inodes, 10), 0).Err(); err != nil {
-		return fmt.Errorf("set total inodes: %s", err)
-	}
-	return m.rdb.Set(ctx, m.usedSpaceKey(), strconv.FormatInt(used, 10), 0).Err()
+	return nil
 }
 
 // redisMeta updates the usage in each transaction

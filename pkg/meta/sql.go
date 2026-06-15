@@ -339,8 +339,8 @@ func (m *dbMeta) sqlConv(sql string) string {
 }
 
 func (m *dbMeta) initStatement() {
-	m.statement["SELECT length FROM node WHERE inode IN (SELECT inode FROM sustained)"] =
-		fmt.Sprintf("SELECT length FROM %snode WHERE inode IN (SELECT inode FROM %ssustained)", m.tablePrefix, m.tablePrefix)
+	m.statement["SELECT n.uid, n.gid, n.length FROM node n WHERE n.inode IN (SELECT inode FROM sustained)"] =
+		fmt.Sprintf("SELECT n.uid, n.gid, n.length FROM %snode n WHERE n.inode IN (SELECT inode FROM %ssustained)", m.tablePrefix, m.tablePrefix)
 	m.statement["update counter set value=value + ? where name='totalInodes'"] =
 		fmt.Sprintf("update %scounter set value=value + ? where name='totalInodes'", m.tablePrefix)
 	m.statement["update counter set value= value + ? where name='usedSpace'"] =
@@ -1417,20 +1417,9 @@ func (m *dbMeta) doSyncVolumeStat(ctx Context, used, inodes int64) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
-	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		queryResultMap, err := s.QueryString(m.sqlConv("SELECT length FROM node WHERE inode IN (SELECT inode FROM sustained)"))
-		if err != nil {
-			return err
-		}
-		for _, v := range queryResultMap {
-			value, err := strconv.ParseInt(v["length"], 10, 64)
-			if err != nil {
-				logger.Warnf("parse sustained length: %s err: %s", v["length"], err)
-				continue
-			}
-			used += align4K(uint64(value))
-			inodes += 1
-		}
+	if err := m.doScanSustainedInodes(ctx, func(uid, gid uint32, length uint64) error {
+		used += align4K(length)
+		inodes++
 		return nil
 	}); err != nil {
 		return err
@@ -3265,6 +3254,36 @@ func (m *dbMeta) doRefreshSession() error {
 			err = mustInsert(ses, &session2{m.sid, m.expireTime(), m.newSessionInfo()})
 		}
 		return err
+	})
+}
+
+func (m *dbMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
+	return m.simpleTxn(ctx, func(s *xorm.Session) error {
+		rows, err := s.QueryString(m.sqlConv("SELECT n.uid, n.gid, n.length FROM node n WHERE n.inode IN (SELECT inode FROM sustained)"))
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			uid, err := strconv.ParseUint(row["uid"], 10, 32)
+			if err != nil {
+				logger.Warnf("parse sustained uid: %v", err)
+				continue
+			}
+			gid, err := strconv.ParseUint(row["gid"], 10, 32)
+			if err != nil {
+				logger.Warnf("parse sustained gid: %v", err)
+				continue
+			}
+			length, err := strconv.ParseUint(row["length"], 10, 64)
+			if err != nil {
+				logger.Warnf("parse sustained length: %v", err)
+				continue
+			}
+			if err := fn(uint32(uid), uint32(gid), length); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
