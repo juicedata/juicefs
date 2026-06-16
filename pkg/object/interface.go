@@ -50,8 +50,8 @@ func (o *obj) StorageClass() string { return o.sc }
 func (o *obj) Status() string       { return o.status }
 
 type MultipartUpload struct {
-	MinPartSize int
-	MaxCount    int
+	MinPartSize int64
+	MaxCount    int64
 	UploadID    string
 }
 
@@ -70,9 +70,9 @@ type PendingPart struct {
 type Limits struct {
 	IsSupportMultipartUpload bool
 	IsSupportUploadPartCopy  bool
-	MinPartSize              int
+	MinPartSize              int64
 	MaxPartSize              int64
-	MaxPartCount             int
+	MaxPartCount             int64
 }
 
 // ObjectStorage is the interface for object storage.

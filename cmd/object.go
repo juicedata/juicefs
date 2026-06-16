@@ -429,7 +429,7 @@ func (j *juiceFS) partDir(key, uploadID string) string {
 	if len(name) > 200 {
 		name = name[:200]
 	}
-	return fmt.Sprintf("%s/.jfs-part-%s-%s/", path.Dir(key), name, uploadID)
+	return fmt.Sprintf("%s/.jfs.part-%s-%s/", path.Dir(key), name, uploadID)
 }
 
 func (j *juiceFS) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*object.Part, error) {
@@ -457,6 +457,7 @@ func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID stri
 		return toError(eno)
 	}
 	defer f.Close(ctx)
+	defer j.jfs.Delete(ctx, tmp)
 	var total uint64
 	for _, part := range parts {
 		p := j.path(path.Join(j.partDir(key, uploadID), strconv.Itoa(part.Num)))
