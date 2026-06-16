@@ -2220,8 +2220,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				return syscall.EEXIST
 			}
 			dtyp, dino = m.parseEntry(dbuf)
-			dgets := tx.gets(m.inodeKey(dino), m.dirQuotaKey(dino))
-			a := dgets[0]
+			a := tx.get(m.inodeKey(dino))
 			if a == nil { // corrupt entry
 				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, nameDst)
 				trash = 0
@@ -2265,9 +2264,6 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					dupdate = true
 					if trash > 0 {
 						tattr.Parent = trash
-					}
-					if dgets[1] != nil { // avoid creating massive tombstones for quota keys we never set.
-						tx.delete(m.dirQuotaKey(dino))
 					}
 				} else {
 					if trash == 0 {
@@ -2380,6 +2376,11 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					tx.deleteKeys(m.xattrKey(dino, ""))
 					if tattr.Parent == 0 {
 						tx.deleteKeys(m.fmtKey("A", dino, "P"))
+					}
+				}
+				if dtyp == TypeDirectory {
+					if quotaKey := m.dirQuotaKey(dino); tx.get(quotaKey) != nil { // avoid creating massive tombstones for quota keys we never set.
+						tx.delete(quotaKey)
 					}
 				}
 			}
