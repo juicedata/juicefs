@@ -2048,7 +2048,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		if pinode != nil {
 			*pinode = inode
 		}
-		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
+		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode), m.dirQuotaKey(inode))
 		if rs[0] == nil {
 			return syscall.ENOENT
 		}
@@ -2108,8 +2108,8 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		}
 		tx.delete(m.entryKey(parent, name))
 		tx.delete(m.dirStatKey(inode))
-		if quotaKey := m.dirQuotaKey(inode); tx.get(quotaKey) != nil { // avoid creating massive tombstones for quota keys we never set.
-			tx.delete(quotaKey)
+		if rs[2] != nil { // avoid creating massive tombstones for quota keys we never set.
+			tx.delete(m.dirQuotaKey(inode))
 		}
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
@@ -2169,7 +2169,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			return nil
 		}
-		rs := tx.gets(m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino))
+		rs := tx.gets(m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino), m.entryKey(parentDst, nameDst))
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return syscall.ENOENT
 		}
@@ -2204,7 +2204,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return syscall.EACCES
 		}
 
-		dbuf := tx.get(m.entryKey(parentDst, nameDst))
+		dbuf := rs[3]
 		if dbuf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
 				if string(e.Name) != nameSrc || parentDst != parentSrc {
@@ -2423,7 +2423,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 
 func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
-		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
+		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode), m.entryKey(parent, name))
 		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
 		}
@@ -2448,7 +2448,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		buf := tx.get(m.entryKey(parent, name))
+		buf := rs[2]
 		if buf != nil || m.conf.CaseInsensi && m.resolveCase(ctx, parent, name) != nil {
 			return syscall.EEXIST
 		}
