@@ -439,6 +439,10 @@ func (j *juiceFS) UploadPartStream(key string, uploadID string, num int, in io.R
 	}, err
 }
 
+func (j *juiceFS) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*object.Part, error) {
+	return nil, utils.ErrNotSUP
+}
+
 func (j *juiceFS) AbortUpload(rCtx context.Context, key string, uploadID string) {
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	_ = j.jfs.Rmr(ctx, j.path(j.partDir(key, uploadID)), true, meta.RmrDefaultThreads)
