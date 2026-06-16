@@ -103,6 +103,49 @@ func TestFetcher_FetchFromPeer(t *testing.T) {
 	}
 }
 
+func TestFetcher_PollCompleted(t *testing.T) {
+	cases := []struct {
+		name      string
+		completed bool
+	}{
+		{"peer still warming", false},
+		{"peer done", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/status" {
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = fmt.Fprintf(w, `{"completed":%v,"progress":{"total":10,"done":3}}`, tc.completed)
+			}))
+			defer peer.Close()
+
+			f := NewFetcher(nil, t.TempDir(), 4194304, peer.Client(), nil)
+			got, err := f.PollCompleted(context.Background(), peer.Listener.Addr().String())
+			if err != nil {
+				t.Fatalf("PollCompleted: unexpected error: %v", err)
+			}
+			if got != tc.completed {
+				t.Errorf("PollCompleted = %v, want %v", got, tc.completed)
+			}
+		})
+	}
+}
+
+func TestFetcher_PollCompleted_ErrorsOnUnreachable(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	deadAddr := srv.Listener.Addr().String()
+	srv.Close()
+
+	f := NewFetcher(nil, t.TempDir(), 4194304, &http.Client{Timeout: time.Second}, nil)
+	if _, err := f.PollCompleted(context.Background(), deadAddr); err == nil {
+		t.Error("PollCompleted on a dead peer: want error, got nil")
+	}
+}
+
 // TestFetcher_FetchFromPeer_RejectsOversizedBody confirms a peer cannot
 // drown the fetcher in memory by sending a body bigger than the largest
 // layout mount accepts for the requested logical size.

@@ -62,8 +62,8 @@ Examples:
 			// General flags
 			&cli.IntFlag{Name: "threads", Aliases: []string{"p"}, Value: 50, Usage: "concurrent fetch workers"},
 			&cli.StringFlag{Name: "file", Aliases: []string{"f"}, Usage: "file containing a list of paths"},
-			&cli.BoolFlag{Name: "keep-alive", Usage: "keep serving blocks to peers after warmup completes (until SIGTERM/SIGINT)"},
-			&cli.StringFlag{Name: "keep-alive-timeout", Value: "0", Usage: "auto-shutdown after this duration in keep-alive mode (0=wait for SIGTERM); ignored without --keep-alive"},
+			&cli.StringFlag{Name: "keep-alive", Value: "peers", Usage: "post-warmup behavior: 'off' exits when the local fetch is done; 'peers' (default) keeps serving until every peer completes, then exits; 'forever' serves until SIGTERM/SIGINT"},
+			&cli.StringFlag{Name: "keep-alive-timeout", Value: "0", Usage: "upper bound on the keep-alive phase (0=no bound); applies to --keep-alive=peers and =forever, ignored when =off"},
 			&cli.StringFlag{Name: "cache-dir", Usage: "cache directory (default: from volume format)"},
 			&cli.StringFlag{Name: "cache-size", Value: "100G", Usage: "hard cap on total cached bytes at cache-dir (e.g. 100G, 50000 = 50000 MiB); 0 disables the cap. Counts pre-existing files. Matches mount's --cache-size default."},
 			&cli.StringFlag{Name: "download-limit", Usage: "bandwidth limit for download from object storage in Mbps per peer (e.g. 800 or 1G); peer-to-peer transfers are not throttled"},
@@ -137,13 +137,18 @@ func p2pWarmup(c *cli.Context) error {
 	// Append volume UUID to cache dir, same as chunk.Config.SelfCheck().
 	cacheDir = path.Join(cacheDir, format.UUID)
 
+	keepAlive, err := p2p.ParseKeepAliveMode(c.String("keep-alive"))
+	if err != nil {
+		return err
+	}
+
 	// Build WarmupConfig from CLI flags.
 	config := p2p.WarmupConfig{
 		ListenAddr:           c.String("listen"),
 		DiscoveryInterval:    utils.Duration(c.String("discovery-interval")),
 		AvailabilityInterval: utils.Duration(c.String("availability-interval")),
 		Threads:              c.Int("threads"),
-		KeepAlive:            c.Bool("keep-alive"),
+		KeepAlive:            keepAlive,
 		KeepAliveTimeout:     utils.Duration(c.String("keep-alive-timeout")),
 		MinPeers:             c.Int("min-peers"),
 

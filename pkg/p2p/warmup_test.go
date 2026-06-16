@@ -301,21 +301,56 @@ func TestCountTerminalBlocks(t *testing.T) {
 	}
 }
 
+func TestParseKeepAliveMode(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    KeepAliveMode
+		wantErr bool
+	}{
+		{"off", KeepAliveOff, false},
+		{"peers", KeepAlivePeers, false},
+		{"forever", KeepAliveForever, false},
+		{"PEERS", KeepAlivePeers, false}, // case-insensitive
+		{" peers ", KeepAlivePeers, false}, // trimmed
+		{"", KeepAlivePeers, false},       // default is peers
+		{"true", "", true},                // old bool value rejected
+		{"yes", "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			got, err := ParseKeepAliveMode(tc.in)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("ParseKeepAliveMode(%q): want error, got %q", tc.in, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseKeepAliveMode(%q): unexpected error: %v", tc.in, err)
+			}
+			if got != tc.want {
+				t.Errorf("ParseKeepAliveMode(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestKeepAliveTimeoutIgnored(t *testing.T) {
 	cases := []struct {
 		name string
-		ka   bool
+		mode KeepAliveMode
 		kat  time.Duration
 		want bool
 	}{
-		{"both set", true, time.Hour, false},
-		{"timeout only — ignored", false, time.Hour, true},
-		{"keep-alive only — manual", true, 0, false},
-		{"neither", false, 0, false},
+		{"peers + timeout", KeepAlivePeers, time.Hour, false},
+		{"forever + timeout", KeepAliveForever, time.Hour, false},
+		{"off + timeout — ignored", KeepAliveOff, time.Hour, true},
+		{"peers no timeout", KeepAlivePeers, 0, false},
+		{"off no timeout", KeepAliveOff, 0, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := WarmupConfig{KeepAlive: tc.ka, KeepAliveTimeout: tc.kat}
+			c := WarmupConfig{KeepAlive: tc.mode, KeepAliveTimeout: tc.kat}
 			if got := c.keepAliveTimeoutIgnored(); got != tc.want {
 				t.Errorf("got %v, want %v", got, tc.want)
 			}
@@ -510,6 +545,88 @@ func TestPolling_PushesLivePeerCountToStatus(t *testing.T) {
 	}
 	if body.Peers != 2 {
 		t.Errorf("/status peers = %d, want 2 (3 discovered minus self)", body.Peers)
+	}
+}
+
+// statusPeer starts a peer that reports the given completed flag on /status.
+func statusPeer(t *testing.T, completed bool) (addr string, close func()) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/status" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"completed":` + boolStr(completed) + `}`))
+	}))
+	return srv.Listener.Addr().String(), srv.Close
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+func TestPeersAllComplete_AllDone(t *testing.T) {
+	w := pollTestWarmup(t)
+	a, ca := statusPeer(t, true)
+	defer ca()
+	b, cb := statusPeer(t, true)
+	defer cb()
+	setDiscoveryPeers(w, []string{a, b})
+
+	if !w.peersAllComplete(context.Background()) {
+		t.Error("peersAllComplete = false, want true when every live peer is done")
+	}
+}
+
+func TestPeersAllComplete_OnePending(t *testing.T) {
+	w := pollTestWarmup(t)
+	a, ca := statusPeer(t, true)
+	defer ca()
+	b, cb := statusPeer(t, false) // still warming
+	defer cb()
+	setDiscoveryPeers(w, []string{a, b})
+
+	if w.peersAllComplete(context.Background()) {
+		t.Error("peersAllComplete = true, want false while a live peer is still warming")
+	}
+}
+
+func TestPeersAllComplete_UnreachableTreatedDone(t *testing.T) {
+	// A peer that left discovery's reach (crashed / scaled down) must not block
+	// exit forever — an unreachable peer counts as done.
+	srv := httptest.NewServer(http.NotFoundHandler())
+	deadAddr := srv.Listener.Addr().String()
+	srv.Close()
+
+	w := pollTestWarmup(t)
+	alive, c := statusPeer(t, true)
+	defer c()
+	setDiscoveryPeers(w, []string{alive, deadAddr})
+
+	if !w.peersAllComplete(context.Background()) {
+		t.Error("peersAllComplete = false, want true (unreachable peer treated as done)")
+	}
+}
+
+func TestPeersAllComplete_NoPeers(t *testing.T) {
+	w := pollTestWarmup(t)
+	setDiscoveryPeers(w, nil)
+	if !w.peersAllComplete(context.Background()) {
+		t.Error("peersAllComplete = false, want true when no live peers remain")
+	}
+}
+
+func TestPeersAllComplete_SkipsSelf(t *testing.T) {
+	// Self must be excluded — a self-poll that fails (or reports our own
+	// not-yet-done status) must not block exit.
+	w := pollTestWarmup(t)
+	setDiscoveryPeers(w, []string{w.externalAddr})
+	if !w.peersAllComplete(context.Background()) {
+		t.Error("peersAllComplete = false, want true when only self is in discovery")
 	}
 }
 

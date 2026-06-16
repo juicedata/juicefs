@@ -1,6 +1,8 @@
 package p2p
 
 import (
+	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -69,6 +71,33 @@ func (b *Block) DoneAt() int64 {
 	return b.doneAt.Load()
 }
 
+// KeepAliveMode controls what a peer does after its local fetch completes.
+type KeepAliveMode string
+
+const (
+	// KeepAliveOff exits as soon as the local fetch finishes.
+	KeepAliveOff KeepAliveMode = "off"
+	// KeepAlivePeers stays up serving blocks until every live peer reports
+	// completion, then exits. Default: late finishers keep pulling from LAN
+	// peers instead of falling back to object storage for their tail.
+	KeepAlivePeers KeepAliveMode = "peers"
+	// KeepAliveForever serves blocks until SIGTERM/SIGINT (or KeepAliveTimeout).
+	KeepAliveForever KeepAliveMode = "forever"
+)
+
+// ParseKeepAliveMode parses the --keep-alive flag value. Empty defaults to
+// "peers". Comparison is case-insensitive and surrounding space is trimmed.
+func ParseKeepAliveMode(s string) (KeepAliveMode, error) {
+	switch m := KeepAliveMode(strings.ToLower(strings.TrimSpace(s))); m {
+	case "":
+		return KeepAlivePeers, nil
+	case KeepAliveOff, KeepAlivePeers, KeepAliveForever:
+		return m, nil
+	default:
+		return "", fmt.Errorf("invalid --keep-alive %q (expected off, peers, or forever)", s)
+	}
+}
+
 type Peer struct {
 	Addr    string // "host:port"
 	UUID    string
@@ -81,7 +110,7 @@ type WarmupConfig struct {
 	DiscoveryInterval    time.Duration
 	AvailabilityInterval time.Duration
 	Threads              int
-	KeepAlive            bool
+	KeepAlive            KeepAliveMode
 	KeepAliveTimeout     time.Duration
 	// MinPeers is the minimum total peer count (INCLUDING self) to wait for.
 	// Acts as a synchronization barrier, not a fixed cluster size — more
@@ -126,8 +155,9 @@ type WarmupConfig struct {
 	CacheSize int64
 }
 
-// keepAliveTimeoutIgnored reports whether KeepAliveTimeout is set without
-// KeepAlive — Run() skips the keep-alive phase, so the timer never starts.
+// keepAliveTimeoutIgnored reports whether KeepAliveTimeout is set while
+// KeepAlive is off — Run() skips the keep-alive phase, so the timer never
+// starts.
 func (c WarmupConfig) keepAliveTimeoutIgnored() bool {
-	return !c.KeepAlive && c.KeepAliveTimeout > 0
+	return c.KeepAlive == KeepAliveOff && c.KeepAliveTimeout > 0
 }

@@ -165,10 +165,10 @@ func (w *Warmup) Run(ctx context.Context, paths []string) error {
 		logger.Warnf("self external address not discovered; using listen address %q for election. If listen is a wildcard, leader election and partition assignment will not agree across peers — pass --listen <self-IP>:port or ensure self is reachable via the configured discovery source.", w.listenAddr)
 	}
 
-	// --keep-alive-timeout only applies inside the keep-alive phase; without
-	// --keep-alive, step 11 is skipped and the timer never starts.
+	// --keep-alive-timeout only applies inside the keep-alive phase; with
+	// --keep-alive=off, step 11 is skipped and the timer never starts.
 	if w.config.keepAliveTimeoutIgnored() {
-		logger.Warnf("--keep-alive-timeout=%s is set but --keep-alive is not; the timeout will be ignored and the process will exit immediately after warmup. Pass --keep-alive to enable post-warmup serving.", w.config.KeepAliveTimeout)
+		logger.Warnf("--keep-alive-timeout=%s is set but --keep-alive=off; the timeout will be ignored and the process will exit immediately after warmup. Use --keep-alive=peers or =forever to enable post-warmup serving.", w.config.KeepAliveTimeout)
 	}
 
 	// Publish the leader role + initial peer count to /status (peers is refreshed later by the availability poll).
@@ -265,8 +265,12 @@ func (w *Warmup) Run(ctx context.Context, paths []string) error {
 		humanize.IBytes(avgRate), humanize.IBytes(fetchRate))
 
 	// 11. Keep-alive if configured.
-	if w.config.KeepAlive {
-		logger.Info("keep-alive mode: serving blocks to peers")
+	switch w.config.KeepAlive {
+	case KeepAlivePeers:
+		logger.Info("keep-alive=peers: serving blocks until all peers complete")
+		w.keepAliveUntilPeersDone(bgCtx)
+	case KeepAliveForever:
+		logger.Info("keep-alive=forever: serving blocks to peers")
 		w.keepAlive(bgCtx)
 	}
 
@@ -676,6 +680,72 @@ func (w *Warmup) waitForCompletion(ctx context.Context, blocks []*Block, queue *
 			w.server.SetProgress(total, done)
 			if done+failed >= total {
 				queue.Close()
+				return
+			}
+		}
+	}
+}
+
+// peersAllComplete polls each live (self-excluded) peer's /status and reports
+// whether every live peer is done warming. An unreachable peer (left
+// discovery, crashed, or already exited) is treated as complete — otherwise a
+// single dead peer would block exit forever. Returns true when no live peers
+// remain.
+func (w *Warmup) peersAllComplete(ctx context.Context) bool {
+	self := w.effectiveAddr()
+	for _, addr := range w.discovery.Peers() {
+		if addr == self {
+			continue
+		}
+		done, err := w.fetcher.PollCompleted(ctx, addr)
+		if err != nil {
+			logger.WithError(err).Debugf("status poll failed for %s; treating as complete", addr)
+			continue
+		}
+		if !done {
+			return false
+		}
+	}
+	return true
+}
+
+// keepAliveUntilPeersDone keeps serving blocks until every live peer reports
+// completion, then returns. It also returns early on SIGTERM/SIGINT, ctx
+// cancellation, or — if set — KeepAliveTimeout. Peers that leave discovery are
+// no longer awaited (see peersAllComplete), so a crashed peer cannot wedge the
+// process; KeepAliveTimeout is a belt-and-suspenders upper bound.
+func (w *Warmup) keepAliveUntilPeersDone(ctx context.Context) {
+	sigCtx, sigStop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
+	defer sigStop()
+
+	var timeoutCh <-chan time.Time
+	if w.config.KeepAliveTimeout > 0 {
+		timer := time.NewTimer(w.config.KeepAliveTimeout)
+		defer timer.Stop()
+		timeoutCh = timer.C
+	}
+
+	// Check once up front so an already-finished cluster exits immediately
+	// instead of waiting a full tick.
+	if w.peersAllComplete(sigCtx) {
+		logger.Info("all peers complete; shutting down")
+		return
+	}
+
+	ticker := time.NewTicker(w.config.AvailabilityInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-sigCtx.Done():
+			logger.Info("received signal, shutting down")
+			return
+		case <-timeoutCh:
+			logger.Info("keep-alive timeout reached")
+			return
+		case <-ticker.C:
+			if w.peersAllComplete(sigCtx) {
+				logger.Info("all peers complete; shutting down")
 				return
 			}
 		}

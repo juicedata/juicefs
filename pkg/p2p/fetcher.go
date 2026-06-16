@@ -368,6 +368,36 @@ func (f *Fetcher) PollAvailability(ctx context.Context, peerAddr string, sinceMs
 	return pr.UpdatedAt, nil
 }
 
+// statusResponse is the subset of a peer's /status we consume here.
+type statusResponse struct {
+	Completed bool `json:"completed"`
+}
+
+// PollCompleted queries the peer's /status and reports its "completed" flag.
+// Used by keep-alive=peers to decide when every peer has finished warming.
+func (f *Fetcher) PollCompleted(ctx context.Context, peerAddr string) (bool, error) {
+	url := fmt.Sprintf("http://%s/status", peerAddr)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false, fmt.Errorf("build request: %w", err)
+	}
+	resp, err := f.httpClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("poll status %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("poll status %s: status %d", url, resp.StatusCode)
+	}
+
+	var sr statusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
+		return false, fmt.Errorf("poll status %s: decode: %w", url, err)
+	}
+	return sr.Completed, nil
+}
+
 // Stats returns a snapshot of the current fetch statistics.
 func (f *Fetcher) Stats() (fromPeers, fromStorage, fromCache, skippedFull, failed, bytesPeer, bytesStorage int64) {
 	return f.stats.FromPeers.Load(),
