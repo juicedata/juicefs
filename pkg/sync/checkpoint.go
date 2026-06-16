@@ -503,7 +503,7 @@ func (s *multipartUploadStore) EnsureMultipartUploadState(key string, size int64
 		return state
 	}
 	savedUpload := *upload
-	savedUpload.MinPartSize = int(partSize)
+	savedUpload.MinPartSize = partSize
 	state := &multipartUploadState{
 		Upload:    savedUpload,
 		Size:      size,

@@ -26,11 +26,13 @@ import (
 	"path"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -399,6 +401,82 @@ func (j *juiceFS) Symlink(oldName, newName string) error {
 func (j *juiceFS) Readlink(name string) (string, error) {
 	target, err := j.jfs.Readlink(ctx, j.path(name))
 	return string(target), toError(err)
+}
+
+func (j *juiceFS) Limits() object.Limits {
+	return object.Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  false,
+		MinPartSize:              4 << 30,
+		MaxPartSize:              4 << 30,
+		MaxPartCount:             10000000,
+	}
+}
+
+func (j *juiceFS) CreateMultipartUpload(_ context.Context, key string) (*object.MultipartUpload, error) {
+	if vfs.IsSpecialName(key) {
+		return nil, fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
+	}
+	return &object.MultipartUpload{
+		MinPartSize: j.Limits().MinPartSize,
+		MaxCount:    j.Limits().MaxPartCount,
+		UploadID:    uuid.NewString(),
+	}, nil
+}
+
+func (j *juiceFS) partDir(key, uploadID string) string {
+	name := path.Base(key)
+	if len(name) > 200 {
+		name = name[:200]
+	}
+	return fmt.Sprintf("%s/.jfs.part-%s-%s/", path.Dir(key), name, uploadID)
+}
+
+func (j *juiceFS) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*object.Part, error) {
+	err := j.Put(context.Background(), path.Join(j.partDir(key, uploadID), strconv.Itoa(num)), in)
+	return &object.Part{
+		Num: num,
+	}, err
+}
+
+func (j *juiceFS) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*object.Part, error) {
+	return nil, utils.ErrNotSUP
+}
+
+func (j *juiceFS) AbortUpload(rCtx context.Context, key string, uploadID string) {
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
+	_ = j.jfs.Rmr(ctx, j.path(j.partDir(key, uploadID)), true, meta.RmrDefaultThreads)
+}
+
+func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID string, parts []*object.Part) (err error) {
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
+	tmp := j.path(path.Join(j.partDir(key, uploadID), "complete"))
+	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
+	// CompleteUpload needs to implement idempotence
+	if errors.Is(eno, syscall.EEXIST) {
+		_ = j.jfs.Delete(ctx, tmp)
+		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
+	}
+	if eno != 0 {
+		return toError(eno)
+	}
+	defer f.Close(ctx)
+	defer j.jfs.Delete(ctx, tmp) //nolint:errcheck
+	var total uint64
+	for _, part := range parts {
+		p := j.path(path.Join(j.partDir(key, uploadID), strconv.Itoa(part.Num)))
+		copied, eno := j.jfs.CopyFileRange(ctx, p, 0, tmp, total, uint64(j.Limits().MaxPartSize))
+		if eno != 0 {
+			return toError(eno)
+		}
+		total += copied
+	}
+
+	eno = j.jfs.Rename(ctx, tmp, j.path(key), 0)
+	if eno == 0 {
+		_ = j.jfs.Rmr(ctx, j.path(j.partDir(key, uploadID)), true, meta.RmrDefaultThreads)
+	}
+	return toError(eno)
 }
 
 func getDefaultChunkConf(format *meta.Format) *chunk.Config {

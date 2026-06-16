@@ -53,9 +53,9 @@ func (o *ossClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
 		IsSupportUploadPartCopy:  true,
-		MinPartSize:              int(oss.MinPartSize),
+		MinPartSize:              oss.MinPartSize,
 		MaxPartSize:              oss.MaxPartSize,
-		MaxPartCount:             int(oss.MaxUploadParts),
+		MaxPartCount:             int64(oss.MaxUploadParts),
 	}
 }
 

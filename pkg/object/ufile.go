@@ -279,7 +279,7 @@ func (u *ufile) CreateMultipartUpload(ctx context.Context, key string) (*Multipa
 	if err := u.parseResp(resp, &out); err != nil {
 		return nil, err
 	}
-	return &MultipartUpload{UploadID: out.UploadId, MinPartSize: out.BlkSize, MaxCount: 1000000}, nil
+	return &MultipartUpload{UploadID: out.UploadId, MinPartSize: int64(out.BlkSize), MaxCount: 1000000}, nil
 }
 
 func (u *ufile) UploadPart(ctx context.Context, key string, uploadID string, num int, data []byte) (*Part, error) {
