@@ -84,8 +84,8 @@ func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	endpoint = uri.Scheme + "://" + uri.Host[len(bucket)+1:]
 	forcePathStyle := !strings.Contains(strings.ToLower(endpoint), "xstore.ctyun.cn")
 
-	awsCfg, err := config.LoadDefaultConfig(ctx,
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
+	awsCfg, err := config.LoadDefaultConfig(ctx, append(defaultChecksumOpts(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
