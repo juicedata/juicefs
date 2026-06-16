@@ -399,15 +399,21 @@ func (s *s3client) Restore(ctx context.Context, key string, days int32) error {
 	return err
 }
 
+// defaultChecksumOpts returns AWS SDK load options that set checksum calculation
+// and validation to "when_required" by default. If the user has explicitly set
+// AWS_REQUEST_CHECKSUM_CALCULATION or AWS_RESPONSE_CHECKSUM_VALIDATION, those
+// env vars take precedence and we skip the corresponding programmatic default,
+// because config.WithXxx options have higher priority than environment variables
+// in the AWS SDK v2 resolution order.
 func defaultChecksumOpts() []func(*config.LoadOptions) error {
-	if v := os.Getenv("JFS_S3_FORCE_CHECKSUM"); v != "" && v != "0" && strings.ToLower(v) != "false" {
-		logger.Infof("S3 SDK checksum calculation and validation are forced on all requests")
-		return nil
+	var opts []func(*config.LoadOptions) error
+	if os.Getenv("AWS_REQUEST_CHECKSUM_CALCULATION") == "" {
+		opts = append(opts, config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired))
 	}
-	return []func(*config.LoadOptions) error{
-		config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
-		config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
+	if os.Getenv("AWS_RESPONSE_CHECKSUM_VALIDATION") == "" {
+		opts = append(opts, config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired))
 	}
+	return opts
 }
 
 func autoS3Region(bucketName, accessKey, secretKey, token string) (string, error) {
