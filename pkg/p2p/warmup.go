@@ -601,7 +601,10 @@ func (w *Warmup) pollAvailabilityOnce(ctx context.Context, lastSeen map[string]i
 		}
 	}
 	for addr := range current {
-		known[addr] = struct{}{}
+		if _, ok := known[addr]; !ok {
+			logger.Infof("peer %s joined discovery", addr)
+			known[addr] = struct{}{}
+		}
 	}
 
 	// Refresh /status with the current live (self-excluded) peer count.

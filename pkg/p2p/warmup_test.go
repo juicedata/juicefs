@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 func TestWarmup_NewAndClose(t *testing.T) {
@@ -519,6 +522,44 @@ func TestPolling_SkipsSelf(t *testing.T) {
 
 	if _, ok := known[w.externalAddr]; ok {
 		t.Errorf("self-address %q ended up in known set", w.externalAddr)
+	}
+}
+
+func TestPolling_LogsPeerJoinOnce(t *testing.T) {
+	// A newly discovered peer should be logged once (symmetric to the
+	// "left discovery" log), and not re-logged on every subsequent sweep.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/available" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"blocks":[],"updated_at":0}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	addr := srv.Listener.Addr().String()
+
+	var buf bytes.Buffer
+	origOut, origLevel := logger.Logger.Out, logger.Logger.Level
+	logger.Logger.SetOutput(&buf)
+	logger.Logger.SetLevel(logrus.InfoLevel)
+	defer func() {
+		logger.Logger.SetOutput(origOut)
+		logger.Logger.SetLevel(origLevel)
+	}()
+
+	w := pollTestWarmup(t)
+	setDiscoveryPeers(w, []string{addr})
+
+	lastSeen := make(map[string]int64)
+	failures := make(map[string]int)
+	known := make(map[string]struct{})
+
+	w.pollAvailabilityOnce(context.Background(), lastSeen, failures, known)
+	w.pollAvailabilityOnce(context.Background(), lastSeen, failures, known)
+
+	if got := strings.Count(buf.String(), "joined discovery"); got != 1 {
+		t.Errorf("join logged %d times, want exactly 1\n%s", got, buf.String())
 	}
 }
 
