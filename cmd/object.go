@@ -457,7 +457,7 @@ func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID stri
 		return toError(eno)
 	}
 	defer f.Close(ctx)
-	defer j.jfs.Delete(ctx, tmp)
+	defer j.jfs.Delete(ctx, tmp) //nolint:errcheck
 	var total uint64
 	for _, part := range parts {
 		p := j.path(path.Join(j.partDir(key, uploadID), strconv.Itoa(part.Num)))
