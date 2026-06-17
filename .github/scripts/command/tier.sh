@@ -291,6 +291,117 @@ assert_tier_list_storage_class()
     fi
 }
 
+assert_tier_list_tag()
+{
+    local id=$1
+    local expected=$2
+    local actual
+
+    ./juicefs tier list "$META_URL" | tee /tmp/tier_list_output.log
+    actual=$(awk -F'|' -v target_id="$id" '
+        function trim(s) {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+            return s
+        }
+        /^\|/ {
+            current_id = trim($2)
+            current_tag = trim($4)
+            if (current_id == target_id) {
+                print current_tag
+                exit
+            }
+        }
+    ' /tmp/tier_list_output.log)
+
+    if [[ "$actual" != "$expected" ]]; then
+        echo "<FATAL>: tier list tag verification failed for id=$id expect=$expected actual=${actual:-<empty>}"
+        cat /tmp/tier_list_output.log
+        exit 1
+    fi
+}
+
+get_tier_tag_from_info()
+{
+    local path=$1
+    local tag
+    tag=$(./juicefs info "$path" | awk '/tier:/ {
+        for (i=1; i<=NF; i++) {
+            if ($i ~ /^tag:/) {
+                gsub(/^tag:/, "", $i)
+                print $i
+                exit
+            }
+        }
+    }')
+    echo "$tag"
+}
+
+assert_tier_info_tag()
+{
+    local path=$1
+    local expected=$2
+    local actual attempt
+    for attempt in $(seq 1 "$ASSERT_RETRY_TIMES"); do
+        actual=$(get_tier_tag_from_info "$path" 2>/dev/null || true)
+        if [[ "$actual" == "$expected" ]]; then
+            return 0
+        fi
+        echo "wait tier tag for $path, expect=$expected actual=${actual:-<empty>} attempt=$attempt/$ASSERT_RETRY_TIMES"
+        sleep "$ASSERT_RETRY_INTERVAL"
+    done
+    echo "<FATAL>: tier tag mismatch for $path, expect=$expected actual=${actual:-<empty>}"
+    exit 1
+}
+
+assert_config_tier_tag_fail()
+{
+    local id=$1
+    local tag=$2
+    if ./juicefs config "$META_URL" --tier "$id" --tag "$tag" -y 2>/dev/null; then
+        echo "<FATAL>: expect config tag failure but succeeded, id=$id tag=$tag"
+        exit 1
+    fi
+    echo "config tier tag failed as expected: id=$id tag=$tag"
+}
+
+get_object_tagging()
+{
+    local key=$1
+    local tag_output
+    tag_output=$(aws s3api get-object-tagging \
+        --bucket "$AWS_BUCKET" \
+        --key "$key" \
+        --endpoint-url "$AWS_ENDPOINT_URL" \
+        --output json 2>/tmp/tier_get_tagging.err) || return 1
+    echo "$tag_output"
+}
+
+assert_object_tag_by_path()
+{
+    local path=$1
+    local expected_key=$2
+    local expected_value=$3
+    local key tag_output actual_key actual_value attempt
+    for attempt in $(seq 1 "$ASSERT_RETRY_TIMES"); do
+        key=$(get_first_object_key "$path" 2>/dev/null || true)
+        if [[ -n "$key" ]]; then
+            tag_output=$(get_object_tagging "$key" 2>/dev/null || true)
+            if [[ -n "$tag_output" ]]; then
+                actual_key=$(echo "$tag_output" | jq -r '.TagSet[0].Key // empty' 2>/dev/null || true)
+                actual_value=$(echo "$tag_output" | jq -r '.TagSet[0].Value // empty' 2>/dev/null || true)
+                if [[ "$actual_key" == "$expected_key" && "$actual_value" == "$expected_value" ]]; then
+                    return 0
+                fi
+            fi
+        fi
+        echo "wait object tag for $path, key=${key:-<empty>} expect=${expected_key}=${expected_value} actual=${actual_key:-<empty>}=${actual_value:-<empty>} attempt=$attempt/$ASSERT_RETRY_TIMES"
+        sleep "$ASSERT_RETRY_INTERVAL"
+    done
+    [[ -f /tmp/tier_get_tagging.err ]] && cat /tmp/tier_get_tagging.err || true
+    echo "<FATAL>: object tag mismatch for $path key=${key:-<empty>} expect=${expected_key}=${expected_value} actual=${actual_key:-<empty>}=${actual_value:-<empty>}"
+    exit 1
+}
+
 tier_set_no_err()
 {
     local tmpout=/tmp/tier_set_last.log
@@ -1195,6 +1306,292 @@ test_tier_remount_during_large_write()
     assert_tier_id /jfs/remount_case/sub/after.bin 1
     assert_tier_sc /jfs/remount_case/sub/after.bin STANDARD_IA
     assert_object_storage_class_by_path /jfs/remount_case/sub/after.bin STANDARD_IA
+}
+
+# ============================================================================
+# Tests for tier tag feature (PR #7099)
+# ============================================================================
+
+test_tier_tag_config()
+{
+    # Test configuring tier with custom tag via juicefs config
+    setup_tier_volume
+
+    # Configure tier 1 with a custom tag
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "env=production" -y
+    sleep 2
+    assert_tier_list_storage_class 1 "STANDARD_IA"
+    assert_tier_list_tag 1 "env=production"
+
+    # Configure tier 2 with a different tag
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING --tag "project=test" -y
+    sleep 2
+    assert_tier_list_storage_class 2 "INTELLIGENT_TIERING"
+    assert_tier_list_tag 2 "project=test"
+
+    # Update only the tag for tier 1 (keep storage class)
+    ./juicefs config "$META_URL" --tier 1 --tag "env=staging" -y
+    sleep 2
+    assert_tier_list_storage_class 1 "STANDARD_IA"
+    assert_tier_list_tag 1 "env=staging"
+
+    # Configure tier 3 with storage class only (no tag)
+    ./juicefs config "$META_URL" --tier 3 --storage-class GLACIER_IR -y
+    sleep 2
+    assert_tier_list_storage_class 3 "GLACIER_IR"
+    assert_tier_list_tag 3 ""
+}
+
+test_tier_tag_list()
+{
+    # Test that tier list shows the tag column correctly
+    setup_tier_volume
+
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "team=data" -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING --tag "cost=low" -y
+    ./juicefs config "$META_URL" --tier 3 --storage-class GLACIER_IR -y
+    sleep 2
+
+    # Verify tier list output has correct columns
+    ./juicefs tier list "$META_URL" | tee /tmp/tier_list_tag_test.log
+
+    # Check header contains "tag" column
+    if ! grep -qE 'tier.*storageClass.*tag' /tmp/tier_list_tag_test.log; then
+        echo "<FATAL>: tier list header missing tag column"
+        cat /tmp/tier_list_tag_test.log
+        exit 1
+    fi
+
+    assert_tier_list_tag 1 "team=data"
+    assert_tier_list_tag 2 "cost=low"
+    assert_tier_list_tag 3 ""
+}
+
+test_tier_tag_info()
+{
+    # Test that juicefs info shows tier tag information
+    setup_tier_volume
+
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "owner=alice" -y
+    sleep 2
+
+    mkdir -p /jfs/tag_info_case
+    dd if=/dev/urandom of=/jfs/tag_info_case/file.bin bs=1M count=4 status=none
+
+    tier_set_no_err "$META_URL" --tier 1 /tag_info_case/file.bin
+    sleep 3
+
+    # Verify info shows the tag
+    ./juicefs info /jfs/tag_info_case/file.bin | tee /tmp/tier_info_tag_test.log
+
+    # The tier line should show the tag
+    if ! grep -qE 'tier:.*tag:.*owner=alice' /tmp/tier_info_tag_test.log; then
+        echo "<FATAL>: juicefs info missing tier tag information"
+        cat /tmp/tier_info_tag_test.log
+        exit 1
+    fi
+
+    assert_tier_info_tag /jfs/tag_info_case/file.bin "owner=alice"
+
+    # Test file with tier that has no tag
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING -y
+    sleep 2
+    tier_set_no_err "$META_URL" --tier 2 /tag_info_case/file.bin
+    sleep 3
+
+    # Info should show empty or no tag
+    ./juicefs info /jfs/tag_info_case/file.bin | tee /tmp/tier_info_no_tag_test.log
+    assert_tier_info_tag /jfs/tag_info_case/file.bin ""
+}
+
+test_tier_tag_format_validation()
+{
+    # Test that invalid tag formats are rejected
+    setup_tier_volume
+
+    # Valid tag format: key=value
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "valid=tag" -y
+    sleep 2
+    assert_tier_list_tag 1 "valid=tag"
+
+    # Invalid tag formats should fail:
+    # - Missing value: "key="
+    assert_config_tier_tag_fail 2 "key="
+
+    # - Missing key: "=value"
+    assert_config_tier_tag_fail 2 "=value"
+
+    # - No equals sign: "invalidtag"
+    assert_config_tier_tag_fail 2 "invalidtag"
+
+    # - Multiple equals: "key=val=ue" should fail (only one = allowed)
+    assert_config_tier_tag_fail 2 "key=val=ue"
+
+    # - Empty tag should be valid (clears the tag)
+    # Note: this depends on implementation - may need adjustment
+}
+
+test_tier_tag_object_tagging()
+{
+    # Test that objects uploaded with a tier tag have the correct S3 object tag
+    setup_tier_volume
+
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "lifecycle=archive" -y
+    sleep 2
+
+    mkdir -p /jfs/tag_object_case
+    dd if=/dev/urandom of=/jfs/tag_object_case/tagged.bin bs=1M count=4 status=none
+
+    tier_set_no_err "$META_URL" --tier 1 /tag_object_case/tagged.bin
+    sleep 5
+
+    # Verify the S3 object has the correct storage class
+    assert_object_storage_class_by_path /jfs/tag_object_case/tagged.bin STANDARD_IA
+
+    # Verify the S3 object has the correct tag
+    assert_object_tag_by_path /jfs/tag_object_case/tagged.bin "lifecycle" "archive"
+
+    # Create another file with different tier (different tag)
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING --tag "env=dev" -y
+    sleep 2
+    dd if=/dev/urandom of=/jfs/tag_object_case/tagged2.bin bs=1M count=4 status=none
+    tier_set_no_err "$META_URL" --tier 2 /tag_object_case/tagged2.bin
+    sleep 5
+
+    assert_object_storage_class_by_path /jfs/tag_object_case/tagged2.bin INTELLIGENT_TIERING
+    assert_object_tag_by_path /jfs/tag_object_case/tagged2.bin "env" "dev"
+}
+
+test_tier_tag_force_update()
+{
+    # Test using --force to update tag when storage class is the same
+    setup_tier_volume
+
+    mkdir -p /jfs/tag_force_case
+    dd if=/dev/urandom of=/jfs/tag_force_case/file.bin bs=1M count=4 status=none
+
+    # Configure tier with initial tag
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "version=v1" -y
+    sleep 2
+    tier_set_no_err "$META_URL" --tier 1 /tag_force_case/file.bin
+    sleep 5
+    assert_tier_sc /jfs/tag_force_case/file.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/tag_force_case/file.bin STANDARD_IA
+    assert_object_tag_by_path /jfs/tag_force_case/file.bin "version" "v1"
+
+    # Update the tier config with a new tag (same storage class)
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "version=v2" -y
+    sleep 2
+
+    # Regular tier set should skip because storage class is the same
+    ./juicefs tier set "$META_URL" --tier 1 /tag_force_case/file.bin
+    sleep 3
+    # Tag should still be v1 on the object (not updated without --force)
+    assert_object_tag_by_path /jfs/tag_force_case/file.bin "version" "v1"
+
+    # With --force, the tag should be updated
+    tier_set_no_err "$META_URL" --tier 1 /tag_force_case/file.bin --force
+    sleep 5
+    assert_tier_sc /jfs/tag_force_case/file.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/tag_force_case/file.bin STANDARD_IA
+    assert_object_tag_by_path /jfs/tag_force_case/file.bin "version" "v2"
+}
+
+test_tier_tag_recursive_set()
+{
+    # Test recursive tier set with tags on directory tree
+    setup_tier_volume
+
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "dept=engineering" -y
+    sleep 2
+
+    mkdir -p /jfs/tag_recursive_case/sub1/sub2
+    dd if=/dev/urandom of=/jfs/tag_recursive_case/root.bin bs=1M count=2 status=none
+    dd if=/dev/urandom of=/jfs/tag_recursive_case/sub1/mid.bin bs=1M count=2 status=none
+    dd if=/dev/urandom of=/jfs/tag_recursive_case/sub1/sub2/deep.bin bs=1M count=2 status=none
+
+    tier_set_no_err "$META_URL" --tier 1 /tag_recursive_case -r
+    sleep 5
+
+    # All files should have tier 1
+    assert_tier_id /jfs/tag_recursive_case/root.bin 1
+    assert_tier_id /jfs/tag_recursive_case/sub1/mid.bin 1
+    assert_tier_id /jfs/tag_recursive_case/sub1/sub2/deep.bin 1
+
+    # All files should have the correct storage class
+    assert_object_storage_class_by_path /jfs/tag_recursive_case/root.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/tag_recursive_case/sub1/mid.bin STANDARD_IA
+    assert_object_storage_class_by_path /jfs/tag_recursive_case/sub1/sub2/deep.bin STANDARD_IA
+
+    # All files should have the correct tag
+    assert_object_tag_by_path /jfs/tag_recursive_case/root.bin "dept" "engineering"
+    assert_object_tag_by_path /jfs/tag_recursive_case/sub1/mid.bin "dept" "engineering"
+    assert_object_tag_by_path /jfs/tag_recursive_case/sub1/sub2/deep.bin "dept" "engineering"
+}
+
+test_tier_tag_inherit_on_write()
+{
+    # Test that new files inherit parent dir tier (including tag) when written
+    setup_tier_volume
+
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "policy=cold" -y
+    sleep 2
+
+    mkdir -p /jfs/tag_inherit_case
+    tier_set_no_err "$META_URL" --tier 1 /tag_inherit_case
+    assert_tier_id /jfs/tag_inherit_case 1
+
+    # Write a new file - it should inherit tier 1 from parent
+    dd if=/dev/urandom of=/jfs/tag_inherit_case/new_file.bin bs=1M count=4 status=none
+    sleep 5
+
+    # New file should inherit tier 1
+    assert_tier_id /jfs/tag_inherit_case/new_file.bin 1
+    assert_tier_sc /jfs/tag_inherit_case/new_file.bin STANDARD_IA
+
+    # New file's S3 object should have the correct storage class and tag
+    assert_object_storage_class_by_path /jfs/tag_inherit_case/new_file.bin STANDARD_IA
+    assert_object_tag_by_path /jfs/tag_inherit_case/new_file.bin "policy" "cold"
+
+    # Create subdirectory and write file
+    mkdir -p /jfs/tag_inherit_case/subdir
+    # Subdir should inherit from parent
+    assert_tier_id /jfs/tag_inherit_case/subdir 1
+
+    dd if=/dev/urandom of=/jfs/tag_inherit_case/subdir/nested.bin bs=1M count=2 status=none
+    sleep 5
+    assert_tier_id /jfs/tag_inherit_case/subdir/nested.bin 1
+    assert_object_storage_class_by_path /jfs/tag_inherit_case/subdir/nested.bin STANDARD_IA
+    assert_object_tag_by_path /jfs/tag_inherit_case/subdir/nested.bin "policy" "cold"
+}
+
+test_tier_tag_change_mapping()
+{
+    # Test changing tier tag mapping and using --force to apply new tag
+    setup_tier_volume
+
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING --tag "stage=prod" -y
+    sleep 2
+
+    mkdir -p /jfs/tag_change_case
+    dd if=/dev/urandom of=/jfs/tag_change_case/file.bin bs=1M count=4 status=none
+
+    tier_set_no_err "$META_URL" --tier 2 /tag_change_case/file.bin
+    sleep 5
+    assert_tier_sc /jfs/tag_change_case/file.bin INTELLIGENT_TIERING
+    assert_object_tag_by_path /jfs/tag_change_case/file.bin "stage" "prod"
+
+    # Change the tier mapping to a different tag
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING --tag "stage=staging" -y
+    sleep 2
+
+    # File still shows old tag until --force is used
+    assert_object_tag_by_path /jfs/tag_change_case/file.bin "stage" "prod"
+
+    # Use --force to apply new tag
+    tier_set_no_err "$META_URL" --tier 2 /tag_change_case/file.bin --force
+    sleep 5
+    assert_object_tag_by_path /jfs/tag_change_case/file.bin "stage" "staging"
 }
 
 init_aws_bucket
