@@ -4088,6 +4088,8 @@ func testQuota(t *testing.T, m Meta) {
 	ctx := Background()
 	var inode, parent Ino
 	var attr Attr
+
+	_ = m.Remove(ctx, RootInode, "quota", true, 10, nil)
 	if st := m.Mkdir(ctx, RootInode, "quota", 0755, 0, 0, &parent, &attr); st != 0 {
 		t.Fatalf("Mkdir quota: %s", st)
 	}
