@@ -321,7 +321,7 @@ juicefs sync --worker host1,host2 /jfs-src /jfs-dst
 
 ### Global traffic control {#global-traffic-control}
 
-`--bwlimit` caps the bandwidth of a single `juicefs sync` process. When you run multiple sync processes in parallel—especially with [distributed synchronization](#distributed-sync)—each process enforces its own local limit independently, so the aggregate bandwidth across all processes can greatly exceed the intended cap.
+`--bwlimit` applies only to a single `juicefs sync` process. When multiple sync processes run concurrently (for example, when using [distributed synchronization](#distributed-sync)), each process enforces its own bandwidth limit independently, so the aggregate bandwidth of all processes may greatly exceed the expected limit.
 
 `--traffic-control-url` solves this by pointing every sync process at a central HTTP server that acts as a shared token-bucket. All processes request bandwidth tokens from the server before transferring data, ensuring that the total throughput across all running instances never exceeds the server-configured rate.
 
