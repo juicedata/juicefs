@@ -332,7 +332,7 @@ The sync client and your traffic-control server communicate via a simple JSON-ov
 | Direction | Method | Path | Body | Description |
 |-----------|--------|------|------|-------------|
 | Request tokens | POST | `<url>` | `{"bytes": N}` | Ask for N bytes of bandwidth. N > 0. |
-| Return unused tokens | POST | `<url>` | `{"bytes": -N}` | Return N bytes that will not be used. N < 0. |
+| Return unused tokens | POST | `<url>` | `{"bytes": -N}` | Return N bytes of unused tokens to the server. N < 0. |
 
 **Response** (JSON):
 
