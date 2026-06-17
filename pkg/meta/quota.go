@@ -280,6 +280,8 @@ func (m *baseMeta) loadQuotas() {
 	if !m.getFormat().DirStats {
 		return
 	}
+	m.quotasFlushLock.Lock()
+	defer m.quotasFlushLock.Unlock()
 	quotas, err := m.en.doLoadQuotas(Background())
 	if err == nil {
 		m.quotaMu.Lock()
