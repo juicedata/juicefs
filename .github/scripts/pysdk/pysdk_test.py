@@ -1,14 +1,16 @@
 import errno
 import fractions
-import unittest
 import os
 import pwd
-from os.path import dirname
 import sys
 import time
+import unittest
+from os.path import dirname
+
 sys.path.append('.')
+from bench import random_read, random_write, seq_read, seq_write
+
 from sdk.python.juicefs.juicefs import juicefs
-from bench import seq_write, random_write, seq_read, random_read
 
 TESTFN='/test'
 TESTFILE='/test/file'
@@ -411,17 +413,29 @@ class ClientParamsTests(FileTests):
         self.assertEqual(read_data, test_data)
 
         cache_dir = "/tmp/jfs_test_cache"
-        cache_size = 0
-        for root, dirs, files in os.walk(cache_dir):
-            for file in files:
-                if file.endswith('.tmp'):
-                    continue
-                path = os.path.join(root, file)
-                try:
-                    cache_size += os.path.getsize(path)
-                except FileNotFoundError:
-                    continue
-        self.assertGreaterEqual(cache_size, size_mb * 1024 * 1024/2)
+
+        def get_cache_size():
+            total = 0
+            for root, dirs, files in os.walk(cache_dir):
+                for file in files:
+                    if file.endswith('.tmp'):
+                        continue
+                    path = os.path.join(root, file)
+                    try:
+                        total += os.path.getsize(path)
+                    except FileNotFoundError:
+                        continue
+            return total
+
+        expected = size_mb * 1024 * 1024 / 2
+        deadline = time.time() + 60
+        cache_size = get_cache_size()
+        while cache_size < expected and time.time() < deadline:
+            with v.open(self.testfile, 'rb') as f:
+                f.read()
+            time.sleep(1)
+            cache_size = get_cache_size()
+        self.assertGreaterEqual(cache_size, expected)
 
     def test_io_limits(self):
         v = juicefs.Client(
