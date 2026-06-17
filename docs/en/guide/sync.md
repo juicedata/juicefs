@@ -345,7 +345,7 @@ The client blocks on the POST request until the server responds, so the server's
 
 ### Reference server implementation
 
-The following is a minimal Go server that enforces a 3 MB/s average rate with a 10 MB burst using [`github.com/juju/ratelimit`](https://github.com/juju/ratelimit):
+The following is a minimal Go server that implements a global bandwidth limit with an average rate of 3 MB/s and a burst capacity of 10 MB using [`github.com/juju/ratelimit`](https://github.com/juju/ratelimit):
 
 ```go
 package main
