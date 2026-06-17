@@ -394,7 +394,7 @@ func main() {
 
 ### Usage
 
-Start the server on a host reachable by all sync processes, then pass its token endpoint to every `juicefs sync` call:
+Start the server on a host reachable by all sync processes, and then pass its token endpoint to each `juicefs sync` call:
 
 ```shell
 # Run the traffic control server (once, on any accessible host)
