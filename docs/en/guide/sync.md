@@ -341,7 +341,7 @@ The sync client and your traffic-control server communicate via a simple JSON-ov
 | `granted` | int64 | Number of bytes actually granted (equal to the requested amount for a blocking server). |
 | `expired` | int64 | Token validity in **milliseconds**. The client returns unused tokens before this deadline. |
 
-The client blocks on the POST until the server responds, so the server's internal rate limiter (e.g. a token bucket) is what enforces the global cap.
+The client blocks on the POST request until the server responds, so the server's internal token bucket (or any other rate-limiting logic) is what enforces the global limit.
 
 ### Reference server implementation
 
