@@ -71,12 +71,15 @@ jobs:
           ./configure
           make
           sudo make install
-          pip install kirk
           cd /opt/ltp
+          sudo mkdir -p output
           sudo chmod +x /tmp/rm_list.sh
-          sudo chmod 777 runtest/fs
-          sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
-          sudo kirk --run-suite fs-jfs --sut default --tmp-dir /tmp/jfs -o result.log -f result.log.failed -T result.log.tconf
+          sudo cp runtest/fs runtest/fs-jfs
+          sudo chmod 777 runtest/fs-jfs
+          sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs-jfs
+          sudo /opt/ltp/kirk --no-colors --run-suite fs-jfs --sut default --tmp-dir /tmp/jfs 2>&1 | sudo tee /opt/ltp/output/result.log
+          sudo sh -c "grep -E '^(Broken:|Failures:|    • )' /opt/ltp/output/result.log > /opt/ltp/output/result.log.failed || true"
+          sudo sh -c "grep -i 'skip' /opt/ltp/output/result.log > /opt/ltp/output/result.log.tconf || true"
   
       - name: tconf Log
         if: always()
