@@ -307,6 +307,8 @@ func (m *baseMeta) loadQuotas() {
 	if !format.DirStats && !format.UserGroupQuota {
 		return
 	}
+	m.quotasFlushLock.Lock()
+	defer m.quotasFlushLock.Unlock()
 
 	dirQuotas, userQuotas, groupQuotas, err := m.en.doLoadQuotas(Background())
 	if err != nil {
