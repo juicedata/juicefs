@@ -104,6 +104,7 @@ recreate_aws_bucket_once()
     fi
 
     aws s3api wait bucket-exists --bucket "$AWS_BUCKET" --endpoint-url "$AWS_ENDPOINT_URL"
+    sleep 5
     aws s3api head-bucket --bucket "$AWS_BUCKET" --endpoint-url "$AWS_ENDPOINT_URL" >/tmp/aws.head_bucket.log 2>/tmp/aws.head_bucket.err || {
         cat /tmp/aws.head_bucket.err || true
         echo "<FATAL>: head-bucket failed for $AWS_BUCKET"
@@ -324,11 +325,12 @@ get_tier_tag_from_info()
 {
     local path=$1
     local tag
+    # Output format: " tier: 1->STANDARD_IA tag: owner=alice"
+    # "tag:" and the value are separate fields, so print the field after "tag:"
     tag=$(./juicefs info "$path" | awk '/tier:/ {
         for (i=1; i<=NF; i++) {
-            if ($i ~ /^tag:/) {
-                gsub(/^tag:/, "", $i)
-                print $i
+            if ($i == "tag:") {
+                print $(i+1)
                 exit
             }
         }

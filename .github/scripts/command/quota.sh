@@ -613,7 +613,9 @@ test_uid_gid_quota_same_file_interaction(){
 
     run_as_user_cmd "$TEST_USER_1" "touch /jfs/uid_gid_mix/f1"
     run_as_user_cmd "$TEST_USER_1" "touch /jfs/uid_gid_mix/f2"
+
     sleep $DIR_QUOTA_FLUSH_INTERVAL
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
 
     ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_gid_uid_before.log
     ./juicefs quota list $META_URL --gid "$TEST_GID_1" 2>&1 | tee uid_gid_gid_before.log
