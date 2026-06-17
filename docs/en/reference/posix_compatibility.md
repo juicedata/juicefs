@@ -86,7 +86,7 @@ JuiceFS passed most of the file system related tests.
    cd /opt/ltp
    ```
 
-5. Create test configuration files. To simplify testing, delete pressure tests, filesystem-unrelated entries, and tests not run on JuiceFS from `runtest/fs` and `runtest/syscalls`, modified files are saved as `fs-jfs` and `syscalls-jfs` (see [Appendix](#appendix) for the detailed deletion list):
+5. Create test configuration files. To simplify testing, delete pressure tests, filesystem‑unrelated entries, and tests that do not run on JuiceFS from `runtest/fs` and `runtest/syscalls`. Then, save the modified files as `fs‑jfs` and `syscalls‑jfs`. (See [Appendix](#appendix) for the detailed deletion list.)
 
 6. Execute tests:
 
@@ -104,7 +104,7 @@ JuiceFS passed most of the file system related tests.
 
 ### Test result
 
-| Test suite | Runs | Passed | Failed | Broken | Skipped |
+| Test suite | Tests run | Passed | Failed | Broken | Skipped |
 |------------|------|--------|--------|--------|---------|
 | fs_bind | 95 | 95 | 0 | 0 | 0 |
 | fs_perms_simple | 18 | 18 | 0 | 0 | 0 |
@@ -114,7 +114,7 @@ JuiceFS passed most of the file system related tests.
 | fcntl-locktests | 1 | 1 | 0 | 0 | 0 |
 | **Total** | **1479** | **1454** | **0** | **0** | **25** |
 
-All file system related tests run on JuiceFS passed with 0 failures and 0 broken.
+All file system-related tests run on JuiceFS passed, with 0 failures and 0 broken tests.
 
 ### Appendix
 
@@ -162,10 +162,10 @@ quota_remount_test01 quota_remount_test01.sh
 isofs isofs.sh
 
 ## syscalls --> syscalls-jfs
-# Only key items related to FUSE and JuiceFS incompatibility are listed here.
+# A large number of unrelated test cases were removed from the syscalls suite. Only some cases unsupported by FUSE or JuiceFS are listed here.
 # For the complete list, please refer to .github/workflows/bash/rm_syscalls
 
-# Pure kernel functionality tests, unrelated to userspace filesystems
+# Pure kernel functionality tests, unrelated to userspace filesystems.
 close_range01 close_range01
 close_range02 close_range02
 openat201 openat201
@@ -176,7 +176,7 @@ openat203 openat203
 listxattr04 listxattr04
 io_uring02 io_uring02
 
-# Tests skipped due to environment issues, require newer kernel versions
+# Tests skipped due to environment limitations; they require a newer kernel version
 listmount04 listmount04
 name_to_handle_at03 name_to_handle_at03
 statmount09 statmount09
@@ -196,13 +196,13 @@ openat02 openat02
 unlink09 unlink09
 mount03 mount03
 
-# FUSE kernel module unsupported tests
+# Tests unsupported by the FUSE kernel module
 fanotify10 fanotify10
 fanotify13 fanotify13
 fanotify16 fanotify16
 fanotify18 fanotify18
 fanotify19 fanotify19
 
-# JuiceFS does not support FS_NOCOW_FL flag
+# JuiceFS does not support the FS_NOCOW_FL flag
 fallocate06 fallocate06
 ```
