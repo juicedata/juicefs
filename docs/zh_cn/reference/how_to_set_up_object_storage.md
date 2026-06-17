@@ -268,6 +268,19 @@ juicefs format \
 所有 S3 兼容的对象存储服务其 `--bucket` 选项的格式为 `https://<bucket>.<endpoint>` 或者 `https://<endpoint>/<bucket>`，默认的 `region` 为 `us-east-1`，当需要不同的 `region` 的时候，可以通过环境变量 `AWS_REGION` 或者 `AWS_DEFAULT_REGION` 手动设置。
 :::
 
+:::tip 提示
+对于 AWS SDK 的请求和响应 checksum，JuiceFS 默认将 `AWS_REQUEST_CHECKSUM_CALCULATION` 和 `AWS_RESPONSE_CHECKSUM_VALIDATION` 设置为 `when_required`。这样只有在 S3 要求时才会发送或校验 SDK 层面的 checksum header，可以提升对 S3 兼容服务的兼容性。
+
+如果使用的是 Amazon S3，并且希望 SDK 在操作支持 checksum 时都进行计算和校验，可以在运行 JuiceFS 前设置以下环境变量：
+
+```shell
+export AWS_REQUEST_CHECKSUM_CALCULATION=when_supported
+export AWS_RESPONSE_CHECKSUM_VALIDATION=when_supported
+```
+
+以上配置只控制 AWS SDK 层面的 checksum。`--bucket` 中的 `disable-checksum=true` 查询参数控制的是 JuiceFS 自身写入对象元数据的 CRC checksum。
+:::
+
 ### Google 云存储 {#google-cloud}
 
 Google 云采用 [IAM](https://cloud.google.com/iam/docs/overview) 管理资源的访问权限，通过对[服务账号](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-gcloud)授权，可以对云服务器、对象存储的访问权限进行精细化的控制。

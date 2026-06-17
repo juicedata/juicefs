@@ -269,6 +269,19 @@ juicefs format \
 The format of the option `--bucket` for all S3 compatible object storage services is `https://<bucket>.<endpoint>` or `https://<endpoint>/<bucket>`. The default `region` is `us-east-1`. When a different `region` is required, it can be set manually via the environment variable `AWS_REGION` or `AWS_DEFAULT_REGION`.
 :::
 
+:::tip
+For AWS SDK request and response checksums, JuiceFS defaults `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required`. This avoids sending or validating SDK-level checksum headers unless S3 requires them, which improves compatibility with S3-compatible services.
+
+If you use Amazon S3 and want the SDK to calculate and validate checksums whenever the operation supports them, set the environment variables before running JuiceFS:
+
+```shell
+export AWS_REQUEST_CHECKSUM_CALCULATION=when_supported
+export AWS_RESPONSE_CHECKSUM_VALIDATION=when_supported
+```
+
+This only controls AWS SDK-level checksums. The `disable-checksum=true` bucket query option controls JuiceFS' own CRC checksum stored in object metadata.
+:::
+
 ### Google Cloud Storage {#google-cloud}
 
 Google Cloud uses [IAM](https://cloud.google.com/iam/docs/overview) to manage permissions for accessing resources. Through authorizing [service accounts](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-gcloud), you can have a fine-grained control of the access rights of cloud servers and object storage.
