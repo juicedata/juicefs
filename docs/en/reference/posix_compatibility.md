@@ -162,7 +162,7 @@ quota_remount_test01 quota_remount_test01.sh
 isofs isofs.sh
 
 ## syscalls --> syscalls-jfs
-# A large number of unrelated test cases were removed from the syscalls suite. Only some cases unsupported by FUSE or JuiceFS are listed here.
+# A large number of test cases unrelated to file systems were removed from the syscalls suite. Only some cases unsupported by FUSE or JuiceFS are listed here.
 # For the complete list, please refer to .github/workflows/bash/rm_syscalls
 
 # Pure kernel functionality tests, unrelated to userspace filesystems.

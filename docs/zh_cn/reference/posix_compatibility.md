@@ -156,7 +156,7 @@ quota_remount_test01 quota_remount_test01.sh
 isofs isofs.sh
 
 ## syscalls --> syscalls-jfs
-# syscall中删除的用例较多，这里仅记录一些fuse和juicefs不支持的用例
+# syscall中与文件系统无关的用例较多，这里仅记录一些fuse和juicefs不支持的用例
 # 完整列表请参考 .github/workflows/bash/rm_syscalls
 
 # 纯内核功能测试，与用户态文件系统无关
