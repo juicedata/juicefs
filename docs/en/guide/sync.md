@@ -325,7 +325,7 @@ juicefs sync --worker host1,host2 /jfs-src /jfs-dst
 
 `--traffic-control-url` solves this by pointing all sync processes to the same centralized traffic-control HTTP server that acts as a shared token-bucket. All processes request bandwidth tokens from the server before transferring data, ensuring that the total throughput across all running instances never exceeds the server-configured rate.
 
-### HTTP API contract
+### HTTP API protocol
 
 The sync client and your traffic-control server communicate via a simple JSON-over-HTTP protocol:
 
