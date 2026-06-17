@@ -404,7 +404,7 @@ go run traffic_control_server.go
 juicefs sync --traffic-control-url http://10.0.0.1:8080/token s3://src/ s3://dst/
 ```
 
-`--bwlimit` and `--traffic-control-url` can be used together: `--bwlimit` enforces a per-process ceiling while `--traffic-control-url` enforces the global ceiling.
+`--bwlimit` and `--traffic-control-url` can be used together: `--bwlimit` sets a limit for each individual process, while `--traffic-control-url` enforces a global limit across all processes.
 
 ## Observation {#observation}
 
