@@ -113,11 +113,10 @@ In addition to `storage-class`, you can assign a custom object tag to a tier, in
 juicefs config redis://localhost --tier 1 --storage-class STANDARD --tag juicefs-tier=archive -y
 ```
 
-You can also set a tag for the default tier (tier 0) when formatting or mounting:
+You can also set a tag for the default tier (tier 0) when formatting:
 
 ```shell
 juicefs format --storage-class STANDARD --tag juicefs-tier=archive redis://localhost myjfs
-juicefs mount --tag juicefs-tier=archive redis://localhost /mountpoint
 ```
 
 Once set, JuiceFS automatically attaches the tag to objects when they are uploaded. You can review the `tag` of each tier with `juicefs tier list`, or inspect a specific file's tag with `juicefs info`.

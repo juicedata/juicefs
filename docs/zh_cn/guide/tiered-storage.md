@@ -112,11 +112,10 @@ juicefs info /mountpoint/path/to/file
 juicefs config redis://localhost --tier 1 --storage-class STANDARD --tag juicefs-tier=archive -y
 ```
 
-也可以在格式化或挂载时为默认层（tier 0）设置标签：
+也可以在格式化时为默认层（tier 0）设置标签：
 
 ```shell
 juicefs format --storage-class STANDARD --tag juicefs-tier=archive redis://localhost myjfs
-juicefs mount --tag juicefs-tier=archive redis://localhost /mountpoint
 ```
 
 设置后，JuiceFS 在上传对象时会自动附加该标签。可通过 `juicefs tier list` 查看每个 tier 的 `tag`，或用 `juicefs info` 查看具体文件的标签。
