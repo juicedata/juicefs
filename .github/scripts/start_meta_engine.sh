@@ -135,8 +135,6 @@ start_meta_engine(){
         retry install_tidb
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
     elif [ "$meta" == "etcd" ]; then
-        # On newer Ubuntu (24.04+) the etcd package is split and the server is
-        # no longer auto-started by apt, so start it explicitly and wait for it.
         sudo .github/scripts/apt_install.sh etcd-server etcd-client || \
             sudo .github/scripts/apt_install.sh etcd
         sudo systemctl unmask etcd 2>/dev/null || true
