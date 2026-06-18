@@ -55,8 +55,11 @@ func TestWarmup(t *testing.T) {
 		cacheDir = fmt.Sprintf("%s/.juicefs/cache", homeDir)
 	}
 
-	os.RemoveAll(fmt.Sprintf("%s/%s", cacheDir, uuid))
 	defer os.RemoveAll(fmt.Sprintf("%s/%s", cacheDir, uuid))
+
+	if err = Main([]string{"", "warmup", "--evict", testMountPoint}); err != nil {
+		t.Fatalf("evict: %s", err)
+	}
 
 	if err = Main([]string{"", "warmup", testMountPoint}); err != nil {
 		t.Fatalf("warmup: %s", err)
