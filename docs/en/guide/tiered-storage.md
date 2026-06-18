@@ -140,4 +140,4 @@ The tag must be in the `key=value` format (exactly one `=`, with a non-empty key
 - `--tier` only `0` to `3` are allowed.
 - In writeback-cache mode (`--writeback`), `tier set` may fail if the file's data has not yet been uploaded to object storage. Wait for the upload to complete, then retry.
 - Changing `--storage-class` does **not** automatically migrate existing objects. You must run `tier set ... --force` manually.
-- `--tag` only takes effect when uploading new objects; it does not modify the tags of objects that already exist in object storage.
+- `--tag` only applies to newly uploaded objects. It does not modify the tags of existing objects in object storage.
