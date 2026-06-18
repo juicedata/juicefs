@@ -12,6 +12,7 @@ JuiceFS 从 v1.4 开始支持分层存储，可以把不同目录或文件映射
   - `0` 为默认层。
   - `1~3` 为可配置层。
 - **storage-class**：某个 tier 对应的对象存储类型（例如 `STANDARD_IA`、`INTELLIGENT_TIERING`、`GLACIER_IR`）。
+- **tag**：某个 tier 对应的自定义对象标签，格式为 `key=value`。上传对象时会附加该标签，可配合云厂商的生命周期规则使用（详见[自定义标签（tag）](#6-自定义标签tag)）。
 - **文件/目录的 tier 属性**：存储在元数据中，决定后续写入或迁移时应使用的存储类型。
 
 ## 使用前提
@@ -103,9 +104,39 @@ juicefs info /mountpoint/path/to/file
 - 当映射与对象实际存储类型不一致时，会显示 `expected(...),actual(...)`，提示需要执行 `tier set --force` 重写。
 - 对 `tier=0`，会显示对象实际存储类型（`actual(...)`）。
 
+## 6. 自定义标签（tag）
+
+除了 `storage-class`，还可以为某个 tier 配置自定义对象标签（tag），格式为 `key=value`：
+
+```shell
+juicefs config redis://localhost --tier 1 --storage-class STANDARD --tag juicefs-tier=archive -y
+```
+
+也可以在格式化时为默认层（tier 0）设置标签：
+
+```shell
+juicefs format --storage-class STANDARD --tag juicefs-tier=archive redis://localhost myjfs
+```
+
+设置后，JuiceFS 在上传对象时会自动附加该标签。可通过 `juicefs tier list` 查看每个 tier 的 `tag`，或用 `juicefs info` 查看具体文件的标签。
+
+### 典型用法：配合生命周期规则下沉到归档层
+
+直接以归档类型（如 `GLACIER`、`DEEP_ARCHIVE`）上传对象时，部分云厂商会按归档存储的写入/请求计费，单次上传的 API 费用较高。当目标是把数据下沉到归档层时，更经济的做法是：
+
+1. 仍以标准（`STANDARD`）等普通存储类型上传，同时为该 tier 设置一个自定义标签，例如 `--tag juicefs-tier=archive`。
+2. 在对象存储桶上配置生命周期规则，按该标签筛选对象，将命中标签的对象自动转换为归档存储类型。
+
+这样既避免了直接上传归档类型带来的高额 API 费用，又能借助云厂商的生命周期规则把数据平滑下沉到归档层。
+
+:::note 注意
+标签格式必须为 `key=value`（仅允许一个 `=`，且 key 与 value 均不能为空），否则会被拒绝或忽略。生命周期规则的具体配置方式请参考对应云厂商的文档。
+:::
+
 ## 注意事项
 
 1. `tier set` 仅支持文件和目录路径。
 2. `--tier` 仅允许 `0~3`。
 3. 在写回缓存（writeback）场景下，若文件数据尚未上传到对象存储，`tier set` 可能失败；待数据上传完成后再重试。
 4. 修改 `--storage-class` 不会自动迁移历史对象，需要手动执行 `tier set ... --force`。
+5. `--tag` 仅在上传新对象时生效，不会修改对象存储中已有对象的标签。
