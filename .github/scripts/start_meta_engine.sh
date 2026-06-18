@@ -137,11 +137,9 @@ start_meta_engine(){
     elif [ "$meta" == "etcd" ]; then
         sudo .github/scripts/apt_install.sh etcd-server etcd-client || \
             sudo .github/scripts/apt_install.sh etcd
-        sudo systemctl unmask etcd 2>/dev/null || true
+        sudo systemctl unmask etcd etcd-server 2>/dev/null || true
         sudo systemctl start etcd 2>/dev/null || \
             sudo systemctl start etcd-server 2>/dev/null || true
-        # etcd runs as the 'etcd' system user, so 'lsof -i' under the current
-        # user can't see its socket. Poll the health endpoint instead.
         timeout=30
         count=0
         until curl -fsS http://localhost:2379/health >/dev/null 2>&1; do
