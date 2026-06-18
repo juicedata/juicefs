@@ -844,7 +844,7 @@ In order to reach Ceph Monitor, `librados` reads Ceph configuration file by sear
 Since these additional Ceph configuration files are needed during the mount, CSI Driver users need to [upload them to Kubernetes, and map to the mount pod](https://juicefs.com/docs/csi/guide/pv/#mount-pod-extra-files).
 
 :::caution
-For workloads that only need to scan object keys, setting `JFS_OBJECT_NO_ORDER=1` or `JFS_OBJECT_NO_ORDER=true` skips sorting and per-object stat calls during Ceph RADOS listing. This improves listing speed for large pools, but the returned objects are unordered and don't include reliable size or modification time. Don't enable it for commands that rely on ordered listing or object metadata, such as `sync`.
+For workloads that only need to scan object keys, setting `JFS_OBJECT_NO_ORDER=1` or `JFS_OBJECT_NO_ORDER=true` skips sorting and per-object stat calls during Ceph RADOS listing. This improves listing speed for large pools, but the returned objects are unordered and do not include reliable size or modification time. Do not enable it for commands that rely on ordered listing or object metadata, such as `sync`.
 :::
 
 To format a volume, run:
