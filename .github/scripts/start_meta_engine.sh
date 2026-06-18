@@ -135,7 +135,26 @@ start_meta_engine(){
         retry install_tidb
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
     elif [ "$meta" == "etcd" ]; then
-        sudo .github/scripts/apt_install.sh etcd
+        # On newer Ubuntu (24.04+) the etcd package is split and the server is
+        # no longer auto-started by apt, so start it explicitly and wait for it.
+        sudo .github/scripts/apt_install.sh etcd-server etcd-client || \
+            sudo .github/scripts/apt_install.sh etcd
+        sudo systemctl unmask etcd 2>/dev/null || true
+        sudo systemctl start etcd 2>/dev/null || \
+            sudo systemctl start etcd-server 2>/dev/null || true
+        timeout=30
+        count=0
+        until lsof -i:2379; do
+            sleep 1
+            count=$((count+1))
+            if [ $count -eq $timeout ]; then
+                echo "etcd failed to start within $timeout seconds."
+                sudo journalctl -u etcd --no-pager | tail -50 || true
+                sudo journalctl -u etcd-server --no-pager | tail -50 || true
+                exit 1
+            fi
+        done
+        echo "etcd is running."
     elif [ "$meta" == "fdb" ]; then
         if lsof -i:4500; then
             echo "fdb is already running"
