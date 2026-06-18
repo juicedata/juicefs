@@ -1,4 +1,4 @@
-# JuiceFS — Copilot Instructions
+# AGENTS.md
 
 JuiceFS is a POSIX-compatible distributed file system written in Go
 (`module github.com/juicedata/juicefs`). A client coordinates a **metadata engine**
