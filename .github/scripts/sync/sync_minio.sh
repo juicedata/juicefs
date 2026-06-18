@@ -640,4 +640,180 @@ test_checkpoint_minio_signal_save(){
     [ $count1 -eq $count2 ] || (echo "file count mismatch after resume: $count1 vs $count2" && exit 1)
 }
 
+test_sync_multipart_stream_various_sizes(){
+    prepare_test
+    local part=$((5 * 1024 * 1024))  # 5MiB default part size
+    local sizes=(
+        $((part - 1))       # 5MiB-1  - single part
+        $((part + 1))       # 5MiB+1  - triggers 2 parts
+        $((part * 2))       # 10MiB   - 2 parts
+        $((part * 2 + 17))  # 10MiB+17 - odd-size 2 parts
+        $((part * 3 - 1))   # 15MiB-1 - 3 parts (tests non-aligned)
+    )
+
+    mkdir -p /jfs/stream_sizes
+    for size in "${sizes[@]}"; do
+        local filename="file_${size}"
+        # Write 4KiB random header then truncate to target size
+        dd if=/dev/urandom of="/jfs/stream_sizes/$filename" bs=4096 count=1 2>/dev/null
+        truncate -s "$size" "/jfs/stream_sizes/$filename"
+    done
+
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/stream_sizes/ \
+        minio://minioadmin:minioadmin@localhost:9000/myjfs/stream_sizes/ \
+        --threads 4 --debug 2>&1 | tee /tmp/sync_stream_sizes.log
+
+    # Verify all files synced correctly
+    for size in "${sizes[@]}"; do
+        local filename="file_${size}"
+        ./mc cp "myminio/myjfs/stream_sizes/$filename" "/tmp/$filename"
+        cmp "/jfs/stream_sizes/$filename" "/tmp/$filename" || \
+            (echo "FAIL: content mismatch for $filename (size=$size)" && exit 1)
+        rm -f "/tmp/$filename"
+    done
+
+    echo "PASS: multipart stream upload with various sizes"
+}
+
+test_sync_multipart_stream_concurrent(){
+    prepare_test
+    local num_files=3
+    local part=$((5 * 1024 * 1024))  # 5MiB default part size
+    local file_size=$((part * 2 + 1024))  # ~10MiB - triggers 3 parts
+
+    mkdir -p /jfs/stream_concurrent
+    for i in $(seq 1 $num_files); do
+        # Random header so cmp can detect corruption
+        dd if=/dev/urandom of="/jfs/stream_concurrent/file_$i" bs=4096 count=1 2>/dev/null
+        truncate -s "$file_size" "/jfs/stream_concurrent/file_$i"
+    done
+
+    # Sync with multiple threads to trigger concurrent multipart uploads
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/stream_concurrent/ \
+        minio://minioadmin:minioadmin@localhost:9000/myjfs/stream_concurrent/ \
+        --threads 6 --debug 2>&1 | tee /tmp/sync_stream_concurrent.log
+
+    # Verify all files
+    for i in $(seq 1 $num_files); do
+        ./mc cp "myminio/myjfs/stream_concurrent/file_$i" "/tmp/file_$i"
+        cmp "/jfs/stream_concurrent/file_$i" "/tmp/file_$i" || \
+            (echo "FAIL: content mismatch for file_$i" && exit 1)
+        rm -f "/tmp/file_$i"
+    done
+
+    # Check for any errors in log
+    grep -i "panic:\|<FATAL>" /tmp/sync_stream_concurrent.log && \
+        (echo "FAIL: panic or fatal error in concurrent stream sync" && exit 1) || true
+
+    echo "PASS: concurrent multipart stream upload"
+}
+
+test_sync_multipart_stream_integrity(){
+    prepare_test
+    local part=$((5 * 1024 * 1024))  # 5MiB default part size
+    local file_size=$((part * 3))    # 15MiB - 3 parts
+    local filename="integrity_check.bin"
+
+    # Full random content so MD5 detects any corruption
+    dd if=/dev/urandom of="/jfs/$filename" bs=1M count=15 2>/dev/null
+    local src_md5
+    src_md5=$(md5sum "/jfs/$filename" | awk '{print $1}')
+    local src_size
+    src_size=$(stat -c%s "/jfs/$filename" 2>/dev/null || stat -f%z "/jfs/$filename")
+
+    # Sync using stream API
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/$filename \
+        minio://minioadmin:minioadmin@localhost:9000/myjfs/$filename \
+        --threads 4 --debug 2>&1 | tee /tmp/sync_stream_integrity.log
+
+    # Download and verify
+    ./mc cp "myminio/myjfs/$filename" "/tmp/$filename"
+    local dst_md5
+    dst_md5=$(md5sum "/tmp/$filename" | awk '{print $1}')
+    local dst_size
+    dst_size=$(stat -c%s "/tmp/$filename" 2>/dev/null || stat -f%z "/tmp/$filename")
+
+    if [ "$src_md5" != "$dst_md5" ]; then
+        echo "FAIL: MD5 checksum mismatch"
+        echo "  src: $src_md5"
+        echo "  dst: $dst_md5"
+        exit 1
+    fi
+
+    if [ "$src_size" != "$dst_size" ]; then
+        echo "FAIL: file size mismatch"
+        echo "  src: $src_size"
+        echo "  dst: $dst_size"
+        exit 1
+    fi
+
+    rm -f "/tmp/$filename"
+    echo "PASS: multipart stream upload integrity check"
+}
+
+test_sync_multipart_stream_boundary(){
+    prepare_test
+    local part=$((5 * 1024 * 1024))  # 5MiB default part size
+
+    mkdir -p /jfs/stream_boundary
+    local sizes=(
+        $((part - 1))       # Just below 1 part
+        $part               # Exact 1 part
+        $((part + 1))       # Just above 1 part
+        $((part * 2 - 1))   # Just below 2 parts
+        $((part * 2))       # Exact 2 parts
+        $((part * 2 + 1))   # Just above 2 parts
+        $((part * 3 - 1))   # Just below 3 parts
+        $((part * 3))       # Exact 3 parts
+        $((part * 3 + 1))   # Just above 3 parts
+    )
+
+    for size in "${sizes[@]}"; do
+        local filename="boundary_${size}"
+        # Random 4KiB header + sparse tail for fast creation
+        dd if=/dev/urandom of="/jfs/stream_boundary/$filename" bs=4096 count=1 2>/dev/null
+        truncate -s "$size" "/jfs/stream_boundary/$filename"
+    done
+
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/stream_boundary/ \
+        minio://minioadmin:minioadmin@localhost:9000/myjfs/stream_boundary/ \
+        --threads 2 --debug 2>&1 | tee /tmp/sync_stream_boundary.log
+
+    # Verify all files
+    for size in "${sizes[@]}"; do
+        local filename="boundary_${size}"
+        ./mc cp "myminio/myjfs/stream_boundary/$filename" "/tmp/$filename"
+        cmp "/jfs/stream_boundary/$filename" "/tmp/$filename" || \
+            (echo "FAIL: content mismatch for $filename (size=$size)" && exit 1)
+        rm -f "/tmp/$filename"
+    done
+
+    echo "PASS: multipart stream upload boundary test"
+}
+
+test_sync_multipart_stream_fallback(){
+    prepare_test
+    local part=$((5 * 1024 * 1024))  # 5MiB default part size
+    local file_size=$((part * 2 + 1024))  # ~10MiB - 3 parts
+
+    dd if=/dev/urandom of="/jfs/fallback_test.bin" bs=4096 count=1 2>/dev/null
+    truncate -s "$file_size" "/jfs/fallback_test.bin"
+
+    # Sync from JFS mount directly to minio (no gateway in between)
+    ./juicefs sync /jfs/fallback_test.bin minio://minioadmin:minioadmin@localhost:9000/myjfs/fallback_test.bin \
+        --threads 2 --debug 2>&1 | tee /tmp/sync_stream_fallback.log
+
+    # Download and verify
+    ./mc cp "myminio/myjfs/fallback_test.bin" "/tmp/fallback_test.bin"
+    cmp "/jfs/fallback_test.bin" "/tmp/fallback_test.bin" || \
+        (echo "FAIL: content mismatch for fallback test" && exit 1)
+
+    # Check log doesn't have fatal errors
+    grep -i "panic:\|<FATAL>" /tmp/sync_stream_fallback.log && \
+        (echo "FAIL: panic or fatal error in fallback sync" && exit 1) || true
+
+    rm -f "/tmp/fallback_test.bin"
+    echo "PASS: multipart stream fallback test"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@
