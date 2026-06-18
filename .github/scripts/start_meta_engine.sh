@@ -140,9 +140,11 @@ start_meta_engine(){
         sudo systemctl unmask etcd 2>/dev/null || true
         sudo systemctl start etcd 2>/dev/null || \
             sudo systemctl start etcd-server 2>/dev/null || true
+        # etcd runs as the 'etcd' system user, so 'lsof -i' under the current
+        # user can't see its socket. Poll the health endpoint instead.
         timeout=30
         count=0
-        until lsof -i:2379; do
+        until curl -fsS http://localhost:2379/health >/dev/null 2>&1; do
             sleep 1
             count=$((count+1))
             if [ $count -eq $timeout ]; then
