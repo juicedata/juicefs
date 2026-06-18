@@ -801,6 +801,10 @@ make juicefs.ceph
 - `~/.ceph/config`
 - 在当前工作目录中的 `ceph.conf`
 
+:::caution
+对于只需要扫描对象 key 的任务，可以设置 `JFS_OBJECT_NO_ORDER=1` 或 `JFS_OBJECT_NO_ORDER=true`，跳过 Ceph RADOS 列举时的排序和逐对象 stat 调用。这个设置能提升大规模存储池的列举速度，但返回的对象是无序的，且不包含可靠的大小和修改时间。不要在依赖有序列举或对象元数据的命令中启用它，例如 `sync` 等。
+:::
+
 创建一个文件系统：
 
 ```bash
