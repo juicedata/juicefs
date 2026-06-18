@@ -430,7 +430,7 @@ tier_set_no_err()
         path_arg="$arg"
     done
     for attempt in $(seq 1 "$max_retries"); do
-        echo "=== juicefs tier set (attempt $attempt/$max_retries): $* ==="
+        echo "=== juicefs tier set (attempt $attempt/$max_retries): path=$path_arg ==="
         ./juicefs tier set "$@" 2>&1 | tee "$tmpout"
         status=${PIPESTATUS[0]}
 
@@ -446,11 +446,11 @@ tier_set_no_err()
         fi
 
         if [[ "$failed" -eq 0 ]]; then
-            echo "juicefs tier set succeeded on attempt $attempt/$max_retries: $*"
+            echo "juicefs tier set succeeded on attempt $attempt/$max_retries: path=$path_arg"
             return 0
         fi
 
-        echo "<WARNING>: juicefs tier set failed ($reason) on attempt $attempt/$max_retries: $*"
+        echo "<WARNING>: juicefs tier set failed ($reason) on attempt $attempt/$max_retries: path=$path_arg"
         grep -E '<ERROR>|<FATAL>' "$tmpout" || true
         if [[ "$attempt" -lt "$max_retries" ]]; then
             echo "retrying (next attempt $((attempt + 1))/$max_retries)..."
@@ -458,7 +458,7 @@ tier_set_no_err()
             continue
         fi
 
-        echo "<FATAL>: juicefs tier set still failing after $max_retries attempts: $*"
+        echo "<FATAL>: juicefs tier set still failing after $max_retries attempts: path=$path_arg"
         [[ -n "$path_arg" ]] && assert_info_no_empty_object_name "/jfs/${path_arg#/}"
         exit 1
     done
