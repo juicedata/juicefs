@@ -71,7 +71,7 @@ When fixing a bug, add a regression test that fails before the fix and passes af
 ## Lint & format
 
 - Run `go fmt` before committing.
-- Linting uses `golangci-lint` (v1.52.2) per `.golangci.yml`.
+- Linting uses `golangci-lint` per `.golangci.yml`; pre-commit pins v1.52.2 and CI runs v2.6 (see `.github/workflows/verify.yml`).
 - Install hooks once with `pre-commit install` (config in `.pre-commit-config.yaml`).
 
 ## Code style & license header
