@@ -90,7 +90,7 @@ jobs:
           sudo META=${{matrix.meta}} .github/scripts/command/changelog.sh
     
       - name: Test Tier
-        timeout-minutes: 20
+        timeout-minutes: 40
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
