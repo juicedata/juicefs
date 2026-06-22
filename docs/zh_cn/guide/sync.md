@@ -146,6 +146,10 @@ juicefs sync --match-full-path --exclude='**/tmpdir/**' s3://xxx/ s3://xxx
 
 凡是 JuiceFS 支持的[存储系统](../reference/how_to_set_up_object_storage.md)，都可以使用 sync 命令来同步数据。特别一提，如果其中一端是 JuiceFS 文件系统，那么建议优先使用[无挂载点同步](#sync-without-mount-point)方式。
 
+:::note 路径中包含特殊字符
+`juicefs sync` 会将数据源和目标端的路径当作 URL 来解析，因此如果路径中含有 `#` 等在 URL 中具有特殊含义的字符，需要先进行转义（URL 编码），否则路径会被截断或解析错误。比如 `#` 需要写成 `%23`，路径 `a/b#c/d` 应当写成 `a/b%23c/d`。
+:::
+
 ### 无挂载点同步 <VersionAdd>1.1</VersionAdd> {#sync-without-mount-point}
 
 在两个存储系统之间同步数据，如果其中一方是 JuiceFS，推荐直接使用 `jfs://` 协议头，而不是先挂载 JuiceFS，再访问本地目录。这样便能跳过挂载点，直接读取或写入数据，在大规模场景下，绕过 FUSE 挂载点将能节约资源开销以及提升数据同步性能。

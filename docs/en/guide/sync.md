@@ -135,6 +135,10 @@ One solution is to include all directories in the directory hierarchy by using t
 
 You can sync data between any [supported storage system](../reference/how_to_set_up_object_storage.md), but note that if one of the endpoint is a JuiceFS volume, it it then recommended to [sync without mount point](#sync-without-mount-point) since it runs without FUSE overhead.
 
+:::note Paths containing special characters
+`juicefs sync` parses both the source and destination paths as URLs, so if a path contains characters that have a special meaning in a URL (such as `#`), they must be escaped (URL-encoded) first, otherwise the path will be truncated or parsed incorrectly. For example, `#` must be written as `%23`, so the path `a/b#c/d` should be written as `a/b%23c/d`.
+:::
+
 ### Sync without mount point <VersionAdd>1.1</VersionAdd> {#sync-without-mount-point}
 
 For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
