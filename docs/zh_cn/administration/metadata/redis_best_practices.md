@@ -29,6 +29,19 @@ used_memory_dataset_perc: 70.12%
 
 其中 `used_memory_rss` 是 Redis 实际使用的总内存大小，这里既包含了存储在 Redis 中的数据大小（也就是上面的 `used_memory_dataset`），也包含了一些 Redis 的[系统开销](https://redis.io/commands/memory-stats)（也就是上面的 `used_memory_overhead`）。前面提到每个文件的元数据大约占用 300 字节是通过 `used_memory_dataset` 来计算的，如果你发现你的 JuiceFS 文件系统中单个文件元数据占用空间远大于 300 字节，可以尝试运行 [`juicefs gc`](../../reference/command_reference.mdx#gc) 命令来清理可能存在的冗余数据。
 
+### 内存写满（OOM）后的恢复 {#recover-from-oom}
+
+当 Redis 内存用量达到 `maxmemory` 上限后，所有写操作都会被拒绝并返回 `OOM command not allowed when used memory > 'maxmemory'` 错误。此时即使想通过 [`juicefs rmr`](../../reference/command_reference.mdx#rmr) 删除文件、或者[彻底删除回收站中的文件](../../security/trash.md#purge)来释放空间也会失败，因为这些删除操作本身仍需要向 Redis 写入数据才能完成。
+
+要从这种状态中恢复，可以参考以下方案：
+
+- **临时调高内存上限**：先通过 [`CONFIG SET maxmemory <new-value>`](https://redis.io/commands/config-set) 临时提高 Redis 的内存上限，让写操作恢复可用，再执行 `juicefs rmr` 或清空回收站等删除操作来释放空间；处理完毕后再将 `maxmemory` 改回原值。如果删除已无法释放出足够空间，也可以利用临时调高上限的时间窗口对 Redis 进行扩容。
+- **预留占位 key（推荐的事前准备）**：在文件系统正常运行时，事先向 Redis 写入一个体积较大的占位 key，预先占住一部分内存空间。一旦遇到 OOM 问题，直接删除这个占位 key 即可立刻释放出空间，从而让 `juicefs rmr`、清空回收站等删除操作得以执行。
+
+:::tip 提示
+为了避免再次触碰上限，建议在恢复后尽快清空回收站、运行 [`juicefs gc`](../../reference/command_reference.mdx#gc) 清理冗余数据，并视情况对 Redis 进行扩容。
+:::
+
 ## 数据可用性
 
 ### 哨兵模式 {#sentinel-mode}

@@ -29,6 +29,19 @@ used_memory_dataset_perc: 70.12%
 
 Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above) but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier that the metadata of each file occupies about 300 bytes, this is actually calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](../../reference/command_reference.mdx#gc) command to clean up possible redundant data.
 
+### Recover from out-of-memory (OOM) {#recover-from-oom}
+
+Once Redis memory usage reaches the `maxmemory` limit, all write operations are rejected with the error `OOM command not allowed when used memory > 'maxmemory'`. At this point, even attempting to free up space by deleting files with [`juicefs rmr`](../../reference/command_reference.mdx#rmr) or by [purging the trash](../../security/trash.md#purge) will fail, because these deletion operations still need to write to Redis to complete.
+
+To recover from this state, consider the following approaches:
+
+- **Temporarily raise the memory limit**: First use [`CONFIG SET maxmemory <new-value>`](https://redis.io/commands/config-set) to temporarily raise the Redis memory limit so that writes become available again, then run `juicefs rmr` or purge the trash to free up space, and finally restore `maxmemory` to its original value afterwards. If deletion alone cannot free up enough space, you can also use this window to scale up Redis.
+- **Reserve a placeholder key (recommended preparation in advance)**: While the file system is running normally, write a large placeholder key into Redis ahead of time to reserve a portion of memory. When an OOM situation occurs, simply delete this placeholder key to immediately free up space, allowing `juicefs rmr` and trash-purging operations to proceed.
+
+:::tip
+To avoid hitting the limit again, after recovering it is recommended to purge the trash and run [`juicefs gc`](../../reference/command_reference.mdx#gc) to clean up redundant data as soon as possible, and scale up Redis if necessary.
+:::
+
 ## High availability
 
 ### Sentinel mode {#sentinel-mode}
