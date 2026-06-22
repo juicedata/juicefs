@@ -6108,3 +6108,101 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 		t.Fatalf("Delete group quota: %s", err)
 	}
 }
+
+// errEngine wraps an engine and forces doCompactChunk to return a chosen error.
+// It is used to exercise the "data written but metadata failed" path in
+// compactChunk, where the result is neither 0 (success) nor EINVAL (wasted)
+// and the new slice may be orphaned in object storage.
+type errEngine struct {
+	engine
+	compactErr syscall.Errno
+	called     bool
+}
+
+func (e *errEngine) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
+	e.called = true
+	// Invoke the real implementation so the slice-ref state mirrors production
+	// behavior as closely as possible, then override the returned errno.
+	_ = e.engine.doCompactChunk(inode, indx, origin, ss, skipped, pos, id, size, delayed)
+	return e.compactErr
+}
+
+// TestCompactChunkOrphanLog verifies that when doCompactChunk returns an error
+// other than 0 or EINVAL (i.e. the false-negative recheck itself failed),
+// compactChunk logs the real errno and surfaces that the slice may be orphaned
+// instead of silently dropping the error or printing a nil value.
+func TestCompactChunkOrphanLog(t *testing.T) {
+	_ = os.Remove(settingPath)
+	m, err := newKVMeta("memkv", "jfs-test-orphan", testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	if err := m.Init(testFormat(), false); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+	if err := m.NewSession(false); err != nil {
+		t.Fatalf("new session: %v", err)
+	}
+	defer m.CloseSession()
+
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error { return nil })
+	m.OnMsg(CompactChunk, func(args ...interface{}) error { return nil })
+
+	ctx := Background()
+	var inode Ino
+	var attr = &Attr{}
+	_ = m.Unlink(ctx, 1, "f")
+	if st := m.Create(ctx, 1, "f", 0650, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create file: %s", st)
+	}
+	defer m.Unlink(ctx, 1, "f")
+
+	// Build a chunk with several small slices so that compactChunk has work
+	// to do (len(compacted) >= 2 && size > 0).
+	for i := 0; i < 5; i++ {
+		var sliceId uint64
+		m.NewSlice(ctx, &sliceId)
+		if st := m.Write(ctx, inode, 0, uint32(i)*100, Slice{Id: sliceId, Size: 100, Len: 100}, time.Now()); st != 0 {
+			t.Fatalf("write %d: %s", i, st)
+		}
+	}
+
+	// Capture logger output.
+	var logBuf bytes.Buffer
+	utils.SetOutput(&logBuf)
+	defer utils.SetOutput(os.Stderr)
+
+	// Swap the engine with one that injects a non-zero, non-EINVAL error
+	// from doCompactChunk to trigger the orphan-warning branch.
+	base := m.getBase()
+	origEn := base.en
+	injected := syscall.EAGAIN // arbitrary errno that is neither 0 nor EINVAL
+	wrapped := &errEngine{engine: origEn, compactErr: injected}
+	base.en = wrapped
+	defer func() { base.en = origEn }()
+
+	// Use force=false to avoid the recursive compactChunk call at the end of
+	// compactChunk, which would otherwise loop forever on the injected error.
+	if c, ok := m.(compactor); ok {
+		c.compactChunk(inode, 0, false, false, 0)
+	} else {
+		t.Skip("meta does not expose compactChunk")
+	}
+
+	if !wrapped.called {
+		t.Fatal("expected doCompactChunk to be invoked, but it was not")
+	}
+
+	out := logBuf.String()
+	if !strings.Contains(out, "orphaned") {
+		t.Errorf("expected log to mention 'orphaned', got: %s", out)
+	}
+	if !strings.Contains(out, "will be cleaned by gc") {
+		t.Errorf("expected log to mention gc cleanup, got: %s", out)
+	}
+	// The previous implementation printed `err` (which was always nil here)
+	// instead of `st`; make sure the real errno now shows up.
+	if !strings.Contains(out, injected.Error()) {
+		t.Errorf("expected log to contain %q, got: %s", injected.Error(), out)
+	}
+}
