@@ -38,10 +38,6 @@ used_memory_dataset_perc: 70.12%
 - **临时调高内存上限**：先通过 [`CONFIG SET maxmemory <new-value>`](https://redis.io/commands/config-set) 临时提高 Redis 的内存上限，让写操作恢复可用，再执行 `juicefs rmr` 或清空回收站等删除操作来释放空间；处理完毕后再将 `maxmemory` 改回原值。如果删除已无法释放出足够空间，也可以利用临时调高上限的时间窗口对 Redis 进行扩容。
 - **预留占位 key（推荐的事前准备）**：在文件系统正常运行时，事先向 Redis 写入一个体积较大的占位 key，预先占住一部分内存空间。一旦遇到 OOM 问题，直接删除这个占位 key 即可立刻释放出空间，从而让 `juicefs rmr`、清空回收站等删除操作得以执行。
 
-:::tip 提示
-为了避免再次触碰上限，建议在恢复后尽快清空回收站、运行 [`juicefs gc`](../../reference/command_reference.mdx#gc) 清理冗余数据，并视情况对 Redis 进行扩容。
-:::
-
 ## 数据可用性
 
 ### 哨兵模式 {#sentinel-mode}
