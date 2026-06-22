@@ -22,6 +22,7 @@ import (
 	"io/fs"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -29,6 +30,12 @@ import (
 
 func TestWebdav(t *testing.T) {
 	jfs := createTestFS(t)
+	defer func() {
+		if err := jfs.Close(); err != nil {
+			t.Logf("jfs.Close() failed: %v (may cause cleanup issues)", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}()
 	webdavFS := &webdavFS{meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())}), jfs, uint16(utils.GetUmask()), WebdavConfig{EnableProppatch: true}}
 	ctx := context.Background()
 	_, err := webdavFS.Stat(ctx, "/")
