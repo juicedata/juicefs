@@ -398,7 +398,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	uri, token := extractToken(uri)
 	u, err := url.Parse(uri)
 	if err != nil {
-		logger.Fatalf("Can't parse %q: %s", utils.RemovePassword(uri), err.Error())
+		logger.Fatalf("Can't parse %q: %s", utils.RemovePassword(uri), utils.RemovePassword(err.Error()))
 	}
 	user := u.User
 	var accessKey, secretKey string
