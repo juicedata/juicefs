@@ -361,39 +361,30 @@ func extractToken(uri string) (string, string) {
 	return uri, ""
 }
 
-// syncURI is a storage URI that may embed credentials. Its String method
-// redacts the secret key, so the value is always safe to print in logs.
-type syncURI string
-
-func (u syncURI) String() string {
-	return utils.RemovePassword(string(u))
-}
-
-func createSyncStorage(rawURI string, conf *sync.Config) (object.ObjectStorage, error) {
+func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
 	// nolint:staticcheck
-	uri := syncURI(strings.TrimPrefix(rawURI, "sftp://"))
-	if !strings.Contains(string(uri), "://") {
-		if isFilePath(string(uri)) {
-			absPath, err := filepath.Abs(string(uri))
+	uri = strings.TrimPrefix(uri, "sftp://")
+	if !strings.Contains(uri, "://") {
+		if isFilePath(uri) {
+			absPath, err := filepath.Abs(uri)
 			if err != nil {
 				logger.Fatalf("invalid path %q: %s", uri, err.Error())
 			}
 			if !strings.HasPrefix(absPath, "/") { // Windows path
 				absPath = "/" + strings.ReplaceAll(absPath, "\\", "/")
 			}
-			if strings.HasSuffix(string(uri), "/") {
+			if strings.HasSuffix(uri, "/") {
 				absPath += "/"
 			}
 
 			// Windows: file:///C:/a/b/c, Unix: file:///a/b/c
-			uri = syncURI("file://" + absPath)
+			uri = "file://" + absPath
 		} else { // sftp
-			host := string(uri)
 			var user string
-			if strings.Contains(host, "@") {
-				parts := strings.Split(host, "@")
+			if strings.Contains(uri, "@") {
+				parts := strings.Split(uri, "@")
 				user = parts[0]
-				host = parts[1]
+				uri = parts[1]
 			}
 			var pass string
 			if strings.Contains(user, ":") {
@@ -401,15 +392,13 @@ func createSyncStorage(rawURI string, conf *sync.Config) (object.ObjectStorage, 
 				user = parts[0]
 				pass = parts[1]
 			}
-			return object.CreateStorage("sftp", host, user, pass, "")
+			return object.CreateStorage("sftp", uri, user, pass, "")
 		}
 	}
-	rawURI, token := extractToken(string(uri))
-	uri = syncURI(rawURI)
-	u, err := url.Parse(rawURI)
+	uri, token := extractToken(uri)
+	u, err := url.Parse(uri)
 	if err != nil {
-		// url.Error.Error() embeds the raw URL (with credentials), so redact it.
-		logger.Fatalf("Can't parse %q: %s", uri, utils.RemovePassword(err.Error()))
+		logger.Fatalf("Can't parse %q: %s", uri, err.Error())
 	}
 	user := u.User
 	var accessKey, secretKey string
