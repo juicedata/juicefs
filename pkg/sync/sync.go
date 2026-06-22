@@ -2216,7 +2216,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			total := handled.GetTotal()
 			progress.Done()
 
-			msg := fmt.Sprintf("Found: %d, excluded: %d (%s), skipped: %d (%s), copied: %d (%s), extra: %d (%s)", total,
+			msg := fmt.Sprintf("Handled: %d, excluded: %d (%s), skipped: %d (%s), copied: %d (%s), extra: %d (%s)", total,
 				excluded.Current(), formatSize(excludedBytes.Current()),
 				skipped.Current(), formatSize(skippedBytes.Current()),
 				copied.Current(), formatSize(copiedBytes.Current()),
