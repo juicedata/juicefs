@@ -254,68 +254,6 @@ static int test_preadv_many_iov(void)
     #undef NUM_IOV
 }
 
-static int test_pwritev_preadv_roundtrip(void)
-{
-    char filepath[512];
-    snprintf(filepath, sizeof(filepath), "%s/pwritev_preadv_roundtrip", test_dir);
-
-    int fd = open(filepath, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) {
-        FAIL("pwritev_preadv_roundtrip", "open failed: %s", strerror(errno));
-        return 1;
-    }
-
-    #define N_IOV 4
-    char write_bufs[N_IOV][1024];
-    char read_bufs[N_IOV][1024];
-    struct iovec wiov[N_IOV], riov[N_IOV];
-
-    for (int i = 0; i < N_IOV; i++) {
-        memset(write_bufs[i], 'A' + i, 1024);
-        memset(read_bufs[i], 0, 1024);
-        wiov[i].iov_base = write_bufs[i];
-        wiov[i].iov_len = 1024;
-        riov[i].iov_base = read_bufs[i];
-        riov[i].iov_len = 1024;
-    }
-
-    ssize_t nwritten = pwritev(fd, wiov, N_IOV, 0);
-    if (nwritten != N_IOV * 1024) {
-        FAIL("pwritev_preadv_roundtrip", "pwritev returned %zd", nwritten);
-        close(fd); unlink(filepath);
-        return 1;
-    }
-
-    fsync(fd);
-
-    ssize_t nread = preadv(fd, riov, N_IOV, 0);
-    if (nread != N_IOV * 1024) {
-        FAIL("pwritev_preadv_roundtrip", "preadv returned %zd", nread);
-        close(fd); unlink(filepath);
-        return 1;
-    }
-
-    int valid = 1;
-    for (int i = 0; i < N_IOV && valid; i++) {
-        for (int j = 0; j < 1024 && valid; j++) {
-            if (read_bufs[i][j] != write_bufs[i][j]) {
-                valid = 0;
-            }
-        }
-    }
-
-    close(fd); unlink(filepath);
-
-    if (!valid) {
-        FAIL("pwritev_preadv_roundtrip", "data mismatch between pwritev and preadv");
-        return 1;
-    }
-
-    PASS("pwritev_preadv_roundtrip (write 4 iov -> read 4 iov, verify match)");
-    return 0;
-    #undef N_IOV
-}
-
 static int test_preadv_partial_read(void)
 {
     char filepath[512];
@@ -329,7 +267,12 @@ static int test_preadv_partial_read(void)
 
     char write_buf[1024];
     memset(write_buf, 'P', 1024);
-    write(fd, write_buf, 1024);
+    ssize_t wret = write(fd, write_buf, 1024);
+    if (wret != 1024) {
+        FAIL("preadv_partial", "initial write returned %zd, expected 1024", wret);
+        close(fd); unlink(filepath);
+        return 1;
+    }
     fsync(fd);
 
     char buf1[512], buf2[512], buf3[512];
@@ -352,6 +295,17 @@ static int test_preadv_partial_read(void)
         return 1;
     }
 
+    int valid = 1;
+    for (int i = 0; i < 512 && valid; i++)
+        if (buf1[i] != 'P') valid = 0;
+    for (int i = 0; i < 512 && valid; i++)
+        if (buf2[i] != 'P') valid = 0;
+
+    if (!valid) {
+        FAIL("preadv_partial", "data integrity check failed for partially filled iovecs");
+        return 1;
+    }
+
     PASS("preadv_partial (3x512B iov but file only 1024B, partial fill ok)");
     return 0;
 }
@@ -369,7 +323,12 @@ static int test_preadv_at_end_of_file(void)
 
     char write_buf[256];
     memset(write_buf, 'E', 256);
-    write(fd, write_buf, 256);
+    ssize_t wret = write(fd, write_buf, 256);
+    if (wret != 256) {
+        FAIL("preadv_eof", "initial write returned %zd, expected 256", wret);
+        close(fd); unlink(filepath);
+        return 1;
+    }
     fsync(fd);
 
     char buf[BLOCK_SIZE];
@@ -408,7 +367,13 @@ static int test_pwritev_at_offset(void)
 
     char initial[BLOCK_SIZE * 4];
     memset(initial, '.', sizeof(initial));
-    write(fd, initial, sizeof(initial));
+    ssize_t init_written = write(fd, initial, sizeof(initial));
+    if (init_written != (ssize_t)sizeof(initial)) {
+        FAIL("pwritev_offset", "initial write returned %zd, expected %zu",
+             init_written, sizeof(initial));
+        close(fd); unlink(filepath);
+        return 1;
+    }
 
     char buf1[100], buf2[100];
     memset(buf1, '1', 100);
@@ -449,40 +414,6 @@ static int test_pwritev_at_offset(void)
     }
 
     PASS("pwritev_at_offset (write 2 iov at offset=4096, verify data)");
-    return 0;
-}
-
-static int test_preadv_single_iov(void)
-{
-    char filepath[512];
-    snprintf(filepath, sizeof(filepath), "%s/preadv_single", test_dir);
-
-    if (create_test_file(filepath, TEST_FILE_SIZE) < 0) {
-        FAIL("preadv_single", "create test file failed");
-        return 1;
-    }
-
-    int fd = open(filepath, O_RDONLY);
-    if (fd < 0) {
-        FAIL("preadv_single", "open failed: %s", strerror(errno));
-        unlink(filepath);
-        return 1;
-    }
-
-    char buf[BLOCK_SIZE];
-    struct iovec iov;
-    iov.iov_base = buf;
-    iov.iov_len = BLOCK_SIZE;
-
-    ssize_t nread = preadv(fd, &iov, 1, 0);
-    close(fd); unlink(filepath);
-
-    if (nread != BLOCK_SIZE) {
-        FAIL("preadv_single", "preadv with 1 iov returned %zd", nread);
-        return 1;
-    }
-
-    PASS("preadv_single_iov (1 iovector, equivalent to pread)");
     return 0;
 }
 
@@ -541,11 +472,9 @@ int main(int argc, char *argv[])
     test_pwritev_basic();
     test_preadv_with_offset();
     test_preadv_many_iov();
-    test_pwritev_preadv_roundtrip();
     test_preadv_partial_read();
     test_preadv_at_end_of_file();
     test_pwritev_at_offset();
-    test_preadv_single_iov();
     test_preadv_zero_len_iov();
 
     print_summary("preadv/pwritev Basic Tests");

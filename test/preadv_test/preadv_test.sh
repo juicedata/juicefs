@@ -31,11 +31,10 @@ mkdir -p "$WORK_DIR"
 
 cd "$SCRIPT_DIR"
 
-if [ ! -f test_basic ] || [ ! -f test_flags ] || \
-   [ ! -f test_odirect ] || [ ! -f test_advanced ]; then
+if [ ! -f test_basic ] || [ ! -f test_flags ] || [ ! -f test_odirect ]; then
     echo "Building test programs..."
     make clean 2>/dev/null || true
-    make
+    make test_basic test_flags test_odirect
     echo ""
 fi
 

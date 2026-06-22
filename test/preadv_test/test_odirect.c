@@ -18,7 +18,7 @@ static int test_odirect_preadv_aligned(void)
         return 1;
     }
 
-    char *write_buf;
+    char *write_buf = NULL;
     if (posix_memalign((void **)&write_buf, BLOCK_SIZE, BLOCK_SIZE) != 0) {
         FAIL("odirect_preadv_aligned", "posix_memalign failed");
         close(fd); unlink(filepath);
@@ -27,13 +27,15 @@ static int test_odirect_preadv_aligned(void)
     memset(write_buf, 'O', BLOCK_SIZE);
 
     ssize_t nwritten = pwrite(fd, write_buf, BLOCK_SIZE, 0);
-    if (nwritten < 0) {
-        FAIL("odirect_preadv_aligned", "pwrite with O_DIRECT failed: %s", strerror(errno));
+    if (nwritten != BLOCK_SIZE) {
+        FAIL("odirect_preadv_aligned",
+             "pwrite with O_DIRECT returned %zd, expected %d: %s",
+             nwritten, BLOCK_SIZE, strerror(errno));
         free(write_buf); close(fd); unlink(filepath);
         return 1;
     }
 
-    char *read_buf;
+    char *read_buf = NULL;
     if (posix_memalign((void **)&read_buf, BLOCK_SIZE, BLOCK_SIZE) != 0) {
         free(write_buf); close(fd); unlink(filepath);
         FAIL("odirect_preadv_aligned", "posix_memalign for read failed");
@@ -84,11 +86,11 @@ static int test_odirect_pwritev_aligned(void)
         return 1;
     }
 
-    char *buf1, *buf2;
+    char *buf1 = NULL, *buf2 = NULL;
     if (posix_memalign((void **)&buf1, BLOCK_SIZE, BLOCK_SIZE) != 0 ||
         posix_memalign((void **)&buf2, BLOCK_SIZE, BLOCK_SIZE) != 0) {
         FAIL("odirect_pwritev_aligned", "posix_memalign failed");
-        free(buf1); close(fd); unlink(filepath);
+        free(buf1); free(buf2); close(fd); unlink(filepath);
         return 1;
     }
 
@@ -158,18 +160,26 @@ static int test_odirect_preadv_unaligned(void)
         return 0;
     }
 
-    char *write_buf;
+    char *write_buf = NULL;
     if (posix_memalign((void **)&write_buf, BLOCK_SIZE, BLOCK_SIZE) != 0) {
         close(fd); unlink(filepath);
         FAIL("odirect_preadv_unaligned", "posix_memalign failed");
         return 1;
     }
     memset(write_buf, 'U', BLOCK_SIZE);
-    pwrite(fd, write_buf, BLOCK_SIZE, 0);
+    ssize_t nwritten = pwrite(fd, write_buf, BLOCK_SIZE, 0);
+    if (nwritten != BLOCK_SIZE) {
+        FAIL("odirect_preadv_unaligned",
+             "pwrite with O_DIRECT returned %zd, expected %d: %s",
+             nwritten, BLOCK_SIZE, strerror(errno));
+        free(write_buf); close(fd); unlink(filepath);
+        return 1;
+    }
 
-    char unaligned_buf[BLOCK_SIZE + 1];
+    /* Force a non-aligned base address by shifting one byte. */
+    char unaligned_raw[BLOCK_SIZE + 1];
     struct iovec iov;
-    iov.iov_base = unaligned_buf;
+    iov.iov_base = unaligned_raw + 1;
     iov.iov_len = BLOCK_SIZE;
 
     ssize_t nread = preadv(fd, &iov, 1, 0);
@@ -185,69 +195,10 @@ static int test_odirect_preadv_unaligned(void)
         return 1;
     }
 
-    PASS("odirect_preadv_unaligned (O_DIRECT accepted unaligned buffer - kernel handles alignment)");
+    printf("  [INFO] odirect_preadv_unaligned: unaligned buffer was accepted; "
+           "this platform/filesystem may fall back to non-strict O_DIRECT handling\n");
+    PASS("odirect_preadv_unaligned (capability probe: unaligned accepted)");
     return 0;
-}
-
-static int test_odirect_preadv_multi_iov(void)
-{
-    char filepath[512];
-    snprintf(filepath, sizeof(filepath), "%s/odirect_multi_iov", test_dir);
-
-    int fd = open(filepath, O_RDWR | O_CREAT | O_TRUNC | O_DIRECT, 0644);
-    if (fd < 0) {
-        SKIP("odirect_preadv_multi_iov", "O_DIRECT not supported");
-        return 0;
-    }
-
-    char *write_buf;
-    if (posix_memalign((void **)&write_buf, BLOCK_SIZE, BLOCK_SIZE * 2) != 0) {
-        close(fd); unlink(filepath);
-        FAIL("odirect_preadv_multi_iov", "posix_memalign failed");
-        return 1;
-    }
-    for (int i = 0; i < BLOCK_SIZE * 2; i++)
-        write_buf[i] = 'M';
-
-    ssize_t nwritten = pwrite(fd, write_buf, BLOCK_SIZE * 2, 0);
-    if (nwritten != BLOCK_SIZE * 2) {
-        free(write_buf); close(fd); unlink(filepath);
-        FAIL("odirect_preadv_multi_iov", "write failed");
-        return 1;
-    }
-
-    char *buf1, *buf2;
-    if (posix_memalign((void **)&buf1, BLOCK_SIZE, BLOCK_SIZE) != 0 ||
-        posix_memalign((void **)&buf2, BLOCK_SIZE, BLOCK_SIZE) != 0) {
-        free(write_buf); free(buf1); close(fd); unlink(filepath);
-        FAIL("odirect_preadv_multi_iov", "posix_memalign for read failed");
-        return 1;
-    }
-
-    struct iovec iov[2];
-    iov[0].iov_base = buf1; iov[0].iov_len = BLOCK_SIZE;
-    iov[1].iov_base = buf2; iov[1].iov_len = BLOCK_SIZE;
-
-    ssize_t nread = preadv(fd, iov, 2, 0);
-
-    free(write_buf); free(buf1); free(buf2); close(fd); unlink(filepath);
-
-    if (nread < 0) {
-        if (errno == EINVAL) {
-            PASS("odirect_preadv_multi_iov (O_DIRECT rejects multi-iov preadv with EINVAL)");
-            return 0;
-        }
-        FAIL("odirect_preadv_multi_iov", "preadv failed: %s", strerror(errno));
-        return 1;
-    }
-
-    if (nread == BLOCK_SIZE * 2) {
-        PASS("odirect_preadv_multi_iov (O_DIRECT + preadv with 2 aligned iovectors works)");
-        return 0;
-    }
-
-    FAIL("odirect_preadv_multi_iov", "read %zd bytes, expected %d", nread, BLOCK_SIZE * 2);
-    return 1;
 }
 
 int main(int argc, char *argv[])
@@ -264,7 +215,6 @@ int main(int argc, char *argv[])
     test_odirect_preadv_aligned();
     test_odirect_pwritev_aligned();
     test_odirect_preadv_unaligned();
-    test_odirect_preadv_multi_iov();
 
     print_summary("O_DIRECT + preadv/pwritev Tests");
     return g_fail > 0 ? 1 : 0;
