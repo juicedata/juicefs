@@ -369,10 +369,11 @@ func createTestFS(t testing.TB) *FileSystem {
 	objStore, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
 	jfs, err := NewFileSystem(&conf, m, store, nil)
-	jfs.checkAccessFile = time.Millisecond
-	jfs.rotateAccessLog = 500
 	if err != nil {
 		t.Fatalf("initialize  failed: %s", err)
 	}
+	jfs.checkAccessFile = time.Millisecond
+	jfs.rotateAccessLog = 500
+	t.Cleanup(func() { _ = jfs.Close() })
 	return jfs
 }
