@@ -17,7 +17,7 @@
 
 1. **首先**
 
-    虽然内核 fuse 请求里并没有 `scatter-gatter`（分散聚集）接口，但 `preadv/pwritev` 可以正常调用，不会报错。内核会把 `preadv/pwritev` 拆分成独立的 `read/write` 请求发送到 juicefs，虽然无法完全享受向量化的优化收益，但相比应用层多次调用 `write/read` 仍会有一定的性能提升（主要是因为减少了系统调用次数）。
+    内核vfs会对 `preadv/pwritev` 接口进行预处理，把 多个 `iovec` 进行合并然后以普通读写接口的形式发送到juicefs，应用可以享受到系统调用次数减少和用户态内核态上下文切换次数减少带来的性能优化
 
 2. **基础能力**
 
@@ -30,12 +30,10 @@
 
 3. **高级 flag 支持如下**
 
-    - `RWF_APPEND` 支持（由内核 vfs 处理）
-    - `RWF_NOWAIT` 不支持（`FUSE` 协议目前没有处理该类型的 flag）
-    - `RWF_HIPRI` 不支持（依赖于 `poll` 接口，`FUSE` 目前不支持此接口）
-    - `RWF_SYNC/RWF_DSYNC` 不支持（`Juicefs` 暂不支持 `preadv/pwritev` 中携带这些 flag，可使用 `fsync` 等接口替代）
-
-    注：上述不支持的 `flag` 在代码中依然可以调用，不会报错，只是不会产生实际作用。
+    - `RWF_APPEND` 完全支持
+    - `RWF_NOWAIT` 明确不支持，会报错 `EOPNOTSUPP`.
+    - `RWF_HIPRI` 可以调用，但没有任何实际效果（高优先级轮询依赖于 `poll` 接口，`FUSE` 目前不支持此接口，依然是走普通 io 路径）
+    - `RWF_SYNC/RWF_DSYNC` 部分支持（内核默认会处理掉这两个 flag，在 `write` 以后 发送一次 `fsync` 请求到 JuiceFS， JuiceFS 并没有区分两者，统一当作 `datasync` 方式来处理）
 
 4. **`O_DIRECT` 测试说明**
 
@@ -45,7 +43,7 @@
     - 对齐缓冲区下的 `O_DIRECT + pwritev`（验证可正常写并做数据一致性校验）
     - 非对齐缓冲区下的 `O_DIRECT + preadv`（能力探测：不同内核/文件系统可能返回 `EINVAL`，也可能被接受）
 
-    注：第三项属于平台相关行为探测，不用于断言 `JuiceFS` 在所有环境下必须拒绝非对齐缓冲区。
+    注：第三项属于平台相关行为探测，不用于断言 JuiceFS 在所有环境下必须拒绝非对齐缓冲区。
 
 ### 测试代码位置
 

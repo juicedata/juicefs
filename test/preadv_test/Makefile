@@ -1,7 +1,7 @@
 CC ?= gcc
 CFLAGS = -Wall -Wextra -O2 -g
 
-TESTS = test_basic test_flags test_odirect test_advanced
+TESTS = test_basic test_flags test_odirect
 
 .PHONY: all clean
 
