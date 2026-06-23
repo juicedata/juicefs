@@ -410,22 +410,57 @@ tier_set_no_err()
     local status
     local max_retries=3
     local attempt
-    local path_arg="${@: -1}"  # last argument is expected to be the file/dir path
+    # Resolve the file/dir path: the positional arg that is not a flag, not the
+    # META_URL (contains "://"), and not the value following --tier. Flags such as
+    # -r/--force may appear after the path, so "${@: -1}" is not reliable.
+    local path_arg=""
+    local prev=""
+    local arg
+    for arg in "$@"; do
+        if [[ "$arg" == -* ]]; then
+            prev="$arg"
+            continue
+        fi
+        if [[ "$prev" == "--tier" ]]; then
+            prev="$arg"
+            continue
+        fi
+        prev="$arg"
+        [[ "$arg" == *"://"* ]] && continue
+        path_arg="$arg"
+    done
     for attempt in $(seq 1 "$max_retries"); do
+        echo "=== juicefs tier set (attempt $attempt/$max_retries): path=$path_arg ==="
         ./juicefs tier set "$@" 2>&1 | tee "$tmpout"
         status=${PIPESTATUS[0]}
-        if grep -qF '<ERROR>' "$tmpout"; then
-            echo "<FATAL>: juicefs tier set produced unexpected ERROR logs (attempt $attempt/$max_retries):"
-            grep -F '<ERROR>' "$tmpout"
-            if [[ "$attempt" -lt "$max_retries" ]]; then
-                echo "retrying..."
-                sleep 2
-                continue
-            fi
-            assert_info_no_empty_object_name "/jfs/${path_arg#/}"
-            exit 1
+
+        # Treat as failure if: non-zero exit, or any <ERROR>/<FATAL> log lines.
+        local failed=0
+        local reason=""
+        if [[ "$status" -ne 0 ]]; then
+            failed=1
+            reason="non-zero exit status=$status"
+        elif grep -qE '<ERROR>|<FATAL>' "$tmpout"; then
+            failed=1
+            reason="unexpected ERROR/FATAL logs"
         fi
-        return "$status"
+
+        if [[ "$failed" -eq 0 ]]; then
+            echo "juicefs tier set succeeded on attempt $attempt/$max_retries: path=$path_arg"
+            return 0
+        fi
+
+        echo "<WARNING>: juicefs tier set failed ($reason) on attempt $attempt/$max_retries: path=$path_arg"
+        grep -E '<ERROR>|<FATAL>' "$tmpout" || true
+        if [[ "$attempt" -lt "$max_retries" ]]; then
+            echo "retrying (next attempt $((attempt + 1))/$max_retries)..."
+            sleep 2
+            continue
+        fi
+
+        echo "<FATAL>: juicefs tier set still failing after $max_retries attempts: path=$path_arg"
+        [[ -n "$path_arg" ]] && assert_info_no_empty_object_name "/jfs/${path_arg#/}"
+        exit 1
     done
 }
 
