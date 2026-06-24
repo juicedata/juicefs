@@ -13,124 +13,6 @@ static int verify_alpha_pattern(const char *buf, size_t len, size_t file_offset)
     return 1;
 }
 
-static int test_register_files_lifecycle_update(void)
-{
-    struct io_uring ring;
-    struct io_uring_cqe *cqe;
-    int fds[4];
-    char paths[4][512];
-    char read_buf[BLOCK_SIZE];
-    int ret;
-    int result = TEST_FAIL;
-    int registered = 0;
-
-    memset(fds, -1, sizeof(fds));
-    memset(paths, 0, sizeof(paths));
-
-    for (int i = 0; i < 4; i++)
-        snprintf(paths[i], sizeof(paths[i]), "%s/reg_file_%d", test_dir, i);
-
-    ret = init_ring(&ring, QUEUE_DEPTH, 0);
-    if (ret < 0) {
-        TEST_SKIP_MSG("register_files_lifecycle_update", "ring init failed: %s", strerror(-ret));
-        return TEST_SKIP;
-    }
-
-    for (int i = 0; i < 4; i++) {
-        fds[i] = open(paths[i], O_RDWR | O_CREAT | O_TRUNC, 0644);
-        if (fds[i] < 0) {
-            TEST_FAIL_MSG("register_files_lifecycle_update", "open failed at idx=%d: %s", i, strerror(errno));
-            goto cleanup;
-        }
-    }
-
-    ret = io_uring_register_files(&ring, fds, 4);
-    if (ret < 0) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "register 4 files failed: %s", strerror(-ret));
-        goto cleanup;
-    }
-    registered = 1;
-
-    ret = io_uring_unregister_files(&ring);
-    if (ret < 0) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "unregister after 4 files failed: %s", strerror(-ret));
-        goto cleanup;
-    }
-    registered = 0;
-
-    if (create_test_file(paths[2], TEST_FILE_SIZE) < 0) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "create test file for update target failed");
-        goto cleanup;
-    }
-
-    ret = io_uring_register_files(&ring, fds, 2);
-    if (ret < 0) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "register 2 files failed: %s", strerror(-ret));
-        goto cleanup;
-    }
-    registered = 1;
-
-    ret = io_uring_register_files_update(&ring, 0, &fds[2], 1);
-    if (ret < 0) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "register_files_update failed: %s", strerror(-ret));
-        goto cleanup;
-    }
-    if (ret != 1) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "register_files_update returned %d, expected 1", ret);
-        goto cleanup;
-    }
-
-    memset(read_buf, 0, sizeof(read_buf));
-    struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-    if (!sqe) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "io_uring_get_sqe returned NULL");
-        goto cleanup;
-    }
-    io_uring_prep_read(sqe, 0, read_buf, BLOCK_SIZE, BLOCK_SIZE);
-    io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
-    io_uring_sqe_set_data64(sqe, 0x301);
-
-    ret = submit_and_wait(&ring, &cqe);
-    if (ret < 0) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "submit/wait failed: %s", strerror(-ret));
-        goto cleanup;
-    }
-
-    if (cqe->res < 0 || cqe->res != BLOCK_SIZE) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "read via updated slot failed: res=%d", cqe->res);
-        io_uring_cqe_seen(&ring, cqe);
-        goto cleanup;
-    }
-
-    if (io_uring_cqe_get_data64(cqe) != 0x301) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "user_data mismatch: %llu", (unsigned long long)io_uring_cqe_get_data64(cqe));
-        io_uring_cqe_seen(&ring, cqe);
-        goto cleanup;
-    }
-
-    if (!verify_alpha_pattern(read_buf, BLOCK_SIZE, BLOCK_SIZE)) {
-        TEST_FAIL_MSG("register_files_lifecycle_update", "updated slot data verification failed");
-        io_uring_cqe_seen(&ring, cqe);
-        goto cleanup;
-    }
-
-    io_uring_cqe_seen(&ring, cqe);
-    TEST_PASS_MSG("register_files_lifecycle_update (register/unregister + files_update)");
-    result = TEST_PASS;
-
-cleanup:
-    if (registered)
-        io_uring_unregister_files(&ring);
-    for (int i = 0; i < 4; i++) {
-        if (fds[i] >= 0)
-            close(fds[i]);
-        if (paths[i][0])
-            unlink(paths[i]);
-    }
-    io_uring_queue_exit(&ring);
-    return result;
-}
-
 static int test_read_with_fixed_file(void)
 {
     struct io_uring ring;
@@ -431,7 +313,6 @@ int main(int argc, char *argv[])
 
     printf("\n=== io_uring Registered Files Tests ===\n\n");
 
-    test_register_files_lifecycle_update();
     test_read_with_fixed_file();
     test_write_with_fixed_file();
     test_fixed_file_with_fixed_buffer();

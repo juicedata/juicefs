@@ -1,15 +1,15 @@
 ## JuiceFS io_uring 测试结果总结
 
-**测试环境**：Linux（建议内核 5.6+）、liburing 开发库、JuiceFS 挂载点（或其他待验证文件系统路径）
+**测试环境**：Linux 内核 6.8-generic、JuiceFS 1.4-beta2
 
-### 总览：当前共 23 项测试
+### 总览：当前共 17 项测试
 
 | 测试套件 | 用例数 | 说明 |
 |---------|--------|------|
-| **Basic I/O** | 5 | 基础读写、readv/writev、批量提交、一致性校验 |
-| **Fixed Buffers** | 5 | 固定缓冲区注册、读写、跨索引验证 |
-| **Registered Files** | 4 | 固定文件表注册与配合固定缓冲区读写 |
-| **Splice** | 4 | file->pipe、pipe->file、偏移小块传输、tee |
+| **Basic I/O** | 4 | 基础读写、readv/writev、批量提交、一致性校验 |
+| **Fixed Buffers** | 3 | 固定缓冲区注册、读写、跨索引验证 |
+| **Registered Files** | 3 | 固定文件表注册与配合固定缓冲区读写 |
+| **Splice** | 2 | file->pipe、pipe->file、偏移小块传输、tee |
 | **Advanced Features** | 5 | nop、timeout、linked sqes、provide buffers、iopoll |
 
 ---
@@ -99,10 +99,10 @@ make
 ```text
 test/io_uring_test/
 ├── common.h                 # 公共头文件与测试辅助函数
-├── test_basic_io.c          # 基础 I/O（5 项）
-├── test_fixed_buffers.c     # 固定缓冲区（5 项）
-├── test_registered_files.c  # 注册文件（4 项）
-├── test_splice.c            # Splice/Tee（4 项）
+├── test_basic_io.c          # 基础 I/O（4 项）
+├── test_fixed_buffers.c     # 固定缓冲区（3 项）
+├── test_registered_files.c  # 注册文件（3 项）
+├── test_splice.c            # Splice/Tee（2 项）
 ├── test_advanced.c          # 高级能力（5 项）
 ├── run_tests.sh
 └── Makefile

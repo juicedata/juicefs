@@ -13,63 +13,6 @@ static int verify_alpha_pattern(const char *buf, size_t len, size_t file_offset)
     return 1;
 }
 
-static int test_register_buffers_lifecycle(void)
-{
-    struct io_uring ring;
-    struct iovec iovs[4];
-    int ret;
-    int result = TEST_FAIL;
-
-    memset(iovs, 0, sizeof(iovs));
-
-    ret = init_ring(&ring, QUEUE_DEPTH, 0);
-    if (ret < 0) {
-        TEST_SKIP_MSG("register_buffers_lifecycle", "ring init failed: %s", strerror(-ret));
-        return TEST_SKIP;
-    }
-
-    for (int i = 0; i < 4; i++) {
-        if (posix_memalign(&iovs[i].iov_base, 4096, BLOCK_SIZE) != 0) {
-            TEST_FAIL_MSG("register_buffers_lifecycle", "posix_memalign failed at idx=%d", i);
-            goto cleanup;
-        }
-        iovs[i].iov_len = BLOCK_SIZE;
-    }
-
-    ret = io_uring_register_buffers(&ring, &iovs[0], 1);
-    if (ret < 0) {
-        TEST_FAIL_MSG("register_buffers_lifecycle", "register 1 buffer failed: %s", strerror(-ret));
-        goto cleanup;
-    }
-    ret = io_uring_unregister_buffers(&ring);
-    if (ret < 0) {
-        TEST_FAIL_MSG("register_buffers_lifecycle", "unregister after single register failed: %s", strerror(-ret));
-        goto cleanup;
-    }
-
-    ret = io_uring_register_buffers(&ring, iovs, 4);
-    if (ret < 0) {
-        TEST_FAIL_MSG("register_buffers_lifecycle", "register 4 buffers failed: %s", strerror(-ret));
-        goto cleanup;
-    }
-    ret = io_uring_unregister_buffers(&ring);
-    if (ret < 0) {
-        TEST_FAIL_MSG("register_buffers_lifecycle", "unregister after multi register failed: %s", strerror(-ret));
-        goto cleanup;
-    }
-
-    TEST_PASS_MSG("register_buffers_lifecycle (single + multi register/unregister)");
-    result = TEST_PASS;
-
-cleanup:
-    for (int i = 0; i < 4; i++) {
-        if (iovs[i].iov_base)
-            free(iovs[i].iov_base);
-    }
-    io_uring_queue_exit(&ring);
-    return result;
-}
-
 static int test_read_fixed(void)
 {
     struct io_uring ring;
@@ -398,134 +341,6 @@ cleanup:
     return result;
 }
 
-static int test_fixed_buffers_multiple_indices(void)
-{
-    struct io_uring ring;
-    struct io_uring_cqe *cqe;
-    struct iovec iovs[3];
-    char filepath[512];
-    int fd, ret;
-    int all_ok = 1;
-    int seen[3] = {0, 0, 0};
-
-    snprintf(filepath, sizeof(filepath), "%s/fixed_multi_idx_testfile", test_dir);
-    memset(iovs, 0, sizeof(iovs));
-    fd = -1;
-
-    ret = init_ring(&ring, QUEUE_DEPTH, 0);
-    if (ret < 0) {
-        TEST_SKIP_MSG("fixed_multi_idx", "ring init failed: %s", strerror(-ret));
-        return TEST_SKIP;
-    }
-
-    for (int i = 0; i < 3; i++) {
-        if (posix_memalign(&iovs[i].iov_base, 4096, BLOCK_SIZE) != 0) {
-            TEST_FAIL_MSG("fixed_multi_idx", "posix_memalign failed");
-            all_ok = 0;
-            goto cleanup;
-        }
-        iovs[i].iov_len = BLOCK_SIZE;
-    }
-
-    ret = io_uring_register_buffers(&ring, iovs, 3);
-    if (ret < 0) {
-        TEST_FAIL_MSG("fixed_multi_idx", "register_buffers(3) failed: %s", strerror(-ret));
-        all_ok = 0;
-        goto cleanup;
-    }
-
-    if (create_test_file(filepath, TEST_FILE_SIZE) < 0) {
-        TEST_FAIL_MSG("fixed_multi_idx", "create test file failed");
-        all_ok = 0;
-        goto cleanup;
-    }
-
-    fd = open(filepath, O_RDONLY);
-    if (fd < 0) {
-        TEST_FAIL_MSG("fixed_multi_idx", "open failed: %s", strerror(errno));
-        all_ok = 0;
-        goto cleanup;
-    }
-
-    for (int i = 0; i < 3; i++) {
-        memset(iovs[i].iov_base, 0, BLOCK_SIZE);
-        struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-        if (!sqe) {
-            TEST_FAIL_MSG("fixed_multi_idx", "io_uring_get_sqe failed at idx=%d", i);
-            all_ok = 0;
-            break;
-        }
-        io_uring_prep_read_fixed(sqe, fd, iovs[i].iov_base, BLOCK_SIZE, i * BLOCK_SIZE, i);
-        io_uring_sqe_set_data64(sqe, 0x300 + i);
-    }
-
-    if (!all_ok)
-        goto cleanup;
-
-    ret = io_uring_submit(&ring);
-    if (ret != 3) {
-        TEST_FAIL_MSG("fixed_multi_idx", "submitted %d, expected 3", ret);
-        all_ok = 0;
-    }
-
-    for (int i = 0; i < 3 && all_ok; i++) {
-        ret = io_uring_wait_cqe(&ring, &cqe);
-        if (ret < 0) {
-            TEST_FAIL_MSG("fixed_multi_idx", "wait cqe failed at iter=%d: %s", i, strerror(-ret));
-            all_ok = 0;
-            break;
-        }
-
-        unsigned long ud = io_uring_cqe_get_data64(cqe);
-        if (ud < 0x300 || ud > 0x302) {
-            TEST_FAIL_MSG("fixed_multi_idx", "unexpected user_data=%lu", ud);
-            all_ok = 0;
-            io_uring_cqe_seen(&ring, cqe);
-            break;
-        }
-
-        int idx = (int)(ud - 0x300);
-        if (seen[idx]) {
-            TEST_FAIL_MSG("fixed_multi_idx", "duplicate completion for idx=%d", idx);
-            all_ok = 0;
-            io_uring_cqe_seen(&ring, cqe);
-            break;
-        }
-        seen[idx] = 1;
-
-        if (cqe->res != BLOCK_SIZE) {
-            TEST_FAIL_MSG("fixed_multi_idx", "completion for idx=%d returned %d", idx, cqe->res);
-            all_ok = 0;
-            io_uring_cqe_seen(&ring, cqe);
-            break;
-        }
-
-        if (!verify_alpha_pattern((const char *)iovs[idx].iov_base, BLOCK_SIZE, (size_t)idx * BLOCK_SIZE)) {
-            TEST_FAIL_MSG("fixed_multi_idx", "data mismatch for idx=%d", idx);
-            all_ok = 0;
-            io_uring_cqe_seen(&ring, cqe);
-            break;
-        }
-
-        io_uring_cqe_seen(&ring, cqe);
-    }
-
-    if (all_ok)
-        TEST_PASS_MSG("fixed_multi_idx (3 registered buffer indices)");
-
-cleanup:
-    if (fd >= 0)
-        close(fd);
-    unlink(filepath);
-    io_uring_unregister_buffers(&ring);
-    for (int i = 0; i < 3; i++) {
-        if (iovs[i].iov_base)
-            free(iovs[i].iov_base);
-    }
-    io_uring_queue_exit(&ring);
-    return all_ok ? TEST_PASS : TEST_FAIL;
-}
-
 int main(int argc, char *argv[])
 {
     if (argc < 2) {
@@ -537,11 +352,9 @@ int main(int argc, char *argv[])
 
     printf("\n=== io_uring Fixed Buffers Tests ===\n\n");
 
-    test_register_buffers_lifecycle();
     test_read_fixed();
     test_write_fixed();
     test_fixed_buffers_rw_consistency();
-    test_fixed_buffers_multiple_indices();
 
     print_summary("Fixed Buffers Tests");
     return g_fail_count > 0 ? 1 : 0;

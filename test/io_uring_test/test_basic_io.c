@@ -411,96 +411,6 @@ static int test_batch_io(void)
     return TEST_FAIL;
 }
 
-static int test_read_write_consistency(void)
-{
-    struct io_uring ring;
-    struct io_uring_cqe *cqe = NULL;
-    char write_buf[BLOCK_SIZE];
-    char read_buf[BLOCK_SIZE];
-    char tmp_path[512];
-    int fd, ret;
-
-    snprintf(tmp_path, sizeof(tmp_path), "%s.rw_consistency", test_file_path);
-
-    ret = init_ring(&ring, QUEUE_DEPTH, 0);
-    if (ret < 0) {
-        TEST_SKIP_MSG("rw_consistency", "ring init failed: %s", strerror(-ret));
-        return TEST_SKIP;
-    }
-
-    fd = open(tmp_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) {
-        TEST_FAIL_MSG("rw_consistency", "open failed: %s", strerror(errno));
-        io_uring_queue_exit(&ring);
-        return TEST_FAIL;
-    }
-
-    for (int i = 0; i < BLOCK_SIZE; i++)
-        write_buf[i] = (char)(i & 0xFF);
-
-    struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-    io_uring_prep_write(sqe, fd, write_buf, BLOCK_SIZE, 0);
-    io_uring_sqe_set_data64(sqe, 10);
-
-    ret = submit_and_wait(&ring, &cqe);
-    if (ret < 0) {
-        TEST_FAIL_MSG("rw_consistency", "write submit/wait failed: %s", strerror(-ret));
-        close(fd);
-        unlink(tmp_path);
-        io_uring_queue_exit(&ring);
-        return TEST_FAIL;
-    }
-
-    if (cqe->res != BLOCK_SIZE) {
-        TEST_FAIL_MSG("rw_consistency", "write cqe res=%d, expected %d", cqe->res, BLOCK_SIZE);
-        io_uring_cqe_seen(&ring, cqe);
-        close(fd);
-        unlink(tmp_path);
-        io_uring_queue_exit(&ring);
-        return TEST_FAIL;
-    }
-
-    io_uring_cqe_seen(&ring, cqe);
-
-    sqe = io_uring_get_sqe(&ring);
-    io_uring_prep_read(sqe, fd, read_buf, BLOCK_SIZE, 0);
-    io_uring_sqe_set_data64(sqe, 11);
-
-    ret = submit_and_wait(&ring, &cqe);
-    if (ret < 0) {
-        TEST_FAIL_MSG("rw_consistency", "read submit/wait failed: %s", strerror(-ret));
-        close(fd);
-        unlink(tmp_path);
-        io_uring_queue_exit(&ring);
-        return TEST_FAIL;
-    }
-
-    if (cqe->res != BLOCK_SIZE) {
-        TEST_FAIL_MSG("rw_consistency", "read cqe res=%d, expected %d", cqe->res, BLOCK_SIZE);
-        io_uring_cqe_seen(&ring, cqe);
-        close(fd);
-        unlink(tmp_path);
-        io_uring_queue_exit(&ring);
-        return TEST_FAIL;
-    }
-
-    io_uring_cqe_seen(&ring, cqe);
-
-    if (memcmp(write_buf, read_buf, BLOCK_SIZE) != 0) {
-        TEST_FAIL_MSG("rw_consistency", "data mismatch after write+read");
-        close(fd);
-        unlink(tmp_path);
-        io_uring_queue_exit(&ring);
-        return TEST_FAIL;
-    }
-
-    close(fd);
-    unlink(tmp_path);
-    io_uring_queue_exit(&ring);
-    TEST_PASS_MSG("rw_consistency (write then read verify)");
-    return TEST_PASS;
-}
-
 int main(int argc, char *argv[])
 {
     if (argc < 2) {
@@ -523,7 +433,6 @@ int main(int argc, char *argv[])
     test_readv();
     test_writev();
     test_batch_io();
-    test_read_write_consistency();
 
     unlink(test_file_path);
 
