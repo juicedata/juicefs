@@ -279,7 +279,7 @@ export AWS_REQUEST_CHECKSUM_CALCULATION=when_supported
 export AWS_RESPONSE_CHECKSUM_VALIDATION=when_supported
 ```
 
-This only controls AWS SDK-level checksums. The `disable-checksum=true` bucket query option controls JuiceFS' own CRC checksum stored in object metadata.
+These settings only affect AWS SDK-level checksums. The `disable-checksum=true` query parameter in `--bucket` controls the CRC checksum that JuiceFS stores in object metadata.
 :::
 
 ### Google Cloud Storage {#google-cloud}
