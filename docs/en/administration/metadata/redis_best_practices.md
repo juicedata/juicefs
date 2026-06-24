@@ -41,7 +41,7 @@ To recover from this state, consider the following approaches:
 To avoid triggering OOM in the first place, take preventive measures in advance:
 
 - Reserve some buffer for `maxmemory` when deploying, rather than setting it close to the physical memory limit, leaving room for operations such as deletions.
-- When using a managed service, configure capacity monitoring and alerts so that you can scale up in time before memory usage approaches the limit.
+- If you are using a managed service, configure capacity monitoring and alerting so that you can scale up before memory usage approaches the limit.
 
 ## High availability
 
