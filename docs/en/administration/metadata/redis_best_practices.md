@@ -35,7 +35,7 @@ Once Redis memory usage reaches the `maxmemory` limit, all write operations are 
 
 To recover from this state, consider the following options:
 
-- **Temporarily raise the memory limit**: First use [`CONFIG SET maxmemory <new-value>`](https://redis.io/commands/config-set) to temporarily raise the Redis memory limit so that writes become available again, then run `juicefs rmr` or purge the trash to free up space, and finally restore `maxmemory` to its original value afterwards. If deletion alone cannot free up enough space, you can also use this window to scale up Redis.
+- **Temporarily increase the memory limit**: Use [`CONFIG SET maxmemory <new-value>`](https://redis.io/commands/config-set) to temporarily raise the Redis memory limit so writes become available again. Then run `juicefs rmr` or purge the trash to free up space and restore `maxmemory` to its original value afterward. If deletion alone cannot free enough space, you can also use this window to scale up Redis.
 - **Reserve a placeholder key (recommended preparation in advance)**: While the file system is running normally, write a large placeholder key into Redis ahead of time to reserve a portion of memory. When an OOM situation occurs, simply delete this placeholder key to immediately free up space, allowing `juicefs rmr` and trash-purging operations to proceed.
 
 To avoid triggering OOM in the first place, take preventive measures in advance:
