@@ -270,7 +270,7 @@ The format of the option `--bucket` for all S3 compatible object storage service
 :::
 
 :::tip
-For AWS SDK request and response checksums, JuiceFS defaults `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required`. This avoids sending or validating SDK-level checksum headers unless S3 requires them, which improves compatibility with S3-compatible services.
+For AWS SDK request and response checksums, JuiceFS sets `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required` by default. As a result, SDK-level checksum headers are only sent or validated when required by S3. This improves compatibility with S3-compatible services.
 
 If you use Amazon S3 and want the SDK to calculate and validate checksums whenever the operation supports them, set the environment variables before running JuiceFS:
 
