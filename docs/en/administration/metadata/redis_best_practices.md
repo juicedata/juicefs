@@ -29,7 +29,7 @@ used_memory_dataset_perc: 70.12%
 
 Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above) but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier that the metadata of each file occupies about 300 bytes, this is actually calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](../../reference/command_reference.mdx#gc) command to clean up possible redundant data.
 
-### Recover from out-of-memory (OOM) {#recover-from-oom}
+### Recover from out-of-memory (OOM) conditions {#recover-from-oom}
 
 Once Redis memory usage reaches the `maxmemory` limit, all write operations are rejected with the error `OOM command not allowed when used memory > 'maxmemory'`. At this point, even attempting to free up space by deleting files with [`juicefs rmr`](../../reference/command_reference.mdx#rmr) or by [purging the trash](../../security/trash.md#purge) will fail, because these deletion operations still need to write to Redis to complete.
 
