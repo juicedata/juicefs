@@ -33,7 +33,7 @@ Among them, `used_memory_rss` is the total memory size actually used by Redis, w
 
 Once Redis memory usage reaches the `maxmemory` limit, all write operations are rejected with the error `OOM command not allowed when used memory > 'maxmemory'`. At this point, even attempts to free up space by deleting files with [`juicefs rmr`](../../reference/command_reference.mdx#rmr) or by [purging the trash](../../security/trash.md#purge) will fail, because these operations still require writes to Redis to complete.
 
-To recover from this state, consider the following approaches:
+To recover from this state, consider the following options:
 
 - **Temporarily raise the memory limit**: First use [`CONFIG SET maxmemory <new-value>`](https://redis.io/commands/config-set) to temporarily raise the Redis memory limit so that writes become available again, then run `juicefs rmr` or purge the trash to free up space, and finally restore `maxmemory` to its original value afterwards. If deletion alone cannot free up enough space, you can also use this window to scale up Redis.
 - **Reserve a placeholder key (recommended preparation in advance)**: While the file system is running normally, write a large placeholder key into Redis ahead of time to reserve a portion of memory. When an OOM situation occurs, simply delete this placeholder key to immediately free up space, allowing `juicefs rmr` and trash-purging operations to proceed.
