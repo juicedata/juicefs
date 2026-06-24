@@ -31,7 +31,7 @@ Among them, `used_memory_rss` is the total memory size actually used by Redis, w
 
 ### Recover from out-of-memory (OOM) conditions {#recover-from-oom}
 
-Once Redis memory usage reaches the `maxmemory` limit, all write operations are rejected with the error `OOM command not allowed when used memory > 'maxmemory'`. At this point, even attempting to free up space by deleting files with [`juicefs rmr`](../../reference/command_reference.mdx#rmr) or by [purging the trash](../../security/trash.md#purge) will fail, because these deletion operations still need to write to Redis to complete.
+Once Redis memory usage reaches the `maxmemory` limit, all write operations are rejected with the error `OOM command not allowed when used memory > 'maxmemory'`. At this point, even attempts to free up space by deleting files with [`juicefs rmr`](../../reference/command_reference.mdx#rmr) or by [purging the trash](../../security/trash.md#purge) will fail, because these operations still require writes to Redis to complete.
 
 To recover from this state, consider the following approaches:
 
