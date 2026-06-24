@@ -40,7 +40,7 @@ To recover from this state, consider the following options:
 
 To reduce the risk of OOM, take the following preventive measures:
 
-- Reserve some buffer for `maxmemory` when deploying, rather than setting it close to the physical memory limit, leaving room for operations such as deletions.
+- When deploying, reserve some buffer for `maxmemory`, rather than setting it close to the physical memory limit, leaving room for operations such as deletions.
 - If you are using a managed service, configure capacity monitoring and alerting so that you can scale up before memory usage approaches the limit.
 
 ## High availability
