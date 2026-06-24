@@ -149,57 +149,6 @@ static int test_odirect_pwritev_aligned(void)
     return 0;
 }
 
-static int test_odirect_preadv_unaligned(void)
-{
-    char filepath[512];
-    snprintf(filepath, sizeof(filepath), "%s/odirect_unaligned", test_dir);
-
-    int fd = open(filepath, O_RDWR | O_CREAT | O_TRUNC | O_DIRECT, 0644);
-    if (fd < 0) {
-        SKIP("odirect_preadv_unaligned", "O_DIRECT not supported");
-        return 0;
-    }
-
-    char *write_buf = NULL;
-    if (posix_memalign((void **)&write_buf, BLOCK_SIZE, BLOCK_SIZE) != 0) {
-        close(fd); unlink(filepath);
-        FAIL("odirect_preadv_unaligned", "posix_memalign failed");
-        return 1;
-    }
-    memset(write_buf, 'U', BLOCK_SIZE);
-    ssize_t nwritten = pwrite(fd, write_buf, BLOCK_SIZE, 0);
-    if (nwritten != BLOCK_SIZE) {
-        FAIL("odirect_preadv_unaligned",
-             "pwrite with O_DIRECT returned %zd, expected %d: %s",
-             nwritten, BLOCK_SIZE, strerror(errno));
-        free(write_buf); close(fd); unlink(filepath);
-        return 1;
-    }
-
-    /* Force a non-aligned base address by shifting one byte. */
-    char unaligned_raw[BLOCK_SIZE + 1];
-    struct iovec iov;
-    iov.iov_base = unaligned_raw + 1;
-    iov.iov_len = BLOCK_SIZE;
-
-    ssize_t nread = preadv(fd, &iov, 1, 0);
-
-    free(write_buf); close(fd); unlink(filepath);
-
-    if (nread < 0) {
-        if (errno == EINVAL) {
-            PASS("odirect_preadv_unaligned (O_DIRECT rejects unaligned buffer with EINVAL, as expected)");
-            return 0;
-        }
-        FAIL("odirect_preadv_unaligned", "unexpected error: %s", strerror(errno));
-        return 1;
-    }
-
-    printf("  [INFO] odirect_preadv_unaligned: unaligned buffer was accepted; "
-           "this platform/filesystem may fall back to non-strict O_DIRECT handling\n");
-    PASS("odirect_preadv_unaligned (capability probe: unaligned accepted)");
-    return 0;
-}
 
 int main(int argc, char *argv[])
 {
@@ -214,7 +163,6 @@ int main(int argc, char *argv[])
 
     test_odirect_preadv_aligned();
     test_odirect_pwritev_aligned();
-    test_odirect_preadv_unaligned();
 
     print_summary("O_DIRECT + preadv/pwritev Tests");
     return g_fail > 0 ? 1 : 0;

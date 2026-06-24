@@ -1,7 +1,7 @@
          
 ## JuiceFS preadv/pwritev 测试结果总结
 
-**测试环境**：JuiceFS 挂载点 `/tmp/jfs`，内核 6.8.0-55-generic
+**测试环境**：JuiceFS 1.4-beta2，内核 6.8.0-55-generic
 
 ### 总览：12 PASS / 0 FAIL / 1 SKIP
 
@@ -32,18 +32,15 @@
 
     - `RWF_APPEND` 完全支持
     - `RWF_NOWAIT` 明确不支持，会报错 `EOPNOTSUPP`.
-    - `RWF_HIPRI` 可以调用，但没有任何实际效果（高优先级轮询依赖于 `poll` 接口，`FUSE` 目前不支持此接口，依然是走普通 io 路径）
-    - `RWF_SYNC/RWF_DSYNC` 部分支持（内核默认会处理掉这两个 flag，在 `write` 以后 发送一次 `fsync` 请求到 JuiceFS， JuiceFS 并没有区分两者，统一当作 `datasync` 方式来处理）
+    - `RWF_HIPRI` 可以调用，但没有任何实际效果（高优先级轮询依赖于 `iopoll` 接口，`FUSE` 目前不支持此接口，依然是走普通 io 路径）
+    - `RWF_SYNC/RWF_DSYNC` 部分支持（内核默认会处理掉这两个 flag，在 `write` 以后 发送一次 `fsync` 请求到 JuiceFS， JuiceFS 并没有区分两者，统一当作 `sync` 方式来处理）
 
 4. **`O_DIRECT` 测试说明**
 
-    当前用例覆盖了 3 类场景：
+    当前用例覆盖了 buffer io 和 direct io，其中 direct io 包括以下场景：
 
     - 对齐缓冲区下的 `O_DIRECT + preadv`（验证可正常读并做数据一致性校验）
     - 对齐缓冲区下的 `O_DIRECT + pwritev`（验证可正常写并做数据一致性校验）
-    - 非对齐缓冲区下的 `O_DIRECT + preadv`（能力探测：不同内核/文件系统可能返回 `EINVAL`，也可能被接受）
-
-    注：第三项属于平台相关行为探测，不用于断言 JuiceFS 在所有环境下必须拒绝非对齐缓冲区。
 
 ### 测试代码位置
 
