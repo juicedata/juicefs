@@ -2371,8 +2371,12 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}()
 		delWg.Add(1)
 		go func() {
-			if checkpointMgr != nil && config.DeleteDst {
-				delayDelFunc(checkpointMgr.dst, []string{checkpointMgr.checkpointKey})
+			if checkpointMgr != nil && config.DeleteDst && !config.Dry {
+				if err := try(3, func() error {
+					return checkpointMgr.dst.Delete(ctx, checkpointMgr.checkpointKey)
+				}); err != nil {
+					logger.Warnf("Failed to delete checkpoint object %s: %s", checkpointMgr.checkpointKey, err)
+				}
 			}
 			delayDelFunc(dst, dstDelayDel)
 			delWg.Done()
