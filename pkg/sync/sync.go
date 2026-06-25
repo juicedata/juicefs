@@ -1444,13 +1444,14 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		}
 		incrTotal(1)
 
+		budgetExhausted := false
 		if dstobj != nil && obj.Key() > dstobj.Key() {
 			if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
-				return nil
+				budgetExhausted = true
 			}
 			dstobj = nil
 		}
-		if dstobj == nil {
+		if !budgetExhausted && dstobj == nil {
 			for dstobj = range dstkeys {
 				if dstobj == nil {
 					return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
@@ -1459,7 +1460,8 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 					break
 				}
 				if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
-					return nil
+					dstobj = nil
+					break
 				}
 				dstobj = nil
 			}

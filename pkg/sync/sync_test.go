@@ -620,6 +620,50 @@ func TestLimits(t *testing.T) {
 	}
 }
 
+// Regression test for the shared --limit budget between source processing and
+// destination-extra deletion: deleting an extra destination object that exhausts
+// the budget must not drop the current source object (which would otherwise be
+// counted in total but never synced, reported as "lost").
+func TestSyncLimitDeleteDstBoundary(t *testing.T) {
+	tmpSrc := t.TempDir() + "/"
+	tmpDst := t.TempDir() + "/"
+	src, _ := object.CreateStorage("file", tmpSrc, "", "", "")
+	dst, _ := object.CreateStorage("file", tmpDst, "", "", "")
+
+	// Source has a single new file "a2" that does not exist on the destination.
+	if err := src.Put(ctx, "a2", bytes.NewReader([]byte{})); err != nil {
+		t.Fatalf("put src a2: %s", err)
+	}
+	// Destination has a single extra file "a1" (sorts before "a2") only on dst.
+	if err := dst.Put(ctx, "a1", bytes.NewReader([]byte{})); err != nil {
+		t.Fatalf("put dst a1: %s", err)
+	}
+
+	// With --limit 2 the budget is exactly enough to delete "a1" and copy "a2".
+	// Deleting "a1" consumes the last unit; the current source object "a2" must
+	// still be synced rather than dropped.
+	config := &Config{
+		Threads:     50,
+		Update:      true,
+		Perms:       true,
+		MaxSize:     math.MaxInt64,
+		ListThreads: 1,
+		DeleteDst:   true,
+		Limit:       2,
+	}
+	if err := Sync(src, dst, config); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+
+	all, err := ListAll(dst, "", "", "", true)
+	if err != nil {
+		t.Fatalf("list all dst: %s", err)
+	}
+	if err := testKeysEqual(all, []string{"", "a2"}); err != nil {
+		t.Fatalf("testKeysEqual fail: %s", err)
+	}
+}
+
 func testKeysEqual(objsCh <-chan object.Object, expectedKeys []string) error {
 	var gottenKeys []string
 	for obj := range objsCh {
