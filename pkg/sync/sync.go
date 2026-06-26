@@ -1444,14 +1444,20 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		}
 		incrTotal(1)
 
-		budgetExhausted := false
+		// deleteBudgetGone records that deleting an extra dst object exhausted the
+		// --limit budget. Even so, we must keep advancing dstkeys to locate the
+		// current source object's matching dst; otherwise dstobj would be left nil
+		// and the object treated as missing on dst, wrongly copying/overwriting it
+		// and breaking --ignore-existing/--existing/--update. We only stop deleting
+		// further extra objects, not scanning.
+		deleteBudgetGone := false
 		if dstobj != nil && obj.Key() > dstobj.Key() {
 			if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
-				budgetExhausted = true
+				deleteBudgetGone = true
 			}
 			dstobj = nil
 		}
-		if !budgetExhausted && dstobj == nil {
+		if dstobj == nil {
 			for dstobj = range dstkeys {
 				if dstobj == nil {
 					return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
@@ -1459,9 +1465,8 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				if obj.Key() <= dstobj.Key() {
 					break
 				}
-				if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
-					dstobj = nil
-					break
+				if !deleteBudgetGone && handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
+					deleteBudgetGone = true
 				}
 				dstobj = nil
 			}

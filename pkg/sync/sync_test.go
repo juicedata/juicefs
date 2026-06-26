@@ -664,6 +664,122 @@ func TestSyncLimitDeleteDstBoundary(t *testing.T) {
 	}
 }
 
+// Regression test: when deleting an extra dst object exhausts the --limit budget,
+// the producer must still scan dstkeys to locate the current source object's
+// matching dst. Otherwise the object is treated as missing on dst and gets
+// copied/overwritten, breaking --ignore-existing (and similarly --existing/--update).
+func TestSyncLimitDeleteDstIgnoreExisting(t *testing.T) {
+	tmpSrc := t.TempDir() + "/"
+	tmpDst := t.TempDir() + "/"
+	src, _ := object.CreateStorage("file", tmpSrc, "", "", "")
+	dst, _ := object.CreateStorage("file", tmpDst, "", "", "")
+
+	// Source has "a2" with new content.
+	if err := src.Put(ctx, "a2", bytes.NewReader([]byte("new"))); err != nil {
+		t.Fatalf("put src a2: %s", err)
+	}
+	// Destination has an extra "a1" (sorts before "a2") and an existing "a2"
+	// with different content that --ignore-existing must preserve.
+	if err := dst.Put(ctx, "a1", bytes.NewReader([]byte{})); err != nil {
+		t.Fatalf("put dst a1: %s", err)
+	}
+	if err := dst.Put(ctx, "a2", bytes.NewReader([]byte("old"))); err != nil {
+		t.Fatalf("put dst a2: %s", err)
+	}
+
+	// With --limit 2, deleting "a1" exhausts the budget. The current source
+	// object "a2" already exists on dst, so --ignore-existing must skip it
+	// rather than overwrite it.
+	config := &Config{
+		Threads:        50,
+		Perms:          true,
+		MaxSize:        math.MaxInt64,
+		ListThreads:    1,
+		DeleteDst:      true,
+		IgnoreExisting: true,
+		Limit:          2,
+	}
+	if err := Sync(src, dst, config); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+
+	all, err := ListAll(dst, "", "", "", true)
+	if err != nil {
+		t.Fatalf("list all dst: %s", err)
+	}
+	if err := testKeysEqual(all, []string{"", "a2"}); err != nil {
+		t.Fatalf("testKeysEqual fail: %s", err)
+	}
+	c, err := dst.Get(ctx, "a2", 0, -1)
+	if err != nil {
+		t.Fatalf("get dst a2: %s", err)
+	}
+	data, _ := io.ReadAll(c)
+	if string(data) != "old" {
+		t.Fatalf("a2 should be preserved by --ignore-existing, got %q", string(data))
+	}
+}
+
+// Regression test for the "leftover dst" branch: a dst object retained from a
+// previous source iteration is deleted as extra for the current source object,
+// exhausting the --limit budget. The producer must still scan dstkeys to find
+// the current object's matching dst instead of treating it as missing, so that
+// --ignore-existing is honored (the same applies to --existing/--update).
+func TestSyncLimitDeleteDstLeftoverIgnoreExisting(t *testing.T) {
+	tmpSrc := t.TempDir() + "/"
+	tmpDst := t.TempDir() + "/"
+	src, _ := object.CreateStorage("file", tmpSrc, "", "", "")
+	dst, _ := object.CreateStorage("file", tmpDst, "", "", "")
+
+	// Source: "a1" (new on dst) and "a4" (also present on dst).
+	if err := src.Put(ctx, "a1", bytes.NewReader([]byte("a1"))); err != nil {
+		t.Fatalf("put src a1: %s", err)
+	}
+	if err := src.Put(ctx, "a4", bytes.NewReader([]byte("new"))); err != nil {
+		t.Fatalf("put src a4: %s", err)
+	}
+	// Destination: extra "a2" (sorts between a1 and a4) and existing "a4".
+	if err := dst.Put(ctx, "a2", bytes.NewReader([]byte{})); err != nil {
+		t.Fatalf("put dst a2: %s", err)
+	}
+	if err := dst.Put(ctx, "a4", bytes.NewReader([]byte("old"))); err != nil {
+		t.Fatalf("put dst a4: %s", err)
+	}
+
+	// Processing "a1" reads and retains dst "a2" (a2 > a1). When processing
+	// "a4", the retained "a2" is deleted as extra and exhausts the budget
+	// (limit 3 = copy a1 + count a4 + delete a2). The matching dst "a4" must
+	// still be located so --ignore-existing skips it instead of overwriting.
+	config := &Config{
+		Threads:        50,
+		Perms:          true,
+		MaxSize:        math.MaxInt64,
+		ListThreads:    1,
+		DeleteDst:      true,
+		IgnoreExisting: true,
+		Limit:          3,
+	}
+	if err := Sync(src, dst, config); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+
+	all, err := ListAll(dst, "", "", "", true)
+	if err != nil {
+		t.Fatalf("list all dst: %s", err)
+	}
+	if err := testKeysEqual(all, []string{"", "a1", "a4"}); err != nil {
+		t.Fatalf("testKeysEqual fail: %s", err)
+	}
+	c, err := dst.Get(ctx, "a4", 0, -1)
+	if err != nil {
+		t.Fatalf("get dst a4: %s", err)
+	}
+	data, _ := io.ReadAll(c)
+	if string(data) != "old" {
+		t.Fatalf("a4 should be preserved by --ignore-existing, got %q", string(data))
+	}
+}
+
 func testKeysEqual(objsCh <-chan object.Object, expectedKeys []string) error {
 	var gottenKeys []string
 	for obj := range objsCh {
