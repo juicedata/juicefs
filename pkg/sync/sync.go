@@ -2257,8 +2257,10 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
 				}
 			}
-			if checkpointMgr != nil {
-				if e := checkpointMgr.DeleteCheckpoint(); e != nil {
+			if checkpointMgr != nil && !config.Dry {
+				if e := try(3, func() error {
+					return checkpointMgr.DeleteCheckpoint()
+				}); e != nil {
 					logger.Warnf("Failed to delete checkpoint after completion: %v", e)
 				}
 			}
