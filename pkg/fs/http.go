@@ -27,6 +27,7 @@ import (
 	"os"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -335,12 +336,33 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Handler.ServeHTTP(w, r)
 }
 
+// noLockSystem is a no-op WebDAV lock system. JuiceFS handles concurrency at
+// the file system level, so WebDAV-level locking is unnecessary and can conflict
+// with clients like davfs2 that perform MOVE operations on locked resources.
+type noLockSystem struct{}
+
+func (noLockSystem) Confirm(now time.Time, name0, name1 string, conditions ...webdav.Condition) (func(), error) {
+	return func() {}, nil
+}
+
+func (noLockSystem) Create(now time.Time, details webdav.LockDetails) (string, error) {
+	return details.Root, nil
+}
+
+func (noLockSystem) Refresh(now time.Time, token string, duration time.Duration) (webdav.LockDetails, error) {
+	return webdav.LockDetails{}, nil
+}
+
+func (noLockSystem) Unlock(now time.Time, token string) error {
+	return nil
+}
+
 func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
 	ctx := meta.NewContext(uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 	hfs := &webdavFS{ctx, fs, uint16(utils.GetUmask()), config}
 	srv := &webdav.Handler{
 		FileSystem: hfs,
-		LockSystem: webdav.NewMemLS(),
+		LockSystem: noLockSystem{},
 		Logger: func(r *http.Request, err error) {
 			if err != nil {
 				logger.Errorf("WEBDAV [%s]: %s, ERROR: %s", r.Method, r.URL, err)
