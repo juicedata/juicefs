@@ -621,9 +621,9 @@ func TestLimits(t *testing.T) {
 }
 
 // Regression test for the shared --limit budget between source processing and
-// destination-extra deletion: deleting an extra destination object that exhausts
-// the budget must not drop the current source object (which would otherwise be
-// counted in total but never synced, reported as "lost").
+// destination-extra deletion. The budget is consumed by both deletions and
+// synced source objects; a source object is only counted in total after it
+// passes the limit check, so the run must not report it as "lost".
 func TestSyncLimitDeleteDstBoundary(t *testing.T) {
 	tmpSrc := t.TempDir() + "/"
 	tmpDst := t.TempDir() + "/"
@@ -639,9 +639,9 @@ func TestSyncLimitDeleteDstBoundary(t *testing.T) {
 		t.Fatalf("put dst a1: %s", err)
 	}
 
-	// With --limit 2 the budget is exactly enough to delete "a1" and copy "a2".
-	// Deleting "a1" consumes the last unit; the current source object "a2" must
-	// still be synced rather than dropped.
+	// With --limit 2 the budget is exactly enough to delete "a1" and copy "a2":
+	// deleting "a1" consumes one unit and syncing "a2" consumes the last one.
+	// The current source object "a2" must still be synced rather than dropped.
 	config := &Config{
 		Threads:     50,
 		Update:      true,
@@ -664,10 +664,11 @@ func TestSyncLimitDeleteDstBoundary(t *testing.T) {
 	}
 }
 
-// Regression test: when deleting an extra dst object exhausts the --limit budget,
-// the producer must still scan dstkeys to locate the current source object's
-// matching dst. Otherwise the object is treated as missing on dst and gets
-// copied/overwritten, breaking --ignore-existing (and similarly --existing/--update).
+// Regression test: while deleting an extra dst object consumes part of the
+// --limit budget, the producer must still scan dstkeys to locate the current
+// source object's matching dst. Otherwise the object is treated as missing on
+// dst and gets copied/overwritten, breaking --ignore-existing (and similarly
+// --existing/--update).
 func TestSyncLimitDeleteDstIgnoreExisting(t *testing.T) {
 	tmpSrc := t.TempDir() + "/"
 	tmpDst := t.TempDir() + "/"
@@ -687,9 +688,10 @@ func TestSyncLimitDeleteDstIgnoreExisting(t *testing.T) {
 		t.Fatalf("put dst a2: %s", err)
 	}
 
-	// With --limit 2, deleting "a1" exhausts the budget. The current source
-	// object "a2" already exists on dst, so --ignore-existing must skip it
-	// rather than overwrite it.
+	// With --limit 2, deleting "a1" consumes one unit and locating/skipping the
+	// matching "a2" consumes the last one. The current source object "a2"
+	// already exists on dst, so --ignore-existing must skip it rather than
+	// overwrite it.
 	config := &Config{
 		Threads:        50,
 		Perms:          true,
@@ -722,9 +724,9 @@ func TestSyncLimitDeleteDstIgnoreExisting(t *testing.T) {
 
 // Regression test for the "leftover dst" branch: a dst object retained from a
 // previous source iteration is deleted as extra for the current source object,
-// exhausting the --limit budget. The producer must still scan dstkeys to find
-// the current object's matching dst instead of treating it as missing, so that
-// --ignore-existing is honored (the same applies to --existing/--update).
+// consuming part of the --limit budget. The producer must still scan dstkeys to
+// find the current object's matching dst instead of treating it as missing, so
+// that --ignore-existing is honored (the same applies to --existing/--update).
 func TestSyncLimitDeleteDstLeftoverIgnoreExisting(t *testing.T) {
 	tmpSrc := t.TempDir() + "/"
 	tmpDst := t.TempDir() + "/"
@@ -747,9 +749,10 @@ func TestSyncLimitDeleteDstLeftoverIgnoreExisting(t *testing.T) {
 	}
 
 	// Processing "a1" reads and retains dst "a2" (a2 > a1). When processing
-	// "a4", the retained "a2" is deleted as extra and exhausts the budget
-	// (limit 3 = copy a1 + count a4 + delete a2). The matching dst "a4" must
-	// still be located so --ignore-existing skips it instead of overwriting.
+	// "a4", the retained "a2" is deleted as extra, which consumes one unit of
+	// the shared budget (limit 3 = copy a1 + delete a2 + sync a4). The matching
+	// dst "a4" must still be located so --ignore-existing skips it instead of
+	// overwriting.
 	config := &Config{
 		Threads:        50,
 		Perms:          true,

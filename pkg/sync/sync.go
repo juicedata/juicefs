@@ -1326,13 +1326,13 @@ func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config 
 	if checkpointMgr.isCheckpointKey(dstobj.Key()) {
 		return false
 	}
+	if config.Limit == 0 {
+		return true
+	}
 	if !config.DeleteDst || !config.Dirs && dstobj.IsDir() {
 		logger.Debug("Ignore extra object", dstobj.Key())
 		extra.Increment()
 		extraBytes.IncrInt64(dstobj.Size())
-		return false
-	}
-	if config.Limit == 0 {
 		return false
 	}
 	incrTotal(1)
@@ -1436,24 +1436,10 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
-		if config.Limit >= 0 {
-			if config.Limit == 0 {
-				return nil
-			}
-			config.Limit--
-		}
-		incrTotal(1)
 
-		// deleteBudgetGone records that deleting an extra dst object exhausted the
-		// --limit budget. Even so, we must keep advancing dstkeys to locate the
-		// current source object's matching dst; otherwise dstobj would be left nil
-		// and the object treated as missing on dst, wrongly copying/overwriting it
-		// and breaking --ignore-existing/--existing/--update. We only stop deleting
-		// further extra objects, not scanning.
-		deleteBudgetGone := false
 		if dstobj != nil && obj.Key() > dstobj.Key() {
 			if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
-				deleteBudgetGone = true
+				return nil
 			}
 			dstobj = nil
 		}
@@ -1465,13 +1451,20 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				if obj.Key() <= dstobj.Key() {
 					break
 				}
-				if !deleteBudgetGone && handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
-					deleteBudgetGone = true
+				if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
+					return nil
 				}
 				dstobj = nil
 			}
 		}
 
+		if config.Limit >= 0 {
+			if config.Limit == 0 {
+				return nil
+			}
+			config.Limit--
+		}
+		incrTotal(1)
 		// FIXME: there is a race when source is modified during coping
 		if dstobj == nil || obj.Key() < dstobj.Key() {
 			if config.Existing {
