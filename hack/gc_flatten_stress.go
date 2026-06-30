@@ -141,7 +141,6 @@ func main() {
 		normal[i] = slice{id: uint64(i) + 1000000, size: uint32(*blockSize)}
 	}
 	slices[100] = normal
-	normal = nil
 	slices[0] = []slice{{id: 10, size: uint32(*blockSize)}}
 	slices[1] = []slice{{id: 20, size: uint32(*blockSize)}}
 	runtime.GC()
@@ -151,7 +150,6 @@ func main() {
 	switch *mode {
 	case "current":
 		km = buildCurrent(slices, *blockSize)
-		slices = nil
 	case "old-real":
 		km = buildOld(slices, *blockSize)
 	case "old-retained":

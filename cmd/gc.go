@@ -232,7 +232,6 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("list all blocks: %s", err)
 	}
 	vkeys, pkeys, ckeys, total, totalBytes := buildSliceKeyMaps(slices, chunkConf.BlockSize)
-	slices = nil
 	if progress.Quiet {
 		logger.Infof("using %d slices (%d bytes)", len(vkeys)+len(ckeys), totalBytes)
 	}
