@@ -43,9 +43,11 @@ func (o *openFile) release() {
 
 type openfiles struct {
 	sync.Mutex
-	expire time.Duration
-	limit  uint64
-	files  map[Ino]*openFile
+	expire    time.Duration
+	limit     uint64
+	files     map[Ino]*openFile
+	stop      chan struct{}
+	closeOnce sync.Once
 }
 
 func newOpenFiles(expire time.Duration, limit uint64) *openfiles {
@@ -53,9 +55,14 @@ func newOpenFiles(expire time.Duration, limit uint64) *openfiles {
 		expire: expire,
 		limit:  limit,
 		files:  make(map[Ino]*openFile),
+		stop:   make(chan struct{}),
 	}
 	go of.cleanup()
 	return of
+}
+
+func (o *openfiles) close() {
+	o.closeOnce.Do(func() { close(o.stop) })
 }
 
 func (o *openfiles) cleanup() {
@@ -101,7 +108,11 @@ func (o *openfiles) cleanup() {
 			}
 		}
 		o.Unlock()
-		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-deleted*2)/(cnt+1)))
+		select {
+		case <-o.stop:
+			return
+		case <-time.After(time.Millisecond * time.Duration(1000*(cnt+1-deleted*2)/(cnt+1))):
+		}
 	}
 }
 
