@@ -33,6 +33,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
@@ -428,9 +429,59 @@ func TestOpenCacheFileReadsDataOnlyFile(t *testing.T) {
 	require.Equal(t, len(data), n)
 	require.Equal(t, data, got)
 
-	tier, err := cf.ReadTierID()
+	require.Equal(t, uint8(0), cf.tierID)
+}
+
+func TestOpenCacheFileReadsChecksumOnlyFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.checksum")
+	data := make([]byte, 64*1024)
+	utils.RandRead(data)
+
+	f, err := os.Create(path)
 	require.NoError(t, err)
-	require.Equal(t, uint8(0), tier)
+	_, err = f.Write(data)
+	require.NoError(t, err)
+	_, err = f.Write(checksum(data))
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	cf, err := openCacheFile(path, len(data), CsFull)
+	require.NoError(t, err)
+	defer cf.Close()
+	require.Equal(t, CsFull, cf.csLevel)
+
+	got := make([]byte, len(data))
+	n, err := cf.ReadAt(got, 0)
+	require.NoError(t, err)
+	require.Equal(t, len(data), n)
+	require.Equal(t, data, got)
+
+	require.Equal(t, uint8(0), cf.tierID)
+}
+
+func tierTrailer(t *testing.T, tier uint8, hasChecksum bool) []byte {
+	t.Helper()
+	b, err := encodeStageMeta(tier, hasChecksum)
+	require.NoError(t, err)
+	return b
+}
+
+func TestEncodeStageMetaLengthParity(t *testing.T) {
+	// The encoded length must be a multiple of 4 iff a checksum is present, and
+	// the stored tier must round-trip regardless of the padding.
+	for tier := uint8(0); tier <= maxTierID; tier++ {
+		for _, hasChecksum := range []bool{true, false} {
+			b, err := encodeStageMeta(tier, hasChecksum)
+			require.NoError(t, err)
+			require.Equal(t, hasChecksum, len(b)%4 == 0,
+				"tier=%d hasChecksum=%v len=%d", tier, hasChecksum, len(b))
+
+			var m stageMeta
+			require.NoError(t, msgpack.Unmarshal(b, &m))
+			require.Equal(t, tier, m.TierID)
+		}
+	}
 }
 
 func TestOpenCacheFileReadsChecksumAndTier(t *testing.T) {
@@ -445,7 +496,7 @@ func TestOpenCacheFileReadsChecksumAndTier(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.Write(checksum(data))
 	require.NoError(t, err)
-	_, err = f.Write([]byte{2})
+	_, err = f.Write(tierTrailer(t, 2, true))
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 
@@ -459,14 +510,12 @@ func TestOpenCacheFileReadsChecksumAndTier(t *testing.T) {
 	require.Equal(t, len(data), n)
 	require.Equal(t, data, got)
 
-	tier, err := cf.ReadTierID()
-	require.NoError(t, err)
-	require.Equal(t, uint8(2), tier)
+	require.Equal(t, uint8(2), cf.tierID)
 }
 
-func TestOpenCacheFileRejectsUnexpectedSize(t *testing.T) {
+func TestOpenCacheFileReadsTierOnly(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "cache.invalid")
+	path := filepath.Join(dir, "cache.tier")
 	data := make([]byte, 1024)
 	utils.RandRead(data)
 
@@ -474,7 +523,55 @@ func TestOpenCacheFileRejectsUnexpectedSize(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.Write(data)
 	require.NoError(t, err)
-	_, err = f.Write([]byte{0xAA, 0xBB})
+	_, err = f.Write(tierTrailer(t, 3, false))
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	cf, err := openCacheFile(path, len(data), CsNone)
+	require.NoError(t, err)
+	defer cf.Close()
+
+	require.Equal(t, uint8(3), cf.tierID)
+}
+
+// Regression: a tier-only file (no checksum) whose trailer size could collide
+// with checksumLength must still be recognized as tier-only, not "checksum only".
+func TestOpenCacheFileTierWithoutChecksumNoCollision(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.tier.collide")
+	// 80KiB data => checksumLength = 3*4 = 12 bytes, close to trailer size
+	data := make([]byte, 80*1024)
+	utils.RandRead(data)
+
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	_, err = f.Write(data)
+	require.NoError(t, err)
+	_, err = f.Write(tierTrailer(t, 2, false)) // no checksum written
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	cf, err := openCacheFile(path, len(data), CsExtend)
+	require.NoError(t, err)
+	defer cf.Close()
+	require.Equal(t, CsNone, cf.csLevel) // no checksum present
+
+	require.Equal(t, uint8(2), cf.tierID)
+}
+
+func TestOpenCacheFileRejectsUnexpectedSize(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.invalid")
+	// 40KiB data => checksumLength = 8 bytes; an "extra" that is a multiple of 4
+	// but smaller than the checksum length is impossible for a well-formed file.
+	data := make([]byte, 40*1024)
+	utils.RandRead(data)
+
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	_, err = f.Write(data)
+	require.NoError(t, err)
+	_, err = f.Write([]byte{0, 0, 0, 0}) // extra=4, multiple of 4 but < checksumLength(8)
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 
@@ -482,7 +579,47 @@ func TestOpenCacheFileRejectsUnexpectedSize(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestReadTierIDReturnsZeroForInvalidTier(t *testing.T) {
+func TestOpenCacheFileRejectsTruncatedData(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.truncated")
+	data := make([]byte, 1024)
+	utils.RandRead(data)
+
+	require.NoError(t, os.WriteFile(path, data[:len(data)-1], 0600))
+
+	_, err := openCacheFile(path, len(data), CsNone)
+	require.Error(t, err)
+}
+
+func TestOpenCacheFileRejectsInvalidStageMeta(t *testing.T) {
+	data := make([]byte, 1024)
+	utils.RandRead(data)
+
+	tests := []struct {
+		name string
+		meta []byte
+	}{
+		{name: "missing tier", meta: []byte{0x80}}, // empty msgpack map
+		{name: "trailing data", meta: append(tierTrailer(t, 2, false), 0, 0, 0, 0)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "cache.invalid.meta")
+			f, err := os.Create(path)
+			require.NoError(t, err)
+			_, err = f.Write(data)
+			require.NoError(t, err)
+			_, err = f.Write(test.meta)
+			require.NoError(t, err)
+			require.NoError(t, f.Close())
+
+			_, err = openCacheFile(path, len(data), CsNone)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestOpenCacheFileReturnsZeroForInvalidTier(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "cache.bad.tier")
 	data := make([]byte, 1024)
@@ -492,7 +629,7 @@ func TestReadTierIDReturnsZeroForInvalidTier(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.Write(data)
 	require.NoError(t, err)
-	_, err = f.Write([]byte{9})
+	_, err = f.Write(tierTrailer(t, 9, false)) // invalid tier=9
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 
@@ -500,7 +637,5 @@ func TestReadTierIDReturnsZeroForInvalidTier(t *testing.T) {
 	require.NoError(t, err)
 	defer cf.Close()
 
-	tier, err := cf.ReadTierID()
-	require.NoError(t, err)
-	require.Equal(t, uint8(0), tier)
+	require.Equal(t, uint8(0), cf.tierID)
 }

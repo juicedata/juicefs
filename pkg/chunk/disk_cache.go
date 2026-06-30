@@ -17,6 +17,7 @@
 package chunk
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -43,6 +44,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/twmb/murmur3"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 var (
@@ -547,10 +549,20 @@ func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool, tie
 			return
 		}
 	}
-	// write tierID into stage file
+	// Append msgpack-encoded stage metadata at the end of file. Its length is
+	// padded so that the whole trailer (checksum + meta) length is a multiple of
+	// 4 iff a checksum is present, which lets the reader disambiguate without any
+	// marker. New fields can be added to stageMeta without breaking compatibility.
 	if tierID != 0 {
-		if err = cache.writeFile(f, []byte{tierID}); err != nil {
-			logger.Warnf("Write tier to cache file %s failed: %s", tmp, err)
+		metaBytes, merr := encodeStageMeta(tierID, cache.checksum != CsNone)
+		if merr != nil {
+			err = merr
+			logger.Warnf("Marshal stage meta for cache file %s failed: %s", tmp, err)
+			_ = f.Close()
+			return
+		}
+		if err = cache.writeFile(f, metaBytes); err != nil {
+			logger.Warnf("Write stage meta to cache file %s failed: %s", tmp, err)
 			_ = f.Close()
 			return
 		}
@@ -1345,14 +1357,64 @@ const (
 
 var crc32c = crc32.MakeTable(crc32.Castagnoli)
 
-const tierIDLength = int64(1) // 1 byte for tierID in the end of cache file
+const maxStageMetaLen = int64(4 << 10) // sanity limit for msgpack metadata length
+const maxTierID = 3                    // maximum valid tier id
+
+// stageMeta is the metadata appended (msgpack-encoded) to the END of a stage
+// file. On-disk layout:
+//
+//	[data] [checksum?] [ msgpack(stageMeta) ]
+//
+// There is no magic/length marker. Instead the parity of the trailer length is
+// used to signal whether a checksum is present, exploiting that the checksum
+// length is always a multiple of 4 (4 bytes of crc32 per 32 KiB block):
+//
+//   - checksum present -> msgpack length padded to a multiple of 4
+//   - checksum absent  -> msgpack length padded to a NON multiple of 4
+//
+// so the whole trailer length (checksum + msgpack) is a multiple of 4 iff a
+// checksum is present, which lets openCacheFile tell them apart unambiguously
+// and locate the msgpack (always the last bytes of the file).
+//
+// Pad is a filler byte slice used only to reach the required length parity.
+// Keep stageMeta backward/forward compatible: only append new optional fields.
+type stageMeta struct {
+	TierID uint8  `msgpack:"tier"`
+	Pad    []byte `msgpack:"pad"`
+}
+
+// stageMetaBaseLen is the msgpack length of stageMeta with an empty Pad. The
+// tier id (a small uint8) always encodes to a fixed size, so this base length is
+// constant and each extra pad byte adds exactly one byte. This lets
+// encodeStageMeta compute the exact padding in one shot.
+var stageMetaBaseLen = func() int {
+	b, err := msgpack.Marshal(&stageMeta{Pad: make([]byte, 0)})
+	if err != nil {
+		panic(err)
+	}
+	return len(b)
+}()
+
+// encodeStageMeta marshals the metadata padded so that the encoded length parity
+// matches checksum presence: a multiple of 4 when a checksum is present, a
+// non-multiple of 4 otherwise. Since each pad byte adds exactly one byte, the
+// required padding is computed directly (no trial-and-error).
+func encodeStageMeta(tierID uint8, hasChecksum bool) ([]byte, error) {
+	var p int
+	switch r := stageMetaBaseLen % 4; {
+	case hasChecksum:
+		p = (4 - r) % 4 // pad up to the next multiple of 4
+	case r == 0:
+		p = 1 // break the multiple-of-4 alignment
+	}
+	return msgpack.Marshal(&stageMeta{TierID: tierID, Pad: make([]byte, p)})
+}
 
 type cacheFile struct {
 	*os.File
-	length   int // length of data
-	csLevel  string
-	hasTier  bool
-	fileSize int64
+	length  int // length of data
+	csLevel string
+	tierID  uint8 // tier decoded from the stage metadata at open time (0 if none)
 }
 
 // Calculate 32-bits checksum for every 32 KiB data, so 512 Bytes for 4 MiB in total
@@ -1380,22 +1442,86 @@ func openCacheFile(name string, length int, level string) (*cacheFile, error) {
 		_ = fp.Close()
 		return nil, err
 	}
-	checksumLength := ((length-1)/csBlock + 1) * 4
-	hasTier := false
-	switch fi.Size() - int64(length) {
-	case 0:
-		level = CsNone
-	case tierIDLength:
-		level = CsNone
-		hasTier = true
-	case int64(checksumLength):
-	case int64(checksumLength) + tierIDLength:
-		hasTier = true
-	default:
+	checksumLength := int64(((length-1)/csBlock + 1) * 4)
+	extra := fi.Size() - int64(length)
+	if extra < 0 {
 		_ = fp.Close()
 		return nil, fmt.Errorf("invalid file size %d, data length %d", fi.Size(), length)
 	}
-	return &cacheFile{File: fp, length: length, csLevel: level, hasTier: hasTier, fileSize: fi.Size()}, nil
+
+	// The trailer (checksum + optional msgpack tier meta) has a length that is a
+	// multiple of 4 iff a checksum is present: the checksum is always a multiple
+	// of 4, and the msgpack meta is padded to preserve that invariant. This lets
+	// us detect checksum presence and locate the msgpack meta (always the last
+	// bytes of the file) without any explicit marker.
+	var metaLen int64
+	switch {
+	case extra == 0:
+		level = CsNone // data only
+	case extra%4 == 0:
+		// checksum present; any remaining bytes after it are the msgpack meta
+		metaLen = extra - checksumLength
+		if metaLen < 0 || metaLen > maxStageMetaLen {
+			_ = fp.Close()
+			return nil, fmt.Errorf("invalid file size %d, data length %d", fi.Size(), length)
+		}
+	default:
+		// not a multiple of 4 => no checksum; the whole tail is the msgpack meta
+		if extra > maxStageMetaLen {
+			_ = fp.Close()
+			return nil, fmt.Errorf("invalid file size %d, data length %d", fi.Size(), length)
+		}
+		level = CsNone
+		metaLen = extra
+	}
+
+	cf := &cacheFile{File: fp, length: length, csLevel: level}
+	if metaLen > 0 {
+		// Decode (and thus validate) the tier metadata at open time. A corrupt or
+		// truncated file whose tail is not valid msgpack is rejected here, which
+		// also guards the checksum-presence inference above from being fooled by a
+		// truncated checksum (whose leftover bytes won't parse as valid msgpack).
+		tier, derr := readStageTier(fp, fi.Size()-metaLen, metaLen)
+		if derr != nil {
+			_ = fp.Close()
+			return nil, fmt.Errorf("invalid stage meta in file %s: %w", name, derr)
+		}
+		cf.tierID = tier
+	}
+	return cf, nil
+}
+
+// readStageTier reads n bytes at off and decodes them as msgpack stage metadata,
+// returning the tier id. A decode failure is returned as an error so the caller
+// can reject the file; an out-of-range tier is tolerated (returned as 0) for
+// forward compatibility with future tier values.
+func readStageTier(fp *os.File, off, n int64) (uint8, error) {
+	buf := make([]byte, n)
+	if _, err := fp.ReadAt(buf, off); err != nil {
+		return 0, err
+	}
+	r := bytes.NewReader(buf)
+	dec := msgpack.NewDecoder(r)
+	var meta map[string]msgpack.RawMessage
+	if err := dec.Decode(&meta); err != nil {
+		return 0, err
+	}
+	if r.Len() != 0 {
+		return 0, fmt.Errorf("unexpected trailing data of length %d", r.Len())
+	}
+	rawTier, ok := meta["tier"]
+	if !ok {
+		return 0, errors.New("missing tier")
+	}
+	var tierID uint8
+	if err := msgpack.Unmarshal(rawTier, &tierID); err != nil {
+		return 0, fmt.Errorf("invalid tier: %w", err)
+	}
+	if tierID > maxTierID {
+		logger.Errorf("Invalid tierID %d in cache file %s", tierID, fp.Name())
+		return 0, nil
+	}
+	return tierID, nil
 }
 
 func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
@@ -1472,22 +1598,4 @@ func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
 		}
 	}
 	return
-}
-
-func (cf *cacheFile) ReadTierID() (uint8, error) {
-	if !cf.hasTier {
-		return 0, nil
-	}
-	var buf [1]byte
-	n, err := cf.File.ReadAt(buf[:], cf.fileSize-tierIDLength)
-	if err != nil {
-		return 0, err
-	} else if n != 1 {
-		return 0, fmt.Errorf("invalid tierID length %d, expect %d", n, tierIDLength)
-	}
-	if buf[0] > 3 {
-		logger.Errorf("Invalid tierID %d in cache file %s", buf[0], cf.Name())
-		return 0, nil
-	}
-	return buf[0], nil
 }

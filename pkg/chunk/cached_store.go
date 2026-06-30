@@ -1060,7 +1060,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	_, err = f.ReadAt(block.Data, 0)
 	tierID := uint8(0)
 	if err == nil {
-		tierID, err = f.ReadTierID()
+		tierID = f.tierID
 	}
 	_ = f.Close()
 	if err != nil {
