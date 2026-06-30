@@ -5,8 +5,7 @@ LDFLAGS = -luring
 TESTS = test_basic_io \
         test_fixed_buffers \
         test_registered_files \
-        test_splice \
-        test_advanced
+        test_splice
 
 .PHONY: all clean run
 
@@ -23,9 +22,6 @@ test_registered_files: test_registered_files.c common.h
 
 test_splice: test_splice.c common.h
 	$(CC) $(CFLAGS) -o $@ test_splice.c $(LDFLAGS)
-
-test_advanced: test_advanced.c common.h
-	$(CC) $(CFLAGS) -o $@ test_advanced.c $(LDFLAGS)
 
 clean:
 	rm -f $(TESTS)

@@ -2,7 +2,7 @@
 
 **Test Environment**: Linux kernel 6.8-generic, JuiceFS 1.4-beta2
 
-### Overview: 17 test cases in total
+### Overview: 12 test cases in total
 
 | Test Suite | Case Count | Description |
 |---------|--------|------|
@@ -10,7 +10,6 @@
 | **Fixed Buffers** | 3 | Fixed buffer registration, read/write, cross-index validation |
 | **Registered Files** | 3 | Fixed file table registration with fixed-buffer read/write |
 | **Splice** | 2 | file->pipe, pipe->file, tee |
-| **Advanced Features** | 5 | nop, timeout, linked sqes, provide buffers, iopoll |
 
 ---
 
@@ -40,16 +39,21 @@
 
 4. **Advanced Feature Notes**
 
-    | Feature | Supported | Details |
-    |---|---|---|
-    | IORING_OP_SPLICE | Yes | Fully supported. The file-to-pipe path is handled by the kernel io_uring module, and what reaches JuiceFS is still regular read/write behavior. |
-    | IORING_OP_NOP | Yes | Submits an empty request; fully supported. |
-    | IORING_OP_TIMEOUT | Yes | Used together with `IORING_OP_TIMEOUT_REMOVE`; both are fully supported. |
-    | IORING_OP_TIMEOUT_REMOVE | Yes | Works with `IORING_OP_TIMEOUT`; both are fully supported. |
-    | IOSQE_IO_LINK | Yes | Linked execution is fully supported. |
-    | IORING_OP_PROVIDE_BUFFERS | Yes | Providing a buffer pool is fully supported. |
-    | IORING_SETUP_IOPOLL | No | Depends on the iopoll interface and may return `EOPNOTSUPP` directly. |
-    | IORING_OP_SYNC_FILE_RANGE | Yes | Used to sync kernel page cache. This is a kernel-level capability and does not require FUSE adaptation. |
+    | Feature | Details |
+    |---|---|
+    | `IORING_OP_SPLICE` | Transfers a file descriptor directly from one address space to another, without going through a user-space buffer |
+    | `IORING_OP_NOP` | No operation; used to pad the io_uring queue, triggers no I/O |
+    | `IORING_OP_TIMEOUT` | Sets a timeout, used to wait for I/O operations to complete |
+    | `IORING_OP_TIMEOUT_REMOVE` | Removes a timeout, used to cancel the timeout set for waiting on I/O operations |
+    | `IORING_OP_LINK` | Links a file descriptor to another file descriptor, without going through a user-space buffer |
+    | `IORING_OP_PROVIDE_BUFFERS` | Provides fixed buffers, improving address resolution efficiency for high-frequency io |
+    | `IORING_OP_SYNC_FILE_RANGE` | Syncs the pagecache of a given file range to disk |
+
+    > All of the above features are implemented by the Linux kernel. No special FUSE-layer adaptation is required, and JuiceFS can benefit directly.
+
+    **`IORING_SETUP_IOPOLL`**
+
+    It switches the ring's I/O completion mode from interrupt-driven to polling (poll) driven. It relies on the underlying iopoll interface and is mostly used for direct read/write on block devices; the vast majority of filesystems are not involved, and JuiceFS does not support this feature.
 
 ### How To Run
 
@@ -103,7 +107,6 @@ test/io_uring_test/
 ├── test_fixed_buffers.c     # Fixed buffers (3 cases)
 ├── test_registered_files.c  # Registered files (3 cases)
 ├── test_splice.c            # Splice/Tee (2 cases)
-├── test_advanced.c          # Advanced features (5 cases)
 ├── run_tests.sh
 └── Makefile
 ```

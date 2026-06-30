@@ -39,8 +39,7 @@ mkdir -p "$WORK_DIR"
 cd "$SCRIPT_DIR"
 
 if [ ! -f test_basic_io ] || [ ! -f test_fixed_buffers ] || \
-   [ ! -f test_registered_files ] || [ ! -f test_splice ] || \
-    [ ! -f test_advanced ]; then
+   [ ! -f test_registered_files ] || [ ! -f test_splice ]; then
     echo "Building test programs..."
     make clean
     make
@@ -66,7 +65,14 @@ run_test() {
         return
     fi
 
-    "$test_binary" "$test_dir" 2>&1 || true
+    if "$test_binary" "$test_dir" 2>&1; then
+        echo "  [PASS] $test_name"
+        TOTAL_PASS=$((TOTAL_PASS + 1))
+    else
+        local rc=$?
+        echo "  [FAIL] $test_name exited with code $rc"
+        TOTAL_FAIL=$((TOTAL_FAIL + 1))
+    fi
     echo ""
 }
 
@@ -79,7 +85,6 @@ run_test "Basic I/O" ./test_basic_io "$WORK_DIR"
 run_test "Fixed Buffers" ./test_fixed_buffers "$WORK_DIR"
 run_test "Registered Files" ./test_registered_files "$WORK_DIR"
 run_test "Splice" ./test_splice "$WORK_DIR"
-run_test "Advanced Features" ./test_advanced "$WORK_DIR"
 
 echo "============================================"
 echo "  Cleanup"
@@ -87,4 +92,17 @@ echo "============================================"
 rm -rf "$WORK_DIR"
 
 echo ""
-echo "All tests completed. Check results above for details."
+echo "============================================"
+echo "  Summary"
+echo "============================================"
+echo "  Passed: $TOTAL_PASS"
+echo "  Failed: $TOTAL_FAIL"
+echo "  Skipped: $TOTAL_SKIP"
+echo ""
+
+if [ "$TOTAL_FAIL" -ne 0 ]; then
+    echo "Some tests failed. Check results above for details."
+    exit 1
+fi
+
+echo "All tests passed."

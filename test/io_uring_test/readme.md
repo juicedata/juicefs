@@ -2,7 +2,7 @@
 
 **测试环境**：Linux 内核 6.8-generic、JuiceFS 1.4-beta2
 
-### 总览：当前共 17 项测试
+### 总览：当前共 12 项测试
 
 | 测试套件 | 用例数 | 说明 |
 |---------|--------|------|
@@ -10,7 +10,6 @@
 | **Fixed Buffers** | 3 | 固定缓冲区注册、读写、跨索引验证 |
 | **Registered Files** | 3 | 固定文件表注册与配合固定缓冲区读写 |
 | **Splice** | 2 | file->pipe、pipe->file、偏移小块传输、tee |
-| **Advanced Features** | 5 | nop、timeout、linked sqes、provide buffers、iopoll |
 
 ---
 
@@ -40,16 +39,22 @@
 
 4. **高级特性说明**
 
-    | 特性名称 | 是否支持 | 详细说明 |
-    |---|---|---|
-    | IORING_OP_SPLICE | 支持 | 完全支持，由内核 io_uring 模块完成 file 到 pipe 的 io 路径，最终发到 juicefs 的只是普通读写请求 |
-    | IORING_OP_NOP | 支持 | 提交一个空请求，完全支持 |
-    | IORING_OP_TIMEOUT | 支持 | 与 IORING_OP_TIMEOUT_REMOVE 组合使用，两个都完全支持 |
-    | IORING_OP_TIMEOUT_REMOVE | 支持 | 与 IORING_OP_TIMEOUT 配套使用，两个都完全支持 |
-    | IOSQE_IO_LINK | 支持 | 链式执行，完全支持 |
-    | IORING_OP_PROVIDE_BUFFERS | 支持 | 提供一组缓冲池，完全支持 |
-    | IORING_SETUP_IOPOLL | 不支持 | 依赖于 iopoll 接口，会直接返回 EOPNOTSUPP |
-    | IORING_OP_SYNC_FILE_RANGE | 支持 | 此接口用于同步内核 pagecache，是纯内核功能，fuse 无需适配，天然支持 |
+    | 特性 | 说明 |
+    |---|---|
+    | `IORING_OP_SPLICE` | 将文件描述符直接从一个进程空间传输到另一个进程空间，无需通过用户空间缓冲区 |
+    | `IORING_OP_NOP` | 无操作，用于填充 io_uring 队列，不触发任何 I/O 操作 |
+    | `IORING_OP_TIMEOUT` | 设置超时时间，用于等待 I/O 操作完成 |
+    | `IORING_OP_TIMEOUT_REMOVE` | 移除超时时间，用于取消等待 I/O 操作的超时设置 |
+    | `IORING_OP_LINK` | 将文件描述符链接到另一个文件描述符，无需通过用户空间缓冲区 |
+    | `IORING_OP_PROVIDE_BUFFERS` | 提供固定缓冲区，用于高频次 io 的地址解析效率 |
+    | `IORING_OP_SYNC_FILE_RANGE` | 同步某个文件范围的 pagecache 到磁盘 |
+
+    > 上述特性均由 linux 内核实现，fuse 层无需特殊适配，juicefs 可以正常享受优化效果
+
+    **`IORING_SETUP_IOPOLL`**
+
+    其作用是把该 ring 的 IO 完成方式从终端驱动切换成轮询（poll）驱动。它依赖于底层的 iopoll 接口，且多用在块设备直接读写下，绝大多数文件系统不涉及，juicefs 也不支持该特性。
+
 
 ### 运行方法
 
@@ -103,7 +108,6 @@ test/io_uring_test/
 ├── test_fixed_buffers.c     # 固定缓冲区（3 项）
 ├── test_registered_files.c  # 注册文件（3 项）
 ├── test_splice.c            # Splice/Tee（2 项）
-├── test_advanced.c          # 高级能力（5 项）
 ├── run_tests.sh
 └── Makefile
 ```
