@@ -1326,14 +1326,16 @@ func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config 
 	if checkpointMgr.isCheckpointKey(dstobj.Key()) {
 		return false
 	}
-	incrTotal(1)
-	if !config.DeleteDst || !config.Dirs && dstobj.IsDir() || config.Limit == 0 {
+	if config.Limit == 0 {
+		return true
+	}
+	if !config.DeleteDst || !config.Dirs && dstobj.IsDir() {
 		logger.Debug("Ignore extra object", dstobj.Key())
 		extra.Increment()
 		extraBytes.IncrInt64(dstobj.Size())
 		return false
 	}
-	config.Limit--
+	incrTotal(1)
 	if dstobj.IsDir() {
 		dstDelayDelMu.Lock()
 		dstDelayDel = append(dstDelayDel, dstobj.Key())
@@ -1344,6 +1346,9 @@ func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config 
 			checkpointMgr.AddPendingKey(prefix, obj)
 		}
 		tasks <- obj
+	}
+	if config.Limit > 0 {
+		config.Limit--
 	}
 	return config.Limit == 0
 }
@@ -1431,13 +1436,6 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
-		if config.Limit >= 0 {
-			if config.Limit == 0 {
-				return nil
-			}
-			config.Limit--
-		}
-		incrTotal(1)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
 			if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
@@ -1460,6 +1458,13 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			}
 		}
 
+		if config.Limit >= 0 {
+			if config.Limit == 0 {
+				return nil
+			}
+			config.Limit--
+		}
+		incrTotal(1)
 		// FIXME: there is a race when source is modified during coping
 		if dstobj == nil || obj.Key() < dstobj.Key() {
 			if config.Existing {
@@ -2230,23 +2235,25 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			if failed != nil {
 				msg += fmt.Sprintf(", failed: %d", failed.Current())
 			}
-			if total-handled.Current()-extra.Current() > 0 {
-				msg += fmt.Sprintf(", lost: %d", total-handled.Current()-extra.Current())
+			if total-handled.Current() > 0 {
+				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
 			}
 			logger.Info(msg)
 
 			if failed != nil {
-				if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
+				if n := failed.Current(); n > 0 || total > handled.Current() {
 					if checkpointMgr != nil {
 						if e := checkpointMgr.Save(checkpointMgr.checkpoint); e != nil {
 							logger.Warnf("Failed to save checkpoint after failure: %v", e)
 						}
 					}
-					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current()-extra.Current())
+					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
 				}
 			}
-			if checkpointMgr != nil {
-				if e := checkpointMgr.DeleteCheckpoint(); e != nil {
+			if checkpointMgr != nil && !config.Dry {
+				if e := try(3, func() error {
+					return checkpointMgr.DeleteCheckpoint()
+				}); e != nil {
 					logger.Warnf("Failed to delete checkpoint after completion: %v", e)
 				}
 			}
@@ -2364,9 +2371,6 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}()
 		delWg.Add(1)
 		go func() {
-			if checkpointMgr != nil && config.DeleteDst {
-				delayDelFunc(checkpointMgr.dst, []string{checkpointMgr.checkpointKey})
-			}
 			delayDelFunc(dst, dstDelayDel)
 			delWg.Done()
 		}()
