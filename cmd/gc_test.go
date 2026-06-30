@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/stretchr/testify/require"
 )
@@ -64,6 +65,22 @@ func getFileCount(dir string) int {
 	}
 
 	return count
+}
+
+func TestBuildSliceKeyMapsClassifiesSlices(t *testing.T) {
+	slices := map[meta.Ino][]meta.Slice{
+		0:   {{Id: 10, Size: 64}},
+		1:   {{Id: 20, Size: 128}},
+		100: {{Id: 30, Size: 256}},
+	}
+
+	vkeys, pkeys, ckeys, total, totalBytes := buildSliceKeyMaps(slices, 128)
+
+	require.Equal(t, uint32(64), pkeys[10])
+	require.Equal(t, uint32(128), ckeys[20])
+	require.Equal(t, uint32(256), vkeys[30])
+	require.Equal(t, int64(4), total)
+	require.Equal(t, uint64(448), totalBytes)
 }
 
 func TestGc(t *testing.T) {

@@ -231,30 +231,8 @@ func gc(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}
-	vkeys := make(map[uint64]uint32)
-	pkeys := make(map[uint64]uint32)
-	ckeys := make(map[uint64]uint32)
-	var total int64
-	var totalBytes uint64
-	for _, s := range slices[0] {
-		pkeys[s.Id] = s.Size
-		total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1
-		totalBytes += uint64(s.Size)
-	}
-	slices[0] = nil
-	for _, s := range slices[1] {
-		ckeys[s.Id] = s.Size
-		total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1
-		totalBytes += uint64(s.Size)
-	}
-	slices[1] = nil
-	for _, ss := range slices {
-		for _, s := range ss {
-			vkeys[s.Id] = s.Size
-			total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1 // s.Size should be > 0
-			totalBytes += uint64(s.Size)
-		}
-	}
+	vkeys, pkeys, ckeys, total, totalBytes := buildSliceKeyMaps(slices, chunkConf.BlockSize)
+	slices = nil
 	if progress.Quiet {
 		logger.Infof("using %d slices (%d bytes)", len(vkeys)+len(ckeys), totalBytes)
 	}
@@ -389,4 +367,35 @@ func gc(ctx *cli.Context) error {
 		logger.Infof("Please add `--delete` to clean leaked objects")
 	}
 	return nil
+}
+
+func buildSliceKeyMaps(slices map[meta.Ino][]meta.Slice, blockSize int) (map[uint64]uint32, map[uint64]uint32, map[uint64]uint32, int64, uint64) {
+	vkeys := make(map[uint64]uint32)
+	pkeys := make(map[uint64]uint32)
+	ckeys := make(map[uint64]uint32)
+	var total int64
+	var totalBytes uint64
+
+	addSlice := func(s meta.Slice) {
+		total += int64(int(s.Size-1)/blockSize) + 1 // s.Size should be > 0
+		totalBytes += uint64(s.Size)
+	}
+	for _, s := range slices[0] {
+		pkeys[s.Id] = s.Size
+		addSlice(s)
+	}
+	for _, s := range slices[1] {
+		ckeys[s.Id] = s.Size
+		addSlice(s)
+	}
+	for inode, ss := range slices {
+		if inode == 0 || inode == 1 {
+			continue
+		}
+		for _, s := range ss {
+			vkeys[s.Id] = s.Size
+			addSlice(s)
+		}
+	}
+	return vkeys, pkeys, ckeys, total, totalBytes
 }
