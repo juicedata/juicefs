@@ -2894,13 +2894,6 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 	} else if st == 0 {
 		m.of.InvalidateChunk(inode, indx)
 	} else {
-		// doCompactChunk already performs a false-negative recheck internally and
-		// normalizes the result to either 0 (success) or EINVAL (wasted). Reaching
-		// this branch means the recheck itself failed (e.g. metadata engine was
-		// unreachable), so the on-disk state of slice `id` is unknown: the data
-		// block may have been written by the prior newMsg(CompactChunk) call while
-		// the metadata reference is uncertain. We cannot safely delete it here;
-		// surface the real error code and mark it for `juicefs gc` to reclaim.
 		logger.Warnf("compact %d %d: %s; slice %d (%d bytes) may be orphaned, will be cleaned by gc",
 			inode, indx, st, id, size)
 	}
