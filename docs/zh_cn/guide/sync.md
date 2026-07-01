@@ -418,7 +418,7 @@ go run traffic_control_server.go
 juicefs sync --traffic-control-url http://10.0.0.1:8080/token s3://src/ s3://dst/
 ```
 
-`--bwlimit` 与 `--traffic-control-url` 可以同时使用：`--bwlimit` 为单个进程设置上限，`--traffic-control-url` 则在所有进程之间执行全局上限。
+`--bwlimit` 与 `--traffic-control-url` 可以同时使用，但同一时刻只有一个生效，且全局流量控制优先级更高。当两者同时设置时，只要流量控制服务可用，就以全局限流为准；一旦服务不可用，sync 会自动回退到本地 `--bwlimit`；当服务恢复后，又会自动切换回全局限流。为了让回退真正起到限速作用，应将 `--bwlimit`（单进程上限）设置得比全局上限更小一些。
 
 ## 观测和监控 {#observation}
 

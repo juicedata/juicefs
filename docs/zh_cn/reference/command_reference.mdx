@@ -994,8 +994,8 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--list-depth=1` <VersionAdd>1.1</VersionAdd>|并发 `list` 目录深度，默认为 1。阅读[并发 `list`](../guide/sync.md#concurrent-list)以了解如何使用。|
 |`--no-https`|不要使用 HTTPS，默认为 false。|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd>|目标端的新建文件的存储类型。|
-|`--bwlimit=0`|限制最大带宽，单位 Mbps，默认为 0 表示不限制。|
-|`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|全局流量控制服务的 URL，用于在多个 sync 实例间协调带宽。服务需提供 HTTP POST 接口，请求体 `{"bytes": <请求字节数>}`，响应体 `{"granted": <允许字节数>, "expired": <过期时间（毫秒）>}`。|
+|`--bwlimit=0`|限制最大带宽，单位 Mbps，默认为 0 表示不限制。与 `--traffic-control-url` 同时使用时，它作为单进程的兜底限流：仅在全局流量控制服务不可用时生效，服务恢复后重新由全局限流接管。建议将其设置得比全局上限更小，才能让兜底真正起到限速作用。|
+|`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|全局流量控制服务的 URL，用于在多个 sync 实例间协调带宽。服务需提供 HTTP POST 接口，请求体 `{"bytes": <请求字节数>}`，响应体 `{"granted": <允许字节数>, "expired": <过期时间（毫秒）>}`。其优先级高于 `--bwlimit`，同一时刻只有一个生效；当服务不可用时 sync 会自动回退到 `--bwlimit`，服务恢复后自动切回全局限流。|
 
 `--traffic-control-url` 使用方法与接口定义：
 

@@ -19,16 +19,21 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juju/ratelimit"
 )
 
 func collectAll(c <-chan object.Object) []string {
@@ -1159,5 +1164,191 @@ func TestSyncEncryptLargeFile(t *testing.T) {
 	got, _ := io.ReadAll(r)
 	if !bytes.Equal(got, largeData) {
 		t.Fatalf("decrypted large file mismatch: got %d bytes, want %d", len(got), len(largeData))
+	}
+}
+
+// TestMixedLimiterFailover verifies that the global traffic control takes
+// precedence, falls back to the local bwlimit when the global service is
+// unavailable, and switches back to the global limit once it recovers.
+func TestMixedLimiterFailover(t *testing.T) {
+	var up atomic.Bool
+	up.Store(true)
+	var granted atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !up.Load() {
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		var in req
+		_ = json.Unmarshal(body, &in)
+		if in.Bytes > 0 {
+			granted.Add(in.Bytes)
+		}
+		out, _ := json.Marshal(resp{Granted: in.Bytes, Expired: 1000})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(out)
+	}))
+	defer srv.Close()
+
+	gLimit := &globalLimit{address: srv.URL}
+	gLimit.healthy.Store(true)
+	// a tiny local limit as fallback
+	bps := float64(1e6)
+	local := ratelimit.NewBucketWithRate(bps, int64(bps))
+	l := &mixedLimiter{global: gLimit, local: local}
+
+	// while healthy, the global service should be used
+	l.Wait(1024)
+	if granted.Load() == 0 {
+		t.Fatalf("expected global service to be used while healthy")
+	}
+	if !gLimit.healthy.Load() {
+		t.Fatalf("expected global limit to stay healthy")
+	}
+
+	// take the service down: the next Wait should mark it unhealthy and fall back
+	up.Store(false)
+	before := granted.Load()
+	l.Wait(1 << 20) // exhausts remaining balance and triggers a failing request
+	if gLimit.healthy.Load() {
+		t.Fatalf("expected global limit to become unhealthy after failure")
+	}
+	// subsequent waits must not increase granted (global is skipped)
+	l.Wait(1024)
+	if granted.Load() != before {
+		t.Fatalf("expected global service to be skipped while unhealthy")
+	}
+
+	// bring the service back and probe for recovery
+	up.Store(true)
+	gLimit.lastProbe = time.Time{} // allow immediate probe
+	gLimit.checkBalance()
+	if !gLimit.healthy.Load() {
+		t.Fatalf("expected global limit to recover after service is back")
+	}
+}
+
+// TestGlobalLimitDrainWaitersOnFailure verifies that when the traffic-control
+// service becomes unavailable, the waiters already queued behind the head do
+// NOT each issue their own failing request. Only the first waiter that detects
+// the failure hits the (dead) service; the rest drain immediately and fall
+// back to the local bwlimit.
+func TestGlobalLimitDrainWaitersOnFailure(t *testing.T) {
+	var down atomic.Bool
+	var downReqs atomic.Int64
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if down.Load() {
+			downReqs.Add(1)
+			<-release // simulate an unresponsive/hung service
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		var in req
+		_ = json.Unmarshal(body, &in)
+		out, _ := json.Marshal(resp{Granted: in.Bytes, Expired: 1000})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(out)
+	}))
+	defer srv.Close()
+
+	g := &globalLimit{address: srv.URL}
+	g.healthy.Store(true)
+
+	down.Store(true)
+	const n = 5
+	results := make(chan bool, n)
+	for i := 0; i < n; i++ {
+		go func() { results <- g.wait(1 << 20) }()
+	}
+
+	// wait until all goroutines are queued: the head is hung in request() while
+	// the others block as waiters behind it.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		g.Lock()
+		nw := len(g.waiters)
+		g.Unlock()
+		if nw == n {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("waiters did not queue up in time, got %d/%d", nw, n)
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// release the hung request so the head fails and the queue drains.
+	close(release)
+	for i := 0; i < n; i++ {
+		if ok := <-results; ok {
+			t.Fatalf("expected wait to fall back (return false) while service is down")
+		}
+	}
+
+	if got := downReqs.Load(); got != 1 {
+		t.Fatalf("expected only 1 request to the down service, got %d", got)
+	}
+	if g.healthy.Load() {
+		t.Fatalf("expected global limit to be marked unhealthy")
+	}
+}
+
+// TestMixedLimiterRecoverInterruptsLocalWait verifies that when the global
+// service recovers, a call that is currently blocked on the (slow) local
+// bwlimit is woken up promptly and switches back to the global limit instead
+// of serving out the full local delay.
+func TestMixedLimiterRecoverInterruptsLocalWait(t *testing.T) {
+	var up atomic.Bool
+	up.Store(true)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !up.Load() {
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		var in req
+		_ = json.Unmarshal(body, &in)
+		out, _ := json.Marshal(resp{Granted: in.Bytes, Expired: 1000})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(out)
+	}))
+	defer srv.Close()
+
+	gLimit := &globalLimit{address: srv.URL}
+	gLimit.healthy.Store(false) // start in the degraded (local fallback) state
+	// A very slow local bucket: capacity 1, rate 1000 tokens/s. Taking a large
+	// count forces a multi-second local wait.
+	local := ratelimit.NewBucketWithRate(1000, 1)
+	l := &mixedLimiter{global: gLimit, local: local}
+
+	done := make(chan time.Duration, 1)
+	go func() {
+		start := time.Now()
+		l.Wait(5000) // ~5s worth of local delay
+		done <- time.Since(start)
+	}()
+
+	// Give the goroutine time to enter the local wait.
+	time.Sleep(100 * time.Millisecond)
+
+	// Bring the service back and let checkBalance detect recovery, which should
+	// interrupt the local wait.
+	up.Store(true)
+	gLimit.lastProbe = time.Time{}
+	gLimit.checkBalance()
+	if !gLimit.healthy.Load() {
+		t.Fatalf("expected global limit to recover")
+	}
+
+	select {
+	case elapsed := <-done:
+		if elapsed >= 3*time.Second {
+			t.Fatalf("local wait was not interrupted on recovery, elapsed %s", elapsed)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("Wait did not return promptly after recovery")
 	}
 }
