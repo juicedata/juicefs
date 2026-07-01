@@ -38,6 +38,9 @@ if [ ! -f test_basic ] || [ ! -f test_flags ] || [ ! -f test_odirect ]; then
     echo ""
 fi
 
+TOTAL_PASS=0
+TOTAL_FAIL=0
+
 run_test() {
     local name=$1
     local binary=$2
@@ -47,7 +50,21 @@ run_test() {
     echo "Running: $name"
     echo "--------------------------------------------"
 
-    "$binary" "$dir" 2>&1 || true
+    if [ ! -x "$binary" ]; then
+        echo "  [ERROR] $binary not found or not executable"
+        TOTAL_FAIL=$((TOTAL_FAIL + 1))
+        echo ""
+        return
+    fi
+
+    if "$binary" "$dir" 2>&1; then
+        echo "  [PASS] $name"
+        TOTAL_PASS=$((TOTAL_PASS + 1))
+    else
+        local rc=$?
+        echo "  [FAIL] $name exited with code $rc"
+        TOTAL_FAIL=$((TOTAL_FAIL + 1))
+    fi
     echo ""
 }
 
@@ -61,4 +78,16 @@ echo "============================================"
 rm -rf "$WORK_DIR"
 
 echo ""
-echo "All tests completed."
+echo "============================================"
+echo "  Summary"
+echo "============================================"
+echo "  Passed: $TOTAL_PASS"
+echo "  Failed: $TOTAL_FAIL"
+echo ""
+
+if [ "$TOTAL_FAIL" -ne 0 ]; then
+    echo "Some tests failed. Check results above for details."
+    exit 1
+fi
+
+echo "All tests passed."
