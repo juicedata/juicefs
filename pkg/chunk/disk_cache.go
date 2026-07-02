@@ -17,6 +17,7 @@
 package chunk
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -43,6 +44,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/twmb/murmur3"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 var (
@@ -547,10 +549,18 @@ func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool, tie
 			return
 		}
 	}
-	// write tierID into stage file
 	if tierID != 0 {
-		if err = cache.writeFile(f, []byte{tierID}); err != nil {
-			logger.Warnf("Write tier to cache file %s failed: %s", tmp, err)
+		// only staged file has a footer
+		footer := stageFooter{Tier: tierID}
+		var fData []byte
+		fData, err = (&footer).marshal(cache.checksum != CsNone)
+		if err != nil {
+			logger.Warnf("Marshal stage footer for cache file %s failed: %s", tmp, err)
+			_ = f.Close()
+			return
+		}
+		if err = cache.writeFile(f, fData); err != nil {
+			logger.Warnf("Write stage footer to cache file %s failed: %s", tmp, err)
 			_ = f.Close()
 			return
 		}
@@ -1345,14 +1355,103 @@ const (
 
 var crc32c = crc32.MakeTable(crc32.Castagnoli)
 
-const tierIDLength = int64(1) // 1 byte for tierID in the end of cache file
+const maxTierID = 3 // maximum valid tier id
+
+// stageFooter is msgpack metadata appended at the end of a stage file:
+//
+//   - file content: [data] [checksum?] [footer]
+//   - footer: [magic uint16] [len uint16] [msgpack data]
+//
+// We use trailer length parity to indicate
+// checksum presence (checksum bytes are always multiple of 4):
+//   - with checksum: msgpack length is padded to a multiple of 4
+//   - without checksum: msgpack length is padded to a non-multiple of 4
+//
+// Therefore, trailer length (checksum + msgpack) is multiple of 4 iff checksum
+// exists, so openCacheFile can distinguish the two and find the trailing
+// msgpack metadata.
+type stageFooter struct {
+	Tier uint8  `msgpack:"tier"`
+	Pad  []byte `msgpack:"pad"` // pad to make msgpack length parity match checksum presence
+}
+
+func (f *stageFooter) marshal(align bool) ([]byte, error) {
+	var p int
+	switch r := stageFooterBaseLen % 4; {
+	case align:
+		p = (4 - r) % 4 // pad up to the next multiple of 4
+	case r == 0:
+		p = 1 // break the multiple-of-4 alignment
+	}
+	f.Pad = stageFooterPad[p]
+	data, err := msgpack.Marshal(f)
+	if err != nil {
+		return nil, err
+	}
+
+	buff := make([]byte, 0, 4+len(data))
+	buff = binary.BigEndian.AppendUint16(buff, stageFooterMagic)
+	buff = binary.BigEndian.AppendUint16(buff, uint16(len(data)))
+	buff = append(buff, data...)
+	return buff, nil
+}
+
+func (f *stageFooter) unmarshal(cf *cacheFile) error {
+	if cf.footerOff == 0 {
+		f.Tier = 0 // no footer, fall back to the default
+		return nil
+	}
+	var hdr [4]byte
+	if _, err := cf.File.ReadAt(hdr[:], cf.footerOff); err != nil {
+		return fmt.Errorf("read stage footer header: %w", err)
+	}
+	if magic := binary.BigEndian.Uint16(hdr[:2]); magic != stageFooterMagic {
+		return fmt.Errorf("invalid stage footer magic %#04x", magic)
+	}
+	size := int64(binary.BigEndian.Uint16(hdr[2:4]))
+	if size == 0 {
+		return fmt.Errorf("invalid stage footer length %d", size)
+	}
+	if cf.footerOff+4+size != cf.size {
+		return fmt.Errorf("stage footer size mismatch: offset %d, size %d, file size %d", cf.footerOff, size, cf.size)
+	}
+	buf := make([]byte, size)
+	if _, err := cf.File.ReadAt(buf, cf.footerOff+4); err != nil {
+		return fmt.Errorf("read stage footer data: %w", err)
+	}
+	if err := msgpack.Unmarshal(buf, f); err != nil {
+		return err
+	}
+	if f.Tier > maxTierID {
+		f.Tier = 0 // ignore unknown/corrupted tier, fall back to the default
+	}
+	return nil
+}
+
+var (
+	stageFooterBaseLen int
+	stageFooterPad     [4][]byte
+	stageFooterMagic   = uint16(0x4653)
+)
+
+func init() {
+	b, err := msgpack.Marshal(&stageFooter{Pad: make([]byte, 0)})
+	if err != nil {
+		panic(err)
+	}
+	stageFooterBaseLen = len(b)
+
+	for i := 0; i < len(stageFooterPad); i++ {
+		stageFooterPad[i] = make([]byte, i)
+	}
+}
 
 type cacheFile struct {
 	*os.File
-	length   int // length of data
-	csLevel  string
-	hasTier  bool
-	fileSize int64
+	length    int // length of data
+	csLevel   string
+	size      int64 // size of file
+	footerOff int64 // offset of stageFooter in file (0 if none)
 }
 
 // Calculate 32-bits checksum for every 32 KiB data, so 512 Bytes for 4 MiB in total
@@ -1380,22 +1479,31 @@ func openCacheFile(name string, length int, level string) (*cacheFile, error) {
 		_ = fp.Close()
 		return nil, err
 	}
-	checksumLength := ((length-1)/csBlock + 1) * 4
-	hasTier := false
-	switch fi.Size() - int64(length) {
-	case 0:
-		level = CsNone
-	case tierIDLength:
-		level = CsNone
-		hasTier = true
-	case int64(checksumLength):
-	case int64(checksumLength) + tierIDLength:
-		hasTier = true
-	default:
+	checksumLength := int64(((length-1)/csBlock + 1) * 4)
+	extra := fi.Size() - int64(length)
+	if extra < 0 {
 		_ = fp.Close()
 		return nil, fmt.Errorf("invalid file size %d, data length %d", fi.Size(), length)
 	}
-	return &cacheFile{File: fp, length: length, csLevel: level, hasTier: hasTier, fileSize: fi.Size()}, nil
+	footerOff := int64(0)
+	switch {
+	case extra == 0:
+		level = CsNone // data only, no footer
+	case extra%4 == 0:
+		switch {
+		case extra == checksumLength:
+		case extra > checksumLength:
+			footerOff = int64(length) + checksumLength
+		default:
+			_ = fp.Close()
+			return nil, fmt.Errorf("invalid file size %d, data length %d, checksum length %d", fi.Size(), length, checksumLength)
+		}
+	default:
+		level = CsNone
+		footerOff = int64(length)
+	}
+	cf := &cacheFile{File: fp, length: length, csLevel: level, footerOff: footerOff, size: fi.Size()}
+	return cf, nil
 }
 
 func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
@@ -1472,22 +1580,4 @@ func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
 		}
 	}
 	return
-}
-
-func (cf *cacheFile) ReadTierID() (uint8, error) {
-	if !cf.hasTier {
-		return 0, nil
-	}
-	var buf [1]byte
-	n, err := cf.File.ReadAt(buf[:], cf.fileSize-tierIDLength)
-	if err != nil {
-		return 0, err
-	} else if n != 1 {
-		return 0, fmt.Errorf("invalid tierID length %d, expect %d", n, tierIDLength)
-	}
-	if buf[0] > 3 {
-		logger.Errorf("Invalid tierID %d in cache file %s", buf[0], cf.Name())
-		return 0, nil
-	}
-	return buf[0], nil
 }
