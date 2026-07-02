@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -440,10 +439,6 @@ func gcExternalSort(
 	objCodec := newGCObjectCodec()
 
 	blobWithPrefix := object.WithPrefix(blob, "chunks/")
-	objs, listErr := object.ListAll(ctx, blobWithPrefix, "", "", true, false)
-	if listErr != nil {
-		logger.Fatalf("list all blocks: %s", listErr)
-	}
 
 	metaSorter, err := extsort.NewSharded(ctx, extsort.Config{
 		WorkDir: workDir,
@@ -465,7 +460,11 @@ func gcExternalSort(
 
 	metaSliceSpin := progress.AddCountSpinner("Scanned slices (meta)")
 	objScanSpin := progress.AddCountSpinner("Scanned objects")
-	var skippedCount, skippedBytes int64
+	valid := progress.AddDoubleSpinnerTwo("Valid objects", "Valid data")
+	pending := progress.AddDoubleSpinnerTwo("Pending delete objects", "Pending delete data")
+	compacted := progress.AddDoubleSpinnerTwo("Compacted objects", "Compacted data")
+	leaked := progress.AddDoubleSpinnerTwo("Leaked objects", "Leaked data")
+	skipped := progress.AddDoubleSpinnerTwo("Skipped objects", "Skipped data")
 
 	eg, egCtx := errgroup.WithContext(ctx)
 
@@ -498,6 +497,10 @@ func gcExternalSort(
 
 	eg.Go(func() error {
 		defer objSorter.CloseInputs()
+		objs, listErr := object.ListAll(egCtx, blobWithPrefix, "", "", true, false)
+		if listErr != nil {
+			return errors.Errorf("list all blocks: %s", listErr)
+		}
 		for obj := range objs {
 			if obj == nil {
 				break
@@ -514,16 +517,16 @@ func gcExternalSort(
 				headObj, err := blobWithPrefix.Head(egCtx, obj.Key())
 				if err != nil {
 					logger.Warnf("head %s: %s", obj.Key(), err)
-					atomic.AddInt64(&skippedCount, 1)
-					atomic.AddInt64(&skippedBytes, obj.Size())
+					objScanSpin.Increment()
+					skipped.IncrInt64(obj.Size())
 					continue
 				}
 				obj = headObj
 			}
 			if obj.Mtime().After(maxMtime) {
 				logger.Debugf("ignore new block: %s %s", obj.Key(), obj.Mtime())
-				atomic.AddInt64(&skippedCount, 1)
-				atomic.AddInt64(&skippedBytes, obj.Size())
+				objScanSpin.Increment()
+				skipped.IncrInt64(obj.Size())
 				continue
 			}
 
@@ -583,7 +586,8 @@ func gcExternalSort(
 				&lock, &validCount, &validBytes,
 				&pendingCount, &pendingBytes,
 				&compactedCount, &compactedBytes,
-				&leakedCount, &leakedBytes)
+				&leakedCount, &leakedBytes,
+				valid, pending, compacted, leaked)
 		}(i)
 	}
 
@@ -625,11 +629,13 @@ func gcExternalSort(
 	}
 	progress.Done()
 
+	vc, _ := valid.Current()
 	dsc, dsb := cleanedSliceSpin.Current()
 	fc, fb := cleanedFileSpin.Current()
+	sc, sb := skipped.Current()
 	logger.Infof("scanned %d objects, %d valid, %d pending delete (%d bytes), %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes)",
-		objScanSpin.Current(), validCount, pendingCount, pendingBytes, compactedCount, compactedBytes,
-		leakedCount, leakedBytes, dsc, dsb, fc, fb, skippedCount, skippedBytes)
+		objScanSpin.Current(), vc, pendingCount, pendingBytes, compactedCount, compactedBytes,
+		leakedCount, leakedBytes, dsc, dsb, fc, fb, sc, sb)
 	if leakedCount > 0 {
 		logger.Infof("Please rerun without `--work-dir` and add `--delete` to clean leaked objects")
 	}
@@ -744,6 +750,7 @@ func mergeShard(
 	pendingCount, pendingBytes *int64,
 	compactedCount, compactedBytes *int64,
 	leakedCount, leakedBytes *int64,
+	valid, pending, compacted, leaked *utils.DoubleSpinner,
 ) {
 	metaCodec := newGCMetaCodec()
 	objCodec := newGCObjectCodec()
@@ -801,6 +808,7 @@ func mergeShard(
 			lock.Lock()
 			*leakedCount++
 			*leakedBytes += objObjSize
+			leaked.IncrInt64(objObjSize)
 			lock.Unlock()
 			continue
 		}
@@ -809,6 +817,7 @@ func mergeShard(
 			lock.Lock()
 			*leakedCount++
 			*leakedBytes += objObjSize
+			leaked.IncrInt64(objObjSize)
 			lock.Unlock()
 		} else {
 			switch curState {
@@ -816,16 +825,19 @@ func mergeShard(
 				lock.Lock()
 				*pendingCount++
 				*pendingBytes += objObjSize
+				pending.IncrInt64(objObjSize)
 				lock.Unlock()
 			case gcStateTrash:
 				lock.Lock()
 				*compactedCount++
 				*compactedBytes += objObjSize
+				compacted.IncrInt64(objObjSize)
 				lock.Unlock()
 			default:
 				lock.Lock()
 				*validCount++
 				*validBytes += objObjSize
+				valid.IncrInt64(objObjSize)
 				lock.Unlock()
 			}
 		}
