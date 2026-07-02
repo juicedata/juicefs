@@ -552,9 +552,10 @@ func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool, tie
 	if tierID != 0 {
 		// only staged file has a footer
 		footer := stageFooter{Tier: tierID}
-		fData, fErr := (&footer).marshal(cache.checksum != CsNone)
-		if fErr != nil {
-			logger.Warnf("Marshal stage footer for cache file %s failed: %s", tmp, fErr)
+		var fData []byte
+		fData, err = (&footer).marshal(cache.checksum != CsNone)
+		if err != nil {
+			logger.Warnf("Marshal stage footer for cache file %s failed: %s", tmp, err)
 			_ = f.Close()
 			return
 		}
