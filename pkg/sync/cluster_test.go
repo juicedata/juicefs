@@ -67,9 +67,6 @@ func TestCluster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Regression test for #7213: the sync manager must use a dedicated mux and
-	// must not expose /debug/pprof/* (registered on http.DefaultServeMux via the
-	// side-effect import of net/http/pprof) on its listen address.
 	if resp, err := http.Get("http://" + addr + "/debug/pprof/cmdline"); err != nil {
 		t.Fatalf("get pprof: %s", err)
 	} else {

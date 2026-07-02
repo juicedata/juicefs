@@ -335,10 +335,6 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Handler.ServeHTTP(w, r)
 }
 
-// newWebdavHandler builds the HTTP handler for the WebDAV server on a dedicated
-// ServeMux. Using a dedicated mux (instead of http.DefaultServeMux) ensures the
-// WebDAV listen address does not expose handlers registered on the default mux,
-// such as /debug/pprof/* (side-effect import of net/http/pprof) and /metrics.
 func newWebdavHandler(fs *FileSystem, config WebdavConfig) http.Handler {
 	ctx := meta.NewContext(uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 	hfs := &webdavFS{ctx, fs, uint16(utils.GetUmask()), config}
