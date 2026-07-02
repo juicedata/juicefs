@@ -17,18 +17,23 @@
 package cmd
 
 import (
+	"context"
+	"encoding/binary"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
+	extsort "github.com/juicedata/juicefs/pkg/utils/extsort"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/urfave/cli/v2"
 )
@@ -53,7 +58,10 @@ $ juicefs gc redis://localhost
 $ juicefs gc redis://localhost --compact
 
 # Delete leaked objects or metadata and delayed deleted slices or files
-$ juicefs gc redis://localhost --delete`,
+$ juicefs gc redis://localhost --delete
+
+# Use external sort to reduce memory usage on large volumes
+$ juicefs gc redis://localhost --work-dir /tmp/gc-work`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "compact",
@@ -69,9 +77,19 @@ $ juicefs gc redis://localhost --delete`,
 				Value:   10,
 				Usage:   "number threads to delete leaked objects",
 			},
+			&cli.StringFlag{
+				Name:  "work-dir",
+				Usage: "working directory for external sort temporary files (enables external sort mode, does not support --delete)",
+			},
 		},
 	}
 }
+
+const (
+	gcStateUsed    uint8 = 0
+	gcStatePending uint8 = 1
+	gcStateTrash   uint8 = 2
+)
 
 func gc(ctx *cli.Context) error {
 	setup(ctx, 1)
@@ -103,13 +121,17 @@ func gc(ctx *cli.Context) error {
 	// Scan all chunks first and do compaction if necessary
 	progress := utils.NewProgress(false)
 	// Delete pending slices while listing all slices
-	delete := ctx.Bool("delete")
+	delFlag := ctx.Bool("delete")
+	workDir := ctx.String("work-dir")
+	if workDir != "" && delFlag {
+		logger.Fatal("external sort mode does not support --delete")
+	}
 	threads := ctx.Int("threads")
 	compact := ctx.Bool("compact")
-	if (delete || compact) && threads <= 0 {
+	if (delFlag || compact) && threads <= 0 {
 		logger.Fatal("threads should be greater than 0 to delete or compact objects")
 	}
-	maxMtime := time.Now().Add(time.Hour * -1)
+	maxMtime := time.Now()
 	strDuration := os.Getenv("JFS_GC_SKIPPEDTIME")
 	if strDuration != "" {
 		iDuration, err := strconv.Atoi(strDuration)
@@ -123,7 +145,7 @@ func gc(ctx *cli.Context) error {
 	var wg sync.WaitGroup
 	var delSpin *utils.Bar
 
-	if delete || compact {
+	if delFlag || compact {
 		delSpin = progress.AddCountSpinner("Cleaned pending slices")
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 			delSpin.Increment()
@@ -135,7 +157,7 @@ func gc(ctx *cli.Context) error {
 	delayedFileSpin := progress.AddDoubleSpinnerTwo("Pending deleted files", "Pending deleted data")
 	cleanedFileSpin := progress.AddDoubleSpinnerTwo("Cleaned pending files", "Cleaned pending data")
 	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)
-	if delete {
+	if delFlag {
 		cleanTrashSpin := progress.AddCountSpinner("Cleaned trash")
 		_ = m.CleanupTrashBefore(c, edge, cleanTrashSpin.IncrBy, nil)
 		cleanTrashSpin.Done()
@@ -150,7 +172,7 @@ func gc(ctx *cli.Context) error {
 		nil, nil, nil,
 		func(_ meta.Ino, size uint64, ts int64) (bool, error) {
 			delayedFileSpin.IncrInt64(int64(size))
-			if delete {
+			if delFlag {
 				cleanedFileSpin.IncrInt64(int64(size))
 				return true, nil
 			}
@@ -176,8 +198,8 @@ func gc(ctx *cli.Context) error {
 		})
 		if st := m.CompactAll(meta.Background(), ctx.Int("threads"), bar); st == 0 {
 			if progress.Quiet {
-				c, b := spin.Current()
-				logger.Infof("Compacted %d chunks (%d slices, %d bytes).", bar.Current(), c, b)
+				cn, b := spin.Current()
+				logger.Infof("Compacted %d chunks (%d slices, %d bytes).", bar.Current(), cn, b)
 			}
 		} else {
 			logger.Errorf("compact all chunks: %s", st)
@@ -190,12 +212,16 @@ func gc(ctx *cli.Context) error {
 		})
 	}
 
+	if workDir != "" {
+		return gcExternalSort(ctx.Context, m, &chunkConf, blob, progress, c, delSpin, cleanedFileSpin, workDir, compact, maxMtime)
+	}
+
 	// put it above delete count spinner
 	sliceCSpin := progress.AddCountSpinner("Listed slices")
 
 	// List all slices in metadata engine
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, true, delete, sliceCSpin.Increment)
+	r := m.ListSlices(c, slices, true, delFlag, sliceCSpin.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
@@ -208,11 +234,11 @@ func gc(ctx *cli.Context) error {
 		func(ss []meta.Slice, ts int64) (bool, error) {
 			for _, s := range ss {
 				delayedSliceSpin.IncrInt64(int64(s.Size))
-				if delete && ts < edge.Unix() {
+				if delFlag && ts < edge.Unix() {
 					cleanedSliceSpin.IncrInt64(int64(s.Size))
 				}
 			}
-			if delete && ts < edge.Unix() {
+			if delFlag && ts < edge.Unix() {
 				return true, nil
 			}
 			return false, nil
@@ -282,7 +308,7 @@ func gc(ctx *cli.Context) error {
 	foundLeaked := func(obj object.Object) {
 		bar.IncrTotal(1)
 		leaked.IncrInt64(obj.Size())
-		if delete {
+		if delFlag {
 			leakedObj <- obj.Key()
 		}
 	}
@@ -367,7 +393,7 @@ func gc(ctx *cli.Context) error {
 	})
 	close(leakedObj)
 	wg.Wait()
-	if delete || compact {
+	if delFlag || compact {
 		delSpin.Done()
 		if progress.Quiet {
 			logger.Infof("Deleted %d pending slices", delSpin.Current())
@@ -385,8 +411,427 @@ func gc(ctx *cli.Context) error {
 	fc, fb := cleanedFileSpin.Current()
 	logger.Infof("scanned %d objects, %d valid, %d pending delete (%d bytes), %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes)",
 		bar.Current(), vc, pc, pb, cc, cb, lc, lb, dsc, dsb, fc, fb, sc, sb)
-	if lc > 0 && !delete {
+	if lc > 0 && !delFlag {
 		logger.Infof("Please add `--delete` to clean leaked objects")
 	}
 	return nil
+}
+
+// gcExternalSort runs GC using external sort to avoid loading all slices into memory.
+func gcExternalSort(
+	ctx context.Context,
+	m meta.Meta,
+	chunkConf *chunk.Config,
+	blob object.ObjectStorage,
+	progress *utils.Progress,
+	c meta.Context,
+	delSpin *utils.Bar,
+	cleanedFileSpin *utils.DoubleSpinner,
+	workDir string,
+	compact bool,
+	maxMtime time.Time,
+) error {
+	logger.Infof("Using external sort mode, work dir: %s", workDir)
+
+	metaCodec := newGCMetaCodec()
+	objCodec := newGCObjectCodec()
+
+	blobWithPrefix := object.WithPrefix(blob, "chunks/")
+	objs, listErr := object.ListAll(ctx, blobWithPrefix, "", "", true, false)
+	if listErr != nil {
+		logger.Fatalf("list all blocks: %s", listErr)
+	}
+
+	metaSorter, err := extsort.NewSharded(ctx, extsort.Config{
+		WorkDir: workDir,
+		Name:    "gc-meta",
+	}, extsort.Codec{Compare: metaCodec.compare})
+	if err != nil {
+		logger.Fatalf("create meta sorter: %s", err)
+	}
+
+	objSorter, err := extsort.NewSharded(ctx, extsort.Config{
+		WorkDir: workDir,
+		Name:    "gc-object",
+	}, extsort.Codec{Compare: objCodec.compare})
+	if err != nil {
+		metaSorter.CloseInputs()
+		_ = metaSorter.Done()
+		logger.Fatalf("create object sorter: %s", err)
+	}
+
+	metaSliceSpin := progress.AddCountSpinner("Scanned slices (meta)")
+	objScanSpin := progress.AddCountSpinner("Scanned objects")
+	var skippedCount, skippedBytes int64
+
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		defer metaSorter.CloseInputs()
+		st := m.ScanSlices(c, true, false, metaSliceSpin.Increment, func(ino meta.Ino, s meta.Slice) error {
+			select {
+			case <-egCtx.Done():
+				return egCtx.Err()
+			default:
+			}
+			var state uint8
+			switch ino {
+			case 0:
+				state = gcStatePending
+			case 1:
+				state = gcStateTrash
+			default:
+				state = gcStateUsed
+			}
+			data := metaCodec.encode(s.Id, s.Size, state)
+			metaSorter.InputFor(s.Id) <- data
+			return nil
+		})
+		if st != 0 {
+			return errors.Errorf("scan slices: %s", st)
+		}
+		return nil
+	})
+
+	eg.Go(func() error {
+		defer objSorter.CloseInputs()
+		for obj := range objs {
+			if obj == nil {
+				break
+			}
+			select {
+			case <-egCtx.Done():
+				return egCtx.Err()
+			default:
+			}
+			if obj.IsDir() {
+				continue
+			}
+			if obj.Size() == 0 || obj.Mtime().Unix() == 0 {
+				headObj, err := blobWithPrefix.Head(egCtx, obj.Key())
+				if err != nil {
+					logger.Warnf("head %s: %s", obj.Key(), err)
+					atomic.AddInt64(&skippedCount, 1)
+					atomic.AddInt64(&skippedBytes, obj.Size())
+					continue
+				}
+				obj = headObj
+			}
+			if obj.Mtime().After(maxMtime) {
+				logger.Debugf("ignore new block: %s %s", obj.Key(), obj.Mtime())
+				atomic.AddInt64(&skippedCount, 1)
+				atomic.AddInt64(&skippedBytes, obj.Size())
+				continue
+			}
+
+			// Parse object key: dir/dir/cid_index_size
+			parts := strings.Split(obj.Key(), "/")
+			if len(parts) != 3 {
+				continue
+			}
+			nameParts := strings.Split(parts[2], "_")
+			if len(nameParts) != 3 {
+				continue
+			}
+			cid, err := strconv.ParseUint(nameParts[0], 10, 64)
+			if err != nil {
+				continue
+			}
+			index, err := strconv.Atoi(nameParts[1])
+			if err != nil {
+				continue
+			}
+			bsize, err := strconv.Atoi(nameParts[2])
+			if err != nil {
+				continue
+			}
+
+			data := objCodec.encode(cid, index, bsize, obj.Size(), obj.Key())
+			objSorter.InputFor(cid) <- data
+			objScanSpin.Increment()
+		}
+		return nil
+	})
+
+	// Wait for both producers; errors from either will cancel the context
+	if err := eg.Wait(); err != nil {
+		_ = metaSorter.Done()
+		_ = objSorter.Done()
+		return errors.Errorf("producer error: %s", err)
+	}
+
+	var lock sync.Mutex
+	var validCount, validBytes int64
+	var pendingCount, pendingBytes int64
+	var compactedCount, compactedBytes int64
+	var leakedCount, leakedBytes int64
+
+	metaOutputs := metaSorter.Outputs()
+	objOutputs := objSorter.Outputs()
+
+	var mergeWg sync.WaitGroup
+	blockSize := chunkConf.BlockSize
+
+	for i := 0; i < len(metaOutputs); i++ {
+		mergeWg.Add(1)
+		go func(shard int) {
+			defer mergeWg.Done()
+			mergeShard(metaOutputs[shard], objOutputs[shard], blockSize,
+				&lock, &validCount, &validBytes,
+				&pendingCount, &pendingBytes,
+				&compactedCount, &compactedBytes,
+				&leakedCount, &leakedBytes)
+		}(i)
+	}
+
+	mergeWg.Wait()
+
+	metaSortErr := metaSorter.Done()
+	objSortErr := objSorter.Done()
+	if metaSortErr != nil {
+		return errors.Errorf("sort meta records: %s", metaSortErr)
+	}
+	if objSortErr != nil {
+		return errors.Errorf("sort object records: %s", objSortErr)
+	}
+
+	delayedSliceSpin := progress.AddDoubleSpinnerTwo("Trash slices", "Trash data")
+	cleanedSliceSpin := progress.AddDoubleSpinnerTwo("Cleaned trash slices", "Cleaned trash data")
+
+	err = m.ScanDeletedObject(
+		c,
+		func(ss []meta.Slice, _ int64) (bool, error) {
+			for _, s := range ss {
+				delayedSliceSpin.IncrInt64(int64(s.Size))
+			}
+			return false, nil
+		},
+		nil, nil, nil,
+	)
+	if err != nil {
+		logger.Fatalf("trash slice scan: %s", err)
+	}
+	delayedSliceSpin.Done()
+	cleanedSliceSpin.Done()
+
+	if compact {
+		delSpin.Done()
+		if progress.Quiet {
+			logger.Infof("Deleted %d pending slices", delSpin.Current())
+		}
+	}
+	progress.Done()
+
+	dsc, dsb := cleanedSliceSpin.Current()
+	fc, fb := cleanedFileSpin.Current()
+	logger.Infof("scanned %d objects, %d valid, %d pending delete (%d bytes), %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes)",
+		objScanSpin.Current(), validCount, pendingCount, pendingBytes, compactedCount, compactedBytes,
+		leakedCount, leakedBytes, dsc, dsb, fc, fb, skippedCount, skippedBytes)
+	if leakedCount > 0 {
+		logger.Infof("Please rerun without `--work-dir` and add `--delete` to clean leaked objects")
+	}
+	return nil
+}
+
+type gcMetaCodec struct{}
+
+func newGCMetaCodec() *gcMetaCodec { return &gcMetaCodec{} }
+
+func (c *gcMetaCodec) encode(sliceID uint64, size uint32, state uint8) []byte {
+	buf := make([]byte, 13)
+	binary.BigEndian.PutUint64(buf[0:8], sliceID)
+	binary.BigEndian.PutUint32(buf[8:12], size)
+	buf[12] = state
+	return buf
+}
+
+func (c *gcMetaCodec) decode(b []byte) (sliceID uint64, size uint32, state uint8) {
+	return binary.BigEndian.Uint64(b[0:8]), binary.BigEndian.Uint32(b[8:12]), b[12]
+}
+
+func (c *gcMetaCodec) compare(a, b []byte) int {
+	aID := binary.BigEndian.Uint64(a[0:8])
+	bID := binary.BigEndian.Uint64(b[0:8])
+	if aID < bID {
+		return -1
+	}
+	if aID > bID {
+		return 1
+	}
+	// Same SliceID: sort by state (used < pending < trash)
+	aState := a[12]
+	bState := b[12]
+	if aState < bState {
+		return -1
+	}
+	if aState > bState {
+		return 1
+	}
+	return 0
+}
+
+type gcObjectCodec struct{}
+
+func newGCObjectCodec() *gcObjectCodec { return &gcObjectCodec{} }
+
+func (c *gcObjectCodec) encode(sliceID uint64, index int, bsize int, objSize int64, key string) []byte {
+	keyLen := len(key)
+	buf := make([]byte, 8+4+4+8+2+keyLen)
+	binary.BigEndian.PutUint64(buf[0:8], sliceID)
+	binary.BigEndian.PutUint32(buf[8:12], uint32(index))
+	binary.BigEndian.PutUint32(buf[12:16], uint32(bsize))
+	binary.BigEndian.PutUint64(buf[16:24], uint64(objSize))
+	binary.BigEndian.PutUint16(buf[24:26], uint16(keyLen))
+	copy(buf[26:], key)
+	return buf
+}
+
+func (c *gcObjectCodec) decode(b []byte) (sliceID uint64, index int32, bsize int32, objSize int64, key string) {
+	sliceID = binary.BigEndian.Uint64(b[0:8])
+	index = int32(binary.BigEndian.Uint32(b[8:12]))
+	bsize = int32(binary.BigEndian.Uint32(b[12:16]))
+	objSize = int64(binary.BigEndian.Uint64(b[16:24]))
+	keyLen := binary.BigEndian.Uint16(b[24:26])
+	key = string(b[26 : 26+keyLen])
+	return
+}
+
+func (c *gcObjectCodec) compare(a, b []byte) int {
+	aID := binary.BigEndian.Uint64(a[0:8])
+	bID := binary.BigEndian.Uint64(b[0:8])
+	if aID < bID {
+		return -1
+	}
+	if aID > bID {
+		return 1
+	}
+	// tie-break on index, block size, then key
+	aIdx := binary.BigEndian.Uint32(a[8:12])
+	bIdx := binary.BigEndian.Uint32(b[8:12])
+	if aIdx < bIdx {
+		return -1
+	}
+	if aIdx > bIdx {
+		return 1
+	}
+	aSz := binary.BigEndian.Uint32(a[12:16])
+	bSz := binary.BigEndian.Uint32(b[12:16])
+	if aSz < bSz {
+		return -1
+	}
+	if aSz > bSz {
+		return 1
+	}
+	aKeyLen := binary.BigEndian.Uint16(a[24:26])
+	bKeyLen := binary.BigEndian.Uint16(b[24:26])
+	if string(a[26:26+aKeyLen]) < string(b[26:26+bKeyLen]) {
+		return -1
+	}
+	if string(a[26:26+aKeyLen]) > string(b[26:26+bKeyLen]) {
+		return 1
+	}
+	return 0
+}
+
+func mergeShard(
+	metaStream, objStream <-chan []byte,
+	blockSize int,
+	lock *sync.Mutex,
+	validCount, validBytes *int64,
+	pendingCount, pendingBytes *int64,
+	compactedCount, compactedBytes *int64,
+	leakedCount, leakedBytes *int64,
+) {
+	metaCodec := newGCMetaCodec()
+	objCodec := newGCObjectCodec()
+
+	var curSliceID uint64
+	var curSize uint32
+	var curState uint8
+	var metaEOF bool
+	var peeked []byte
+
+	readMetaGroup := func() {
+		if metaEOF {
+			return
+		}
+		var data []byte
+		var ok bool
+		if peeked != nil {
+			data = peeked
+			peeked = nil
+		} else {
+			data, ok = <-metaStream
+			if !ok {
+				metaEOF = true
+				return
+			}
+		}
+		curSliceID, curSize, curState = metaCodec.decode(data)
+		for {
+			data, ok = <-metaStream
+			if !ok {
+				return
+			}
+			sid, sz, st := metaCodec.decode(data)
+			if sid != curSliceID {
+				peeked = data
+				return
+			}
+			if st < curState {
+				curState = st
+				curSize = sz
+			}
+		}
+	}
+
+	readMetaGroup()
+
+	for objData := range objStream {
+		objSliceID, objIndex, objBsize, objObjSize, _ := objCodec.decode(objData)
+
+		for !metaEOF && curSliceID < objSliceID {
+			readMetaGroup()
+		}
+
+		if metaEOF || curSliceID > objSliceID {
+			lock.Lock()
+			*leakedCount++
+			*leakedBytes += objObjSize
+			lock.Unlock()
+			continue
+		}
+
+		if isLeakedBlock(int(objIndex), int(objBsize), int(curSize), blockSize) {
+			lock.Lock()
+			*leakedCount++
+			*leakedBytes += objObjSize
+			lock.Unlock()
+		} else {
+			switch curState {
+			case gcStatePending:
+				lock.Lock()
+				*pendingCount++
+				*pendingBytes += objObjSize
+				lock.Unlock()
+			case gcStateTrash:
+				lock.Lock()
+				*compactedCount++
+				*compactedBytes += objObjSize
+				lock.Unlock()
+			default:
+				lock.Lock()
+				*validCount++
+				*validBytes += objObjSize
+				lock.Unlock()
+			}
+		}
+	}
+}
+
+func isLeakedBlock(index, blockSize, sliceSize, configuredBlockSize int) bool {
+	if blockSize == configuredBlockSize {
+		return (index+1)*blockSize > sliceSize
+	}
+	return index*configuredBlockSize+blockSize != sliceSize
 }

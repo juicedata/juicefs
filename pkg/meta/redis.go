@@ -3984,6 +3984,13 @@ func (m *redisMeta) hscan(ctx context.Context, key string, f func([]string) erro
 }
 
 func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
+	return m.ScanSlices(ctx, scanPending, delete, showProgress, func(ino Ino, s Slice) error {
+		slices[ino] = append(slices[ino], s)
+		return nil
+	})
+}
+
+func (m *redisMeta) ScanSlices(ctx Context, scanPending, delete bool, showProgress func(), fn func(Ino, Slice) error) syscall.Errno {
 	logger.Debugf("start cleanup...")
 	m.cleanupLeakedInodes(delete)
 	m.cleanupLeakedChunks(delete)
@@ -3991,7 +3998,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending,
 	if delete {
 		_ = m.doCleanupSlices(ctx, nil)
 	}
-	logger.Debugf("start listing slices...")
+	logger.Debugf("start scanning slices...")
 
 	p := m.rdb.Pipeline()
 	err := m.scan(ctx, "c*_*", func(keys []string) error {
@@ -4018,7 +4025,9 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending,
 			}
 			for _, s := range ss {
 				if s.id > 0 {
-					slices[Ino(inode)] = append(slices[Ino(inode)], Slice{Id: s.id, Size: s.size})
+					if err := fn(Ino(inode), Slice{Id: s.id, Size: s.size}); err != nil {
+						return err
+					}
 					if showProgress != nil {
 						showProgress()
 					}
@@ -4033,7 +4042,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending,
 	}
 
 	if scanPending {
-		_ = m.hscan(Background(), m.sliceRefs(), func(keys []string) error {
+		if err := m.hscan(Background(), m.sliceRefs(), func(keys []string) error {
 			for i := 0; i < len(keys); i += 2 {
 				key, val := keys[i], keys[i+1]
 				if strings.HasPrefix(val, "-") { // < 0
@@ -4042,22 +4051,29 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending,
 						id, _ := strconv.ParseUint(ps[0][1:], 10, 64)
 						size, _ := strconv.ParseUint(ps[1], 10, 32)
 						if id > 0 && size > 0 {
-							slices[0] = append(slices[0], Slice{Id: id, Size: uint32(size)})
+							if err := fn(0, Slice{Id: id, Size: uint32(size)}); err != nil {
+								return err
+							}
 						}
 					}
 				}
 			}
 			return nil
-		})
+		}); err != nil {
+			logger.Warnf("scan pending slices: %s", err)
+			return errno(err)
+		}
 	}
 
 	if m.getFormat().TrashDays == 0 {
 		return 0
 	}
 	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
-		slices[1] = append(slices[1], ss...)
-		if showProgress != nil {
-			for range ss {
+		for _, s := range ss {
+			if err := fn(1, s); err != nil {
+				return false, err
+			}
+			if showProgress != nil {
 				showProgress()
 			}
 		}

@@ -3188,12 +3188,20 @@ func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 }
 
 func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
+	return m.ScanSlices(ctx, scanPending, delete, showProgress, func(ino Ino, s Slice) error {
+		slices[ino] = append(slices[ino], s)
+		return nil
+	})
+}
+
+func (m *kvMeta) ScanSlices(ctx Context, scanPending, delete bool, showProgress func(), fn func(Ino, Slice) error) syscall.Errno {
 	if delete {
 		_ = m.doCleanupSlices(ctx, nil)
 	}
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	if err := m.client.scan(m.fmtKey("A"), func(key, value []byte) bool {
+	var cbErr error
+	err := m.client.scan(m.fmtKey("A"), func(key, value []byte) bool {
 		if len(key) != klen || key[1+8] != 'C' {
 			return true
 		}
@@ -3205,37 +3213,53 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, de
 		}
 		for _, s := range ss {
 			if s.id > 0 {
-				slices[inode] = append(slices[inode], Slice{Id: s.id, Size: s.size})
+				if cbErr = fn(inode, Slice{Id: s.id, Size: s.size}); cbErr != nil {
+					return false
+				}
 				if showProgress != nil {
 					showProgress()
 				}
 			}
 		}
 		return true
-	}); err != nil {
+	})
+	if cbErr != nil {
+		return errno(cbErr)
+	}
+	if err != nil {
 		return errno(err)
 	}
 
 	if scanPending {
 		// slice refs: Kccccccccnnnn
 		klen = 1 + 8 + 4
-		_ = m.client.scan(m.fmtKey("K"), func(k, v []byte) bool {
+		cbErr = nil
+		err = m.client.scan(m.fmtKey("K"), func(k, v []byte) bool {
 			if len(k) == klen && len(v) == 8 && parseCounter(v) < 0 {
 				rb := utils.FromBuffer([]byte(k)[1:])
-				slices[0] = append(slices[0], Slice{Id: rb.Get64(), Size: rb.Get32()})
+				if cbErr = fn(0, Slice{Id: rb.Get64(), Size: rb.Get32()}); cbErr != nil {
+					return false
+				}
 			}
 			return true
-
 		})
+		if cbErr != nil {
+			return errno(cbErr)
+		}
+		if err != nil {
+			return errno(err)
+		}
 	}
 
 	if m.getFormat().TrashDays == 0 {
 		return 0
 	}
 	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
-		slices[1] = append(slices[1], ss...)
-		if showProgress != nil {
-			for range ss {
+		for _, s := range ss {
+			if err := fn(1, s); err != nil {
+				return false, err
+			}
+			if showProgress != nil {
 				showProgress()
 			}
 		}
