@@ -1060,7 +1060,12 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	_, err = f.ReadAt(block.Data, 0)
 	tierID := uint8(0)
 	if err == nil {
-		tierID = f.tierID
+		footer := &stageFooter{}
+		if ferr := footer.unmarshal(f); ferr != nil {
+			logger.Warnf("Parse stage footer of %s failed, upload with default tier: %s", stagingPath, ferr)
+		} else {
+			tierID = footer.Tier
+		}
 	}
 	_ = f.Close()
 	if err != nil {
