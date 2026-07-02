@@ -353,13 +353,17 @@ func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
 	if config.EnableGzip {
 		h = makeGzipHandler(h)
 	}
-	http.Handle("/", h)
+	// Use a dedicated mux instead of http.DefaultServeMux so that handlers
+	// registered on the default mux (net/http/pprof, Prometheus /metrics) are
+	// not published on the user-facing WebDAV listen address.
+	mux := http.NewServeMux()
+	mux.Handle("/", h)
 	logger.Infof("WebDAV listening on %s", config.Addr)
 	var err error
 	if config.CertFile != "" && config.KeyFile != "" {
-		err = http.ListenAndServeTLS(config.Addr, config.CertFile, config.KeyFile, nil)
+		err = http.ListenAndServeTLS(config.Addr, config.CertFile, config.KeyFile, mux)
 	} else {
-		err = http.ListenAndServe(config.Addr, nil)
+		err = http.ListenAndServe(config.Addr, mux)
 	}
 	if err != nil {
 		logger.Fatalf("Error with WebDAV server: %v", err)
