@@ -455,8 +455,10 @@ func gcExternalSort(
 		logger.Fatalf("create object sorter: %s", err)
 	}
 
-	metaSliceSpin := progress.AddCountSpinner("Scanned slices (meta)")
-	objScanSpin := progress.AddCountSpinner("Scanned objects")
+	metaSliceSpin := progress.AddCountSpinner("Listed slices")
+	delayedSliceSpin := progress.AddDoubleSpinnerTwo("Trash slices", "Trash data")
+	cleanedSliceSpin := progress.AddDoubleSpinnerTwo("Cleaned trash slices", "Cleaned trash data")
+	objScanBar := progress.AddCountBar("Scanned objects", 0)
 	valid := progress.AddDoubleSpinnerTwo("Valid objects", "Valid data")
 	pending := progress.AddDoubleSpinnerTwo("Pending delete objects", "Pending delete data")
 	compacted := progress.AddDoubleSpinnerTwo("Compacted objects", "Compacted data")
@@ -482,6 +484,7 @@ func gcExternalSort(
 			default:
 				state = gcStateUsed
 			}
+			objScanBar.IncrTotal(int64(int(s.Size-1)/chunkConf.BlockSize) + 1)
 			data := metaCodec.encode(s.Id, s.Size, state)
 			metaSorter.InputFor(s.Id) <- data
 			return nil
@@ -514,7 +517,7 @@ func gcExternalSort(
 				headObj, err := blobWithPrefix.Head(egCtx, obj.Key())
 				if err != nil {
 					logger.Warnf("head %s: %s", obj.Key(), err)
-					objScanSpin.Increment()
+					objScanBar.Increment()
 					skipped.IncrInt64(obj.Size())
 					continue
 				}
@@ -522,7 +525,7 @@ func gcExternalSort(
 			}
 			if obj.Mtime().After(maxMtime) {
 				logger.Debugf("ignore new block: %s %s", obj.Key(), obj.Mtime())
-				objScanSpin.Increment()
+				objScanBar.Increment()
 				skipped.IncrInt64(obj.Size())
 				continue
 			}
@@ -551,7 +554,7 @@ func gcExternalSort(
 
 			data := objCodec.encode(cid, index, bsize, obj.Size(), obj.Key())
 			objSorter.InputFor(cid) <- data
-			objScanSpin.Increment()
+			objScanBar.Increment()
 		}
 		return nil
 	})
@@ -584,7 +587,7 @@ func gcExternalSort(
 				&pendingCount, &pendingBytes,
 				&compactedCount, &compactedBytes,
 				&leakedCount, &leakedBytes,
-				valid, pending, compacted, leaked)
+				objScanBar, valid, pending, compacted, leaked)
 		}(i)
 	}
 
@@ -598,9 +601,6 @@ func gcExternalSort(
 	if objSortErr != nil {
 		return errors.Errorf("sort object records: %s", objSortErr)
 	}
-
-	delayedSliceSpin := progress.AddDoubleSpinnerTwo("Trash slices", "Trash data")
-	cleanedSliceSpin := progress.AddDoubleSpinnerTwo("Cleaned trash slices", "Cleaned trash data")
 
 	err = m.ScanDeletedObject(
 		c,
@@ -631,7 +631,7 @@ func gcExternalSort(
 	fc, fb := cleanedFileSpin.Current()
 	sc, sb := skipped.Current()
 	logger.Infof("scanned %d objects, %d valid, %d pending delete (%d bytes), %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes)",
-		objScanSpin.Current(), vc, pendingCount, pendingBytes, compactedCount, compactedBytes,
+		objScanBar.Current(), vc, pendingCount, pendingBytes, compactedCount, compactedBytes,
 		leakedCount, leakedBytes, dsc, dsb, fc, fb, sc, sb)
 	if leakedCount > 0 {
 		logger.Infof("Please rerun without `--work-dir` and add `--delete` to clean leaked objects")
@@ -747,6 +747,7 @@ func mergeShard(
 	pendingCount, pendingBytes *int64,
 	compactedCount, compactedBytes *int64,
 	leakedCount, leakedBytes *int64,
+	objScanBar *utils.Bar,
 	valid, pending, compacted, leaked *utils.DoubleSpinner,
 ) {
 	metaCodec := newGCMetaCodec()
@@ -803,6 +804,7 @@ func mergeShard(
 
 		if metaEOF || curSliceID > objSliceID {
 			lock.Lock()
+			objScanBar.IncrTotal(1)
 			*leakedCount++
 			*leakedBytes += objObjSize
 			leaked.IncrInt64(objObjSize)
@@ -812,6 +814,7 @@ func mergeShard(
 
 		if isLeakedBlock(int(objIndex), int(objBsize), int(curSize), blockSize) {
 			lock.Lock()
+			objScanBar.IncrTotal(1)
 			*leakedCount++
 			*leakedBytes += objObjSize
 			leaked.IncrInt64(objObjSize)
