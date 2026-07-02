@@ -23,48 +23,36 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/lanrat/extsort"
+	lanratextsort "github.com/lanrat/extsort"
 )
 
-// Compare compares two encoded byte records.
-// Returns -1 if a < b, 0 if a == b, 1 if a > b.
-type Compare func(a, b []byte) int
-
-// Codec defines the comparison function for record sorting.
-type Codec struct {
-	Compare Compare
+// Codec defines serialization and comparison for record sorting.
+type Codec[T any] struct {
+	FromBytes lanratextsort.FromBytesGeneric[T]
+	ToBytes   lanratextsort.ToBytesGeneric[T]
+	Compare   lanratextsort.CompareGeneric[T]
 }
 
 // Config configures the sharded external sort.
 type Config struct {
-	WorkDir      string
-	Name         string
-	Shards       int
-	Threads      int
-	ChunkSize    int
-	InputBuffer  int
-	OutputBuffer int
+	WorkDir string
+	Name    string
+	Shards  int
+	Threads int
 }
 
-const (
-	defaultShards  = 16
-	defaultThreads = 4
-	// defaultChunkSize    = 1000000
-	defaultChunkSize    = 1
-	defaultInputBuffer  = 512
-	defaultOutputBuffer = 128
-)
+const defaultShards = 16
 
 // Sharded manages multiple external sort instances, one per shard.
 // Records are distributed to shards via InputFor(shardKey), and sorted
 // output for each shard is read from Outputs().
-type Sharded struct {
+type Sharded[T any] struct {
 	cfg    Config
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	inputs   []chan []byte
-	outputs  []<-chan []byte
+	inputs   []chan T
+	outputs  []<-chan T
 	errChans []<-chan error
 
 	wg      sync.WaitGroup
@@ -73,23 +61,10 @@ type Sharded struct {
 
 // NewSharded creates a sharded external sorter that distributes records
 // to independent sort instances by shardKey % Shards.
-func NewSharded(ctx context.Context, cfg Config, codec Codec) (*Sharded, error) {
+func NewSharded[T any](ctx context.Context, cfg Config, codec Codec[T]) (*Sharded[T], error) {
 	ctx, cancel := context.WithCancel(ctx)
-
 	if cfg.Shards <= 0 {
 		cfg.Shards = defaultShards
-	}
-	if cfg.Threads <= 0 {
-		cfg.Threads = defaultThreads
-	}
-	if cfg.ChunkSize <= 0 {
-		cfg.ChunkSize = defaultChunkSize
-	}
-	if cfg.InputBuffer <= 0 {
-		cfg.InputBuffer = defaultInputBuffer
-	}
-	if cfg.OutputBuffer <= 0 {
-		cfg.OutputBuffer = defaultOutputBuffer
 	}
 
 	workDir, err := os.MkdirTemp(cfg.WorkDir, cfg.Name+"-")
@@ -98,79 +73,72 @@ func NewSharded(ctx context.Context, cfg Config, codec Codec) (*Sharded, error) 
 		return nil, err
 	}
 
-	s := &Sharded{
+	s := &Sharded[T]{
 		cfg:      cfg,
 		ctx:      ctx,
 		cancel:   cancel,
 		workDir:  workDir,
-		inputs:   make([]chan []byte, cfg.Shards),
-		outputs:  make([]<-chan []byte, cfg.Shards),
+		inputs:   make([]chan T, cfg.Shards),
+		outputs:  make([]<-chan T, cfg.Shards),
 		errChans: make([]<-chan error, cfg.Shards),
 	}
 
-	numWorkers := cfg.Threads / cfg.Shards
-	if numWorkers < 1 {
-		numWorkers = 1
-	}
-
-	compareFn := extsort.CompareGeneric[[]byte](codec.Compare)
-
 	for i := 0; i < cfg.Shards; i++ {
-		dir := filepath.Join(workDir, s.shardName(i))
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			s.abortShards(i)
+		if err := s.startShard(i, codec); err != nil {
+			s.abortShards(i + 1)
 			cancel()
 			os.RemoveAll(workDir)
 			return nil, err
 		}
-
-		extCfg := &extsort.Config{
-			ChunkSize:          cfg.ChunkSize,
-			NumWorkers:         numWorkers,
-			ChanBuffSize:       cfg.InputBuffer,
-			SortedChanBuffSize: cfg.OutputBuffer,
-			TempFilesDir:       dir,
-		}
-
-		input := make(chan []byte, cfg.InputBuffer)
-		s.inputs[i] = input
-
-		fromBytes := func(b []byte) ([]byte, error) { return b, nil }
-		toBytes := func(b []byte) ([]byte, error) { return b, nil }
-
-		sorter, output, errCh := extsort.Generic[[]byte](
-			input,
-			extsort.FromBytesGeneric[[]byte](fromBytes),
-			extsort.ToBytesGeneric[[]byte](toBytes),
-			compareFn,
-			extCfg,
-		)
-
-		s.outputs[i] = output
-		s.errChans[i] = errCh
-
-		if sorter == nil {
-			sorterErr := <-errCh
-			s.abortShards(i + 1)
-			cancel()
-			os.RemoveAll(workDir)
-			return nil, fmt.Errorf("external sort sorter %d: %w", i, sorterErr)
-		}
-
-		s.wg.Add(1)
-		go func(sorter extsort.Sorter) {
-			defer s.wg.Done()
-			sorter.Sort(s.ctx)
-		}(sorter)
 	}
 
 	return s, nil
 }
 
+func (s *Sharded[T]) startShard(i int, codec Codec[T]) error {
+	dir := filepath.Join(s.workDir, s.shardName(i))
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	workers := s.cfg.Threads / s.cfg.Shards
+	if workers < 1 {
+		workers = 1
+	}
+	input := make(chan T, s.cfg.Threads*128)
+	sorter, output, errCh := lanratextsort.Generic(
+		input,
+		codec.FromBytes,
+		codec.ToBytes,
+		codec.Compare,
+		&lanratextsort.Config{
+			ChunkSize:          1 << 20,
+			NumWorkers:         workers,
+			ChanBuffSize:       s.cfg.Threads,
+			SortedChanBuffSize: s.cfg.Threads * 32,
+			TempFilesDir:       dir,
+		},
+	)
+
+	s.inputs[i] = input
+	s.outputs[i] = output
+	s.errChans[i] = errCh
+	if sorter == nil {
+		return fmt.Errorf("external sort sorter %d: %w", i, <-errCh)
+	}
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		sorter.Sort(s.ctx)
+	}()
+	return nil
+}
+
 // abortShards closes inputs and drains outputs for shards 0..n-1,
 // then waits for all started sort goroutines to finish.
 // It tolerates nil channels for uninitialized shards.
-func (s *Sharded) abortShards(n int) {
+func (s *Sharded[T]) abortShards(n int) {
 	for j := 0; j < n; j++ {
 		if s.inputs[j] != nil {
 			close(s.inputs[j])
@@ -187,17 +155,17 @@ func (s *Sharded) abortShards(n int) {
 
 // InputFor returns the input channel for the shard corresponding to shardKey.
 // The shard is determined by shardKey % Shards.
-func (s *Sharded) InputFor(shardKey uint64) chan<- []byte {
+func (s *Sharded[T]) InputFor(shardKey uint64) chan<- T {
 	return s.inputs[shardKey%uint64(s.cfg.Shards)]
 }
 
 // Outputs returns the output channels for all shards in order.
-func (s *Sharded) Outputs() []<-chan []byte {
+func (s *Sharded[T]) Outputs() []<-chan T {
 	return s.outputs
 }
 
 // CloseInputs closes all input channels, signaling that no more data will be sent.
-func (s *Sharded) CloseInputs() {
+func (s *Sharded[T]) CloseInputs() {
 	for _, ch := range s.inputs {
 		close(ch)
 	}
@@ -207,7 +175,7 @@ func (s *Sharded) CloseInputs() {
 // encountered, if any. It does not drain outputs — outputs remain readable
 // after Wait returns. Callers should drain outputs before calling Wait,
 // otherwise sort goroutines may block on unbuffered output channels.
-func (s *Sharded) Wait() error {
+func (s *Sharded[T]) Wait() error {
 	s.wg.Wait()
 	var firstErr error
 	for _, ch := range s.errChans {
@@ -223,7 +191,7 @@ func (s *Sharded) Wait() error {
 // Done drains any remaining output, waits for all sort goroutines, cancels the
 // context, removes the temporary working directory, and returns the first sorter
 // error encountered (if any).
-func (s *Sharded) Done() error {
+func (s *Sharded[T]) Done() error {
 	for _, ch := range s.outputs {
 		if ch != nil {
 			for range ch {
@@ -238,6 +206,6 @@ func (s *Sharded) Done() error {
 	return err
 }
 
-func (s *Sharded) shardName(i int) string {
+func (s *Sharded[T]) shardName(i int) string {
 	return fmt.Sprintf("%s-%02d", s.cfg.Name, i)
 }

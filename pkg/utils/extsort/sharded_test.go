@@ -17,7 +17,6 @@
 package extsort
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -31,14 +30,19 @@ func TestShardedSortsRecordsByShard(t *testing.T) {
 	s, err := NewSharded(context.Background(), Config{
 		WorkDir: t.TempDir(),
 		Name:    "records",
-	}, Codec{Compare: bytes.Compare})
+		Threads: 2,
+	}, Codec[testRecord]{
+		FromBytes: decodeTestRecord,
+		ToBytes:   encodeTestRecord,
+		Compare:   compareTestRecord,
+	})
 	if err != nil {
 		t.Fatalf("new sharded sorter: %s", err)
 	}
 
 	workDir := s.workDir
 	for _, id := range []uint64{34, 17, 2, 33, 18, 1} {
-		s.InputFor(id) <- encodeTestRecord(id)
+		s.InputFor(id) <- testRecord{id: id}
 	}
 	s.CloseInputs()
 
@@ -70,16 +74,21 @@ func TestShardedDoneReturnsSortError(t *testing.T) {
 	s, err := NewSharded(context.Background(), Config{
 		WorkDir: t.TempDir(),
 		Name:    "records",
-	}, Codec{Compare: func(_, _ []byte) int {
-		panic("compare failed")
-	}})
+		Threads: 2,
+	}, Codec[testRecord]{
+		FromBytes: decodeTestRecord,
+		ToBytes:   encodeTestRecord,
+		Compare: func(_, _ testRecord) int {
+			panic("compare failed")
+		},
+	})
 	if err != nil {
 		t.Fatalf("new sharded sorter: %s", err)
 	}
 
 	workDir := s.workDir
-	s.InputFor(0) <- encodeTestRecord(2)
-	s.InputFor(0) <- encodeTestRecord(1)
+	s.InputFor(0) <- testRecord{id: 2}
+	s.InputFor(0) <- testRecord{id: 1}
 	s.CloseInputs()
 
 	err = s.Done()
@@ -91,20 +100,34 @@ func TestShardedDoneReturnsSortError(t *testing.T) {
 	}
 }
 
-func encodeTestRecord(id uint64) []byte {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, id)
-	return b
+type testRecord struct {
+	id uint64
 }
 
-func decodeTestRecord(b []byte) (uint64, error) {
-	if len(b) != 8 {
-		return 0, errors.New("invalid record size")
+func compareTestRecord(a, b testRecord) int {
+	if a.id < b.id {
+		return -1
 	}
-	return binary.BigEndian.Uint64(b), nil
+	if a.id > b.id {
+		return 1
+	}
+	return 0
 }
 
-func readOutputs(t *testing.T, outputs []<-chan []byte) [][]uint64 {
+func encodeTestRecord(r testRecord) ([]byte, error) {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, r.id)
+	return b, nil
+}
+
+func decodeTestRecord(b []byte) (testRecord, error) {
+	if len(b) != 8 {
+		return testRecord{}, errors.New("invalid record size")
+	}
+	return testRecord{id: binary.BigEndian.Uint64(b)}, nil
+}
+
+func readOutputs(t *testing.T, outputs []<-chan testRecord) [][]uint64 {
 	t.Helper()
 
 	type result struct {
@@ -114,15 +137,10 @@ func readOutputs(t *testing.T, outputs []<-chan []byte) [][]uint64 {
 	}
 	results := make(chan result, len(outputs))
 	for shard, output := range outputs {
-		go func(shard int, output <-chan []byte) {
+		go func(shard int, output <-chan testRecord) {
 			var ids []uint64
-			for b := range output {
-				id, err := decodeTestRecord(b)
-				if err != nil {
-					results <- result{shard: shard, err: err}
-					return
-				}
-				ids = append(ids, id)
+			for r := range output {
+				ids = append(ids, r.id)
 			}
 			results <- result{shard: shard, ids: ids}
 		}(shard, output)
