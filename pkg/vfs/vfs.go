@@ -79,6 +79,8 @@ type FuseOptions struct {
 	DisableReadDirPlus       bool `json:",omitempty"`
 	EnableReadDirPlusAuto    bool
 	EnableWriteback          bool
+	EnablePassthrough        bool `json:",omitempty"`
+	MaxStackDepth            int  `json:",omitempty"`
 	EnableIoctl              bool `json:",omitempty"`
 	DontUmask                bool
 	OtherCaps                uint32

@@ -40,6 +40,12 @@ type fileSystem struct {
 	fuse.RawFileSystem
 	conf *vfs.Config
 	v    *vfs.VFS
+
+	// passthrough write-path acceleration (experimental). When enabled and
+	// the kernel supports FUSE passthrough, newly written files are backed by
+	// a local staging file the kernel reads/writes directly (no daemon upcall),
+	// reconciled into JuiceFS slices on release. See passthrough.go.
+	pt *passthroughState
 }
 
 func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
@@ -235,6 +241,10 @@ func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name str
 		return fuse.Status(err)
 	}
 	out.Fh = fh
+	if id, ok := fs.pt.tryOpen(entry.Inode, fh, in.Flags); ok {
+		out.OpenFlags |= fuse.FOPEN_PASSTHROUGH
+		out.BackingID = id
+	}
 	return fs.replyEntry(ctx, &out.EntryOut, entry)
 }
 
@@ -246,6 +256,11 @@ func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Op
 		return fuse.Status(err)
 	}
 	out.Fh = fh
+	if id, ok := fs.pt.tryOpen(Ino(in.NodeId), fh, in.Flags); ok {
+		out.OpenFlags |= fuse.FOPEN_PASSTHROUGH
+		out.BackingID = id
+		return 0
+	}
 	if vfs.IsSpecialNode(Ino(in.NodeId)) {
 		out.OpenFlags |= fuse.FOPEN_DIRECT_IO
 	} else if entry.Attr.KeepCache {
@@ -273,6 +288,7 @@ func (fs *fileSystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) 
 func (fs *fileSystem) Release(cancel <-chan struct{}, in *fuse.ReleaseIn) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
+	fs.pt.reconcile(ctx, fs.v, in.Fh)
 	fs.v.Release(ctx, Ino(in.NodeId), in.Fh)
 }
 
@@ -516,6 +532,14 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		opt.Options = append(opt.Options, "volname="+conf.Format.Name)
 		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
 	}
+	// Experimental: opt into FUSE passthrough write acceleration via env var
+	// (avoids CLI surface while prototyping). JUICEFS_PASSTHROUGH_DIR must point
+	// at a non-stacked fs (tmpfs/ext4/xfs), not overlayfs/fuse.
+	ptEnabled := os.Getenv("JUICEFS_PASSTHROUGH") == "1"
+	if ptEnabled {
+		opt.EnablePassthrough = true
+		opt.MaxStackDepth = 2
+	}
 	fssrv, err := fuse.NewServer(imp, conf.Meta.MountPoint, &opt)
 	if err != nil {
 		if execErr, ok := err.(*exec.Error); ok {
@@ -537,6 +561,11 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		v.InvalidateEntry = func(parent Ino, name string) syscall.Errno {
 			return syscall.Errno(fssrv.EntryNotify(uint64(parent), name))
 		}
+	}
+
+	if ptEnabled {
+		imp.pt = newPassthroughState(fssrv, os.Getenv("JUICEFS_PASSTHROUGH_DIR"))
+		logger.Infof("FUSE passthrough enabled (experimental); staging dir=%s", imp.pt.dir)
 	}
 
 	fsserv = fssrv
