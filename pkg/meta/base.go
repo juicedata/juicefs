@@ -2894,7 +2894,8 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 	} else if st == 0 {
 		m.of.InvalidateChunk(inode, indx)
 	} else {
-		logger.Warnf("compact %d %d: %s", inode, indx, err)
+		logger.Warnf("compact %d %d: %s; slice %d (%d bytes) may be orphaned, will be cleaned by gc",
+			inode, indx, st, id, size)
 	}
 
 	if force {
