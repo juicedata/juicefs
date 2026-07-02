@@ -551,7 +551,8 @@ func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool, tie
 	}
 	if tierID != 0 {
 		// only staged file has a footer
-		fData, fErr := stageFooter{Tier: tierID}.marshal(cache.checksum != CsNone)
+		footer := stageFooter{Tier: tierID}
+		fData, fErr := (&footer).marshal(cache.checksum != CsNone)
 		if fErr != nil {
 			logger.Warnf("Marshal stage footer for cache file %s failed: %s", tmp, fErr)
 			_ = f.Close()
@@ -1373,7 +1374,7 @@ type stageFooter struct {
 	Pad  []byte `msgpack:"pad"` // pad to make msgpack length parity match checksum presence
 }
 
-func (f stageFooter) marshal(align bool) ([]byte, error) {
+func (f *stageFooter) marshal(align bool) ([]byte, error) {
 	var p int
 	switch r := stageFooterBaseLen % 4; {
 	case align:
@@ -1381,8 +1382,8 @@ func (f stageFooter) marshal(align bool) ([]byte, error) {
 	case r == 0:
 		p = 1 // break the multiple-of-4 alignment
 	}
-
-	data, err := msgpack.Marshal(&stageFooter{Tier: f.Tier, Pad: stageFooterPad[p]})
+	f.Pad = stageFooterPad[p]
+	data, err := msgpack.Marshal(f)
 	if err != nil {
 		return nil, err
 	}
