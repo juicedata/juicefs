@@ -335,7 +335,7 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Handler.ServeHTTP(w, r)
 }
 
-func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
+func newWebdavHandler(fs *FileSystem, config WebdavConfig) http.Handler {
 	ctx := meta.NewContext(uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 	hfs := &webdavFS{ctx, fs, uint16(utils.GetUmask()), config}
 	srv := &webdav.Handler{
@@ -353,13 +353,19 @@ func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
 	if config.EnableGzip {
 		h = makeGzipHandler(h)
 	}
-	http.Handle("/", h)
+	mux := http.NewServeMux()
+	mux.Handle("/", h)
+	return mux
+}
+
+func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
+	handler := newWebdavHandler(fs, config)
 	logger.Infof("WebDAV listening on %s", config.Addr)
 	var err error
 	if config.CertFile != "" && config.KeyFile != "" {
-		err = http.ListenAndServeTLS(config.Addr, config.CertFile, config.KeyFile, nil)
+		err = http.ListenAndServeTLS(config.Addr, config.CertFile, config.KeyFile, handler)
 	} else {
-		err = http.ListenAndServe(config.Addr, nil)
+		err = http.ListenAndServe(config.Addr, handler)
 	}
 	if err != nil {
 		logger.Fatalf("Error with WebDAV server: %v", err)

@@ -90,7 +90,8 @@ func exposeMetrics(c *cli.Context, registerer prometheus.Registerer, registry *p
 		logger.Fatalf("metrics format error %q: %v", c.String("metrics"), err)
 	}
 	go metric.UpdateMetrics(registerer)
-	http.Handle("/metrics", promhttp.HandlerFor(
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.HandlerFor(
 		registry,
 		promhttp.HandlerOpts{
 			// Opt into OpenMetrics to support exemplars.
@@ -127,7 +128,7 @@ func exposeMetrics(c *cli.Context, registerer prometheus.Registerer, registry *p
 	}
 
 	go func() {
-		if err := http.Serve(ln, nil); err != nil {
+		if err := http.Serve(ln, mux); err != nil {
 			logger.Errorf("Serve for metrics: %s", err)
 		}
 	}()
