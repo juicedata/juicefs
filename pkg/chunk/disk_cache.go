@@ -1488,21 +1488,15 @@ func openCacheFile(name string, length int, level string) (*cacheFile, error) {
 	case extra == 0:
 		level = CsNone // data only, no footer
 	case extra%4 == 0:
-		// The trailer is a multiple of 4, so a checksum is present (checksum
-		// length is always a multiple of 4 and the footer keeps this parity,
-		// see stageFooter). A checksum-only file has extra == checksumLength;
-		// a checksum+footer file has extra > checksumLength.
 		switch {
 		case extra == checksumLength:
-			// checksum only, no footer
 		case extra > checksumLength:
 			footerOff = int64(length) + checksumLength
-		default: // extra < checksumLength: malformed
+		default:
 			_ = fp.Close()
 			return nil, fmt.Errorf("invalid file size %d, data length %d, checksum length %d", fi.Size(), length, checksumLength)
 		}
 	default:
-		// trailer is not a multiple of 4: a footer without checksum
 		level = CsNone
 		footerOff = int64(length)
 	}
