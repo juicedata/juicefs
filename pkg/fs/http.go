@@ -335,7 +335,11 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Handler.ServeHTTP(w, r)
 }
 
-func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
+// newWebdavHandler builds the HTTP handler for the WebDAV server on a dedicated
+// ServeMux. Using a dedicated mux (instead of http.DefaultServeMux) ensures the
+// WebDAV listen address does not expose handlers registered on the default mux,
+// such as /debug/pprof/* (side-effect import of net/http/pprof) and /metrics.
+func newWebdavHandler(fs *FileSystem, config WebdavConfig) http.Handler {
 	ctx := meta.NewContext(uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 	hfs := &webdavFS{ctx, fs, uint16(utils.GetUmask()), config}
 	srv := &webdav.Handler{
@@ -353,17 +357,19 @@ func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
 	if config.EnableGzip {
 		h = makeGzipHandler(h)
 	}
-	// Use a dedicated mux instead of http.DefaultServeMux so that handlers
-	// registered on the default mux (net/http/pprof, Prometheus /metrics) are
-	// not published on the user-facing WebDAV listen address.
 	mux := http.NewServeMux()
 	mux.Handle("/", h)
+	return mux
+}
+
+func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
+	handler := newWebdavHandler(fs, config)
 	logger.Infof("WebDAV listening on %s", config.Addr)
 	var err error
 	if config.CertFile != "" && config.KeyFile != "" {
-		err = http.ListenAndServeTLS(config.Addr, config.CertFile, config.KeyFile, mux)
+		err = http.ListenAndServeTLS(config.Addr, config.CertFile, config.KeyFile, handler)
 	} else {
-		err = http.ListenAndServe(config.Addr, mux)
+		err = http.ListenAndServe(config.Addr, handler)
 	}
 	if err != nil {
 		logger.Fatalf("Error with WebDAV server: %v", err)

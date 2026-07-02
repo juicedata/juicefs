@@ -16,8 +16,12 @@
 package sync
 
 import (
+	"io"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/user"
+	"strings"
 	"testing"
 	"time"
 
@@ -62,6 +66,21 @@ func TestCluster(t *testing.T) {
 	addr, err := startManager(&conf, todo, nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Regression test for #7213: the sync manager must use a dedicated mux and
+	// must not expose /debug/pprof/* (registered on http.DefaultServeMux via the
+	// side-effect import of net/http/pprof) on its listen address.
+	if resp, err := http.Get("http://" + addr + "/debug/pprof/cmdline"); err != nil {
+		t.Fatalf("get pprof: %s", err)
+	} else {
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("manager exposed /debug/pprof: status %d", resp.StatusCode)
+		}
+		if strings.Contains(string(body), os.Args[0]) {
+			t.Fatalf("manager leaked process command line via /debug/pprof/cmdline")
+		}
 	}
 	// sendStats(addr)
 	// worker
