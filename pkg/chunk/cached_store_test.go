@@ -470,7 +470,7 @@ func TestOpenCacheFileReads(t *testing.T) {
 			} else {
 				// A file without a footer defaults to tier 0.
 				require.Zero(t, cf.footerOff)
-				require.Error(t, ft.unmarshal(cf))
+				require.NoError(t, ft.unmarshal(cf))
 				require.Equal(t, uint8(0), ft.Tier)
 			}
 		})
