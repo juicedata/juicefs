@@ -76,6 +76,18 @@ func (f *file) Group() string     { return f.group }
 func (f *file) Mode() os.FileMode { return f.mode }
 func (f *file) IsSymlink() bool   { return f.isSymlink }
 
+// NewSymlink returns a File representing a symbolic link at key whose target is
+// the given string. It is used to sync a dangling or external symlink as a link
+// (with --links) when Head fails to resolve the link by following it.
+func NewSymlink(key, target string) File {
+	return &file{
+		obj{key, int64(len(target)), time.Now(), false, "", ""},
+		"", "",
+		os.ModeSymlink | 0777,
+		true,
+	}
+}
+
 func MarshalObject(o Object) map[string]interface{} {
 	m := make(map[string]interface{})
 	m["key"] = o.Key()

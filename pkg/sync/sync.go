@@ -1884,8 +1884,23 @@ var ignoreFiles int64
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config, checkpointMgr *CheckpointManager) error {
 	obj, err := src.Head(ctx, key)
 	if err != nil {
-		logger.Warnf("head %s from %s: %s", key, src, err)
-		return err
+		// Head follows symlinks, so a link whose target can't be resolved makes it
+		// fail: jfs external links (target outside the mount) surface as ErrExtlink
+		// or ENOTSUP, and dangling links (missing target) as ErrNotExist. With
+		// --links we still want to sync the link itself, so only for these
+		// unfollowable-link errors do we fall back to treating it as a symlink via
+		// Readlink; genuine errors (permission, IO, ...) are still returned.
+		if config.Links && (errors.Is(err, utils.ErrExtlink) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, os.ErrNotExist)) {
+			if sl, ok := src.(object.SupportSymlink); ok {
+				if target, e := sl.Readlink(key); e == nil {
+					obj, err = object.NewSymlink(key, target), nil
+				}
+			}
+		}
+		if err != nil {
+			logger.Warnf("head %s from %s: %s", key, src, err)
+			return err
+		}
 	}
 	if obj.IsDir() && (!config.Links || !obj.IsSymlink()) {
 		// only `files-from` will hit this case
