@@ -1894,6 +1894,8 @@ func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStora
 			if sl, ok := src.(object.SupportSymlink); ok {
 				if target, e := sl.Readlink(key); e == nil {
 					obj, err = object.NewSymlink(key, target), nil
+				} else {
+					err = fmt.Errorf("readlink %s from %s: %w", key, src, e)
 				}
 			}
 		}
