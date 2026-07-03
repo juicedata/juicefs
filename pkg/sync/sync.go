@@ -126,6 +126,9 @@ type globalLimit struct {
 	waiters []*sync.Cond
 
 	address string
+	// localBW is the configured local bwlimit in Mbps (0 when not set), used to
+	// make the downgrade log message accurate about the fallback rate limit.
+	localBW int64
 	// healthy indicates whether the traffic-control service is currently
 	// reachable. When it turns false, callers fall back to the local bwlimit.
 	healthy   atomic.Bool
@@ -172,8 +175,18 @@ func (l *globalLimit) notifyRecovered() {
 
 func (l *globalLimit) request(ask int64) (granted int64, expired int64, err error) {
 	// Unify the health update: the service is healthy only when the whole
-	// request succeeds.
-	defer func() { l.healthy.Store(err == nil) }()
+	// request succeeds. Log once at the moment it switches from available to
+	// unavailable so it's clear the limiter has been downgraded.
+	defer func() {
+		ok := err == nil
+		if prev := l.healthy.Swap(ok); prev && !ok {
+			if l.localBW > 0 {
+				logger.Warnf("traffic control %s is unavailable, switch to local bwlimit %s", l.address, utils.Mbps(l.localBW))
+			} else {
+				logger.Warnf("traffic control %s is unavailable, run without rate limit", l.address)
+			}
+		}
+	}()
 	r := req{Bytes: ask}
 	data, err := json.Marshal(r)
 	if err != nil {
@@ -185,7 +198,7 @@ func (l *globalLimit) request(ask int64) (granted int64, expired int64, err erro
 		if result != nil {
 			status = http.StatusText(result.StatusCode)
 		}
-		logger.Errorf("request traffic control %s failed: %s, http status: %s", l.address, err, status)
+		logger.Warnf("request traffic control %s failed: %s, http status: %s", l.address, err, status)
 		if err == nil {
 			err = fmt.Errorf("http status: %s", status)
 		}
@@ -270,7 +283,11 @@ func (l *globalLimit) checkBalance() {
 		if time.Since(l.lastProbe) >= time.Second {
 			l.lastProbe = time.Now()
 			if _, _, err := l.request(0); err == nil {
-				logger.Infof("traffic control %s recovered, switch back to global limit", l.address)
+				if l.localBW > 0 {
+					logger.Infof("traffic control %s recovered, switch back to global limit from local bwlimit %s", l.address, utils.Mbps(l.localBW))
+				} else {
+					logger.Infof("traffic control %s recovered, switch back to global limit", l.address)
+				}
 				// Wake up callers that are currently blocked on the local
 				// bwlimit so they can switch back to the global limit.
 				l.notifyRecovered()
@@ -2238,7 +2255,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 	var gLimit *globalLimit
 	if config.TrafficControlURL != "" {
-		gLimit = &globalLimit{address: config.TrafficControlURL}
+		gLimit = &globalLimit{address: config.TrafficControlURL, localBW: config.BWLimit}
 		gLimit.healthy.Store(true)
 		go func() {
 			for {
