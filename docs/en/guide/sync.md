@@ -343,7 +343,7 @@ The sync client and your traffic-control server communicate via a simple JSON-ov
 | Field | Type | Description |
 |-------|------|-------------|
 | `granted` | int64 | Number of bytes actually granted (equal to the requested amount for a blocking server). |
-| `expired` | int64 | Token validity in **milliseconds**. The client returns unused tokens before this expiration. |
+| `expired` | int64 | Token validity in **milliseconds**. After this window elapses, the client returns any unused tokens, provided it currently has no pending bandwidth demand. |
 
 The client blocks on the POST request until the server responds, so the server's internal token bucket (or any other rate-limiting logic) is what enforces the global limit.
 
@@ -409,6 +409,8 @@ juicefs sync --traffic-control-url http://10.0.0.1:8080/token s3://src/ s3://dst
 ```
 
 `--bwlimit` and `--traffic-control-url` can be used together, but only one of them is enforced at any given time, with the global traffic control taking precedence. When both are set, the global limit is applied as long as the traffic-control service is reachable; if the service becomes unavailable, sync automatically falls back to the local `--bwlimit`, and once the service recovers it switches back to the global limit. To make the fallback meaningful, set `--bwlimit` to a smaller per-process value than the global cap.
+
+If `--traffic-control-url` is used without `--bwlimit`, there is no local fallback: while the traffic-control service is unavailable, sync transfers without any rate limit (logged as `run without rate limit`), and resumes the global limit once the service recovers.
 
 ## Observation {#observation}
 

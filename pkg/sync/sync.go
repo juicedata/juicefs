@@ -114,6 +114,18 @@ func (l *mixedLimiter) Wait(count int64) {
 		// of releasing this call unlimited, re-run the limiter so it is limited
 		// again: it uses the global limit now, or falls back to the local
 		// bwlimit if the global service becomes unavailable once more.
+		//
+		// Note: the tokens reserved by l.local.Take(count) above are NOT
+		// returned here. juju/ratelimit deducts them irrevocably (its Take has
+		// no way to give tokens back), so interrupting the wait early leaves the
+		// local bucket charged for these bytes without the full corresponding
+		// delay. This is acceptable on purpose:
+		//   - the bytes are still transmitted (under the global limit after the
+		//     re-run), so the local bucket stays honest about total throughput
+		//     and won't allow a burst above bwlimit right after a failover;
+		//   - the resulting debt is bounded (at most Threads*count per recovery)
+		//     and self-heals, because while the global limit is active nobody
+		//     touches the local bucket and it refills back up to its capacity.
 		l.Wait(count)
 	}
 }
