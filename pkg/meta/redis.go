@@ -4068,6 +4068,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	}
 	root = m.checkRoot(root)
 	progress := utils.NewProgress(false)
+	defer progress.Done()
 	bar := progress.AddCountBar("Dumped entries", 1) // with root
 	useTotal := root == RootInode && !skipTrash
 	if useTotal {
@@ -4116,7 +4117,6 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	if _, err = bw.WriteString("\n}\n"); err != nil {
 		return err
 	}
-	progress.Done()
 
 	return bw.Flush()
 }

@@ -4068,6 +4068,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	}()
 
 	progress := utils.NewProgress(false)
+	defer progress.Done()
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 	return m.roTxn(Background(), func(s *xorm.Session) error {
@@ -4230,7 +4231,6 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		if _, err = bw.WriteString("\n}\n"); err != nil {
 			return err
 		}
-		progress.Done()
 		return bw.Flush()
 	})
 }
