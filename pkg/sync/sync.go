@@ -1370,7 +1370,7 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 	}
 
 	var dstkeys <-chan object.Object
-	if config.ForceUpdate {
+	if config.ForceUpdate && !config.DeleteDst {
 		t := make(chan object.Object)
 		close(t)
 		dstkeys = t
@@ -1937,7 +1937,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	defer func() {
 		<-config.concurrentList
 	}()
-	if config.Limit == 1 && len(config.rules) == 0 {
+	if config.Limit == 1 && len(config.rules) == 0 && !config.DeleteDst {
 		if produceSingleObject(tasks, src, dst, prefix, config, checkpointMgr) == nil {
 			return nil
 		}
@@ -2016,7 +2016,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		dcp = commonPrefix // search common prefix in dst
 	}
 	var dstkeys <-chan object.Object
-	if config.ForceUpdate {
+	if config.ForceUpdate && !config.DeleteDst {
 		t := make(chan object.Object)
 		close(t)
 		dstkeys = t
