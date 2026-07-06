@@ -20,6 +20,7 @@ import (
 	"cmp"
 	"context"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -428,7 +429,7 @@ func gcExternalSort(
 
 	eg.Go(func() error {
 		defer objSorter.CloseInputs()
-		return scanGcObjectRecords(egCtx, blobWithPrefix, objSorter, maxMtime, objScanSpin, skipped)
+		return scanGcObjectRecords(egCtx, blobWithPrefix, objSorter, threads, maxMtime, objScanSpin, skipped)
 	})
 
 	if err := eg.Wait(); err != nil {
@@ -540,15 +541,8 @@ func scanGcMetaRecords(ctx context.Context, m meta.Meta, c meta.Context, sorter 
 	return nil
 }
 
-func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, sorter *extsort.Sharded[gcObjectRecord], maxMtime time.Time, objScanSpin *utils.Bar, skipped *utils.DoubleSpinner) error {
-	objs, err := object.ListAll(ctx, blob, "", "", true, false)
-	if err != nil {
-		return errors.Errorf("list all blocks: %s", err)
-	}
-	for obj := range objs {
-		if obj == nil {
-			break
-		}
+func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, sorter *extsort.Sharded[gcObjectRecord], threads int, maxMtime time.Time, objScanSpin *utils.Bar, skipped *utils.DoubleSpinner) error {
+	return scanGcChunkObjects(ctx, blob, threads, func(obj object.Object) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -557,11 +551,11 @@ func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, sorter 
 		var ok bool
 		obj, ok = prepareGcObject(ctx, blob, obj, maxMtime, objScanSpin, skipped)
 		if !ok {
-			continue
+			return nil
 		}
 		record, ok := parseGcObjectRecord(obj)
 		if !ok {
-			continue
+			return nil
 		}
 		select {
 		case sorter.InputFor(record.sliceID) <- record:
@@ -569,6 +563,96 @@ func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, sorter 
 			return ctx.Err()
 		}
 		objScanSpin.Increment()
+		return nil
+	})
+}
+
+const gcObjectListBatch = 10000
+
+func scanGcChunkObjects(ctx context.Context, blob object.ObjectStorage, threads int, handle func(object.Object) error) error {
+	prefixes, err := listGcChunkObjectPrefixes(ctx, blob)
+	if err != nil {
+		if err != nil {
+			logger.Warnf("can't find chunk prefixes: %s, list chunks using single thread", err)
+		}
+		return scanGcChunkObjectsPrefix(ctx, blob, "", handle)
+	}
+	if len(prefixes) == 0 {
+		return nil
+	}
+	sort.Slice(prefixes, func(i, j int) bool { return prefixes[i] > prefixes[j] })
+	control := make(chan bool, threads)
+	var wg sync.WaitGroup
+
+	for _, prefix := range prefixes {
+		control <- true
+		wg.Add(1)
+		go func(prefix string) {
+			defer wg.Done()
+			e := scanGcChunkObjectsPrefix(ctx, blob, prefix, handle)
+			<-control
+			if e != nil {
+				logger.Errorf("list chunks from %s: %s", blob, e)
+				err = errors.Errorf("list chunks from %s: %s", blob, e)
+			}
+		}(prefix)
+	}
+	wg.Wait()
+	return err
+}
+
+func listGcChunkObjectPrefixes(ctx context.Context, blob object.ObjectStorage) ([]string, error) {
+	var prefixes []string
+	seenPrefixes := make(map[string]struct{})
+	var marker, token string
+	for {
+		objs, hasMore, nextToken, err := blob.List(ctx, "", marker, token, "/", gcObjectListBatch, true)
+		if err != nil {
+			return nil, err
+		}
+		if len(objs) > 0 && marker != "" && objs[0].Key() == marker {
+			objs = objs[1:]
+		}
+		if hasMore && len(objs) == 0 && nextToken == token {
+			return nil, errors.New("list chunk prefixes made no progress")
+		}
+		for _, obj := range objs {
+			if obj == nil || obj.Key() == "" {
+				continue
+			}
+			key := obj.Key()
+			if obj.IsDir() {
+				if _, ok := seenPrefixes[key]; !ok {
+					prefixes = append(prefixes, key)
+					seenPrefixes[key] = struct{}{}
+				}
+			} else {
+				if strings.Contains(key, "/") {
+					return nil, errors.Errorf("delimiter list returned nested object %s", key)
+				}
+			}
+			marker = key
+		}
+		if !hasMore {
+			break
+		}
+		token = nextToken
+	}
+	return prefixes, nil
+}
+
+func scanGcChunkObjectsPrefix(ctx context.Context, blob object.ObjectStorage, prefix string, handle func(object.Object) error) error {
+	objs, err := object.ListAll(ctx, blob, prefix, "", true, false)
+	if err != nil {
+		return errors.Errorf("list chunk prefix %s: %s", prefix, err)
+	}
+	for obj := range objs {
+		if obj == nil {
+			return errors.Errorf("list chunk prefix %s failed", prefix)
+		}
+		if err := handle(obj); err != nil {
+			return err
+		}
 	}
 	return nil
 }
