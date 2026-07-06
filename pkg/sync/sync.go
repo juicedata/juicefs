@@ -745,9 +745,6 @@ func init() {
 }
 
 func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64, key, uploadID string, num int, calChksum bool) (*object.Part, uint32, error) {
-	if limiter != nil {
-		limiter.Wait(size)
-	}
 	start := time.Now()
 	sz := size
 	var part *object.Part
@@ -759,15 +756,16 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		defer in.Close()
 		r := &chksumReader{in, 0, calChksum}
+		pr := &withProgress{r}
 		err = utils.ErrNotSUP
 		if obj, ok := dst.(object.SupportUploadPartStream); ok {
-			part, err = obj.UploadPartStream(key, uploadID, num+1, r)
+			part, err = obj.UploadPartStream(key, uploadID, num+1, pr)
 		}
 
 		if errors.Is(err, utils.ErrNotSUP) {
 			data := dynAlloc(int(size))
 			defer dynFree(data)
-			if _, err = io.ReadFull(r, data); err != nil {
+			if _, err = io.ReadFull(pr, data); err != nil {
 				return err
 			}
 			// PartNumber starts from 1
@@ -910,7 +908,6 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 			parts[num], chksum, copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort, calChksum)
 			chksums[num] = chksumWithSz{chksum, sz}
 			if copyErr == nil {
-				copiedBytes.IncrInt64(sz)
 				if state != nil {
 					uploads.MarkMultipartPart(key, state, parts[num], chksum, calChksum)
 				}
