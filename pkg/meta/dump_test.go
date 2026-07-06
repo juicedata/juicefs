@@ -24,14 +24,6 @@ import (
 	"time"
 )
 
-type failWriter struct {
-	err error
-}
-
-func (w failWriter) Write([]byte) (int, error) {
-	return 0, w.err
-}
-
 func settleGoroutines() {
 	runtime.GC()
 	time.Sleep(300 * time.Millisecond)
