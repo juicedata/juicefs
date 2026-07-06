@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright 2025 Juicedata, Inc.
+ * JuiceFS, Copyright 2026 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,9 +135,6 @@ func (s *Sharded[T]) startShard(i int, codec Codec[T]) error {
 	return nil
 }
 
-// abortShards closes inputs and drains outputs for shards 0..n-1,
-// then waits for all started sort goroutines to finish.
-// It tolerates nil channels for uninitialized shards.
 func (s *Sharded[T]) abortShards(n int) {
 	for j := 0; j < n; j++ {
 		if s.inputs[j] != nil {
@@ -171,11 +168,7 @@ func (s *Sharded[T]) CloseInputs() {
 	}
 }
 
-// Wait waits for all sort goroutines to finish and returns the first error
-// encountered, if any. It does not drain outputs — outputs remain readable
-// after Wait returns. Callers should drain outputs before calling Wait,
-// otherwise sort goroutines may block on unbuffered output channels.
-func (s *Sharded[T]) Wait() error {
+func (s *Sharded[T]) wait() error {
 	s.wg.Wait()
 	var firstErr error
 	for _, ch := range s.errChans {
@@ -198,7 +191,7 @@ func (s *Sharded[T]) Done() error {
 			}
 		}
 	}
-	err := s.Wait()
+	err := s.wait()
 	s.cancel()
 	if s.workDir != "" {
 		_ = os.RemoveAll(s.workDir)

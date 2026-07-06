@@ -850,17 +850,17 @@ func mergeShard(
 	valid, pending, compacted, leaked *utils.DoubleSpinner,
 ) gcMergeStats {
 	var stats gcMergeStats
-	var curSliceID uint64
-	var curSize uint32
-	var curState uint8
-	var metaEOF bool
+
+	type metaGroup struct {
+		sliceID uint64
+		size    uint32
+		state   uint8
+	}
+
 	var peeked gcMetaRecord
 	var hasPeeked bool
 
-	readMetaGroup := func() {
-		if metaEOF {
-			return
-		}
+	nextMetaGroup := func() (metaGroup, bool) {
 		var r gcMetaRecord
 		var ok bool
 		if hasPeeked {
@@ -869,47 +869,46 @@ func mergeShard(
 		} else {
 			r, ok = <-metaStream
 			if !ok {
-				metaEOF = true
-				return
+				return metaGroup{}, false
 			}
 		}
-		curSliceID, curSize, curState = r.sliceID, r.size, r.state
+		group := metaGroup{sliceID: r.sliceID, size: r.size, state: r.state}
 		for {
 			r, ok = <-metaStream
 			if !ok {
-				return
+				return group, true
 			}
-			if r.sliceID != curSliceID {
+			if r.sliceID != group.sliceID {
 				peeked = r
 				hasPeeked = true
-				return
+				return group, true
 			}
-			if r.state < curState {
-				curState = r.state
-				curSize = r.size
+			if r.state < group.state {
+				group.state = r.state
+				group.size = r.size
 			}
 		}
 	}
 
-	readMetaGroup()
+	meta, ok := nextMetaGroup()
 	markLeaked := func(obj gcObjectRecord) {
 		addGcObjectStat(&stats.leaked, leaked, obj.objectSize)
 	}
 
 	for obj := range objStream {
-		for !metaEOF && curSliceID < obj.sliceID {
-			readMetaGroup()
+		for ok && meta.sliceID < obj.sliceID {
+			meta, ok = nextMetaGroup()
 		}
 
-		if metaEOF || curSliceID > obj.sliceID {
+		if !ok || meta.sliceID > obj.sliceID {
 			markLeaked(obj)
 			continue
 		}
 
-		if isLeakedBlock(obj.index, obj.blockSize, int(curSize), blockSize) {
+		if isLeakedBlock(obj.index, obj.blockSize, int(meta.size), blockSize) {
 			markLeaked(obj)
 		} else {
-			switch curState {
+			switch meta.state {
 			case gcStatePending:
 				addGcObjectStat(&stats.pending, pending, obj.objectSize)
 			case gcStateTrash:
