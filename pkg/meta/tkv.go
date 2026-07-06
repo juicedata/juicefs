@@ -5066,7 +5066,12 @@ func (m *kvMeta) getDirFetcher() dirFetcher {
 		}
 
 		if cursor != nil {
-			keys, vals = keys[1:], vals[1:]
+			// The cursor may have been deleted concurrently
+			if len(keys) > 0 && bytes.Equal(keys[0], startKey) {
+				keys, vals = keys[1:], vals[1:]
+			} else if len(keys) > limit-1 {
+				keys, vals = keys[:limit-1], vals[:limit-1]
+			}
 		}
 
 		if total > limit && offset <= len(keys) {
