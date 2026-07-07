@@ -5,6 +5,7 @@ on:
     branches:
       - 'main'
       - 'release-*'
+      - 'datadog'
     paths-ignore:
       - '.autocorrectrc'
       - '.markdownlint-cli2.jsonc'
@@ -18,6 +19,7 @@ on:
     branches:
       - 'main'
       - 'release-*'
+      - 'datadog'
     paths-ignore:
       - '.autocorrectrc'
       - '.markdownlint-cli2.jsonc'
@@ -155,14 +157,6 @@ jobs:
       - name: Check Failure
         if: env.WORKFLOW_CONCLUSION == 'failure'
         run: exit 1
-
-      - name: Send Slack Notification
-        if: failure() && github.event_name != 'workflow_dispatch'
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_JUICEFS_CE_CI_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
-          workflow_name: ${{ github.workflow }}
 
       - name: Success
         if: success()
