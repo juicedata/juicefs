@@ -71,7 +71,11 @@ func (r *realtimeSpeed) update(current int64, now time.Time) string {
 	r.last, r.lastTime = current, now
 	var avgSpeed float64
 	if el := now.Sub(r.start).Seconds(); el > 0 {
-		avgSpeed = float64(current) / el
+		cur := current
+		if cur < 0 {
+			cur = 0
+		}
+		avgSpeed = float64(cur) / el
 	}
 	r.msg = r.format(r.avg.Value(), avgSpeed)
 	return r.msg
