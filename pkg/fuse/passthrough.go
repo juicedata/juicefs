@@ -198,6 +198,14 @@ func (p *passthroughState) reconcile(ctx vfs.Context, v *vfs.VFS, fh uint64) {
 	if p == nil {
 		return
 	}
+	// Fence for consistency points BEFORE looking anything up: the
+	// application's close(2) has already returned, but the data still lives
+	// only in the staging file until the copy below finishes. A checkpoint
+	// or commit that ran concurrently would flush+snapshot without these
+	// writes and publish a mid-copy (short) file. The external-flush counter
+	// lets those paths wait for in-flight reconciles first.
+	v.BeginExternalFlush()
+	defer v.EndExternalFlush()
 	p.mu.Lock()
 	pf := p.files[fh]
 	if pf != nil {

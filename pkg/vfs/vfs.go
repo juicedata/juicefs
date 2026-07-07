@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -1241,8 +1242,26 @@ type VFS struct {
 	modM       sync.Mutex
 	modifiedAt map[Ino]time.Time
 
+	// externalFlushes counts out-of-band write flows (e.g. FUSE passthrough
+	// reconcile at release) whose Write calls are not yet visible to
+	// FlushAll. Consistency points (checkpoint, commit) must wait for it to
+	// reach zero before flushing, or a file whose close(2) already returned
+	// can be snapshotted mid-copy. See ExternalFlushes.
+	externalFlushes int64
+
 	registry *prometheus.Registry
 }
+
+// BeginExternalFlush marks an out-of-band write flow (such as a passthrough
+// staging-file reconcile) as in flight. Call before the flow's first Write so
+// a concurrent consistency point cannot observe zero while data is pending.
+func (v *VFS) BeginExternalFlush() { atomic.AddInt64(&v.externalFlushes, 1) }
+
+// EndExternalFlush marks the flow complete (its writes flushed or failed).
+func (v *VFS) EndExternalFlush() { atomic.AddInt64(&v.externalFlushes, -1) }
+
+// ExternalFlushes reports the number of out-of-band write flows in flight.
+func (v *VFS) ExternalFlushes() int64 { return atomic.LoadInt64(&v.externalFlushes) }
 
 func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer prometheus.Registerer, registry *prometheus.Registry) *VFS {
 	reader := NewDataReader(conf, m, store)
