@@ -238,7 +238,7 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 		if _type == TypeDirectory {
 			p.mode |= 02000
 		} else if n.mode&02010 == 02010 && m.ctx.Uid() != 0 {
-			if !containsGid(m.ctx, p.gid) {
+			if m.ctx.CheckPermission() && !containsGid(m.ctx, p.gid) {
 				n.mode &= ^uint16(02000)
 			}
 		}
@@ -391,7 +391,7 @@ func (m *fsMachine) symlink(parent Ino, name string, inode Ino, target string) s
 		if _type == TypeDirectory {
 			p.mode |= 02000
 		} else if n.mode&02010 == 02010 && m.ctx.Uid() != 0 {
-			if !containsGid(m.ctx, p.gid) {
+			if m.ctx.CheckPermission() && !containsGid(m.ctx, p.gid) {
 				n.mode &= ^uint16(02000)
 			}
 		}
