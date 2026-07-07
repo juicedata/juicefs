@@ -1716,7 +1716,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			n.Gid = pn.Gid
 			if _type == TypeDirectory {
 				n.Mode |= 02000
-			} else if n.Mode&02010 == 02010 && ctx.Uid() != 0 {
+			} else if ctx.CheckPermission() && n.Mode&02010 == 02010 && ctx.Uid() != 0 {
 				if !containsGid(ctx, pn.Gid) {
 					n.Mode &= ^uint16(02000)
 				}
