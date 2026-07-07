@@ -1574,8 +1574,10 @@ func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, paren
 	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
 		if _type == TypeDirectory {
 			childMode |= 02000
-		} else if ctx.CheckPermission() && childMode&02010 == 02010 && ctx.Uid() != 0 && !containsGid(ctx, parentGid) {
-			childMode &= ^uint16(02000)
+		} else if ctx.CheckPermission() && childMode&02010 == 02010 && ctx.Uid() != 0 {
+			if !containsGid(ctx, parentGid) {
+				childMode &= ^uint16(02000)
+			}
 		}
 		return childMode
 	}
@@ -3558,8 +3560,8 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		changed = true
 	}
 	if set&SetAttrMode != 0 {
-		if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
-			if ctx.CheckPermission() && !containsGid(ctx, cur.Gid) {
+		if ctx.CheckPermission() && ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
+			if !containsGid(ctx, cur.Gid) {
 				attr.Mode &= 05777
 			}
 		}
