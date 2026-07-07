@@ -47,11 +47,12 @@ type passthroughState struct {
 	server *fuse.Server
 	dir    string
 
-	mu      sync.Mutex
-	files   map[uint64]*ptFile // keyed by fh
-	pool    []*ptBacking       // idle registered backings, truncated to 0
-	poolSeq int
-	warnOne sync.Once
+	mu       sync.Mutex
+	files    map[uint64]*ptFile // keyed by fh
+	pool     []*ptBacking       // idle registered backings, truncated to 0
+	poolSeq  int
+	disabled bool // registration failed with a permanent error; stop trying
+	warnOne  sync.Once
 }
 
 // ptPoolCap bounds the idle registered backings kept per mount. Each entry
@@ -90,6 +91,10 @@ func newPassthroughState(server *fuse.Server, dir string) *passthroughState {
 // checkout returns an idle registered backing, or registers a fresh one.
 func (p *passthroughState) checkout() (*ptBacking, bool) {
 	p.mu.Lock()
+	if p.disabled {
+		p.mu.Unlock()
+		return nil, false
+	}
 	if n := len(p.pool); n > 0 {
 		b := p.pool[n-1]
 		p.pool = p.pool[:n-1]
@@ -108,9 +113,25 @@ func (p *passthroughState) checkout() (*ptBacking, bool) {
 	}
 	id, errno := p.server.RegisterBackingFd(&fuse.BackingMap{Fd: int32(f.Fd())})
 	if errno != 0 {
-		logger.Warnf("passthrough: RegisterBackingFd(%s): %s", path, errno)
 		_ = f.Close()
 		_ = os.Remove(path)
+		// EPERM is permanent: the backing-registration ioctl needs
+		// CAP_SYS_ADMIN in the init user namespace, and a process that
+		// lacks it now will lack it for every open (e.g. a non-root
+		// container whose added capabilities are bounding-set only).
+		// Without this latch every write-open pays a doomed ioctl, a
+		// staging create/remove, and a warning line (ENG26-869 saw 2000+
+		// per run). Other errnos may be transient; keep trying those.
+		if errno == syscall.EPERM {
+			p.mu.Lock()
+			p.disabled = true
+			p.mu.Unlock()
+			logger.Warnf("passthrough: RegisterBackingFd(%s): %s; disabling passthrough for this mount "+
+				"(the ioctl needs CAP_SYS_ADMIN in the init user namespace — run the mount as root, "+
+				"or use a mount broker that performs registrations node-side)", path, errno)
+			return nil, false
+		}
+		logger.Warnf("passthrough: RegisterBackingFd(%s): %s", path, errno)
 		return nil, false
 	}
 	return &ptBacking{path: path, f: f, backingID: id}, true

@@ -61,6 +61,19 @@ func TestPassthroughPoolReuse(t *testing.T) {
 	}
 }
 
+// TestPassthroughDisabledLatch: once registration hit a permanent error the
+// state stops attempting registrations entirely — checkout must return false
+// before touching the (nil) server or the filesystem.
+func TestPassthroughDisabledLatch(t *testing.T) {
+	p := &passthroughState{dir: t.TempDir(), files: make(map[uint64]*ptFile), disabled: true}
+	if b, ok := p.checkout(); ok || b != nil {
+		t.Fatalf("checkout on disabled state = %v, %v; want nil, false", b, ok)
+	}
+	if p.poolSeq != 0 {
+		t.Fatalf("disabled checkout still allocated a staging sequence")
+	}
+}
+
 // TestPassthroughPoolStaleCleanup: a fresh state removes leftover staging
 // files from a crashed predecessor in the same directory.
 func TestPassthroughPoolStaleCleanup(t *testing.T) {
