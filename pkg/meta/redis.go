@@ -1429,7 +1429,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			attr.Gid = pattr.Gid
 			if _type == TypeDirectory {
 				attr.Mode |= 02000
-			} else if attr.Mode&02010 == 02010 && ctx.Uid() != 0 {
+			} else if ctx.CheckPermission() && attr.Mode&02010 == 02010 && ctx.Uid() != 0 {
 				if !containsGid(ctx, pattr.Gid) {
 					attr.Mode &= ^uint16(02000)
 				}
