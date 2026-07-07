@@ -706,6 +706,36 @@ func testMetaClient(t *testing.T, m Meta) {
 			t.Fatalf("rmdir d3: %s", st)
 		}
 
+		fdCtx := newFuseDefaultCtx(10, 10) // uid=10, primary gid=10 only
+		var pf, ff Ino
+		if st := m.Mkdir(ctx, 1, "d_fuse", 0755, 0, 0, &pf, attr); st != 0 {
+			t.Fatalf("mkdir d_fuse: %s", st)
+		}
+		if st := m.SetAttr(ctx, pf, SetAttrUID|SetAttrGID, 0, &Attr{Uid: 10, Gid: 20}); st != 0 {
+			t.Fatalf("chown d_fuse: %s", st)
+		}
+		// chmod path (mergeAttr): chmod g+s on a dir whose group (20) is not caller's group
+		if st := m.SetAttr(fdCtx, pf, SetAttrMode, 0, &Attr{Mode: 02755}); st != 0 {
+			t.Fatalf("chmod g+s d_fuse: %s", st)
+		}
+		if st := m.GetAttr(fdCtx, pf, attr); st != 0 {
+			t.Fatalf("getattr d_fuse: %s", st)
+		} else if attr.Mode&02000 == 0 {
+			t.Fatalf("sgid should be kept in FUSE default mode (chmod)")
+		}
+		// create path (inheritMode): create a group-executable setgid file under the
+		// setgid parent dir whose group (20) is not in caller's Gids().
+		if st := m.Mknod(fdCtx, pf, "f_fuse", TypeFile, 02755, 0, 0, "", &ff, attr); st != 0 {
+			t.Fatalf("create f_fuse: %s", st)
+		} else if attr.Mode&02000 == 0 {
+			t.Fatalf("sgid should be kept in FUSE default mode (create)")
+		}
+		if st := m.Unlink(fdCtx, pf, "f_fuse"); st != 0 {
+			t.Fatalf("unlink f_fuse: %s", st)
+		}
+		if st := m.Rmdir(ctx, 1, "d_fuse"); st != 0 {
+			t.Fatalf("rmdir d_fuse: %s", st)
+		}
 	}
 	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil, false); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve /d1/d2: %s", st)
@@ -6106,5 +6136,35 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 	if err := m.HandleQuota(ctx, QuotaDel, fmt.Sprintf("%d", gid), GroupQuotaType, nil, false, false, false); err != nil {
 		t.Fatalf("Delete group quota: %s", err)
+	}
+}
+
+// fuseDefaultCtx simulates FUSE default mode (NonDefaultPermission=false):
+// Gids() only returns the primary group and CheckPermission() returns false.
+type fuseDefaultCtx struct {
+	context.Context
+	pid uint32
+	uid uint32
+	gid uint32
+}
+
+func (c *fuseDefaultCtx) Uid() uint32           { return c.uid }
+func (c *fuseDefaultCtx) Gid() uint32           { return c.gid }
+func (c *fuseDefaultCtx) Gids() []uint32        { return []uint32{c.gid} }
+func (c *fuseDefaultCtx) Pid() uint32           { return c.pid }
+func (c *fuseDefaultCtx) Cancel()               {}
+func (c *fuseDefaultCtx) Canceled() bool        { return false }
+func (c *fuseDefaultCtx) CheckPermission() bool { return false }
+func (c *fuseDefaultCtx) WithValue(k, v interface{}) Context {
+	cp := *c
+	cp.Context = context.WithValue(c.Context, k, v)
+	return &cp
+}
+
+func newFuseDefaultCtx(uid, primaryGid uint32) *fuseDefaultCtx {
+	return &fuseDefaultCtx{
+		Context: context.Background(),
+		uid:     uid,
+		gid:     primaryGid,
 	}
 }
