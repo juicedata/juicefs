@@ -71,6 +71,15 @@ func (p *passthroughState) tryOpen(ino Ino, fh uint64, flags uint32) (int32, boo
 	if p == nil || !isWriteOpen(flags) {
 		return 0, false
 	}
+	// Never hand JuiceFS's internal/control files (.control, .stats, .config,
+	// ...) to the kernel via a backing file. Those inodes are served by the
+	// daemon's in-process handlers; passthrough would silently divert their
+	// I/O to a plain temp file, breaking the control protocol — e.g. the
+	// `juicefs checkpoint` verb, whose write/read on .control would go to the
+	// backing file and never reach the handler, hanging the command.
+	if vfs.IsSpecialNode(ino) {
+		return 0, false
+	}
 	if !p.server.SupportsPassthrough() {
 		p.warnOne.Do(func() {
 			logger.Warnf("FUSE passthrough requested but not supported by the kernel; falling back")
