@@ -6108,3 +6108,112 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 		t.Fatalf("Delete group quota: %s", err)
 	}
 }
+
+// fuseDefaultCtx simulates FUSE default mode (NonDefaultPermission=false):
+// Gids() only returns the primary group and CheckPermission() returns false.
+type fuseDefaultCtx struct {
+	context.Context
+	pid uint32
+	uid uint32
+	gid uint32
+}
+
+func (c *fuseDefaultCtx) Uid() uint32           { return c.uid }
+func (c *fuseDefaultCtx) Gid() uint32           { return c.gid }
+func (c *fuseDefaultCtx) Gids() []uint32        { return []uint32{c.gid} }
+func (c *fuseDefaultCtx) Pid() uint32           { return c.pid }
+func (c *fuseDefaultCtx) Cancel()               {}
+func (c *fuseDefaultCtx) Canceled() bool        { return false }
+func (c *fuseDefaultCtx) CheckPermission() bool { return false }
+func (c *fuseDefaultCtx) WithValue(k, v interface{}) Context {
+	cp := *c
+	cp.Context = context.WithValue(c.Context, k, v)
+	return &cp
+}
+
+func newFuseDefaultCtx(uid, primaryGid uint32) *fuseDefaultCtx {
+	return &fuseDefaultCtx{
+		Context: context.Background(),
+		uid:     uid,
+		gid:     primaryGid,
+	}
+}
+
+func TestSgidSetBySecondaryGroup_MetaFix(t *testing.T) {
+	m := setupTestMeta(t)
+
+	ctx := NewContext(1, 10, []uint32{10, 20})
+
+	var dirIno Ino
+	attr := &Attr{}
+
+	if st := m.Mkdir(ctx, RootInode, "testdir_fix", 0755, 0, 0, &dirIno, attr); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	defer m.Rmdir(ctx, RootInode, "testdir_fix") //nolint:errcheck
+
+	if st := m.SetAttr(ctx, dirIno, SetAttrGID, 0, &Attr{Gid: 20}); st != 0 {
+		t.Fatalf("chgrp to secondary group: %s", st)
+	}
+
+	if st := m.SetAttr(ctx, dirIno, SetAttrMode, 0, &Attr{Mode: 02755}); st != 0 {
+		t.Fatalf("chmod g+s: %s", st)
+	}
+
+	if st := m.GetAttr(ctx, dirIno, attr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	if attr.Mode&02000 == 0 {
+		t.Fatalf("BUG: setgid bit was silently stripped! mode=0%o", attr.Mode)
+	}
+	t.Logf("PASS: setgid bit preserved, mode=0%o", attr.Mode)
+}
+
+func TestSgidSetBySecondaryGroup_FuseDefaultMode(t *testing.T) {
+	m := setupTestMeta(t)
+
+	ctx := newFuseDefaultCtx(10, 10)
+
+	rootCtx := NewContext(0, 0, []uint32{0})
+	var dirIno Ino
+	attr := &Attr{}
+
+	if st := m.Mkdir(rootCtx, RootInode, "testdir_fuse", 0755, 0, 0, &dirIno, attr); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	defer m.Rmdir(rootCtx, RootInode, "testdir_fuse") //nolint:errcheck
+
+	if st := m.SetAttr(rootCtx, dirIno, SetAttrUID|SetAttrGID, 0, &Attr{Uid: 10, Gid: 20}); st != 0 {
+		t.Fatalf("chown: %s", st)
+	}
+
+	if st := m.SetAttr(ctx, dirIno, SetAttrMode, 0, &Attr{Mode: 02755}); st != 0 {
+		t.Fatalf("chmod g+s: %s", st)
+	}
+
+	if st := m.GetAttr(ctx, dirIno, attr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+
+	if attr.Mode&02000 == 0 {
+		t.Fatalf("BUG: setgid bit was silently stripped! mode=0%o", attr.Mode)
+	}
+	t.Logf("PASS: setgid bit preserved (CheckPermission=false skips strip), mode=0%o", attr.Mode)
+}
+
+func setupTestMeta(t *testing.T) Meta {
+	t.Helper()
+	m, err := newSQLMeta("sqlite3", t.TempDir()+"/sgid-test.db", testConfig())
+	if err != nil {
+		t.Fatalf("new meta client: %v", err)
+	}
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %v", err)
+	}
+	format := testFormat()
+	format.Name = "test-sgid-repro"
+	if err := m.Init(format, true); err != nil {
+		t.Fatalf("init meta: %v", err)
+	}
+	return m
+}
