@@ -55,18 +55,32 @@ type setTimeout func(time.Duration)
 func (fs *fileSystem) replyAttr(ctx *fuseContext, entry *meta.Entry, attr *fuse.Attr, set setTimeout) {
 	if vfs.IsSpecialNode(entry.Inode) {
 		set(time.Hour)
-	} else if entry.Attr.Typ == meta.TypeFile && fs.v.ModifiedSince(entry.Inode, ctx.start) {
-		logger.Debugf("refresh attr for %d", entry.Inode)
-		var attr meta.Attr
-		st := fs.v.Meta.GetAttr(ctx, entry.Inode, &attr)
-		if st == 0 {
-			*entry.Attr = attr
+	} else {
+		// NOTE: UpdateLength must run BEFORE the ModifiedSince check to close a
+		// TOCTOU race: if the writer is already freed when UpdateLength looks it
+		// up, the data commit (modifiedAtNow) must have happened before the free
+		// (commitThread commits via m.Write before freeChunk), so ModifiedSince
+		// below is guaranteed to observe it and force a refresh. With the old
+		// order (check first, merge later), a close() completing in between left
+		// a stale size=0 with neither correction applied.
+		fs.v.UpdateLength(entry.Inode, entry.Attr)
+		refreshed := true
+		if entry.Attr.Typ == meta.TypeFile && fs.v.ModifiedSince(entry.Inode, ctx.start) {
+			refreshed = false
+			logger.Debugf("refresh attr for %d", entry.Inode)
+			var nattr meta.Attr
+			st := fs.v.Meta.GetAttr(ctx, entry.Inode, &nattr)
+			if st == 0 {
+				*entry.Attr = nattr
+				// NOTE: merge again: a new writer may have appeared during
+				// GetAttr; length only grows, never regresses.
+				fs.v.UpdateLength(entry.Inode, entry.Attr)
+			}
+		}
+		if refreshed {
 			set(fs.conf.AttrTimeout)
 		}
-	} else {
-		set(fs.conf.AttrTimeout)
 	}
-	fs.v.UpdateLength(entry.Inode, entry.Attr)
 	attrToStat(entry.Inode, entry.Attr, attr)
 }
 
