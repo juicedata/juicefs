@@ -5,7 +5,7 @@ JuiceFS is a POSIX-compatible distributed file system written in Go
 and **object storage**, exposing POSIX (FUSE) and an S3 gateway, plus Java/Hadoop
 (`sdk/java/`) and Python (`sdk/python/`) SDKs.
 
-The metadata engine has three implementation families under `pkg/meta/`:
+Metadata engine families under `pkg/meta/`:
 
 - **Redis** — `redisMeta` (`redis.go`); also KeyDB.
 - **SQL/DB** — `dbMeta` (`sql.go`): MySQL, PostgreSQL, SQLite.
@@ -40,7 +40,7 @@ make juicefs.ceph            # -tags ceph
 make juicefs.fdb             # -tags fdb (FoundationDB)
 ```
 
-Run a local volume (SQLite metadata) for manual testing:
+Local volume for manual testing (SQLite metadata):
 
 ```sh
 ./juicefs format sqlite3://test.db myjfs    # create a volume
@@ -49,7 +49,7 @@ Run a local volume (SQLite metadata) for manual testing:
 
 ## Test
 
-Use the smallest target that covers your change. All targets are in the `Makefile`
+Use the smallest target covering your change. Targets are in the `Makefile`
 and mirror CI (`.github/workflows/unittests.yml`).
 
 ```sh
@@ -66,7 +66,9 @@ make test.fdb                # FoundationDB tests (-tags fdb)
 | `cmd/**`           | `make test.cmd`                                                   |
 | any other `pkg/**` | `make test.pkg`                                                   |
 
-When fixing a bug, add a regression test that fails before the fix and passes after.
+- When fixing a bug, add a regression test that fails before the fix and passes after.
+- Group new test cases for the same module/category together; extend an existing test
+  rather than scattering new cases.
 
 ## Lint & format
 
@@ -78,37 +80,19 @@ When fixing a bug, add a regression test that fails before the fix and passes af
 
 - Follow [Effective Go](https://go.dev/doc/effective_go) and
   [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments).
-- Every new `.go` file MUST start with the Apache 2.0 header:
-
-```go
-/*
- * JuiceFS, Copyright <year> Juicedata, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-```
+- Keep comments minimal; add only when necessary.
+- Every new `.go` file MUST start with the Apache 2.0 header (see `main.go` for the canonical template).
 
 ## Agent boundaries
 
 - Correctness first: this is a distributed file system; small changes can affect data
-  integrity or consistency. Do not invent APIs, defaults, or behavior — verify against
-  the code, and don't bypass safety checks.
+  integrity. Do not invent APIs, defaults, or behavior — verify against the code, and
+  don't bypass safety checks.
 - Metadata-engine parity: a semantic change in `pkg/meta/` must behave identically
   across all three families (Redis, SQL/DB, KV) and be covered by their shared tests.
 - Backward compatibility: keep the `dump`/`load` metadata format backward compatible,
   and forward compatible where feasible (tolerate unknown/new fields).
-- When writing or reviewing changes, check that behavior changes have matching unit
-  tests, and that user-facing changes update the docs.
+- Behavior changes need matching unit tests; user-facing changes update the docs.
 - Keep diffs minimal and scoped; avoid unrelated refactors or formatting-only churn.
 - Do not hand-edit generated code or vendored dependencies.
 - Match existing conventions in the file you are editing.
