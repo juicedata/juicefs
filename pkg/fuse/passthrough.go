@@ -50,6 +50,7 @@ type passthroughState struct {
 
 	mu       sync.Mutex
 	files    map[uint64]*ptFile // keyed by fh
+	busy     map[Ino]int        // inodes with a passthrough open or pending reconcile
 	pool     []*ptBacking       // idle registered backings, truncated to 0
 	poolSeq  int
 	disabled bool // registration failed with a permanent error; stop trying
@@ -95,7 +96,12 @@ func newPassthroughState(server *fuse.Server, dir string) *passthroughState {
 		logger.Warnf("passthrough: per-process staging dir under %s: %s; using base", base, err)
 		sub = base
 	}
-	return &passthroughState{server: server, dir: sub, files: make(map[uint64]*ptFile)}
+	return &passthroughState{
+		server: server,
+		dir:    sub,
+		files:  make(map[uint64]*ptFile),
+		busy:   make(map[Ino]int),
+	}
 }
 
 // checkout returns an idle registered backing, or registers a fresh one.
@@ -206,14 +212,40 @@ func (p *passthroughState) tryOpen(ino Ino, fh uint64, flags uint32, emptyAtOpen
 		})
 		return 0, false
 	}
+	// One passthrough writer per inode at a time. A second write-open while an
+	// earlier one is still open — or while its reconcile is in flight (during
+	// which the metadata size still reads 0, so emptyAtOpen looks true again) —
+	// would get its own empty backing whose linear reconcile overwrites the
+	// first's data. Reserve the inode; overlapping opens fall to the daemon
+	// path, which serializes correctly.
+	p.mu.Lock()
+	if p.disabled || p.busy[ino] > 0 {
+		p.mu.Unlock()
+		return 0, false
+	}
+	p.busy[ino]++
+	p.mu.Unlock()
+
 	b, ok := p.checkout()
 	if !ok {
+		p.mu.Lock()
+		p.releaseBusyLocked(ino)
+		p.mu.Unlock()
 		return 0, false
 	}
 	p.mu.Lock()
 	p.files[fh] = &ptFile{ino: ino, fh: fh, b: b}
 	p.mu.Unlock()
 	return b.backingID, true
+}
+
+// releaseBusyLocked drops one busy reference for ino. Caller holds p.mu.
+func (p *passthroughState) releaseBusyLocked(ino Ino) {
+	if n := p.busy[ino]; n <= 1 {
+		delete(p.busy, ino)
+	} else {
+		p.busy[ino] = n - 1
+	}
 }
 
 // reconcile flushes a passthrough staging file back into JuiceFS slices, then
@@ -231,6 +263,13 @@ func (p *passthroughState) reconcile(ctx vfs.Context, v *vfs.VFS, fh uint64) {
 	if pf == nil {
 		return
 	}
+	// Free the inode for a new passthrough open only once its data has fully
+	// landed (or been preserved on failure) — held across the whole reconcile.
+	defer func() {
+		p.mu.Lock()
+		p.releaseBusyLocked(pf.ino)
+		p.mu.Unlock()
+	}()
 	// Fence for consistency points now that we know this is a passthrough
 	// release with data to land: the application's close(2) has already
 	// returned, but the data still lives only in the staging file until the
