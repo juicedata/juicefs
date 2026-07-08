@@ -34,7 +34,9 @@ import (
 // for write gets a local staging file (on a non-stacked fs) that the kernel
 // reads/writes directly via FUSE_PASSTHROUGH, bypassing the daemon per-op. On
 // release the staging file is reconciled into JuiceFS slices via the normal
-// writer path. Durability is therefore deferred to release (commit-style).
+// writer path. Durability is therefore deferred to release (commit-style),
+// with one exception: fsync(2)/fdatasync(2) reconcile immediately (see
+// fsync below), so an application's explicit sync point means what it says.
 //
 // Backing registrations are POOLED: registering a backing fd costs an ioctl
 // (or, on unprivileged broker mounts, an RPC round trip to the node broker)
