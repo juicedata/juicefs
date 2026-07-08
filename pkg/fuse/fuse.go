@@ -570,6 +570,22 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 
 	fsserv = fssrv
 	fssrv.Serve()
+	// The kernel delivers queued RELEASEs before tearing the session down,
+	// but their passthrough reconciles may still be copying staging data
+	// when Serve returns; exiting now would lose bytes of files whose
+	// close(2) long since succeeded. Wait the reconciles out so anything
+	// that snapshots the metadata store after the daemon exits
+	// (commit/finalize) sees every closed file in full.
+	if imp.pt != nil {
+		deadline := time.Now().Add(time.Minute)
+		for v.ExternalFlushes() > 0 {
+			if time.Now().After(deadline) {
+				logger.Errorf("passthrough: exiting with %d unfinished reconcile(s)", v.ExternalFlushes())
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
 	return nil
 }
 

@@ -1370,6 +1370,18 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 		return float64(len(v.handles))
 	})
 	_ = registerer.Register(handlersGause)
+	// Named to contain "staging_blocks" ON PURPOSE: durability watchers that
+	// sum the staging gauges from .stats (e.g. drain-before-commit clients)
+	// then automatically cover in-flight passthrough reconciles too — a
+	// closed file's data is "staged" in its backing file until the reconcile
+	// lands it in the writer, invisible to the writeback gauges.
+	externalGauge := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "passthrough_staging_blocks",
+		Help: "out-of-band flush flows (passthrough staging reconciles) not yet visible to FlushAll.",
+	}, func() float64 {
+		return float64(v.ExternalFlushes())
+	})
+	_ = registerer.Register(externalGauge)
 	InitMemoryBufferMetrics(writer, reader, registerer)
 }
 
