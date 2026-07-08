@@ -252,6 +252,11 @@ func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name str
 func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
+	// If this inode has a passthrough write still reconciling, wait for it so
+	// this open sees the file's real (post-reconcile) size and content rather
+	// than the transient empty state — otherwise a write here would race the
+	// reconcile's copy and lose data.
+	fs.pt.waitInode(Ino(in.NodeId))
 	entry, fh, err := fs.v.Open(ctx, Ino(in.NodeId), in.Flags)
 	if err != 0 {
 		return fuse.Status(err)

@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/juicedata/juicefs/pkg/vfs"
@@ -245,6 +246,33 @@ func (p *passthroughState) releaseBusyLocked(ino Ino) {
 		delete(p.busy, ino)
 	} else {
 		p.busy[ino] = n - 1
+	}
+}
+
+// waitInode blocks (bounded) until ino has no passthrough open or in-flight
+// reconcile. Called at the start of Open so a reopen of a file this session
+// just wrote via passthrough observes the reconciled state: until reconcile
+// lands, the metadata size still reads 0 and a new write (passthrough OR
+// daemon) would race the reconcile's linear copy and silently lose data.
+// After the wait the file's size is authoritative, so tryOpen's emptyAtOpen
+// gate correctly sends the reopen down the daemon path.
+func (p *passthroughState) waitInode(ino Ino) {
+	if p == nil {
+		return
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		p.mu.Lock()
+		busy := p.busy[ino] > 0
+		p.mu.Unlock()
+		if !busy {
+			return
+		}
+		if time.Now().After(deadline) {
+			logger.Warnf("passthrough: waited 30s for in-flight reconcile of ino %d; proceeding", ino)
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
 }
 

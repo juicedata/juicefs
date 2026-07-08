@@ -48,3 +48,4 @@ test*.bak
 dist/
 juicefs.egg-info/
 pkg/meta/jfs-load-dump/juicefs-fork
+juicefs-fork
