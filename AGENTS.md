@@ -78,6 +78,7 @@ When fixing a bug, add a regression test that fails before the fix and passes af
 
 - Follow [Effective Go](https://go.dev/doc/effective_go) and
   [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments).
+- Keep comments minimal; add them only when necessary.
 - Every new `.go` file MUST start with the Apache 2.0 header:
 
 ```go
