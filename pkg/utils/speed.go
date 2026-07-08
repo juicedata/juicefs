@@ -59,10 +59,10 @@ func (r *realtimeSpeed) update(current int64, now time.Time) string {
 		r.last, r.lastTime = current, now
 		return r.msg
 	}
-	dt := now.Sub(r.lastTime).Seconds()
-	if dt < speedSampleInterval.Seconds() { // debounce: reuse last reading
+	if now.Sub(r.lastTime) < speedSampleInterval { // debounce: reuse last reading
 		return r.msg
 	}
+	dt := now.Sub(r.lastTime).Seconds()
 	delta := current - r.last
 	if delta < 0 { // negative delta (e.g. sync rollback) -> clamp to 0
 		delta = 0
