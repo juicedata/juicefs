@@ -55,6 +55,7 @@ type passthroughState struct {
 	pool     []*ptBacking       // idle registered backings, truncated to 0
 	poolSeq  int
 	disabled bool // registration failed with a permanent error; stop trying
+	paused   bool // draining for handover/shutdown; refuse new passthrough opens
 	warnOne  sync.Once
 }
 
@@ -75,6 +76,9 @@ type ptFile struct {
 	ino Ino
 	fh  uint64
 	b   *ptBacking
+	// mu serializes staging-content copies for this open: fsync-time copies
+	// against each other and against the final release-time reconcile.
+	mu sync.Mutex
 }
 
 func newPassthroughState(server *fuse.Server, dir string) *passthroughState {
@@ -207,31 +211,36 @@ func (p *passthroughState) tryOpen(ino Ino, fh uint64, flags uint32, emptyAtOpen
 	if vfs.IsSpecialNode(ino) {
 		return 0, false
 	}
-	if !p.server.SupportsPassthrough() {
-		p.warnOne.Do(func() {
-			logger.Warnf("FUSE passthrough requested but not supported by the kernel; falling back")
-		})
-		return 0, false
-	}
 	// One passthrough writer per inode at a time. A second write-open while an
 	// earlier one is still open — or while its reconcile is in flight (during
 	// which the metadata size still reads 0, so emptyAtOpen looks true again) —
 	// would get its own empty backing whose linear reconcile overwrites the
 	// first's data. Reserve the inode; overlapping opens fall to the daemon
-	// path, which serializes correctly.
+	// path, which serializes correctly. Checked before any server call so the
+	// disabled latch and a drain-for-handover pause short-circuit cheaply.
 	p.mu.Lock()
-	if p.disabled || p.busy[ino] > 0 {
+	if p.disabled || p.paused || p.busy[ino] > 0 {
 		p.mu.Unlock()
 		return 0, false
 	}
 	p.busy[ino]++
 	p.mu.Unlock()
-
-	b, ok := p.checkout()
-	if !ok {
+	release := func() {
 		p.mu.Lock()
 		p.releaseBusyLocked(ino)
 		p.mu.Unlock()
+	}
+
+	if !p.server.SupportsPassthrough() {
+		p.warnOne.Do(func() {
+			logger.Warnf("FUSE passthrough requested but not supported by the kernel; falling back")
+		})
+		release()
+		return 0, false
+	}
+	b, ok := p.checkout()
+	if !ok {
+		release()
 		return 0, false
 	}
 	p.mu.Lock()
@@ -337,38 +346,11 @@ func (p *passthroughState) reconcile(ctx vfs.Context, v *vfs.VFS, fh uint64) {
 		}
 	}()
 
-	rf, err := os.Open(b.path)
-	if err != nil {
-		logger.Errorf("passthrough: reopen staging %s: %s", b.path, err)
+	pf.mu.Lock()
+	defer pf.mu.Unlock()
+	off, ok := p.copyStagingLocked(ctx, v, pf)
+	if !ok {
 		return
-	}
-	defer rf.Close()
-	buf := make([]byte, 4<<20)
-	var off uint64
-	for {
-		n, err := rf.Read(buf)
-		if n > 0 {
-			// vfs.Write may retain the buffer until flush; give each chunk its
-			// own backing array so the next Read doesn't corrupt a pending slice.
-			chunk := make([]byte, n)
-			copy(chunk, buf[:n])
-			if e := v.Write(ctx, pf.ino, chunk, off, fh); e != 0 {
-				logger.Errorf("passthrough: reconcile write ino %d off %d: %s", pf.ino, off, e)
-				return
-			}
-			off += uint64(n)
-		}
-		if err != nil {
-			if err != io.EOF {
-				// A read error mid-copy must NOT be mistaken for end-of-file:
-				// that would flush+commit a truncated file as if complete. Bail
-				// so the defer preserves the staging and the file is not sealed
-				// short.
-				logger.Errorf("passthrough: read staging %s at off %d: %s", b.path, off, err)
-				return
-			}
-			break
-		}
 	}
 	if e := v.Flush(ctx, pf.ino, fh, 0); e != 0 {
 		logger.Errorf("passthrough: reconcile flush ino %d: %s", pf.ino, e)
@@ -387,4 +369,144 @@ func (p *passthroughState) reconcile(ctx vfs.Context, v *vfs.VFS, fh uint64) {
 	}
 	done = true
 	p.checkin(b)
+}
+
+// copyStagingLocked copies the full staging content of pf into JuiceFS slices
+// via the normal writer path. Returns the byte count and false on any read or
+// write error — a read error mid-copy must NOT be mistaken for end-of-file,
+// or the caller would flush+commit a truncated file as if complete. Always a
+// FULL copy from offset 0: passthrough writes land in the backing at
+// arbitrary offsets, so an incremental "since last copy" scheme would miss
+// overwrites of already-copied ranges. Caller holds pf.mu.
+func (p *passthroughState) copyStagingLocked(ctx vfs.Context, v *vfs.VFS, pf *ptFile) (uint64, bool) {
+	rf, err := os.Open(pf.b.path)
+	if err != nil {
+		logger.Errorf("passthrough: reopen staging %s: %s", pf.b.path, err)
+		return 0, false
+	}
+	defer rf.Close()
+	buf := make([]byte, 4<<20)
+	var off uint64
+	for {
+		n, err := rf.Read(buf)
+		if n > 0 {
+			// vfs.Write may retain the buffer until flush; give each chunk its
+			// own backing array so the next Read doesn't corrupt a pending slice.
+			chunk := make([]byte, n)
+			copy(chunk, buf[:n])
+			if e := v.Write(ctx, pf.ino, chunk, off, pf.fh); e != 0 {
+				logger.Errorf("passthrough: staging copy write ino %d off %d: %s", pf.ino, off, e)
+				return off, false
+			}
+			off += uint64(n)
+		}
+		if err != nil {
+			if err != io.EOF {
+				logger.Errorf("passthrough: read staging %s at off %d: %s", pf.b.path, off, err)
+				return off, false
+			}
+			break
+		}
+	}
+	return off, true
+}
+
+// fsync makes fsync(2)/fdatasync(2) honest for a passthrough open. The
+// kernel diverts only read/write/mmap to the backing file — FSYNC still
+// reaches the daemon, whose writer has no data for this fh, so plain
+// vfs.Fsync would report success while every byte still sits in a local
+// staging file that a crash before release would lose. Instead, copy the
+// staging content into JuiceFS slices now (the open stays live and the
+// backing stays registered; the release-time reconcile recopies and remains
+// the authority on final content) and then flush the writer, giving the
+// caller exactly the durability a non-passthrough fsync provides.
+//
+// Returns handled=false when fh is not a passthrough open (caller proceeds
+// with the normal path).
+func (p *passthroughState) fsync(ctx vfs.Context, v *vfs.VFS, fh uint64) (bool, syscall.Errno) {
+	if p == nil {
+		return false, 0
+	}
+	p.mu.Lock()
+	pf := p.files[fh]
+	p.mu.Unlock()
+	if pf == nil {
+		return false, 0
+	}
+	pf.mu.Lock()
+	defer pf.mu.Unlock()
+	// Fence: a checkpoint/commit racing this copy must wait for it, exactly
+	// as for a release-time reconcile, or it could snapshot a mid-copy state
+	// of a file the application believes it just made durable.
+	v.BeginExternalFlush()
+	defer v.EndExternalFlush()
+	if _, ok := p.copyStagingLocked(ctx, v, pf); !ok {
+		// The open is still live and release will retry the copy; report the
+		// failure so the application does not trust this fsync.
+		return true, syscall.EIO
+	}
+	if e := v.Fsync(ctx, pf.ino, 0, fh); e != 0 {
+		return true, e
+	}
+	return true, 0
+}
+
+// truncate mirrors a successful SETATTR size change onto the inode's live
+// passthrough backing, if any. truncate(2)/ftruncate(2) reach the daemon —
+// the kernel never diverts SETATTR to the backing — so without this the
+// backing keeps its old length and diverges from the size the caller just
+// set: reads through the passthrough fd see the old data/EOF, and the
+// release-time reconcile (linear copy of the staging, authority on final
+// content) would silently undo the truncate.
+func (p *passthroughState) truncate(ino Ino, size uint64) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	var pf *ptFile
+	for _, f := range p.files {
+		if f.ino == ino {
+			pf = f
+			break
+		}
+	}
+	p.mu.Unlock()
+	if pf == nil {
+		return
+	}
+	pf.mu.Lock()
+	defer pf.mu.Unlock()
+	if err := pf.b.f.Truncate(int64(size)); err != nil {
+		logger.Errorf("passthrough: mirror truncate ino %d to %d on %s: %s", ino, size, pf.b.path, err)
+	}
+}
+
+// drain blocks new passthrough opens and waits (bounded) until no inode has
+// a live passthrough open or in-flight reconcile. Used before a smooth
+// upgrade (SIGHUP handover): a passthrough open's data exists only in this
+// process's staging files, which the successor has no record of, so handing
+// over while any are live silently loses every byte written through them.
+// On timeout it re-enables passthrough and returns false — the caller must
+// refuse the handover and keep serving.
+func (p *passthroughState) drain(timeout time.Duration) bool {
+	p.mu.Lock()
+	p.paused = true
+	p.mu.Unlock()
+	deadline := time.Now().Add(timeout)
+	for {
+		p.mu.Lock()
+		n := len(p.busy)
+		p.mu.Unlock()
+		if n == 0 {
+			return true
+		}
+		if time.Now().After(deadline) {
+			p.mu.Lock()
+			p.paused = false
+			p.mu.Unlock()
+			logger.Warnf("passthrough: %d inode(s) still have live passthrough opens or reconciles after %s", n, timeout)
+			return false
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

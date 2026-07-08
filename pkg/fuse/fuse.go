@@ -125,6 +125,12 @@ func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *f
 	if err != 0 {
 		return fuse.Status(err)
 	}
+	if in.Valid&fuse.FATTR_SIZE != 0 {
+		// truncate(2)/ftruncate(2) never reach the backing file (the kernel
+		// only diverts read/write/mmap); mirror the new size onto any live
+		// passthrough backing so it doesn't diverge from the metadata.
+		fs.pt.truncate(Ino(in.NodeId), in.Size)
+	}
 	fs.replyAttr(ctx, entry, &out.Attr, out.SetTimeout)
 	return 0
 }
@@ -322,6 +328,12 @@ func (fs *fileSystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Statu
 func (fs *fileSystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
+	// For a passthrough open the daemon's writer holds none of the data (it
+	// lives in the kernel backing file), so vfs.Fsync alone would succeed
+	// without making anything durable; reconcile the staging content first.
+	if handled, errno := fs.pt.fsync(ctx, fs.v, in.Fh); handled {
+		return fuse.Status(errno)
+	}
 	err := fs.v.Fsync(ctx, Ino(in.NodeId), int(in.FsyncFlags), in.Fh)
 	return fuse.Status(err)
 }
@@ -575,6 +587,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 
 	if ptEnabled {
 		imp.pt = newPassthroughState(fssrv, os.Getenv("JUICEFS_PASSTHROUGH_DIR"))
+		ptState = imp.pt
 		logger.Infof("FUSE passthrough enabled (experimental); staging dir=%s", imp.pt.dir)
 	}
 
@@ -640,10 +653,24 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, m
 }
 
 var fsserv *fuse.Server
+var ptState *passthroughState
 
 func Shutdown() bool {
 	if fsserv != nil {
 		return fsserv.Shutdown()
 	}
 	return false
+}
+
+// DrainPassthrough blocks new passthrough opens and waits (bounded) for all
+// live passthrough opens and in-flight reconciles to finish. Returns false —
+// with passthrough re-enabled — if any remain; the caller must then refuse a
+// session handover, because passthrough data exists only in this process's
+// staging files and a successor has no record of them. Returns true
+// immediately when passthrough is not enabled.
+func DrainPassthrough(timeout time.Duration) bool {
+	if ptState == nil {
+		return true
+	}
+	return ptState.drain(timeout)
 }
