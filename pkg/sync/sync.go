@@ -1179,11 +1179,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
 				var equal bool
-				var srcChksumPtr *uint32
-				if !remoteCopied {
-					srcChksumPtr = &srcChksum
-				}
-				if equal, err = checkSum(src, dst, key, srcChksumPtr, obj, config); err == nil && !equal {
+				if equal, err = checkSum(src, dst, key, &srcChksum, obj, config); err == nil && !equal {
 					err = fmt.Errorf("checksums of copied object %s don't match", key)
 				}
 			}
@@ -2066,6 +2062,12 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 
 // Sync syncs all the keys between to object storage
 func Sync(src, dst object.ObjectStorage, config *Config) error {
+	if config.RemoteCopy && (object.IsEncrypted(src) || object.IsEncrypted(dst)) {
+		return fmt.Errorf("--remote-copy cannot be used with encrypted object storage")
+	}
+	if config.RemoteCopy && (config.CheckAll || config.CheckNew) {
+		return fmt.Errorf("--remote-copy cannot be used with --check-all or --check-new")
+	}
 	if config.RemoteCopy && !canRemoteCopy(src, dst) {
 		logger.Warnf("Remote copy is not supported between %s and %s, fallback to normal copy", src, dst)
 		config.RemoteCopy = false

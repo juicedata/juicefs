@@ -256,6 +256,20 @@ func NewEncrypted(o ObjectStorage, enc Encryptor) ObjectStorage {
 	return &encrypted{o, enc}
 }
 
+// IsEncrypted returns true if the storage is wrapped by encryption.
+func IsEncrypted(o ObjectStorage) bool {
+	for {
+		switch s := o.(type) {
+		case *withPrefix:
+			o = s.os
+		case *encrypted, *chunkedEncrypted, *chunkedEncryptedFS, *chunkedEncryptedFSSymlink:
+			return true
+		default:
+			return false
+		}
+	}
+}
+
 func (e *encrypted) String() string {
 	return fmt.Sprintf("%s(encrypted)", e.ObjectStorage)
 }
