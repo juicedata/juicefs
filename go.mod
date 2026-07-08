@@ -10,6 +10,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.4
 	github.com/DataDog/zstd v1.5.6
 	github.com/IBM/ibm-cos-sdk-go v1.13.0
+	github.com/VividCortex/ewma v1.2.0
 	github.com/agiledragon/gomonkey/v2 v2.6.0
 	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.4.1
 	github.com/aliyun/credentials-go v1.4.5
@@ -124,7 +125,6 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.48.1 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.48.1 // indirect
 	github.com/IBM/go-sdk-core/v5 v5.21.2 // indirect
-	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/alecthomas/participle v0.2.1 // indirect
 	github.com/alex-ant/gomath v0.0.0-20160516115720-89013a210a82 // indirect
