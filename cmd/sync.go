@@ -234,6 +234,10 @@ func syncActionFlags() []cli.Flag {
 			Name:  "dry",
 			Usage: "don't copy file",
 		},
+		&cli.BoolFlag{
+			Name:  "remote-copy",
+			Usage: "enable server-side copy when source and destination support it",
+		},
 		&cli.StringFlag{
 			Name:  "mountpoint",
 			Usage: "the mount point for current volume (to follow symlink)",

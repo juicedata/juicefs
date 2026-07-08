@@ -39,6 +39,7 @@ type Config struct {
 	Perms             bool
 	MaxFailure        int64
 	Dry               bool
+	RemoteCopy        bool
 	DeleteSrc         bool
 	DeleteDst         bool
 	MatchFullPath     bool
@@ -188,6 +189,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Perms:                c.Bool("perms"),
 		Dirs:                 c.Bool("dirs"),
 		Dry:                  c.Bool("dry"),
+		RemoteCopy:           c.Bool("remote-copy"),
 		MaxFailure:           c.Int64("max-failure"),
 		DeleteSrc:            c.Bool("delete-src"),
 		DeleteDst:            c.Bool("delete-dst"),
