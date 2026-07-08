@@ -27,7 +27,7 @@ import (
 // speedSampleInterval is the minimum gap between two effective samples. It is
 // slightly larger than mpb's 120ms refresh rate so each sampling window is
 // stable and the reading does not jitter.
-const speedSampleInterval = 300 * time.Millisecond
+const speedSampleInterval = 1 * time.Second
 
 // realtimeSpeed reports an instantaneous transfer speed (EWMA-smoothed
 // Δbytes/Δt between samples) together with the cumulative average speed since
