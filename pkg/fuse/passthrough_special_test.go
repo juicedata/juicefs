@@ -24,11 +24,11 @@ func TestTryOpenSkipsSpecialNodes(t *testing.T) {
 	if !vfs.IsSpecialNode(control) {
 		t.Fatalf("expected %d to be a special node", control)
 	}
-	if id, ok := p.tryOpen(control, 1, 0x8002); ok || id != 0 {
+	if id, ok := p.tryOpen(control, 1, 0x8002, true); ok || id != 0 {
 		t.Fatalf("tryOpen(special) = (%d,%v), want (0,false)", id, ok)
 	}
 	// A regular inode with a read-only open is also refused (not a write).
-	if _, ok := p.tryOpen(vfs.Ino(2), 1, 0); ok {
+	if _, ok := p.tryOpen(vfs.Ino(2), 1, 0, true); ok {
 		t.Fatalf("tryOpen(regular, read-only) should be false")
 	}
 }

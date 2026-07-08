@@ -74,16 +74,32 @@ func TestPassthroughDisabledLatch(t *testing.T) {
 	}
 }
 
-// TestPassthroughPoolStaleCleanup: a fresh state removes leftover staging
-// files from a crashed predecessor in the same directory.
-func TestPassthroughPoolStaleCleanup(t *testing.T) {
-	dir := t.TempDir()
-	stale := filepath.Join(dir, "pool-9.tmp")
-	if err := os.WriteFile(stale, []byte("junk"), 0600); err != nil {
+// TestPassthroughStagingIsolation: a fresh state carves a private per-process
+// subdir under base and MUST NOT touch files belonging to another mount that
+// shares base — the old shared-dir sweep silently deleted a live mount's
+// in-use staging (data loss). It also gives distinct states distinct dirs.
+func TestPassthroughStagingIsolation(t *testing.T) {
+	base := t.TempDir()
+	// A sibling mount's live staging file sitting directly in base.
+	sibling := filepath.Join(base, "pool-9.tmp")
+	if err := os.WriteFile(sibling, []byte("live data"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	_ = newPassthroughState(nil, dir)
-	if _, err := os.Stat(stale); !os.IsNotExist(err) {
-		t.Fatalf("stale staging file survived: %v", err)
+	p1 := newPassthroughState(nil, base)
+	p2 := newPassthroughState(nil, base)
+
+	if _, err := os.Stat(sibling); err != nil {
+		t.Fatalf("sibling mount's staging was disturbed: %v", err)
+	}
+	if p1.dir == base || p2.dir == base {
+		t.Fatalf("state did not isolate into a subdir: p1=%q p2=%q base=%q", p1.dir, p2.dir, base)
+	}
+	if filepath.Dir(p1.dir) != base {
+		t.Fatalf("subdir %q not under base %q", p1.dir, base)
+	}
+	// Even within one process, two states must not share a dir (else their
+	// pool-N.tmp names would collide).
+	if p1.dir == p2.dir {
+		t.Fatalf("two states shared staging dir %q", p1.dir)
 	}
 }

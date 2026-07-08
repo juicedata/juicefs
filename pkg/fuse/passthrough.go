@@ -18,6 +18,7 @@ package fuse
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -75,17 +76,26 @@ type ptFile struct {
 }
 
 func newPassthroughState(server *fuse.Server, dir string) *passthroughState {
-	if dir == "" {
-		dir = filepath.Join(os.TempDir(), "juicefs-passthrough")
+	base := dir
+	if base == "" {
+		base = filepath.Join(os.TempDir(), "juicefs-passthrough")
 	}
-	_ = os.MkdirAll(dir, 0700)
-	// Best-effort: drop staging files a crashed predecessor left behind.
-	if stale, err := filepath.Glob(filepath.Join(dir, "*.tmp")); err == nil {
-		for _, p := range stale {
-			_ = os.Remove(p)
-		}
+	_ = os.MkdirAll(base, 0700)
+	// Isolate this mount's staging in a per-process subdir. Several juicefs
+	// mounts (multiple volumes on a node, or a graceful-restart successor)
+	// can share `base`; a flat shared dir would let one mount's pool-N.tmp
+	// collide with another's, and — worse — a startup sweep of the shared dir
+	// would unlink another live mount's in-use staging files, silently losing
+	// the data of files whose close(2) already returned. A private subdir
+	// removes both hazards, so we deliberately do NOT garbage-collect the
+	// shared root here (a crashed predecessor's subdir is inert and can be
+	// reaped out of band).
+	sub, err := os.MkdirTemp(base, fmt.Sprintf("m%d-", os.Getpid()))
+	if err != nil {
+		logger.Warnf("passthrough: per-process staging dir under %s: %s; using base", base, err)
+		sub = base
 	}
-	return &passthroughState{server: server, dir: dir, files: make(map[uint64]*ptFile)}
+	return &passthroughState{server: server, dir: sub, files: make(map[uint64]*ptFile)}
 }
 
 // checkout returns an idle registered backing, or registers a fresh one.
@@ -106,7 +116,11 @@ func (p *passthroughState) checkout() (*ptBacking, bool) {
 	p.mu.Unlock()
 
 	path := filepath.Join(p.dir, fmt.Sprintf("pool-%d.tmp", seq))
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	// O_EXCL: never open a staging file that already exists. The dir is
+	// per-process and seq is monotonic, so a collision would signal a bug
+	// (or a shared-dir fallback), and truncating a pre-existing file could
+	// clobber another mount's in-use backing.
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		logger.Warnf("passthrough: open staging %s: %s", path, err)
 		return nil, false
@@ -159,12 +173,22 @@ func isWriteOpen(flags uint32) bool {
 	return acc == syscall.O_WRONLY || acc == syscall.O_RDWR
 }
 
-// tryOpen sets up passthrough for a write-opened file. It returns the kernel
-// backing ID and true on success; callers then set FOPEN_PASSTHROUGH and
-// OpenOut.BackingID. On any failure it returns false and the caller falls back
-// to the normal (daemon) path — passthrough is purely an optimization.
-func (p *passthroughState) tryOpen(ino Ino, fh uint64, flags uint32) (int32, bool) {
-	if p == nil || !isWriteOpen(flags) {
+// tryOpen sets up passthrough for a write-opened file that is EMPTY at open.
+// It returns the kernel backing ID and true on success; callers then set
+// FOPEN_PASSTHROUGH and OpenOut.BackingID. On any failure it returns false and
+// the caller falls back to the normal (daemon) path — passthrough is purely an
+// optimization.
+//
+// emptyAtOpen MUST be true only when the file has no pre-existing content the
+// open can observe or extend: a fresh Create, or an Open with O_TRUNC, or a
+// zero-length file. This is a correctness gate, not a heuristic. The backing
+// staging file always starts empty and FOPEN_PASSTHROUGH diverts reads, writes
+// AND mmap to it, so enabling it on a non-empty file would (a) serve reads as
+// zeros/EOF instead of real content (read-modify-write corruption), and (b)
+// make reconcile — which copies staging linearly from offset 0 — overwrite the
+// file's real prefix with holes for O_APPEND / sparse / seek-write patterns.
+func (p *passthroughState) tryOpen(ino Ino, fh uint64, flags uint32, emptyAtOpen bool) (int32, bool) {
+	if p == nil || !isWriteOpen(flags) || !emptyAtOpen {
 		return 0, false
 	}
 	// Never hand JuiceFS's internal/control files (.control, .stats, .config,
@@ -198,14 +222,6 @@ func (p *passthroughState) reconcile(ctx vfs.Context, v *vfs.VFS, fh uint64) {
 	if p == nil {
 		return
 	}
-	// Fence for consistency points BEFORE looking anything up: the
-	// application's close(2) has already returned, but the data still lives
-	// only in the staging file until the copy below finishes. A checkpoint
-	// or commit that ran concurrently would flush+snapshot without these
-	// writes and publish a mid-copy (short) file. The external-flush counter
-	// lets those paths wait for in-flight reconciles first.
-	v.BeginExternalFlush()
-	defer v.EndExternalFlush()
 	p.mu.Lock()
 	pf := p.files[fh]
 	if pf != nil {
@@ -215,6 +231,16 @@ func (p *passthroughState) reconcile(ctx vfs.Context, v *vfs.VFS, fh uint64) {
 	if pf == nil {
 		return
 	}
+	// Fence for consistency points now that we know this is a passthrough
+	// release with data to land: the application's close(2) has already
+	// returned, but the data still lives only in the staging file until the
+	// copy below finishes. A checkpoint or commit that ran concurrently would
+	// flush+snapshot without these writes and publish a mid-copy (short) file.
+	// The external-flush counter lets those paths wait for in-flight
+	// reconciles first. Scoped past the pf==nil check so plain (non-
+	// passthrough) releases don't add spurious fence contention.
+	v.BeginExternalFlush()
+	defer v.EndExternalFlush()
 	// The kernel stops issuing passthrough I/O for this open once its release
 	// is processed, and reconcile runs from the RELEASE handler — after the
 	// application's last close, so no writes are in flight. The registration
@@ -225,12 +251,22 @@ func (p *passthroughState) reconcile(ctx vfs.Context, v *vfs.VFS, fh uint64) {
 	b := pf.b
 	done := false
 	defer func() {
-		if !done { // reconcile failed: don't reuse a backing with stale data
+		if !done {
+			// Reconcile failed: the staging file is the ONLY copy of data whose
+			// close(2) already returned 0, so do NOT delete it — preserve it as
+			// an .orphan sibling for manual recovery and log loudly. Drop the
+			// kernel registration and the live fd so the backing isn't reused
+			// with stale data.
 			if errno := p.server.UnregisterBackingFd(b.backingID); errno != 0 {
 				logger.Warnf("passthrough: UnregisterBackingFd(%d): %s", b.backingID, errno)
 			}
 			_ = b.f.Close()
-			_ = os.Remove(b.path)
+			orphan := b.path + fmt.Sprintf(".orphan-%d", pf.ino)
+			if err := os.Rename(b.path, orphan); err != nil {
+				logger.Errorf("passthrough: reconcile of ino %d FAILED and staging %s could not be preserved: %s", pf.ino, b.path, err)
+			} else {
+				logger.Errorf("passthrough: reconcile of ino %d FAILED; unreconciled data preserved at %s", pf.ino, orphan)
+			}
 		}
 	}()
 
@@ -256,7 +292,15 @@ func (p *passthroughState) reconcile(ctx vfs.Context, v *vfs.VFS, fh uint64) {
 			off += uint64(n)
 		}
 		if err != nil {
-			break // io.EOF or read error
+			if err != io.EOF {
+				// A read error mid-copy must NOT be mistaken for end-of-file:
+				// that would flush+commit a truncated file as if complete. Bail
+				// so the defer preserves the staging and the file is not sealed
+				// short.
+				logger.Errorf("passthrough: read staging %s at off %d: %s", b.path, off, err)
+				return
+			}
+			break
 		}
 	}
 	if e := v.Flush(ctx, pf.ino, fh, 0); e != 0 {

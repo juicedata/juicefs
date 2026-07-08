@@ -241,7 +241,8 @@ func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name str
 		return fuse.Status(err)
 	}
 	out.Fh = fh
-	if id, ok := fs.pt.tryOpen(entry.Inode, fh, in.Flags); ok {
+	// A freshly Create'd file is always empty.
+	if id, ok := fs.pt.tryOpen(entry.Inode, fh, in.Flags, true); ok {
 		out.OpenFlags |= fuse.FOPEN_PASSTHROUGH
 		out.BackingID = id
 	}
@@ -256,7 +257,11 @@ func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Op
 		return fuse.Status(err)
 	}
 	out.Fh = fh
-	if id, ok := fs.pt.tryOpen(Ino(in.NodeId), fh, in.Flags); ok {
+	// Passthrough only when this open observes an empty file: O_TRUNC (about
+	// to be emptied) or an already zero-length file. Otherwise the backing
+	// (which starts empty) would shadow / overwrite real content.
+	emptyAtOpen := in.Flags&uint32(syscall.O_TRUNC) != 0 || entry.Attr.Length == 0
+	if id, ok := fs.pt.tryOpen(Ino(in.NodeId), fh, in.Flags, emptyAtOpen); ok {
 		out.OpenFlags |= fuse.FOPEN_PASSTHROUGH
 		out.BackingID = id
 		return 0
