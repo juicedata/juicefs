@@ -266,7 +266,7 @@ type userGroupQuota struct {
 
 type changeLog struct {
 	Id    int64  `xorm:"pk bigserial"`
-	Entry string `xorm:"notnull"`
+	Entry string `xorm:"text notnull"`
 }
 
 type dbMeta struct {
