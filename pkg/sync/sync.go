@@ -78,12 +78,6 @@ type mixedLimiter struct {
 	local  *ratelimit.Bucket
 }
 
-// Wait applies at most one rate limit at a time. The global traffic control
-// takes precedence; when it is unavailable, it falls back to the local
-// bwlimit (if configured). Once the global service recovers, calls that are
-// currently blocked on the local bwlimit are woken up and re-run the limiter
-// so they go through the global limit again (or the local bwlimit as a
-// fallback if the global service is unavailable once more).
 func (l *mixedLimiter) Wait(count int64) {
 	if l.global != nil && l.global.healthy.Load() {
 		if l.global.wait(count) {
@@ -93,41 +87,7 @@ func (l *mixedLimiter) Wait(count int64) {
 	if l.local == nil {
 		return
 	}
-	// Reserve the tokens from the local bucket and wait for them. Take is used
-	// instead of Wait so that the sleep can be interrupted when the global
-	// service recovers.
-	d := l.local.Take(count)
-	if d <= 0 {
-		return
-	}
-	if l.global == nil {
-		time.Sleep(d)
-		return
-	}
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		// finished waiting under the local bwlimit
-	case <-l.global.recovered():
-		// The global service came back while we were waiting locally. Instead
-		// of releasing this call unlimited, re-run the limiter so it is limited
-		// again: it uses the global limit now, or falls back to the local
-		// bwlimit if the global service becomes unavailable once more.
-		//
-		// Note: the tokens reserved by l.local.Take(count) above are NOT
-		// returned here. juju/ratelimit deducts them irrevocably (its Take has
-		// no way to give tokens back), so interrupting the wait early leaves the
-		// local bucket charged for these bytes without the full corresponding
-		// delay. This is acceptable on purpose:
-		//   - the bytes are still transmitted (under the global limit after the
-		//     re-run), so the local bucket stays honest about total throughput
-		//     and won't allow a burst above bwlimit right after a failover;
-		//   - the resulting debt is bounded (at most Threads*count per recovery)
-		//     and self-heals, because while the global limit is active nobody
-		//     touches the local bucket and it refills back up to its capacity.
-		l.Wait(count)
-	}
+	l.local.Wait(count)
 }
 
 type globalLimit struct {
@@ -137,20 +97,10 @@ type globalLimit struct {
 	need    int64
 	waiters []*sync.Cond
 
-	address string
-	// localBW is the configured local bwlimit in Mbps (0 when not set), used to
-	// make the downgrade log message accurate about the fallback rate limit.
-	localBW int64
-	// healthy indicates whether the traffic-control service is currently
-	// reachable. When it turns false, callers fall back to the local bwlimit.
+	address   string
+	localBW   int64
 	healthy   atomic.Bool
 	lastProbe time.Time
-
-	// recoverMu guards recoverCh, which is closed to broadcast that the
-	// service has switched from unavailable back to available so that callers
-	// blocked on the local bwlimit can switch back to the global limit.
-	recoverMu sync.Mutex
-	recoverCh chan struct{}
 }
 type req struct {
 	// Positive numbers indicate a request, negative numbers indicate a payback.
@@ -162,33 +112,7 @@ type resp struct {
 	Expired int64 `json:"expired"` // Millisecond
 }
 
-// recovered returns a channel that is closed once the traffic-control service
-// switches from unavailable back to available. A fresh channel is created for
-// each down->up cycle, so callers should fetch it right before waiting.
-func (l *globalLimit) recovered() <-chan struct{} {
-	l.recoverMu.Lock()
-	defer l.recoverMu.Unlock()
-	if l.recoverCh == nil {
-		l.recoverCh = make(chan struct{})
-	}
-	return l.recoverCh
-}
-
-// notifyRecovered broadcasts a recovery event to all callers currently waiting
-// on the local bwlimit.
-func (l *globalLimit) notifyRecovered() {
-	l.recoverMu.Lock()
-	if l.recoverCh != nil {
-		close(l.recoverCh)
-		l.recoverCh = nil
-	}
-	l.recoverMu.Unlock()
-}
-
 func (l *globalLimit) request(ask int64) (granted int64, expired int64, err error) {
-	// Unify the health update: the service is healthy only when the whole
-	// request succeeds. Log once at the moment it switches from available to
-	// unavailable so it's clear the limiter has been downgraded.
 	defer func() {
 		ok := err == nil
 		if prev := l.healthy.Swap(ok); prev && !ok {
@@ -228,10 +152,6 @@ func (l *globalLimit) request(ask int64) (granted int64, expired int64, err erro
 	return res.Granted, res.Expired, nil
 }
 
-// wait tries to acquire `bytes` credits from the global traffic-control
-// service. It returns true when the global limit was successfully applied,
-// and false when the service is unavailable so the caller can fall back to
-// the local bwlimit.
 func (l *globalLimit) wait(bytes int64) bool {
 	l.Lock()
 	defer l.Unlock()
@@ -247,37 +167,8 @@ func (l *globalLimit) wait(bytes int64) bool {
 		me.Wait()
 	}
 
-	globalISOk := true
-	if l.balance < bytes {
-		if !l.healthy.Load() {
-			// The service is already known to be down (typically detected by a
-			// preceding waiter). Don't issue another request that would also
-			// fail; drain the queue immediately and fall back to the local
-			// bwlimit. Only the first waiter that discovers the failure pays
-			// the cost of the failing request.
-			globalISOk = false
-		} else {
-			// request credit for other waiters together
-			ask := l.need - l.balance
-			if ask >= bytes*10 {
-				// don't wait for too long
-				ask = bytes * 10
-			}
-			l.Unlock()
-			granted, expire, err := l.request(ask)
-			l.Lock()
-			if err == nil {
-				l.balance += granted
-				l.due = time.Now().Add(time.Millisecond * time.Duration(expire))
-				logger.Debugf("grant %d from %s until %s", granted, l.address, l.due)
-			} else {
-				// service is unavailable, fall back to the local bwlimit
-				globalISOk = false
-			}
-		}
-	}
-
-	if globalISOk {
+	ok := l.balance >= bytes || l.requestMoreLocked(bytes)
+	if ok {
 		l.balance -= bytes
 	}
 	l.need -= bytes
@@ -285,12 +176,32 @@ func (l *globalLimit) wait(bytes int64) bool {
 	if len(l.waiters) > 0 {
 		l.waiters[0].Signal()
 	}
-	return globalISOk
+	return ok
+}
+
+func (l *globalLimit) requestMoreLocked(bytes int64) bool {
+	if !l.healthy.Load() {
+		return false
+	}
+	// request credit for other waiters together
+	ask := l.need - l.balance
+	if ask >= bytes*10 {
+		// don't wait for too long
+		ask = bytes * 10
+	}
+	l.Unlock()
+	granted, expire, err := l.request(ask)
+	l.Lock()
+	if err != nil {
+		return false
+	}
+	l.balance += granted
+	l.due = time.Now().Add(time.Millisecond * time.Duration(expire))
+	logger.Debugf("grant %d from %s until %s", granted, l.address, l.due)
+	return true
 }
 
 func (l *globalLimit) checkBalance() {
-	// When the service is down, callers use the local bwlimit and no longer
-	// hit the global limit, so probe periodically to detect recovery.
 	if !l.healthy.Load() {
 		if time.Since(l.lastProbe) >= time.Second {
 			l.lastProbe = time.Now()
@@ -300,9 +211,6 @@ func (l *globalLimit) checkBalance() {
 				} else {
 					logger.Infof("traffic control %s recovered, switch back to global limit", l.address)
 				}
-				// Wake up callers that are currently blocked on the local
-				// bwlimit so they can switch back to the global limit.
-				l.notifyRecovered()
 			}
 		}
 		return

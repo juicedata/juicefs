@@ -408,7 +408,7 @@ go run traffic_control_server.go
 juicefs sync --traffic-control-url http://10.0.0.1:8080/token s3://src/ s3://dst/
 ```
 
-`--bwlimit` and `--traffic-control-url` can be used together, but only one of them is enforced at any given time, with the global traffic control taking precedence. When both are set, the global limit is applied as long as the traffic-control service is reachable; if the service becomes unavailable, sync automatically falls back to the local `--bwlimit`, and once the service recovers it switches back to the global limit. To make the fallback meaningful, set `--bwlimit` to a smaller per-process value than the global cap.
+`--bwlimit` and `--traffic-control-url` can be used together. For each limiter check, sync tries the global traffic-control service first; if the service is unavailable, that check falls back to the local `--bwlimit`. After the service recovers, subsequent checks use the global limit again. Ongoing waits that have already fallen back to `--bwlimit` are not interrupted by recovery. To make the fallback meaningful, set `--bwlimit` to a smaller per-process value than the global cap.
 
 If `--traffic-control-url` is used without `--bwlimit`, there is no local fallback: while the traffic-control service is unavailable, sync transfers without any rate limit (logged as `run without rate limit`), and resumes the global limit once the service recovers.
 
