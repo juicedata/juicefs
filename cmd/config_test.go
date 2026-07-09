@@ -327,6 +327,37 @@ func TestConfigAutoMinClientVersionDoesNotDowngrade(t *testing.T) {
 	}
 }
 
+func TestConfigFeatureMinClientVersionOverridesExplicitLowerVersion(t *testing.T) {
+	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
+	bucketPath := filepath.Join(t.TempDir(), "testBucket")
+	if err := Main([]string{"", "format", metaURL, "--bucket", bucketPath, testVolume}); err != nil {
+		t.Fatalf("format: %s", err)
+	}
+
+	out, err := getStdout([]string{"", "config", metaURL, "--enable-acl", "--min-client-version", "1.1.0-A", "--force"})
+	if err != nil {
+		t.Fatalf("config acl with lower min-client-version: %s", err)
+	}
+	if !strings.Contains(string(out), "min-client-version: 1.1.0-A -> 1.2.0-A") {
+		t.Fatalf("missing final min-client-version change: %s", out)
+	}
+
+	data, err := getStdout([]string{"", "config", metaURL})
+	if err != nil {
+		t.Fatalf("getStdout: %s", err)
+	}
+	var format meta.Format
+	if err = json.Unmarshal(data, &format); err != nil {
+		t.Fatalf("json unmarshal: %s", err)
+	}
+	if !format.EnableACL {
+		t.Fatalf("enable-acl should be true")
+	}
+	if format.MinClientVersion != "1.2.0-A" {
+		t.Fatalf("min-client-version %q != expect 1.2.0-A", format.MinClientVersion)
+	}
+}
+
 func TestConfigKerberosMinClientVersionWithConfirmation(t *testing.T) {
 	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
 	bucketPath := filepath.Join(t.TempDir(), "testBucket")

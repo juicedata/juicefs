@@ -167,9 +167,29 @@ func ensureMinClientVersion(format *meta.Format, required string, msg *strings.B
 			return false
 		}
 	}
-	msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", "min-client-version", format.MinClientVersion, required))
+	if msg != nil {
+		msg.WriteString("min-client-version: ")
+		msg.WriteString(format.MinClientVersion)
+		msg.WriteString(" -> ")
+		msg.WriteString(required)
+		msg.WriteByte('\n')
+	}
 	format.MinClientVersion = required
 	return true
+}
+
+func higherClientVersion(current, required string) string {
+	if current == "" {
+		return required
+	}
+	cv := version.Parse(current)
+	rv := version.Parse(required)
+	if cv != nil && rv != nil {
+		if r, err := version.CompareVersions(cv, rv); err == nil && r >= 0 {
+			return current
+		}
+	}
+	return required
 }
 
 func config(ctx *cli.Context) error {
@@ -190,6 +210,7 @@ func config(ctx *cli.Context) error {
 	originUGQuota := format.UserGroupQuota
 	var quota, storage, trash, clientVer, tier bool
 	var autoMinClientVersion string
+	var requiredMinClientVersion string
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
 	var targetTierID uint8
@@ -197,10 +218,7 @@ func config(ctx *cli.Context) error {
 	var findTier bool
 	var newTier object.Tier
 	requireMinClientVersion := func(required string) {
-		if ensureMinClientVersion(format, required, &msg) {
-			clientVer = true
-			autoMinClientVersion = format.MinClientVersion
-		}
+		requiredMinClientVersion = higherClientVersion(requiredMinClientVersion, required)
 	}
 
 	for _, flag := range ctx.LocalFlagNames() {
@@ -447,6 +465,10 @@ func config(ctx *cli.Context) error {
 				logger.Fatalf("missing required flag: --storage-class or --tag")
 			}
 		}
+	}
+	if requiredMinClientVersion != "" && ensureMinClientVersion(format, requiredMinClientVersion, &msg) {
+		clientVer = true
+		autoMinClientVersion = requiredMinClientVersion
 	}
 	if msg.Len() == 0 {
 		fmt.Println("Nothing changed.")
