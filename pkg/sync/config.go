@@ -64,6 +64,7 @@ type Config struct {
 	CheckAll          bool
 	CheckNew          bool
 	CheckChange       bool
+	NoChmtime         bool
 	MaxSize           int64
 	MinSize           int64
 	MaxAge            time.Duration
@@ -212,6 +213,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		CheckAll:             c.Bool("check-all"),
 		CheckNew:             c.Bool("check-new"),
 		CheckChange:          c.Bool("check-change"),
+		NoChmtime:            c.Bool("no-chmtime"),
 		MaxSize:              int64(utils.ParseBytes(c, "max-size", 'B')),
 		MinSize:              int64(utils.ParseBytes(c, "min-size", 'B')),
 		MaxAge:               utils.Duration(c.String("max-age")),

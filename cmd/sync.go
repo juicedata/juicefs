@@ -225,6 +225,11 @@ func syncActionFlags() []cli.Flag {
 			Name:  "check-change",
 			Usage: "check if source file changes after sync",
 		},
+		&cli.BoolFlag{
+			Name:   "no-chmtime",
+			Usage:  "do not update mtime after copy",
+			Hidden: true,
+		},
 		&cli.Int64Flag{
 			Name:  "max-failure",
 			Value: -1,
