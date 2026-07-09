@@ -1167,6 +1167,8 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 					err = copyDataRemote(src, dst, key, obj.Size())
 					if err == nil {
 						remoteCopied = true
+					} else if errors.Is(err, utils.ENOTSUP) {
+						logger.Debugf("Remote copy %s not supported, fallback to normal copy", key)
 					} else {
 						logger.Warnf("Remote copy %s failed: %s, fallback to normal copy", key, err)
 					}
