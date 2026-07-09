@@ -1003,9 +1003,12 @@ func copyDataRemote(src, dst object.ObjectStorage, key string, size int64) error
 	src, srcKey := object.UnwrapPrefix(src, key)
 	dst, dstKey := object.UnwrapPrefix(dst, key)
 	// TODO: copy multipartUploads
-	err := try(3, func() error {
-		return dst.Copy(dstKey, srcKey)
-	})
+	err := dst.Copy(dstKey, srcKey)
+	if err != nil && !errors.Is(err, utils.ENOTSUP) {
+		err = try(2, func() error {
+			return dst.Copy(dstKey, srcKey)
+		})
+	}
 	if err == nil {
 		copiedBytes.IncrInt64(size)
 		logger.Debugf("Remote copied data of %s (%d bytes) in %s", key, size, time.Since(start))
