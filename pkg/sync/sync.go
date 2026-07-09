@@ -1034,7 +1034,7 @@ func noMoreTask(tasks chan<- object.Object) {
 	close(tasks)
 }
 
-func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
+func fetchTask(tasks chan object.Object, config *Config) (t object.Object, done func()) {
 	defer func() {
 		if e, ok := recover().(error); ok && e.Error() == "send on closed channel" {
 			logger.Debugf("no more task, continue with current one")
@@ -1063,7 +1063,7 @@ AGAIN:
 	if size == markChecksum {
 		size = withoutSize(t).Size()
 	}
-	if size >= maxBlock*2 {
+	if size >= maxBlock*2 && !shouldRemoteCopy(t, config) {
 		done := make(chan struct{})
 		h := &holder{done: done}
 		n := min(int(size)/maxBlock, 20)
@@ -1078,7 +1078,7 @@ AGAIN:
 
 func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager, uploads multipartUploads) {
 	for {
-		obj, done := fetchTask(tasks)
+		obj, done := fetchTask(tasks, config)
 		if obj == nil {
 			break
 		}
