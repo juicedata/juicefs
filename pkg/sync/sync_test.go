@@ -19,12 +19,16 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
+	gosync "sync"
 	"testing"
 	"time"
 
@@ -305,6 +309,73 @@ func TestParseRules(t *testing.T) {
 		if gotRules := parseIncludeRules(tt.args); !reflect.DeepEqual(gotRules, tt.wantRules) {
 			t.Errorf("got %+v, want %+v", gotRules, tt.wantRules)
 		}
+	}
+}
+
+func TestGlobalLimitBatchesSmallRequests(t *testing.T) {
+	var mu gosync.Mutex
+	var asks []int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var in req
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			t.Errorf("decode request: %s", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		mu.Lock()
+		asks = append(asks, in.Bytes)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(resp{Granted: in.Bytes, Expired: 1000}); err != nil {
+			t.Errorf("encode response: %s", err)
+		}
+	}))
+	defer server.Close()
+
+	limit := &globalLimit{address: server.URL}
+	for sent := int64(0); sent < globalLimitRequestSize; sent += bufferSize {
+		limit.wait(bufferSize, globalLimitRequestSize)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(asks) != 1 {
+		t.Fatalf("small waits should reuse one global traffic-control grant, got %d requests: %v", len(asks), asks)
+	}
+	if asks[0] != globalLimitRequestSize {
+		t.Fatalf("request size = %d, want %d", asks[0], globalLimitRequestSize)
+	}
+}
+
+func TestGlobalLimitRequestBatchCanBeCappedByRemainingSize(t *testing.T) {
+	var mu gosync.Mutex
+	var ask int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var in req
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			t.Errorf("decode request: %s", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		mu.Lock()
+		ask = in.Bytes
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(resp{Granted: in.Bytes, Expired: 1000}); err != nil {
+			t.Errorf("encode response: %s", err)
+		}
+	}))
+	defer server.Close()
+
+	limit := &globalLimit{address: server.URL}
+	limit.wait(1024, 1024)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if ask != 1024 {
+		t.Fatalf("request size = %d, want 1024", ask)
 	}
 }
 
