@@ -51,7 +51,6 @@ const (
 	defaultPartSize              = 5 << 20
 	bufferSize                   = 32 << 10
 	maxBlock                     = defaultPartSize * 2
-	globalLimitRequestSize       = maxBlock
 	multipartCheckpointThreshold = 4 << 30
 	markDeleteSrc                = -1
 	markDeleteDst                = -2
@@ -80,18 +79,11 @@ type mixedLimiter struct {
 }
 
 func (l *mixedLimiter) Wait(count int64) {
-	l.waitWithMin(count, 0)
-}
-
-func (l *mixedLimiter) waitWithMin(count, minGlobalRequest int64) {
-	if count <= 0 {
-		return
-	}
 	if l.local != nil {
 		l.local.Wait(count)
 	}
 	if l.global != nil {
-		l.global.wait(count, minGlobalRequest)
+		l.global.wait(count)
 	}
 }
 
@@ -141,7 +133,7 @@ func (l *globalLimit) request(ask int64) (int64, int64, error) {
 	return res.Granted, res.Expired, nil
 }
 
-func (l *globalLimit) wait(bytes, minRequest int64) {
+func (l *globalLimit) wait(bytes int64) {
 	l.Lock()
 	defer l.Unlock()
 	if bytes <= 0 || l.balance >= bytes && len(l.waiters) == 0 {
@@ -157,13 +149,9 @@ func (l *globalLimit) wait(bytes, minRequest int64) {
 	}
 
 	if l.balance < bytes {
-		// Request credit for other waiters together.
+		// request credit for other waiters together
 		ask := l.need - l.balance
-		if minRequest > 0 {
-			if ask < minRequest {
-				ask = minRequest
-			}
-		} else if ask >= bytes*10 {
+		if ask >= bytes*10 {
 			// don't wait for too long
 			ask = bytes * 10
 		}
@@ -710,41 +698,20 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 	}
 	r := &chksumReader{in, 0, calChksum}
 	defer in.Close()
-	err = dst.Put(ctx, key, &withProgress{r: r, left: size})
+	err = dst.Put(ctx, key, &withProgress{r})
 	return r.chksum, err
 }
 
 type withProgress struct {
-	r    io.Reader
-	left int64
+	r io.Reader
 }
 
 func (w *withProgress) Read(b []byte) (int, error) {
-	if limiter != nil && len(b) > 0 {
-		n := int64(len(b))
-		minGlobalRequest := int64(0)
-		if w.left >= 0 {
-			if w.left == 0 {
-				n = 0
-			} else {
-				if n > w.left {
-					n = w.left
-				}
-				minGlobalRequest = min(w.left, globalLimitRequestSize)
-			}
-		}
-		limiter.waitWithMin(n, minGlobalRequest)
+	if limiter != nil {
+		limiter.Wait(int64(len(b)))
 	}
 	n, err := w.r.Read(b)
-	if w.left >= 0 {
-		w.left -= int64(n)
-		if w.left < 0 {
-			w.left = 0
-		}
-	}
-	if copiedBytes != nil {
-		copiedBytes.IncrInt64(int64(n))
-	}
+	copiedBytes.IncrInt64(int64(n))
 	return n, err
 }
 
@@ -789,7 +756,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		defer in.Close()
 		r := &chksumReader{in, 0, calChksum}
-		pr := &withProgress{r: r, left: size}
+		pr := &withProgress{r}
 		err = utils.ErrNotSUP
 		if obj, ok := dst.(object.SupportUploadPartStream); ok {
 			part, err = obj.UploadPartStream(key, uploadID, num+1, pr)
