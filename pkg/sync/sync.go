@@ -1017,7 +1017,7 @@ func copyDataRemote(src, dst object.ObjectStorage, key string, size int64) error
 }
 
 func shouldRemoteCopy(obj object.Object, config *Config) bool {
-	return config.RemoteCopy && !obj.IsDir() && !obj.IsSymlink()
+	return config.RemoteCopy && !obj.IsSymlink()
 }
 
 type holder struct {
