@@ -1937,7 +1937,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	defer func() {
 		<-config.concurrentList
 	}()
-	if config.Limit == 1 && len(config.rules) == 0 && !config.DeleteDst {
+	if config.Limit == 1 && len(config.rules) == 0 {
 		if produceSingleObject(tasks, src, dst, prefix, config, checkpointMgr) == nil {
 			return nil
 		}

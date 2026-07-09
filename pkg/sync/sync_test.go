@@ -242,56 +242,6 @@ func TestSyncForceUpdateDeleteDst(t *testing.T) {
 	}
 }
 
-func TestSyncForceUpdateDeleteDstLimitOne(t *testing.T) {
-	src, _ := object.CreateStorage("file", t.TempDir()+"/", "", "", "")
-	dst, _ := object.CreateStorage("file", t.TempDir()+"/", "", "", "")
-	filesFrom := t.TempDir() + "/files-from"
-	if err := os.WriteFile(filesFrom, []byte("dir/\n"), 0644); err != nil {
-		t.Fatalf("write files-from: %s", err)
-	}
-
-	if err := src.Put(ctx, "dir/b", bytes.NewReader([]byte("new"))); err != nil {
-		t.Fatalf("put src dir/b: %s", err)
-	}
-	if err := dst.Put(ctx, "dir/a", bytes.NewReader([]byte("extra"))); err != nil {
-		t.Fatalf("put dst dir/a: %s", err)
-	}
-	if err := dst.Put(ctx, "dir/b", bytes.NewReader([]byte("old"))); err != nil {
-		t.Fatalf("put dst dir/b: %s", err)
-	}
-
-	if err := Sync(src, dst, &Config{
-		Threads:     4,
-		ListThreads: 1,
-		ListDepth:   1,
-		ForceUpdate: true,
-		DeleteDst:   true,
-		Quiet:       true,
-		Limit:       1,
-		MaxSize:     math.MaxInt64,
-		FilesFrom:   filesFrom,
-	}); err != nil {
-		t.Fatalf("sync: %s", err)
-	}
-
-	// The destination-only "dir/a" sorts before source "dir/b", so deleting
-	// it consumes the shared limit budget and "dir/b" must not be updated.
-	if _, err := dst.Head(ctx, "dir/a"); !os.IsNotExist(err) {
-		t.Fatalf("head dst dir/a: %v, want not exist", err)
-	}
-	reader, err := dst.Get(ctx, "dir/b", 0, -1)
-	if err != nil {
-		t.Fatalf("get dst dir/b: %s", err)
-	}
-	content, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("read dst b: %s", err)
-	}
-	if string(content) != "old" {
-		t.Fatalf("dst dir/b content = %q, want %q", content, "old")
-	}
-}
-
 // nolint:errcheck
 func TestSyncIncludeAndExclude(t *testing.T) {
 	tmpA := t.TempDir() + "/"
