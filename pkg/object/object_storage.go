@@ -76,9 +76,6 @@ func (f *file) Group() string     { return f.group }
 func (f *file) Mode() os.FileMode { return f.mode }
 func (f *file) IsSymlink() bool   { return f.isSymlink }
 
-// NewSymlink returns a File marked as a symbolic link at key. The target is only
-// used to set the Size (len(target)), so the entry can be handled as a symlink
-// even when Head can't resolve it by following the link.
 func NewSymlink(key, target string) File {
 	return &file{
 		obj{key, int64(len(target)), time.Now(), false, "", ""},
