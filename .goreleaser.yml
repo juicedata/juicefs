@@ -61,6 +61,15 @@ builds:
       - linux
     goarch:
       - arm64
+  - id: juicefs-linux-riscv64
+    env:
+      - CC=/usr/local/riscv64-linux-musl-cross/bin/riscv64-linux-musl-cc
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}} -linkmode external -extldflags '-static'
+    main: .
+    goos:
+      - linux
+    goarch:
+      - riscv64
 checksum:
   name_template: 'checksums.txt'
 snapshot:

@@ -26,6 +26,14 @@ ifdef STATIC
 	export CC
 endif
 
+# RISC-V build knobs (override in command line when needed):
+# make juicefs.riscv64 RISCV64_GORISCV64='rva23u64,zabha,zacas' \
+#     RISCV64_ASM_DEFS='-D HasZvknha -D EnableSmallSizeMemVector'
+RISCV64_CC ?= /usr/local/gcc
+RISCV64_GORISCV64 ?=
+RISCV64_ASM_DEFS ?=
+RISCV64_ASMFLAGS ?= github.com/juicedata/juicefs/...='$(RISCV64_ASM_DEFS)'
+
 juicefs: Makefile cmd/*.go pkg/*/*.go go.*
 	go version
 	go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -o juicefs .
@@ -67,6 +75,22 @@ juicefs.loongarch: Makefile cmd/*.go pkg/*/*.go go.*
 # Please execute the `brew install FiloSottile/musl-cross/musl-cross` command before using it.
 juicefs.linux:
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-musl-gcc CGO_LDFLAGS="-static" go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)"  -o juicefs .
+
+# This is cross-compiling RISC-V in a Linux environment on x86_64 (amd64) or aarch64 (arm64) architecture.
+# 1. Install RISC-V musl cross-compile toolchain at /usr/local/riscv64-linux-musl-cross
+#    or override RISCV64_CC to your toolchain path.
+# 2. Run `make juicefs.riscv64` to build the RISC-V binary.
+# 3. Optionally set RISCV64_GORISCV64 for ISA extensions and RISCV64_ASM_DEFS for assembly defines.
+#    Example:
+#      make juicefs.riscv64 RISCV64_GORISCV64='rva23u64,zabha,zacas' \
+#          RISCV64_ASM_DEFS='-D HasZvknha -D EnableSmallSizeMemVector'
+juicefs.riscv64: Makefile cmd/*.go pkg/*/*.go go.*
+	CGO_ENABLED=1 GOARCH=riscv64 GORISCV64="$(RISCV64_GORISCV64)" \
+	CC="$(RISCV64_CC)" \
+	go build -gcflags="$(GCFLAGS)" \
+		-ldflags="$(LDFLAGS)" \
+		-asmflags="$(RISCV64_ASMFLAGS)" \
+		-o juicefs .
 
 /usr/local/include/winfsp:
 	sudo mkdir -p /usr/local/include/winfsp
