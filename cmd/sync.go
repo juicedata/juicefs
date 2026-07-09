@@ -225,6 +225,11 @@ func syncActionFlags() []cli.Flag {
 			Name:  "check-change",
 			Usage: "check if source file changes after sync",
 		},
+		&cli.BoolFlag{
+			Name:   "no-chmtime",
+			Usage:  "do not update mtime after copy",
+			Hidden: true,
+		},
 		&cli.Int64Flag{
 			Name:  "max-failure",
 			Value: -1,
@@ -233,6 +238,10 @@ func syncActionFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "dry",
 			Usage: "don't copy file",
+		},
+		&cli.BoolFlag{
+			Name:  "remote-copy",
+			Usage: "enable server-side copy when source and destination support it",
 		},
 		&cli.StringFlag{
 			Name:  "mountpoint",

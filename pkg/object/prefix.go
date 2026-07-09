@@ -35,6 +35,18 @@ func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 	return &withPrefix{os, prefix}
 }
 
+// UnwrapPrefix returns the underlying storage and key with all prefixes applied.
+func UnwrapPrefix(os ObjectStorage, key string) (ObjectStorage, string) {
+	for {
+		p, ok := os.(*withPrefix)
+		if !ok {
+			return os, key
+		}
+		os = p.os
+		key = p.prefix + key
+	}
+}
+
 // DirStorage returns an ObjectStorage representing the parent directory of s.
 // If s already represents a directory (String() ends with "/"), it is returned unchanged.
 // For file-like storages, returns a new storage rooted at the parent directory.
@@ -170,7 +182,7 @@ func (p *withPrefix) Put(key string, in io.Reader, getters ...AttrGetter) error 
 }
 
 func (p *withPrefix) Copy(dst, src string) error {
-	return p.os.Copy(dst, src)
+	return p.os.Copy(p.prefix+dst, p.prefix+src)
 }
 
 func (p *withPrefix) Delete(key string, getters ...AttrGetter) error {

@@ -992,6 +992,34 @@ func copyData(src, dst object.ObjectStorage, key string, size int64, mtime time.
 	return srcChksum, err
 }
 
+func canRemoteCopy(src, dst object.ObjectStorage) bool {
+	src, _ = object.UnwrapPrefix(src, "")
+	dst, _ = object.UnwrapPrefix(dst, "")
+	return src.String() == dst.String()
+}
+
+func copyDataRemote(src, dst object.ObjectStorage, key string, size int64) error {
+	start := time.Now()
+	src, srcKey := object.UnwrapPrefix(src, key)
+	dst, dstKey := object.UnwrapPrefix(dst, key)
+	// TODO: copy multipartUploads
+	err := dst.Copy(dstKey, srcKey)
+	if err != nil && !errors.Is(err, utils.ENOTSUP) {
+		err = try(2, func() error {
+			return dst.Copy(dstKey, srcKey)
+		})
+	}
+	if err == nil {
+		copiedBytes.IncrInt64(size)
+		logger.Debugf("Remote copied data of %s (%d bytes) in %s", key, size, time.Since(start))
+	}
+	return err
+}
+
+func shouldRemoteCopy(obj object.Object, config *Config) bool {
+	return config.RemoteCopy && !obj.IsSymlink()
+}
+
 type holder struct {
 	done chan struct{}
 }
@@ -1006,7 +1034,7 @@ func noMoreTask(tasks chan<- object.Object) {
 	close(tasks)
 }
 
-func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
+func fetchTask(tasks chan object.Object, config *Config) (t object.Object, done func()) {
 	defer func() {
 		if e, ok := recover().(error); ok && e.Error() == "send on closed channel" {
 			logger.Debugf("no more task, continue with current one")
@@ -1035,7 +1063,7 @@ AGAIN:
 	if size == markChecksum {
 		size = withoutSize(t).Size()
 	}
-	if size >= maxBlock*2 {
+	if size >= maxBlock*2 && !shouldRemoteCopy(t, config) {
 		done := make(chan struct{})
 		h := &holder{done: done}
 		n := min(int(size)/maxBlock, 20)
@@ -1050,7 +1078,7 @@ AGAIN:
 
 func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager, uploads multipartUploads) {
 	for {
-		obj, done := fetchTask(tasks)
+		obj, done := fetchTask(tasks, config)
 		if obj == nil {
 			break
 		}
@@ -1128,13 +1156,26 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			}
 			var err error
 			var srcChksum uint32
+			var remoteCopied bool
 
 			if config.Links && obj.IsSymlink() {
 				if err = copyLink(src, dst, key); err != nil {
 					logger.Errorf("copy link %s failed: %s", key, err)
 				}
 			} else {
-				srcChksum, err = copyData(src, dst, key, obj.Size(), obj.Mtime(), config.CheckAll || config.CheckNew, uploads)
+				if shouldRemoteCopy(obj, config) {
+					err = copyDataRemote(src, dst, key, obj.Size())
+					if err == nil {
+						remoteCopied = true
+					} else if errors.Is(err, utils.ENOTSUP) {
+						logger.Debugf("Remote copy %s not supported, fallback to normal copy", key)
+					} else {
+						logger.Warnf("Remote copy %s failed: %s, fallback to normal copy", key, err)
+					}
+				}
+				if !remoteCopied {
+					srcChksum, err = copyData(src, dst, key, obj.Size(), obj.Mtime(), config.CheckAll || config.CheckNew, uploads)
+				}
 			}
 
 			if err == nil && config.CheckChange {
@@ -1148,7 +1189,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 				}
 			}
 			if err == nil {
-				if mc, ok := dst.(object.MtimeChanger); ok {
+				if mc, ok := dst.(object.MtimeChanger); ok && !config.NoChmtime {
 					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ENOTSUP) {
 						logger.Warnf("Update mtime of %s: %s", key, err)
 					}
@@ -2026,6 +2067,17 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 
 // Sync syncs all the keys between to object storage
 func Sync(src, dst object.ObjectStorage, config *Config) error {
+	if config.RemoteCopy && (object.IsEncrypted(src) || object.IsEncrypted(dst)) {
+		return fmt.Errorf("--remote-copy cannot be used with encrypted object storage")
+	}
+	if config.RemoteCopy && (config.CheckAll || config.CheckNew) {
+		return fmt.Errorf("--remote-copy cannot be used with --check-all or --check-new")
+	}
+	if config.RemoteCopy && !canRemoteCopy(src, dst) {
+		logger.Warnf("Remote copy is not supported between %s and %s, fallback to normal copy", src, dst)
+		config.RemoteCopy = false
+	}
+
 	var checkpointMgr *CheckpointManager
 	var checkpoint *Checkpoint
 	var uploads multipartUploads

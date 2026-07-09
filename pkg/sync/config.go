@@ -39,6 +39,7 @@ type Config struct {
 	Perms             bool
 	MaxFailure        int64
 	Dry               bool
+	RemoteCopy        bool
 	DeleteSrc         bool
 	DeleteDst         bool
 	MatchFullPath     bool
@@ -63,6 +64,7 @@ type Config struct {
 	CheckAll          bool
 	CheckNew          bool
 	CheckChange       bool
+	NoChmtime         bool
 	MaxSize           int64
 	MinSize           int64
 	MaxAge            time.Duration
@@ -188,6 +190,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Perms:                c.Bool("perms"),
 		Dirs:                 c.Bool("dirs"),
 		Dry:                  c.Bool("dry"),
+		RemoteCopy:           c.Bool("remote-copy"),
 		MaxFailure:           c.Int64("max-failure"),
 		DeleteSrc:            c.Bool("delete-src"),
 		DeleteDst:            c.Bool("delete-dst"),
@@ -210,6 +213,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		CheckAll:             c.Bool("check-all"),
 		CheckNew:             c.Bool("check-new"),
 		CheckChange:          c.Bool("check-change"),
+		NoChmtime:            c.Bool("no-chmtime"),
 		MaxSize:              int64(utils.ParseBytes(c, "max-size", 'B')),
 		MinSize:              int64(utils.ParseBytes(c, "min-size", 'B')),
 		MaxAge:               utils.Duration(c.String("max-age")),

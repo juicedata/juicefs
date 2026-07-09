@@ -464,7 +464,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 
 	dstKey := "test-copy"
 	defer s.Delete(dstKey)
-	err = s.Copy(fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix))
+	err = s.Copy(dstKey, "test")
 	if err != nil && err != notSupported {
 		t.Fatalf("copy failed: %s", err.Error())
 	}

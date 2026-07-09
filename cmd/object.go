@@ -178,6 +178,20 @@ func (j *juiceFS) Put(key string, in io.Reader, getters ...object.AttrGetter) (e
 	return nil
 }
 
+func (j *juiceFS) Copy(dst, src string) error {
+	if strings.HasSuffix(dst, "/") {
+		return j.jfs.MkdirAll(ctx, path.Dir(j.path(dst)), 0777, j.umask)
+	}
+	eno := j.jfs.Clone(ctx, j.path(src), j.path(dst), false)
+	if eno == syscall.ENOENT {
+		if eno = j.jfs.MkdirAll(ctx, path.Dir(j.path(dst)), 0777, j.umask); eno != 0 {
+			return toError(eno)
+		}
+		eno = j.jfs.Clone(ctx, j.path(src), j.path(dst), false)
+	}
+	return toError(eno)
+}
+
 func (j *juiceFS) Delete(key string, getters ...object.AttrGetter) error {
 	if key == "" {
 		return nil
