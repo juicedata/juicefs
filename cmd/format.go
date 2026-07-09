@@ -509,14 +509,15 @@ func format(c *cli.Context) error {
 			}
 		}
 
+		var minClientVersionMsg strings.Builder
 		if format.EnableACL {
-			format.MinClientVersion = "1.2.0-A"
+			ensureMinClientVersion(format, "1.2.0-A", &minClientVersionMsg)
 		}
 		if format.RangerRestUrl != "" || format.RangerService != "" {
-			format.MinClientVersion = "1.3.0-A"
+			ensureMinClientVersion(format, "1.3.0-A", &minClientVersionMsg)
 		}
 		if format.KerbConf != "" {
-			format.MinClientVersion = "1.4.0-A"
+			ensureMinClientVersion(format, "1.4.0-A", &minClientVersionMsg)
 		}
 
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {

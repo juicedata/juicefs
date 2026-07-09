@@ -159,6 +159,19 @@ func userConfirmed() bool {
 	return false
 }
 
+func ensureMinClientVersion(format *meta.Format, required string, msg *strings.Builder) bool {
+	current := version.Parse(format.MinClientVersion)
+	target := version.Parse(required)
+	if current != nil && target != nil {
+		if r, err := version.CompareVersions(current, target); err == nil && r >= 0 {
+			return false
+		}
+	}
+	msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", "min-client-version", format.MinClientVersion, required))
+	format.MinClientVersion = required
+	return true
+}
+
 func config(ctx *cli.Context) error {
 	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
@@ -176,12 +189,19 @@ func config(ctx *cli.Context) error {
 	originDirStats := format.DirStats
 	originUGQuota := format.UserGroupQuota
 	var quota, storage, trash, clientVer, tier bool
+	var autoMinClientVersion string
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
 	var targetTierID uint8
 	var currentTier object.Tier
 	var findTier bool
 	var newTier object.Tier
+	requireMinClientVersion := func(required string) {
+		if ensureMinClientVersion(format, required, &msg) {
+			clientVer = true
+			autoMinClientVersion = format.MinClientVersion
+		}
+	}
 
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
@@ -358,10 +378,8 @@ func config(ctx *cli.Context) error {
 			if enableACL := ctx.Bool(flag); enableACL != format.EnableACL {
 				if enableACL {
 					msg.WriteString(fmt.Sprintf("%s: %v -> %v\n", flag, format.EnableACL, true))
-					msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", "min-client-version", format.MinClientVersion, "1.2.0-A"))
 					format.EnableACL = true
-					format.MinClientVersion = "1.2.0-A"
-					clientVer = true
+					requireMinClientVersion("1.2.0-A")
 				} else {
 					return errors.New("cannot disable acl")
 				}
@@ -370,25 +388,23 @@ func config(ctx *cli.Context) error {
 			if newUrl := ctx.String(flag); newUrl != format.RangerRestUrl {
 				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.RangerRestUrl, newUrl))
 				format.RangerRestUrl = newUrl
-				format.MinClientVersion = "1.3.0-A"
-				clientVer = true
+				requireMinClientVersion("1.3.0-A")
 			}
 		case "ranger-service":
 			if newService := ctx.String(flag); newService != format.RangerService {
 				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.RangerService, newService))
 				format.RangerService = newService
-				format.MinClientVersion = "1.3.0-A"
-				clientVer = true
+				requireMinClientVersion("1.3.0-A")
 			}
 		case "kerberos-config-file":
 			msg.WriteString(fmt.Sprintf("%s: updated\n", flag))
 			format.KerbConf = readKerbConf(ctx.String(flag))
-			format.MinClientVersion = "1.4.0-A"
-			clientVer = true
+			requireMinClientVersion("1.4.0-A")
 		case "tier":
 			if ctx.IsSet("bucket") || ctx.IsSet("access-key") || ctx.IsSet("secret-key") || ctx.IsSet("session-token") {
 				logger.Fatalf("Current tiered storage does not support multi-bucket mode")
 			}
+			var tierChanged bool
 			targetTierID = uint8(ctx.Int(flag))
 			currentTier, findTier = format.Tiers[targetTierID]
 			if !findTier {
@@ -406,6 +422,7 @@ func config(ctx *cli.Context) error {
 				if !findTier || currentTier.Sc != newTier.Sc {
 					msg.WriteString(fmt.Sprintf("set tier %d storage-class: %s\n", targetTierID, newTier.Sc))
 					tier = true
+					tierChanged = true
 				}
 			}
 
@@ -418,10 +435,14 @@ func config(ctx *cli.Context) error {
 				if !findTier || currentTier.Tag != newTier.Tag {
 					msg.WriteString(fmt.Sprintf("set tier %d tag: %s\n", targetTierID, newTier.Tag))
 					tier = true
+					tierChanged = true
 				}
 			}
 			if change {
 				format.Tiers[targetTierID] = newTier
+				if targetTierID != 0 && tierChanged {
+					requireMinClientVersion("1.4.0-A")
+				}
 			} else {
 				logger.Fatalf("missing required flag: --storage-class or --tag")
 			}
@@ -477,11 +498,14 @@ func config(ctx *cli.Context) error {
 			}
 		}
 		if clientVer {
+			confirmClientVer := false
+			if autoMinClientVersion != "" {
+				warn("Clients below version %s will be rejected after modification.", autoMinClientVersion)
+				confirmClientVer = true
+			}
 			if format.CheckVersion() != nil {
 				warn("Clients with the same version of this will be rejected after modification.")
-				if !yes && !userConfirmed() {
-					return fmt.Errorf("Aborted.")
-				}
+				confirmClientVer = true
 			}
 
 			// check all clients
@@ -494,7 +518,11 @@ func config(ctx *cli.Context) error {
 				}
 				if warnMsg != "" {
 					fmt.Println(warnMsg)
+					confirmClientVer = true
 				}
+			}
+			if confirmClientVer && !yes && !userConfirmed() {
+				return fmt.Errorf("Aborted.")
 			}
 		}
 		if tier {
