@@ -1370,7 +1370,7 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 	}
 
 	var dstkeys <-chan object.Object
-	if config.ForceUpdate {
+	if config.ForceUpdate && !config.DeleteDst {
 		t := make(chan object.Object)
 		close(t)
 		dstkeys = t
@@ -2016,7 +2016,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		dcp = commonPrefix // search common prefix in dst
 	}
 	var dstkeys <-chan object.Object
-	if config.ForceUpdate {
+	if config.ForceUpdate && !config.DeleteDst {
 		t := make(chan object.Object)
 		close(t)
 		dstkeys = t
