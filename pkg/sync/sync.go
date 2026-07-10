@@ -159,6 +159,9 @@ func (l *globalLimit) wait(bytes int64) bool {
 		l.balance -= bytes
 		return true
 	}
+	if !l.healthy.Load() {
+		return false
+	}
 	l.need += bytes
 
 	var me = sync.NewCond(l)
@@ -202,9 +205,10 @@ func (l *globalLimit) requestMoreLocked(bytes int64) bool {
 }
 
 func (l *globalLimit) checkBalance() {
+	now := time.Now()
 	if !l.healthy.Load() {
 		if time.Since(l.lastProbe) >= time.Second {
-			l.lastProbe = time.Now()
+			l.lastProbe = now
 			if _, _, err := l.request(0); err == nil {
 				if l.localBW > 0 {
 					logger.Infof("traffic control %s recovered, switch back to global limit from local bwlimit %s", l.address, utils.Mbps(l.localBW))
@@ -215,7 +219,6 @@ func (l *globalLimit) checkBalance() {
 		}
 		return
 	}
-	now := time.Now()
 	l.Lock()
 	if l.balance > 0 && l.need == 0 && l.due.Before(now) {
 		payback := l.balance
