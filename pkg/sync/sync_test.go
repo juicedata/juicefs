@@ -177,6 +177,71 @@ func TestSync(t *testing.T) {
 	}
 }
 
+// Regression test for https://github.com/juicedata/juicefs/issues/7216.
+// --force-update may skip listing the destination only when --delete-dst does
+// not need that listing to find extraneous objects.
+func TestSyncForceUpdateDeleteDst(t *testing.T) {
+	testCases := []struct {
+		name        string
+		listThreads int
+		listDepth   int
+	}{
+		{name: "single listing thread", listThreads: 1, listDepth: 1},
+		{name: "parallel listing", listThreads: 2, listDepth: 2},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			src, _ := object.CreateStorage("file", t.TempDir()+"/", "", "", "")
+			dst, _ := object.CreateStorage("file", t.TempDir()+"/", "", "", "")
+
+			if err := src.Put(ctx, "shared/file", bytes.NewReader([]byte("new"))); err != nil {
+				t.Fatalf("put src shared/file: %s", err)
+			}
+			if err := src.Put(ctx, "src-only/file", bytes.NewReader([]byte("source"))); err != nil {
+				t.Fatalf("put src src-only/file: %s", err)
+			}
+			if err := dst.Put(ctx, "shared/file", bytes.NewReader([]byte("old"))); err != nil {
+				t.Fatalf("put dst shared/file: %s", err)
+			}
+			if err := dst.Put(ctx, "dst-only/file", bytes.NewReader([]byte("extra"))); err != nil {
+				t.Fatalf("put dst dst-only/file: %s", err)
+			}
+
+			if err := Sync(src, dst, &Config{
+				Threads:     4,
+				ListThreads: testCase.listThreads,
+				ListDepth:   testCase.listDepth,
+				ForceUpdate: true,
+				DeleteDst:   true,
+				Quiet:       true,
+				Limit:       -1,
+				MaxSize:     math.MaxInt64,
+			}); err != nil {
+				t.Fatalf("sync: %s", err)
+			}
+
+			reader, err := dst.Get(ctx, "shared/file", 0, -1)
+			if err != nil {
+				t.Fatalf("get dst shared/file: %s", err)
+			}
+			content, err := io.ReadAll(reader)
+			if err != nil {
+				t.Fatalf("read dst shared/file: %s", err)
+			}
+			if string(content) != "new" {
+				t.Fatalf("shared/file content = %q, want %q", content, "new")
+			}
+			if _, err := dst.Head(ctx, "src-only/file"); err != nil {
+				t.Fatalf("head dst src-only/file: %s", err)
+			}
+			if _, err := dst.Head(ctx, "dst-only/file"); !os.IsNotExist(err) {
+				t.Fatalf("head dst dst-only/file: %v, want not exist", err)
+			}
+		})
+	}
+}
+
 // nolint:errcheck
 func TestSyncIncludeAndExclude(t *testing.T) {
 	tmpA := t.TempDir() + "/"
