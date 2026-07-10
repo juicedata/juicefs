@@ -343,7 +343,7 @@ The sync client and your traffic-control server communicate via a simple JSON-ov
 | Field | Type | Description |
 |-------|------|-------------|
 | `granted` | int64 | Number of bytes actually granted (equal to the requested amount for a blocking server). |
-| `expired` | int64 | Token validity in **milliseconds**. The client returns unused tokens before this expiration. |
+| `expired` | int64 | Token validity in **milliseconds**. After this window elapses, the client returns any unused tokens, provided it currently has no pending bandwidth demand. |
 
 The client blocks on the POST request until the server responds, so the server's internal token bucket (or any other rate-limiting logic) is what enforces the global limit.
 
@@ -408,7 +408,9 @@ go run traffic_control_server.go
 juicefs sync --traffic-control-url http://10.0.0.1:8080/token s3://src/ s3://dst/
 ```
 
-`--bwlimit` and `--traffic-control-url` can be used together: `--bwlimit` sets a limit for each individual process, while `--traffic-control-url` enforces a global limit across all processes.
+`--bwlimit` and `--traffic-control-url` can be used together. For each limiter check, sync tries the global traffic-control service first; if the service is unavailable, that check falls back to the local `--bwlimit`. After the service recovers, subsequent checks use the global limit again. Ongoing waits that have already fallen back to `--bwlimit` are not interrupted by recovery. To make the fallback meaningful, set `--bwlimit` to a smaller per-process value than the global cap.
+
+If `--traffic-control-url` is used without `--bwlimit`, there is no local fallback: while the traffic-control service is unavailable, sync transfers without any rate limit (logged as `run without rate limit`), and resumes the global limit once the service recovers.
 
 ## Observation {#observation}
 

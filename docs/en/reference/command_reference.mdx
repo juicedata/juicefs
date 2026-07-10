@@ -999,8 +999,8 @@ In which:
 |`--list-depth=1` <VersionAdd>1.1</VersionAdd> |Depth of concurrent `list` operation, default to 1. Read [concurrent `list`](../guide/sync.md#concurrent-list) to learn its usage.|
 |`--no-https`|Do not use HTTPS, default to false.|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |the storage class for destination|
-|`--bwlimit=0`|Limit bandwidth in Mbps default to 0 which means unlimited.|
-|`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|URL of the global traffic control service for coordinating bandwidth across multiple sync instances. The service should expose an HTTP POST endpoint with request body `{"bytes": <requested-bytes>}` and response body `{"granted": <granted-bytes>, "expired": <expire-time-ms>}`.|
+|`--bwlimit=0`|Limit bandwidth in Mbps default to 0 which means unlimited. When used together with `--traffic-control-url`, it acts as a per-process fallback while the global traffic control service is unavailable. Fallback waits already in progress continue under `--bwlimit`, and subsequent waits return to the global limit after recovery. Set it to a smaller value than the global cap to make the fallback meaningful.|
+|`--traffic-control-url value` <VersionAdd>1.4</VersionAdd>|URL of the global traffic control service for coordinating bandwidth across multiple sync instances. The service should expose an HTTP POST endpoint with request body `{"bytes": <requested-bytes>}` and response body `{"granted": <granted-bytes>, "expired": <expire-time-ms>}`. It is tried before `--bwlimit`; if unreachable, current limiter checks fall back to `--bwlimit` (or no limit if unset), and subsequent checks use the global limit again after recovery.|
 
 Usage and API contract for `--traffic-control-url`:
 

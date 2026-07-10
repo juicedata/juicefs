@@ -79,12 +79,15 @@ type mixedLimiter struct {
 }
 
 func (l *mixedLimiter) Wait(count int64) {
-	if l.local != nil {
-		l.local.Wait(count)
+	if l.global != nil && l.global.healthy.Load() {
+		if l.global.wait(count) {
+			return
+		}
 	}
-	if l.global != nil {
-		l.global.wait(count)
+	if l.local == nil {
+		return
 	}
+	l.local.Wait(count)
 }
 
 type globalLimit struct {
@@ -94,7 +97,10 @@ type globalLimit struct {
 	need    int64
 	waiters []*sync.Cond
 
-	address string
+	address   string
+	localBW   int64
+	healthy   atomic.Bool
+	lastProbe time.Time
 }
 type req struct {
 	// Positive numbers indicate a request, negative numbers indicate a payback.
@@ -106,7 +112,17 @@ type resp struct {
 	Expired int64 `json:"expired"` // Millisecond
 }
 
-func (l *globalLimit) request(ask int64) (int64, int64, error) {
+func (l *globalLimit) request(ask int64) (granted int64, expired int64, err error) {
+	defer func() {
+		ok := err == nil
+		if prev := l.healthy.Swap(ok); prev && !ok {
+			if l.localBW > 0 {
+				logger.Warnf("traffic control %s is unavailable, switch to local bwlimit %s", l.address, utils.Mbps(l.localBW))
+			} else {
+				logger.Warnf("traffic control %s is unavailable, run without rate limit", l.address)
+			}
+		}
+	}()
 	r := req{Bytes: ask}
 	data, err := json.Marshal(r)
 	if err != nil {
@@ -118,7 +134,10 @@ func (l *globalLimit) request(ask int64) (int64, int64, error) {
 		if result != nil {
 			status = http.StatusText(result.StatusCode)
 		}
-		logger.Errorf("request traffic control %s failed: %s, http status: %s", l.address, err, status)
+		logger.Warnf("request traffic control %s failed: %s, http status: %s", l.address, err, status)
+		if err == nil {
+			err = fmt.Errorf("http status: %s", status)
+		}
 		return 0, 0, err
 	}
 	defer result.Body.Close()
@@ -127,18 +146,21 @@ func (l *globalLimit) request(ask int64) (int64, int64, error) {
 		return 0, 0, err
 	}
 	res := resp{}
-	if err := json.Unmarshal(content, &res); err != nil {
+	if err = json.Unmarshal(content, &res); err != nil {
 		return 0, 0, err
 	}
 	return res.Granted, res.Expired, nil
 }
 
-func (l *globalLimit) wait(bytes int64) {
+func (l *globalLimit) wait(bytes int64) bool {
 	l.Lock()
 	defer l.Unlock()
 	if bytes <= 0 || l.balance >= bytes && len(l.waiters) == 0 {
 		l.balance -= bytes
-		return
+		return true
+	}
+	if !l.healthy.Load() {
+		return false
 	}
 	l.need += bytes
 
@@ -148,33 +170,55 @@ func (l *globalLimit) wait(bytes int64) {
 		me.Wait()
 	}
 
-	if l.balance < bytes {
-		// request credit for other waiters together
-		ask := l.need - l.balance
-		if ask >= bytes*10 {
-			// don't wait for too long
-			ask = bytes * 10
-		}
-		l.Unlock()
-		granted, expire, err := l.request(ask)
-		l.Lock()
-		if err == nil {
-			l.balance += granted
-			l.due = time.Now().Add(time.Millisecond * time.Duration(expire))
-			logger.Debugf("grant %d from %s until %s", granted, l.address, l.due)
-		}
+	ok := l.balance >= bytes || l.requestMoreLocked(bytes)
+	if ok {
+		l.balance -= bytes
 	}
-
-	l.balance -= bytes
 	l.need -= bytes
 	l.waiters = l.waiters[1:]
 	if len(l.waiters) > 0 {
 		l.waiters[0].Signal()
 	}
+	return ok
+}
+
+func (l *globalLimit) requestMoreLocked(bytes int64) bool {
+	if !l.healthy.Load() {
+		return false
+	}
+	// request credit for other waiters together
+	ask := l.need - l.balance
+	if ask >= bytes*10 {
+		// don't wait for too long
+		ask = bytes * 10
+	}
+	l.Unlock()
+	granted, expire, err := l.request(ask)
+	l.Lock()
+	if err != nil {
+		return false
+	}
+	l.balance += granted
+	l.due = time.Now().Add(time.Millisecond * time.Duration(expire))
+	logger.Debugf("grant %d from %s until %s", granted, l.address, l.due)
+	return true
 }
 
 func (l *globalLimit) checkBalance() {
 	now := time.Now()
+	if !l.healthy.Load() {
+		if time.Since(l.lastProbe) >= time.Second {
+			l.lastProbe = now
+			if _, _, err := l.request(0); err == nil {
+				if l.localBW > 0 {
+					logger.Infof("traffic control %s recovered, switch back to global limit from local bwlimit %s", l.address, utils.Mbps(l.localBW))
+				} else {
+					logger.Infof("traffic control %s recovered, switch back to global limit", l.address)
+				}
+			}
+		}
+		return
+	}
 	l.Lock()
 	if l.balance > 0 && l.need == 0 && l.due.Before(now) {
 		payback := l.balance
@@ -2142,7 +2186,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 	var gLimit *globalLimit
 	if config.TrafficControlURL != "" {
-		gLimit = &globalLimit{address: config.TrafficControlURL}
+		gLimit = &globalLimit{address: config.TrafficControlURL, localBW: config.BWLimit}
+		gLimit.healthy.Store(true)
 		go func() {
 			for {
 				time.Sleep(time.Millisecond * 10)
