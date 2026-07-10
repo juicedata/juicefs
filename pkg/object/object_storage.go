@@ -82,6 +82,15 @@ func (f *file) GetTime(t string) time.Time {
 	return f.mtime
 }
 
+func NewSymlink(key, target string) File {
+	return &file{
+		obj{key, int64(len(target)), time.Now(), false, "", ""},
+		"", "",
+		os.ModeSymlink | 0777,
+		true,
+	}
+}
+
 func MarshalObject(o Object) map[string]interface{} {
 	m := make(map[string]interface{})
 	m["key"] = o.Key()

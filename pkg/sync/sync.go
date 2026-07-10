@@ -1893,8 +1893,19 @@ var ignoreFiles int64
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config, checkpointMgr *CheckpointManager) error {
 	obj, err := src.Head(ctx, key)
 	if err != nil {
-		logger.Warnf("head %s from %s: %s", key, src, err)
-		return err
+		if config.Links && (errors.Is(err, utils.ErrExtlink) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, os.ErrNotExist)) {
+			if sl, ok := src.(object.SupportSymlink); ok {
+				if target, e := sl.Readlink(key); e == nil {
+					obj, err = object.NewSymlink(key, target), nil
+				} else {
+					err = fmt.Errorf("readlink %s from %s: %w", key, src, e)
+				}
+			}
+		}
+		if err != nil {
+			logger.Warnf("head %s from %s: %s", key, src, err)
+			return err
+		}
 	}
 	if obj.IsDir() && (!config.Links || !obj.IsSymlink()) {
 		// only `files-from` will hit this case
