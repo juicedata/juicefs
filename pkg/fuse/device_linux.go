@@ -28,7 +28,7 @@ import (
 
 // ensureFuseDev ensures /dev/fuse exists. If not, it will create one
 func ensureFuseDev() {
-	if _, err := os.Open("/dev/fuse"); os.IsNotExist(err) {
+	if _, err := os.Stat("/dev/fuse"); os.IsNotExist(err) {
 		// 10, 229 according to https://www.kernel.org/doc/Documentation/admin-guide/devices.txt
 		fuse := unix.Mkdev(10, 229)
 		if err := syscall.Mknod("/dev/fuse", 0o666|syscall.S_IFCHR, int(fuse)); err != nil {
