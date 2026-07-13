@@ -107,6 +107,7 @@ func TestPrepareWorkerCommandKeepsCredentialsOutOfArgs(t *testing.T) {
 	os.Args = []string{
 		"/usr/local/bin/juicefs", "sync", src, dst,
 		"--worker", "worker.example.com", "--debug", "--bwlimit", "10",
+		"--start-time", "2026-07-13 07:25:05",
 	}
 	config := &Config{Env: map[string]string{
 		"SECRET_KEY":    "env-secret-key",
@@ -129,6 +130,9 @@ func TestPrepareWorkerCommandKeepsCredentialsOutOfArgs(t *testing.T) {
 	}
 	if !strings.Contains(command, "--worker-config-stdin") {
 		t.Fatalf("worker command should enable stdin config: %s", command)
+	}
+	if !strings.Contains(command, `2026-07-13\ 07:25:05`) || strings.Contains(command, `2026-07-13\\\ 07:25:05`) {
+		t.Fatalf("worker command should escape arguments exactly once: %s", command)
 	}
 
 	gotSrc, gotDst, env, err := ReadClusterWorkerConfig(bytes.NewReader(payload))

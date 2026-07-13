@@ -413,7 +413,7 @@ func prepareWorkerCommand(host, address, path string, config *Config) ([]string,
 	if !config.Verbose && !config.Quiet {
 		args = append(args, "-q")
 	}
-	return args, payload, nil
+	return shellescape.EscapeArgs(args), payload, nil
 }
 
 // ReadClusterWorkerConfig reads storage URLs and environment variables from worker stdin.
@@ -468,8 +468,8 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				return
 			}
 			defer clear(payload)
-			logger.Debugf("launch worker command args: [ssh, %q]", strings.Join(shellescape.EscapeArgs(args), ", "))
-			cmd = exec.Command("ssh", shellescape.EscapeArgs(args)...)
+			logger.Debugf("launch worker command args: [ssh, %q]", strings.Join(args, ", "))
+			cmd = exec.Command("ssh", args...)
 			cmd.Stdin = bytes.NewReader(payload)
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
