@@ -576,7 +576,7 @@ func doSync(c *cli.Context) error {
 	if strings.HasSuffix(srcURL, "/") != strings.HasSuffix(dstURL, "/") {
 		logger.Fatalf("SRC and DST should both end with path separator or not!")
 	}
-	config.SetClusterStorage(srcArg, dstArg, srcURL, dstURL)
+	config.SetClusterStorage(srcArg, dstArg)
 	src, err := createSyncStorage(srcURL, config)
 	if err != nil {
 		return err

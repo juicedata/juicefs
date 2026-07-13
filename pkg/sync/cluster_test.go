@@ -112,7 +112,7 @@ func TestPrepareWorkerCommandKeepsCredentialsOutOfArgs(t *testing.T) {
 		"SECRET_KEY":    "env-secret-key",
 		"SESSION_TOKEN": "env-session-token",
 	}}
-	config.SetClusterStorage(src, dst, src, dst)
+	config.SetClusterStorage(src, dst)
 
 	args, payload, err := prepareWorkerCommand("worker.example.com", "10.0.0.1:12345", "/tmp/juicefs", config)
 	if err != nil {

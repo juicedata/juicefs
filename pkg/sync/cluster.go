@@ -380,11 +380,11 @@ func prepareWorkerCommand(host, address, path string, config *Config) ([]string,
 	workerArgs := append([]string(nil), os.Args[1:]...)
 	var foundSource, foundDestination bool
 	for i, arg := range workerArgs {
-		if arg == config.clusterSourceArg {
+		if arg == config.clusterSource {
 			workerArgs[i] = clusterWorkerSourceArg
 			foundSource = true
 		}
-		if arg == config.clusterDestinationArg {
+		if arg == config.clusterDestination {
 			workerArgs[i] = clusterWorkerDestinationArg
 			foundDestination = true
 		}
