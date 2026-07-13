@@ -65,10 +65,17 @@ func TestWarmup(t *testing.T) {
 		t.Fatalf("warmup: %s", err)
 	}
 
-	time.Sleep(2 * time.Second)
 	filePath = fmt.Sprintf("%s/%s/raw/chunks/0/0/1_0_4", cacheDir, uuid)
-	content, err := os.ReadFile(filePath)
-	if err != nil || len(content) < 4 || string(content[:4]) != "test" {
-		t.Fatalf("warmup: %s; got content %s", err, content)
+	deadline := time.Now().Add(10 * time.Second)
+	var content []byte
+	for {
+		content, err = os.ReadFile(filePath)
+		if err == nil && len(content) >= 4 && string(content[:4]) == "test" {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("warmup: %s; got content %s", err, content)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
