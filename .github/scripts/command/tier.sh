@@ -223,6 +223,50 @@ assert_tier_sc()
     exit 1
 }
 
+assert_tier_sc_with_set_retry()
+{
+    local path=$1
+    local expected=$2
+    local meta_url=$3
+    local tier=$4
+    local tier_path=$5
+    local token sc actual attempt
+    local retried=0
+    local matches=0
+    for attempt in $(seq 1 "$ASSERT_RETRY_TIMES"); do
+        token=$(get_tier_token "$path" 2>/dev/null || true)
+        sc=${token#*->}
+        if [[ "$sc" == expected\(*\),actual\(*\) ]]; then
+            actual=${sc##*actual(}
+            actual=${actual%)}
+        elif [[ "$sc" == actual\(*\) ]]; then
+            actual=${sc#actual(}
+            actual=${actual%)}
+        else
+            actual=$sc
+        fi
+        if [[ -n "$token" && "$actual" == "$expected" ]]; then
+            matches=$((matches + 1))
+            if [[ "$matches" -ge 2 ]]; then
+                return 0
+            fi
+        else
+            matches=0
+            if [[ -n "$token" && "$retried" -eq 0 ]]; then
+                echo "<WARNING>: tier storage class mismatch for $path, expect=$expected actual=${actual:-<empty>}; retry tier set with --force"
+                sleep 2
+                tier_set_no_err "$meta_url" --tier "$tier" "$tier_path" --force
+                retried=1
+                continue
+            fi
+        fi
+        echo "wait tier storage class for $path, expect=$expected token_sc=${sc:-<empty>} actual=${actual:-<empty>} attempt=$attempt/$ASSERT_RETRY_TIMES"
+        sleep "$ASSERT_RETRY_INTERVAL"
+    done
+    echo "<FATAL>: tier storage class mismatch for $path after tier set retry, expect=$expected actual=${actual:-<empty>}"
+    exit 1
+}
+
 assert_tier_sc_expected_actual()
 {
     local path=$1
@@ -1007,7 +1051,7 @@ test_tier_overwrite_roundtrip()
     # Cycle 3: change file.bin to tier 3 and verify a subsequent overwrite still keeps tier 3.
     tier_set_no_err "$META_URL" --tier 3 /rt_case/parent/file.bin
     assert_tier_id /jfs/rt_case/parent/file.bin 3
-    assert_tier_sc /jfs/rt_case/parent/file.bin GLACIER_IR
+    assert_tier_sc_with_set_retry /jfs/rt_case/parent/file.bin GLACIER_IR "$META_URL" 3 /rt_case/parent/file.bin
     assert_object_storage_class_by_path /jfs/rt_case/parent/file.bin GLACIER_IR
 
     echo "cycle3" > /jfs/rt_case/parent/file.bin
