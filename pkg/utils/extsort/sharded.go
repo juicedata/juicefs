@@ -19,6 +19,7 @@ package extsort
 import (
 	"context"
 	"fmt"
+	"hash/crc64"
 	"os"
 	"path/filepath"
 	"sync"
@@ -39,9 +40,56 @@ type Config struct {
 	Name    string
 	Shards  int
 	Threads int
+	// Checksum verifies records written to and read from disk in Done.
+	Checksum bool
 }
 
-const defaultShards = 16
+const (
+	defaultShards    = 16
+	defaultChunkSize = 1 << 20
+)
+
+var checksumTable = crc64.MakeTable(crc64.ECMA)
+
+// Records are reordered by sorting, so the checksum represents a multiset.
+type recordChecksum struct {
+	count      uint64
+	sum        uint64
+	sumSquares uint64
+}
+
+func (c *recordChecksum) add(hash uint64) {
+	c.count++
+	c.sum += hash
+	c.sumSquares += hash * hash
+}
+
+func (c recordChecksum) equal(other recordChecksum) bool {
+	return c.count == other.count && c.sum == other.sum && c.sumSquares == other.sumSquares
+}
+
+func (c recordChecksum) String() string {
+	return fmt.Sprintf("count=%d sum=%016x sumSquares=%016x", c.count, c.sum, c.sumSquares)
+}
+
+type shardChecksum struct {
+	mu      sync.Mutex
+	written recordChecksum
+	read    recordChecksum
+}
+
+func (c *shardChecksum) addWritten(data []byte) {
+	hash := crc64.Checksum(data, checksumTable)
+	c.mu.Lock()
+	c.written.add(hash)
+	c.mu.Unlock()
+}
+
+func (c *shardChecksum) addRead(hash uint64) {
+	c.mu.Lock()
+	c.read.add(hash)
+	c.mu.Unlock()
+}
 
 // Sharded manages multiple external sort instances, one per shard.
 // Records are distributed to shards via InputFor(shardKey), and sorted
@@ -51,9 +99,10 @@ type Sharded[T any] struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	inputs   []chan T
-	outputs  []<-chan T
-	errChans []<-chan error
+	inputs    []chan T
+	outputs   []<-chan T
+	errChans  []<-chan error
+	checksums []*shardChecksum
 
 	wg      sync.WaitGroup
 	workDir string
@@ -82,6 +131,9 @@ func NewSharded[T any](ctx context.Context, cfg Config, codec Codec[T]) (*Sharde
 		outputs:  make([]<-chan T, cfg.Shards),
 		errChans: make([]<-chan error, cfg.Shards),
 	}
+	if cfg.Checksum {
+		s.checksums = make([]*shardChecksum, cfg.Shards)
+	}
 
 	for i := 0; i < cfg.Shards; i++ {
 		if err := s.startShard(i, codec); err != nil {
@@ -106,13 +158,35 @@ func (s *Sharded[T]) startShard(i int, codec Codec[T]) error {
 		workers = 1
 	}
 	input := make(chan T, s.cfg.Threads*128)
+	fromBytes := codec.FromBytes
+	toBytes := codec.ToBytes
+	var checksum *shardChecksum
+	if s.cfg.Checksum {
+		checksum = &shardChecksum{}
+		fromBytes = func(data []byte) (T, error) {
+			hash := crc64.Checksum(data, checksumTable)
+			record, err := codec.FromBytes(data)
+			if err == nil {
+				checksum.addRead(hash)
+			}
+			return record, err
+		}
+		toBytes = func(record T) ([]byte, error) {
+			data, err := codec.ToBytes(record)
+			if err == nil {
+				checksum.addWritten(data)
+			}
+			return data, err
+		}
+		s.checksums[i] = checksum
+	}
 	sorter, output, errCh := lanratextsort.Generic(
 		input,
-		codec.FromBytes,
-		codec.ToBytes,
+		fromBytes,
+		toBytes,
 		codec.Compare,
 		&lanratextsort.Config{
-			ChunkSize:          1 << 20,
+			ChunkSize:          defaultChunkSize,
 			NumWorkers:         workers,
 			ChanBuffSize:       s.cfg.Threads,
 			SortedChanBuffSize: s.cfg.Threads * 32,
@@ -183,7 +257,7 @@ func (s *Sharded[T]) wait() error {
 
 // Done drains any remaining output, waits for all sort goroutines, cancels the
 // context, removes the temporary working directory, and returns the first sorter
-// error encountered (if any).
+// or integrity error encountered (if any).
 func (s *Sharded[T]) Done() error {
 	for _, ch := range s.outputs {
 		if ch != nil {
@@ -192,6 +266,17 @@ func (s *Sharded[T]) Done() error {
 		}
 	}
 	err := s.wait()
+	if err == nil && s.cfg.Checksum {
+		for shard, checksum := range s.checksums {
+			checksum.mu.Lock()
+			written, read := checksum.written, checksum.read
+			checksum.mu.Unlock()
+			if !written.equal(read) {
+				err = fmt.Errorf("external sort %s checksum mismatch: written %s, read %s", s.shardName(shard), written, read)
+				break
+			}
+		}
+	}
 	s.cancel()
 	if s.workDir != "" {
 		_ = os.RemoveAll(s.workDir)
