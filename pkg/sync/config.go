@@ -81,9 +81,22 @@ type Config struct {
 	rules          []rule
 	concurrentList chan int              `json:"-"`
 	Registerer     prometheus.Registerer `json:"-"`
+
+	clusterSourceArg      string
+	clusterDestinationArg string
+	clusterSource         string
+	clusterDestination    string
 }
 
 const JFS_UMASK = "JFS_UMASK"
+
+// SetClusterStorage records the original arguments and resolved storage URLs for worker startup.
+func (c *Config) SetClusterStorage(sourceArg, destinationArg, source, destination string) {
+	c.clusterSourceArg = sourceArg
+	c.clusterDestinationArg = destinationArg
+	c.clusterSource = source
+	c.clusterDestination = destination
+}
 
 func envList() []string {
 	return []string{

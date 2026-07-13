@@ -119,3 +119,23 @@ func Test_extractToken(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadClusterWorkerConfig(t *testing.T) {
+	t.Setenv("SECRET_KEY", "old-secret")
+	payload := bytes.NewBufferString(`{
+		"source": "oss://test-access-key:test-secret-key@test-bucket.oss.example.com/",
+		"destination": "/tmp/dst/",
+		"env": {"SECRET_KEY": "new-secret"}
+	}`)
+
+	src, dst, err := loadClusterWorkerConfig(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if src != "oss://test-access-key:test-secret-key@test-bucket.oss.example.com/" || dst != "/tmp/dst/" {
+		t.Fatalf("unexpected worker storage config: %q -> %q", src, dst)
+	}
+	if got := os.Getenv("SECRET_KEY"); got != "new-secret" {
+		t.Fatalf("worker environment was not restored: %q", got)
+	}
+}

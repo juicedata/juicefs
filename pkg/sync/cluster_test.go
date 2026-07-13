@@ -16,6 +16,7 @@
 package sync
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
@@ -94,6 +95,51 @@ func TestCluster(t *testing.T) {
 	}
 	if _, ok := <-mytodo; ok {
 		t.Fatalf("should end")
+	}
+}
+
+func TestPrepareWorkerCommandKeepsCredentialsOutOfArgs(t *testing.T) {
+	oldArgs := os.Args
+	t.Cleanup(func() { os.Args = oldArgs })
+
+	src := "oss://test-access-key:test-secret-key@test-bucket.oss.example.com/"
+	dst := "/tmp/dst/"
+	os.Args = []string{
+		"/usr/local/bin/juicefs", "sync", src, dst,
+		"--worker", "worker.example.com", "--debug", "--bwlimit", "10",
+	}
+	config := &Config{Env: map[string]string{
+		"SECRET_KEY":    "env-secret-key",
+		"SESSION_TOKEN": "env-session-token",
+	}}
+	config.SetClusterStorage(src, dst, src, dst)
+
+	args, payload, err := prepareWorkerCommand("worker.example.com", "10.0.0.1:12345", "/tmp/juicefs", config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := strings.Join(args, " ")
+	for _, secret := range []string{"test-access-key", "test-secret-key", "test-bucket.oss.example.com", "env-secret-key", "env-session-token"} {
+		if strings.Contains(command, secret) {
+			t.Fatalf("worker command leaked %q: %s", secret, command)
+		}
+	}
+	if !strings.Contains(command, clusterWorkerSourceArg) || !strings.Contains(command, clusterWorkerDestinationArg) {
+		t.Fatalf("worker command should use storage placeholders: %s", command)
+	}
+	if !strings.Contains(command, "--worker-config-stdin") {
+		t.Fatalf("worker command should enable stdin config: %s", command)
+	}
+
+	gotSrc, gotDst, env, err := ReadClusterWorkerConfig(bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotSrc != src || gotDst != dst {
+		t.Fatalf("unexpected worker storage config: %q -> %q", gotSrc, gotDst)
+	}
+	if env["SECRET_KEY"] != "env-secret-key" || env["SESSION_TOKEN"] != "env-session-token" {
+		t.Fatalf("unexpected worker environment: %+v", env)
 	}
 }
 
