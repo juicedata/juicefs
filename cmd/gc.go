@@ -20,7 +20,6 @@ import (
 	"cmp"
 	"context"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -482,9 +481,10 @@ func gcExternalSort(
 
 func newGcExternalSorters(ctx context.Context, workDir string, threads int) (*extsort.Sharded[gcMetaRecord], *extsort.Sharded[gcObjectRecord], error) {
 	metaSorter, err := extsort.NewSharded(ctx, extsort.Config{
-		WorkDir: workDir,
-		Name:    "gc-meta",
-		Threads: threads,
+		WorkDir:  workDir,
+		Name:     "gc-meta",
+		Threads:  threads,
+		Checksum: true,
 	}, extsort.Codec[gcMetaRecord]{
 		FromBytes: gcMetaRecordFromBytes,
 		ToBytes:   gcMetaRecordToBytes,
@@ -495,9 +495,10 @@ func newGcExternalSorters(ctx context.Context, workDir string, threads int) (*ex
 	}
 
 	objSorter, err := extsort.NewSharded(ctx, extsort.Config{
-		WorkDir: workDir,
-		Name:    "gc-object",
-		Threads: threads,
+		WorkDir:  workDir,
+		Name:     "gc-object",
+		Threads:  threads,
+		Checksum: false,
 	}, extsort.Codec[gcObjectRecord]{
 		FromBytes: gcObjectRecordFromBytes,
 		ToBytes:   gcObjectRecordToBytes,
@@ -572,15 +573,12 @@ const gcObjectListBatch = 10000
 func scanGcChunkObjects(ctx context.Context, blob object.ObjectStorage, threads int, handle func(object.Object) error) error {
 	prefixes, err := listGcChunkObjectPrefixes(ctx, blob)
 	if err != nil {
-		if err != nil {
-			logger.Warnf("can't find chunk prefixes: %s, list chunks using single thread", err)
-		}
+		logger.Warnf("can't find chunk prefixes: %s, list chunks using single thread", err)
 		return scanGcChunkObjectsPrefix(ctx, blob, "", handle)
 	}
 	if len(prefixes) == 0 {
 		return nil
 	}
-	sort.Slice(prefixes, func(i, j int) bool { return prefixes[i] > prefixes[j] })
 	control := make(chan bool, threads)
 	var wg sync.WaitGroup
 
