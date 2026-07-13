@@ -395,26 +395,6 @@ func TestCacheManager(t *testing.T) {
 	s1 := m.getStore(k1)
 	require.NotNil(t, s1)
 
-	PatchConvey("test getDiskUsage", t, func() {
-		Mock(getDiskUsage).To(func(path string) (uint64, uint64, uint64, uint64) {
-			time.Sleep(time.Second * 10)
-			return 1, 1, 1, 1
-		}).Build()
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			s1.Lock()
-			wg.Done()
-			s1.cleanupFull()
-			s1.Unlock()
-		}()
-
-		wg.Wait()
-		start := time.Now()
-		s1.load(k1)
-		So(time.Since(start), ShouldBeLessThan, time.Second*3)
-	})
-
 	m.Lock()
 	shutdownStore(s1)
 	m.Unlock()
@@ -436,6 +416,32 @@ func TestCacheManager(t *testing.T) {
 	m.Unlock()
 	time.Sleep(3 * time.Second)
 	require.True(t, m.isEmpty())
+}
+
+func TestCleanupFullDoesNotBlockLoad(t *testing.T) {
+	PatchConvey("test getDiskUsage", t, func() {
+		conf := defaultConf
+		conf.CacheEviction = EvictionNone
+		s := newTestCacheStore(t.TempDir()+"/", &conf, nil)
+		Mock(getDiskUsage).To(func(path string) (uint64, uint64, uint64, uint64) {
+			time.Sleep(time.Second * 10)
+			return 1, 1, 1, 1
+		}).Build()
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			s.Lock()
+			wg.Done()
+			s.cleanupFull()
+			s.Unlock()
+		}()
+
+		wg.Wait()
+		start := time.Now()
+		_, _ = s.load("1_1_1")
+		So(time.Since(start), ShouldBeLessThan, time.Second*3)
+	})
 }
 
 func TestAtimeNotLost(t *testing.T) {
