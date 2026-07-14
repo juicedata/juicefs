@@ -57,18 +57,15 @@ func (fs *fileSystem) replyAttr(ctx *fuseContext, entry *meta.Entry, attr *fuse.
 	if vfs.IsSpecialNode(entry.Inode) {
 		set(time.Hour)
 	} else {
-		refreshed := true
 		if entry.Attr.Typ == meta.TypeFile && fs.v.ModifiedSince(entry.Inode, ctx.start) {
-			refreshed = false
 			logger.Debugf("refresh attr for %d", entry.Inode)
-			var nattr meta.Attr
-			st := fs.v.Meta.GetAttr(ctx, entry.Inode, &nattr)
+			var nAttr meta.Attr
+			st := fs.v.Meta.GetAttr(ctx, entry.Inode, &nAttr)
 			if st == 0 {
-				*entry.Attr = nattr
+				*entry.Attr = nAttr
 				fs.v.UpdateLength(entry.Inode, entry.Attr) // Merge again in case write appeared during GetAttr
 			}
-		}
-		if refreshed {
+		} else {
 			set(fs.conf.AttrTimeout)
 		}
 	}
