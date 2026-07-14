@@ -178,20 +178,6 @@ func ensureMinClientVersion(format *meta.Format, required string, msg *strings.B
 	return true
 }
 
-func higherClientVersion(current, required string) string {
-	if current == "" {
-		return required
-	}
-	cv := version.Parse(current)
-	rv := version.Parse(required)
-	if cv != nil && rv != nil {
-		if r, err := version.CompareVersions(cv, rv); err == nil && r >= 0 {
-			return current
-		}
-	}
-	return required
-}
-
 func config(ctx *cli.Context) error {
 	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
@@ -209,16 +195,19 @@ func config(ctx *cli.Context) error {
 	originDirStats := format.DirStats
 	originUGQuota := format.UserGroupQuota
 	var quota, storage, trash, clientVer, tier bool
-	var autoMinClientVersion string
-	var requiredMinClientVersion string
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
 	var targetTierID uint8
 	var currentTier object.Tier
 	var findTier bool
 	var newTier object.Tier
+
+	requiredMinClientVersion := format.MinClientVersion
 	requireMinClientVersion := func(required string) {
-		requiredMinClientVersion = higherClientVersion(requiredMinClientVersion, required)
+		if mv := maxVersion(requiredMinClientVersion, required); mv != requiredMinClientVersion {
+			requiredMinClientVersion = mv
+			clientVer = true
+		}
 	}
 
 	for _, flag := range ctx.LocalFlagNames() {
@@ -422,7 +411,7 @@ func config(ctx *cli.Context) error {
 			if ctx.IsSet("bucket") || ctx.IsSet("access-key") || ctx.IsSet("secret-key") || ctx.IsSet("session-token") {
 				logger.Fatalf("Current tiered storage does not support multi-bucket mode")
 			}
-			var tierChanged bool
+			requireMinClientVersion("1.4.0-A")
 			targetTierID = uint8(ctx.Int(flag))
 			currentTier, findTier = format.Tiers[targetTierID]
 			if !findTier {
@@ -440,7 +429,6 @@ func config(ctx *cli.Context) error {
 				if !findTier || currentTier.Sc != newTier.Sc {
 					msg.WriteString(fmt.Sprintf("set tier %d storage-class: %s\n", targetTierID, newTier.Sc))
 					tier = true
-					tierChanged = true
 				}
 			}
 
@@ -453,23 +441,25 @@ func config(ctx *cli.Context) error {
 				if !findTier || currentTier.Tag != newTier.Tag {
 					msg.WriteString(fmt.Sprintf("set tier %d tag: %s\n", targetTierID, newTier.Tag))
 					tier = true
-					tierChanged = true
 				}
 			}
 			if change {
 				format.Tiers[targetTierID] = newTier
-				if targetTierID != 0 && tierChanged {
-					requireMinClientVersion("1.4.0-A")
-				}
 			} else {
 				logger.Fatalf("missing required flag: --storage-class or --tag")
 			}
 		}
 	}
-	if requiredMinClientVersion != "" && ensureMinClientVersion(format, requiredMinClientVersion, &msg) {
-		clientVer = true
-		autoMinClientVersion = requiredMinClientVersion
+
+	if clientVer {
+		msg.WriteString("min-client-version: ")
+		msg.WriteString(format.MinClientVersion)
+		msg.WriteString(" -> ")
+		msg.WriteString(requiredMinClientVersion)
+		msg.WriteByte('\n')
+		format.MinClientVersion = requiredMinClientVersion
 	}
+
 	if msg.Len() == 0 {
 		fmt.Println("Nothing changed.")
 		return nil
@@ -521,12 +511,8 @@ func config(ctx *cli.Context) error {
 		}
 		if clientVer {
 			confirmClientVer := false
-			if autoMinClientVersion != "" {
-				warn("Clients below version %s will be rejected after modification.", autoMinClientVersion)
-				confirmClientVer = true
-			}
 			if format.CheckVersion() != nil {
-				warn("Clients with the same version of this will be rejected after modification.")
+				warn("Clients below version %d will be rejected after modification.", format.MinClientVersion)
 				confirmClientVer = true
 			}
 

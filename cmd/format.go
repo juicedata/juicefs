@@ -402,6 +402,19 @@ func readKerbConf(file string) string {
 	return string(data)
 }
 
+func maxVersion(v1, v2 string) string {
+	if v1 == "" {
+		return v2
+	}
+	s1, s2 := version.Parse(v1), version.Parse(v2)
+	if s1 != nil && s2 != nil {
+		if r, err := version.CompareVersions(s1, s2); err == nil && r >= 0 {
+			return v1
+		}
+	}
+	return v2
+}
+
 func format(c *cli.Context) error {
 	setup(c, 2)
 	removePassword(c.Args().Get(0))
@@ -510,13 +523,13 @@ func format(c *cli.Context) error {
 		}
 
 		if format.EnableACL {
-			ensureMinClientVersion(format, "1.2.0-A", nil)
+			format.MinClientVersion = maxVersion(format.MinClientVersion, "1.2.0-A")
 		}
 		if format.RangerRestUrl != "" || format.RangerService != "" {
-			ensureMinClientVersion(format, "1.3.0-A", nil)
+			format.MinClientVersion = maxVersion(format.MinClientVersion, "1.3.0-A")
 		}
 		if format.KerbConf != "" {
-			ensureMinClientVersion(format, "1.4.0-A", nil)
+			format.MinClientVersion = maxVersion(format.MinClientVersion, "1.4.0-A")
 		}
 
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
