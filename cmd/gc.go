@@ -127,8 +127,8 @@ func gc(ctx *cli.Context) error {
 	}
 	threads := ctx.Int("threads")
 	compact := ctx.Bool("compact")
-	if (delFlag || compact) && threads <= 0 {
-		logger.Fatal("threads should be greater than 0 to delete or compact objects")
+	if (delFlag || compact || workDir != "") && threads <= 0 {
+		logger.Fatal("threads should be greater than 0 to delete, compact, or externally sort objects")
 	}
 	maxMtime := time.Now().Add(time.Hour * -1)
 	strDuration := os.Getenv("JFS_GC_SKIPPEDTIME")
@@ -403,10 +403,11 @@ func gcExternalSort(
 ) error {
 	logger.Infof("Using external sort mode, work dir: %s", workDir)
 
+	eg, sortCtx := errgroup.WithContext(ctx)
 	blobWithPrefix := object.WithPrefix(blob, "chunks/")
-	metaSorter, objSorter, err := newGcExternalSorters(ctx, workDir, threads)
+	metaSorter, objSorter, err := newGcExternalSorters(sortCtx, workDir, threads)
 	if err != nil {
-		logger.Fatalf("%s", err)
+		return err
 	}
 
 	metaSliceSpin := progress.AddCountSpinner("Listed slices")
@@ -419,33 +420,51 @@ func gcExternalSort(
 	leaked := progress.AddDoubleSpinnerTwo("Leaked objects", "Leaked data")
 	skipped := progress.AddDoubleSpinnerTwo("Skipped objects", "Skipped data")
 
-	eg, egCtx := errgroup.WithContext(ctx)
-
 	eg.Go(func() error {
-		defer metaSorter.CloseInputs()
-		return scanGcMetaRecords(egCtx, m, c, metaSorter, metaSliceSpin)
+		defer metaSorter.CloseInput()
+		if err := scanGcMetaRecords(sortCtx, m, c, metaSorter.Input(), metaSliceSpin); err != nil {
+			return errors.Errorf("produce meta records: %s", err)
+		}
+		return nil
 	})
 
 	eg.Go(func() error {
-		defer objSorter.CloseInputs()
-		return scanGcObjectRecords(egCtx, blobWithPrefix, objSorter, threads, maxMtime, objScanSpin, skipped)
+		defer objSorter.CloseInput()
+		if err := scanGcObjectRecords(sortCtx, blobWithPrefix, objSorter.Input(), threads, maxMtime, objScanSpin, skipped); err != nil {
+			return errors.Errorf("produce object records: %s", err)
+		}
+		return nil
 	})
 
-	if err := eg.Wait(); err != nil {
-		_ = metaSorter.Done()
-		_ = objSorter.Done()
-		return errors.Errorf("producer error: %s", err)
-	}
+	eg.Go(func() error {
+		if err := metaSorter.Wait(); err != nil {
+			return errors.Errorf("sort meta records: %s", err)
+		}
+		return nil
+	})
 
-	stats := mergeGcSortedRecords(metaSorter.Outputs(), objSorter.Outputs(), chunkConf.BlockSize, valid, pending, compacted, leaked)
+	eg.Go(func() error {
+		if err := objSorter.Wait(); err != nil {
+			return errors.Errorf("sort object records: %s", err)
+		}
+		return nil
+	})
 
-	metaSortErr := metaSorter.Done()
-	objSortErr := objSorter.Done()
-	if metaSortErr != nil {
-		return errors.Errorf("sort meta records: %s", metaSortErr)
-	}
-	if objSortErr != nil {
-		return errors.Errorf("sort object records: %s", objSortErr)
+	var stats gcMergeStats
+	eg.Go(func() error {
+		var err error
+		stats, err = mergeGcSortedRecords(sortCtx, metaSorter.Output(), objSorter.Output(), chunkConf.BlockSize, valid, pending, compacted, leaked)
+		if err != nil {
+			return errors.Errorf("merge sorted records: %s", err)
+		}
+		return nil
+	})
+
+	sortErr := eg.Wait()
+	_ = metaSorter.Done()
+	_ = objSorter.Done()
+	if sortErr != nil {
+		return sortErr
 	}
 
 	err = m.ScanDeletedObject(
@@ -479,8 +498,8 @@ func gcExternalSort(
 	return nil
 }
 
-func newGcExternalSorters(ctx context.Context, workDir string, threads int) (*extsort.Sharded[gcMetaRecord], *extsort.Sharded[gcObjectRecord], error) {
-	metaSorter, err := extsort.NewSharded(ctx, extsort.Config{
+func newGcExternalSorters(ctx context.Context, workDir string, threads int) (*extsort.Sorter[gcMetaRecord], *extsort.Sorter[gcObjectRecord], error) {
+	metaSorter, err := extsort.New(ctx, extsort.Config{
 		WorkDir:  workDir,
 		Name:     "gc-meta",
 		Threads:  threads,
@@ -494,25 +513,24 @@ func newGcExternalSorters(ctx context.Context, workDir string, threads int) (*ex
 		return nil, nil, errors.Errorf("create meta sorter: %s", err)
 	}
 
-	objSorter, err := extsort.NewSharded(ctx, extsort.Config{
-		WorkDir:  workDir,
-		Name:     "gc-object",
-		Threads:  threads,
-		Checksum: false,
+	objSorter, err := extsort.New(ctx, extsort.Config{
+		WorkDir: workDir,
+		Name:    "gc-object",
+		Threads: threads,
 	}, extsort.Codec[gcObjectRecord]{
 		FromBytes: gcObjectRecordFromBytes,
 		ToBytes:   gcObjectRecordToBytes,
 		Compare:   compareGcObjectRecord,
 	})
 	if err != nil {
-		metaSorter.CloseInputs()
+		metaSorter.CloseInput()
 		_ = metaSorter.Done()
 		return nil, nil, errors.Errorf("create object sorter: %s", err)
 	}
 	return metaSorter, objSorter, nil
 }
 
-func scanGcMetaRecords(ctx context.Context, m meta.Meta, c meta.Context, sorter *extsort.Sharded[gcMetaRecord], metaSliceSpin *utils.Bar) error {
+func scanGcMetaRecords(ctx context.Context, m meta.Meta, c meta.Context, output chan<- gcMetaRecord, metaSliceSpin *utils.Bar) error {
 	st := m.ScanSlices(c, true, false, nil, func(ino meta.Ino, s meta.Slice) error {
 		select {
 		case <-ctx.Done():
@@ -530,7 +548,7 @@ func scanGcMetaRecords(ctx context.Context, m meta.Meta, c meta.Context, sorter 
 			state = gcStateUsed
 		}
 		select {
-		case sorter.InputFor(s.Id) <- gcMetaRecord{sliceID: s.Id, size: s.Size, state: state}:
+		case output <- gcMetaRecord{sliceID: s.Id, size: s.Size, state: state}:
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
@@ -542,7 +560,7 @@ func scanGcMetaRecords(ctx context.Context, m meta.Meta, c meta.Context, sorter 
 	return nil
 }
 
-func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, sorter *extsort.Sharded[gcObjectRecord], threads int, maxMtime time.Time, objScanSpin *utils.Bar, skipped *utils.DoubleSpinner) error {
+func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, output chan<- gcObjectRecord, threads int, maxMtime time.Time, objScanSpin *utils.Bar, skipped *utils.DoubleSpinner) error {
 	return scanGcChunkObjects(ctx, blob, threads, func(obj object.Object) error {
 		select {
 		case <-ctx.Done():
@@ -559,7 +577,7 @@ func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, sorter 
 			return nil
 		}
 		select {
-		case sorter.InputFor(record.sliceID) <- record:
+		case output <- record:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -791,17 +809,6 @@ type gcMergeStats struct {
 	leaked    gcObjectCounter
 }
 
-func (s *gcMergeStats) add(other gcMergeStats) {
-	s.valid.count += other.valid.count
-	s.valid.bytes += other.valid.bytes
-	s.pending.count += other.pending.count
-	s.pending.bytes += other.pending.bytes
-	s.compacted.count += other.compacted.count
-	s.compacted.bytes += other.compacted.bytes
-	s.leaked.count += other.leaked.count
-	s.leaked.bytes += other.leaked.bytes
-}
-
 func addGcObjectStat(counter *gcObjectCounter, spinner *utils.DoubleSpinner, size int64) {
 	counter.count++
 	counter.bytes += size
@@ -818,87 +825,57 @@ func logGcSummary(scanned int64, stats gcMergeStats, cleanedSliceSpin, cleanedFi
 }
 
 func mergeGcSortedRecords(
-	metaStreams []<-chan gcMetaRecord,
-	objStreams []<-chan gcObjectRecord,
-	blockSize int,
-	valid, pending, compacted, leaked *utils.DoubleSpinner,
-) gcMergeStats {
-	statsByShard := make([]gcMergeStats, len(metaStreams))
-	var wg sync.WaitGroup
-	for i := range metaStreams {
-		wg.Add(1)
-		go func(shard int) {
-			defer wg.Done()
-			statsByShard[shard] = mergeShard(metaStreams[shard], objStreams[shard], blockSize, valid, pending, compacted, leaked)
-		}(i)
-	}
-	wg.Wait()
-
-	var stats gcMergeStats
-	for _, shardStats := range statsByShard {
-		stats.add(shardStats)
-	}
-	return stats
-}
-
-func mergeShard(
+	ctx context.Context,
 	metaStream <-chan gcMetaRecord,
 	objStream <-chan gcObjectRecord,
 	blockSize int,
 	valid, pending, compacted, leaked *utils.DoubleSpinner,
-) gcMergeStats {
+) (gcMergeStats, error) {
 	var stats gcMergeStats
 
-	type metaGroup struct {
-		sliceID uint64
-		size    uint32
-		state   uint8
-	}
-
-	var peeked gcMetaRecord
-	var hasPeeked bool
-
-	nextMetaGroup := func() (metaGroup, bool) {
-		var r gcMetaRecord
-		var ok bool
-		if hasPeeked {
-			r = peeked
-			hasPeeked = false
-		} else {
-			r, ok = <-metaStream
-			if !ok {
-				return metaGroup{}, false
-			}
-		}
-		group := metaGroup{sliceID: r.sliceID, size: r.size, state: r.state}
-		for {
-			r, ok = <-metaStream
-			if !ok {
-				return group, true
-			}
-			if r.sliceID != group.sliceID {
-				peeked = r
-				hasPeeked = true
-				return group, true
-			}
-			if r.state < group.state {
-				group.state = r.state
-				group.size = r.size
-			}
+	readMeta := func() (gcMetaRecord, bool, error) {
+		select {
+		case r, ok := <-metaStream:
+			return r, ok, nil
+		case <-ctx.Done():
+			return gcMetaRecord{}, false, ctx.Err()
 		}
 	}
 
-	meta, ok := nextMetaGroup()
+	readObject := func() (gcObjectRecord, bool, error) {
+		select {
+		case r, ok := <-objStream:
+			return r, ok, nil
+		case <-ctx.Done():
+			return gcObjectRecord{}, false, ctx.Err()
+		}
+	}
+
+	meta, metaOpen, err := readMeta()
+	if err != nil {
+		return stats, err
+	}
 	markLeaked := func(obj gcObjectRecord) {
 		addGcObjectStat(&stats.leaked, leaked, obj.objectSize)
 	}
 
-	for obj := range objStream {
-		for ok && meta.sliceID < obj.sliceID {
-			meta, ok = nextMetaGroup()
+	for {
+		obj, objOpen, err := readObject()
+		if err != nil {
+			return stats, err
+		}
+		if !objOpen {
+			break
 		}
 
-		if !ok || meta.sliceID > obj.sliceID {
+		for metaOpen && meta.sliceID < obj.sliceID {
+			meta, metaOpen, err = readMeta()
+			if err != nil {
+				return stats, err
+			}
+		}
+
+		if !metaOpen || meta.sliceID > obj.sliceID {
 			markLeaked(obj)
 			continue
 		}
@@ -916,7 +893,14 @@ func mergeShard(
 			}
 		}
 	}
-	return stats
+
+	for metaOpen {
+		_, metaOpen, err = readMeta()
+		if err != nil {
+			return stats, err
+		}
+	}
+	return stats, nil
 }
 
 func isLeakedBlock(index, blockSize, sliceSize, configuredBlockSize int) bool {

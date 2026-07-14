@@ -20,16 +20,14 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
 )
 
-func TestShardedSortsRecordsByShard(t *testing.T) {
-	s, err := NewSharded(context.Background(), Config{
+func TestSorterSortsRecords(t *testing.T) {
+	s, err := New(context.Background(), Config{
 		WorkDir: t.TempDir(),
-		Name:    "records",
 		Threads: 2,
 	}, Codec[testRecord]{
 		FromBytes: decodeTestRecord,
@@ -37,43 +35,26 @@ func TestShardedSortsRecordsByShard(t *testing.T) {
 		Compare:   compareTestRecord,
 	})
 	if err != nil {
-		t.Fatalf("new sharded sorter: %s", err)
+		t.Fatalf("new sorter: %s", err)
 	}
 
-	workDir := s.workDir
 	for _, id := range []uint64{34, 17, 2, 33, 18, 1} {
-		s.InputFor(id) <- testRecord{id: id}
+		s.Input() <- testRecord{id: id}
 	}
-	s.CloseInputs()
+	s.CloseInput()
 
-	got := readOutputs(t, s.Outputs())
-	if err := s.Done(); err != nil {
-		t.Fatalf("done: %s", err)
+	got := readOutput(s.Output())
+	if err := s.Wait(); err != nil {
+		t.Fatalf("wait: %s", err)
 	}
-	if _, err := os.Stat(workDir); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("work dir was not removed: %v", err)
-	}
-
-	if want := []uint64{1, 17, 33}; !reflect.DeepEqual(got[1], want) {
-		t.Fatalf("shard 1 = %v, want %v", got[1], want)
-	}
-	if want := []uint64{2, 18, 34}; !reflect.DeepEqual(got[2], want) {
-		t.Fatalf("shard 2 = %v, want %v", got[2], want)
-	}
-	for shard, ids := range got {
-		if shard == 1 || shard == 2 {
-			continue
-		}
-		if len(ids) != 0 {
-			t.Fatalf("shard %d = %v, want empty", shard, ids)
-		}
+	if want := []uint64{1, 2, 17, 18, 33, 34}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("output = %v, want %v", got, want)
 	}
 }
 
-func TestShardedDoneReturnsSortError(t *testing.T) {
-	s, err := NewSharded(context.Background(), Config{
+func TestSorterDoneReturnsSortError(t *testing.T) {
+	s, err := New(context.Background(), Config{
 		WorkDir: t.TempDir(),
-		Name:    "records",
 		Threads: 2,
 	}, Codec[testRecord]{
 		FromBytes: decodeTestRecord,
@@ -83,20 +64,16 @@ func TestShardedDoneReturnsSortError(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("new sharded sorter: %s", err)
+		t.Fatalf("new sorter: %s", err)
 	}
 
-	workDir := s.workDir
-	s.InputFor(0) <- testRecord{id: 2}
-	s.InputFor(0) <- testRecord{id: 1}
-	s.CloseInputs()
+	s.Input() <- testRecord{id: 2}
+	s.Input() <- testRecord{id: 1}
+	s.CloseInput()
 
 	err = s.Done()
 	if err == nil || !strings.Contains(err.Error(), "compare failed") {
 		t.Fatalf("done error = %v, want comparison error", err)
-	}
-	if _, err := os.Stat(workDir); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("work dir was not removed: %v", err)
 	}
 }
 
@@ -127,32 +104,10 @@ func decodeTestRecord(b []byte) (testRecord, error) {
 	return testRecord{id: binary.BigEndian.Uint64(b)}, nil
 }
 
-func readOutputs(t *testing.T, outputs []<-chan testRecord) [][]uint64 {
-	t.Helper()
-
-	type result struct {
-		shard int
-		ids   []uint64
-		err   error
+func readOutput(output <-chan testRecord) []uint64 {
+	var ids []uint64
+	for r := range output {
+		ids = append(ids, r.id)
 	}
-	results := make(chan result, len(outputs))
-	for shard, output := range outputs {
-		go func(shard int, output <-chan testRecord) {
-			var ids []uint64
-			for r := range output {
-				ids = append(ids, r.id)
-			}
-			results <- result{shard: shard, ids: ids}
-		}(shard, output)
-	}
-
-	got := make([][]uint64, len(outputs))
-	for range outputs {
-		res := <-results
-		if res.err != nil {
-			t.Fatalf("read shard %d: %s", res.shard, res.err)
-		}
-		got[res.shard] = res.ids
-	}
-	return got
+	return ids
 }
