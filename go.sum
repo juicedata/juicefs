@@ -488,6 +488,8 @@ github.com/jtolio/noiseconn v0.0.0-20230301220541-88105e6c8ac6 h1:iVMQyk78uOpX/U
 github.com/jtolio/noiseconn v0.0.0-20230301220541-88105e6c8ac6/go.mod h1:MEkhEPFwP3yudWO0lj6vfYpLIB+3eIcuIW+e0AZzUQk=
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83 h1:RyHTka3jCnTaUqfRYjlwcQlr53aasmkvHEbYLXthqr8=
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83/go.mod h1:1CNUng3PtjQMtRzJO4FMXBQvkGtuYRxxiR9xMa7jMwI=
+github.com/juicedata/extsort v1.0.2-0.20260714080020-5f2c5c576e84 h1:F7eCZoQZjzApvElG8t5oyc2jKC+XUWKlel9pjt8T6RA=
+github.com/juicedata/extsort v1.0.2-0.20260714080020-5f2c5c576e84/go.mod h1:hceP6kxKPKebjN1RVrDBXMXXECbaI41Y94tt6MDazc4=
 github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db h1:esc0bVXkjEuyPLn7JXFhKBDztpM0dT0GYQn7CqaBB6w=
 github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=
 github.com/juicedata/go-fuse/v2 v2.1.1-0.20260610024748-b44a81936922 h1:EnPQryUPQLe4gbf98fFENp1OU1eKxOOo5ehdKfwiJCE=
@@ -552,8 +554,6 @@ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/l0wl3vel/bunny-storage-go-sdk v1.0.0 h1:gyqUpzKyqeE4kgzEwTElyKLrUfyOppPstamAHcZ4UWI=
 github.com/l0wl3vel/bunny-storage-go-sdk v1.0.0/go.mod h1:c3E7etB0BjhkChXz7HtMjxK5PSdVaFvuAqqzB2IEUfQ=
-github.com/lanrat/extsort v1.4.2 h1:akbLIdo4PhNZtvjpaWnbXtGMmLtnGzXplkzfgl+XTTY=
-github.com/lanrat/extsort v1.4.2/go.mod h1:hceP6kxKPKebjN1RVrDBXMXXECbaI41Y94tt6MDazc4=
 github.com/leodido/go-urn v1.4.0 h1:WT9HwE9SGECu3lg4d/dIA+jxlljEa1/ffXKmRjqdmIQ=
 github.com/leodido/go-urn v1.4.0/go.mod h1:bvxc+MVxLKB4z00jd1z+Dvzr47oO32F/QSNjSBOlFxI=
 github.com/lib/pq v1.7.0/go.mod h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=
