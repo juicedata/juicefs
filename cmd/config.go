@@ -159,25 +159,6 @@ func userConfirmed() bool {
 	return false
 }
 
-func ensureMinClientVersion(format *meta.Format, required string, msg *strings.Builder) bool {
-	current := version.Parse(format.MinClientVersion)
-	target := version.Parse(required)
-	if current != nil && target != nil {
-		if r, err := version.CompareVersions(current, target); err == nil && r >= 0 {
-			return false
-		}
-	}
-	if msg != nil {
-		msg.WriteString("min-client-version: ")
-		msg.WriteString(format.MinClientVersion)
-		msg.WriteString(" -> ")
-		msg.WriteString(required)
-		msg.WriteByte('\n')
-	}
-	format.MinClientVersion = required
-	return true
-}
-
 func config(ctx *cli.Context) error {
 	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
