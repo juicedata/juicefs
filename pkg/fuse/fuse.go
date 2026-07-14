@@ -53,20 +53,22 @@ func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
 type setTimeout func(time.Duration)
 
 func (fs *fileSystem) replyAttr(ctx *fuseContext, entry *meta.Entry, attr *fuse.Attr, set setTimeout) {
+	fs.v.UpdateLength(entry.Inode, entry.Attr) // UpdateLength before ModifiedSince check to avoid TOCTOU race
 	if vfs.IsSpecialNode(entry.Inode) {
 		set(time.Hour)
-	} else if entry.Attr.Typ == meta.TypeFile && fs.v.ModifiedSince(entry.Inode, ctx.start) {
-		logger.Debugf("refresh attr for %d", entry.Inode)
-		var attr meta.Attr
-		st := fs.v.Meta.GetAttr(ctx, entry.Inode, &attr)
-		if st == 0 {
-			*entry.Attr = attr
+	} else {
+		if entry.Attr.Typ == meta.TypeFile && fs.v.ModifiedSince(entry.Inode, ctx.start) {
+			logger.Debugf("refresh attr for %d", entry.Inode)
+			var nAttr meta.Attr
+			st := fs.v.Meta.GetAttr(ctx, entry.Inode, &nAttr)
+			if st == 0 {
+				*entry.Attr = nAttr
+				fs.v.UpdateLength(entry.Inode, entry.Attr) // Merge again in case write appeared during GetAttr
+			}
+		} else {
 			set(fs.conf.AttrTimeout)
 		}
-	} else {
-		set(fs.conf.AttrTimeout)
 	}
-	fs.v.UpdateLength(entry.Inode, entry.Attr)
 	attrToStat(entry.Inode, entry.Attr, attr)
 }
 
