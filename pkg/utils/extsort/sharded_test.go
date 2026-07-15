@@ -43,9 +43,9 @@ func TestSorterSortsRecords(t *testing.T) {
 	}
 	s.CloseInput()
 
-	got := readOutput(s.Output())
-	if err := s.Wait(); err != nil {
-		t.Fatalf("wait: %s", err)
+	got, err := readOutput(context.Background(), s)
+	if err != nil {
+		t.Fatalf("read output: %s", err)
 	}
 	if want := []uint64{1, 2, 17, 18, 33, 34}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("output = %v, want %v", got, want)
@@ -104,10 +104,16 @@ func decodeTestRecord(b []byte) (testRecord, error) {
 	return testRecord{id: binary.BigEndian.Uint64(b)}, nil
 }
 
-func readOutput(output <-chan testRecord) []uint64 {
+func readOutput(ctx context.Context, s *Sorter[testRecord]) ([]uint64, error) {
 	var ids []uint64
-	for r := range output {
+	for {
+		r, ok, err := s.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return ids, nil
+		}
 		ids = append(ids, r.id)
 	}
-	return ids
 }

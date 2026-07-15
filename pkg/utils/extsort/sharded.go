@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 
 	lanratextsort "github.com/lanrat/extsort"
 )
@@ -46,13 +45,9 @@ const (
 )
 
 type Sorter[T any] struct {
-	input  chan T
-	output <-chan T
-	errCh  <-chan error
-
-	waitOnce sync.Once
-	err      error
-	workDir  string
+	input   chan T
+	sorter  *lanratextsort.GenericSorter[T]
+	workDir string
 }
 
 func New[T any](ctx context.Context, cfg Config, codec Codec[T]) (*Sorter[T], error) {
@@ -64,7 +59,7 @@ func New[T any](ctx context.Context, cfg Config, codec Codec[T]) (*Sorter[T], er
 		return nil, err
 	}
 	input := make(chan T, cfg.Threads*128)
-	sorter, output, errCh := lanratextsort.Generic(
+	sorter, _, errCh := lanratextsort.Generic(
 		input,
 		codec.FromBytes,
 		codec.ToBytes,
@@ -83,7 +78,7 @@ func New[T any](ctx context.Context, cfg Config, codec Codec[T]) (*Sorter[T], er
 		_ = os.RemoveAll(workDir)
 		return nil, fmt.Errorf("create external sorter: %w", err)
 	}
-	s := &Sorter[T]{input: input, output: output, errCh: errCh, workDir: workDir}
+	s := &Sorter[T]{input: input, sorter: sorter, workDir: workDir}
 	go sorter.Sort(ctx)
 	return s, nil
 }
@@ -92,25 +87,23 @@ func (s *Sorter[T]) Input() chan<- T {
 	return s.input
 }
 
-func (s *Sorter[T]) Output() <-chan T {
-	return s.output
-}
-
 func (s *Sorter[T]) CloseInput() {
 	close(s.input)
 }
 
-func (s *Sorter[T]) Wait() error {
-	s.waitOnce.Do(func() {
-		s.err = <-s.errCh
-	})
-	return s.err
+func (s *Sorter[T]) Next(ctx context.Context) (T, bool, error) {
+	return s.sorter.Next(ctx)
 }
 
 func (s *Sorter[T]) Done() error {
-	for range s.output {
+	var err error
+	for {
+		_, ok, nextErr := s.Next(context.Background())
+		if !ok {
+			err = nextErr
+			break
+		}
 	}
-	err := s.Wait()
 	_ = os.RemoveAll(s.workDir)
 	return err
 }
