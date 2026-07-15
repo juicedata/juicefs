@@ -186,7 +186,6 @@ func config(ctx *cli.Context) error {
 	var requiredMinClientVersion string
 	requireMinClientVersion := func(required string) {
 		requiredMinClientVersion = maxVersion(requiredMinClientVersion, required)
-		clientVer = true
 	}
 
 	for _, flag := range ctx.LocalFlagNames() {
@@ -429,13 +428,14 @@ func config(ctx *cli.Context) error {
 		}
 	}
 
-	if clientVer && compareVersion(format.MinClientVersion, requiredMinClientVersion) < 0 {
+	if compareVersion(format.MinClientVersion, requiredMinClientVersion) < 0 {
 		msg.WriteString("min-client-version: ")
 		msg.WriteString(format.MinClientVersion)
 		msg.WriteString(" -> ")
 		msg.WriteString(requiredMinClientVersion)
 		msg.WriteByte('\n')
 		format.MinClientVersion = requiredMinClientVersion
+		clientVer = true
 	}
 
 	if msg.Len() == 0 {

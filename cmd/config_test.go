@@ -152,110 +152,43 @@ func TestConfig(t *testing.T) {
 	}
 }
 
-func TestConfigTierMinClientVersion(t *testing.T) {
-	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
-	bucketPath := filepath.Join(t.TempDir(), "testBucket")
-	if err := Main([]string{"", "format", metaURL, "--bucket", bucketPath, testVolume}); err != nil {
-		t.Fatalf("format: %s", err)
+func TestConfigMinClientVersion(t *testing.T) {
+	writeKerbConf := func(t *testing.T) string {
+		path := filepath.Join(t.TempDir(), "krb5.conf")
+		if err := os.WriteFile(path, []byte("[libdefaults]\n"), 0644); err != nil {
+			t.Fatalf("write kerberos config: %s", err)
+		}
+		return path
 	}
 
-	out, err := getStdout([]string{"", "config", metaURL, "--tier", "1", "--storage-class", "GLACIER", "--force"})
-	if err != nil {
-		t.Fatalf("config tier: %s", err)
-	}
-	if !strings.Contains(string(out), "min-client-version: 1.1.0-A -> 1.4.0-A") {
-		t.Fatalf("min client version change is missing in output: %s", out)
-	}
-
-	data, err := getStdout([]string{"", "config", metaURL})
-	if err != nil {
-		t.Fatalf("getStdout: %s", err)
-	}
-	var format meta.Format
-	if err = json.Unmarshal(data, &format); err != nil {
-		t.Fatalf("json unmarshal: %s", err)
-	}
-	if format.MinClientVersion != "1.4.0-A" {
-		t.Fatalf("min-client-version %q != expect 1.4.0-A", format.MinClientVersion)
-	}
-	if tier := format.Tiers[1]; tier.Sc != "GLACIER" {
-		t.Fatalf("tier 1 storage-class %q != expect GLACIER", tier.Sc)
-	}
-}
-
-func TestConfigTierZeroDoesNotChangeMinClientVersion(t *testing.T) {
-	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
-	bucketPath := filepath.Join(t.TempDir(), "testBucket")
-	if err := Main([]string{"", "format", metaURL, "--bucket", bucketPath, testVolume}); err != nil {
-		t.Fatalf("format: %s", err)
-	}
-
-	out, err := getStdout([]string{"", "config", metaURL, "--tier", "0", "--storage-class", "STANDARD_IA", "--force"})
-	if err != nil {
-		t.Fatalf("config tier 0: %s", err)
-	}
-	if strings.Contains(string(out), "min-client-version") {
-		t.Fatalf("tier 0 should not change min-client-version: %s", out)
-	}
-
-	data, err := getStdout([]string{"", "config", metaURL})
-	if err != nil {
-		t.Fatalf("getStdout: %s", err)
-	}
-	var format meta.Format
-	if err = json.Unmarshal(data, &format); err != nil {
-		t.Fatalf("json unmarshal: %s", err)
-	}
-	if format.MinClientVersion != "1.1.0-A" {
-		t.Fatalf("min-client-version %q != expect 1.1.0-A", format.MinClientVersion)
-	}
-	if tier := format.Tiers[0]; tier.Sc != "STANDARD_IA" {
-		t.Fatalf("tier 0 storage-class %q != expect STANDARD_IA", tier.Sc)
-	}
-}
-
-func TestConfigAutoMinClientVersionRequiresConfirmation(t *testing.T) {
-	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
-	bucketPath := filepath.Join(t.TempDir(), "testBucket")
-	if err := Main([]string{"", "format", metaURL, "--bucket", bucketPath, testVolume}); err != nil {
-		t.Fatalf("format: %s", err)
-	}
-
-	out, err := getStdoutWithInput([]string{"", "config", metaURL, "--enable-acl"}, "n\n")
-	if err == nil || err.Error() != "Aborted." {
-		t.Fatalf("config should be aborted, got output %q error %v", out, err)
-	}
-	if !strings.Contains(string(out), "Clients below version 1.2.0-A will be rejected after modification.") {
-		t.Fatalf("missing min client version confirmation warning: %s", out)
-	}
-
-	data, err := getStdout([]string{"", "config", metaURL})
-	if err != nil {
-		t.Fatalf("getStdout: %s", err)
-	}
-	var format meta.Format
-	if err = json.Unmarshal(data, &format); err != nil {
-		t.Fatalf("json unmarshal: %s", err)
-	}
-	if format.EnableACL {
-		t.Fatalf("enable-acl should not be changed after abort")
-	}
-	if format.MinClientVersion != "1.1.0-A" {
-		t.Fatalf("min-client-version %q != expect 1.1.0-A", format.MinClientVersion)
-	}
-}
-
-func TestConfigAutoMinClientVersionDoesNotDowngrade(t *testing.T) {
 	cases := []struct {
-		name     string
-		args     func(t *testing.T) []string
-		validate func(t *testing.T, format meta.Format)
+		name       string
+		formatArgs func(t *testing.T) []string // extra flags for the initial format
+		preArgs    []string                    // optional config run before the measured one
+		args       func(t *testing.T) []string // measured config run; nil to only check format result
+		input      string                      // stdin for confirmation prompts
+		wantOut    []string                    // substrings expected in the measured output
+		notWantOut []string                    // substrings that must not appear
+		wantMinVer string
+		validate   func(t *testing.T, format meta.Format)
 	}{
 		{
-			name: "acl",
-			args: func(t *testing.T) []string {
-				return []string{"--enable-acl"}
+			name:       "tier bumps min client version",
+			args:       func(t *testing.T) []string { return []string{"--tier", "1", "--storage-class", "GLACIER", "--force"} },
+			wantOut:    []string{"min-client-version: 1.1.0-A -> 1.4.0-A"},
+			wantMinVer: "1.4.0-A",
+			validate: func(t *testing.T, format meta.Format) {
+				if tier := format.Tiers[1]; tier.Sc != "GLACIER" {
+					t.Fatalf("tier 1 storage-class %q != expect GLACIER", tier.Sc)
+				}
 			},
+		},
+		{
+			name:       "acl does not downgrade",
+			preArgs:    []string{"--min-client-version", "1.4.0-A", "--force"},
+			args:       func(t *testing.T) []string { return []string{"--enable-acl", "--force"} },
+			notWantOut: []string{"min-client-version"},
+			wantMinVer: "1.4.0-A",
 			validate: func(t *testing.T, format meta.Format) {
 				if !format.EnableACL {
 					t.Fatalf("enable-acl should be true")
@@ -263,10 +196,11 @@ func TestConfigAutoMinClientVersionDoesNotDowngrade(t *testing.T) {
 			},
 		},
 		{
-			name: "ranger",
-			args: func(t *testing.T) []string {
-				return []string{"--ranger-rest-url", "http://localhost:6080"}
-			},
+			name:       "ranger does not downgrade",
+			preArgs:    []string{"--min-client-version", "1.4.0-A", "--force"},
+			args:       func(t *testing.T) []string { return []string{"--ranger-rest-url", "http://localhost:6080", "--force"} },
+			notWantOut: []string{"min-client-version"},
+			wantMinVer: "1.4.0-A",
 			validate: func(t *testing.T, format meta.Format) {
 				if format.RangerRestUrl != "http://localhost:6080" {
 					t.Fatalf("ranger-rest-url %q != expect http://localhost:6080", format.RangerRestUrl)
@@ -274,14 +208,46 @@ func TestConfigAutoMinClientVersionDoesNotDowngrade(t *testing.T) {
 			},
 		},
 		{
-			name: "kerberos",
-			args: func(t *testing.T) []string {
-				path := filepath.Join(t.TempDir(), "krb5.conf")
-				if err := os.WriteFile(path, []byte("[libdefaults]\n"), 0644); err != nil {
-					t.Fatalf("write kerberos config: %s", err)
+			name:       "kerberos does not downgrade",
+			preArgs:    []string{"--min-client-version", "1.4.0-A", "--force"},
+			args:       func(t *testing.T) []string { return []string{"--kerberos-config-file", writeKerbConf(t), "--force"} },
+			notWantOut: []string{"min-client-version"},
+			wantMinVer: "1.4.0-A",
+			validate: func(t *testing.T, format meta.Format) {
+				if format.KerbConf != "[libdefaults]\n" {
+					t.Fatalf("unexpected kerberos config: %q", format.KerbConf)
 				}
-				return []string{"--kerberos-config-file", path}
 			},
+		},
+		{
+			name: "feature overrides explicit lower version",
+			args: func(t *testing.T) []string {
+				return []string{"--enable-acl", "--min-client-version", "1.1.0-A", "--force"}
+			},
+			wantOut:    []string{"min-client-version: 1.1.0-A -> 1.2.0-A"},
+			wantMinVer: "1.2.0-A",
+			validate: func(t *testing.T, format meta.Format) {
+				if !format.EnableACL {
+					t.Fatalf("enable-acl should be true")
+				}
+			},
+		},
+		{
+			name:       "kerberos via config with confirmation input",
+			args:       func(t *testing.T) []string { return []string{"--kerberos-config-file", writeKerbConf(t)} },
+			input:      "y\n",
+			wantOut:    []string{"min-client-version: 1.1.0-A -> 1.4.0-A"},
+			wantMinVer: "1.4.0-A",
+			validate: func(t *testing.T, format meta.Format) {
+				if format.KerbConf != "[libdefaults]\n" {
+					t.Fatalf("unexpected kerberos config: %q", format.KerbConf)
+				}
+			},
+		},
+		{
+			name:       "format with kerberos bumps min client version",
+			formatArgs: func(t *testing.T) []string { return []string{"--kerberos-config-file", writeKerbConf(t)} },
+			wantMinVer: "1.4.0-A",
 			validate: func(t *testing.T, format meta.Format) {
 				if format.KerbConf != "[libdefaults]\n" {
 					t.Fatalf("unexpected kerberos config: %q", format.KerbConf)
@@ -294,21 +260,43 @@ func TestConfigAutoMinClientVersionDoesNotDowngrade(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
 			bucketPath := filepath.Join(t.TempDir(), "testBucket")
-			if err := Main([]string{"", "format", metaURL, "--bucket", bucketPath, testVolume}); err != nil {
+			formatCmd := []string{"", "format", metaURL, "--bucket", bucketPath}
+			if c.formatArgs != nil {
+				formatCmd = append(formatCmd, c.formatArgs(t)...)
+			}
+			formatCmd = append(formatCmd, testVolume)
+			if err := Main(formatCmd); err != nil {
 				t.Fatalf("format: %s", err)
 			}
-			if err := Main([]string{"", "config", metaURL, "--min-client-version", "1.4.0-A", "--force"}); err != nil {
-				t.Fatalf("config min-client-version: %s", err)
+
+			if len(c.preArgs) > 0 {
+				if err := Main(append([]string{"", "config", metaURL}, c.preArgs...)); err != nil {
+					t.Fatalf("pre config: %s", err)
+				}
 			}
 
-			args := append([]string{"", "config", metaURL}, c.args(t)...)
-			args = append(args, "--force")
-			out, err := getStdout(args)
-			if err != nil {
-				t.Fatalf("config %s: %s", c.name, err)
-			}
-			if strings.Contains(string(out), "min-client-version") {
-				t.Fatalf("min-client-version should not be downgraded: %s", out)
+			if c.args != nil {
+				args := append([]string{"", "config", metaURL}, c.args(t)...)
+				var out []byte
+				var err error
+				if c.input != "" {
+					out, err = getStdoutWithInput(args, c.input)
+				} else {
+					out, err = getStdout(args)
+				}
+				if err != nil {
+					t.Fatalf("config: %s", err)
+				}
+				for _, s := range c.wantOut {
+					if !strings.Contains(string(out), s) {
+						t.Fatalf("missing %q in output: %s", s, out)
+					}
+				}
+				for _, s := range c.notWantOut {
+					if strings.Contains(string(out), s) {
+						t.Fatalf("unexpected %q in output: %s", s, out)
+					}
+				}
 			}
 
 			data, err := getStdout([]string{"", "config", metaURL})
@@ -319,106 +307,12 @@ func TestConfigAutoMinClientVersionDoesNotDowngrade(t *testing.T) {
 			if err = json.Unmarshal(data, &format); err != nil {
 				t.Fatalf("json unmarshal: %s", err)
 			}
-			if format.MinClientVersion != "1.4.0-A" {
-				t.Fatalf("min-client-version %q != expect 1.4.0-A", format.MinClientVersion)
+			if format.MinClientVersion != c.wantMinVer {
+				t.Fatalf("min-client-version %q != expect %q", format.MinClientVersion, c.wantMinVer)
 			}
-			c.validate(t, format)
+			if c.validate != nil {
+				c.validate(t, format)
+			}
 		})
-	}
-}
-
-func TestConfigFeatureMinClientVersionOverridesExplicitLowerVersion(t *testing.T) {
-	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
-	bucketPath := filepath.Join(t.TempDir(), "testBucket")
-	if err := Main([]string{"", "format", metaURL, "--bucket", bucketPath, testVolume}); err != nil {
-		t.Fatalf("format: %s", err)
-	}
-
-	out, err := getStdout([]string{"", "config", metaURL, "--enable-acl", "--min-client-version", "1.1.0-A", "--force"})
-	if err != nil {
-		t.Fatalf("config acl with lower min-client-version: %s", err)
-	}
-	if !strings.Contains(string(out), "min-client-version: 1.1.0-A -> 1.2.0-A") {
-		t.Fatalf("missing final min-client-version change: %s", out)
-	}
-
-	data, err := getStdout([]string{"", "config", metaURL})
-	if err != nil {
-		t.Fatalf("getStdout: %s", err)
-	}
-	var format meta.Format
-	if err = json.Unmarshal(data, &format); err != nil {
-		t.Fatalf("json unmarshal: %s", err)
-	}
-	if !format.EnableACL {
-		t.Fatalf("enable-acl should be true")
-	}
-	if format.MinClientVersion != "1.2.0-A" {
-		t.Fatalf("min-client-version %q != expect 1.2.0-A", format.MinClientVersion)
-	}
-}
-
-func TestConfigKerberosMinClientVersionWithConfirmation(t *testing.T) {
-	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
-	bucketPath := filepath.Join(t.TempDir(), "testBucket")
-	if err := Main([]string{"", "format", metaURL, "--bucket", bucketPath, testVolume}); err != nil {
-		t.Fatalf("format: %s", err)
-	}
-
-	path := filepath.Join(t.TempDir(), "krb5.conf")
-	if err := os.WriteFile(path, []byte("[libdefaults]\n"), 0644); err != nil {
-		t.Fatalf("write kerberos config: %s", err)
-	}
-	out, err := getStdoutWithInput([]string{"", "config", metaURL, "--kerberos-config-file", path}, "y\n")
-	if err != nil {
-		t.Fatalf("config kerberos: %s", err)
-	}
-	if !strings.Contains(string(out), "Clients below version 1.4.0-A will be rejected after modification.") {
-		t.Fatalf("missing min client version confirmation warning: %s", out)
-	}
-	if !strings.Contains(string(out), "min-client-version: 1.1.0-A -> 1.4.0-A") {
-		t.Fatalf("missing min client version change: %s", out)
-	}
-
-	data, err := getStdout([]string{"", "config", metaURL})
-	if err != nil {
-		t.Fatalf("getStdout: %s", err)
-	}
-	var format meta.Format
-	if err = json.Unmarshal(data, &format); err != nil {
-		t.Fatalf("json unmarshal: %s", err)
-	}
-	if format.MinClientVersion != "1.4.0-A" {
-		t.Fatalf("min-client-version %q != expect 1.4.0-A", format.MinClientVersion)
-	}
-	if format.KerbConf != "[libdefaults]\n" {
-		t.Fatalf("unexpected kerberos config: %q", format.KerbConf)
-	}
-}
-
-func TestFormatKerberosMinClientVersion(t *testing.T) {
-	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
-	bucketPath := filepath.Join(t.TempDir(), "testBucket")
-	path := filepath.Join(t.TempDir(), "krb5.conf")
-	if err := os.WriteFile(path, []byte("[libdefaults]\n"), 0644); err != nil {
-		t.Fatalf("write kerberos config: %s", err)
-	}
-	if err := Main([]string{"", "format", metaURL, "--bucket", bucketPath, "--kerberos-config-file", path, testVolume}); err != nil {
-		t.Fatalf("format: %s", err)
-	}
-
-	data, err := getStdout([]string{"", "config", metaURL})
-	if err != nil {
-		t.Fatalf("getStdout: %s", err)
-	}
-	var format meta.Format
-	if err = json.Unmarshal(data, &format); err != nil {
-		t.Fatalf("json unmarshal: %s", err)
-	}
-	if format.MinClientVersion != "1.4.0-A" {
-		t.Fatalf("min-client-version %q != expect 1.4.0-A", format.MinClientVersion)
-	}
-	if format.KerbConf != "[libdefaults]\n" {
-		t.Fatalf("unexpected kerberos config: %q", format.KerbConf)
 	}
 }
