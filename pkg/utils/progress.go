@@ -162,8 +162,14 @@ func (p *Progress) AddByteSpinner(name string) *Bar {
 		decor.CurrentKibiByte("% .1f", decor.WCSyncSpaceR),
 		decor.CurrentNoUnit("(%d Bytes)", decor.WCSyncSpaceR),
 	}
-	// FIXME: maybe use EWMA speed
-	decors = append(decors, decor.AverageSpeed(decor.UnitKiB, "  % .1f", decor.WCSyncSpaceR))
+	rt := newRealtimeSpeed()
+	decors = append(decors,
+		// realtime speed with cumulative average in parentheses, e.g.
+		// "52.9 MiB/s (avg 51.0 MiB/s)"; sampled by mpb's render ticker
+		decor.Any(func(s decor.Statistics) string {
+			return rt.update(s.Current, time.Now())
+		}, decor.WCSyncSpaceR),
+	)
 	b := p.Progress.Add(0, newSpinner(),
 		mpb.PrependDecorators(decors...),
 		mpb.BarFillerClearOnComplete(),
