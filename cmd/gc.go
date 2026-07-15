@@ -78,7 +78,7 @@ $ juicefs gc redis://localhost --work-dir /tmp/gc-work`,
 			},
 			&cli.StringFlag{
 				Name:  "work-dir",
-				Usage: "working directory for external sort temporary files (enables external sort mode, does not support --delete)",
+				Usage: "working directory for external sort temporary files (enables external sort mode)",
 			},
 		},
 	}
@@ -122,9 +122,6 @@ func gc(ctx *cli.Context) error {
 	// Delete pending slices while listing all slices
 	delFlag := ctx.Bool("delete")
 	workDir := ctx.String("work-dir")
-	if workDir != "" && delFlag {
-		logger.Fatal("external sort mode does not support --delete")
-	}
 	threads := ctx.Int("threads")
 	compact := ctx.Bool("compact")
 	if (delFlag || compact || workDir != "") && threads <= 0 {
@@ -212,7 +209,7 @@ func gc(ctx *cli.Context) error {
 	}
 
 	if workDir != "" {
-		return gcExternalSort(ctx.Context, m, &chunkConf, blob, progress, c, delSpin, cleanedFileSpin, workDir, threads, compact, maxMtime)
+		return gcExternalSort(ctx.Context, m, &chunkConf, blob, progress, c, delSpin, cleanedFileSpin, workDir, threads, delFlag, compact, edge, maxMtime)
 	}
 
 	// put it above delete count spinner
@@ -398,7 +395,9 @@ func gcExternalSort(
 	cleanedFileSpin *utils.DoubleSpinner,
 	workDir string,
 	threads int,
+	delFlag bool,
 	compact bool,
+	edge time.Time,
 	maxMtime time.Time,
 ) error {
 	logger.Infof("Using external sort mode, work dir: %s", workDir)
@@ -419,10 +418,26 @@ func gcExternalSort(
 	compacted := progress.AddDoubleSpinnerTwo("Compacted objects", "Compacted data")
 	leaked := progress.AddDoubleSpinnerTwo("Leaked objects", "Leaked data")
 	skipped := progress.AddDoubleSpinnerTwo("Skipped objects", "Skipped data")
+	var wg sync.WaitGroup
+	var leakedObj chan string
+	if delFlag {
+		leakedObj = make(chan string, 10240)
+		for i := 0; i < threads; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for key := range leakedObj {
+					if err := blobWithPrefix.Delete(ctx, key); err != nil {
+						logger.Warnf("delete %s: %s", key, err)
+					}
+				}
+			}()
+		}
+	}
 
 	eg.Go(func() error {
 		defer metaSorter.CloseInput()
-		if err := scanGcMetaRecords(sortCtx, m, c, metaSorter.Input(), metaSliceSpin); err != nil {
+		if err := scanGcMetaRecords(sortCtx, m, c, metaSorter.Input(), metaSliceSpin, delFlag); err != nil {
 			return errors.Errorf("produce meta records: %s", err)
 		}
 		return nil
@@ -453,7 +468,7 @@ func gcExternalSort(
 	var stats gcMergeStats
 	eg.Go(func() error {
 		var err error
-		stats, err = mergeGcSortedRecords(sortCtx, metaSorter.Output(), objSorter.Output(), chunkConf.BlockSize, valid, pending, compacted, leaked)
+		stats, err = mergeGcSortedRecords(sortCtx, metaSorter.Output(), objSorter.Output(), chunkConf.BlockSize, valid, pending, compacted, leaked, leakedObj)
 		if err != nil {
 			return errors.Errorf("merge sorted records: %s", err)
 		}
@@ -463,15 +478,25 @@ func gcExternalSort(
 	sortErr := eg.Wait()
 	_ = metaSorter.Done()
 	_ = objSorter.Done()
+	if leakedObj != nil {
+		close(leakedObj)
+		wg.Wait()
+	}
 	if sortErr != nil {
 		return sortErr
 	}
 
 	err = m.ScanDeletedObject(
 		c,
-		func(ss []meta.Slice, _ int64) (bool, error) {
+		func(ss []meta.Slice, ts int64) (bool, error) {
 			for _, s := range ss {
 				delayedSliceSpin.IncrInt64(int64(s.Size))
+				if delFlag && ts < edge.Unix() {
+					cleanedSliceSpin.IncrInt64(int64(s.Size))
+				}
+			}
+			if delFlag && ts < edge.Unix() {
+				return true, nil
 			}
 			return false, nil
 		},
@@ -483,7 +508,7 @@ func gcExternalSort(
 	delayedSliceSpin.Done()
 	cleanedSliceSpin.Done()
 
-	if compact {
+	if delFlag || compact {
 		delSpin.Done()
 		if progress.Quiet {
 			logger.Infof("Deleted %d pending slices", delSpin.Current())
@@ -492,8 +517,8 @@ func gcExternalSort(
 	progress.Done()
 
 	logGcSummary(objScanSpin.Current(), stats, cleanedSliceSpin, cleanedFileSpin, skipped)
-	if stats.leaked.count > 0 {
-		logger.Infof("Please rerun without `--work-dir` and add `--delete` to clean leaked objects")
+	if stats.leaked.count > 0 && !delFlag {
+		logger.Infof("Please add `--delete` to clean leaked objects")
 	}
 	return nil
 }
@@ -530,8 +555,8 @@ func newGcExternalSorters(ctx context.Context, workDir string, threads int) (*ex
 	return metaSorter, objSorter, nil
 }
 
-func scanGcMetaRecords(ctx context.Context, m meta.Meta, c meta.Context, output chan<- gcMetaRecord, metaSliceSpin *utils.Bar) error {
-	st := m.ScanSlices(c, true, false, nil, func(ino meta.Ino, s meta.Slice) error {
+func scanGcMetaRecords(ctx context.Context, m meta.Meta, c meta.Context, output chan<- gcMetaRecord, metaSliceSpin *utils.Bar, delFlag bool) error {
+	st := m.ScanSlices(c, true, delFlag, nil, func(ino meta.Ino, s meta.Slice) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -717,7 +742,7 @@ func parseGcObjectRecord(obj object.Object) (gcObjectRecord, bool) {
 	if err != nil {
 		return gcObjectRecord{}, false
 	}
-	return gcObjectRecord{sliceID: sliceID, index: index, blockSize: blockSize, objectSize: obj.Size()}, true
+	return gcObjectRecord{sliceID: sliceID, index: index, blockSize: blockSize, objectSize: obj.Size(), key: obj.Key()}, true
 }
 
 type gcMetaRecord struct {
@@ -727,8 +752,8 @@ type gcMetaRecord struct {
 }
 
 const (
-	gcMetaRecordSize   = 13
-	gcObjectRecordSize = 24
+	gcMetaRecordSize        = 13
+	gcObjectRecordFixedSize = 24
 )
 
 func gcMetaRecordFromBytes(data []byte) (gcMetaRecord, error) {
@@ -763,10 +788,11 @@ type gcObjectRecord struct {
 	index      int
 	blockSize  int
 	objectSize int64
+	key        string
 }
 
 func gcObjectRecordFromBytes(data []byte) (gcObjectRecord, error) {
-	if len(data) != gcObjectRecordSize {
+	if len(data) < gcObjectRecordFixedSize {
 		return gcObjectRecord{}, errors.Errorf("invalid gc object record size: %d", len(data))
 	}
 	rb := utils.FromBuffer(data)
@@ -775,15 +801,17 @@ func gcObjectRecordFromBytes(data []byte) (gcObjectRecord, error) {
 		index:      int(rb.Get32()),
 		blockSize:  int(rb.Get32()),
 		objectSize: int64(rb.Get64()),
+		key:        string(rb.Get(len(data) - gcObjectRecordFixedSize)),
 	}, nil
 }
 
 func gcObjectRecordToBytes(r gcObjectRecord) ([]byte, error) {
-	wb := utils.NewBuffer(gcObjectRecordSize)
+	wb := utils.NewBuffer(uint32(gcObjectRecordFixedSize + len(r.key)))
 	wb.Put64(r.sliceID)
 	wb.Put32(uint32(r.index))
 	wb.Put32(uint32(r.blockSize))
 	wb.Put64(uint64(r.objectSize))
+	wb.Put([]byte(r.key))
 	return wb.Bytes(), nil
 }
 
@@ -830,6 +858,7 @@ func mergeGcSortedRecords(
 	objStream <-chan gcObjectRecord,
 	blockSize int,
 	valid, pending, compacted, leaked *utils.DoubleSpinner,
+	leakedObj chan<- string,
 ) (gcMergeStats, error) {
 	var stats gcMergeStats
 
@@ -857,6 +886,9 @@ func mergeGcSortedRecords(
 	}
 	markLeaked := func(obj gcObjectRecord) {
 		addGcObjectStat(&stats.leaked, leaked, obj.objectSize)
+		if leakedObj != nil {
+			leakedObj <- obj.key
+		}
 	}
 
 	for {
