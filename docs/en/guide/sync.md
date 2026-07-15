@@ -319,6 +319,95 @@ parallel-ssh -h hosts.txt -i juicefs mount -d redis://10.10.0.8:6379/1 /jfs-dst 
 juicefs sync --worker host1,host2 /jfs-src /jfs-dst
 ```
 
+### Global traffic control {#global-traffic-control}
+
+`--bwlimit` applies only to a single `juicefs sync` process. When multiple sync processes run concurrently (for example, when using [distributed synchronization](#distributed-sync)), each process enforces its own bandwidth limit independently, so the aggregate bandwidth of all processes may greatly exceed the expected limit.
+
+`--traffic-control-url` solves this by pointing all sync processes to the same centralized traffic-control HTTP server that acts as a shared token-bucket. All processes request bandwidth tokens from the server before transferring data, ensuring that the total throughput across all running instances never exceeds the server-configured rate.
+
+### HTTP API protocol
+
+The sync client and your traffic-control server communicate via a simple JSON-over-HTTP protocol:
+
+| Direction | Method | Path | Body | Description |
+|-----------|--------|------|------|-------------|
+| Request tokens | POST | `<url>` | `{"bytes": N}` | Ask for N bytes of bandwidth. N > 0. |
+| Return unused tokens | POST | `<url>` | `{"bytes": -N}` | Return N bytes of unused tokens to the server. N < 0. |
+
+**Response** (JSON):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `granted` | int64 | Number of bytes actually granted (equal to the requested amount for a blocking server). |
+| `expired` | int64 | Token validity in **milliseconds**. After this window elapses, the client returns any unused tokens, provided it currently has no pending bandwidth demand. |
+
+The client blocks on the POST request until the server responds, so the server's internal token bucket (or any other rate-limiting logic) is what enforces the global limit.
+
+### Reference server implementation
+
+The following is a minimal Go server that implements a global bandwidth limit with an average rate of 3 MB/s and a burst capacity of 10 MB using [`github.com/juju/ratelimit`](https://github.com/juju/ratelimit):
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "io"
+    "log"
+    "net/http"
+
+    "github.com/juju/ratelimit"
+)
+
+var limiter *ratelimit.Bucket
+
+type req struct {
+    // Positive: request tokens. Negative: return unused tokens.
+    Bytes int64 `json:"bytes"`
+}
+type resp struct {
+    Granted int64 `json:"granted"` // bytes granted
+    Expired int64 `json:"expired"` // token validity in milliseconds
+}
+
+func tokenHandler(w http.ResponseWriter, r *http.Request) {
+    body, _ := io.ReadAll(r.Body)
+    var in req
+    json.Unmarshal(body, &in)
+    if in.Bytes > 0 {
+        limiter.Wait(in.Bytes) // blocks until tokens are available
+    }
+    out, _ := json.Marshal(resp{Granted: in.Bytes, Expired: 1000})
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(out)
+}
+
+func main() {
+    // 3 MB/s average rate, 10 MB burst
+    limiter = ratelimit.NewBucketWithRate(3<<20, 10<<20)
+    http.HandleFunc("/token", tokenHandler)
+    fmt.Println("Starting traffic control server on :8080")
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+### Usage
+
+Start the server on a host reachable by all sync processes, and then pass its token endpoint to each `juicefs sync` call:
+
+```shell
+# Run the traffic control server (once, on any accessible host)
+go run traffic_control_server.go
+
+# Each sync process uses the same URL to share a global bandwidth cap
+juicefs sync --traffic-control-url http://10.0.0.1:8080/token s3://src/ s3://dst/
+```
+
+`--bwlimit` and `--traffic-control-url` can be used together. For each limiter check, sync tries the global traffic-control service first; if the service is unavailable, that check falls back to the local `--bwlimit`. After the service recovers, subsequent checks use the global limit again. Ongoing waits that have already fallen back to `--bwlimit` are not interrupted by recovery. To make the fallback meaningful, set `--bwlimit` to a smaller per-process value than the global cap.
+
+If `--traffic-control-url` is used without `--bwlimit`, there is no local fallback: while the traffic-control service is unavailable, sync transfers without any rate limit (logged as `run without rate limit`), and resumes the global limit once the service recovers.
+
 ## Observation {#observation}
 
 When using `sync` to transfer large files, the progress bar might move slowly or get stuck. If this happens, you can observe the progress using other methods.
