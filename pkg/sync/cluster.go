@@ -231,7 +231,8 @@ func sendStats(addr string, multipartUploads *workerMultipartUploads) {
 }
 
 func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *CheckpointManager) (string, error) {
-	http.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []object.Object
 		var total int64
 		obj, ok := <-tasks
@@ -273,7 +274,7 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 		logger.Debugf("send %d objects(%s) to %s", len(objs), humanize.IBytes(uint64(total)), req.RemoteAddr)
 		_, _ = w.Write(d)
 	})
-	http.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != "POST" {
 			http.Error(w, "POST required", http.StatusBadRequest)
 			return
@@ -339,7 +340,7 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 		return "", fmt.Errorf("listen: %s", err)
 	}
 	logger.Infof("Listen at %s", l.Addr())
-	go func() { _ = http.Serve(l, nil) }()
+	go func() { _ = http.Serve(l, mux) }()
 	return l.Addr().String(), nil
 }
 
