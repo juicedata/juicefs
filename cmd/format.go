@@ -402,15 +402,20 @@ func readKerbConf(file string) string {
 	return string(data)
 }
 
-func maxVersion(v1, v2 string) string {
+func compareVersion(v1, v2 string) int {
 	if v1 == "" {
-		return v2
+		return -1
 	}
-	s1, s2 := version.Parse(v1), version.Parse(v2)
-	if s1 != nil && s2 != nil {
-		if r, err := version.CompareVersions(s1, s2); err == nil && r >= 0 {
-			return v1
-		}
+	if v2 == "" {
+		return 1
+	}
+	ret, _ := version.CompareVersions(version.Parse(v1), version.Parse(v2))
+	return ret
+}
+
+func maxVersion(v1, v2 string) string {
+	if compareVersion(v1, v2) >= 0 {
+		return v1
 	}
 	return v2
 }

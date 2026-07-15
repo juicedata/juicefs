@@ -183,12 +183,10 @@ func config(ctx *cli.Context) error {
 	var findTier bool
 	var newTier object.Tier
 
-	requiredMinClientVersion := format.MinClientVersion
+	var requiredMinClientVersion string
 	requireMinClientVersion := func(required string) {
-		if mv := maxVersion(requiredMinClientVersion, required); mv != requiredMinClientVersion {
-			requiredMinClientVersion = mv
-			clientVer = true
-		}
+		requiredMinClientVersion = maxVersion(requiredMinClientVersion, required)
+		clientVer = true
 	}
 
 	for _, flag := range ctx.LocalFlagNames() {
@@ -350,8 +348,7 @@ func config(ctx *cli.Context) error {
 					return fmt.Errorf("Invalid version string: %s", new)
 				}
 				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MinClientVersion, new))
-				format.MinClientVersion = new
-				clientVer = true
+				requireMinClientVersion(new)
 			}
 		case "max-client-version":
 			if new := ctx.String(flag); new != format.MaxClientVersion {
@@ -432,7 +429,7 @@ func config(ctx *cli.Context) error {
 		}
 	}
 
-	if clientVer {
+	if clientVer && compareVersion(format.MinClientVersion, requiredMinClientVersion) < 0 {
 		msg.WriteString("min-client-version: ")
 		msg.WriteString(format.MinClientVersion)
 		msg.WriteString(" -> ")
@@ -493,7 +490,7 @@ func config(ctx *cli.Context) error {
 		if clientVer {
 			confirmClientVer := false
 			if format.CheckVersion() != nil {
-				warn("Clients below version %d will be rejected after modification.", format.MinClientVersion)
+				warn("Clients below version %s will be rejected after modification.", format.MinClientVersion)
 				confirmClientVer = true
 			}
 
