@@ -454,24 +454,10 @@ func gcExternalSort(
 		return nil
 	})
 
-	eg.Go(func() error {
-		if err := metaSorter.Wait(); err != nil {
-			return errors.Errorf("sort meta records: %s", err)
-		}
-		return nil
-	})
-
-	eg.Go(func() error {
-		if err := objSorter.Wait(); err != nil {
-			return errors.Errorf("sort object records: %s", err)
-		}
-		return nil
-	})
-
 	var stats gcMergeStats
 	eg.Go(func() error {
 		var err error
-		stats, err = mergeGcSortedRecords(sortCtx, metaSorter.Output(), objSorter.Output(), chunkConf.BlockSize, valid, pending, compacted, leaked, leakedObj)
+		stats, err = mergeGcSortedRecords(sortCtx, metaSorter, objSorter, chunkConf.BlockSize, valid, pending, compacted, leaked, leakedObj)
 		if err != nil {
 			return errors.Errorf("merge sorted records: %s", err)
 		}
@@ -888,8 +874,8 @@ func logGcSummary(scanned int64, stats gcMergeStats, cleanedSliceSpin, cleanedFi
 
 func mergeGcSortedRecords(
 	ctx context.Context,
-	metaStream <-chan gcMetaRecord,
-	objStream <-chan gcObjectRecord,
+	metaSorter *extsort.Sorter[gcMetaRecord],
+	objSorter *extsort.Sorter[gcObjectRecord],
 	blockSize int,
 	valid, pending, compacted, leaked *utils.DoubleSpinner,
 	leakedObj chan<- string,
@@ -897,21 +883,11 @@ func mergeGcSortedRecords(
 	var stats gcMergeStats
 
 	readMeta := func() (gcMetaRecord, bool, error) {
-		select {
-		case r, ok := <-metaStream:
-			return r, ok, nil
-		case <-ctx.Done():
-			return gcMetaRecord{}, false, ctx.Err()
-		}
+		return metaSorter.Next(ctx)
 	}
 
 	readObject := func() (gcObjectRecord, bool, error) {
-		select {
-		case r, ok := <-objStream:
-			return r, ok, nil
-		case <-ctx.Done():
-			return gcObjectRecord{}, false, ctx.Err()
-		}
+		return objSorter.Next(ctx)
 	}
 
 	meta, metaOpen, err := readMeta()
