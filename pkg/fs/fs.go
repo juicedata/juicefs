@@ -1021,7 +1021,11 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 					target = target[len(mp):]
 				} else {
 					fi.name = "file:" + target
-					logger.Errorf("external link: %s -> %s", p, target)
+					linkPath := strings.Join(ss[:i+1], "/")
+					if linkPath == "" {
+						linkPath = "/"
+					}
+					logger.Warnf("external link: %s -> %s (while resolving %s)", linkPath, target, p)
 					return fi, utils.ErrExtlink
 				}
 			} else {
