@@ -412,6 +412,7 @@ func gcExternalSort(
 	metaSliceSpin := progress.AddCountSpinner("Listed slices")
 	delayedSliceSpin := progress.AddDoubleSpinnerTwo("Trash slices", "Trash data")
 	cleanedSliceSpin := progress.AddDoubleSpinnerTwo("Cleaned trash slices", "Cleaned trash data")
+	prefixSpin := progress.AddCountSpinner("Listed prefixes")
 	objScanSpin := progress.AddCountSpinner("Scanned objects")
 	valid := progress.AddDoubleSpinnerTwo("Valid objects", "Valid data")
 	pending := progress.AddDoubleSpinnerTwo("Pending delete objects", "Pending delete data")
@@ -437,6 +438,7 @@ func gcExternalSort(
 
 	eg.Go(func() error {
 		defer metaSorter.CloseInput()
+		defer metaSliceSpin.Done()
 		if err := scanGcMetaRecords(sortCtx, m, c, metaSorter.Input(), metaSliceSpin, delFlag); err != nil {
 			return errors.Errorf("produce meta records: %s", err)
 		}
@@ -445,7 +447,8 @@ func gcExternalSort(
 
 	eg.Go(func() error {
 		defer objSorter.CloseInput()
-		if err := scanGcObjectRecords(sortCtx, blobWithPrefix, objSorter.Input(), threads, maxMtime, objScanSpin, skipped); err != nil {
+		defer objScanSpin.Done()
+		if err := scanGcObjectRecords(sortCtx, blobWithPrefix, objSorter.Input(), threads, chunkConf.HashPrefix, maxMtime, prefixSpin, objScanSpin, skipped); err != nil {
 			return errors.Errorf("produce object records: %s", err)
 		}
 		return nil
@@ -585,8 +588,8 @@ func scanGcMetaRecords(ctx context.Context, m meta.Meta, c meta.Context, output 
 	return nil
 }
 
-func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, output chan<- gcObjectRecord, threads int, maxMtime time.Time, objScanSpin *utils.Bar, skipped *utils.DoubleSpinner) error {
-	return scanGcChunkObjects(ctx, blob, threads, func(obj object.Object) error {
+func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, output chan<- gcObjectRecord, threads int, hashPrefix bool, maxMtime time.Time, prefixSpin, objScanSpin *utils.Bar, skipped *utils.DoubleSpinner) error {
+	return scanGcChunkObjects(ctx, blob, threads, hashPrefix, prefixSpin, func(obj object.Object) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -613,63 +616,94 @@ func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, output 
 
 const gcObjectListBatch = 10000
 
-func scanGcChunkObjects(ctx context.Context, blob object.ObjectStorage, threads int, handle func(object.Object) error) error {
-	prefixes, err := listGcChunkObjectPrefixes(ctx, blob)
-	if err != nil {
-		logger.Warnf("can't find chunk prefixes: %s, list chunks using single thread", err)
-		return scanGcChunkObjectsPrefix(ctx, blob, "", handle)
-	}
-	if len(prefixes) == 0 {
-		return nil
-	}
-	control := make(chan bool, threads)
-	var wg sync.WaitGroup
-
-	for _, prefix := range prefixes {
-		control <- true
-		wg.Add(1)
-		go func(prefix string) {
-			defer wg.Done()
-			e := scanGcChunkObjectsPrefix(ctx, blob, prefix, handle)
-			<-control
-			if e != nil {
-				logger.Errorf("list chunks from %s: %s", blob, e)
-				err = errors.Errorf("list chunks from %s: %s", blob, e)
+func scanGcChunkObjects(ctx context.Context, blob object.ObjectStorage, threads int, hashPrefix bool, prefixSpin *utils.Bar, handle func(object.Object) error) error {
+	prefixes := make(chan string, threads)
+	eg, scanCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		defer close(prefixes)
+		defer prefixSpin.Done()
+		depth := 2
+		if hashPrefix {
+			depth = 1
+		}
+		return walkGcChunkObjectPrefixes(ctx, blob, "", depth, true, func(prefix string) error {
+			select {
+			case prefixes <- prefix:
+				if prefix != "" {
+					prefixSpin.Increment()
+				}
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
 			}
-		}(prefix)
+		})
+	})
+
+	for range threads {
+		eg.Go(func() error {
+			for {
+				select {
+				case prefix, ok := <-prefixes:
+					if !ok {
+						return nil
+					}
+					if err := scanGcChunkObjectsPrefix(scanCtx, blob, prefix, handle); err != nil {
+						return errors.Errorf("list chunks from %s: %s", blob, err)
+					}
+				case <-scanCtx.Done():
+					return scanCtx.Err()
+				}
+			}
+		})
 	}
-	wg.Wait()
-	return err
+	return eg.Wait()
 }
 
-func listGcChunkObjectPrefixes(ctx context.Context, blob object.ObjectStorage) ([]string, error) {
-	var prefixes []string
+func walkGcChunkObjectPrefixes(ctx context.Context, blob object.ObjectStorage, prefix string, depth int, allowFallback bool, fn func(string) error) error {
 	seenPrefixes := make(map[string]struct{})
 	var marker, token string
+	firstPage := true
 	for {
-		objs, hasMore, nextToken, err := blob.List(ctx, "", marker, token, "/", gcObjectListBatch, true)
+		objs, hasMore, nextToken, err := blob.List(ctx, prefix, marker, token, "/", gcObjectListBatch, true)
 		if err != nil {
-			return nil, err
+			if allowFallback && firstPage {
+				logger.Warnf("can't find chunk prefixes: %s, list chunks using single thread", err)
+				return fn("")
+			}
+			return err
 		}
+		firstPage = false
 		if len(objs) > 0 && marker != "" && objs[0].Key() == marker {
 			objs = objs[1:]
 		}
 		if hasMore && len(objs) == 0 && nextToken == token {
-			return nil, errors.New("list chunk prefixes made no progress")
+			return errors.New("list chunk prefixes made no progress")
 		}
 		for _, obj := range objs {
 			if obj == nil || obj.Key() == "" {
 				continue
 			}
 			key := obj.Key()
+			if key == prefix {
+				marker = key
+				continue
+			}
 			if obj.IsDir() {
 				if _, ok := seenPrefixes[key]; !ok {
-					prefixes = append(prefixes, key)
 					seenPrefixes[key] = struct{}{}
+					if depth == 1 {
+						if err := fn(key); err != nil {
+							return err
+						}
+					} else {
+						if err := walkGcChunkObjectPrefixes(ctx, blob, key, depth-1, false, fn); err != nil {
+							return err
+						}
+					}
 				}
 			} else {
-				if strings.Contains(key, "/") {
-					return nil, errors.Errorf("delimiter list returned nested object %s", key)
+				if strings.Contains(strings.TrimPrefix(key, prefix), "/") {
+					return errors.Errorf("delimiter list returned nested object %s", key)
 				}
 			}
 			marker = key
@@ -679,7 +713,7 @@ func listGcChunkObjectPrefixes(ctx context.Context, blob object.ObjectStorage) (
 		}
 		token = nextToken
 	}
-	return prefixes, nil
+	return nil
 }
 
 func scanGcChunkObjectsPrefix(ctx context.Context, blob object.ObjectStorage, prefix string, handle func(object.Object) error) error {
