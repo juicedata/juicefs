@@ -82,10 +82,10 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 	}
 	var cfg aws.Config
 	if accessKey != "" {
-		cfg, err = config.LoadDefaultConfig(ctx,
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
+		cfg, err = config.LoadDefaultConfig(ctx, append(defaultChecksumOpts(),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))...)
 	} else {
-		cfg, err = config.LoadDefaultConfig(ctx)
+		cfg, err = config.LoadDefaultConfig(ctx, defaultChecksumOpts()...)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %s", err)

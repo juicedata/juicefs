@@ -399,13 +399,33 @@ func (s *s3client) Restore(ctx context.Context, key string, days int32) error {
 	return err
 }
 
+// defaultChecksumOpts returns AWS SDK load options that set checksum calculation
+// and validation to "when_required" by default. If the user has explicitly set
+// AWS_REQUEST_CHECKSUM_CALCULATION or AWS_RESPONSE_CHECKSUM_VALIDATION, those
+// env vars take precedence and we skip the corresponding programmatic default,
+// because config.WithXxx options have higher priority than environment variables
+// in the AWS SDK v2 resolution order.
+func defaultChecksumOpts() []func(*config.LoadOptions) error {
+	var opts []func(*config.LoadOptions) error
+	if os.Getenv("AWS_REQUEST_CHECKSUM_CALCULATION") == "" {
+		opts = append(opts, config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired))
+	}
+	if os.Getenv("AWS_RESPONSE_CHECKSUM_VALIDATION") == "" {
+		opts = append(opts, config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired))
+	}
+	return opts
+}
+
 func autoS3Region(bucketName, accessKey, secretKey, token string) (string, error) {
 	var cfg aws.Config
 	var err error
 	if accessKey != "" {
-		cfg, err = config.LoadDefaultConfig(ctx, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
+		var loadOpts []func(*config.LoadOptions) error
+		loadOpts = append(loadOpts, defaultChecksumOpts()...)
+		loadOpts = append(loadOpts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
+		cfg, err = config.LoadDefaultConfig(ctx, loadOpts...)
 	} else {
-		cfg, err = config.LoadDefaultConfig(ctx)
+		cfg, err = config.LoadDefaultConfig(ctx, defaultChecksumOpts()...)
 	}
 	if err != nil {
 		return "", err
@@ -586,15 +606,14 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		})
 	}
 	var cfg aws.Config
+	var loadOpts []func(*config.LoadOptions) error
+	loadOpts = append(loadOpts, defaultChecksumOpts()...)
 	if accessKey == "anonymous" {
-		cfg, err = config.LoadDefaultConfig(ctx,
-			config.WithCredentialsProvider(aws.AnonymousCredentials{}))
+		loadOpts = append(loadOpts, config.WithCredentialsProvider(aws.AnonymousCredentials{}))
 	} else if accessKey != "" {
-		cfg, err = config.LoadDefaultConfig(ctx,
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
-	} else {
-		cfg, err = config.LoadDefaultConfig(ctx)
+		loadOpts = append(loadOpts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	}
+	cfg, err = config.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {
 		return nil, err
 	}
