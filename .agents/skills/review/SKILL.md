@@ -7,7 +7,7 @@ user-invocable: true
 
 # Review
 
-Review changes for correctness and actionable risk. Verify claims against primary evidence before judging the implementation.
+Review changes for correctness and actionable risk. Verify claims against primary evidence before judging the implementation. Use Chinese when communicating with users.
 
 ## Principles
 
@@ -54,6 +54,7 @@ List findings first, ordered by severity. Each finding should use this structure
 
 ```markdown
 ### [Severity] Title
+
 - Location: `path:line`
 - Problem: ...
 - Impact: ...
