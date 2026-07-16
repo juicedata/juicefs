@@ -551,15 +551,11 @@ func doSync(c *cli.Context) error {
 		logger.Debugf("worker process start")
 	}
 	// Windows support `\` and `/` as its separator, Unix only use `/`
-	srcArg := c.Args().Get(0)
-	dstArg := c.Args().Get(1)
-	srcURL := srcArg
-	dstURL := dstArg
+	srcURL, dstURL := c.Args().Get(0), c.Args().Get(1)
 	if isWorker {
-		srcURL = workerSrcURL
-		dstURL = workerDstURL
+		srcURL, dstURL = workerSrcURL, workerDstURL
 	} else {
-		config.SetClusterStorage(srcArg, dstArg)
+		config.SetClusterStorage(srcURL, dstURL)
 	}
 	removePassword(srcURL, dstURL)
 	if runtime.GOOS == "windows" {
