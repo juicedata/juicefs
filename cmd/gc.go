@@ -528,9 +528,10 @@ func newGcExternalSorters(ctx context.Context, workDir string, threads int) (*ex
 	}
 
 	objSorter, err := extsort.New(ctx, extsort.Config{
-		WorkDir: workDir,
-		Name:    "gc-object",
-		Threads: threads,
+		WorkDir:  workDir,
+		Name:     "gc-object",
+		Threads:  threads,
+		Checksum: true,
 	}, extsort.Codec[gcObjectRecord]{
 		FromBytes: gcObjectRecordFromBytes,
 		ToBytes:   gcObjectRecordToBytes,
