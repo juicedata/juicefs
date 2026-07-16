@@ -375,4 +375,4 @@ replace github.com/cloudsoda/go-smb2 => github.com/juicedata/go-smb2 v0.0.0-2026
 
 replace github.com/hashicorp/golang-lru/v2 v2.0.7 => github.com/juicedata/golang-lru/v2 v2.0.8-0.20251126062551-1b321869f904
 
-replace github.com/lanrat/extsort => github.com/juicedata/extsort v1.0.2-0.20260716020151-f7a036297dcd
+replace github.com/lanrat/extsort => github.com/juicedata/extsort v1.0.2-0.20260716070150-94a8c0fbe780
