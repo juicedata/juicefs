@@ -83,6 +83,23 @@ make test.fdb                # FoundationDB tests (-tags fdb)
 - Keep comments minimal; add only when necessary.
 - Every new `.go` file MUST start with the Apache 2.0 header (see `main.go` for the canonical template).
 
+## Version compatibility
+
+- Persistent metadata or serialization changes in `pkg/meta/{interface,redis,sql,tkv}.go`
+  must remain readable by new clients, and old clients must not silently drop new
+  fields when rewriting records.
+- When metadata fields change, review `pkg/meta/{dump,backup}.go`, `pkg/meta/*_bak.go`,
+  and `pb/backup.proto`. Released dump/load formats must remain readable; tolerate
+  unknown fields where feasible, reject unsupported formats explicitly, and never
+  silently lose correctness-critical data.
+- Evaluate mixed-version behavior for metadata features or semantic changes. If
+  unsafe, raise (never lower) `MinClientVersion` and enable the feature only after
+  old clients have exited.
+- FUSE option changes must preserve existing names and defaults. Review graceful
+  restart, `FuseOptions`, `StripOptions`, and old-config normalization in
+  `cmd/mount_unix.go`, `pkg/vfs/vfs.go`, and `pkg/fuse/fuse.go`.
+- Add compatibility tests, or explicitly report missing coverage during review.
+
 ## Agent boundaries
 
 - Correctness first: this is a distributed file system; small changes can affect data
@@ -90,8 +107,6 @@ make test.fdb                # FoundationDB tests (-tags fdb)
   don't bypass safety checks.
 - Metadata-engine parity: a semantic change in `pkg/meta/` must behave identically
   across all three families (Redis, SQL/DB, KV) and be covered by their shared tests.
-- Backward compatibility: keep the `dump`/`load` metadata format backward compatible,
-  and forward compatible where feasible (tolerate unknown/new fields).
 - Behavior changes need matching unit tests; user-facing changes update the docs.
 - Keep diffs minimal and scoped; avoid unrelated refactors or formatting-only churn.
 - Do not hand-edit generated code or vendored dependencies.
