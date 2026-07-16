@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
-
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
@@ -53,7 +52,9 @@ func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
 type setTimeout func(time.Duration)
 
 func (fs *fileSystem) replyAttr(ctx *fuseContext, entry *meta.Entry, attr *fuse.Attr, set setTimeout) {
+	replyAttrRaceMaybeSleep(entry)
 	fs.v.UpdateLength(entry.Inode, entry.Attr) // UpdateLength before ModifiedSince check to avoid TOCTOU race
+	replyAttrRaceMaybeSleep(entry)
 	if vfs.IsSpecialNode(entry.Inode) {
 		set(time.Hour)
 	} else {

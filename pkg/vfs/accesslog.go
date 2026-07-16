@@ -101,6 +101,10 @@ func logit(ctx Context, method string, err syscall.Errno, format string, args ..
 	}
 }
 
+func (v *VFS) AccessLogf(ctx Context, method string, err syscall.Errno, format string, args ...interface{}) {
+	logit(ctx, method, err, format, args...)
+}
+
 func openAccessLog(fh uint64) uint64 {
 	readerLock.Lock()
 	defer readerLock.Unlock()
