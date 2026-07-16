@@ -612,15 +612,15 @@ func scanGcChunkObjects(ctx context.Context, blob object.ObjectStorage, threads 
 		if hashPrefix {
 			depth = 1
 		}
-		return walkGcChunkObjectPrefixes(ctx, blob, "", depth, true, func(prefix string) error {
+		return walkGcChunkObjectPrefixes(scanCtx, blob, "", depth, true, func(prefix string) error {
 			select {
 			case prefixes <- prefix:
 				if prefix != "" {
 					prefixSpin.Increment()
 				}
 				return nil
-			case <-ctx.Done():
-				return ctx.Err()
+			case <-scanCtx.Done():
+				return scanCtx.Err()
 			}
 		})
 	})
