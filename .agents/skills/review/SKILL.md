@@ -48,9 +48,33 @@ Evaluate the relevant dimensions:
 - **Tests**: reproduction of the original problem, fixed behavior, boundaries, errors, concurrency, compatibility, and backend-specific paths. Check that tests are stable, minimal, readable, and use the smallest relevant commands. If tests were not run, explain why and recommend them.
 - **JuiceFS**: apply `AGENTS.md`, especially its requirements for POSIX semantics, data integrity, metadata-engine parity, dump/load and mixed-version compatibility, object-storage behavior, concurrency, and failure recovery.
 
-### 4. Report Findings
+### 4. Report the Review
 
-List findings first, ordered by severity. Each finding should use this structure:
+Use the following three top-level sections, in this order. This gives the reader enough context to understand the review before presenting defects and risks.
+
+```markdown
+## Summary
+
+## Solution
+
+## Findings
+```
+
+In **Summary**:
+
+- Summarize the reported problem, relevant background, trigger conditions, affected users or behavior, and expected behavior.
+- State the verified root cause when the evidence supports one. Clearly distinguish verified facts from claims, assumptions, and unknowns.
+- Keep this section concise and focused on the context needed to evaluate the change.
+
+In **Solution**:
+
+- Explain the implemented or proposed solution, its key mechanism, and the main code paths or components it changes.
+- Describe why the approach addresses the problem, plus important compatibility, migration, performance, security, or design tradeoffs when relevant.
+- Summarize the approach rather than narrating the diff file by file. Do not present the solution as correct before completing the review.
+
+In **Findings**:
+
+- List actionable findings ordered by severity. Each finding should use this structure:
 
 ```markdown
 ### [Severity] Title
@@ -62,9 +86,9 @@ List findings first, ordered by severity. Each finding should use this structure
 - Recommendation: ...
 ```
 
-After the findings, report assumptions or unknowns, tests run or not run, remaining risks, and a verdict when supported by sufficient evidence: Approve, Request changes, Comment only, or Need more information.
+- After the individual findings, include assumptions or unknowns, tests run or not run, remaining risks, and a verdict when supported by sufficient evidence: Approve, Request changes, Comment only, or Need more information. Keep this supporting review context within the **Findings** section instead of creating additional top-level sections.
 
-If there are no findings, say so explicitly and identify what was checked and what remains unverified.
+- If there are no findings, say so explicitly under **Findings**, then identify what was checked and what remains unverified.
 
 ## Severity
 
