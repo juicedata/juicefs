@@ -488,8 +488,8 @@ github.com/jtolio/noiseconn v0.0.0-20230301220541-88105e6c8ac6 h1:iVMQyk78uOpX/U
 github.com/jtolio/noiseconn v0.0.0-20230301220541-88105e6c8ac6/go.mod h1:MEkhEPFwP3yudWO0lj6vfYpLIB+3eIcuIW+e0AZzUQk=
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83 h1:RyHTka3jCnTaUqfRYjlwcQlr53aasmkvHEbYLXthqr8=
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83/go.mod h1:1CNUng3PtjQMtRzJO4FMXBQvkGtuYRxxiR9xMa7jMwI=
-github.com/juicedata/extsort v1.0.2-0.20260716020151-f7a036297dcd h1:j/YmBcBrKN5AB9XMVKibdkRiiNWPNb24ddefP18A95A=
-github.com/juicedata/extsort v1.0.2-0.20260716020151-f7a036297dcd/go.mod h1:hceP6kxKPKebjN1RVrDBXMXXECbaI41Y94tt6MDazc4=
+github.com/juicedata/extsort v1.0.2-0.20260716070150-94a8c0fbe780 h1:g6vDXketCtLxBjVF4HKxfpj3ejB6qDQRdyQ3+IpfTAs=
+github.com/juicedata/extsort v1.0.2-0.20260716070150-94a8c0fbe780/go.mod h1:hceP6kxKPKebjN1RVrDBXMXXECbaI41Y94tt6MDazc4=
 github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db h1:esc0bVXkjEuyPLn7JXFhKBDztpM0dT0GYQn7CqaBB6w=
 github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=
 github.com/juicedata/go-fuse/v2 v2.1.1-0.20260610024748-b44a81936922 h1:EnPQryUPQLe4gbf98fFENp1OU1eKxOOo5ehdKfwiJCE=
