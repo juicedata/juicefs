@@ -17,7 +17,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -194,14 +196,20 @@ func fsck(ctx *cli.Context) error {
 					}
 					obj, err := blob.Head(ctx.Context, objKey)
 					if err != nil {
-						if _, ok := brokens[inode]; !ok {
+						filePath, ok := brokens[inode]
+						if !ok {
 							if ps := m.GetPaths(meta.Background(), inode); len(ps) > 0 {
-								brokens[inode] = ps[0]
+								filePath = ps[0]
 							} else {
-								brokens[inode] = fmt.Sprintf("inode:%d", inode)
+								filePath = fmt.Sprintf("inode:%d", inode)
 							}
 						}
-						logger.Errorf("can't find block %s for file %s: %s", objKey, brokens[inode], err)
+						if !errors.Is(err, os.ErrNotExist) {
+							logger.Warnf("check block %s for file %s in object storage: %s", objKey, filePath, err)
+							continue
+						}
+						brokens[inode] = filePath
+						logger.Errorf("can't find block %s for file %s: %s", objKey, filePath, err)
 						lostDSpin.IncrInt64(int64(sz))
 						continue
 					}
