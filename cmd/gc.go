@@ -412,7 +412,7 @@ func gcExternalSort(
 	metaSliceSpin := progress.AddCountSpinner("Listed slices")
 	delayedSliceSpin := progress.AddDoubleSpinnerTwo("Trash slices", "Trash data")
 	cleanedSliceSpin := progress.AddDoubleSpinnerTwo("Cleaned trash slices", "Cleaned trash data")
-	prefixSpin := progress.AddCountSpinner("Listed prefixes")
+	prefixSpin := progress.AddCountBar("Listed prefixes", 0)
 	objScanSpin := progress.AddCountSpinner("Scanned objects")
 	valid := progress.AddDoubleSpinnerTwo("Valid objects", "Valid data")
 	pending := progress.AddDoubleSpinnerTwo("Pending delete objects", "Pending delete data")
@@ -604,21 +604,19 @@ func scanGcObjectRecords(ctx context.Context, blob object.ObjectStorage, output 
 const gcObjectListBatch = 10000
 
 func scanGcChunkObjects(ctx context.Context, blob object.ObjectStorage, threads int, hashPrefix bool, prefixSpin *utils.Bar, handle func(object.Object) error) error {
+	defer prefixSpin.Done()
 	prefixes := make(chan string, threads)
 	eg, scanCtx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		defer close(prefixes)
-		defer prefixSpin.Done()
 		depth := 2
 		if hashPrefix {
 			depth = 1
 		}
 		return walkGcChunkObjectPrefixes(scanCtx, blob, "", depth, true, func(prefix string) error {
+			prefixSpin.IncrTotal(1)
 			select {
 			case prefixes <- prefix:
-				if prefix != "" {
-					prefixSpin.Increment()
-				}
 				return nil
 			case <-scanCtx.Done():
 				return scanCtx.Err()
@@ -637,6 +635,7 @@ func scanGcChunkObjects(ctx context.Context, blob object.ObjectStorage, threads 
 					if err := scanGcChunkObjectsPrefix(scanCtx, blob, prefix, handle); err != nil {
 						return errors.Errorf("list chunks from %s: %s", blob, err)
 					}
+					prefixSpin.Increment()
 				case <-scanCtx.Done():
 					return scanCtx.Err()
 				}
