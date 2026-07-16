@@ -324,10 +324,6 @@ func clusterFlags() []cli.Flag {
 			Name:  "manager-addr",
 			Usage: "the IP address to communicate with workers",
 		},
-		&cli.BoolFlag{
-			Name:   "worker-config-stdin",
-			Hidden: true,
-		},
 	})
 }
 
@@ -535,12 +531,11 @@ func loadClusterWorkerConfig(r io.Reader) (string, string, error) {
 }
 
 func doSync(c *cli.Context) error {
+	isWorker := c.String("manager") != ""
 	var workerSrcURL, workerDstURL string
-	if c.Bool("worker-config-stdin") {
-		if c.String("manager") == "" {
-			return fmt.Errorf("worker-config-stdin requires manager")
-		}
+	if isWorker {
 		var err error
+		// need init before loadClusterWorkerConfig, otherwise the env will not be applied(umask)
 		workerSrcURL, workerDstURL, err = loadClusterWorkerConfig(os.Stdin)
 		if err != nil {
 			return fmt.Errorf("load worker config: %s", err)
@@ -560,9 +555,11 @@ func doSync(c *cli.Context) error {
 	dstArg := c.Args().Get(1)
 	srcURL := srcArg
 	dstURL := dstArg
-	if c.Bool("worker-config-stdin") {
+	if isWorker {
 		srcURL = workerSrcURL
 		dstURL = workerDstURL
+	} else {
+		config.SetClusterStorage(srcArg, dstArg)
 	}
 	removePassword(srcURL, dstURL)
 	if runtime.GOOS == "windows" {
@@ -576,7 +573,6 @@ func doSync(c *cli.Context) error {
 	if strings.HasSuffix(srcURL, "/") != strings.HasSuffix(dstURL, "/") {
 		logger.Fatalf("SRC and DST should both end with path separator or not!")
 	}
-	config.SetClusterStorage(srcArg, dstArg)
 	src, err := createSyncStorage(srcURL, config)
 	if err != nil {
 		return err

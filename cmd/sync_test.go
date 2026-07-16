@@ -22,9 +22,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/object"
+	juicesync "github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 func TestSync(t *testing.T) {
@@ -137,5 +140,57 @@ func TestLoadClusterWorkerConfig(t *testing.T) {
 	}
 	if got := os.Getenv("SECRET_KEY"); got != "new-secret" {
 		t.Fatalf("worker environment was not restored: %q", got)
+	}
+}
+
+func TestSyncWorkerReadsConfigFromStdinByDefault(t *testing.T) {
+	stdin := filepath.Join(t.TempDir(), "stdin")
+	if err := os.WriteFile(stdin, []byte("invalid worker config"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(stdin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	oldStdin := os.Stdin
+	os.Stdin = f
+	t.Cleanup(func() { os.Stdin = oldStdin })
+
+	err = Main([]string{"juicefs", "sync", "file:///tmp/src", "file:///tmp/dst", "--manager", "127.0.0.1:1"})
+	if err == nil || !strings.Contains(err.Error(), "load worker config") {
+		t.Fatalf("worker should read config from stdin without an extra flag: %v", err)
+	}
+}
+
+func TestSyncWorkerRestoresUmaskBeforeConfigInitialization(t *testing.T) {
+	oldUmask := utils.GetUmask()
+	t.Cleanup(func() { utils.SetUmask(oldUmask) })
+	utils.SetUmask(0022)
+	t.Setenv(juicesync.JFS_UMASK, "")
+
+	stdin := filepath.Join(t.TempDir(), "stdin")
+	payload := `{
+		"source": "invalid://bucket/",
+		"destination": "file:///tmp/dst/",
+		"env": {"JFS_UMASK": "63"}
+	}`
+	if err := os.WriteFile(stdin, []byte(payload), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(stdin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	oldStdin := os.Stdin
+	os.Stdin = f
+	t.Cleanup(func() { os.Stdin = oldStdin })
+
+	if err = Main([]string{"juicefs", "sync", "invalid://bucket/", "file:///tmp/dst/", "--manager", "127.0.0.1:1"}); err == nil {
+		t.Fatal("expected unsupported storage error")
+	}
+	if got := utils.GetUmask(); got != 0077 {
+		t.Fatalf("worker umask was not restored before config initialization: %04o", got)
 	}
 }

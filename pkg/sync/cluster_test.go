@@ -26,7 +26,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oliverisaac/shellescape"
+
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type obj struct {
@@ -98,7 +101,7 @@ func TestCluster(t *testing.T) {
 	}
 }
 
-func TestPrepareWorkerCommandKeepsCredentialsOutOfArgs(t *testing.T) {
+func TestPrepareWorkerCommandRedactsSecretsInArgs(t *testing.T) {
 	oldArgs := os.Args
 	t.Cleanup(func() { os.Args = oldArgs })
 
@@ -110,8 +113,9 @@ func TestPrepareWorkerCommandKeepsCredentialsOutOfArgs(t *testing.T) {
 		"--start-time", "2026-07-13 07:25:05",
 	}
 	config := &Config{Env: map[string]string{
-		"SECRET_KEY":    "env-secret-key",
-		"SESSION_TOKEN": "env-session-token",
+		"SECRET_KEY":     "env-secret-key",
+		"SESSION_TOKEN":  "env-session-token",
+		"JFS_PAGE_STACK": "1",
 	}}
 	config.SetClusterStorage(src, dst)
 
@@ -120,16 +124,25 @@ func TestPrepareWorkerCommandKeepsCredentialsOutOfArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 	command := strings.Join(args, " ")
-	for _, secret := range []string{"test-access-key", "test-secret-key", "test-bucket.oss.example.com", "env-secret-key", "env-session-token"} {
+	for _, secret := range []string{"test-secret-key", "env-secret-key", "env-session-token"} {
 		if strings.Contains(command, secret) {
 			t.Fatalf("worker command leaked %q: %s", secret, command)
 		}
 	}
-	if !strings.Contains(command, clusterWorkerSourceArg) || !strings.Contains(command, clusterWorkerDestinationArg) {
-		t.Fatalf("worker command should use storage placeholders: %s", command)
+	for _, storageURL := range []string{src, dst} {
+		redacted := shellescape.Escape(utils.RemovePassword(storageURL))
+		if !strings.Contains(command, redacted) {
+			t.Fatalf("worker command should use redacted storage URL %q: %s", redacted, command)
+		}
 	}
-	if !strings.Contains(command, "--worker-config-stdin") {
-		t.Fatalf("worker command should enable stdin config: %s", command)
+	if strings.Contains(command, "cluster-worker-source") || strings.Contains(command, "cluster-worker-destination") {
+		t.Fatalf("worker command should not use fixed storage placeholders: %s", command)
+	}
+	if strings.Contains(command, "--worker-config-stdin") {
+		t.Fatalf("worker command should read stdin without an extra flag: %s", command)
+	}
+	if strings.Contains(command, "JFS_PAGE_STACK") {
+		t.Fatalf("worker command should not pass JFS_PAGE_STACK separately: %s", command)
 	}
 	if !strings.Contains(command, `2026-07-13\ 07:25:05`) || strings.Contains(command, `2026-07-13\\\ 07:25:05`) {
 		t.Fatalf("worker command should escape arguments exactly once: %s", command)

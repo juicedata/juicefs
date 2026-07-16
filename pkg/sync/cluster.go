@@ -58,11 +58,7 @@ type Stat struct {
 	MultipartUploads map[string]*multipartUploadState `json:"multipart_uploads,omitempty"`
 }
 
-const (
-	clusterWorkerSourceArg      = "cluster-worker-source"
-	clusterWorkerDestinationArg = "cluster-worker-destination"
-	maxClusterWorkerConfigSize  = 16 << 20
-)
+const maxClusterWorkerConfigSize = 16 << 20
 
 type clusterWorkerConfig struct {
 	Source      string            `json:"source"`
@@ -381,11 +377,11 @@ func prepareWorkerCommand(host, address, path string, config *Config) ([]string,
 	var foundSource, foundDestination bool
 	for i, arg := range workerArgs {
 		if arg == config.clusterSource {
-			workerArgs[i] = clusterWorkerSourceArg
+			workerArgs[i] = utils.RemovePassword(config.clusterSource)
 			foundSource = true
 		}
 		if arg == config.clusterDestination {
-			workerArgs[i] = clusterWorkerDestinationArg
+			workerArgs[i] = utils.RemovePassword(config.clusterDestination)
 			foundDestination = true
 		}
 	}
@@ -402,14 +398,9 @@ func prepareWorkerCommand(host, address, path string, config *Config) ([]string,
 		return nil, nil, fmt.Errorf("marshal worker config: %s", err)
 	}
 
-	args := []string{host}
-	// JFS_PAGE_STACK is read during package initialization, before the worker can read stdin.
-	if config.Env["JFS_PAGE_STACK"] != "" {
-		args = append(args, "JFS_PAGE_STACK=1")
-	}
-	args = append(args, path)
+	args := []string{host, path}
 	args = append(args, workerArgs...)
-	args = append(args, "--manager", address, "--worker-config-stdin")
+	args = append(args, "--manager", address)
 	if !config.Verbose && !config.Quiet {
 		args = append(args, "-q")
 	}
