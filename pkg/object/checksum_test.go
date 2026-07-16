@@ -70,8 +70,9 @@ func TestChecksumRead(t *testing.T) {
 
 	// verify failed case
 	for _, contentLength := range lens {
-		content[0] = 'a'
-		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		corrupted := append([]byte(nil), content...)
+		corrupted[0] ^= 0xff
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(corrupted)), actual, contentLength)
 		n, err := reader.Read(make([]byte, length))
 		if contentLength == -1 && (err != nil && err != io.EOF || n != length) {
 			t.Fatalf("dont verify checksum when content length is -1")
