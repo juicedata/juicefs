@@ -535,7 +535,7 @@ func doSync(c *cli.Context) error {
 	var workerSrcURL, workerDstURL string
 	if isWorker {
 		var err error
-		// need init before loadClusterWorkerConfig, otherwise the env will not be applied(umask)
+		// need init before NewConfigFromCli, otherwise the env will not be applied(umask)
 		workerSrcURL, workerDstURL, err = loadClusterWorkerConfig(os.Stdin)
 		if err != nil {
 			return fmt.Errorf("load worker config: %s", err)
