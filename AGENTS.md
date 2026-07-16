@@ -83,25 +83,22 @@ make test.fdb                # FoundationDB tests (-tags fdb)
 - Keep comments minimal; add only when necessary.
 - Every new `.go` file MUST start with the Apache 2.0 header (see `main.go` for the canonical template).
 
-## Version compatibility review
+## Version compatibility
 
-Check version compatibility when implementing or reviewing these changes:
-
-- When changing persistent metadata structures or serialization in
-  `pkg/meta/interface.go`, `redis.go`, `sql.go`, or `tkv.go`, ensure new clients can
-  read existing data and old clients cannot silently drop new fields when rewriting records.
-- When adding, changing, or removing metadata fields, check whether
-  `pkg/meta/dump.go`, `backup.go`, `*_bak.go`, and `pb/backup.proto` must be updated.
-- Changes to dump/load formats must remain compatible with data created by released
-  versions and tolerate unknown fields where feasible. Unsupported formats must fail
-  explicitly, and correctness-critical fields must not be silently lost.
-- For new metadata features or semantic changes, evaluate mixed-version client
-  behavior. If mixing is unsafe, raise `MinClientVersion` without lowering an existing
-  version floor, and ensure running old clients are gone before enabling the feature.
-- When changing FUSE options, preserve existing option names and defaults. Check
-  graceful restart logic, `FuseOptions`, `StripOptions`, and old-version config
-  normalization in `cmd/mount_unix.go`, `pkg/vfs/vfs.go`, and `pkg/fuse/fuse.go`.
-- Add compatibility tests for these changes; missing coverage must be called out during review.
+- Persistent metadata or serialization changes in `pkg/meta/{interface,redis,sql,tkv}.go`
+  must remain readable by new clients, and old clients must not silently drop new
+  fields when rewriting records.
+- When metadata fields change, review `pkg/meta/{dump,backup}.go`, `pkg/meta/*_bak.go`,
+  and `pb/backup.proto`. Released dump/load formats must remain readable; tolerate
+  unknown fields where feasible, reject unsupported formats explicitly, and never
+  silently lose correctness-critical data.
+- Evaluate mixed-version behavior for metadata features or semantic changes. If
+  unsafe, raise (never lower) `MinClientVersion` and enable the feature only after
+  old clients have exited.
+- FUSE option changes must preserve existing names and defaults. Review graceful
+  restart, `FuseOptions`, `StripOptions`, and old-config normalization in
+  `cmd/mount_unix.go`, `pkg/vfs/vfs.go`, and `pkg/fuse/fuse.go`.
+- Add compatibility tests, or explicitly report missing coverage during review.
 
 ## Agent boundaries
 
