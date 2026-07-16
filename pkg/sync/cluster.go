@@ -58,6 +58,14 @@ type Stat struct {
 	MultipartUploads map[string]*multipartUploadState `json:"multipart_uploads,omitempty"`
 }
 
+const maxClusterWorkerConfigSize = 16 << 20
+
+type clusterWorkerConfig struct {
+	Source      string            `json:"source"`
+	Destination string            `json:"destination"`
+	Env         map[string]string `json:"env,omitempty"`
+}
+
 var completionMu sync.Mutex
 var completedKeysBuf []string
 var failedKeysBuf []string
@@ -364,6 +372,60 @@ func findSelfPath() (string, error) {
 	return "", fmt.Errorf("can't find path for %s", program)
 }
 
+func prepareWorkerCommand(host, address, path string, config *Config) ([]string, []byte, error) {
+	workerArgs := append([]string(nil), os.Args[1:]...)
+	var foundSource, foundDestination bool
+	for i, arg := range workerArgs {
+		if arg == config.clusterSource {
+			workerArgs[i] = utils.RemovePassword(config.clusterSource)
+			foundSource = true
+		}
+		if arg == config.clusterDestination {
+			workerArgs[i] = utils.RemovePassword(config.clusterDestination)
+			foundDestination = true
+		}
+	}
+	if !foundSource || !foundDestination {
+		return nil, nil, fmt.Errorf("can't locate source or destination in command arguments")
+	}
+
+	payload, err := json.Marshal(clusterWorkerConfig{
+		Source:      config.clusterSource,
+		Destination: config.clusterDestination,
+		Env:         config.Env,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshal worker config: %s", err)
+	}
+
+	args := []string{host, path}
+	args = append(args, workerArgs...)
+	args = append(args, "--manager", address)
+	if !config.Verbose && !config.Quiet {
+		args = append(args, "-q")
+	}
+	return shellescape.EscapeArgs(args), payload, nil
+}
+
+// ReadClusterWorkerConfig reads storage URLs and environment variables from worker stdin.
+func ReadClusterWorkerConfig(r io.Reader) (string, string, map[string]string, error) {
+	data, err := io.ReadAll(io.LimitReader(r, maxClusterWorkerConfigSize+1))
+	if err != nil {
+		return "", "", nil, fmt.Errorf("read worker config: %s", err)
+	}
+	if len(data) > maxClusterWorkerConfigSize {
+		return "", "", nil, fmt.Errorf("worker config is too large")
+	}
+	var config clusterWorkerConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return "", "", nil, fmt.Errorf("unmarshal worker config: %s", err)
+	}
+	if config.Source == "" || config.Destination == "" {
+		return "", "", nil, fmt.Errorf("worker config is missing source or destination")
+	}
+	return config.Source, config.Destination, config.Env, nil
+}
+
 func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 	workers := strings.Split(strings.Join(config.Workers, ","), ",")
 	for _, host := range workers {
@@ -391,35 +453,15 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				return
 			}
 			// launch itself
-			var args = []string{host}
-			// set env
-			var printEnv []string
-			for k, v := range config.Env {
-				args = append(args, fmt.Sprintf("%s=%s", k, v))
-				if strings.Contains(k, "SECRET") ||
-					strings.Contains(k, "TOKEN") ||
-					strings.Contains(k, "PASSWORD") ||
-					strings.Contains(k, "AZURE_STORAGE_CONNECTION_STRING") ||
-					strings.Contains(k, "JFS_RSA_PASSPHRASE") {
-					v = "******"
-				}
-				printEnv = append(printEnv, fmt.Sprintf("%s=%s", k, v))
+			args, payload, err := prepareWorkerCommand(host, address, rpath, config)
+			if err != nil {
+				logger.Errorf("prepare worker command for %q: %s", host, err)
+				return
 			}
-
-			args = append(args, rpath)
-			args = append(args, os.Args[1:]...)
-			args = append(args, "--manager", address)
-			if !config.Verbose && !config.Quiet {
-				args = append(args, "-q")
-			}
-			var argsBk = make([]string, len(args))
-			copy(argsBk, args)
-			for i, s := range printEnv {
-				argsBk[i+1] = s
-			}
-			logger.Debugf("launch worker command args: [ssh, %q]", strings.Join(shellescape.EscapeArgs(argsBk), ", "))
-			cmd = exec.Command("ssh", shellescape.EscapeArgs(args)...)
-			cmd.Stdin = os.Stdin
+			defer clear(payload)
+			logger.Debugf("launch worker command args: [ssh, %q]", strings.Join(args, ", "))
+			cmd = exec.Command("ssh", args...)
+			cmd.Stdin = bytes.NewReader(payload)
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
 				logger.Errorf("redirect stderr: %s", err)

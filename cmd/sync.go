@@ -19,6 +19,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	_ "net/http/pprof"
 	"net/url"
@@ -516,7 +517,30 @@ func wrapSyncEncryptedStore(store object.ObjectStorage, keyPath, passphraseEnv, 
 	return object.NewChunkedEncrypted(store, encryptor), nil
 }
 
+func loadClusterWorkerConfig(r io.Reader) (string, string, error) {
+	src, dst, env, err := sync.ReadClusterWorkerConfig(r)
+	if err != nil {
+		return "", "", err
+	}
+	for key, value := range env {
+		if err := os.Setenv(key, value); err != nil {
+			return "", "", fmt.Errorf("set worker environment %q: %s", key, err)
+		}
+	}
+	return src, dst, nil
+}
+
 func doSync(c *cli.Context) error {
+	isWorker := c.String("manager") != ""
+	var workerSrcURL, workerDstURL string
+	if isWorker {
+		var err error
+		// need init before NewConfigFromCli, otherwise the env will not be applied(umask)
+		workerSrcURL, workerDstURL, err = loadClusterWorkerConfig(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("load worker config: %s", err)
+		}
+	}
 	setup(c, 2)
 	if c.IsSet("include") && !c.IsSet("exclude") {
 		logger.Warnf("The include option needs to be used with the exclude option, otherwise the result of the current sync may not match your expectations")
@@ -527,8 +551,12 @@ func doSync(c *cli.Context) error {
 		logger.Debugf("worker process start")
 	}
 	// Windows support `\` and `/` as its separator, Unix only use `/`
-	srcURL := c.Args().Get(0)
-	dstURL := c.Args().Get(1)
+	srcURL, dstURL := c.Args().Get(0), c.Args().Get(1)
+	if isWorker {
+		srcURL, dstURL = workerSrcURL, workerDstURL
+	} else {
+		config.SetClusterStorage(srcURL, dstURL)
+	}
 	removePassword(srcURL, dstURL)
 	if runtime.GOOS == "windows" {
 		if !strings.Contains(srcURL, "://") {
