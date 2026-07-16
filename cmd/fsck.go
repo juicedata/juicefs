@@ -205,8 +205,8 @@ func fsck(ctx *cli.Context) error {
 							}
 						}
 						if !errors.Is(err, os.ErrNotExist) {
-							progress.Done()
-							return fmt.Errorf("check block %s for file %s in object storage: %w", objKey, filePath, err)
+							logger.Warnf("check block %s for file %s in object storage: %s", objKey, filePath, err)
+							continue
 						}
 						brokens[inode] = filePath
 						logger.Errorf("can't find block %s for file %s: %s", objKey, filePath, err)
