@@ -139,7 +139,7 @@ func (o *ossClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	if ins, ok := in.(io.ReadSeeker); ok {
 		req.Metadata = make(map[string]string)
-		req.Metadata[oss.HeaderOssMetaPrefix+checksumAlgr] = generateChecksum(ins)
+		req.Metadata[checksumAlgr] = generateChecksum(ins)
 	}
 	var reqId string
 	result, err := o.client.PutObject(ctx, req)
