@@ -45,19 +45,39 @@ func Test_s3client_full_string(t *testing.T) {
 
 func TestS3OCIRegion(t *testing.T) {
 	tests := []struct {
-		name     string
-		endpoint string
-		want     string
+		name          string
+		endpoint      string
+		wantBucket    string
+		wantRegion    string
+		wantPathStyle bool
 	}{
 		{
-			name:     "legacy endpoint",
-			endpoint: "bucket.namespace.compat.objectstorage.ap-singapore-1.oraclecloud.com",
-			want:     "ap-singapore-1",
+			name:          "legacy endpoint",
+			endpoint:      "bucket.namespace.compat.objectstorage.ap-singapore-1.oraclecloud.com",
+			wantBucket:    "bucket",
+			wantRegion:    "ap-singapore-1",
+			wantPathStyle: true,
 		},
 		{
-			name:     "dedicated endpoint",
-			endpoint: "https://prod-sandbox-juicefs.axywvpcvts33.compat.objectstorage.us-sanjose-1.oci.customer-oci.com",
-			want:     "us-sanjose-1",
+			name:          "dedicated endpoint",
+			endpoint:      "https://prod-sandbox-juicefs.axywvpcvts33.compat.objectstorage.us-sanjose-1.oci.customer-oci.com",
+			wantBucket:    "prod-sandbox-juicefs",
+			wantRegion:    "us-sanjose-1",
+			wantPathStyle: true,
+		},
+		{
+			name:          "path style endpoint",
+			endpoint:      "https://axywvpcvts33.compat.objectstorage.us-sanjose-1.oci.customer-oci.com/prod-sandbox-juicefs",
+			wantBucket:    "prod-sandbox-juicefs",
+			wantRegion:    "us-sanjose-1",
+			wantPathStyle: true,
+		},
+		{
+			name:          "virtual hosted style endpoint",
+			endpoint:      "https://prod-sandbox-juicefs.vhcompat.objectstorage.us-sanjose-1.oci.customer-oci.com",
+			wantBucket:    "prod-sandbox-juicefs",
+			wantRegion:    "us-sanjose-1",
+			wantPathStyle: false,
 		},
 	}
 	for _, tt := range tests {
@@ -68,7 +88,10 @@ func TestS3OCIRegion(t *testing.T) {
 			if err != nil {
 				t.Fatalf("newS3() error = %v", err)
 			}
-			assert.Equal(t, tt.want, stor.(*s3client).region)
+			client := stor.(*s3client)
+			assert.Equal(t, tt.wantBucket, client.bucket)
+			assert.Equal(t, tt.wantRegion, client.region)
+			assert.Equal(t, tt.wantPathStyle, client.s3.Options().UsePathStyle)
 		})
 	}
 }
