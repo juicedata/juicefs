@@ -42,3 +42,33 @@ func Test_s3client_full_string(t *testing.T) {
 		})
 	}
 }
+
+func TestS3OCIRegion(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+		want     string
+	}{
+		{
+			name:     "legacy endpoint",
+			endpoint: "bucket.namespace.compat.objectstorage.ap-singapore-1.oraclecloud.com",
+			want:     "ap-singapore-1",
+		},
+		{
+			name:     "dedicated endpoint",
+			endpoint: "https://prod-sandbox-juicefs.axywvpcvts33.compat.objectstorage.us-sanjose-1.oci.customer-oci.com",
+			want:     "us-sanjose-1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("AWS_REGION", "eu-frankfurt-1")
+			t.Setenv("AWS_DEFAULT_REGION", "eu-frankfurt-1")
+			stor, err := newS3(tt.endpoint, "", "", "")
+			if err != nil {
+				t.Fatalf("newS3() error = %v", err)
+			}
+			assert.Equal(t, tt.want, stor.(*s3client).region)
+		})
+	}
+}
