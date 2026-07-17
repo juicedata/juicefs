@@ -95,8 +95,16 @@ func TestGc(t *testing.T) {
 	defer os.Unsetenv("JFS_GC_SKIPPEDTIME")
 	t.Logf("JFS_GC_SKIPPEDTIME is %s", os.Getenv("JFS_GC_SKIPPEDTIME"))
 
-	leaked := filepath.Join(dataDir, "0", "0", "123456789_0_1048576")
-	os.WriteFile(leaked, []byte(strings.Repeat("aaaaaaaabbbbbbbb", 64*1024)), 0644)
+	const leakedID = 123456789
+	leaked := filepath.Join(
+		dataDir,
+		fmt.Sprintf("%02X", leakedID%256),
+		fmt.Sprintf("%d", leakedID/1000/1000),
+		fmt.Sprintf("%d_0_1048576", leakedID),
+	)
+	require.NoError(t, os.MkdirAll(filepath.Dir(leaked), 0755))
+	leakedData := []byte(strings.Repeat("aaaaaaaabbbbbbbb", 64*1024))
+	require.NoError(t, os.WriteFile(leaked, leakedData, 0644))
 	time.Sleep(time.Second * 3)
 
 	if err := Main([]string{"", "gc", "--delete", testMeta}); err != nil {
@@ -108,4 +116,21 @@ func TestGc(t *testing.T) {
 	if err := Main([]string{"", "gc", testMeta}); err != nil {
 		t.Fatalf("gc failed: %s", err)
 	}
+
+	require.NoError(t, os.WriteFile(leaked, leakedData, 0644))
+	beforeExternalGc := getFileCount(dataDir)
+	workDir := t.TempDir()
+	if err := Main([]string{"", "gc", "--work-dir", workDir, testMeta}); err != nil {
+		t.Fatalf("gc external sort failed: %s", err)
+	}
+	require.True(t, utils.Exists(leaked))
+
+	if err := Main([]string{"", "gc", "--work-dir", workDir, "--delete", testMeta}); err != nil {
+		t.Fatalf("gc external sort delete failed: %s", err)
+	}
+	require.False(t, utils.Exists(leaked))
+	require.Equal(t, beforeExternalGc-1, getFileCount(dataDir))
+	entries, err := os.ReadDir(workDir)
+	require.NoError(t, err)
+	require.Empty(t, entries)
 }
