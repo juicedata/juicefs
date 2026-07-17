@@ -29,7 +29,7 @@ import (
 )
 
 func TestMergeGcSortedRecords(t *testing.T) {
-	const externalSortChunkSize = 2 << 20
+	const externalSortChunkSize = 1 << 20
 
 	ctx := context.Background()
 	metaSorter, objSorter, err := newGcExternalSorters(ctx, t.TempDir(), 2)
