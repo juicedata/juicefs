@@ -432,7 +432,7 @@ func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 		if length > attr.Length {
 			attr.Length = length
 		}
-		v.reader.Truncate(inode, attr.Length)
+		v.reader.UpdateLength(inode, attr.Length)
 	}
 }
 
