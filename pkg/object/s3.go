@@ -484,7 +484,7 @@ func defaultPathStyle() bool {
 	return v == "" || v == "0" || v == "false"
 }
 
-var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
+var oracleCompileRegexp = `^.*\.compat\.objectstorage\.([^.]+)\.(?:oraclecloud\.com|oci\.customer-oci\.com)$`
 var OVHCompileRegexp = `^s3\.(\w*)(\.\w*)?\.cloud\.ovh\.net$`
 
 func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
