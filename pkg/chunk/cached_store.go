@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -335,10 +334,6 @@ func (store *cachedStore) put(ctx context.Context, key string, p *Page) error {
 }
 
 func (store *cachedStore) delete(key string) error {
-	if shouldSkipObjectDelete() {
-		logger.Warnf("skip deleting object %s due to JFS_OBJECT_DELETE_SKIP", key)
-		return nil
-	}
 	st := time.Now()
 	var reqID string
 	err := utils.WithTimeout(context.TODO(), func(ctx context.Context) error {
@@ -357,22 +352,6 @@ func (store *cachedStore) delete(key string) error {
 	}
 	return err
 }
-
-func shouldSkipObjectDelete() bool {
-	value := strings.TrimSpace(os.Getenv("JFS_OBJECT_DELETE_SKIP"))
-	if value == "" {
-		return false
-	}
-	probability, err := strconv.ParseFloat(value, 64)
-	if err != nil || probability <= 0 {
-		return false
-	}
-	if probability >= 1 {
-		return true
-	}
-	return rand.Float64() < probability
-}
-
 func (store *cachedStore) upload(ctx context.Context, key string, block *Page, s *wSlice) error {
 	sync := s != nil
 	blen := len(block.Data)
