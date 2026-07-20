@@ -88,7 +88,7 @@ jobs:
           echo "last_date=$last_date" >> $GITHUB_ENV
 
       - name: Generate today's coverage report
-        timeout-minutes: 90
+        timeout-minutes: 30
         working-directory: schedule/${{env.last_date}}
         run: |
           echo "current dir is $(pwd)"
