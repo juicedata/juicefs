@@ -346,7 +346,9 @@ func config(ctx *cli.Context) error {
 				if version.Parse(new) == nil {
 					return fmt.Errorf("Invalid version string: %s", new)
 				}
-				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MinClientVersion, new))
+				if compareVersion(new, format.MinClientVersion) < 0 {
+					return fmt.Errorf("cannot lower min-client-version from %s to %s", format.MinClientVersion, new)
+				}
 				requireMinClientVersion(new)
 			}
 		case "max-client-version":
