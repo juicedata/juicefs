@@ -287,23 +287,70 @@ get_meta_url2(){
     return 0
 }
 
+wait_mysql_ready() {
+    local user=$1
+    local password=$2
+    local host=$3
+    local port=$4
+    local mysql_args=(-u"$user" -h "$host" -P "$port")
+    if [ -n "$password" ]; then
+        mysql_args+=("-p$password")
+    fi
+    for i in $(seq 1 60); do
+        if mysqladmin "${mysql_args[@]}" ping --silent >/dev/null 2>&1; then
+            echo "MySQL is ready at $host:$port"
+            return 0
+        fi
+        if [ "$host" = "127.0.0.1" ] && [ "$port" = "3306" ]; then
+            sudo /etc/init.d/mysql start >/dev/null 2>&1 || true
+        fi
+        echo "Waiting for MySQL at $host:$port ($i/60)..."
+        sleep 2
+    done
+    echo "MySQL at $host:$port is not ready after 60 attempts"
+    sudo /etc/init.d/mysql status 2>/dev/null || true
+    ss -tlnp 2>/dev/null | grep ":$port " || true
+    sudo journalctl -u mysql --no-pager -n 20 2>/dev/null || true
+    return 1
+}
+
+mysql_exec_with_retry() {
+    local user=$1
+    local password=$2
+    local host=$3
+    local port=$4
+    local sql=$5
+    local mysql_args=(-u"$user" -h "$host" -P "$port")
+    if [ -n "$password" ]; then
+        mysql_args+=("-p$password")
+    fi
+    for i in $(seq 1 10); do
+        if mysql "${mysql_args[@]}" -e "$sql"; then
+            return 0
+        fi
+        echo "MySQL command failed (attempt $i/10), retrying..."
+        sleep 3
+    done
+    return 1
+}
+
 create_database(){
     meta_url=$1
     db_name=$(basename $meta_url | awk -F? '{print $1}')
     if [[ "$meta_url" == mysql* ]]; then
         user=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $1}')
         password=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $2}')
-        test -n "$password" && password="-p$password" || password=""
         host=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $1}')
         port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
         test -z "$port" && port="3306"
-        echo user=$user, password=$password, host=$host, port=$port, db_name=$db_name
+        echo user=$user, host=$host, port=$port, db_name=$db_name
+        wait_mysql_ready "$user" "$password" "$host" "$port"
         if [ "$#" -eq 2 ]; then
             echo isolation_level=$2
-            mysql -u$user $password -h $host -P $port -e "set global transaction isolation level $2;"
-            mysql -u$user $password -h $host -P $port -e "show variables like '%isolation%;'"
+            mysql_exec_with_retry "$user" "$password" "$host" "$port" "set global transaction isolation level $2;"
+            mysql_exec_with_retry "$user" "$password" "$host" "$port" "show variables like '%isolation%';"
         fi
-        mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;"
+        mysql_exec_with_retry "$user" "$password" "$host" "$port" "drop database if exists $db_name; create database $db_name;"
         elif [[ "$meta_url" == postgres* ]]; then
             export PGPASSWORD="postgres"
             printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
