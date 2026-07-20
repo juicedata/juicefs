@@ -162,15 +162,17 @@ func TestConfigMinClientVersion(t *testing.T) {
 	}
 
 	cases := []struct {
-		name       string
-		formatArgs func(t *testing.T) []string // extra flags for the initial format
-		preArgs    []string                    // optional config run before the measured one
-		args       func(t *testing.T) []string // measured config run; nil to only check format result
-		input      string                      // stdin for confirmation prompts
-		wantOut    []string                    // substrings expected in the measured output
-		notWantOut []string                    // substrings that must not appear
-		wantMinVer string
-		validate   func(t *testing.T, format meta.Format)
+		name                  string
+		formatArgs            func(t *testing.T) []string // extra flags for the initial format
+		preArgs               []string                    // optional config run before the measured one
+		args                  func(t *testing.T) []string // measured config run; nil to only check format result
+		input                 string                      // stdin for confirmation prompts
+		wantOut               []string                    // substrings expected in the measured output
+		notWantOut            []string                    // substrings that must not appear
+		wantErr               string                      // substring expected in the measured error
+		wantMinVerOutputCount int                         // expected number of min-client-version output lines; 0 skips the check
+		wantMinVer            string
+		validate              func(t *testing.T, format meta.Format)
 	}{
 		{
 			name:       "tier bumps min client version",
@@ -233,6 +235,22 @@ func TestConfigMinClientVersion(t *testing.T) {
 			},
 		},
 		{
+			name: "explicit min version upgrade output once",
+			args: func(t *testing.T) []string {
+				return []string{"--min-client-version", "1.4.0-A", "--force"}
+			},
+			wantOut:               []string{"min-client-version: 1.1.0-A -> 1.4.0-A"},
+			wantMinVerOutputCount: 1,
+			wantMinVer:            "1.4.0-A",
+		},
+		{
+			name:       "explicit min version downgrade is rejected",
+			preArgs:    []string{"--min-client-version", "1.4.0-A", "--force"},
+			args:       func(t *testing.T) []string { return []string{"--min-client-version", "1.2.0-A", "--force"} },
+			wantErr:    "cannot lower min-client-version from 1.4.0-A to 1.2.0-A",
+			wantMinVer: "1.4.0-A",
+		},
+		{
 			name:       "kerberos via config with confirmation input",
 			args:       func(t *testing.T) []string { return []string{"--kerberos-config-file", writeKerbConf(t)} },
 			input:      "y\n",
@@ -284,7 +302,11 @@ func TestConfigMinClientVersion(t *testing.T) {
 				} else {
 					out, err = getStdout(args)
 				}
-				if err != nil {
+				if c.wantErr != "" {
+					if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+						t.Fatalf("config error %q does not contain %q", err, c.wantErr)
+					}
+				} else if err != nil {
 					t.Fatalf("config: %s", err)
 				}
 				for _, s := range c.wantOut {
@@ -295,6 +317,11 @@ func TestConfigMinClientVersion(t *testing.T) {
 				for _, s := range c.notWantOut {
 					if strings.Contains(string(out), s) {
 						t.Fatalf("unexpected %q in output: %s", s, out)
+					}
+				}
+				if c.wantMinVerOutputCount > 0 {
+					if count := strings.Count(string(out), "min-client-version:"); count != c.wantMinVerOutputCount {
+						t.Fatalf("min-client-version output count %d != expect %d: %s", count, c.wantMinVerOutputCount, out)
 					}
 				}
 			}
