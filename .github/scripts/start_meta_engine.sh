@@ -307,7 +307,7 @@ wait_mysql_ready() {
         echo "Waiting for MySQL at $host:$port ($i/60)..."
         sleep 2
     done
-    echo "MySQL at $host:$port is not ready after 60 attempts"
+    echo "MySQL at $host:$port is not ready after 120 seconds"
     sudo /etc/init.d/mysql status 2>/dev/null || true
     ss -tlnp 2>/dev/null | grep ":$port " || true
     sudo journalctl -u mysql --no-pager -n 20 2>/dev/null || true
