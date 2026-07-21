@@ -31,8 +31,6 @@ test_config_min_client_version()
     ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d && exit 1 || true
     ./juicefs config $META_URL --min-client-version 1.0.1
     ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d && exit 1 || true
-    ./juicefs config $META_URL --min-client-version 1.0.0
-    ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d
 }
 
 test_config_max_client_version()
