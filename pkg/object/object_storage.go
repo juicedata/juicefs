@@ -378,6 +378,7 @@ func (b *tierStorage) InitTiers(init Tiers) error {
 	if init == nil {
 		init = NewTiers("")
 	}
+	tiers := make(Tiers, len(init))
 	for id, t := range init {
 		if t.Tag != "" && !ValidateTag(t.Tag) {
 			logger.Warnf("invalid tag %q for tier %d; ignore it", t.Tag, id)
@@ -385,9 +386,9 @@ func (b *tierStorage) InitTiers(init Tiers) error {
 		} else {
 			t.encodedTag = encodeTag(t.Tag)
 		}
-		init[id] = t
+		tiers[id] = t
 	}
-	b.tiers = init
+	b.tiers = tiers
 	return nil
 }
 
