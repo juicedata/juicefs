@@ -113,11 +113,45 @@ install_tidb(){
     done
 }
 
+wait_mysql_ready() {
+    local engine=$1
+    local user=$2
+    local password=$3
+    local host=$4
+    local port=$5
+    local mysql_args=(-u"$user" -h "$host" -P "$port")
+    if [ -n "$password" ]; then
+        mysql_args+=("-p$password")
+    fi
+
+    for i in $(seq 1 60); do
+        if mysqladmin --connect-timeout=1 --protocol=TCP "${mysql_args[@]}" ping --silent >/dev/null 2>&1 && \
+            mysql --connect-timeout=1 --protocol=TCP "${mysql_args[@]}" -e "SELECT 1" >/dev/null 2>&1; then
+            echo "$engine is ready at $host:$port"
+            return 0
+        fi
+        echo "Waiting for $engine at $host:$port ($i/60)..."
+        sleep 2
+    done
+
+    echo "$engine at $host:$port is not ready after 120 seconds"
+    ss -tlnp 2>/dev/null | grep ":$port " || true
+    if [ "$engine" == "mariadb" ]; then
+        docker ps -a --filter name=^/mdb$ || true
+        docker logs --tail 50 mdb || true
+    else
+        sudo /etc/init.d/mysql status 2>/dev/null || true
+        sudo journalctl -u mysql --no-pager -n 20 2>/dev/null || true
+    fi
+    return 1
+}
+
 start_meta_engine(){
     meta=$1
     storage=$2
     if [ "$meta" == "mysql" ]; then
-        sudo /etc/init.d/mysql start
+        sudo /etc/init.d/mysql start || return 1
+        wait_mysql_ready mysql root root 127.0.0.1 3306 || return 1
     elif [ "$meta" == "redis" ]; then
         sudo .github/scripts/apt_install.sh  redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
@@ -128,9 +162,9 @@ start_meta_engine(){
         if lsof -i:3306; then
             echo "mariadb is already running"
         else
-            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
-            sleep 10
+            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest || return 1
         fi
+        wait_mysql_ready mariadb root root 127.0.0.1 3306 || return 1
     elif [ "$meta" == "tidb" ]; then
         retry install_tidb
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
@@ -217,7 +251,8 @@ start_meta_engine(){
         fi
     elif [ "$meta" != "mysql" ] && [ "$storage" == "mysql" ]; then
         echo "start mysql"
-        sudo /etc/init.d/mysql start
+        sudo /etc/init.d/mysql start || return 1
+        wait_mysql_ready mysql root root 127.0.0.1 3306 || return 1
     fi
 }
 
