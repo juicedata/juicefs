@@ -121,7 +121,7 @@ jobs:
           set +x
 
       - name: Remove test dir
-        timeout-minutes: 30
+        timeout-minutes: 60
         run: |
           echo "Removing test dir /tmp/jfs/${{matrix.basedir}} with ${{matrix.removeOp}}"
           if [[ "${{matrix.removeOp}}" == "rm" ]]; then
