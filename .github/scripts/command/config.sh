@@ -29,7 +29,10 @@ test_config_min_client_version()
     download_juicefs_client 1.0.0
     ./juicefs format $META_URL myjfs
     ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d && exit 1 || true
-    ./juicefs config $META_URL --min-client-version 1.0.1
+    if ./juicefs config $META_URL --min-client-version 1.0.1; then
+        echo "<FATAL>: expect min-client-version downgrade to fail"
+        exit 1
+    fi
     ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d && exit 1 || true
 }
 
