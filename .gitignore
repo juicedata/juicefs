@@ -38,6 +38,7 @@ test*.py
 test*.bak
 
 # gen
+graphify-out/
 /juicefs
 /juicefs.ceph
 /juicefs.exe
