@@ -92,7 +92,7 @@ snapshot:
 		-v `pwd`:/go/src/github.com/juicedata/juicefs \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-w /go/src/github.com/juicedata/juicefs \
-		juicedata/golang-cross:v1.25.7-0 release --snapshot --clean --skip-publish
+		juicedata/golang-cross:v1.25.7-0 release --snapshot --clean
 
 release:
 	docker run --rm --privileged \
