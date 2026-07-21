@@ -35,6 +35,11 @@ import (
 
 var resolver = dnscache.New(time.Minute)
 var httpClient *http.Client
+var httpTransport *http.Transport
+
+func GetHttpTransport() *http.Transport {
+	return httpTransport
+}
 
 func splitIPsByVersion(ips []net.IP) ([]net.IP, []net.IP) {
 	ipv6 := make([]net.IP, 0, len(ips))
@@ -150,37 +155,38 @@ func dialRandom(ctx context.Context, dialer *net.Dialer, network string, ips []n
 
 func init() {
 	dialer := &net.Dialer{Timeout: time.Second * 10}
-	httpClient = &http.Client{
-		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			TLSHandshakeTimeout:   time.Second * 20,
-			ResponseHeaderTimeout: time.Second * 30,
-			IdleConnTimeout:       time.Second * 300,
-			MaxIdleConnsPerHost:   500,
-			ReadBufferSize:        32 << 10,
-			WriteBufferSize:       32 << 10,
-			DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
-				host, port, err := net.SplitHostPort(address)
-				if err != nil {
-					return nil, err
-				}
-				if ip := net.ParseIP(host); ip != nil {
-					return dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-				}
-				ips, err := resolver.Fetch(host)
-				if err != nil {
-					return nil, err
-				}
-				if len(ips) == 0 {
-					return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
-				}
-				ipv6, ipv4 := splitIPsByVersion(ips)
-				return dialParallel(ctx, dialer, network, ipv6, ipv4, port)
-			},
-			DisableCompression: true,
-			TLSClientConfig:    &tls.Config{},
+	httpTransport = &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		TLSHandshakeTimeout:   time.Second * 20,
+		ResponseHeaderTimeout: time.Second * 30,
+		IdleConnTimeout:       time.Second * 300,
+		MaxIdleConnsPerHost:   500,
+		ReadBufferSize:        32 << 10,
+		WriteBufferSize:       32 << 10,
+		DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(address)
+			if err != nil {
+				return nil, err
+			}
+			if ip := net.ParseIP(host); ip != nil {
+				return dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+			}
+			ips, err := resolver.Fetch(host)
+			if err != nil {
+				return nil, err
+			}
+			if len(ips) == 0 {
+				return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+			}
+			ipv6, ipv4 := splitIPsByVersion(ips)
+			return dialParallel(ctx, dialer, network, ipv6, ipv4, port)
 		},
-		Timeout: time.Hour,
+		DisableCompression: true,
+		TLSClientConfig:    &tls.Config{},
+	}
+	httpClient = &http.Client{
+		Transport: configureHTTPTransport(httpTransport),
+		Timeout:   time.Hour,
 	}
 }
 
