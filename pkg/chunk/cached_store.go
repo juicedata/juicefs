@@ -352,6 +352,7 @@ func (store *cachedStore) delete(key string) error {
 	}
 	return err
 }
+
 func (store *cachedStore) upload(ctx context.Context, key string, block *Page, s *wSlice) error {
 	sync := s != nil
 	blen := len(block.Data)
