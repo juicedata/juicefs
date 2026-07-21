@@ -32,8 +32,10 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
-var ctx = context.Background()
-var logger = utils.GetLogger("juicefs")
+var (
+	ctx    = context.Background()
+	logger = utils.GetLogger("juicefs")
+)
 
 var UserAgent = "JuiceFS"
 
@@ -80,7 +82,7 @@ func NewSymlink(key, target string) File {
 	return &file{
 		obj{key, int64(len(target)), time.Now(), false, "", ""},
 		"", "",
-		os.ModeSymlink | 0777,
+		os.ModeSymlink | 0o777,
 		true,
 	}
 }
@@ -107,7 +109,8 @@ func UnmarshalObject(m map[string]interface{}) Object {
 		key:   m["key"].(string),
 		size:  int64(m["size"].(float64)),
 		mtime: mtime,
-		isDir: m["isdir"].(bool)}
+		isDir: m["isdir"].(bool),
+	}
 	if _, ok := m["mode"]; ok {
 		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), m["isSymlink"].(bool)}
 		return &f
@@ -239,7 +242,7 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 	listed := make(chan Object, 10240)
 	var walk func(string, []Object) error
 	walk = func(prefix string, entries []Object) error {
-		var concurrent = 10
+		concurrent := 10
 		var err error
 		threads := make([]listThread, concurrent)
 		for c := 0; c < concurrent; c++ {
@@ -378,6 +381,7 @@ func (b *tierStorage) InitTiers(init Tiers) error {
 	if init == nil {
 		init = NewTiers("")
 	}
+	tiers := make(Tiers, len(init))
 	for id, t := range init {
 		if t.Tag != "" && !ValidateTag(t.Tag) {
 			logger.Warnf("invalid tag %q for tier %d; ignore it", t.Tag, id)
@@ -385,9 +389,9 @@ func (b *tierStorage) InitTiers(init Tiers) error {
 		} else {
 			t.encodedTag = encodeTag(t.Tag)
 		}
-		init[id] = t
+		tiers[id] = t
 	}
-	b.tiers = init
+	b.tiers = tiers
 	return nil
 }
 
