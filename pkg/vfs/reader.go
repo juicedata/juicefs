@@ -76,7 +76,6 @@ type DataReader interface {
 	Open(inode Ino, length uint64) FileReader
 	Truncate(inode Ino, length uint64)
 	Invalidate(inode Ino, off, length uint64)
-	UpdateLength(inode Ino, length uint64)
 }
 
 type frange struct {
@@ -793,16 +792,6 @@ func (r *dataReader) Truncate(inode Ino, length uint64) {
 			})
 		}
 		f.length = length
-	})
-}
-
-// UpdateLength grows fileReader.length only; it never shrinks because attr.Length
-// may be stale (e.g. obtained before commit completes). Real truncation uses Truncate.
-func (r *dataReader) UpdateLength(inode Ino, length uint64) {
-	r.visit(inode, func(f *fileReader) {
-		if length > f.length {
-			f.length = length
-		}
 	})
 }
 
