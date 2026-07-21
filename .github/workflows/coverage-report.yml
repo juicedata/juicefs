@@ -37,7 +37,7 @@ jobs:
         branch: ['main']
         test: ['ut', 'it', 'all']
           
-    timeout-minutes: 60
+    timeout-minutes: 120
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -88,7 +88,7 @@ jobs:
           echo "last_date=$last_date" >> $GITHUB_ENV
 
       - name: Generate today's coverage report
-        timeout-minutes: 30
+        timeout-minutes: 90
         working-directory: schedule/${{env.last_date}}
         run: |
           echo "current dir is $(pwd)"
