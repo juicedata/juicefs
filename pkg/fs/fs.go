@@ -1031,12 +1031,18 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 			} else {
 				target = path.Join(strings.Join(ss[:i], "/"), target)
 			}
-			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
-			if err != 0 {
-				return
+			hasRemaining := false
+			for _, comp := range ss[i+1:] {
+				if comp != "" {
+					target = target + "/" + comp
+					hasRemaining = true
+				}
 			}
-			inode = fi.Inode()
-			attr = fi.attr
+			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
+			if err == 0 && fi != nil && !hasRemaining {
+				fi.name = name
+			}
+			return
 		}
 		fi.name = name
 		parent = inode
