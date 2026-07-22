@@ -140,7 +140,7 @@ func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters .
 		return err
 	}
 	args := new(api.PutObjectArgs)
-	t := q.GetTier(ctx)
+	t := q.getRuntimeTier(ctx)
 	if t.Sc != "" {
 		args.StorageClass = t.Sc
 	}
@@ -159,7 +159,7 @@ func (q *bosclient) Restore(ctx context.Context, key string, days int32) error {
 }
 
 func (q *bosclient) Copy(ctx context.Context, dst, src string) error {
-	tier := q.GetTier(ctx)
+	tier := q.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(tier.Sc, api.STORAGE_CLASS_STANDARD)
 	args := &api.CopyObjectArgs{
 		ObjectMeta: api.ObjectMeta{StorageClass: sc},

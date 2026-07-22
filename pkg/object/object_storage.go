@@ -360,11 +360,20 @@ type SupportTier interface {
 	GetTier(ctx context.Context) Tier
 }
 
+type runtimeTier struct {
+	Tier
+	encodedTag string
+}
+
 type tierStorage struct {
-	tiers map[uint8]Tier
+	tiers map[uint8]runtimeTier
 }
 
 func (b *tierStorage) GetTier(ctx context.Context) Tier {
+	return b.getRuntimeTier(ctx).Tier
+}
+
+func (b *tierStorage) getRuntimeTier(ctx context.Context) runtimeTier {
 	if id, ok := ctx.Value(TierKey{}).(uint8); ok {
 		if t, ok := b.tiers[id]; ok {
 			return t
@@ -378,16 +387,17 @@ func (b *tierStorage) InitTiers(init Tiers) error {
 	if init == nil {
 		init = NewTiers("")
 	}
+	tiers := make(map[uint8]runtimeTier, len(init))
 	for id, t := range init {
+		tier := runtimeTier{Tier: t}
 		if t.Tag != "" && !ValidateTag(t.Tag) {
 			logger.Warnf("invalid tag %q for tier %d; ignore it", t.Tag, id)
-			t.encodedTag = ""
 		} else {
-			t.encodedTag = encodeTag(t.Tag)
+			tier.encodedTag = encodeTag(t.Tag)
 		}
-		init[id] = t
+		tiers[id] = tier
 	}
-	b.tiers = init
+	b.tiers = tiers
 	return nil
 }
 
@@ -403,10 +413,9 @@ func encodeTag(tag string) string {
 }
 
 type Tier struct {
-	ID         uint8  `json:"ID"`
-	Sc         string `json:"StorageClass"`
-	Tag        string `json:"Tag"`
-	encodedTag string
+	ID  uint8  `json:"ID"`
+	Sc  string `json:"StorageClass"`
+	Tag string `json:"Tag"`
 }
 
 func ValidateTag(tag string) bool {

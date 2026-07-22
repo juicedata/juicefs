@@ -155,7 +155,7 @@ func (s *ks3) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 		Body:        body,
 		ContentType: &mimeType,
 	}
-	t := s.GetTier(ctx)
+	t := s.getRuntimeTier(ctx)
 	if t.Sc != "" {
 		params.StorageClass = aws.String(t.Sc)
 	}
@@ -170,7 +170,7 @@ func (s *ks3) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 	return err
 }
 func (s *ks3) Copy(ctx context.Context, dst, src string) error {
-	t := s.GetTier(ctx)
+	t := s.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, s3.StorageClassStandard)
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
