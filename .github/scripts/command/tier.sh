@@ -27,6 +27,11 @@ fi
 AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-${AWS_S3_ENDPOINT_URL:-$DEFAULT_AWS_ENDPOINT_URL}}
 AWS_BUCKET_URL=${AWS_BUCKET_URL:-${AWS_ENDPOINT_URL}/${AWS_BUCKET}}
 TIER_VOLUME_NAME=${TIER_VOLUME_NAME:-myjfs}
+# Mount log file used by tier tests so that reload/config behavior can be asserted.
+TIER_MOUNT_LOG=${TIER_MOUNT_LOG:-/tmp/juicefs_tier.log}
+# Window (seconds) and threshold for the reload-churn regression check (PR #7305).
+TIER_RELOAD_CHURN_WINDOW=${TIER_RELOAD_CHURN_WINDOW:-10}
+TIER_RELOAD_CHURN_THRESHOLD=${TIER_RELOAD_CHURN_THRESHOLD:-2}
 
 cleanup_aws_volume_prefix()
 {
@@ -136,7 +141,7 @@ setup_tier_volume()
     [[ -n "$AWS_SESSION_TOKEN_VALUE" ]] && format_cmd+=(--session-token "$AWS_SESSION_TOKEN_VALUE")
 
     "${format_cmd[@]}"
-    ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s
+    ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s --log "$TIER_MOUNT_LOG"
 
     # configure tier 1~3 before using juicefs tier commands
     ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA -y
@@ -161,7 +166,7 @@ setup_tier_volume_writeback()
     [[ -n "$AWS_SESSION_TOKEN_VALUE" ]] && format_cmd+=(--session-token "$AWS_SESSION_TOKEN_VALUE")
 
     "${format_cmd[@]}"
-    ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s \
+    ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s --log "$TIER_MOUNT_LOG" \
         --writeback --upload-delay "$upload_delay"
 
     ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA -y
@@ -408,6 +413,84 @@ assert_config_tier_tag_fail()
         exit 1
     fi
     echo "config tier tag failed as expected: id=$id tag=$tag"
+}
+
+assert_no_storage_reload_churn()
+{
+    local log_file=${1:-$TIER_MOUNT_LOG}
+    local window=${2:-$TIER_RELOAD_CHURN_WINDOW}
+    local threshold=${3:-$TIER_RELOAD_CHURN_THRESHOLD}
+    local marker="found new configuration"
+    local before after delta
+
+    if [[ ! -f "$log_file" ]]; then
+        echo "<FATAL>: mount log not found for reload churn check: $log_file"
+        exit 1
+    fi
+
+    # Let any in-flight legitimate config reload flush to the log first.
+    sleep 3
+    before=$(grep -c "$marker" "$log_file" 2>/dev/null || true)
+    before=${before:-0}
+    sleep "$window"
+    after=$(grep -c "$marker" "$log_file" 2>/dev/null || true)
+    after=${after:-0}
+    delta=$(( after - before ))
+
+    if [[ "$delta" -ge "$threshold" ]]; then
+        echo "<FATAL>: object storage keeps reloading after config settled: '$marker' increased by $delta in ${window}s (before=$before after=$after, threshold=$threshold). This is the tier reload-churn bug (see PR #7305)."
+        grep -n "$marker" "$log_file" | tail -20
+        exit 1
+    fi
+    echo "no storage reload churn: '$marker' delta=$delta over ${window}s (before=$before after=$after)"
+}
+
+# Number of object storage reloads observed so far in the mount log.
+count_storage_reload()
+{
+    local log_file=${1:-$TIER_MOUNT_LOG}
+    local n
+    n=$(grep -c "found new configuration" "$log_file" 2>/dev/null || true)
+    echo "${n:-0}"
+}
+
+# Positive control for PR #7305: a *genuine* config change MUST still trigger an
+# object storage reload, otherwise the fix would over-suppress real updates.
+assert_storage_reloaded()
+{
+    local before=$1
+    local log_file=${2:-$TIER_MOUNT_LOG}
+    local timeout=${3:-20}
+    local after attempt
+    for attempt in $(seq 1 "$timeout"); do
+        after=$(count_storage_reload "$log_file")
+        if [[ "$after" -gt "$before" ]]; then
+            echo "object storage reloaded after real config change: before=$before after=$after"
+            return 0
+        fi
+        sleep 1
+    done
+    echo "<FATAL>: expected object storage reload after config change, but 'found new configuration' did not increase (before=$before after=${after:-?}) within ${timeout}s"
+    exit 1
+}
+
+# A no-op / non-config operation must NOT trigger an object storage reload.
+assert_storage_not_reloaded()
+{
+    local before=$1
+    local wait_seconds=${2:-10}
+    local log_file=${3:-$TIER_MOUNT_LOG}
+    local threshold=${4:-2}
+    local after delta
+    sleep "$wait_seconds"
+    after=$(count_storage_reload "$log_file")
+    delta=$(( after - before ))
+    if [[ "$delta" -ge "$threshold" ]]; then
+        echo "<FATAL>: object storage reloaded unexpectedly (delta=$delta, before=$before after=$after, threshold=$threshold) with no config change. This is the tier reload-churn bug (see PR #7305)."
+        grep -n "found new configuration" "$log_file" | tail -20
+        exit 1
+    fi
+    echo "no unexpected storage reload: delta=$delta over ${wait_seconds}s (before=$before after=$after)"
 }
 
 get_object_tagging()
@@ -1421,6 +1504,10 @@ test_tier_tag_config()
     sleep 2
     assert_tier_list_storage_class 3 "GLACIER_IR"
     assert_tier_list_tag 3 ""
+
+    # After the tag config settles, the mount must not keep recreating the
+    # object storage on every heartbeat reload (PR #7305).
+    assert_no_storage_reload_churn
 }
 
 test_tier_tag_list()
@@ -1541,6 +1628,10 @@ test_tier_tag_object_tagging()
 
     assert_object_storage_class_by_path /jfs/tag_object_case/tagged2.bin INTELLIGENT_TIERING
     assert_object_tag_by_path /jfs/tag_object_case/tagged2.bin "env" "dev"
+
+    # Configuring tiers with tags must not put the object storage into a reload
+    # loop that rebuilds the S3 client every heartbeat (PR #7305).
+    assert_no_storage_reload_churn
 }
 
 test_tier_tag_force_update()
@@ -1673,6 +1764,81 @@ test_tier_tag_change_mapping()
     tier_set_no_err "$META_URL" --tier 2 /tag_change_case/file.bin --force
     sleep 5
     assert_object_tag_by_path /jfs/tag_change_case/file.bin "stage" "staging"
+}
+
+test_tier_reload_no_churn_with_tags()
+{
+    setup_tier_volume
+
+    local before
+    before=$(count_storage_reload)
+
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "team=infra" -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING --tag "team=data" -y
+    assert_tier_list_tag 1 "team=infra"
+    assert_tier_list_tag 2 "team=data"
+    assert_storage_reloaded "$before"
+
+    # (2) settled config -> no churn across ~7 heartbeats
+    assert_no_storage_reload_churn "$TIER_MOUNT_LOG" 15 2
+
+    # (3) identical re-apply -> no reload
+    local settled
+    settled=$(count_storage_reload)
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "team=infra" -y
+    assert_storage_not_reloaded "$settled" 10
+}
+
+test_tier_reload_no_churn_without_tags()
+{
+    setup_tier_volume
+    # setup_tier_volume already configured tier 1/2/3 storage classes; the reload
+    # from those changes must settle and then stop.
+    assert_no_storage_reload_churn "$TIER_MOUNT_LOG" 15 2
+}
+
+test_tier_reload_no_churn_on_file_ops()
+{
+    setup_tier_volume
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "phase=hot" -y
+    sleep 3
+
+    mkdir -p /jfs/reload_fileops_case
+    dd if=/dev/urandom of=/jfs/reload_fileops_case/a.bin bs=1M count=4 status=none
+    tier_set_no_err "$META_URL" --tier 1 /reload_fileops_case/a.bin
+    sleep 3
+    assert_object_tag_by_path /jfs/reload_fileops_case/a.bin "phase" "hot"
+
+    local before
+    before=$(count_storage_reload)
+    # More writes + tier sets, but no config change at all.
+    dd if=/dev/urandom of=/jfs/reload_fileops_case/b.bin bs=1M count=4 status=none
+    tier_set_no_err "$META_URL" --tier 1 /reload_fileops_case/b.bin
+    dd if=/dev/urandom of=/jfs/reload_fileops_case/c.bin bs=1M count=4 status=none
+    tier_set_no_err "$META_URL" --tier 1 /reload_fileops_case/c.bin
+    assert_storage_not_reloaded "$before" 12
+}
+
+test_tier_reload_no_churn_after_remount()
+{
+    # After a remount with tags already configured, the freshly loaded config
+    # must not churn either (fresh process, fresh Format load from metadata).
+    setup_tier_volume
+    ./juicefs config "$META_URL" --tier 1 --storage-class STANDARD_IA --tag "env=production" -y
+    ./juicefs config "$META_URL" --tier 2 --storage-class INTELLIGENT_TIERING --tag "env=staging" -y
+    sleep 3
+
+    # Remount into a fresh log file so reload counts start clean.
+    local remount_log=/tmp/juicefs_tier_remount.log
+    rm -f "$remount_log"
+    ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s --log "$remount_log"
+    sleep 3
+
+    assert_tier_list_tag 1 "env=production"
+    assert_tier_list_tag 2 "env=staging"
+
+    # No config change after remount -> no reload churn.
+    assert_no_storage_reload_churn "$remount_log" 15 2
 }
 
 init_aws_bucket
