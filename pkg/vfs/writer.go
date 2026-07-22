@@ -564,15 +564,9 @@ func (w *dataWriter) GetLength(inode Ino) uint64 {
 	return 0
 }
 
-// MergeWriterLength merges the in-memory writer length into attr.Length, syncs the
-// reader length, and reports whether ino was modified since start, doing it all
-// atomically under modM.
-//
-// A writer is freed only after invalidateAttr (which also takes modM) runs on the
-// close path, so within this critical section either the writer is still alive and
-// its length is authoritative, or modifiedAt is already recorded. Therefore a
-// "not modified" result guarantees the merged length is trustworthy and cacheable,
-// while a "modified" result tells the caller not to cache the (possibly stale) size.
+// MergeWriterLength merges the in-memory writer length into attr.Length and reports
+// whether ino was modified since start. Returns true if the size may be stale and
+// should not be cached. Runs atomically under modM.
 func (v *VFS) MergeWriterLength(ino Ino, attr *meta.Attr, start time.Time) (modified bool) {
 	v.modM.Lock()
 	defer v.modM.Unlock()

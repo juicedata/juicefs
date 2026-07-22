@@ -55,9 +55,7 @@ func (fs *fileSystem) replyAttr(ctx *fuseContext, entry *meta.Entry, attr *fuse.
 	if vfs.IsSpecialNode(entry.Inode) {
 		set(time.Hour)
 	} else if entry.Attr.Typ == meta.TypeFile && fs.v.MergeWriterLength(entry.Inode, entry.Attr, ctx.start) {
-		// Modified since the request started: the merged size may still be changing,
-		// so refresh from meta and leave the timeout at 0 to keep the kernel from
-		// caching a possibly-stale size.
+		// Size may still be changing; refresh from meta and skip attr cache.
 		logger.Debugf("refresh attr for %d", entry.Inode)
 		var nAttr meta.Attr
 		if fs.v.Meta.GetAttr(ctx, entry.Inode, &nAttr) == 0 {
