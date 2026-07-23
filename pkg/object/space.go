@@ -46,7 +46,9 @@ func (s *space) Limits() Limits {
 
 func (s *space) InitTiers(_ Tiers) error {
 	// avoid panic when GetStorageClass
-	s.tiers = NewTiers("")
+	if err := s.tierStorage.InitTiers(nil); err != nil {
+		return err
+	}
 	return notSupported
 }
 

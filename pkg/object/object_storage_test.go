@@ -63,6 +63,34 @@ func get(s ObjectStorage, k string, off, limit int64, getters ...AttrGetter) (st
 	return string(data), nil
 }
 
+func TestTierStorageInitTiersIsolatesRuntimeState(t *testing.T) {
+	init := Tiers{
+		0: {
+			ID:  0,
+			Sc:  "STANDARD",
+			Tag: "owner=team a",
+		},
+	}
+	original := init[0]
+
+	storage := &tierStorage{}
+	if err := storage.InitTiers(init); err != nil {
+		t.Fatalf("InitTiers failed: %v", err)
+	}
+
+	if got := init[0]; got != original {
+		t.Fatalf("InitTiers mutated input: got %+v, want %+v", got, original)
+	}
+	if got := storage.tiers[0].encodedTag; got != "owner=team+a" {
+		t.Fatalf("unexpected encoded tag: got %q, want %q", got, "owner=team+a")
+	}
+
+	init[0] = Tier{ID: 0, Sc: "STANDARD", Tag: "owner=changed"}
+	if got := storage.GetTier(context.Background()); got != original {
+		t.Fatalf("tier storage shares input map: got %+v, want %+v", got, original)
+	}
+}
+
 func listAll(ctx context.Context, s ObjectStorage, prefix, marker string, limit int64, followLink bool) ([]Object, error) {
 	ch, err := ListAll(ctx, s, prefix, marker, followLink, true)
 	if err == nil {

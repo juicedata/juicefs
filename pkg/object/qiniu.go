@@ -54,7 +54,9 @@ func (q *qiniu) String() string {
 
 func (q *qiniu) InitTiers(_ Tiers) error {
 	// avoid panic when GetStorageClass
-	q.tiers = NewTiers("")
+	if err := q.tierStorage.InitTiers(nil); err != nil {
+		return err
+	}
 	return notSupported
 }
 

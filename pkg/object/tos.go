@@ -98,7 +98,7 @@ func (t *tosClient) Put(ctx context.Context, key string, in io.Reader, getters .
 			checksumAlgr: generateChecksum(ins),
 		}
 	}
-	tier := t.GetTier(ctx)
+	tier := t.getRuntimeTier(ctx)
 	input := &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,
@@ -281,7 +281,7 @@ func (t *tosClient) ListUploads(ctx context.Context, marker string) ([]*PendingP
 }
 
 func (t *tosClient) Copy(ctx context.Context, dst, src string) error {
-	tier := t.GetTier(ctx)
+	tier := t.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(tier.Sc, string(enum.StorageClassStandard))
 	input := &tos.CopyObjectInput{
 		SrcBucket:    t.bucket,
