@@ -112,6 +112,8 @@ prepare_db() {
         install_fdb
         ;;
     "test.pkg")
+        sudo systemctl start redis-server.service 2>/dev/null || sudo service redis-server start
+        check_port 6379
         install_mysql
         retry install_tikv
         install_minio
