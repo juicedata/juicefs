@@ -576,7 +576,10 @@ func (n *jfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	if err != nil {
 		return
 	}
-	f, eno := n.fs.Open(mctx, n.path(bucket, object), vfs.MODE_MASK_R)
+	// Use OpenForRead so that concurrent GET requests for the same object share
+	// one per-inode page-cache, mirroring kernel page-cache behaviour and
+	// avoiding redundant object-storage I/O.
+	f, eno := n.fs.OpenForRead(mctx, n.path(bucket, object))
 	if eno != 0 {
 		return nil, jfsToObjectErr(ctx, eno, bucket, object)
 	}
