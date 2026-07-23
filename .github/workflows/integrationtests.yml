@@ -9,6 +9,7 @@ on:
       - '**.c'
       - '**.go'
       - 'Makefile'
+      - '.github/scripts/raceinject_replyattr_repro.sh'
       - '**/integrationtests.yml'
   pull_request:
     branches:
@@ -18,6 +19,7 @@ on:
       - '**.c'
       - '**.go'
       - 'Makefile'
+      - '.github/scripts/raceinject_replyattr_repro.sh'
       - '**/integrationtests.yml'
   schedule:
     - cron:  '0 19 * * *'
@@ -171,9 +173,42 @@ jobs:
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
+  fuse-raceinject-repro:
+    timeout-minutes: 45
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: oldstable
+          cache: true
+
+      - name: Run replyAttr raceinject repro
+        timeout-minutes: 30
+        run: |
+          chmod +x .github/scripts/raceinject_replyattr_repro.sh
+          .github/scripts/raceinject_replyattr_repro.sh
+
+      - name: log
+        if: always()
+        run: |
+          if [ -f /var/log/juicefs.log ]; then
+            tail -300 /var/log/juicefs.log
+          fi
+
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [integrationtests]
+    needs: [integrationtests, fuse-raceinject-repro]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3
