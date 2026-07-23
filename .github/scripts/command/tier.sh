@@ -645,8 +645,12 @@ test_tier_dir_recursive_and_non_recursive()
 {
     setup_tier_volume
 
-    mkdir -p /jfs/dir_case/juicefs
-    tar -C . -cf - . | tar -C /jfs/dir_case/juicefs -xf -
+    mkdir -p /jfs/dir_case/juicefs/{cmd,pkg/sub,docs,.git/refs/heads}
+    echo "readme" > /jfs/dir_case/juicefs/README.md
+    echo "module example.com/juicefs" > /jfs/dir_case/juicefs/go.mod
+    echo "all:" > /jfs/dir_case/juicefs/Makefile
+    echo "package sample" > /jfs/dir_case/juicefs/pkg/sub/sample.go
+    echo "ref: refs/heads/main" > /jfs/dir_case/juicefs/.git/HEAD
 
     # Phase 1: non-recursive set — only the directory itself changes
     tier_set_no_err "$META_URL" --tier 1 /dir_case/juicefs
