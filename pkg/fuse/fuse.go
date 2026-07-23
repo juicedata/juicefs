@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
-
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
@@ -53,21 +52,18 @@ func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
 type setTimeout func(time.Duration)
 
 func (fs *fileSystem) replyAttr(ctx *fuseContext, entry *meta.Entry, attr *fuse.Attr, set setTimeout) {
-	fs.v.UpdateLength(entry.Inode, entry.Attr) // UpdateLength before ModifiedSince check to avoid TOCTOU race
 	if vfs.IsSpecialNode(entry.Inode) {
 		set(time.Hour)
-	} else {
-		if entry.Attr.Typ == meta.TypeFile && fs.v.ModifiedSince(entry.Inode, ctx.start) {
-			logger.Debugf("refresh attr for %d", entry.Inode)
-			var nAttr meta.Attr
-			st := fs.v.Meta.GetAttr(ctx, entry.Inode, &nAttr)
-			if st == 0 {
-				*entry.Attr = nAttr
-				fs.v.UpdateLength(entry.Inode, entry.Attr) // Merge again in case write appeared during GetAttr
-			}
-		} else {
-			set(fs.conf.AttrTimeout)
+	} else if entry.Attr.Typ == meta.TypeFile && fs.v.MergeWriterLength(entry.Inode, entry.Attr, ctx.start) {
+		// Size may still be changing; refresh from meta and skip attr cache.
+		logger.Debugf("refresh attr for %d", entry.Inode)
+		var nAttr meta.Attr
+		if fs.v.Meta.GetAttr(ctx, entry.Inode, &nAttr) == 0 {
+			*entry.Attr = nAttr
+			fs.v.MergeWriterLength(entry.Inode, entry.Attr, ctx.start)
 		}
+	} else {
+		set(fs.conf.AttrTimeout)
 	}
 	attrToStat(entry.Inode, entry.Attr, attr)
 }

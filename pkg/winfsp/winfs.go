@@ -842,12 +842,12 @@ func (j *juice) Readdir(path string,
 		for _, e := range entries {
 			name := string(e.Name)
 			if full {
-				if j.vfs.ModifiedSince(e.Inode, readAt) {
+				if j.vfs.MergeWriterLength(e.Inode, e.Attr, readAt) {
 					if e2, err := j.vfs.GetAttr(ctx, e.Inode, 0); err == 0 {
 						e.Attr = e2.Attr
+						j.vfs.MergeWriterLength(e.Inode, e.Attr, readAt)
 					}
 				}
-				j.vfs.UpdateLength(e.Inode, e.Attr)
 				j.attrToStat(e.Inode, e.Attr, &st)
 				ok = fill(name, &st, 0)
 			} else {
