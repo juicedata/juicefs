@@ -40,6 +40,12 @@ type fileSystem struct {
 	fuse.RawFileSystem
 	conf *vfs.Config
 	v    *vfs.VFS
+
+	// passthrough write-path acceleration (experimental). When enabled and
+	// the kernel supports FUSE passthrough, newly written files are backed by
+	// a local staging file the kernel reads/writes directly (no daemon upcall),
+	// reconciled into JuiceFS slices on release. See passthrough.go.
+	pt *passthroughState
 }
 
 func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
@@ -120,6 +126,12 @@ func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *f
 	entry, err := fs.v.SetAttr(ctx, Ino(in.NodeId), int(in.Valid), in.Fh, in.Mode, in.Uid, in.Gid, int64(in.Atime), int64(in.Mtime), in.Atimensec, in.Mtimensec, in.Size)
 	if err != 0 {
 		return fuse.Status(err)
+	}
+	if in.Valid&fuse.FATTR_SIZE != 0 {
+		// truncate(2)/ftruncate(2) never reach the backing file (the kernel
+		// only diverts read/write/mmap); mirror the new size onto any live
+		// passthrough backing so it doesn't diverge from the metadata.
+		fs.pt.truncate(Ino(in.NodeId), in.Size)
 	}
 	fs.replyAttr(ctx, entry, &out.Attr, out.SetTimeout)
 	return 0
@@ -237,17 +249,36 @@ func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name str
 		return fuse.Status(err)
 	}
 	out.Fh = fh
+	// A freshly Create'd file is always empty.
+	if id, ok := fs.pt.tryOpen(entry.Inode, fh, in.Flags, true); ok {
+		out.OpenFlags |= fuse.FOPEN_PASSTHROUGH
+		out.BackingID = id
+	}
 	return fs.replyEntry(ctx, &out.EntryOut, entry)
 }
 
 func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
+	// If this inode has a passthrough write still reconciling, wait for it so
+	// this open sees the file's real (post-reconcile) size and content rather
+	// than the transient empty state — otherwise a write here would race the
+	// reconcile's copy and lose data.
+	fs.pt.waitInode(Ino(in.NodeId))
 	entry, fh, err := fs.v.Open(ctx, Ino(in.NodeId), in.Flags)
 	if err != 0 {
 		return fuse.Status(err)
 	}
 	out.Fh = fh
+	// Passthrough only when this open observes an empty file: O_TRUNC (about
+	// to be emptied) or an already zero-length file. Otherwise the backing
+	// (which starts empty) would shadow / overwrite real content.
+	emptyAtOpen := in.Flags&uint32(syscall.O_TRUNC) != 0 || entry.Attr.Length == 0
+	if id, ok := fs.pt.tryOpen(Ino(in.NodeId), fh, in.Flags, emptyAtOpen); ok {
+		out.OpenFlags |= fuse.FOPEN_PASSTHROUGH
+		out.BackingID = id
+		return 0
+	}
 	if vfs.IsSpecialNode(Ino(in.NodeId)) {
 		out.OpenFlags |= fuse.FOPEN_DIRECT_IO
 	} else if entry.Attr.KeepCache {
@@ -275,6 +306,7 @@ func (fs *fileSystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) 
 func (fs *fileSystem) Release(cancel <-chan struct{}, in *fuse.ReleaseIn) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
+	fs.pt.reconcile(ctx, fs.v, in.Fh)
 	fs.v.Release(ctx, Ino(in.NodeId), in.Fh)
 }
 
@@ -298,6 +330,12 @@ func (fs *fileSystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Statu
 func (fs *fileSystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
+	// For a passthrough open the daemon's writer holds none of the data (it
+	// lives in the kernel backing file), so vfs.Fsync alone would succeed
+	// without making anything durable; reconcile the staging content first.
+	if handled, errno := fs.pt.fsync(ctx, fs.v, in.Fh); handled {
+		return fuse.Status(errno)
+	}
 	err := fs.v.Fsync(ctx, Ino(in.NodeId), int(in.FsyncFlags), in.Fh)
 	return fuse.Status(err)
 }
@@ -518,6 +556,14 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		opt.Options = append(opt.Options, "volname="+conf.Format.Name)
 		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
 	}
+	// Experimental: opt into FUSE passthrough write acceleration via env var
+	// (avoids CLI surface while prototyping). JUICEFS_PASSTHROUGH_DIR must point
+	// at a non-stacked fs (tmpfs/ext4/xfs), not overlayfs/fuse.
+	ptEnabled := os.Getenv("JUICEFS_PASSTHROUGH") == "1"
+	if ptEnabled {
+		opt.EnablePassthrough = true
+		opt.MaxStackDepth = 2
+	}
 	fssrv, err := fuse.NewServer(imp, conf.Meta.MountPoint, &opt)
 	if err != nil {
 		if execErr, ok := err.(*exec.Error); ok {
@@ -541,8 +587,30 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		}
 	}
 
+	if ptEnabled {
+		imp.pt = newPassthroughState(fssrv, os.Getenv("JUICEFS_PASSTHROUGH_DIR"))
+		ptState = imp.pt
+		logger.Infof("FUSE passthrough enabled (experimental); staging dir=%s", imp.pt.dir)
+	}
+
 	fsserv = fssrv
 	fssrv.Serve()
+	// The kernel delivers queued RELEASEs before tearing the session down,
+	// but their passthrough reconciles may still be copying staging data
+	// when Serve returns; exiting now would lose bytes of files whose
+	// close(2) long since succeeded. Wait the reconciles out so anything
+	// that snapshots the metadata store after the daemon exits
+	// (commit/finalize) sees every closed file in full.
+	if imp.pt != nil {
+		deadline := time.Now().Add(time.Minute)
+		for v.ExternalFlushes() > 0 {
+			if time.Now().After(deadline) {
+				logger.Errorf("passthrough: exiting with %d unfinished reconcile(s)", v.ExternalFlushes())
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
 	return nil
 }
 
@@ -587,10 +655,24 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, m
 }
 
 var fsserv *fuse.Server
+var ptState *passthroughState
 
 func Shutdown() bool {
 	if fsserv != nil {
 		return fsserv.Shutdown()
 	}
 	return false
+}
+
+// DrainPassthrough blocks new passthrough opens and waits (bounded) for all
+// live passthrough opens and in-flight reconciles to finish. Returns false —
+// with passthrough re-enabled — if any remain; the caller must then refuse a
+// session handover, because passthrough data exists only in this process's
+// staging files and a successor has no record of them. Returns true
+// immediately when passthrough is not enabled.
+func DrainPassthrough(timeout time.Duration) bool {
+	if ptState == nil {
+		return true
+	}
+	return ptState.drain(timeout)
 }
