@@ -645,13 +645,8 @@ test_tier_dir_recursive_and_non_recursive()
 {
     setup_tier_volume
 
-    command -v git >/dev/null 2>&1 || {
-        echo "<FATAL>: git is required for test_tier_dir_recursive_and_non_recursive"
-        exit 1
-    }
-
-    mkdir -p /jfs/dir_case
-    git clone --depth 1 https://github.com/juicedata/juicefs.git /jfs/dir_case/juicefs
+    mkdir -p /jfs/dir_case/juicefs
+    tar -C . -cf - . | tar -C /jfs/dir_case/juicefs -xf -
 
     # Phase 1: non-recursive set — only the directory itself changes
     tier_set_no_err "$META_URL" --tier 1 /dir_case/juicefs
