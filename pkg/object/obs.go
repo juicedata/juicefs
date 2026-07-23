@@ -165,7 +165,7 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	params.ContentLength = vlen
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
-	t := s.GetTier(ctx)
+	t := s.getRuntimeTier(ctx)
 	params.StorageClass = obs.StorageClassType(t.Sc)
 	var resp *obs.PutObjectOutput
 	var err error
@@ -185,7 +185,7 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 }
 
 func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
-	t := s.GetTier(ctx)
+	t := s.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, string(obs.StorageClassStandard))
 	params := &obs.CopyObjectInput{}
 	params.Bucket = s.bucket
