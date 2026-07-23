@@ -503,6 +503,10 @@ type Meta interface {
 
 	// ListSlices returns all slices used by all files.
 	ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno
+	// ScanSlices scans all slices used by all files, calling fn for each slice.
+	// Ino is 0 for pending slices, 1 for trash slices, or the actual inode.
+	// When delete is true, leaked inodes/chunks/refs and delayed slices are cleaned up before scanning.
+	ScanSlices(ctx Context, scanPending, delete bool, showProgress func(), fn func(Ino, Slice) error) syscall.Errno
 	// Remove all files and directories recursively.
 	// count represents the number of attempted deletions of entries (even if failed).
 	Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno

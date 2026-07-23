@@ -3961,6 +3961,13 @@ func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 }
 
 func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
+	return m.ScanSlices(ctx, scanPending, delete, showProgress, func(ino Ino, s Slice) error {
+		slices[ino] = append(slices[ino], s)
+		return nil
+	})
+}
+
+func (m *dbMeta) ScanSlices(ctx Context, scanPending, delete bool, showProgress func(), fn func(Ino, Slice) error) syscall.Errno {
 	if delete {
 		_ = m.doCleanupSlices(ctx, nil)
 	}
@@ -3978,7 +3985,9 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, de
 			}
 			for _, s := range ss {
 				if s.id > 0 {
-					slices[c.Inode] = append(slices[c.Inode], Slice{Id: s.id, Size: s.size})
+					if err := fn(c.Inode, Slice{Id: s.id, Size: s.size}); err != nil {
+						return err
+					}
 					if showProgress != nil {
 						showProgress()
 					}
@@ -3992,26 +4001,32 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, de
 	}
 
 	if scanPending {
-		_ = m.simpleTxn(ctx, func(s *xorm.Session) error {
+		if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 			var cks []sliceRef
 			err := s.Where("refs <= 0").Find(&cks)
 			if err != nil {
 				return err
 			}
 			for _, ck := range cks {
-				slices[0] = append(slices[0], Slice{Id: ck.Id, Size: ck.Size})
+				if err := fn(0, Slice{Id: ck.Id, Size: ck.Size}); err != nil {
+					return err
+				}
 			}
 			return nil
-		})
+		}); err != nil {
+			return errno(err)
+		}
 	}
 
 	if m.getFormat().TrashDays == 0 {
 		return 0
 	}
 	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
-		slices[1] = append(slices[1], ss...)
-		if showProgress != nil {
-			for range ss {
+		for _, s := range ss {
+			if err := fn(1, s); err != nil {
+				return false, err
+			}
+			if showProgress != nil {
 				showProgress()
 			}
 		}
