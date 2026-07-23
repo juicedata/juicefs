@@ -27,9 +27,7 @@ fi
 AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-${AWS_S3_ENDPOINT_URL:-$DEFAULT_AWS_ENDPOINT_URL}}
 AWS_BUCKET_URL=${AWS_BUCKET_URL:-${AWS_ENDPOINT_URL}/${AWS_BUCKET}}
 TIER_VOLUME_NAME=${TIER_VOLUME_NAME:-myjfs}
-# Mount log file used by tier tests so that reload/config behavior can be asserted.
 TIER_MOUNT_LOG=${TIER_MOUNT_LOG:-/tmp/juicefs_tier.log}
-# Window (seconds) and threshold for the reload-churn regression check (PR #7305).
 TIER_RELOAD_CHURN_WINDOW=${TIER_RELOAD_CHURN_WINDOW:-10}
 TIER_RELOAD_CHURN_THRESHOLD=${TIER_RELOAD_CHURN_THRESHOLD:-2}
 
