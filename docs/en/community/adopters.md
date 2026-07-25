@@ -21,6 +21,7 @@ slug: /adopters
 | [DJI](https://www.dji.com) | Drone & Autonomous driving, AI pipeline|             |
 | [Clobotics](https://clobotics.com)   | Drone, AI pipeline  | [How Clobotics Overcame Multi-Cloud and Massive File Storage Challenges](https://juicefs.com/en/blog/user-stories/multi-cloud-storage-posix-compatible)     |
 | [TP-LINK](https://www.tp-link.com) | AI      |       |
+| [Terminus](https://www.terminusgroup.com) | AIoT | |
 | [MemVerge](https://memverge.com)  | BioTech, High performance file store  |            |
 | [MDI Biological Laboratory](https://mdibl.org) | BioTech, High performance file store |           |
 | [Lawrence Berkeley Lab](https://www.lbl.gov) | BioTech, High performance file store |             |
@@ -39,6 +40,7 @@ slug: /adopters
 | [Pingan Bank](https://pingan.com)  | Fintech, Data platform  |             |
 | [Tongdun](https://tongdun.cn)  | Fintech, Data platform |        |
 | [Yaoxin Financing Re-Guarantee](https://www.yaoxinhd.com)  | Data platform, File sharing      |          |
+| [Sui Wallet](https://slush.app) | Blockchain | |
 | [China Telecom](https://www.chinatelecomglobal.com)  | Telecom, Data platform | [Scaling Hadoop on cloud: Managing PB-Level Data through Separation of Compute and Storage with JuiceFS](https://juicefs.com/en/blog/user-stories/applicatio-of-juicefs-in-china-telecoms-daily-average-pb-data-scenario)   |
 | [China Mobile Cloud](https://ecloud.he.chinamobile.com)  | Public cloud, Data platform  | [Improving Apache HBase Performance on Cloud with JuiceFS](https://juicefs.com/en/blog/user-stories/juicefs-support-hbase-at-chinamobile-cloud)    |
 | [Volcano Engine](https://www.volcengine.com)  | Public cloud, File sharing, VFX rendering | [How JuiceFS Accelerates Edge Rendering Performance in Volcengine](https://juicefs.com/en/blog/user-stories/how-juicefs-accelerates-edge-rendering-performance-in-volcengine)   |
