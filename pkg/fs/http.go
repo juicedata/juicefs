@@ -134,6 +134,9 @@ func (hfs *webdavFS) Rename(ctx context.Context, oldName, newName string) error 
 
 func (hfs *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	fi, err := hfs.fs.Stat(hfs.ctx, removeNewLine(name))
+	if fi == nil {
+		return nil, econv(err)
+	}
 	return fi, econv(err)
 }
 
