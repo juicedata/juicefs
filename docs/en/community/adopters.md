@@ -21,6 +21,7 @@ slug: /adopters
 | [DJI](https://www.dji.com) | Drone & Autonomous driving, AI pipeline|             |
 | [Clobotics](https://clobotics.com)   | Drone, AI pipeline  | [How Clobotics Overcame Multi-Cloud and Massive File Storage Challenges](https://juicefs.com/en/blog/user-stories/multi-cloud-storage-posix-compatible)     |
 | [TP-LINK](https://www.tp-link.com) | AI      |       |
+| [Yealink](https://www.yealink.com) | Unified communications | |
 | [Terminus](https://www.terminusgroup.com) | AIoT | |
 | [MemVerge](https://memverge.com)  | BioTech, High performance file store  |            |
 | [MDI Biological Laboratory](https://mdibl.org) | BioTech, High performance file store |           |

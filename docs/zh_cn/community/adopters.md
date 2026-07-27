@@ -56,6 +56,7 @@ slug: /adopters
 | [蝉妈妈数据](https://www.chanmama.com)  |  AI  |         |
 | [酷家乐](https://www.kujiale.com)    |  AI    |       |
 | [TP-LINK](https://www.tp-link.com)   | AI      |       |
+| [亿联网络](https://www.yealink.com.cn) | 企业通信 | |
 | [Terminus](https://www.terminusgroup.com) | AIoT | |
 | [Fal](https://fal.ai) | GenerativeAI    |           |
 | [Lepton AI](https://www.lepton.ai) | GenerativeAI | [加速 AI 训推：Lepton AI 如何构建多租户、低延迟云存储平台](https://juicefs.com/zh-cn/blog/user-stories/lepton-ai-build-multi-tenant-low-latency-cloud-storage-platform)          |
