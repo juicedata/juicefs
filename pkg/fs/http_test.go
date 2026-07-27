@@ -82,8 +82,12 @@ func TestWebdav(t *testing.T) {
 	if webdavFS.RemoveAll(ctx, "/d2") != nil {
 		t.Fatalf("webdavFS removeAll failed: %s", err)
 	}
-	if _, err = webdavFS.Stat(ctx, "/d2"); err != os.ErrNotExist {
+	missingInfo, err := webdavFS.Stat(ctx, "/d2")
+	if err != os.ErrNotExist {
 		t.Fatalf("webdavFS removeAll failed: %s", err)
+	}
+	if missingInfo != nil {
+		t.Fatalf("webdavFS stat returned non-nil info for missing path: %#v", missingInfo)
 	}
 	if err = aFile.Close(); err != nil {
 		t.Fatalf("webdavFS close file failed: %s", err)
