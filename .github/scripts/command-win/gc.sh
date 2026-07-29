@@ -23,7 +23,10 @@ test_gc_trash_slices(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs
     ./juicefs.exe mount -d $META_URL z: --no-usage-report
-    PATH1=test PATH2=z:\\test python3 .github/scripts/random_read_write.py 
+    local suffix="${RANDOM}_$$"
+    local local_file="${RUNNER_TEMP:-.}/random_read_write_${suffix}"
+    local mount_file="z:\\random_read_write_${suffix}"
+    PATH1="$local_file" PATH2="$mount_file" python3 .github/scripts/random_read_write.py
     ./juicefs.exe status --more $META_URL
     ./juicefs.exe config $META_URL --trash-days 0 --yes
     ./juicefs.exe gc $META_URL 
