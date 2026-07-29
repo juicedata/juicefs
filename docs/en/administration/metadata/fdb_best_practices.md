@@ -20,51 +20,61 @@ FoundationDB supports horizontal scaling. When data storage reaches the maximum 
   - macOS 10.7 or later
 - At least 4 GB of memory for each `fdbserver` process
 - Storage:
-  - Use the memory storage engine when the data size is smaller than the available memory.
-  - Use the SSD storage engine when the data size is larger than the available memory.
+  - When the data size is smaller than the available memory, use the memory storage engine.
+  - When the data size is larger than the available memory, use the SSD storage engine.
 
-## Configure FoundationDB
 
-### Configure FoundationDB on a single machine
+## Install FoundationDB
 
-**[Ubuntu](https://apple.github.io/foundationdb/getting-started-linux.html)**
+### Install FoundationDB on a single machine
+
+#### Ubuntu
+
+For details, see the [FoundationDB documentation](https://apple.github.io/foundationdb/getting-started-linux.html).
 
 ```
-// Download the server and client DEB packages
+// Download the server and client DEB packages.
 wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
 wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
-// Install the packages
+// Install the packages.
 sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb \
 foundationdb-server_6.3.23-1_amd64.deb
 ```
 
-**[RHEL/CentOS 6/CentOS 7](https://apple.github.io/foundationdb/getting-started-linux.html)**
+#### RHEL / CentOS 6 / CentOS 7
+
+For details, see the [FoundationDB documentation](https://apple.github.io/foundationdb/getting-started-linux.html).
 
 ```
-// Download the server and client RPM packages
+// Download the server and client RPM packages.
 wget https://github.com/apple/foundationdb/releases/download/6.3.12/foundationdb-clients-6.3.23-1.el7.x86_64.rpm
 wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server-6.3.23-1.el7.x86_64.rpm
-// Install the packages
+// Install the packages.
 sudo rpm -Uvh foundationdb-clients-6.3.23-1.el7.x86_64.rpm \
 foundationdb-server-6.3.23-1.el7.x86_64.rpm
 ```
 
-**[macOS](https://apple.github.io/foundationdb/getting-started-linux.html)**
+#### macOS
 
-For details, see the official FoundationDB documentation.
+For details, see the [FoundationDB documentation](https://apple.github.io/foundationdb/getting-started-linux.html).
 
-### [Configure a FoundationDB cluster on multiple machines](https://apple.github.io/foundationdb/administration.html#adding-machines-to-a-cluster)
+### Configure a FoundationDB cluster on multiple machines
 
-> Follow the preceding instructions to deploy FoundationDB on each machine.
-
-- First, deploy a standalone FoundationDB instance on every machine.
-- On one node, edit its `fdb.cluster` file (located at `/etc/foundationdb/fdb.cluster` by default). This file contains a single line in the following format: `description:ID@IP:PORT,IP:PORT,...`. Add the `IP:PORT` entries for the other machines.
-- Copy the modified `fdb.cluster` file to the other nodes.
-- Restart FoundationDB on every machine (`sudo service foundationdb restart`).
+For details, see [this document](https://apple.github.io/foundationdb/administration.html#adding-machines-to-a-cluster).
+The deployment steps for each machine are the same as the single-machine installation process.
+After installing FoundationDB on all machines, configure the cluster as follows:
+1. Choose one node and edit its `fdb.cluster` file (located at `/etc/foundationdb/fdb.cluster` by default). This file contains a single line in the following format: `description:ID@IP:PORT,IP:PORT,...`. Add the `IP:PORT` entries of the other machines.
+2. Copy the updated `fdb.cluster` file to all other nodes.
+3. Restart FoundationDB on every node:
+    ``` 
+    sudo service foundationdb restart
+    ```
 
 ## Redundancy modes
 
-FoundationDB supports multiple redundancy modes. These modes determine storage requirements, the required cluster size, and fault tolerance. Choose the appropriate redundancy mode based on the number of machines in your cluster. To change the redundancy mode, use the `configure` command in `fdbcli`, as shown in the following example:
+FoundationDB supports multiple redundancy modes. These modes determine storage requirements, the required cluster size, and fault tolerance.
+
+Choose an appropriate redundancy mode based on your cluster size. To change the redundancy mode, use the `configure` command in `fdbcli`, as shown in the following example:
 
 ```
 user@host$ fdbcli
@@ -72,7 +82,7 @@ Using cluster file `/etc/foundationdb/fdb.cluster'.
 
 The database is available.
 
-Welcome to the fdbcli. For help, type `help'.
+Welcome to the fdbcli. For help, type 'help'.
 fdb> configure double
 Configuration changed.
 ```
@@ -93,7 +103,7 @@ FoundationDB stores three replicas of the data, and at least three machines must
 
 ## Storage engines
 
-FoundationDB provides two storage engines: `ssd` and `memory`. Choose a storage engine based on the amount of data you need to store. In our tests, the two engines delivered similar performance. Because the `ssd` storage engine supports larger data sets, we recommend using it.
+FoundationDB provides two storage engines: `ssd` and `memory`. Choose a storage engine based on the amount of data you need to store. In our tests, the two engines delivered similar performance. Because the `ssd` storage engine supports larger datasets, we recommend using it.
 
 ```
 user@host$ fdbcli
