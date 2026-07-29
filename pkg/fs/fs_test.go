@@ -344,6 +344,41 @@ func TestBatchDeleteEntriesChecksParentWriteAndSearchPermission(t *testing.T) {
 	}
 }
 
+func TestResolveRelativeSymlinkAfterRedirection(t *testing.T) {
+	fs := createTestFS(t)
+	ctx := meta.NewContext(1, 1, []uint32{2})
+
+	for _, dir := range []string{"/a", "/x/y", "/x/z"} {
+		if err := fs.MkdirAll(ctx, dir, 0777, 022); err != 0 {
+			t.Fatalf("mkdir %s: %s", dir, err)
+		}
+	}
+
+	f, err := fs.Create(ctx, "/x/z/file", 0666, 022)
+	if err != 0 {
+		t.Fatalf("create target file: %s", err)
+	}
+	if err := f.Close(ctx); err != 0 {
+		t.Fatalf("close target file: %s", err)
+	}
+
+	if err := fs.Symlink(ctx, "../x/y", "/a/link1"); err != 0 {
+		t.Fatalf("symlink /a/link1: %s", err)
+	}
+	if err := fs.Symlink(ctx, "../z", "/x/y/link2"); err != 0 {
+		t.Fatalf("symlink /x/y/link2: %s", err)
+	}
+
+	if fi, err := fs.Stat(ctx, "/a/link1/link2/file"); err != 0 {
+		t.Fatalf("stat nested relative symlink path: %s", err)
+	} else if fi.name != "file" {
+		t.Fatalf("unexpected final name: %+v", fi)
+	}
+	if err := fs.Close(); err != nil {
+		t.Fatalf("close: %s", err)
+	}
+}
+
 func createTestFS(t testing.TB) *FileSystem {
 	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
