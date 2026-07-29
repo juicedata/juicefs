@@ -986,17 +986,14 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 		}
 
 		var inode Ino
-		var resolved bool
+		isLastComponent := i == len(ss)-1
 
 		err = fs.lookup(ctx, parent, name, &inode, attr)
-		if i == len(ss)-1 {
-			resolved = true
-		}
 		if err != 0 {
 			return
 		}
 		fi = AttrToFileInfo(inode, attr)
-		if (!resolved || followLastSymlink) && fi.IsSymlink() {
+		if (!isLastComponent || followLastSymlink) && fi.IsSymlink() {
 			if _, ok := visited[inode]; ok {
 				logger.Errorf("find a loop symlink: %d", inode)
 				return nil, syscall.ELOOP
@@ -1031,15 +1028,11 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 			} else {
 				target = path.Join(strings.Join(ss[:i], "/"), target)
 			}
-			hasRemaining := false
-			for _, comp := range ss[i+1:] {
-				if comp != "" {
-					target = target + "/" + comp
-					hasRemaining = true
-				}
+			if !isLastComponent {
+				target += "/" + strings.Join(ss[i+1:], "/")
 			}
 			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
-			if err == 0 && fi != nil && !hasRemaining {
+			if err == 0 && isLastComponent {
 				fi.name = name
 			}
 			return
