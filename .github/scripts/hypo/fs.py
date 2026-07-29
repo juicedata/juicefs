@@ -136,6 +136,26 @@ class JuicefsMachine(RuleBasedStateMachine):
         else:
             return rule in self.INCLUDE_RULES
 
+    def _update_paths_after_rename(self, old_path, new_path):
+        if not old_path:
+            return
+
+        old_prefix = old_path + os.sep
+        new_prefix = new_path + os.sep
+
+        for name in ('files', 'folders', 'entry_with_acl'):
+            bundle = self.bundles.get(name, [])
+            for i, entry in enumerate(bundle):
+                if isinstance(entry, str) and entry.startswith(old_prefix):
+                    bundle[i] = new_prefix + entry[len(old_prefix):]
+
+        xattr_bundle = self.bundles.get('xattrs', [])
+        for i, entry in enumerate(xattr_bundle):
+            if (isinstance(entry, tuple) and len(entry) == 2
+                    and isinstance(entry[0], str)
+                    and entry[0].startswith(old_prefix)):
+                xattr_bundle[i] = (new_prefix + entry[0][len(old_prefix):], entry[1])
+
     @rule(
         entry = Entries,
         user = st.sampled_from(SUDO_USERS)
@@ -356,7 +376,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         if isinstance(result1, Exception):
             return entry
         else:
-            return os.path.join(parent, new_entry_name)
+            new_path = os.path.join(parent, new_entry_name)
+            self._update_paths_after_rename(entry, new_path)
+            return new_path
         
 
     @rule( target=Files, entry = Files.filter(lambda x: x != multiple()),
