@@ -369,6 +369,39 @@ func TestBadgerSimpleTxnReadOnly(t *testing.T) {
 	}
 }
 
+func TestBadgerSyncOption(t *testing.T) {
+	root := t.TempDir()
+	tests := []struct {
+		name     string
+		addr     string
+		expected bool
+	}{
+		{name: "default false", addr: root + "/default", expected: false},
+		{name: "sync true", addr: root + "/true?sync=true", expected: true},
+		{name: "sync false", addr: root + "/false?sync=false", expected: false},
+		{name: "sync invalid 1", addr: root + "/invalid1?sync=1", expected: false},
+		{name: "sync invalid 0", addr: root + "/invalid0?sync=0", expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := newBadgerClient(tt.addr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.close()
+
+			bc, ok := client.(*badgerClient)
+			if !ok {
+				t.Fatalf("unexpected client type %T", client)
+			}
+			if got := bc.client.Opts().SyncWrites; got != tt.expected {
+				t.Fatalf("sync option mismatch: got %v, expected %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestBadgerDeleteTxnTooBig(t *testing.T) {
 	dir := t.TempDir()
 

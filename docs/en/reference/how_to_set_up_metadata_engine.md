@@ -190,6 +190,16 @@ When being used as the metadata storage engine for JuiceFS, KeyDB functions the 
 
 When using BadgerDB as the JuiceFS metadata storage engine, use `badger://` to specify the database path.
 
+You can append query options to the Badger metadata URL:
+
+- `sync=true|false`: controls whether Badger enables sync-on-commit (`SyncWrites`). Default is `false` for better write performance.
+
+For example:
+
+```shell
+juicefs format badger://$HOME/badger-data?sync=true myjfs
+```
+
 #### Create a file system
 
 You only need to create a file system for use, and there is no need to create a BadgerDB database in advance.
