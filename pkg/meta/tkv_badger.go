@@ -22,8 +22,10 @@ package meta
 import (
 	"bytes"
 	"context"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -254,7 +256,24 @@ func (c *badgerClient) close() error {
 func (c *badgerClient) gc() {}
 
 func newBadgerClient(addr string) (tkvClient, error) {
-	opt := badger.DefaultOptions(addr)
+	dataPath, queryStr, _ := strings.Cut(addr, "?")
+	opt := badger.DefaultOptions(dataPath)
+	if queryStr != "" {
+		query, err := url.ParseQuery(queryStr)
+		if err != nil {
+			return nil, err
+		}
+		syncValue := strings.ToLower(query.Get("sync"))
+		switch syncValue {
+		case "", "false":
+			opt.SyncWrites = false
+		case "true":
+			opt.SyncWrites = true
+		default:
+			logger.Warnf("invalid badger sync option %q, fallback to false", syncValue)
+			opt.SyncWrites = false
+		}
+	}
 	opt.Logger = utils.GetLogger("badger")
 	opt.MetricsEnabled = false
 	client, err := badger.Open(opt)
