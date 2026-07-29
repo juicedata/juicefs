@@ -61,11 +61,17 @@ For details, see the [FoundationDB documentation](https://apple.github.io/founda
 ### Configure a FoundationDB cluster on multiple machines
 
 For details, see [this document](https://apple.github.io/foundationdb/administration.html#adding-machines-to-a-cluster).
+
 The deployment steps for each machine are the same as the single-machine installation process.
+
 After installing FoundationDB on all machines, configure the cluster as follows:
+
 1. Choose one node and edit its `fdb.cluster` file (located at `/etc/foundationdb/fdb.cluster` by default). This file contains a single line in the following format: `description:ID@IP:PORT,IP:PORT,...`. Add the `IP:PORT` entries of the other machines.
+
 2. Copy the updated `fdb.cluster` file to all other nodes.
+
 3. Restart FoundationDB on every node:
+
     ``` 
     sudo service foundationdb restart
     ```
