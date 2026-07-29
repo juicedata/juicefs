@@ -317,7 +317,7 @@ func (m *redisMeta) NewSession(record bool) error {
 
 func (m *redisMeta) doDeleteSlice(id uint64, size uint32) error {
 	ctx := Background()
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		return m.rdb.HDel(ctx, m.sliceRefs(), m.sliceKey(id, size)).Err()
 	}
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -395,7 +395,7 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 	if err = m.rdb.Set(ctx, m.setting(), data, 0).Err(); err != nil {
 		return err
 	}
-	m.fmt = format
+	m.setFormat(format)
 	if body != nil {
 		return nil
 	}
@@ -486,7 +486,7 @@ func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
 
 	var v int64
 	var err error
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		v, err = m.rdb.IncrBy(Background(), key, value).Result()
 	} else {
 		_, err = m.rdb.TxPipelined(Background(), func(pipe redis.Pipeliner) error {
@@ -1603,7 +1603,7 @@ func (m *redisMeta) txnLastLog() string {
 }
 
 func (m *redisMeta) genLog(ctx Context, pipe redis.Pipeliner, ts time.Time, op string, args ...any) {
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		return
 	}
 	op = fmt.Sprintf(op, args...)
@@ -5173,9 +5173,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
-	m.Lock()
-	m.fmt = &dm.Setting
-	m.Unlock()
+	m.setFormat(&dm.Setting)
 	if err = m.loadDumpedACLs(ctx); err != nil {
 		return err
 	}

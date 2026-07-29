@@ -273,7 +273,9 @@ type baseMeta struct {
 	sync.Mutex
 	addr string
 	conf *Config
-	fmt  *Format
+	// fmt is reloaded in the background while other goroutines read it, so it is
+	// only ever accessed through getFormat/setFormat
+	fmt atomic.Pointer[Format]
 
 	root         Ino
 	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict
@@ -728,9 +730,7 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	if format.Tiers == nil {
 		format.Tiers = object.NewTiers(format.StorageClass)
 	}
-	m.Lock()
-	m.fmt = format
-	m.Unlock()
+	m.setFormat(format)
 	return format, nil
 }
 
@@ -819,7 +819,7 @@ func (m *baseMeta) NewSession(record bool) error {
 		go m.cleanupSlices(ctx)
 		go m.cleanupTrash(ctx)
 		go m.symlinks.clean(ctx, &m.sessWG)
-		if m.fmt.ChangeLog {
+		if m.getFormat().ChangeLog {
 			m.sessWG.Add(1)
 			go m.cleanupChangelog(ctx)
 		}
@@ -1102,8 +1102,9 @@ func parseChangelogTime(entry string) (time.Time, error) {
 func (m *baseMeta) cleanupChangelog(ctx Context) {
 	defer m.sessWG.Done()
 	for {
-		maxAge := time.Duration(m.fmt.ChangeLogMaxAge) * time.Second
-		maxLines := m.fmt.ChangeLogMaxLines
+		format := m.getFormat()
+		maxAge := time.Duration(format.ChangeLogMaxAge) * time.Second
+		maxLines := format.ChangeLogMaxLines
 		interval := 5 * time.Minute
 		select {
 		case <-ctx.Done():
@@ -2774,9 +2775,11 @@ func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino, create bool) s
 }
 
 func (m *baseMeta) getFormat() *Format {
-	m.Lock()
-	defer m.Unlock()
-	return m.fmt
+	return m.fmt.Load()
+}
+
+func (m *baseMeta) setFormat(format *Format) {
+	m.fmt.Store(format)
 }
 
 func (m *baseMeta) GetFormat() Format {
@@ -3228,7 +3231,7 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 			logger.Warnf("bad entry as a subTrash: %s", entry.Name)
 			continue
 		}
-		if m.fmt.DirStats {
+		if m.getFormat().DirStats {
 			ds, st := m.GetDirStat(ctx, entry.Inode)
 			if st == 0 && ds != nil {
 				if _, err := scan(entry.Inode, uint64(ds.length), ts, ds.inodes); err != nil {

@@ -137,7 +137,7 @@ func (m *kvMeta) Name() string {
 }
 
 func (m *kvMeta) doDeleteSlice(id uint64, size uint32) error {
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		return m.deleteKeys(m.sliceKey(id, size))
 	}
 	return m.txn(Background(), func(tx *kvTxn) error {
@@ -563,7 +563,7 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.fmt = format
+	m.setFormat(format)
 	ts := time.Now().Unix()
 	attr := &Attr{
 		Typ:    TypeDirectory,
@@ -643,7 +643,7 @@ func (m *kvMeta) doFlushStats() {
 }
 
 func (m *kvMeta) doNewSession(sinfo []byte, update bool) error {
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		if err := m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime())); err != nil {
 			return fmt.Errorf("new session: %s", err)
 		}
@@ -751,7 +751,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 	if fail {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
-		if !m.fmt.ChangeLog {
+		if !m.getFormat().ChangeLog {
 			return m.deleteKeys(m.sessionKey(sid), m.legacySessionKey(sid), m.sessionInfoKey(sid))
 		}
 		return m.txn(ctx, func(tx *kvTxn) error {
@@ -909,7 +909,7 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 }
 
 func (m *kvMeta) genLog(tx *kvTxn, ts time.Time, op string, args ...any) {
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		return
 	}
 	id := tx.id()
@@ -4358,9 +4358,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.Lock()
-	m.fmt = &dm.Setting
-	m.Unlock()
+	m.setFormat(&dm.Setting)
 
 	if err = m.loadDumpedACLs(Background()); err != nil {
 		return err
