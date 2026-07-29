@@ -265,7 +265,7 @@ func newBadgerClient(addr string) (tkvClient, error) {
 		}
 		syncValue := strings.ToLower(query.Get("sync"))
 		switch syncValue {
-		case "", "false":
+		case "false":
 			opt.SyncWrites = false
 		case "true":
 			opt.SyncWrites = true
