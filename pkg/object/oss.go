@@ -132,7 +132,7 @@ func (o *ossClient) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	t := o.GetTier(ctx)
+	t := o.getRuntimeTier(ctx)
 	req := &oss.PutObjectRequest{
 		Bucket:       &o.bucket,
 		Key:          &key,
@@ -144,7 +144,7 @@ func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	}
 	if ins, ok := in.(io.ReadSeeker); ok {
 		req.Metadata = make(map[string]string)
-		req.Metadata[oss.HeaderOssMetaPrefix+checksumAlgr] = generateChecksum(ins)
+		req.Metadata[checksumAlgr] = generateChecksum(ins)
 	}
 	var reqId string
 	result, err := o.client.PutObject(ctx, req)
@@ -174,7 +174,7 @@ func (o *ossClient) Restore(ctx context.Context, key string, days int32) error {
 }
 
 func (o *ossClient) Copy(ctx context.Context, dst, src string) error {
-	t := o.GetTier(ctx)
+	t := o.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, string(oss.StorageClassStandard))
 	var req = &oss.CopyObjectRequest{
 		SourceBucket: &o.bucket,

@@ -40,8 +40,10 @@ func (s *wasabi) String() string {
 	return fmt.Sprintf("wasabi://%s/", s.s3client.bucket)
 }
 
-func (s *wasabi) InitTiers(init Tiers) error {
-	s.tiers = NewTiers("")
+func (s *wasabi) InitTiers(_ Tiers) error {
+	if err := s.tierStorage.InitTiers(nil); err != nil {
+		return err
+	}
 	return notSupported
 }
 

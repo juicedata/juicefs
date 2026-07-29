@@ -153,7 +153,7 @@ func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getter
 }
 
 func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	t := s.GetTier(ctx)
+	t := s.getRuntimeTier(ctx)
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -197,7 +197,7 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
-	t := s.GetTier(ctx)
+	t := s.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, string(types.StorageClassStandard))
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
@@ -484,8 +484,19 @@ func defaultPathStyle() bool {
 	return v == "" || v == "0" || v == "false"
 }
 
-var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
+var oracleCompileRegexp = `^(?:.*\.)?(?:compat|vhcompat)\.objectstorage\.([^.]+)\.(?:oraclecloud\.com|oci\.customer-oci\.com)$`
 var OVHCompileRegexp = `^s3\.(\w*)(\.\w*)?\.cloud\.ovh\.net$`
+
+func parseOCIEndpoint(host string) (string, bool) {
+	compile := regexp.MustCompile(oracleCompileRegexp)
+	submatch := compile.FindStringSubmatch(host)
+	if len(submatch) != 2 {
+		return "", false
+	}
+	virtualHosted := strings.HasPrefix(host, "vhcompat.objectstorage.") ||
+		strings.Contains(host, ".vhcompat.objectstorage.")
+	return submatch[1], virtualHosted
+}
 
 func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
@@ -502,10 +513,12 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	}
 
 	var (
-		bucketName string
-		region     string
-		ep         string
+		bucketName      string
+		region          string
+		ep              string
+		ociVirtualStyle bool
 	)
+	region, ociVirtualStyle = parseOCIEndpoint(uri.Hostname())
 
 	if uri.Path != "" {
 		// [ENDPOINT]/[BUCKET]
@@ -602,7 +615,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	if ep != "" {
 		optFns = append(optFns, func(options *s3.Options) {
 			options.BaseEndpoint = aws.String(uri.Scheme + "://" + ep)
-			options.UsePathStyle = defaultPathStyle()
+			options.UsePathStyle = defaultPathStyle() && !ociVirtualStyle
 		})
 	}
 	var cfg aws.Config

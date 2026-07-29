@@ -140,7 +140,7 @@ func (c *COS) Restore(ctx context.Context, key string, days int32) error {
 }
 
 func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	t := c.GetTier(ctx)
+	t := c.getRuntimeTier(ctx)
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{
@@ -170,7 +170,7 @@ func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 }
 
 func (c *COS) Copy(ctx context.Context, dst, src string) error {
-	t := c.GetTier(ctx)
+	t := c.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, DefaultStorageClass)
 	var opt cos.ObjectCopyOptions
 	opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{
