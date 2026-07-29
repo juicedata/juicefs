@@ -23,7 +23,6 @@ FoundationDB supports horizontal scaling. When data storage reaches the maximum 
   - When the data size is smaller than the available memory, use the memory storage engine.
   - When the data size is larger than the available memory, use the SSD storage engine.
 
-
 ## Install FoundationDB
 
 ### Install FoundationDB on a single machine
@@ -72,7 +71,7 @@ After installing FoundationDB on all machines, configure the cluster as follows:
 
 3. Restart FoundationDB on every node:
 
-    ``` 
+    ```
     sudo service foundationdb restart
     ```
 
