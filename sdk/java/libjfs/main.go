@@ -133,6 +133,7 @@ const (
 	ENOTEMPTY = -0x27
 	ENODATA   = -0x3d
 	ENOTSUP   = -0x5f
+	ELOOP     = -0x28
 )
 
 func errno(err error) int32 {
@@ -178,6 +179,8 @@ func errno(err error) int32 {
 		return ENODATA
 	case syscall.ENOTSUP:
 		return ENOTSUP
+	case syscall.ELOOP:
+		return ELOOP
 	default:
 		logger.Warnf("unknown errno %d: %s", eno, err)
 		return -int32(eno)
