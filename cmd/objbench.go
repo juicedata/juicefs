@@ -184,11 +184,8 @@ func objbench(ctx *cli.Context) error {
 	prefix := fmt.Sprintf("__juicefs_benchmark_%d__/", time.Now().UnixNano())
 	blob := object.WithPrefix(blobOrigin, prefix)
 	storageClass := ctx.String("storage-class")
-	if os, ok := blob.(object.SupportTier); ok && storageClass != "" {
-		tiers := object.NewTiers(storageClass)
-		if err := os.InitTiers(tiers); err != nil {
-			logger.Warnf("Set storage tier: %s", err)
-		}
+	if storageClass != "" {
+		initStorageTiers(blob, object.NewTiers(storageClass))
 	}
 	defer func() {
 		_ = blobOrigin.Delete(ctx.Context, prefix)

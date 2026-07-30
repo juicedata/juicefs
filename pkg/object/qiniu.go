@@ -53,7 +53,7 @@ func (q *qiniu) String() string {
 }
 
 func (q *qiniu) InitTiers(_ Tiers) error {
-	// avoid panic when GetStorageClass
+	// Initialize tier 0 for callers that still pass the default tier ID.
 	if err := q.tierStorage.InitTiers(nil); err != nil {
 		return err
 	}

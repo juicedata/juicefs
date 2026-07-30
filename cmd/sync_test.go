@@ -30,6 +30,33 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
+func TestCreateSyncStorageWithoutConfiguredTiers(t *testing.T) {
+	const storageName = "unsupported-sync-tier-test"
+	initCalls := 0
+	object.Register(storageName, func(bucket, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+		storage, err := object.CreateStorage("mem", bucket, accessKey, secretKey, token)
+		if err != nil {
+			return nil, err
+		}
+		return &unsupportedTierStorage{ObjectStorage: storage, initCalls: &initCalls}, nil
+	})
+
+	var logs bytes.Buffer
+	originalOutput := logger.Out
+	logger.SetOutput(&logs)
+	defer logger.SetOutput(originalOutput)
+
+	if _, err := createSyncStorage(storageName+"://bucket/prefix", &juicesync.Config{}); err != nil {
+		t.Fatalf("create sync storage: %s", err)
+	}
+	if initCalls != 1 {
+		t.Fatalf("InitTiers called %d times, expected 1", initCalls)
+	}
+	if strings.Contains(logs.String(), "Set storage tier:") {
+		t.Fatalf("unexpected storage tier warning: %s", logs.String())
+	}
+}
+
 func TestSync(t *testing.T) {
 	if os.Getenv("MINIO_TEST_BUCKET") == "" {
 		t.Skip()
