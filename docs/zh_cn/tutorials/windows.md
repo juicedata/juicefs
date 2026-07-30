@@ -26,7 +26,7 @@ sidebar_position: 1
 
 ### 第一步 下载 JuiceFS 客户端
 
-在项目仓库的 [Release 页面](https://github.com/juicedata/juicefs/releases) 下载最新版本的 JuiceFS 客户端，例如 `juicefs-1.3.0-windows-amd64.tar.gz`。
+在项目仓库的 [Release 页面](https://github.com/juicedata/juicefs/releases) 下载最新版本的 JuiceFS 客户端，例如 `juicefs-1.4.0-windows-amd64.zip`。
 
 ### 第二步 创建程序目录
 

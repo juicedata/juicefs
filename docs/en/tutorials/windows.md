@@ -26,7 +26,7 @@ The [installation guide](../getting-started/installation.md#windows) introduces 
 
 ### Step 1: Download JuiceFS Client
 
-Go to the project's [Release page](https://github.com/juicedata/juicefs/releases) and download the latest JuiceFS client, for example, `juicefs-1.3.0-windows-amd64.tar.gz`.
+Go to the project's [Release page](https://github.com/juicedata/juicefs/releases) and download the latest JuiceFS client, for example, `juicefs-1.4.0-windows-amd64.zip`.
 
 ### Step 2: Create Program Directory
 
