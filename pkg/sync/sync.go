@@ -421,6 +421,10 @@ func try(n int, f func() error) (err error) {
 }
 
 func deleteObj(storage object.ObjectStorage, key string, dry bool) error {
+	return deleteObjWithLimit(storage, key, dry, -1)
+}
+
+func deleteObjWithLimit(storage object.ObjectStorage, key string, dry bool, limit int64) error {
 	if dry {
 		logger.Debugf("Will delete %s from %s", key, storage)
 		deleted.Increment()
@@ -430,6 +434,9 @@ func deleteObj(storage object.ObjectStorage, key string, dry bool) error {
 	if err := try(3, func() error { return storage.Delete(ctx, key) }); err == nil {
 		deleted.Increment()
 		logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
+		return nil
+	} else if limit == 0 && errors.Is(err, syscall.ENOTEMPTY) {
+		logger.Warnf("Deferred deleting non-empty directory %s from %s because the object limit was reached", key, storage)
 		return nil
 	} else {
 		failed.Increment()
@@ -2152,7 +2159,6 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			uploads = workerUploads
 		}
 	}
-
 	if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
 		major, minor := utils.GetKernelVersion()
 		// copy_file_range() system call first appeared in Linux 4.5, and reworked in 5.3
@@ -2412,7 +2418,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			}
 			for i := len(keys) - 1; i >= 0; i-- {
 				incrHandled(1)
-				_ = deleteObj(storage, keys[i], config.Dry)
+				_ = deleteObjWithLimit(storage, keys[i], config.Dry, config.Limit)
 			}
 		}
 		delWg := sync.WaitGroup{}
