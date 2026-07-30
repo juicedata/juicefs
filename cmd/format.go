@@ -285,11 +285,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		return nil, err
 	}
 	blob = object.WithPrefix(blob, format.Name+"/")
-	if os, ok := blob.(object.SupportTier); ok {
-		if err := os.InitTiers(format.Tiers); err != nil {
-			logger.Warnf("Set storage tier: %s", err)
-		}
-	}
+	initStorageTiers(blob, format.Tiers)
 	if format.EncryptKey != "" {
 		privKey, err := object.ParsePrivateKeyFromPem([]byte(format.EncryptKey), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
 		if err != nil {
@@ -305,6 +301,23 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		blob = object.NewEncrypted(blob, encryptor)
 	}
 	return blob, nil
+}
+
+func initStorageTiers(storage object.ObjectStorage, tiers object.Tiers) {
+	if tierStorage, ok := storage.(object.SupportTier); ok {
+		if err := tierStorage.InitTiers(tiers); err != nil && hasConfiguredTiers(tiers) {
+			logger.Warnf("Set storage tier: %s", err)
+		}
+	}
+}
+
+func hasConfiguredTiers(tiers object.Tiers) bool {
+	for id, tier := range tiers {
+		if id != 0 || tier.Sc != "" || tier.Tag != "" {
+			return true
+		}
+	}
+	return false
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")

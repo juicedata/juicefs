@@ -45,7 +45,7 @@ func (s *space) Limits() Limits {
 }
 
 func (s *space) InitTiers(_ Tiers) error {
-	// avoid panic when GetStorageClass
+	// Initialize tier 0 for callers that still pass the default tier ID.
 	if err := s.tierStorage.InitTiers(nil); err != nil {
 		return err
 	}

@@ -17,12 +17,30 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 )
+
+type unsupportedTierStorage struct {
+	object.ObjectStorage
+	initCalls *int
+}
+
+func (s *unsupportedTierStorage) InitTiers(_ object.Tiers) error {
+	*s.initCalls = *s.initCalls + 1
+	return errors.New("not supported")
+}
+
+func (s *unsupportedTierStorage) GetTier(context.Context) object.Tier {
+	return object.Tier{}
+}
 
 func TestFixObjectSize(t *testing.T) {
 	t.Run("Should make sure the size is in range", func(t *testing.T) {
@@ -54,6 +72,46 @@ func TestFixObjectSize(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestCreateStorageTierWarning(t *testing.T) {
+	const storageName = "unsupported-tier-test"
+	initCalls := 0
+	object.Register(storageName, func(bucket, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+		storage, err := object.CreateStorage("mem", bucket, accessKey, secretKey, token)
+		if err != nil {
+			return nil, err
+		}
+		return &unsupportedTierStorage{ObjectStorage: storage, initCalls: &initCalls}, nil
+	})
+
+	var logs bytes.Buffer
+	originalOutput := logger.Out
+	logger.SetOutput(&logs)
+	defer logger.SetOutput(originalOutput)
+
+	format := meta.Format{Name: "test", Storage: storageName, Tiers: object.NewTiers("")}
+	if _, err := createStorage(format); err != nil {
+		t.Fatalf("create storage without configured tiers: %s", err)
+	}
+	if initCalls != 1 {
+		t.Fatalf("InitTiers called %d times, expected 1", initCalls)
+	}
+	if strings.Contains(logs.String(), "Set storage tier:") {
+		t.Fatalf("unexpected storage tier warning: %s", logs.String())
+	}
+
+	logs.Reset()
+	format.Tiers[0] = object.Tier{ID: 0, Sc: "STANDARD_IA"}
+	if _, err := createStorage(format); err != nil {
+		t.Fatalf("create storage with a configured tier: %s", err)
+	}
+	if initCalls != 2 {
+		t.Fatalf("InitTiers called %d times, expected 2", initCalls)
+	}
+	if !strings.Contains(logs.String(), "Set storage tier: not supported") {
+		t.Fatalf("missing storage tier warning: %s", logs.String())
+	}
 }
 
 func TestFormat(t *testing.T) {

@@ -482,11 +482,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			store = object.WithPrefix(store, u.Path[1:])
 		}
 	}
-	if os, ok := store.(object.SupportTier); ok {
-		if err := os.InitTiers(object.NewTiers("")); err != nil {
-			logger.Warnf("Set storage tier: %s", err)
-		}
-	}
+	initStorageTiers(store, object.NewTiers(""))
 	return store, nil
 }
 
@@ -582,12 +578,7 @@ func doSync(c *cli.Context) error {
 		object.Shutdown(dst)
 	}()
 	if config.StorageClass != "" {
-		if os, ok := dst.(object.SupportTier); ok {
-			tiers := object.NewTiers(config.StorageClass)
-			if err := os.InitTiers(tiers); err != nil {
-				logger.Warnf("Set storage tier: %s", err)
-			}
-		}
+		initStorageTiers(dst, object.NewTiers(config.StorageClass))
 	}
 	src, err = wrapSyncEncryptedStore(src, c.String("decrypt-rsa-key"), "JFS_DECRYPT_RSA_PASSPHRASE", "decrypt", c.String("decrypt-algo"))
 	if err != nil {
