@@ -90,11 +90,12 @@ import (
 
 type redisMeta struct {
 	*baseMeta
-	rdb        redis.UniversalClient
-	prefix     string
-	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
-	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
-	cache      *redisCache
+	rdb         redis.UniversalClient
+	prefix      string
+	shaLookup   string // The SHA returned by Redis for the loaded `scriptLookup`
+	shaResolve  string // The SHA returned by Redis for the loaded `scriptResolve`
+	cache       *redisCache
+	sessionJSON atomic.Value // []byte
 }
 
 var _ Meta = (*redisMeta)(nil)
@@ -445,15 +446,13 @@ func (m *redisMeta) doNewSession(sinfo []byte, update bool) error {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)
 	expire := m.expireTime()
-	err := m.txn(ctx, func(tx *redis.Tx) error {
-		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.ZAdd(ctx, m.allSessions(), redis.Z{Score: float64(expire), Member: ssid})
-			pipe.HSet(ctx, m.sessionInfos(), ssid, sinfo)
-			m.genLog(ctx, pipe, time.Now(), "NEWSESSION(%d,%d,%s)", m.sid, expire, logEncode(sinfo))
-			return nil
-		})
-		return err
-	}, m.allSessions(), m.sessionInfos())
+	m.sessionJSON.Store(sinfo)
+	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.ZAdd(ctx, m.allSessions(), redis.Z{Score: float64(expire), Member: ssid})
+		pipe.HSet(ctx, m.sessionInfos(), ssid, sinfo)
+		m.genLog(ctx, pipe, time.Now(), "NEWSESSION(%d,%d,%s)", m.sid, expire, logEncode(sinfo))
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("new session %d: %s", m.sid, err)
 	}
@@ -471,6 +470,15 @@ func (m *redisMeta) doNewSession(sinfo []byte, update bool) error {
 		go m.cleanupLegacies()
 	}
 	return nil
+}
+
+func (m *redisMeta) cachedSessionJSON() []byte {
+	if data := m.sessionJSON.Load(); data != nil {
+		return data.([]byte)
+	}
+	data := m.newSessionInfo()
+	m.sessionJSON.Store(data)
+	return data
 }
 
 func (m *redisMeta) getCounter(name string) (int64, error) {
@@ -2968,15 +2976,12 @@ func (m *redisMeta) doCleanStaleSession(sid uint64) error {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
 		var removed *redis.IntCmd
-		if err := m.txn(ctx, func(tx *redis.Tx) error {
-			_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.HDel(ctx, m.sessionInfos(), ssid)
-				removed = pipe.ZRem(ctx, m.allSessions(), ssid)
-				m.genLog(ctx, pipe, time.Now(), "CLEANSESSION(%d)", sid)
-				return nil
-			})
-			return err
-		}, m.sessionInfos(), m.allSessions()); err != nil {
+		if _, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HDel(ctx, m.sessionInfos(), ssid)
+			removed = pipe.ZRem(ctx, m.allSessions(), ssid)
+			m.genLog(ctx, pipe, time.Now(), "CLEANSESSION(%d)", sid)
+			return nil
+		}); err != nil {
 			return err
 		}
 		if n, err := removed.Result(); err != nil {
@@ -3025,26 +3030,19 @@ func (m *redisMeta) doRefreshSession() error {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)
 	expire := m.expireTime()
-	return m.txn(ctx, func(tx *redis.Tx) error {
-		ok, err := tx.HExists(ctx, m.sessionInfos(), ssid).Result()
-		if err != nil {
-			return err
-		}
-		if !ok {
-			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-		}
-		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			if !ok {
-				pipe.HSet(ctx, m.sessionInfos(), ssid, m.newSessionInfo())
-			}
-			pipe.ZAdd(ctx, m.allSessions(), redis.Z{
-				Score:  float64(expire),
-				Member: ssid,
-			})
-			return nil
+	var created *redis.BoolCmd
+	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		created = pipe.HSetNX(ctx, m.sessionInfos(), ssid, m.cachedSessionJSON())
+		pipe.ZAdd(ctx, m.allSessions(), redis.Z{
+			Score:  float64(expire),
+			Member: ssid,
 		})
-		return err
-	}, m.sessionInfos(), m.allSessions())
+		return nil
+	})
+	if err == nil && created.Val() {
+		logger.Warnf("Session %d was stale and cleaned up, but now I'm back again", m.sid)
+	}
+	return err
 }
 
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
