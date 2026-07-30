@@ -7,12 +7,14 @@ on:
       - 'release-**'
     paths:
       - '**/rmfiles.yml'
+      - '.github/actions/build/action.yml'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
       - '**/rmfiles.yml'
+      - '.github/actions/build/action.yml'
   schedule:
     - cron:  '0 20 * * *'
   workflow_dispatch:
