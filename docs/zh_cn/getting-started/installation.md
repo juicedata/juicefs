@@ -39,6 +39,7 @@ curl -sSL https://d.juicefs.com/install | sh -s /tmp
 | `juicefs-x.y.z-linux-amd64.tar.gz`   | 面向 x86 架构 Linux 发行版                                                      |
 | `juicefs-x.y.z-linux-arm64.tar.gz`   | 面向 ARM 架构的 Linux 发行版                                                    |
 | `juicefs-x.y.z-windows-amd64.tar.gz` | 面向 x86 架构的 Windows 系统                                                    |
+| `juicefs-x.y.z-windows-amd64.zip`    | 面向 x86 架构 Windows 系统的 ZIP 压缩包                                         |
 | `juicefs-hadoop-x.y.z.jar`           | 面向 x86 和 ARM 架构的 Hadoop Java SDK（同时支持 Linux、macOS 及 Windows 系统） |
 
 ### Linux 发行版 {#linux}

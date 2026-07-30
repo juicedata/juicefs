@@ -39,6 +39,7 @@ You can download the latest version of the client at [GitHub](https://github.com
 | `juicefs-x.y.z-linux-amd64.tar.gz`   | For Linux distributions on x86 architecture                                                  |
 | `juicefs-x.y.z-linux-arm64.tar.gz`   | For Linux distributions on ARM architecture                                                  |
 | `juicefs-x.y.z-windows-amd64.tar.gz` | For Windows on x86 architecture                                                              |
+| `juicefs-x.y.z-windows-amd64.zip`    | ZIP package for Windows on x86 architecture                                                  |
 | `juicefs-hadoop-x.y.z.jar`           | Hadoop Java SDK on x86 and ARM architectures (supports Linux, macOS, and Windows systems) |
 
 ### Linux {#linux}
