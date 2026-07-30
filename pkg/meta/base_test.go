@@ -1157,18 +1157,11 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "f3"); st != 0 {
 		t.Fatalf("unlink f3: %s", st)
 	}
-	var i int
-	for i = 0; i < 200; i++ {
-		if st := m.Read(ctx, inode, 0, &slices); st == syscall.ENOENT {
-			break
-		}
-		time.Sleep(time.Millisecond * 100)
+	if st := m.Lookup(ctx, 1, "f", &inode, attr, false); st != syscall.ENOENT {
+		t.Fatalf("lookup deleted f should return ENOENT, but got: %s", st)
 	}
-	if i >= 200 {
-		var attr Attr
-		stLookup := m.Lookup(ctx, 1, "f", &inode, &attr, false)
-		stGetAttr := m.GetAttr(ctx, inode, &attr)
-		t.Fatalf("chunk not delete after 20s, Lookup: %s, GetAttr: %s", stLookup, stGetAttr)
+	if st := m.GetAttr(ctx, inode, attr); st != syscall.ENOENT {
+		t.Fatalf("getattr deleted inode should return ENOENT, but got: %s", st)
 	}
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)
