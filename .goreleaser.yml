@@ -73,3 +73,10 @@ changelog:
       - '^test:'
 archives:
   - name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - tar.gz
+          - zip
