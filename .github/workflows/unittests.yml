@@ -18,16 +18,18 @@ on:
     branches:
       - 'main'
       - 'release-*'
-    paths-ignore:
-      - '.autocorrectrc'
-      - '.markdownlint-cli2.jsonc'
-      - 'package*.json'
-      - 'docs/**'
-      - '**.md'
-      - '.github/**'
-      - '!.github/workflows/unittests.yml'
-      - '**.java'
-      - '**/pom.xml'
+    paths:
+      - '**'
+      - '!.autocorrectrc'
+      - '!.markdownlint-cli2.jsonc'
+      - '!package*.json'
+      - '!docs/**'
+      - '!**.md'
+      - '!.github/**'
+      - '.github/actions/build/action.yml'
+      - '.github/workflows/unittests.yml'
+      - '!**.java'
+      - '!**/pom.xml'
   workflow_dispatch:
     inputs:
       debug:
