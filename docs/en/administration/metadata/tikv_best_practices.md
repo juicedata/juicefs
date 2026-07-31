@@ -16,7 +16,7 @@ TiKV natively supports multi-version concurrency control (MVCC). When newly writ
 
 ### JuiceFS configuration
 
-TiKV uses a cluster variable named `safe-point` (a timestamp) to decide whether to remove old versions created before a given time. Before JuiceFS v1.0.4, JuiceFS did not set `safe-point`, so the TiKV metadata engine depended on TiDB for garbage collection. Starting with v1.0.4, JuiceFS clients periodically set `safe-point`. By default, versions older than three hours are removed. You can adjust this interval by setting the gc-interval parameter in the metadata URL when mounting. 
+TiKV uses a cluster variable named `safe-point` (a timestamp) to decide whether to remove old versions created before a given time. Before JuiceFS v1.0.4, JuiceFS did not set `safe-point`, so the TiKV metadata engine depended on TiDB for garbage collection. Starting with v1.0.4, JuiceFS clients periodically set `safe-point`. By default, versions older than three hours are removed. You can adjust this interval by setting the gc-interval parameter in the metadata URL when mounting.
 
 - Mount log with the default `gc-interval`
 
@@ -91,8 +91,8 @@ According to [TiDB software and hardware requirements](https://docs.pingcap.com/
 
     :::note
 
-    - For performance testing, avoid low-performance storage and network hardware, which might distort the test results.
-    - NVMe SSDs are recommended for TiKV to achieve faster reads and writes.
+      - For performance testing, avoid low-performance storage and network hardware, which might distort the test results.
+      - NVMe SSDs are recommended for TiKV to achieve faster reads and writes.
 
     :::
 
