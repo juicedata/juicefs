@@ -36,7 +36,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--storage=file`|Object storage type (e.g. `s3`, `gs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
 |`--bucket=value`|Customized endpoint to access object storage|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |The storage class for data written by current client|
-|`--tag=value`|A custom tag when uploading to object storage (e.g., `--tag key=value`)
+|`--tag=value`|A custom tag when uploading to object storage (e.g., `--tag key=value`)|
 |`--get-timeout=60`|The max number of seconds to download an object (default: 60)|
 |`--put-timeout=60`|The max number of seconds to upload an object (default: 60)|
 |`--io-retries=10`|The number of retries when the network is abnormal and the number of retries for metadata requests are also controlled by this option. If the number of retries is exceeded, an `EIO Input/output error` error will be returned. (default: 10)|
