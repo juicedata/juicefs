@@ -177,9 +177,9 @@ KeyDB 的 Active Replication 功能是异步复制的，可能会导致一致性
 
 使用 BadgerDB 作为 JuiceFS 元数据存储引擎时，使用 `badger://` 协议头指定数据库路径。
 
-可以在 Badger 元数据 URL 中追加 query 参数：
+可以在 BadgerDB 元数据 URL 中追加 query 参数：
 
-- `sync=true|false`：控制 Badger 是否开启提交时同步（`SyncWrites`），默认值是 `false`，以获得更好的写入性能。
+`sync=true|false`：控制 BadgerDB 是否开启提交时同步（`SyncWrites`），默认值是 `false`，以获得更好的写入性能。
 
 例如：
 
