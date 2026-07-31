@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -47,21 +48,33 @@ func slatedbKeyRange(begin, end []byte) slatedb.KeyRange {
 	return r
 }
 
+// slatedbFullRange is an unbounded subrange, i.e. scan the whole prefix.
+func slatedbFullRange() slatedb.KeyRange {
+	return slatedb.KeyRange{StartInclusive: true, EndInclusive: false}
+}
+
+// number of rows fetched per FFI call; batching costs one cgo crossing per
+// batch instead of one per row
+const slatedbScanBatch = 512
+
 func slatedbIterate(it *slatedb.DbIterator, keysOnly bool, handler func(k, v []byte) bool) {
 	defer it.Destroy()
 	for {
-		kv, err := it.Next()
+		batch, err := it.NextBatch(slatedbScanBatch)
 		if err != nil {
 			panic(err)
 		}
-		if kv == nil {
-			return
+		for i := range batch {
+			var value []byte
+			if !keysOnly {
+				value = batch[i].Value
+			}
+			if !handler(batch[i].Key, value) {
+				return
+			}
 		}
-		var value []byte
-		if !keysOnly {
-			value = kv.Value
-		}
-		if !handler(kv.Key, value) {
+		// a short batch means the iterator is exhausted
+		if len(batch) < slatedbScanBatch {
 			return
 		}
 	}
@@ -105,7 +118,7 @@ func (tx *slatedbTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v [
 }
 
 func (tx *slatedbTxn) exist(prefix []byte) bool {
-	it, err := tx.t.ScanPrefix(prefix)
+	it, err := tx.t.ScanPrefix(prefix, slatedbFullRange())
 	if err != nil {
 		panic(err)
 	}
@@ -179,7 +192,7 @@ func (tx *slatedbSnapTxn) scan(begin, end []byte, keysOnly bool, handler func(k,
 }
 
 func (tx *slatedbSnapTxn) exist(prefix []byte) bool {
-	it, err := tx.s.ScanPrefix(prefix)
+	it, err := tx.s.ScanPrefix(prefix, slatedbFullRange())
 	if err != nil {
 		panic(err)
 	}
@@ -311,7 +324,7 @@ func (c *slatedbClient) scan(prefix []byte, handler func(key []byte, value []byt
 			}
 		}
 	}()
-	it, err := c.db.ScanPrefix(prefix)
+	it, err := c.db.ScanPrefix(prefix, slatedbFullRange())
 	if err != nil {
 		return err
 	}
@@ -367,7 +380,8 @@ func (c *slatedbClient) gc() {}
 //
 // Query parameters:
 //
-//	dbpath=<path>        path of the database inside the object store (default: root)
+//	dbpath=<path>        extra path of the database inside the object store,
+//	                     appended to the path taken from the URL
 //	durability=remote    wait until commits are durable in the object store (default)
 //	durability=memory    ack commits from memory; bounded loss window on crash
 //	settings=<json>      SlateDB settings as a JSON object, e.g. {"flush_interval":"20ms"}
@@ -386,32 +400,43 @@ func newSlateDBClient(addr string) (tkvClient, error) {
 	case "", "remote":
 	case "memory":
 		awaitDurable = false
+		logger.Warnf("SlateDB durability is set to memory: metadata committed within the last flush interval may be lost if the process is killed")
 	default:
 		return nil, fmt.Errorf("invalid durability %q, expect remote or memory", query.Get("durability"))
 	}
 
-	storeURL := addr
-	if storeURL == "" || storeURL == "memory" {
+	// SlateDB rejects a path component in the object store URL: the store is
+	// opened at its root and the path is passed to the builder instead.
+	var storeURL, dbPath string
+	switch {
+	case addr == "" || addr == "memory":
 		storeURL = "memory:///"
-	} else if !strings.Contains(storeURL, "://") {
-		p, err := filepath.Abs(storeURL)
+	case !strings.Contains(addr, "://"):
+		p, err := filepath.Abs(addr)
 		if err != nil {
 			return nil, err
 		}
 		if err = os.MkdirAll(p, 0750); err != nil {
 			return nil, fmt.Errorf("create dir %s: %s", p, err)
 		}
-		p = filepath.ToSlash(p)
-		if !strings.HasPrefix(p, "/") {
-			p = "/" + p // windows drive letter
+		storeURL = "file:///"
+		dbPath = strings.TrimPrefix(filepath.ToSlash(p), "/")
+	default:
+		u, err := url.Parse(addr)
+		if err != nil {
+			return nil, fmt.Errorf("parse store url %q: %s", addr, err)
 		}
-		storeURL = "file://" + p
+		storeURL = u.Scheme + "://" + u.Host
+		dbPath = strings.Trim(u.Path, "/")
+	}
+	if p := query.Get("dbpath"); p != "" {
+		dbPath = path.Join(dbPath, p)
 	}
 	store, err := slatedb.ObjectStoreResolve(storeURL)
 	if err != nil {
 		return nil, fmt.Errorf("resolve object store %s: %s", storeURL, err)
 	}
-	builder := slatedb.NewDbBuilder(query.Get("dbpath"), store)
+	builder := slatedb.NewDbBuilder(dbPath, store)
 	defer builder.Destroy()
 	if s := query.Get("settings"); s != "" {
 		// apply fields one by one on top of the defaults; SettingsFromJsonString

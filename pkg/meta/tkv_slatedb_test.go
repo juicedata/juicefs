@@ -26,6 +26,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	slatedb "slatedb.io/slatedb-go/uniffi"
 )
 
 // tests use durability=memory: with the default (remote) every commit waits
@@ -147,6 +149,117 @@ func TestSlateDBSettings(t *testing.T) { //skip mutate
 
 	if _, err = newSlateDBClient(t.TempDir() + `?settings={"flush_interval":}`); err == nil {
 		t.Fatal("expected error for malformed settings JSON")
+	}
+}
+
+// kvMeta relies on reads inside a transaction observing that transaction's own
+// buffered writes and deletes (e.g. scan after set, exist after delete).
+func TestSlateDBTxnOwnWrites(t *testing.T) { //skip mutate
+	c, err := newSlateDBClient("memory?durability=memory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.close()
+
+	if err := c.txn(Background(), func(tx *kvTxn) error {
+		tx.set([]byte("p1"), []byte("v1"))
+		tx.set([]byte("p2"), []byte("v2"))
+		tx.set([]byte("p3"), []byte("v3"))
+
+		var keys []string
+		tx.scan([]byte("p"), nextKey([]byte("p")), false, func(k, v []byte) bool {
+			keys = append(keys, string(k)+"="+string(v))
+			return true
+		})
+		if len(keys) != 3 {
+			t.Errorf("scan must see own writes, got %v", keys)
+		}
+		if !tx.exist([]byte("p")) {
+			t.Error("exist must see own writes")
+		}
+
+		// overwrite and delete, both must be visible to later reads
+		tx.set([]byte("p2"), []byte("v2b"))
+		tx.delete([]byte("p1"))
+		if got := tx.get([]byte("p2")); string(got) != "v2b" {
+			t.Errorf("get after overwrite: got %q, want v2b", got)
+		}
+		if got := tx.get([]byte("p1")); got != nil {
+			t.Errorf("get after delete: got %q, want nil", got)
+		}
+
+		keys = keys[:0]
+		tx.scan([]byte("p"), nextKey([]byte("p")), true, func(k, v []byte) bool {
+			keys = append(keys, string(k))
+			return true
+		})
+		if len(keys) != 2 || keys[0] != "p2" || keys[1] != "p3" {
+			t.Errorf("scan must see own delete, got %v", keys)
+		}
+		return nil
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	// deleting every key in one txn must leave the prefix empty afterwards
+	if err := c.txn(Background(), func(tx *kvTxn) error {
+		tx.deleteKeys([]byte("p"))
+		if tx.exist([]byte("p")) {
+			t.Error("exist must not see keys deleted in the same txn")
+		}
+		return nil
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.simpleTxn(Background(), func(tx *kvTxn) error {
+		if tx.exist([]byte("p")) {
+			t.Error("keys still present after deleteKeys committed")
+		}
+		return nil
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// shouldRetry must classify a genuine write-write conflict as retryable,
+// otherwise kvMeta.txn surfaces it instead of restarting the transaction.
+func TestSlateDBConflictIsRetryable(t *testing.T) { //skip mutate
+	c, err := newSlateDBClient("memory?durability=memory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.close()
+	sc := c.(*slatedbClient)
+
+	tx1, err := sc.db.Begin(slatedb.IsolationLevelSerializableSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx1.Destroy()
+	tx2, err := sc.db.Begin(slatedb.IsolationLevelSerializableSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx2.Destroy()
+
+	key := []byte("contended")
+	for _, tx := range []*slatedb.DbTransaction{tx1, tx2} {
+		if _, err := tx.Get(key); err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Put(key, []byte("x")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := tx1.Commit(); err != nil {
+		t.Fatalf("first commit should succeed: %s", err)
+	}
+	_, err = tx2.Commit()
+	if err == nil {
+		t.Fatal("second commit should conflict")
+	}
+	if !c.shouldRetry(err) {
+		t.Fatalf("conflict must be retryable, got %T: %s", err, err)
 	}
 }
 

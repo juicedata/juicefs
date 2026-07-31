@@ -47,8 +47,11 @@ juicefs.fdb: Makefile cmd/*.go pkg/*/*.go
 juicefs.fdb.cover: Makefile cmd/*.go pkg/*/*.go
 	go build -tags fdb -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -cover -o juicefs.fdb .
 
-# requires the slatedb_uniffi shared library (build with `cargo build --release -p slatedb-uniffi`
-# from https://github.com/slatedb/slatedb) on the linker/loader path
+# Requires the slatedb_uniffi shared library on the linker/loader path. Build it from
+# the tag matching slatedb.io/slatedb-go in go.mod, otherwise the binding aborts at
+# startup with a UniFFI contract/checksum mismatch:
+#   git clone --branch bindings/go/v0.15.0 https://github.com/slatedb/slatedb
+#   cd slatedb && cargo build --release -p slatedb-uniffi
 juicefs.slatedb: Makefile cmd/*.go pkg/*/*.go
 	go build -tags slatedb -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -o juicefs.slatedb .
 
