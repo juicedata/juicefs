@@ -90,8 +90,8 @@ According to [TiDB software and hardware requirements](https://docs.pingcap.com/
     | TiKV | 8 cores+ | 32 GB+ | SSD, 200 GB+ | Gigabit NIC | 3 |
 
     :::note
-    - For performance testing, avoid low-performance storage and network hardware, which might distort the test results.
-    - NVMe SSDs are recommended for TiKV to achieve faster reads and writes.
+  - For performance testing, avoid low-performance storage and network hardware, which might distort the test results.
+  - NVMe SSDs are recommended for TiKV to achieve faster reads and writes.
     :::
 
 - **Production environments**
