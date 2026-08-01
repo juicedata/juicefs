@@ -66,6 +66,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 				}
 				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					pipe.HSet(ctx, ikey, lkey, "R")
+					pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
 					r.genLog(ctx, pipe, time.Now(), "FLOCK(%d,%d,R)", inode, owner)
 					return nil
 				})
