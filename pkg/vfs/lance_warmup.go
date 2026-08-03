@@ -29,25 +29,36 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	lancepb "github.com/juicedata/juicefs/pkg/vfs/proto/lance"
+	file2pb "github.com/juicedata/juicefs/pkg/vfs/proto/lance/file2"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
-	lanceMagic           = "LANC"
-	lanceManifestDir     = "_versions"
-	lanceDataDir         = "data"
-	lanceDeletionsDir    = "_deletions"
-	lanceIndicesDir      = "_indices"
-	lanceTransactionsDir = "_transactions"
-	lanceVersionHintFile = "latest_version_hint.json"
-	lanceManifestExt     = ".manifest"
+	lanceMagic            = "LANC"
+	lanceManifestDir      = "_versions"
+	lanceDataDir          = "data"
+	lanceDeletionsDir     = "_deletions"
+	lanceIndicesDir       = "_indices"
+	lanceTransactionsDir  = "_transactions"
+	lanceVersionHintFile  = "latest_version_hint.json"
+	lanceManifestExt      = ".manifest"
+	lanceFileFooterLen    = 40
+	lanceCmoEntrySize     = 16 // position(8B) + length(8B) per column in CMO table
 )
 
 // LanceWarmupConfig configures Lance dataset warmup behavior.
 type LanceWarmupConfig struct {
-	Version        string // specific version to warmup; empty = latest
-	ManifestOnly   bool   // only warmup manifest files, skip data files
-	IncludeIndices bool   // also warmup index files under _indices/
+	Version           string   // specific version to warmup; empty = latest
+	ManifestOnly      bool     // only warmup manifest files, skip data files
+	IncludeIndices    bool     // also warmup index files under _indices/
+	Columns           []string // column names for column-level warmup
+	IncludeDataPages  bool     // when doing column warmup, also warmup data page buffers
+}
+
+// byteRange represents a [start, end) byte range within a file.
+type byteRange struct {
+	start uint64
+	end   uint64
 }
 
 // lanceVersionHint is the JSON structure of latest_version_hint.json.
@@ -121,6 +132,17 @@ func (c *CacheFiller) resolveLancePaths(
 	// 5. Transaction file
 	if manifest.TransactionFile != "" {
 		paths = append(paths, path.Join(datasetPath, lanceTransactionsDir, manifest.TransactionFile))
+	}
+
+	// 6. Column-level warmup (V2 format only)
+	if config != nil && len(config.Columns) > 0 {
+		// Column warmup works at the byte-range level inside data files,
+		// so it bypasses the normal path-based warmup pipeline.
+		// We call it here directly and skip adding those data files to paths
+		// to avoid double-warming (unless the user didn't also request full file warmup).
+		if err := c.warmupLanceColumns(ctx, datasetPath, manifest, config, WarmupCache); err != nil {
+			logger.Warnf("warmup lance columns: %s", err)
+		}
 	}
 
 	return paths, nil
@@ -369,4 +391,393 @@ func relativeDeletionFilePath(fragmentID uint64, delFile *lancepb.DeletionFile) 
 // isLanceDataset checks if a path looks like a Lance dataset directory.
 func isLanceDataset(p string) bool {
 	return strings.HasSuffix(p, ".lance") || strings.HasSuffix(p, ".lance/")
+}
+
+// -----------------------------------------------------------------------------------
+// Column-level metadata warmup (Lance V2 file format only)
+// -----------------------------------------------------------------------------------
+
+// lanceFileFooter represents the 40-byte footer of a Lance V2 data file.
+//
+// Layout (all little-endian):
+//
+//	u64 column_meta_start          — start of Column Metadatas region
+//	u64 column_meta_offsets_start   — start of Column Metadata Offset (CMO) table
+//	u64 global_buff_offsets_start  — start of Global Buffers Offset (GBO) table
+//	u32 num_global_buffers
+//	u32 num_columns
+//	u16 major_version
+//	u16 minor_version
+//	"LANC" (4 bytes magic)
+type lanceFileFooter struct {
+	columnMetaStart         uint64
+	columnMetaOffsetsStart  uint64
+	globalBuffOffsetsStart  uint64
+	numGlobalBuffers        uint32
+	numColumns              uint32
+	majorVersion            uint16
+	minorVersion            uint16
+}
+
+// readLanceFileFooter reads the 40-byte footer from the end of a .lance data file.
+func (c *CacheFiller) readLanceFileFooter(
+	ctx meta.Context, inode Ino, fileSize int64,
+) (*lanceFileFooter, error) {
+	if fileSize < int64(lanceFileFooterLen) {
+		return nil, fmt.Errorf("file too small for footer: %d bytes", fileSize)
+	}
+	data, err := c.readFileRange(ctx, inode, fileSize-int64(lanceFileFooterLen), int64(lanceFileFooterLen))
+	if err != nil {
+		return nil, fmt.Errorf("read footer: %w", err)
+	}
+	// Verify magic
+	magic := data[lanceFileFooterLen-4:]
+	if !bytes.Equal(magic, []byte(lanceMagic)) {
+		return nil, fmt.Errorf("invalid lance file magic: %x", magic)
+	}
+	return &lanceFileFooter{
+		columnMetaStart:        binary.LittleEndian.Uint64(data[0:8]),
+		columnMetaOffsetsStart: binary.LittleEndian.Uint64(data[8:16]),
+		globalBuffOffsetsStart: binary.LittleEndian.Uint64(data[16:24]),
+		numGlobalBuffers:       binary.LittleEndian.Uint32(data[24:28]),
+		numColumns:             binary.LittleEndian.Uint32(data[28:32]),
+		majorVersion:           binary.LittleEndian.Uint16(data[32:34]),
+		minorVersion:           binary.LittleEndian.Uint16(data[34:36]),
+	}, nil
+}
+
+// readColumnMetadataOffset reads the CMO table entry for a given column index.
+// Each CMO entry is 16 bytes: position(8B LE) + length(8B LE).
+// Returns (position, length) of the ColumnMetadata protobuf in the file.
+func (c *CacheFiller) readColumnMetadataOffset(
+	ctx meta.Context, inode Ino, footer *lanceFileFooter, columnIndex uint32,
+) (position uint64, length uint64, err error) {
+	if columnIndex >= footer.numColumns {
+		return 0, 0, fmt.Errorf("column index %d out of range (num_columns=%d)", columnIndex, footer.numColumns)
+	}
+	offset := int64(footer.columnMetaOffsetsStart) + int64(columnIndex)*int64(lanceCmoEntrySize)
+	data, err := c.readFileRange(ctx, inode, offset, int64(lanceCmoEntrySize))
+	if err != nil {
+		return 0, 0, fmt.Errorf("read CMO entry for column %d: %w", columnIndex, err)
+	}
+	position = binary.LittleEndian.Uint64(data[0:8])
+	length = binary.LittleEndian.Uint64(data[8:16])
+	return position, length, nil
+}
+
+// readColumnMetadata reads and parses the ColumnMetadata protobuf for a given column.
+func (c *CacheFiller) readColumnMetadata(
+	ctx meta.Context, inode Ino, footer *lanceFileFooter, columnIndex uint32,
+) (*file2pb.ColumnMetadata, error) {
+	pos, length, err := c.readColumnMetadataOffset(ctx, inode, footer, columnIndex)
+	if err != nil {
+		return nil, err
+	}
+	data, err := c.readFileRange(ctx, inode, int64(pos), int64(length))
+	if err != nil {
+		return nil, fmt.Errorf("read column %d metadata bytes: %w", columnIndex, err)
+	}
+	cm := &file2pb.ColumnMetadata{}
+	if err := proto.Unmarshal(data, cm); err != nil {
+		return nil, fmt.Errorf("decode column %d metadata: %w", columnIndex, err)
+	}
+	return cm, nil
+}
+
+// columnByteRanges extracts all byte ranges from a ColumnMetadata that should be warmed up.
+//
+// If includeDataPages is true, includes each page's buffer_offsets/sizes.
+// Always includes the column-level buffer_offsets/sizes.
+func columnByteRanges(cm *file2pb.ColumnMetadata, includeDataPages bool) []byteRange {
+	var ranges []byteRange
+
+	if includeDataPages {
+		// Collect page data buffer ranges
+		for _, page := range cm.Pages {
+			for i := range page.BufferOffsets {
+				if i < len(page.BufferSizes) {
+					start := page.BufferOffsets[i]
+					size := page.BufferSizes[i]
+					ranges = append(ranges, byteRange{start: start, end: start + size})
+				}
+			}
+		}
+	}
+
+	// Collect column-level buffer ranges (e.g. dictionaries, statistics)
+	for i := range cm.BufferOffsets {
+		if i < len(cm.BufferSizes) {
+			start := cm.BufferOffsets[i]
+			size := cm.BufferSizes[i]
+			ranges = append(ranges, byteRange{start: start, end: start + size})
+		}
+	}
+
+	return ranges
+}
+
+// warmupByteRanges maps file-internal byte ranges to JuiceFS slices and warms them up.
+//
+// For each range [start, end):
+//  1. Compute startChunk = start / ChunkSize, endChunk = (end-1) / ChunkSize
+//  2. For each chunk, meta.Read(inode, chunkIdx, &slices)
+//  3. For each slice, check if [sliceStart, sliceEnd) overlaps [rangeStart, rangeEnd)
+//  4. If overlap, FillCache(slice.Id, slice.Size) to warm the containing block
+func (c *CacheFiller) warmupByteRanges(
+	ctx meta.Context, inode Ino, ranges []byteRange, action CacheAction,
+) error {
+	// Merge overlapping and adjacent ranges to reduce meta.Read calls
+	ranges = mergeByteRanges(ranges)
+
+	for _, r := range ranges {
+		if r.end <= r.start {
+			continue
+		}
+		startChunk := uint32(r.start / meta.ChunkSize)
+		endChunk := uint32((r.end - 1) / meta.ChunkSize)
+
+		for chunkIdx := startChunk; chunkIdx <= endChunk; chunkIdx++ {
+			if ctx.Canceled() {
+				return nil
+			}
+			var slices []meta.Slice
+			if st := c.meta.Read(ctx, inode, chunkIdx, &slices); st != 0 {
+				logger.Warnf("read inode %d chunk %d: %s", inode, chunkIdx, st)
+				continue
+			}
+			for _, s := range slices {
+				if s.Id == 0 {
+					continue // hole
+				}
+				// Compute the file-level byte range of this slice
+				sliceStart := uint64(chunkIdx)*uint64(meta.ChunkSize) + uint64(s.Off)
+				sliceEnd := sliceStart + uint64(s.Len)
+
+				// Check overlap with target range
+				if sliceEnd <= r.start || sliceStart >= r.end {
+					continue // no overlap
+				}
+
+				switch action {
+				case WarmupCache:
+					if err := c.store.FillCache(s.Id, s.Size); err != nil {
+						logger.Warnf("fill cache slice %d (chunk %d): %s", s.Id, chunkIdx, err)
+					}
+				case EvictCache:
+					_ = c.store.EvictCache(s.Id, s.Size)
+				case CheckCache:
+					_ = c.store.CheckCache(s.Id, s.Size, nil)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// mergeByteRanges merges overlapping and adjacent byte ranges to minimize meta.Read calls.
+func mergeByteRanges(ranges []byteRange) []byteRange {
+	if len(ranges) <= 1 {
+		return ranges
+	}
+	// Sort by start
+	sortByteRanges(ranges)
+	merged := []byteRange{ranges[0]}
+	for i := 1; i < len(ranges); i++ {
+		last := &merged[len(merged)-1]
+		if ranges[i].start <= last.end {
+			// Overlap or adjacent — merge
+			if ranges[i].end > last.end {
+				last.end = ranges[i].end
+			}
+		} else {
+			merged = append(merged, ranges[i])
+		}
+	}
+	return merged
+}
+
+func sortByteRanges(ranges []byteRange) {
+	// Simple insertion sort (ranges are typically few dozens)
+	for i := 1; i < len(ranges); i++ {
+		key := ranges[i]
+		j := i - 1
+		for j >= 0 && ranges[j].start > key.start {
+			ranges[j+1] = ranges[j]
+			j--
+		}
+		ranges[j+1] = key
+	}
+}
+
+// buildFieldColumnMap builds a map from field name to column index.
+//
+// In Lance V2 format, physical columns are assigned in DFS pre-order:
+//   - V2.0: every field (including struct intermediates) gets a column index
+//   - V2.1: only leaf fields get column indices (struct intermediates don't)
+//
+// Since we only support V2 and the manifest's DataFile.column_indices tells us
+// the actual mapping for each file, we use DataFile.fields and DataFile.column_indices
+// to build the map when available. As a fallback, we use manifest.Fields with V2.0 rules.
+func buildFieldColumnMap(manifest *lancepb.Manifest, dataFile *lancepb.DataFile) map[string]int {
+	m := make(map[string]int)
+
+	if dataFile != nil && len(dataFile.Fields) > 0 && len(dataFile.ColumnIndices) > 0 {
+		// Use the file's own field → column index mapping
+		// dataFile.Fields is a list of field IDs; dataFile.ColumnIndices is the
+		// corresponding column indices in the file.
+		// We need the manifest's schema to map field IDs to names.
+		idToName := make(map[int32]string)
+		for _, field := range manifest.Fields {
+			idToName[field.Id] = field.Name
+		}
+		for i, fieldID := range dataFile.Fields {
+			if i < len(dataFile.ColumnIndices) {
+				if name, ok := idToName[fieldID]; ok {
+					m[name] = int(dataFile.ColumnIndices[i])
+				}
+			}
+		}
+		return m
+	}
+
+	// Fallback: assign column indices in DFS order (V2.0 rules)
+	colIdx := 0
+	var walk func(field *lancepb.Field, prefix string)
+	walk = func(field *lancepb.Field, prefix string) {
+		name := field.Name
+		if prefix != "" {
+			name = prefix + "." + name
+		}
+		m[name] = colIdx
+		colIdx++
+	}
+	for _, field := range manifest.Fields {
+		walk(field, "")
+	}
+	return m
+}
+
+// warmupLanceColumns performs column-level metadata warmup for a Lance dataset.
+//
+// For each data file in the dataset:
+//  1. Read the file footer (40 bytes from end)
+//  2. For each specified column, read its ColumnMetadata via the CMO table
+//  3. Extract byte ranges from ColumnMetadata (page buffers + column buffers)
+//  4. Map those byte ranges to JuiceFS slices and FillCache
+func (c *CacheFiller) warmupLanceColumns(
+	ctx meta.Context,
+	datasetPath string,
+	manifest *lancepb.Manifest,
+	config *LanceWarmupConfig,
+	action CacheAction,
+) error {
+	for _, frag := range manifest.Fragments {
+		for _, dataFile := range frag.Files {
+			fullPath := path.Join(datasetPath, lanceDataDir, dataFile.Path)
+
+			var inode Ino
+			var attr = &Attr{}
+			if st := c.resolve(ctx, fullPath, &inode, attr); st != 0 {
+				logger.Warnf("resolve lance data file %s: %s", fullPath, st)
+				continue
+			}
+			if attr.Typ != meta.TypeFile {
+				continue
+			}
+
+			// Read V2 file footer
+			footer, err := c.readLanceFileFooter(ctx, inode, int64(attr.Length))
+			if err != nil {
+				logger.Warnf("read footer %s: %s", fullPath, err)
+				continue
+			}
+
+			// Build column name → column index map for this file
+			colMap := buildFieldColumnMap(manifest, dataFile)
+
+			// For each requested column, read & warmup its metadata
+			for _, colName := range config.Columns {
+				colIdx, ok := colMap[colName]
+				if !ok {
+					logger.Warnf("column %q not found in %s", colName, fullPath)
+					continue
+				}
+				if colIdx >= int(footer.numColumns) {
+					logger.Warnf("column %q index %d out of range (%d columns) in %s",
+						colName, colIdx, footer.numColumns, fullPath)
+					continue
+				}
+
+				cm, err := c.readColumnMetadata(ctx, inode, footer, uint32(colIdx))
+				if err != nil {
+					logger.Warnf("read column %q metadata in %s: %s", colName, fullPath, err)
+					continue
+				}
+
+				ranges := columnByteRanges(cm, config.IncludeDataPages)
+				logger.Infof("warmup column %q in %s: %d byte ranges", colName, fullPath, len(ranges))
+
+				if err := c.warmupByteRanges(ctx, inode, ranges, action); err != nil {
+					logger.Warnf("warmup column %q in %s: %s", colName, fullPath, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// readFileRange reads a specific byte range [offset, offset+length) from a file
+// through JuiceFS metadata and chunk store.
+func (c *CacheFiller) readFileRange(
+	ctx meta.Context, inode Ino, offset, length int64,
+) ([]byte, error) {
+	if length <= 0 {
+		return nil, nil
+	}
+	startChunk := uint32(offset / int64(meta.ChunkSize))
+	endChunk := uint32((offset + length - 1) / int64(meta.ChunkSize))
+
+	var buf bytes.Buffer
+	for chunkIdx := startChunk; chunkIdx <= endChunk; chunkIdx++ {
+		var slices []meta.Slice
+		if st := c.meta.Read(ctx, inode, chunkIdx, &slices); st != 0 {
+			return nil, fmt.Errorf("read chunk %d: %s", chunkIdx, st)
+		}
+		for _, s := range slices {
+			if s.Id == 0 {
+				continue // hole
+			}
+			// Compute the file-level byte range of this slice
+			chunkStart := int64(chunkIdx) * int64(meta.ChunkSize)
+			sliceFileStart := chunkStart + int64(s.Off)
+			sliceFileEnd := sliceFileStart + int64(s.Len)
+
+			// Intersect with [offset, offset+length)
+			readStart := sliceFileStart
+			if readStart < offset {
+				readStart = offset
+			}
+			readEnd := sliceFileEnd
+			if readEnd > offset+length {
+				readEnd = offset + length
+			}
+			if readStart >= readEnd {
+				continue
+			}
+
+			// Read from chunk store
+			intraSliceOff := readStart - sliceFileStart
+			readLen := readEnd - readStart
+			page := chunk.NewOffPage(int(readLen))
+			reader := c.store.NewReader(s.Id, int(s.Size))
+			n, err := reader.ReadAt(ctx, page, int(intraSliceOff))
+			if err != nil && n == 0 {
+				page.Release()
+				return nil, fmt.Errorf("read slice %d at offset %d: %w", s.Id, intraSliceOff, err)
+			}
+			buf.Write(page.Data[:n])
+			page.Release()
+		}
+	}
+	return buf.Bytes(), nil
 }

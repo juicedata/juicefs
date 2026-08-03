@@ -112,6 +112,14 @@ $ juicefs warmup --lance --lance-include-indices /mnt/jfs/data/mydataset.lance`,
 				Name:  "lance-include-indices",
 				Usage: "also warmup Lance index files under _indices/",
 			},
+			&cli.StringFlag{
+				Name:  "lance-columns",
+				Usage: "comma-separated column names to warmup column-level metadata (V2 format only)",
+			},
+			&cli.BoolFlag{
+				Name:  "lance-column-data",
+				Usage: "also warmup column data pages in addition to metadata",
+			},
 		},
 	}
 }
@@ -192,6 +200,11 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 	// Optional lance config: lance_flag(1) + manifest_only(1) + include_indices(1) + version_len(2) + version
 	if lanceCfg != nil {
 		bodyLen += 1 + 1 + 1 + 2 + uint32(len(lanceCfg.Version))
+		// Optional columns: columns_len(2) + columns_data + include_data_pages(1)
+		if len(lanceCfg.Columns) > 0 {
+			colData := strings.Join(lanceCfg.Columns, ",")
+			bodyLen += 2 + uint32(len(colData)) + 1
+		}
 	}
 	headerLen := uint32(8)
 	wb := utils.NewBuffer(headerLen + bodyLen)
@@ -218,6 +231,18 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 		wb.Put8(includeIndices)
 		wb.Put16(uint16(len(lanceCfg.Version)))
 		wb.Put([]byte(lanceCfg.Version))
+
+		// Optional: column names
+		if len(lanceCfg.Columns) > 0 {
+			colData := strings.Join(lanceCfg.Columns, ",")
+			wb.Put16(uint16(len(colData)))
+			wb.Put([]byte(colData))
+			var includeData uint8
+			if lanceCfg.IncludeDataPages {
+				includeData = 1
+			}
+			wb.Put8(includeData)
+		}
 	}
 
 	if _, err := cf.Write(wb.Bytes()); err != nil {
@@ -324,9 +349,18 @@ func warmup(ctx *cli.Context) error {
 	var lanceCfg *vfs.LanceWarmupConfig
 	if lanceMode {
 		lanceCfg = &vfs.LanceWarmupConfig{
-			Version:        ctx.String("lance-version"),
-			ManifestOnly:   ctx.Bool("lance-manifest-only"),
-			IncludeIndices: ctx.Bool("lance-include-indices"),
+			Version:          ctx.String("lance-version"),
+			ManifestOnly:     ctx.Bool("lance-manifest-only"),
+			IncludeIndices:   ctx.Bool("lance-include-indices"),
+			IncludeDataPages: ctx.Bool("lance-column-data"),
+		}
+		if cols := ctx.String("lance-columns"); cols != "" {
+			lanceCfg.Columns = strings.Split(cols, ",")
+			for i, c := range lanceCfg.Columns {
+				lanceCfg.Columns[i] = strings.TrimSpace(c)
+			}
+			logger.Infof("Lance column warmup: columns=%v, include-data=%v",
+				lanceCfg.Columns, lanceCfg.IncludeDataPages)
 		}
 		if lanceCfg.Version != "" {
 			logger.Infof("Lance mode: version=%s, manifest-only=%v, include-indices=%v",

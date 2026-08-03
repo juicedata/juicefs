@@ -615,6 +615,21 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 						lanceCfg.Version = string(r.Get(verLen))
 					}
 				}
+				// Optional: column names
+				if r.HasMore() {
+					colLen := int(r.Get16())
+					if colLen > 0 && r.HasMore() {
+						colData := string(r.Get(colLen))
+						lanceCfg.Columns = strings.Split(colData, ",")
+						for i, c := range lanceCfg.Columns {
+							lanceCfg.Columns[i] = strings.TrimSpace(c)
+						}
+					}
+				}
+				// Optional: include data pages flag
+				if r.HasMore() {
+					lanceCfg.IncludeDataPages = r.Get8() == 1
+				}
 			}
 		}
 

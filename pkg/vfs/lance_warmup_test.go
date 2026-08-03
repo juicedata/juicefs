@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	lancepb "github.com/juicedata/juicefs/pkg/vfs/proto/lance"
+	file2pb "github.com/juicedata/juicefs/pkg/vfs/proto/lance/file2"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -200,5 +201,140 @@ func TestIsLanceDataset(t *testing.T) {
 				t.Errorf("isLanceDataset(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestMergeByteRanges(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  []byteRange
+		want   []byteRange
+	}{
+		{
+			name:  "empty",
+			input: []byteRange{},
+			want:  []byteRange{},
+		},
+		{
+			name:  "single",
+			input: []byteRange{{100, 200}},
+			want:  []byteRange{{100, 200}},
+		},
+		{
+			name:  "disjoint",
+			input: []byteRange{{100, 200}, {300, 400}},
+			want:  []byteRange{{100, 200}, {300, 400}},
+		},
+		{
+			name:  "overlapping",
+			input: []byteRange{{100, 250}, {200, 400}},
+			want:  []byteRange{{100, 400}},
+		},
+		{
+			name:  "adjacent",
+			input: []byteRange{{100, 200}, {200, 300}},
+			want:  []byteRange{{100, 300}},
+		},
+		{
+			name:  "unsorted overlapping",
+			input: []byteRange{{300, 400}, {100, 250}, {200, 300}},
+			want:  []byteRange{{100, 400}},
+		},
+		{
+			name:  "contained",
+			input: []byteRange{{100, 400}, {200, 300}},
+			want:  []byteRange{{100, 400}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mergeByteRanges(tt.input)
+			if len(got) != len(tt.want) {
+				t.Fatalf("len: got %d, want %d", len(got), len(tt.want))
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("[%d]: got {%d,%d}, want {%d,%d}",
+						i, got[i].start, got[i].end, tt.want[i].start, tt.want[i].end)
+				}
+			}
+		})
+	}
+}
+
+func TestColumnByteRanges(t *testing.T) {
+	cm := &file2pb.ColumnMetadata{
+		Pages: []*file2pb.ColumnMetadata_Page{
+			{
+				BufferOffsets: []uint64{1000, 2000},
+				BufferSizes:   []uint64{500, 300},
+			},
+			{
+				BufferOffsets: []uint64{3000},
+				BufferSizes:   []uint64{100},
+			},
+		},
+		BufferOffsets: []uint64{5000},
+		BufferSizes:   []uint64{50},
+	}
+
+	// Metadata only (no data pages)
+	ranges := columnByteRanges(cm, false)
+	if len(ranges) != 1 {
+		t.Fatalf("metadata only: got %d ranges, want 1", len(ranges))
+	}
+	if ranges[0].start != 5000 || ranges[0].end != 5050 {
+		t.Errorf("metadata range: got {%d,%d}, want {5000,5050}",
+			ranges[0].start, ranges[0].end)
+	}
+
+	// With data pages
+	ranges = columnByteRanges(cm, true)
+	if len(ranges) != 4 {
+		t.Fatalf("with data: got %d ranges, want 4", len(ranges))
+	}
+	// After merge: [{1000,1500}, {2000,2300}, {3000,3100}, {5000,5050}]
+	merged := mergeByteRanges(ranges)
+	if len(merged) != 4 {
+		t.Fatalf("merged: got %d ranges, want 4", len(merged))
+	}
+}
+
+func TestBuildFieldColumnMap(t *testing.T) {
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "id"},
+			{Id: 1, Name: "name"},
+			{Id: 2, Name: "value"},
+		},
+	}
+
+	// Without DataFile, fallback to V2.0 rules
+	m := buildFieldColumnMap(manifest, nil)
+	if m["id"] != 0 {
+		t.Errorf("id: got %d, want 0", m["id"])
+	}
+	if m["name"] != 1 {
+		t.Errorf("name: got %d, want 1", m["name"])
+	}
+	if m["value"] != 2 {
+		t.Errorf("value: got %d, want 2", m["value"])
+	}
+
+	// With DataFile providing explicit field→column mapping
+	dataFile := &lancepb.DataFile{
+		Fields:        []int32{0, 1, 2},
+		ColumnIndices: []int32{2, 1, 0}, // reversed
+	}
+	m = buildFieldColumnMap(manifest, dataFile)
+	if m["id"] != 2 {
+		t.Errorf("id with datafile: got %d, want 2", m["id"])
+	}
+	if m["name"] != 1 {
+		t.Errorf("name with datafile: got %d, want 1", m["name"])
+	}
+	if m["value"] != 0 {
+		t.Errorf("value with datafile: got %d, want 0", m["value"])
 	}
 }
