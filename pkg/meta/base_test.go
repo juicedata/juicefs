@@ -574,6 +574,19 @@ func testMetaClient(t *testing.T, m Meta) {
 	if base.sid != ses[0].Sid {
 		t.Fatalf("my sid %d != registered sid %d", base.sid, ses[0].Sid)
 	}
+	if err = base.en.doCleanStaleSession(base.sid); err != nil {
+		t.Fatalf("clean session: %s", err)
+	}
+	if err = base.en.doRefreshSession(); err != nil {
+		t.Fatalf("refresh session: %s", err)
+	}
+	restored, err := m.GetSession(base.sid, false)
+	if err != nil {
+		t.Fatalf("get restored session: %s", err)
+	}
+	if !reflect.DeepEqual(ses[0].SessionInfo, restored.SessionInfo) { // session should remain unchanged even after rejoining
+		t.Fatalf("restored session info changed: %+v != %+v", restored.SessionInfo, ses[0].SessionInfo)
+	}
 	go m.CleanStaleSessions(Background())
 
 	var parent, inode, dummyInode Ino

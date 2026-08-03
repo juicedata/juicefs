@@ -3252,7 +3252,7 @@ func (m *dbMeta) doRefreshSession() error {
 		n, err := ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid})
 		if err == nil && n == 0 {
 			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-			err = mustInsert(ses, &session2{m.sid, m.expireTime(), m.newSessionInfo()})
+			err = mustInsert(ses, &session2{m.sid, m.expireTime(), m.currentSessionInfo()})
 		}
 		return err
 	})

@@ -90,12 +90,11 @@ import (
 
 type redisMeta struct {
 	*baseMeta
-	rdb         redis.UniversalClient
-	prefix      string
-	shaLookup   string // The SHA returned by Redis for the loaded `scriptLookup`
-	shaResolve  string // The SHA returned by Redis for the loaded `scriptResolve`
-	cache       *redisCache
-	sessionJSON atomic.Value // []byte
+	rdb        redis.UniversalClient
+	prefix     string
+	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
+	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
+	cache      *redisCache
 }
 
 var _ Meta = (*redisMeta)(nil)
@@ -446,7 +445,6 @@ func (m *redisMeta) doNewSession(sinfo []byte, update bool) error {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)
 	expire := m.expireTime()
-	m.sessionJSON.Store(sinfo)
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.ZAdd(ctx, m.allSessions(), redis.Z{Score: float64(expire), Member: ssid})
 		pipe.HSet(ctx, m.sessionInfos(), ssid, sinfo)
@@ -470,15 +468,6 @@ func (m *redisMeta) doNewSession(sinfo []byte, update bool) error {
 		go m.cleanupLegacies()
 	}
 	return nil
-}
-
-func (m *redisMeta) cachedSessionJSON() []byte {
-	if data := m.sessionJSON.Load(); data != nil {
-		return data.([]byte)
-	}
-	data := m.newSessionInfo()
-	m.sessionJSON.Store(data)
-	return data
 }
 
 func (m *redisMeta) getCounter(name string) (int64, error) {
@@ -3032,7 +3021,7 @@ func (m *redisMeta) doRefreshSession() error {
 	expire := m.expireTime()
 	var created *redis.BoolCmd
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		created = pipe.HSetNX(ctx, m.sessionInfos(), ssid, m.cachedSessionJSON())
+		created = pipe.HSetNX(ctx, m.sessionInfos(), ssid, m.currentSessionInfo())
 		pipe.ZAdd(ctx, m.allSessions(), redis.Z{
 			Score:  float64(expire),
 			Member: ssid,
