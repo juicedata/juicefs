@@ -464,9 +464,11 @@ juicefs/
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### 6.3 单元测试
+### 6.3 测试
 
-已实现 9 个单元测试，覆盖以下场景：
+#### 单元测试
+
+已实现 13 个测试（9 单元 + 4 E2E），覆盖以下场景：
 
 | 测试 | 说明 |
 |------|------|
@@ -478,6 +480,17 @@ juicefs/
 | `TestMergeByteRanges` | 字节范围合并 (空/单个/不相交/重叠/相邻/包含) |
 | `TestColumnByteRanges` | 从 ColumnMetadata 提取字节范围 (仅元数据/含数据页) |
 | `TestBuildFieldColumnMap` | 列名→column index 映射 (回退/精确映射) |
+| `TestE2E_ManifestParseAndPathResolution` | 构建 manifest 二进制 → 解析 → 验证 fragments/files/deletion/txn |
+| `TestE2E_V2FooterAndColumnMetadata` | 构建 V2 数据文件 → 读 footer → 读 CMO → 解析 ColumnMetadata → 提取字节范围 |
+| `TestE2E_FieldColumnMapResolution` | manifest schema → 字段映射 (回退 DFS / 精确映射 / 子集字段) |
+| `TestE2E_FullPipeline` | 完整链路：manifest → schema → field map → V2 file → footer → column metadata → byte ranges → merge |
+
+运行测试：
+
+```bash
+cd /home/dji/Desktop/code/juicefs
+go test ./pkg/vfs/ -run "TestParseLance|TestRelativeDeletion|TestIsLance|TestMergeByte|TestColumnByte|TestBuildField|TestE2E" -v -count=1
+```
 
 ---
 
@@ -494,3 +507,405 @@ juicefs/
 5. **Protobuf 依赖**：引入 `google.golang.org/protobuf` 依赖，增加少量二进制体积。
 
 6. **并发控制**：列级预热的并发度由 `--threads` 参数控制（默认 50），与文件级预热共用并发池。
+
+---
+
+## 八、手工测试指南
+
+本章描述从编译 JuiceFS、创建 Lance 数据集、挂载文件系统到验证预热功能的完整流程。
+
+### 8.1 环境准备
+
+#### 必要软件
+
+```bash
+# Go (编译 JuiceFS)
+go version  # 需要 1.21+
+
+# Python + pylance (创建 Lance 数据集)
+python3 --version  # 3.8+
+pip3 install pylance  # 已安装: pylance 9.1.0b4 / lance 1.2.1
+
+# Redis (JuiceFS 元数据引擎，可选，也可用 SQLite 替代)
+# 如果没有 redis-server，可以使用 SQLite 作为元数据引擎
+```
+
+#### 8.1.1 编译 JuiceFS
+
+```bash
+cd /home/dji/Desktop/code/juicefs
+
+# 切换到 lance 分支
+git checkout lance
+
+# 编译
+go build -o juicefs .
+
+# 验证
+./juicefs --version
+# 预期输出: juicefs version 1.5.0-dev+unknown
+
+# 查看 warmup 命令帮助
+./juicefs warmup --help
+# 确认可以看到 --lance, --lance-columns, --lance-column-data 等选项
+```
+
+#### 8.1.2 运行单元测试
+
+```bash
+cd /home/dji/Desktop/code/juicefs
+
+# 运行全部 Lance 相关测试
+go test ./pkg/vfs/ \
+  -run "TestParseLance|TestRelativeDeletion|TestIsLance|TestMergeByte|TestColumnByte|TestBuildField|TestE2E" \
+  -v -count=1
+
+# 预期: 13 个测试全部 PASS
+```
+
+### 8.2 创建 Lance 数据集
+
+使用 Python + pylance 在本地创建一个测试用 Lance 数据集：
+
+```python
+#!/usr/bin/env python3
+"""create_lance_dataset.py — 创建测试用 Lance 数据集"""
+
+import lance
+import pyarrow as pa
+import os
+
+# 1. 定义 schema 和测试数据
+schema = pa.schema([
+    pa.field("id", pa.int64()),
+    pa.field("name", pa.string()),
+    pa.field("score", pa.float32()),
+    pa.field("embedding", pa.list_(pa.float32(), 128)),
+])
+
+num_rows = 10000
+
+table = pa.table({
+    "id": pa.array(range(num_rows), type=pa.int64()),
+    "name": pa.array([f"item_{i}" for i in range(num_rows)], type=pa.string()),
+    "score": pa.array([float(i) / 100.0 for i in range(num_rows)], type=pa.float32()),
+    "embedding": pa.array(
+        [[float(i) / 1000.0] * 128 for i in range(num_rows)],
+        type=pa.list_(pa.float32(), 128)
+    ),
+}, schema=schema)
+
+# 2. 写入 Lance 数据集
+dataset_path = "/tmp/test_lance_data.lance"
+if os.path.exists(dataset_path):
+    import shutil
+    shutil.rmtree(dataset_path)
+
+# 写入数据，分多个 fragment
+lance.write_dataset(
+    table,
+    dataset_path,
+    mode="overwrite",
+    max_rows_per_file=2500,  # 4 个 fragment
+)
+
+print(f"Lance dataset created at: {dataset_path}")
+
+# 3. 验证目录结构
+for root, dirs, files in os.walk(dataset_path):
+    level = root.replace(dataset_path, "").count(os.sep)
+    indent = "  " * level
+    print(f"{indent}{os.path.basename(root)}/")
+    subindent = "  " * (level + 1)
+    for file in sorted(files):
+        filepath = os.path.join(root, file)
+        size = os.path.getsize(filepath)
+        print(f"{subindent}{file} ({size:,} bytes)")
+
+# 4. 打印 manifest 信息
+import lance
+ds = lance.dataset(dataset_path)
+print(f"\nDataset info:")
+print(f"  Version: {ds.version}")
+print(f"  Schema: {ds.schema}")
+print(f"  Num fragments: {ds.num_fragments}")
+for frag in ds.get_fragments():
+    print(f"    Fragment {frag.fragment_id}: {len(frag.files)} files")
+    for f in frag.files:
+        print(f"      - {f.path}")
+```
+
+运行：
+
+```bash
+python3 create_lance_dataset.py
+```
+
+预期输出（目录结构类似）：
+
+```
+test_lance_data.lance/
+  _versions/
+    0.manifest (xxx bytes)
+    latest_version_hint.json (xx bytes)
+  data/
+    0000-xxx.lance (xxx bytes)
+    0001-xxx.lance (xxx bytes)
+    0002-xxx.lance (xxx bytes)
+    0003-xxx.lance (xxx bytes)
+
+Dataset info:
+  Version: 1
+  Schema: id: int64, name: string, score: float, embedding: fixed_size_list<item: float>[128]
+  Num fragments: 4
+```
+
+### 8.3 挂载 JuiceFS
+
+#### 8.3.1 使用 SQLite 元数据引擎（无需 Redis）
+
+```bash
+# 创建挂载点
+sudo mkdir -p /mnt/jfs
+
+# 使用 SQLite 作为元数据引擎，本地磁盘作为对象存储
+sudo /home/dji/Desktop/code/juicefs/juicefs mount \
+  --meta sqlite:///tmp/juicefs-meta.db \
+  --storage file \
+  --bucket /tmp/juicefs-storage \
+  /mnt/jfs
+```
+
+挂载成功后，`/mnt/jfs` 就是一个可用的 JuiceFS 文件系统。
+
+#### 8.3.2 使用 Redis 元数据引擎（可选）
+
+```bash
+# 先启动 Redis
+redis-server --daemonize yes
+
+# 挂载
+sudo /home/dji/Desktop/code/juicefs/juicefs mount \
+  --meta redis://127.0.0.1:6379/1 \
+  --storage file \
+  --bucket /tmp/juicefs-storage \
+  /mnt/jfs
+```
+
+#### 8.3.3 后台挂载（推荐）
+
+```bash
+# 后台运行模式
+sudo /home/dji/Desktop/code/juicefs/juicefs mount \
+  --meta sqlite:///tmp/juicefs-meta.db \
+  --storage file \
+  --bucket /tmp/juicefs-storage \
+  --daemon \
+  /mnt/jfs
+
+# 验证挂载
+df -h /mnt/jfs
+# 预期: juicefs 1.0P  0  1.0P  0% /mnt/jfs
+
+ls /mnt/jfs
+# 预期: 可以正常列目录
+```
+
+### 8.4 将 Lance 数据集复制到 JuiceFS
+
+```bash
+# 创建数据目录
+sudo mkdir -p /mnt/jfs/data
+
+# 复制 Lance 数据集到 JuiceFS
+sudo cp -r /tmp/test_lance_data.lance /mnt/jfs/data/
+
+# 验证文件在 JuiceFS 中
+ls -la /mnt/jfs/data/test_lance_data.lance/
+ls -la /mnt/jfs/data/test_lance_data.lance/_versions/
+ls -la /mnt/jfs/data/test_lance_data.lance/data/
+```
+
+### 8.5 测试预热功能
+
+#### 8.5.1 数据集级预热
+
+```bash
+# 清空 JuiceFS 本地缓存（确保预热前没有缓存）
+sudo rm -rf /var/jfsCache/local/
+
+# 预热整个 Lance 数据集
+sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+  --lance \
+  /mnt/jfs/data/test_lance_data.lance
+
+# 预期输出:
+# Lance mode: latest version, manifest-only=false, include-indices=false
+# Warmup: <N> paths with 50 workers
+# <N> files warmed up, <X> bytes
+```
+
+#### 8.5.2 仅预热 Manifest
+
+```bash
+# 只预热 manifest 文件
+sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+  --lance \
+  --lance-manifest-only \
+  /mnt/jfs/data/test_lance_data.lance
+
+# 预期: 只预热 _versions/ 下的 manifest 文件，不预热 data/ 目录
+```
+
+#### 8.5.3 列级元数据预热
+
+```bash
+# 预热 id 和 name 列的元数据
+sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+  --lance \
+  --lance-columns "id,name" \
+  /mnt/jfs/data/test_lance_data.lance
+
+# 预期输出包含:
+# Lance column warmup: columns=[id name], include-data=false
+# warmup column "id" in /mnt/jfs/data/test_lance_data.lance/data/0000-xxx.lance: N byte ranges
+# warmup column "name" in /mnt/jfs/data/test_lance_data.lance/data/0000-xxx.lance: N byte ranges
+```
+
+#### 8.5.4 列级预热 + 数据页
+
+```bash
+# 预热 score 列的元数据 + 数据页缓冲区
+sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+  --lance \
+  --lance-columns "score" \
+  --lance-column-data \
+  /mnt/jfs/data/test_lance_data.lance
+```
+
+#### 8.5.5 指定版本预热
+
+```bash
+# 预热版本 0
+sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+  --lance \
+  --lance-version 0 \
+  /mnt/jfs/data/test_lance_data.lance
+
+# 预期输出包含:
+# Lance mode: version=0, manifest-only=false, include-indices=false
+```
+
+#### 8.5.6 检查缓存状态
+
+```bash
+# 检查哪些数据块已缓存（不实际预热）
+sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+  --lance \
+  --check \
+  /mnt/jfs/data/test_lance_data.lance
+
+# --check 模式下只检查缓存命中率，不执行下载
+
+# 查看本地缓存目录大小
+sudo du -sh /var/jfsCache/local/
+```
+
+#### 8.5.7 驱逐缓存
+
+```bash
+# 驱逐已缓存的数据块
+sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+  --lance \
+  --evict \
+  /mnt/jfs/data/test_lance_data.lance
+
+# 验证缓存已被清空
+sudo du -sh /var/jfsCache/local/
+```
+
+### 8.6 验证预热效果
+
+#### 方法 1：读取延迟对比
+
+```bash
+# 清空缓存后，直接读取（冷读）
+sudo rm -rf /var/jfsCache/local/
+time sudo cat /mnt/jfs/data/test_lance_data.lance/data/*.lance > /dev/null
+
+# 预热
+sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+  --lance \
+  /mnt/jfs/data/test_lance_data.lance
+
+# 再次读取（热读）
+time sudo cat /mnt/jfs/data/test_lance_data.lance/data/*.lance > /dev/null
+
+# 预期: 热读明显快于冷读
+```
+
+#### 方法 2：通过 Python 读取 Lance 验证
+
+```python
+#!/usr/bin/env python3
+"""verify_lance_warmup.py — 验证预热后的 Lance 数据集可正常读取"""
+
+import lance
+import time
+
+ds = lance.dataset("/mnt/jfs/data/test_lance_data.lance")
+print(f"Dataset: version={ds.version}, fragments={ds.num_fragments}")
+
+# 冷读 / 热读对比
+start = time.time()
+table = ds.to_table()
+elapsed = time.time() - start
+print(f"Full scan: {len(table)} rows in {elapsed:.3f}s")
+
+# 列级读取
+for col in ["id", "name", "score", "embedding"]:
+    start = time.time()
+    col_data = ds.to_table(columns=[col])
+    elapsed = time.time() - start
+    print(f"Column '{col}': {col_data.num_rows} rows in {elapsed:.3f}s")
+```
+
+运行：
+
+```bash
+# 冷读
+sudo rm -rf /var/jfsCache/local/
+sudo python3 verify_lance_warmup.py
+
+# 预热
+sudo /home/dji/Desktop/code/juicefs/juicefs warmup --lance /mnt/jfs/data/test_lance_data.lance
+
+# 热读
+sudo python3 verify_lance_warmup.py
+```
+
+### 8.7 测试后清理
+
+```bash
+# 卸载 JuiceFS
+sudo umount /mnt/jfs
+
+# 清理本地存储
+sudo rm -rf /var/jfsCache/
+sudo rm -f /tmp/juicefs-meta.db
+sudo rm -rf /tmp/juicefs-storage/
+sudo rm -rf /tmp/test_lance_data.lance
+sudo rm -f /home/dji/Desktop/code/juicefs/juicefs  # 可选: 删除编译产物
+```
+
+### 8.8 故障排查
+
+| 问题 | 可能原因 | 解决方法 |
+|------|---------|---------|
+| `open control file: no such file` | JuiceFS 未挂载 | 确认 `mount` 命令成功，`df -h /mnt/jfs` 有输出 |
+| `find lance manifest: no manifest files found` | 目录结构不完整 | 确认 `_versions/` 下有 `.manifest` 文件 |
+| `read footer: file too small` | 数据文件损坏 | 重新复制 Lance 数据集到 JuiceFS |
+| `column "xxx" not found` | 列名不匹配 | 用 `python3 -c "import lance; print(lance.dataset(path).schema)"` 检查列名 |
+| `warmup lance columns: ...` 警告 | V1 格式数据文件 | 确保数据文件是 V2 格式（pylance 1.x 默认写 V2） |
+| JuiceFS 挂载失败 | 元数据引擎连接问题 | 检查 `--meta` URL，SQLite 用 `sqlite:///path/to/db` |
+| 权限不足 | warmup 需要 root | 使用 `sudo` 执行 warmup 命令 |
