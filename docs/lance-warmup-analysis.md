@@ -830,3 +830,700 @@ func (c *CacheFiller) incrementalLanceWarmup(
 4. **并发控制**：大数据集可能有数千个数据文件，需要合理控制并发预热数
 5. **错误处理**：manifest 解析失败时应有 graceful degradation，不影响普通文件预热
 6. **readFileContent 实现**：需要通过 JuiceFS 内部接口读取文件内容，可能需要 VFS 层暴露一个 Read 方法给 CacheFiller
+
+---
+
+## 五、Lance 列级元数据预热设计
+
+### 5.1 背景
+
+当前实现预热的是**文件级**的——对 Lance 数据集而言，预热粒度是 manifest 文件和 data 文件（整个 `.lance` 文件）。但实际场景中，用户可能只需要预热**某一列的元数据**，原因：
+
+1. **列式存储特性**：Lance 是列式格式，分析查询通常只读取部分列，预热点不需要的列浪费带宽和缓存空间
+2. **元数据 vs 数据**：列的元数据（page table / column metadata）比列的实际数据小得多，但读取时必须先加载，预热元数据能显著加速首次查询
+3. **大宽表场景**：ML/AI 数据集可能有数百甚至数千列，只预热需要的列可以大幅减少预热时间
+
+### 5.2 Lance 文件格式深入分析
+
+#### 5.2.1 V1 文件格式 (Lance File v1, major=0, minor=1)
+
+V1 文件布局：
+
+```
+┌───────────────────────────────────┐
+│  Data Pages                       │  ← 实际列数据，按列×batch组织
+│  (Page Table 指向这些数据)          │
+├───────────────────────────────────┤
+│  Page Table                       │  ← N×M×2 矩阵: [field_id][batch_id] → (position, length)
+│  (位置由 Metadata 指定)            │
+├───────────────────────────────────┤
+│  File Metadata (protobuf)         │  ← 包含 batch_offsets, page_table_position, manifest_position
+├───────────────────────────────────┤
+│  Metadata Offset (8 bytes)        │  ← 指向 File Metadata 的位置
+├───────────────────────────────────┤
+│  MAGIC: "LANC" (4 bytes)          │
+└───────────────────────────────────┘
+```
+
+**V1 Page Table 结构**：
+```
+PageTable: BTreeMap<field_id, BTreeMap<batch_id, PageInfo{position, length}>>
+
+加载方式:
+  PageTable::load(reader, position, min_field_id, max_field_id, num_batches)
+  - 从 position 处读取 (max_field_id - min_field_id + 1) * num_batches * 2 个 int64
+  - 每对 (position, length) 描述一个 page 的物理位置和大小
+```
+
+**V1 列与 Field 的关系**：
+- Manifest 的 `fields` 列表定义了所有字段（含嵌套字段），每个有 `id` 和 `name`
+- `DataFile.fields` 列表记录该数据文件包含哪些字段
+- 读取某列时：field_id → page_table[field_id][batch_id] → (position, length) → 从 position 处读 length 字节
+
+#### 5.2.2 V2 文件格式 (Lance File v2, major=0, minor=2+)
+
+V2 文件布局（来自 `protos/file2.proto`）：
+
+```
+┌──────────────────────────────────────┐
+│  Data Pages                          │  ← 数据缓冲区
+│  (Data Buffer 0..N)                  │
+├──────────────────────────────────────┤
+│  Column Metadatas                     │  ← 每列一个 ColumnMetadata protobuf
+│  |A| Column 0 Metadata               │  ← 包含 pages 列表、buffer_offsets/sizes
+│  |  Column 1 Metadata                │
+│  |  ...                               │
+│  |  Column CN Metadata                │
+├──────────────────────────────────────┤
+│  Column Metadata Offset Table         │  ← |B| 每列元数据的位置和大小
+│  (Column 0 Position, Size, ...)       │
+├──────────────────────────────────────┤
+│  Global Buffers Offset Table          │  ← |C| 全局缓冲区位置
+│  (Global Buffer 0 Position, Size, .) │
+├──────────────────────────────────────┤
+│  Footer (40 bytes)                    │
+│  A: u64 column_meta_start             │  ← Column Metadatas 的起始位置
+│  B: u64 column_meta_offsets_start     │  ← Offset Table 的起始位置
+│  C: u64 global_buff_offsets_start     │  ← Global Buffers 的起始位置
+│  u32 num_global_buffers               │
+│  u32 num_columns                      │
+│  u16 major_version                    │
+│  u16 minor_version                    │
+│  "LANC" (4 bytes magic)               │
+└──────────────────────────────────────┘
+```
+
+**V2 ColumnMetadata 结构** (`protos/file2.proto`)：
+```protobuf
+message ColumnMetadata {
+  message Page {
+    repeated uint64 buffer_offsets = 1;  // page 数据缓冲区在文件中的偏移
+    repeated uint64 buffer_sizes = 2;     // 每个缓冲区的大小
+    uint64 length = 3;                   // 逻辑行数
+    Encoding encoding = 4;               // 页编码方式
+    uint64 priority = 5;                 // 优先级（通常为首行行号）
+  }
+  Encoding encoding = 1;                 // 列级编码
+  repeated Page pages = 2;               // ★ 该列的所有页
+  repeated uint64 buffer_offsets = 3;   // 列级缓冲区偏移
+  repeated uint64 buffer_sizes = 4;      // 列级缓冲区大小
+}
+```
+
+**V2 列投影**：
+- `ReaderProjection` 包含 `column_indices: Vec<u32>`，指定要读取哪些列
+- `from_column_names(schema, &["col_a", "col_b"])` → 构建 projection
+- 读取时只加载指定列的 ColumnMetadata 和对应的数据页
+
+**V2 Footer 关键字段**：
+- `column_meta_start`: Column Metadatas 区域的起始位置
+- `column_meta_offsets_start`: Offset Table 的起始位置（每列 12 字节: position:u64 + size:u32）
+- `num_columns`: 列数
+- **注意**: Footer 中有 `column_meta_offsets_start` 字段但当前 Lance 代码注释 "We don't use this today because we always load metadata for every column"——即当前 Lance 读取所有列的元数据，尚未支持 metadata projection
+
+#### 5.2.3 两种格式的列元数据对比
+
+| 特性 | V1 (legacy) | V2 (current) |
+|------|-------------|--------------|
+| 列元数据位置 | Page Table (int64 数组) | ColumnMetadata (protobuf) |
+| 列元数据内容 | (position, length) pairs | pages[], buffer_offsets[], encoding |
+| 列定位方式 | field_id → page_table[field_id][batch] | column_index → column_metadata_offsets[index] |
+| 支持列投影 | 是（按 field_id 查询） | 是（按 column_index 选择性读取） |
+| 元数据大小 | 固定大小 (num_fields × num_batches × 16B) | 可变大小（protobuf 编码） |
+
+### 5.3 列级元数据预热方案
+
+#### 5.3.1 整体架构
+
+```
+                    CLI: juicefs warmup --lance --lance-columns "col_a,col_b" /path/ds.lance
+                                    │
+                    ┌───────────────▼───────────────┐
+                    │  CacheFiller                  │
+                    │  resolveLancePaths()           │
+                    │  (新增列级预热分支)             │
+                    └───────────────┬───────────────┘
+                                    │
+                    ┌───────────────▼───────────────┐
+                    │  LanceFileMetadataReader       │  ← 新增
+                    │  1. 读 .lance 文件 footer       │
+                    │  2. 解析 ColumnMetadata         │
+                    │  3. 提取指定列的 page offsets   │
+                    │  4. 计算需要预热的字节范围       │
+                    └───────────────┬───────────────┘
+                                    │
+                    ┌───────────────▼───────────────┐
+                    │  JuiceFS Slice 预热            │
+                    │  将字节范围映射到 JuiceFS        │
+                    │  chunks/slices/blocks          │
+                    │  → FillCache(id, size)         │
+                    └───────────────────────────────┘
+```
+
+#### 5.3.2 核心挑战
+
+预热列元数据比预热整个文件复杂得多，核心问题是：
+
+**JuiceFS 的预热粒度是 Slice（对象存储中的对象），而 Lance 的列元数据是文件内的字节范围。**
+
+JuiceFS 的 `FillCache(id, size)` 预热的是整个 slice（即一个对象存储对象），无法只预热对象的一部分。这意味着：
+
+1. 如果目标列的元数据和**其他列的数据**在同一个 JuiceFS slice 中，预热整个 slice 会把不需要的数据也下载了
+2. 需要将 Lance 文件内的字节范围映射到 JuiceFS 的 chunk/slice/block 结构
+
+#### 5.3.3 字节范围 → JuiceFS Block 映射
+
+Lance 数据文件在 JuiceFS 中是一个普通文件。文件的内容通过 JuiceFS 的 chunk/slice/block 机制存储在对象存储中。
+
+```
+Lance 文件: /data/0000-uuid.lance (假设大小 100MB, ChunkSize=64MB)
+  
+  JuiceFS 内部:
+  Chunk 0: slices → blocks → 对象存储 objects
+    block 0: chunks/0/0/0_0_4194304  (0-4MB)
+    block 1: chunks/0/0/0_1_4194304  (4-8MB)
+    block 2: chunks/0/0/0_2_4194304  (8-12MB)
+    ...
+    block 15: chunks/0/0/0_15_4194304 (60-64MB)
+  Chunk 1: slices → blocks
+    block 0: chunks/0/0/0_16_4194304 (64-68MB)
+    ...
+  
+  如果目标列元数据在文件偏移 0x1000-0x2000 (4KB-8KB):
+    → 落在 Chunk 0, block 0 (0-4MB 范围内)
+    → 需要 FillCache(slice_id, slice_size) 预热包含这个范围的 block
+```
+
+**映射算法**：
+```
+输入: Lance 文件 inode, 字节范围 [start_offset, end_offset]
+输出: 需要预热的 (chunkIndex, blockIndex) 列表
+
+1. startChunk = start_offset / ChunkSize
+   endChunk = end_offset / ChunkSize
+
+2. 对每个 chunkIndex ∈ [startChunk, endChunk]:
+     a. meta.Read(inode, chunkIndex, &slices)  // 从元数据引擎获取 slices
+     b. 对每个 slice:
+        - 计算 slice 在文件中的字节范围 [slice.Off, slice.Off + slice.Len]
+        - 与 [start_offset, end_offset] 取交集
+        - 如果有交集，对该 slice 调用 FillCache(slice.Id, slice.Size)
+```
+
+#### 5.3.4 实现设计
+
+##### Step 1: 扩展 CLI 选项
+
+```go
+// cmd/warmup.go - 新增 flags
+&cli.StringFlag{
+    Name:  "lance-columns",
+    Usage: "comma-separated list of column names to warmup (only metadata, not data pages)",
+},
+&cli.BoolFlag{
+    Name:  "lance-column-data",
+    Usage: "warmup column data pages in addition to metadata",
+},
+```
+
+使用方式：
+```bash
+# 仅预热 col_a 和 col_b 的元数据 (ColumnMetadata + page table)
+juicefs warmup --lance --lance-columns "col_a,col_b" /path/ds.lance
+
+# 预热 col_a 的元数据 + 数据页
+juicefs warmup --lance --lance-columns "col_a" --lance-column-data /path/ds.lance
+```
+
+##### Step 2: 新增 Lance 文件元数据读取器
+
+创建 `pkg/vfs/lance_file_reader.go`：
+
+```go
+package vfs
+
+import (
+    "bytes"
+    "encoding/binary"
+    "fmt"
+    "io"
+
+    "github.com/juicedata/juicefs/pkg/meta"
+    lancepb "github.com/juicedata/juicefs/pkg/vfs/proto/lance"
+    file2pb "github.com/juicedata/juicefs/pkg/vfs/proto/lance/file2"
+    "google.golang.org/protobuf/proto"
+)
+
+// LanceFileFooter V2 文件 footer (40 bytes)
+type LanceFileFooter struct {
+    ColumnMetaStart         uint64 // Column Metadatas 区域起始位置
+    ColumnMetaOffsetsStart  uint64 // Column Metadata Offset Table 起始位置
+    GlobalBuffOffsetsStart  uint64 // Global Buffers Offset Table 起始位置
+    NumGlobalBuffers        uint32
+    NumColumns              uint32
+    MajorVersion            uint16
+    MinorVersion            uint16
+}
+
+const lanceFileFooterLen = 40
+
+// readLanceFileFooter 读取 .lance 数据文件的 footer
+// 需要先读文件末尾 40 字节
+func (c *CacheFiller) readLanceFileFooter(
+    ctx meta.Context, inode Ino, fileSize int64,
+) (*LanceFileFooter, []byte, error) {
+    // 读取文件末尾 footer (40 bytes)
+    footerData, err := c.readFileRange(ctx, inode, fileSize-int64(lanceFileFooterLen), int64(lanceFileFooterLen))
+    if err != nil {
+        return nil, nil, err
+    }
+
+    // 检查魔数
+    magic := footerData[lanceFileFooterLen-4:]
+    if !bytes.Equal(magic, []byte(lanceMagic)) {
+        return nil, nil, fmt.Errorf("invalid lance file magic: %x", magic)
+    }
+
+    footer := &LanceFileFooter{
+        ColumnMetaStart:        binary.LittleEndian.Uint64(footerData[0:8]),
+        ColumnMetaOffsetsStart: binary.LittleEndian.Uint64(footerData[8:16]),
+        GlobalBuffOffsetsStart: binary.LittleEndian.Uint64(footerData[16:24]),
+        NumGlobalBuffers:       binary.LittleEndian.Uint32(footerData[24:28]),
+        NumColumns:             binary.LittleEndian.Uint32(footerData[28:32]),
+        MajorVersion:           binary.LittleEndian.Uint16(footerData[32:34]),
+        MinorVersion:           binary.LittleEndian.Uint16(footerData[34:36]),
+    }
+    return footer, footerData, nil
+}
+
+// readColumnMetadataOffset 读取指定列的 ColumnMetadata 位置和大小
+// Offset Table 中每列: position(8 bytes LE) + size(4 bytes LE) = 12 bytes
+func (c *CacheFiller) readColumnMetadataOffset(
+    ctx meta.Context, inode Ino, footer *LanceFileFooter, columnIndex int,
+) (position uint64, size uint32, err error) {
+    // Offset Table 中每列占 12 字节
+    offset := int64(footer.ColumnMetaOffsetsStart) + int64(columnIndex)*12
+    data, err := c.readFileRange(ctx, inode, offset, 12)
+    if err != nil {
+        return 0, 0, err
+    }
+    position = binary.LittleEndian.Uint64(data[0:8])
+    size = binary.LittleEndian.Uint32(data[8:12])
+    return position, size, nil
+}
+
+// readColumnMetadata 读取并解析指定列的 ColumnMetadata
+func (c *CacheFiller) readColumnMetadata(
+    ctx meta.Context, inode Ino, footer *LanceFileFooter, columnIndex int,
+) (*file2pb.ColumnMetadata, error) {
+    pos, size, err := c.readColumnMetadataOffset(ctx, inode, footer, columnIndex)
+    if err != nil {
+        return nil, fmt.Errorf("read column %d offset: %w", columnIndex, err)
+    }
+    data, err := c.readFileRange(ctx, inode, int64(pos), int64(size))
+    if err != nil {
+        return nil, fmt.Errorf("read column %d metadata: %w", columnIndex, err)
+    }
+    cm := &file2pb.ColumnMetadata{}
+    if err := proto.Unmarshal(data, cm); err != nil {
+        return nil, fmt.Errorf("decode column %d metadata: %w", columnIndex, err)
+    }
+    return cm, nil
+}
+
+// resolveColumnByteRanges 从 ColumnMetadata 中提取所有需要预热的字节范围
+//
+// 如果 includeDataPages=true, 返回 page 数据的字节范围
+// 如果 includeDataPages=false, 只返回 ColumnMetadata 自身的字节范围
+// (ColumnMetadata 已经包含在 offset table 中读取过)
+//
+// 返回: [(start_offset, end_offset), ...]
+type byteRange struct {
+    start uint64
+    end   uint64
+}
+
+func columnMetadataByteRanges(cm *file2pb.ColumnMetadata, includeDataPages bool) []byteRange {
+    var ranges []byteRange
+
+    if includeDataPages {
+        // 收集所有 page 的 buffer 字节范围
+        for _, page := range cm.Pages {
+            for i, off := range page.BufferOffsets {
+                size := page.BufferSizes[i]
+                ranges = append(ranges, byteRange{start: off, end: off + size})
+            }
+        }
+    }
+
+    // 收集列级 buffer 的字节范围
+    for i, off := range cm.BufferOffsets {
+        size := cm.BufferSizes[i]
+        ranges = append(ranges, byteRange{start: off, end: off + size})
+    }
+
+    return ranges
+}
+
+// warmupByteRanges 将文件内的字节范围映射到 JuiceFS slices 并预热
+//
+// 核心算法:
+//   对每个字节范围 [start, end):
+//   1. 计算 start_chunk = start / ChunkSize, end_chunk = end / ChunkSize
+//   2. 对每个 chunk:
+//      a. meta.Read(inode, chunk_index, &slices)
+//      b. 对每个 slice, 检查其文件内范围 [slice.Off, slice.Off + slice.Len)
+//         是否与 [start, end) 有交集
+//      c. 有交集则 FillCache(slice.Id, slice.Size)
+func (c *CacheFiller) warmupByteRanges(
+    ctx meta.Context, inode Ino, fileSize int64, ranges []byteRange, action CacheAction,
+) error {
+    for _, r := range ranges {
+        startChunk := uint32(r.start / meta.ChunkSize)
+        endChunk := uint32(r.end / meta.ChunkSize)
+
+        for chunkIdx := startChunk; chunkIdx <= endChunk; chunkIdx++ {
+            if ctx.Canceled() {
+                return nil
+            }
+            var slices []meta.Slice
+            if st := c.meta.Read(ctx, inode, chunkIdx, &slices); st != 0 {
+                logger.Warnf("read inode %d chunk %d: %s", inode, chunkIdx, st)
+                continue
+            }
+            for _, s := range slices {
+                sliceStart := uint64(chunkIdx)*uint64(meta.ChunkSize) + uint64(s.Off)
+                sliceEnd := sliceStart + uint64(s.Len)
+
+                // 检查交集
+                if sliceEnd <= r.start || sliceStart >= r.end {
+                    continue // 无交集
+                }
+
+                switch action {
+                case WarmupCache:
+                    if err := c.store.FillCache(s.Id, s.Size); err != nil {
+                        logger.Warnf("fill cache slice %d: %s", s.Id, err)
+                    }
+                case EvictCache:
+                    _ = c.store.EvictCache(s.Id, s.Size)
+                case CheckCache:
+                    _ = c.store.CheckCache(s.Id, s.Size, nil)
+                }
+            }
+        }
+    }
+    return nil
+}
+```
+
+##### Step 3: 扩展 `resolveLancePaths` 支持列级预热
+
+```go
+// 在 LanceWarmupConfig 中新增字段
+type LanceWarmupConfig struct {
+    Version          string
+    ManifestOnly    bool
+    IncludeIndices  bool
+    // 新增：列级预热
+    Columns          []string  // 要预热的列名
+    IncludeDataPages bool      // 是否预热列数据页（true=元数据+数据, false=仅元数据）
+}
+
+// 在 resolveLancePaths() 中新增列级分支
+func (c *CacheFiller) resolveLancePaths(ctx, datasetPath, config) ([]string, error) {
+    // ... 原有逻辑: 找 manifest, 收集文件路径 ...
+
+    // 新增: 如果指定了列名，收集需要预热的字节范围
+    if len(config.Columns) > 0 {
+        // 1. 从 manifest 的 schema 中找到列名 → field_id / column_index 的映射
+        fieldToColumnIndex := c.buildFieldColumnMap(manifest)
+
+        // 2. 对每个数据文件，预热指定列的元数据
+        for _, frag := range manifest.Fragments {
+            for _, dataFile := range frag.Files {
+                fullPath := path.Join(datasetPath, lanceDataDir, dataFile.Path)
+
+                var inode Ino
+                var attr = &Attr{}
+                if st := c.resolve(ctx, fullPath, &inode, attr); st != 0 {
+                    continue
+                }
+
+                // 3. 读 .lance 文件 footer
+                footer, _, err := c.readLanceFileFooter(ctx, inode, attr.Length)
+                if err != nil {
+                    logger.Warnf("read footer %s: %s", fullPath, err)
+                    continue
+                }
+
+                // 4. 对每个指定的列，读取并预热其 ColumnMetadata
+                for _, colName := range config.Columns {
+                    colIdx, ok := fieldToColumnIndex[colName]
+                    if !ok {
+                        logger.Warnf("column %s not found in %s", colName, fullPath)
+                        continue
+                    }
+                    if int(colIdx) >= int(footer.NumColumns) {
+                        continue
+                    }
+
+                    // 读取 ColumnMetadata
+                    cm, err := c.readColumnMetadata(ctx, inode, footer, int(colIdx))
+                    if err != nil {
+                        logger.Warnf("read column metadata %s in %s: %s", colName, fullPath, err)
+                        continue
+                    }
+
+                    // 计算字节范围
+                    ranges := columnMetadataByteRanges(cm, config.IncludeDataPages)
+
+                    // 预热这些字节范围对应的 JuiceFS blocks
+                    if err := c.warmupByteRanges(ctx, inode, attr.Length, ranges, WarmupCache); err != nil {
+                        logger.Warnf("warmup column %s in %s: %s", colName, fullPath, err)
+                    }
+                }
+            }
+        }
+    }
+
+    return paths, nil
+}
+
+// buildFieldColumnMap 从 manifest 的 schema 构建 列名 → column_index 映射
+//
+// V2.0: 所有字段（含中间结构字段）都有 column index，按 DFS 序分配
+// V2.1: 只有叶子字段有 column index
+func (c *CacheFiller) buildFieldColumnMap(manifest *lancepb.Manifest) map[string]int {
+    m := make(map[string]int)
+    colIdx := 0
+    // 遍历 fields，按 DFS 序分配 column index
+    // 注意: 需要根据文件版本判断是 V2.0 还是 V2.1 规则
+    for _, field := range manifest.Fields {
+        // 简化处理: 对叶子字段和非叶子字段都分配 index
+        // 精确处理需要检查 file_minor_version
+        m[field.Name] = colIdx
+        colIdx++
+        // TODO: 递归处理嵌套字段
+    }
+    return m
+}
+```
+
+##### Step 4: 新增 `readFileRange` 辅助方法
+
+```go
+// readFileRange 读取文件中指定字节范围的内容
+// 通过 JuiceFS chunk store 读取，支持范围读取
+func (c *CacheFiller) readFileRange(
+    ctx meta.Context, inode Ino, offset, length int64,
+) ([]byte, error) {
+    // 计算涉及的 chunk
+    startChunk := uint32(offset / int64(meta.ChunkSize))
+    endChunk := uint32((offset + length - 1) / int64(meta.ChunkSize))
+
+    var buf bytes.Buffer
+    for chunkIdx := startChunk; chunkIdx <= endChunk; chunkIdx++ {
+        var slices []meta.Slice
+        if st := c.meta.Read(ctx, inode, chunkIdx, &slices); st != 0 {
+            return nil, fmt.Errorf("read chunk %d: %s", chunkIdx, st)
+        }
+        for _, s := range slices {
+            if s.Id == 0 {
+                continue // hole
+            }
+            // 计算这个 slice 中我们需要的范围
+            chunkStart := int64(chunkIdx) * int64(meta.ChunkSize)
+            sliceFileStart := chunkStart + int64(s.Off)
+            sliceFileEnd := sliceFileStart + int64(s.Len)
+
+            // 与 [offset, offset+length) 取交集
+            readStart := max(sliceFileStart, offset)
+            readEnd := min(sliceFileEnd, offset+length)
+            if readStart >= readEnd {
+                continue
+            }
+
+            // 从 chunk store 读取
+            intraSliceOff := readStart - sliceFileStart
+            readLen := readEnd - readStart
+            page := chunk.NewOffPage(int(readLen))
+            reader := c.store.NewReader(s.Id, int(s.Size))
+            n, err := reader.ReadAt(ctx, page, intraSliceOff)
+            if err != nil && n == 0 {
+                page.Release()
+                return nil, fmt.Errorf("read slice %d at %d: %w", s.Id, intraSliceOff, err)
+            }
+            buf.Write(page.Data[:n])
+            page.Release()
+        }
+    }
+    return buf.Bytes(), nil
+}
+```
+
+##### Step 5: 扩展 FillCache 消息协议
+
+```go
+// cmd/warmup.go - sendCommand 中新增列名编码
+if lanceCfg != nil {
+    // ... 原有 lance 配置编码 ...
+    // 新增: 列名列表
+    if len(lanceCfg.Columns) > 0 {
+        colData := strings.Join(lanceCfg.Columns, ",")
+        wb.Put16(uint16(len(colData)))
+        wb.Put([]byte(colData))
+        var includeData uint8
+        if lanceCfg.IncludeDataPages {
+            includeData = 1
+        }
+        wb.Put8(includeData)
+    }
+}
+
+// pkg/vfs/internal.go - handleMsg 中新增列名解析
+if lanceCfg != nil {
+    // ... 原有解析 ...
+    if r.HasMore() {
+        colLen := int(r.Get16())
+        if colLen > 0 && r.HasMore() {
+            colData := string(r.Get(colLen))
+            lanceCfg.Columns = strings.Split(colData, ",")
+        }
+        if r.HasMore() {
+            lanceCfg.IncludeDataPages = r.Get8() == 1
+        }
+    }
+}
+```
+
+##### Step 6: 生成 file2.proto 的 Go 代码
+
+```bash
+# 复制 V2 文件格式 proto
+cp /home/dji/Desktop/code/lance/lance/protos/file2.proto pkg/vfs/proto/lance/
+protoc --go_out=pkg/vfs/proto/lance/ \
+    --go_opt=Mfile2.proto=github.com/juicedata/juicefs/pkg/vfs/proto/lance \
+    pkg/vfs/proto/lance/file2.proto
+```
+
+### 5.4 V1 格式数据文件的列级预热
+
+对于 V1 格式的 .lance 文件，列元数据是 Page Table：
+
+```go
+// V1 Page Table 读取
+// 1. 读文件末尾找到 Metadata offset
+// 2. 读 Metadata protobuf → 获取 page_table_position
+// 3. 从 page_table_position 读取指定 field_id 的 (position, length) 对
+
+func (c *CacheFiller) warmupV1Column(
+    ctx meta.Context, inode Ino, fileSize int64,
+    fieldID int32, numBatches int32,
+) error {
+    // 1. 读取文件 metadata
+    metadata, err := c.readV1FileMetadata(ctx, inode, fileSize)
+    if err != nil {
+        return err
+    }
+
+    // 2. 从 page_table_position 读取指定 field_id 的 pages
+    // PageTable 布局: [field_id][batch_id] → (position: int64, length: int64)
+    // 每列占 numBatches * 2 * 8 字节
+    fieldOffset := int64(metadata.PageTablePosition) +
+        int64(fieldID) * int64(numBatches) * 2 * 8
+
+    pageTableData, err := c.readFileRange(ctx, inode, fieldOffset,
+        int64(numBatches)*16)
+    if err != nil {
+        return err
+    }
+
+    // 3. 解析每个 batch 的 (position, length) 并预热
+    var ranges []byteRange
+    for i := 0; i < int(numBatches); i++ {
+        pos := binary.LittleEndian.Uint64(pageTableData[i*16 : i*16+8])
+        length := binary.LittleEndian.Uint64(pageTableData[i*16+8 : i*16+16])
+        if pos == 0 && length == 0 {
+            continue // 不存在的 page
+        }
+        ranges = append(ranges, byteRange{start: pos, end: pos + length})
+    }
+
+    return c.warmupByteRanges(ctx, inode, fileSize, ranges, WarmupCache)
+}
+```
+
+### 5.5 列名到 Field ID / Column Index 的映射
+
+Manifest 的 `fields` 列表定义了所有字段。需要处理嵌套字段：
+
+```go
+// buildFieldToColumnIndexMap 构建 列名 → column_index 的映射
+// 处理嵌套字段时使用全限定名 (如 "struct_col.field_a")
+func buildFieldToColumnIndexMap(fields []*lancepb.Field) map[string]int {
+    m := make(map[string]int)
+    var walk func(field *lancepb.Field, prefix string, idx *int)
+    walk = func(field *lancepb.Field, prefix string, idx *int) {
+        name := field.Name
+        if prefix != "" {
+            name = prefix + "." + name
+        }
+        m[name] = *idx
+        *idx++
+        // 注: V1 格式中所有字段都有 column index
+        // V2.1 中只有叶子字段有，需要根据版本调整
+    }
+    idx := 0
+    for _, field := range fields {
+        walk(field, "", &idx)
+    }
+    return m
+}
+```
+
+### 5.6 实现优先级
+
+| 阶段 | 内容 | 难度 | 依赖 |
+|------|------|------|------|
+| C0 | 生成 file2.proto Go 代码 | 低 | protoc |
+| C1 | 实现 readFileRange (按范围读文件) | 中 | — |
+| C2 | 实现 readLanceFileFooter (V2) | 中 | C1 |
+| C3 | 实现 readColumnMetadata (V2) | 中 | C2 |
+| C4 | 实现 warmupByteRanges (范围→slice 映射) | 高 | C1 |
+| C5 | 实现 buildFieldColumnMap | 中 | — |
+| C6 | 集成列级预热到 resolveLancePaths | 高 | C3,C4,C5 |
+| C7 | V1 格式支持 (Page Table 读取) | 中 | C1,C4 |
+| C8 | 嵌套字段名处理 | 中 | C5 |
+| C9 | 消息协议扩展 + CLI 选项 | 低 | C6 |
+
+### 5.7 风险与注意事项
+
+1. **V1/V2 兼容**：Lance 数据文件可能是 V1 或 V2 格式，需要通过 footer 的 major/minor 版本号判断
+2. **Column Index 精确性**：V2.0 和 V2.1 的列索引分配规则不同，需要检查文件版本
+3. **嵌套字段**：struct/list 等嵌套类型的列名解析需要正确处理全限定名
+4. **Page Table 加载**：V1 的 Page Table 需要知道 min_field_id, max_field_id, num_batches，这些信息来自 manifest 中的 schema 和 fragment
+5. **大文件范围读取**：readFileRange 需要高效读取文件内小范围数据，避免读取整个文件
+6. **Slice 覆盖**：一个 JuiceFS slice 可能包含多个列的数据，预热 slice 会带入其他列的数据。这是 JuiceFS 架构限制——预热的粒度受限于 slice 大小
+7. **性能优化**：可以批量收集所有列的字节范围，合并重叠或相邻的范围，减少 meta.Read 调用次数
+8. **DataFile.fields 字段**：manifest 中的 `DataFile.fields` 列表记录了文件包含哪些字段及其在文件中的列索引，这是精确映射的关键
