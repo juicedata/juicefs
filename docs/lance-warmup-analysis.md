@@ -498,7 +498,10 @@ go test ./pkg/vfs/ -run "TestParseLance|TestRelativeDeletion|TestIsLance|TestMer
 
 1. **V2 格式仅**：列级元数据预热仅支持 Lance V2 文件格式（footer 中 `major_version` 和 `minor_version` 标识）。不支持 V1 (legacy) 格式的 Page Table。
 
-2. **Slice 粒度限制**：JuiceFS 的预热粒度是 Slice（对象存储对象）。如果目标列的元数据和其他列的数据在同一个 Slice 中，预热整个 Slice 会带入不需要的数据。这是 JuiceFS 架构特性决定的。
+2. **Slice 粒度限制**：JuiceFS 的预热粒度是 Slice（对象存储对象，每个最大 64MiB）。`FillCache` 会下载整个 Slice 的所有 block。因此：
+   - 小文件（< 64MiB）整个文件就是一个 slice，列级预热和全量预热效果相同
+   - 大文件（多个 slice）中，如果某列数据只跨越部分 slice，列级预热可以减少下载量
+   - 列级预热的实际效果取决于列数据在文件中的物理分布
 
 3. **嵌套字段**：当前 `buildFieldColumnMap` 使用简单的 DFS 序分配列索引，对于复杂嵌套字段（struct/list）可能不够精确。建议优先使用 manifest 中 DataFile 的 `fields` + `column_indices` 精确映射。
 
@@ -507,6 +510,153 @@ go test ./pkg/vfs/ -run "TestParseLance|TestRelativeDeletion|TestIsLance|TestMer
 5. **Protobuf 依赖**：引入 `google.golang.org/protobuf` 依赖，增加少量二进制体积。
 
 6. **并发控制**：列级预热的并发度由 `--threads` 参数控制（默认 50），与文件级预热共用并发池。
+
+---
+
+## 7.5 列级预热问题分析与修复记录
+
+本节记录列级预热功能在手工测试中发现的问题、根因分析和修复方案，供后续维护参考。
+
+### 7.5.1 问题描述
+
+手工测试（8.5.3 列级元数据预热）中发现：
+
+- 执行 `juicefs warmup --lance --lance-columns "id" /mnt/jfs/data/test_lance_large.lance` 后
+- 缓存大小（~99MB）与全量预热（~99MB）几乎一致
+- 查看 JuiceFS 日志显示 `warmup column "id" in ...lance: 0 byte ranges`
+- 即列级预热没有实际预热任何字节范围
+
+### 7.5.2 根因分析
+
+通过独立 Go 程序解析 V2.1 格式的 ColumnMetadata，发现三个问题：
+
+#### 问题 1：`columnByteRanges(cm, false)` 返回空列表
+
+`columnByteRanges` 函数的逻辑：
+
+```go
+func columnByteRanges(cm *file2pb.ColumnMetadata, includeDataPages bool) []byteRange {
+    var ranges []byteRange
+    // 1. Column-level buffers (field 3/4) — 始终包含
+    for i := range cm.BufferOffsets { ... }
+    // 2. Page data buffers (page.BufferOffsets/sizes) — 仅 includeDataPages=true
+    if includeDataPages {
+        for _, page := range cm.Pages { ... }
+    }
+    return ranges
+}
+```
+
+当 `--lance-column-data` 未指定时（`includeDataPages=false`），只收集 column-level buffers（`cm.BufferOffsets`/`cm.BufferSizes`）。但在 V2.1 格式中，这些字段**为空**：
+
+```
+Column 0: 1 pages, 0 buffer_offsets, 0 buffer_sizes  ← column-level buffers 为空
+  Page 0: 2 buffer_offsets, 2 buffer_sizes, length=50000  ← page-level 有数据
+```
+
+V2.1 格式中，所有数据缓冲区信息存储在 Page 内部，column-level buffers 只用于 dictionaries/statistics 等辅助数据。当列没有这些辅助数据时，column-level buffers 为空，导致返回 0 个字节范围。
+
+#### 问题 2：缺少 ColumnMetadata protobuf 自身的字节范围
+
+CMO (Column Metadata Offset) 表中记录了每列 ColumnMetadata protobuf 的位置和长度：
+
+```
+CMO entry: [8B position LE][8B length LE]
+```
+
+但 `warmupLanceColumns` 在调用 `columnByteRanges` 时没有把这个范围加入预热列表。ColumnMetadata protobuf 本身是查询列数据时必须读取的元数据（包含 page layout 信息），应该被预热。
+
+#### 问题 3：`resolveLancePaths` 的 `colOnlyMode` 缺失
+
+当指定 `--lance-columns` 时，`resolveLancePaths` 应该只返回 manifest/txn/hint 等元数据文件路径，**不**返回数据文件路径（因为数据文件由 `warmupLanceColumns` 按字节范围预热）。但原始代码中 `colOnlyMode` 逻辑未实现，导致数据文件也被加入 paths 列表，触发了全量预热。
+
+### 7.5.3 修复方案
+
+#### 修复 1：`warmupLanceColumns` 增加 CMO 范围
+
+在 `pkg/vfs/lance_warmup.go` 的 `warmupLanceColumns` 函数中，读取 CMO entry 获取 ColumnMetadata protobuf 的位置和长度，并将其作为第一个字节范围加入预热列表：
+
+```go
+// 修复前
+cm, err := c.readColumnMetadata(ctx, inode, footer, uint32(colIdx))
+ranges := columnByteRanges(cm, config.IncludeDataPages)
+
+// 修复后
+cmPos, cmLen, err := c.readColumnMetadataOffset(ctx, inode, footer, uint32(colIdx))
+cm, err := c.readColumnMetadata(ctx, inode, footer, uint32(colIdx))
+ranges := []byteRange{{start: cmPos, end: cmPos + cmLen}}  // CMO 范围
+ranges = append(ranges, columnByteRanges(cm, config.IncludeDataPages)...)
+```
+
+这样即使 `columnByteRanges` 返回空，CMO 范围也会被预热，确保 ColumnMetadata protobuf 本身被缓存。
+
+#### 修复 2：`resolveLancePaths` 增加 `colOnlyMode`
+
+在 `pkg/vfs/lance_warmup.go` 的 `resolveLancePaths` 函数中，当 `config.Columns` 非空时设置 `colOnlyMode = true`，跳过数据文件路径的添加：
+
+```go
+colOnlyMode := len(config.Columns) > 0
+// ...
+if !colOnlyMode {
+    // 添加数据文件路径
+    paths = append(paths, dataFilePath)
+}
+```
+
+这避免了在列级模式下同时执行全量路径预热和字节范围预热。
+
+### 7.5.4 预热范围设计
+
+修复后，列级预热的字节范围构成：
+
+| 范围类型 | 来源 | 始终包含 | 说明 |
+|---------|------|---------|------|
+| ColumnMetadata protobuf | CMO table `[pos, pos+length)` | ✅ | 列的元数据本身（page layout 等） |
+| Column-level buffers | `cm.BufferOffsets`/`cm.BufferSizes` | ✅ | dictionaries, statistics |
+| Page data buffers | `page.BufferOffsets`/`page.BufferSizes` | ❌ | 仅当 `--lance-column-data` |
+
+数据流：
+
+```
+Manifest → Schema → field_id → DataFile.column_indices → column index
+                                                         ↓
+V2 File → Footer → CMO table → [cmPos, cmPos+cmLen)  → 预热范围 ①
+                              → ColumnMetadata protobuf
+                                ↓
+                                ├── cm.BufferOffsets/Sizes    → 预热范围 ②
+                                └── pages[].BufferOffsets    → 预热范围 ③ (可选)
+                                                         ↓
+                                           mergeByteRanges → 去重合并
+                                                         ↓
+                                           warmupByteRanges → 映射到 slice
+                                                         ↓
+                                           FillCache → 下载 block
+```
+
+### 7.5.5 验证结果
+
+使用 200MB Lance 数据集（3 列 × 200K 行 × 2 文件，每文件 ~197MB / 4 chunks）验证：
+
+| 预热方式 | 缓存大小 | 缓存文件数 | 说明 |
+|---------|---------|-----------|------|
+| 全量预热 | 395M | 103 | 所有数据 |
+| id 列 + 数据页 | **11M** | 7 | id 列数据在文件末尾，只命中 1 个 slice |
+| large_blob 列 + 数据页 | 395M | 103 | large_blob 占文件绝大部分数据 |
+
+**id 列**（int64，每行 8B，200K 行 ≈ 1.6MB）的数据集中在每个文件末尾的 chunk 3 中，只命中 1 个 slice (~5MB)，所以缓存仅 11MB，相比全量 395MB 减少了 **97%**。
+
+**large_blob 列**（binary，每行 2KB，200K 行 ≈ 390MB）占文件绝大部分数据，跨所有 chunk，所以缓存与全量一致。
+
+### 7.5.6 架构限制说明
+
+JuiceFS 预热的最小粒度是 **slice**（对象存储对象，最大 64MiB）。`FillCache(sliceID, sliceSize)` 会下载整个 slice 的所有 block（4MB each）。这意味着：
+
+- 如果目标列的字节范围落在 slice A 中，但 slice A 中也有其他列的数据，整个 slice A 都会被下载
+- 列级预热的效果取决于列数据是否集中在少数 slice 中
+- 对于小文件（< 64MiB，一个 slice），列级预热与全量预热无差异
+- 对于大文件中集中在文件尾部的小列，效果最显著
+
+这是 JuiceFS 对象存储架构的固有特性，不是 bug。未来的优化方向可以考虑在 block 级别（4MB）进行更细粒度的缓存控制。
 
 ---
 
