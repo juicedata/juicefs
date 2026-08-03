@@ -373,12 +373,22 @@ func (c *CacheFiller) readFileContent(ctx meta.Context, p string) ([]byte, error
 				page.Release()
 				return nil, fmt.Errorf("read slice %d: %w", s.Id, err)
 			}
-			buf.Write(page.Data[:n])
+			// Use s.Len (logical length) instead of n (physical read length)
+			// to avoid encryption padding issues
+			actualLen := n
+			if int(s.Len) < actualLen {
+				actualLen = int(s.Len)
+			}
+			buf.Write(page.Data[:actualLen])
 			page.Release()
 		}
 	}
-
-	return buf.Bytes(), nil
+	// Trim to exact file length — encryption may add padding bytes
+	result := buf.Bytes()
+	if uint64(len(result)) > attr.Length {
+		result = result[:attr.Length]
+	}
+	return result, nil
 }
 
 // relativeDeletionFilePath constructs the relative path of a deletion file.
