@@ -488,7 +488,7 @@ juicefs/
 运行测试：
 
 ```bash
-cd /home/dji/Desktop/code/juicefs
+cd <juicefs-repo>
 go test ./pkg/vfs/ -run "TestParseLance|TestRelativeDeletion|TestIsLance|TestMergeByte|TestColumnByte|TestBuildField|TestE2E" -v -count=1
 ```
 
@@ -533,7 +533,7 @@ pip3 install pylance  # 已安装: pylance 9.1.0b4 / lance 1.2.1
 #### 8.1.1 编译 JuiceFS
 
 ```bash
-cd /home/dji/Desktop/code/juicefs
+cd juicefs
 
 # 切换到 lance 分支
 git checkout lance
@@ -553,7 +553,7 @@ go build -o juicefs .
 #### 8.1.2 运行单元测试
 
 ```bash
-cd /home/dji/Desktop/code/juicefs
+cd juicefs
 
 # 运行全部 Lance 相关测试
 go test ./pkg/vfs/ \
@@ -662,18 +662,20 @@ Dataset info:
 
 ### 8.3 挂载 JuiceFS
 
+JuiceFS 需要先 `format` 格式化卷，再 `mount` 挂载。meta URL 是位置参数，不是 `--meta` 选项。
+
 #### 8.3.1 使用 SQLite 元数据引擎（无需 Redis）
 
 ```bash
 # 创建挂载点
-sudo mkdir -p /mnt/jfs
+mkdir -p /mnt/jfs
 
-# 使用 SQLite 作为元数据引擎，本地磁盘作为对象存储
-sudo /home/dji/Desktop/code/juicefs/juicefs mount \
-  --meta sqlite:///tmp/juicefs-meta.db \
-  --storage file \
-  --bucket /tmp/juicefs-storage \
-  /mnt/jfs
+# 1. 格式化卷（仅需执行一次）
+#    SQLite 作为元数据引擎，本地磁盘默认作为对象存储 (--storage file)
+./juicefs format sqlite3:///tmp/juicefs-meta.db mylance
+
+# 2. 挂载（meta URL 作为位置参数传入）
+./juicefs mount sqlite3:///tmp/juicefs-meta.db /mnt/jfs -d
 ```
 
 挂载成功后，`/mnt/jfs` 就是一个可用的 JuiceFS 文件系统。
@@ -684,28 +686,23 @@ sudo /home/dji/Desktop/code/juicefs/juicefs mount \
 # 先启动 Redis
 redis-server --daemonize yes
 
+# 格式化
+./juicefs format redis://127.0.0.1:6379/1 mylance
+
 # 挂载
-sudo /home/dji/Desktop/code/juicefs/juicefs mount \
-  --meta redis://127.0.0.1:6379/1 \
-  --storage file \
-  --bucket /tmp/juicefs-storage \
-  /mnt/jfs
+./juicefs mount redis://127.0.0.1:6379/1 /mnt/jfs -d
 ```
 
 #### 8.3.3 后台挂载（推荐）
 
 ```bash
-# 后台运行模式
-sudo /home/dji/Desktop/code/juicefs/juicefs mount \
-  --meta sqlite:///tmp/juicefs-meta.db \
-  --storage file \
-  --bucket /tmp/juicefs-storage \
-  --daemon \
-  /mnt/jfs
+# -d 等同于 --background，后台运行模式
+./juicefs format sqlite3:///tmp/juicefs-meta.db mylance
+./juicefs mount sqlite3:///tmp/juicefs-meta.db /mnt/jfs -d
 
 # 验证挂载
 df -h /mnt/jfs
-# 预期: juicefs 1.0P  0  1.0P  0% /mnt/jfs
+# 预期: JuiceFS:mylance  1.0P  0  1.0P  0% /mnt/jfs
 
 ls /mnt/jfs
 # 预期: 可以正常列目录
@@ -715,10 +712,10 @@ ls /mnt/jfs
 
 ```bash
 # 创建数据目录
-sudo mkdir -p /mnt/jfs/data
+mkdir -p /mnt/jfs/data
 
 # 复制 Lance 数据集到 JuiceFS
-sudo cp -r /tmp/test_lance_data.lance /mnt/jfs/data/
+cp -r /tmp/test_lance_data.lance /mnt/jfs/data/
 
 # 验证文件在 JuiceFS 中
 ls -la /mnt/jfs/data/test_lance_data.lance/
@@ -732,10 +729,10 @@ ls -la /mnt/jfs/data/test_lance_data.lance/data/
 
 ```bash
 # 清空 JuiceFS 本地缓存（确保预热前没有缓存）
-sudo rm -rf /var/jfsCache/local/
+rm -rf /var/jfsCache/local/
 
 # 预热整个 Lance 数据集
-sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+./juicefs warmup \
   --lance \
   /mnt/jfs/data/test_lance_data.lance
 
@@ -749,7 +746,7 @@ sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
 
 ```bash
 # 只预热 manifest 文件
-sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+./juicefs warmup \
   --lance \
   --lance-manifest-only \
   /mnt/jfs/data/test_lance_data.lance
@@ -761,7 +758,7 @@ sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
 
 ```bash
 # 预热 id 和 name 列的元数据
-sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+./juicefs warmup \
   --lance \
   --lance-columns "id,name" \
   /mnt/jfs/data/test_lance_data.lance
@@ -776,7 +773,7 @@ sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
 
 ```bash
 # 预热 score 列的元数据 + 数据页缓冲区
-sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+./juicefs warmup \
   --lance \
   --lance-columns "score" \
   --lance-column-data \
@@ -787,7 +784,7 @@ sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
 
 ```bash
 # 预热版本 0
-sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+./juicefs warmup \
   --lance \
   --lance-version 0 \
   /mnt/jfs/data/test_lance_data.lance
@@ -800,7 +797,7 @@ sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
 
 ```bash
 # 检查哪些数据块已缓存（不实际预热）
-sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+./juicefs warmup \
   --lance \
   --check \
   /mnt/jfs/data/test_lance_data.lance
@@ -808,20 +805,20 @@ sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
 # --check 模式下只检查缓存命中率，不执行下载
 
 # 查看本地缓存目录大小
-sudo du -sh /var/jfsCache/local/
+du -sh /var/jfsCache/local/
 ```
 
 #### 8.5.7 驱逐缓存
 
 ```bash
 # 驱逐已缓存的数据块
-sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+./juicefs warmup \
   --lance \
   --evict \
   /mnt/jfs/data/test_lance_data.lance
 
 # 验证缓存已被清空
-sudo du -sh /var/jfsCache/local/
+du -sh /var/jfsCache/local/
 ```
 
 ### 8.6 验证预热效果
@@ -830,16 +827,16 @@ sudo du -sh /var/jfsCache/local/
 
 ```bash
 # 清空缓存后，直接读取（冷读）
-sudo rm -rf /var/jfsCache/local/
-time sudo cat /mnt/jfs/data/test_lance_data.lance/data/*.lance > /dev/null
+rm -rf /var/jfsCache/local/
+time cat /mnt/jfs/data/test_lance_data.lance/data/*.lance > /dev/null
 
 # 预热
-sudo /home/dji/Desktop/code/juicefs/juicefs warmup \
+./juicefs warmup \
   --lance \
   /mnt/jfs/data/test_lance_data.lance
 
 # 再次读取（热读）
-time sudo cat /mnt/jfs/data/test_lance_data.lance/data/*.lance > /dev/null
+time cat /mnt/jfs/data/test_lance_data.lance/data/*.lance > /dev/null
 
 # 预期: 热读明显快于冷读
 ```
@@ -874,28 +871,28 @@ for col in ["id", "name", "score", "embedding"]:
 
 ```bash
 # 冷读
-sudo rm -rf /var/jfsCache/local/
-sudo python3 verify_lance_warmup.py
+rm -rf /var/jfsCache/local/
+python3 verify_lance_warmup.py
 
 # 预热
-sudo /home/dji/Desktop/code/juicefs/juicefs warmup --lance /mnt/jfs/data/test_lance_data.lance
+./juicefs warmup --lance /mnt/jfs/data/test_lance_data.lance
 
 # 热读
-sudo python3 verify_lance_warmup.py
+python3 verify_lance_warmup.py
 ```
 
 ### 8.7 测试后清理
 
 ```bash
 # 卸载 JuiceFS
-sudo umount /mnt/jfs
+umount /mnt/jfs
 
 # 清理本地存储
-sudo rm -rf /var/jfsCache/
-sudo rm -f /tmp/juicefs-meta.db
-sudo rm -rf /tmp/juicefs-storage/
-sudo rm -rf /tmp/test_lance_data.lance
-sudo rm -f /home/dji/Desktop/code/juicefs/juicefs  # 可选: 删除编译产物
+rm -rf /var/jfsCache/
+rm -f /tmp/juicefs-meta.db
+rm -rf /tmp/juicefs-storage/
+rm -rf /tmp/test_lance_data.lance
+rm -f ./juicefs  # 可选: 删除编译产物
 ```
 
 ### 8.8 故障排查
@@ -907,5 +904,5 @@ sudo rm -f /home/dji/Desktop/code/juicefs/juicefs  # 可选: 删除编译产物
 | `read footer: file too small` | 数据文件损坏 | 重新复制 Lance 数据集到 JuiceFS |
 | `column "xxx" not found` | 列名不匹配 | 用 `python3 -c "import lance; print(lance.dataset(path).schema)"` 检查列名 |
 | `warmup lance columns: ...` 警告 | V1 格式数据文件 | 确保数据文件是 V2 格式（pylance 1.x 默认写 V2） |
-| JuiceFS 挂载失败 | 元数据引擎连接问题 | 检查 `--meta` URL，SQLite 用 `sqlite:///path/to/db` |
-| 权限不足 | warmup 需要 root | 使用 `sudo` 执行 warmup 命令 |
+| JuiceFS 挂载失败 | 元数据引擎连接问题 | 确认 `format` 和 `mount` 命令中的 meta URL 格式正确，SQLite 用 `sqlite3:///path/to/db` |
+| 权限不足 | warmup 需要 root | 确保当前用户对挂载点有读写权限|
