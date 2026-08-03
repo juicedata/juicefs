@@ -92,7 +92,7 @@ type cacheStore struct {
 	keys      KeyIndex
 	scanned   bool
 	stageFull bool
-	rawFull   bool
+	rawFull   atomic.Bool
 	checksum  string // checksum level
 	uploader  func(key, path string, force bool) bool
 
@@ -354,16 +354,18 @@ func (cache *cacheStore) checkFreeSpace() {
 	for cache.available() {
 		usage := cache.curFreeRatio()
 		cache.stageFull = cache.isFull(usage, true)
-		cache.rawFull = cache.isFull(usage, false)
-		if cache.rawFull && cache.keys.name() != EvictionNone {
+		rawFull := cache.isFull(usage, false)
+		cache.rawFull.Store(rawFull)
+		if rawFull && cache.keys.name() != EvictionNone {
 			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(usage.br*100), int(usage.fr*100))
 			cache.Lock()
 			cache.cleanupFull()
 			cache.Unlock()
 			usage = cache.curFreeRatio()
-			cache.rawFull = cache.isFull(usage, false)
+			rawFull = cache.isFull(usage, false)
+			cache.rawFull.Store(rawFull)
 		}
-		if cache.rawFull {
+		if rawFull {
 			cache.uploadStaging()
 		}
 		time.Sleep(time.Second)
@@ -445,7 +447,7 @@ func (cache *cacheStore) cache(key string, p *Page, force, dropCache bool) {
 	if !cache.enabled() {
 		return
 	}
-	if cache.rawFull && cache.keys.name() == EvictionNone {
+	if cache.rawFull.Load() && cache.keys.name() == EvictionNone {
 		logger.Debugf("Caching directory is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
 		cache.m.cacheDrops.Add(1)
 		return

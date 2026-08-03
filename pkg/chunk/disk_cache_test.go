@@ -521,9 +521,7 @@ func TestUnknownInodeStatsShouldNotMarkCacheAsRawFull(t *testing.T) {
 		s := newCacheStore(m, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 
 		require.Never(t, func() bool {
-			s.Lock()
-			defer s.Unlock()
-			return s.rawFull
+			return s.rawFull.Load()
 		}, 1500*time.Millisecond, 100*time.Millisecond)
 	})
 }
