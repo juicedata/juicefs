@@ -817,10 +817,10 @@ ds = lance.dataset(dataset_path)
 print(f"\nDataset info:")
 print(f"  Version: {ds.version}")
 print(f"  Schema: {ds.schema}")
-print(f"  Num fragments: {ds.num_fragments}")
+print(f"  Num fragments: {len(list(ds.get_fragments()))}")
 for frag in ds.get_fragments():
-    print(f"    Fragment {frag.fragment_id}: {len(frag.files)} files")
-    for f in frag.files:
+    print(f"    Fragment {frag.fragment_id}: {len(frag.data_files())} files")
+    for f in frag.data_files():
         print(f"      - {f.path}")
 ```
 
@@ -1125,7 +1125,7 @@ import lance
 import time
 
 ds = lance.dataset("/mnt/jfs/data/test_lance_data.lance")
-print(f"Dataset: version={ds.version}, fragments={ds.num_fragments}")
+print(f"Dataset: version={ds.version}, fragments={len(list(ds.get_fragments()))}")
 
 # 冷读 / 热读对比
 start = time.time()
@@ -1138,7 +1138,7 @@ for col in ["id", "name", "score", "embedding"]:
     start = time.time()
     col_data = ds.to_table(columns=[col])
     elapsed = time.time() - start
-    print(f"Column '{col}': {col_data.num_rows} rows in {elapsed:.3f}s")
+    print(f"Column '{col}': {col_data.count_rows()} rows in {elapsed:.3f}s")
 ```
 
 运行：
