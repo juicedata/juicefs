@@ -1310,7 +1310,7 @@ func (m *cacheManager) exist(key string) (string, bool) {
 		return "", false
 	}
 	loc := store.dir
-	existed, err := m.getStore(key).exist(key)
+	existed, err := store.exist(key)
 	if err == errNotCached {
 		legacy := m.getStoreLegacy(key)
 		if legacy != store && legacy != nil {
