@@ -794,30 +794,78 @@ find ~/.juicefs/cache/ -type f -name "*_*_*" | wc -l
 #### 8.5.3 列级元数据预热
 
 ```bash
-# 预热 id 和 name 列的元数据
-./juicefs warmup \
-  --lance \
-  --lance-columns "id,name" \
-  /mnt/jfs/data/test_lance_data.lance
+# 预热 id 和 name 列的元数据（ColumnMetadata protobuf + column-level buffers）
+./juicefs warmup --lance --lance-columns "id,name" /mnt/jfs/data/test_lance_data.lance
 
-# 预期输出包含:
-# Lance column warmup: columns=[id name], include-data=false
-# warmup column "id" in /mnt/jfs/data/test_lance_data.lance/data/0000-xxx.lance: N byte ranges
-# warmup column "name" in /mnt/jfs/data/test_lance_data.lance/data/0000-xxx.lance: N byte ranges
+# 预热 id 列的元数据 + 数据页缓冲区（page buffer offsets/sizes）
+./juicefs warmup --lance --lance-columns "id" --lance-column-data /mnt/jfs/data/test_lance_data.lance
 ```
 
-#### 8.5.4 列级预热 + 数据页
+**列级预热的工作原理：**
+
+列级预热通过解析 V2 文件 footer 中的 CMO (Column Metadata Offset) 表，定位指定列的 ColumnMetadata protobuf，提取 page buffer 和 column buffer 的字节范围，然后映射到 JuiceFS slices 进行预热。
+
+预热范围包含：
+1. **ColumnMetadata protobuf 自身**（从 CMO 表获取位置和长度）
+2. **Column-level buffers**（dictionaries, statistics 等）
+3. **Page data buffers**（仅当 `--lance-column-data` 时）
+
+**注意事项：**
+
+JuiceFS 预热的最小粒度是 slice（对象存储对象，每个最大 64MiB）。`FillCache` 会下载整个 slice 的所有 block。因此：
+- 小文件（< 64MiB）整个文件就是一个 slice，列级预热和全量预热效果相同
+- 大文件（多个 slice）中，如果某列数据只跨越部分 slice，列级预热可以减少下载量
+
+**验证列级预热效果（需要大文件数据集）：**
 
 ```bash
-# 预热 score 列的元数据 + 数据页缓冲区
-./juicefs warmup \
-  --lance \
-  --lance-columns "score" \
-  --lance-column-data \
-  /mnt/jfs/data/test_lance_data.lance
+# 创建大尺寸数据集（每个文件 ~200MB，跨 4 个 chunk）
+python3 -c "
+import lance, pyarrow as pa, os, numpy as np
+
+num_rows = 200000
+table = pa.table({
+    'id': pa.array(range(num_rows), type=pa.int64()),
+    'name': pa.array([f'item_{i:06d}' for i in range(num_rows)], type=pa.string()),
+    'large_blob': pa.array([os.urandom(2048) for _ in range(num_rows)], type=pa.binary()),
+})
+
+lance.write_dataset(table, '/tmp/test_lance_huge.lance', mode='overwrite', max_rows_per_file=100000)
+"
+
+# 复制到 JuiceFS
+cp -r /tmp/test_lance_huge.lance /mnt/jfs/
+
+# 全量预热
+rm -rf ~/.juicefs/cache/
+./juicefs warmup --lance /mnt/jfs/test_lance_huge.lance
+du -sh ~/.juicefs/cache/
+# 预期: ~395M (全量数据)
+
+# id 列预热（含数据页，id 列数据在文件末尾，只占 1 个 slice）
+rm -rf ~/.juicefs/cache/
+./juicefs warmup --lance --lance-columns "id" --lance-column-data /mnt/jfs/test_lance_huge.lance
+du -sh ~/.juicefs/cache/
+# 预期: ~11M (仅最后一个 chunk 的 slice)
+
+# large_blob 列预热（数据占文件大部分，跨所有 chunk）
+rm -rf ~/.juicefs/cache/
+./juicefs warmup --lance --lance-columns "large_blob" --lance-column-data /mnt/jfs/test_lance_huge.lance
+du -sh ~/.juicefs/cache/
+# 预期: ~395M (large_blob 占了绝大部分数据)
 ```
 
-#### 8.5.5 指定版本预热
+**实测结果（200MB 数据集，3 列 × 200K 行 × 2 文件）：**
+
+| 预热方式 | 缓存大小 | 缓存文件数 | 说明 |
+|---------|---------|-----------|------|
+| 全量预热 | 395M | 103 | 所有数据 |
+| id 列 + 数据页 | 11M | 7 | id 列数据在文件末尾，只命中 1 个 slice |
+| large_blob 列 + 数据页 | 395M | 103 | large_blob 占文件绝大部分数据 |
+
+**结论：** 列级预热的实际效果取决于列数据在文件中的物理分布。当目标列的数据集中在一部分 slice 时（如小列在文件末尾），可以显著减少下载量；当列数据占文件大部分时，效果不明显。
+
+#### 8.5.4 指定版本预热
 
 ```bash
 # 预热版本 0
@@ -830,7 +878,7 @@ find ~/.juicefs/cache/ -type f -name "*_*_*" | wc -l
 # Lance mode: version=0, manifest-only=false, include-indices=false
 ```
 
-#### 8.5.6 检查缓存状态
+#### 8.5.5 检查缓存状态
 
 ```bash
 # 检查哪些数据块已缓存（不实际预热）
@@ -845,7 +893,7 @@ find ~/.juicefs/cache/ -type f -name "*_*_*" | wc -l
 du -sh ~/.juicefs/cache/
 ```
 
-#### 8.5.7 驱逐缓存
+#### 8.5.6 驱逐缓存
 
 ```bash
 # 驱逐已缓存的数据块

@@ -98,11 +98,16 @@ func (c *CacheFiller) resolveLancePaths(
 	}
 
 	// 3. Collect all fragment data files
+	// When doing column-level warmup, skip adding data file paths
+	// because they will be warmed up at byte-range level by warmupLanceColumns.
+	colOnlyMode := config != nil && len(config.Columns) > 0
 	for _, frag := range manifest.Fragments {
 		// Data files: path is relative to data/ directory
 		for _, dataFile := range frag.Files {
 			fullPath := path.Join(datasetPath, lanceDataDir, dataFile.Path)
-			paths = append(paths, fullPath)
+			if !colOnlyMode {
+				paths = append(paths, fullPath)
+			}
 		}
 
 		// Deletion file: path is constructed as _deletions/{fragId}-{readVersion}-{id}.{suffix}
@@ -117,7 +122,9 @@ func (c *CacheFiller) resolveLancePaths(
 		for _, overlay := range frag.Overlays {
 			if overlay.DataFile != nil && overlay.DataFile.Path != "" {
 				overlayPath := path.Join(datasetPath, lanceDataDir, overlay.DataFile.Path)
-				paths = append(paths, overlayPath)
+				if !colOnlyMode {
+					paths = append(paths, overlayPath)
+				}
 			}
 		}
 	}
@@ -558,6 +565,9 @@ func (c *CacheFiller) warmupByteRanges(
 					continue // no overlap
 				}
 
+				logger.Infof("warmupByteRanges: chunk=%d slice_id=%d slice_len=%d file=[%d,%d) target=[%d,%d)",
+					chunkIdx, s.Id, s.Len, sliceStart, sliceEnd, r.start, r.end)
+
 				switch action {
 				case WarmupCache:
 					if err := c.store.FillCache(s.Id, s.Size); err != nil {
@@ -708,14 +718,29 @@ func (c *CacheFiller) warmupLanceColumns(
 					continue
 				}
 
+				// Read CMO entry to get ColumnMetadata protobuf location
+				cmPos, cmLen, err := c.readColumnMetadataOffset(ctx, inode, footer, uint32(colIdx))
+				if err != nil {
+					logger.Warnf("read CMO for column %q in %s: %s", colName, fullPath, err)
+					continue
+				}
+
+				// Read and parse ColumnMetadata
 				cm, err := c.readColumnMetadata(ctx, inode, footer, uint32(colIdx))
 				if err != nil {
 					logger.Warnf("read column %q metadata in %s: %s", colName, fullPath, err)
 					continue
 				}
 
-				ranges := columnByteRanges(cm, config.IncludeDataPages)
-				logger.Infof("warmup column %q in %s: %d byte ranges", colName, fullPath, len(ranges))
+				// Build byte ranges to warmup:
+				// 1. ColumnMetadata protobuf itself (from CMO table)
+				// 2. Column-level buffers (dictionaries, statistics) — always
+				// 3. Page data buffers — only when --lance-column-data
+				ranges := []byteRange{{start: cmPos, end: cmPos + cmLen}}
+				ranges = append(ranges, columnByteRanges(cm, config.IncludeDataPages)...)
+
+				logger.Infof("warmupLanceColumns: file=%s col=%q colIdx=%d ranges=%d",
+					dataFile.Path, colName, colIdx, len(ranges))
 
 				if err := c.warmupByteRanges(ctx, inode, ranges, action); err != nil {
 					logger.Warnf("warmup column %q in %s: %s", colName, fullPath, err)
