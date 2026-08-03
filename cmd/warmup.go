@@ -58,7 +58,19 @@ $ cat /tmp/filelist
 /mnt/jfs/datadir/f1
 /mnt/jfs/datadir/f2
 /mnt/jfs/datadir/f3
-$ juicefs warmup -f /tmp/filelist`,
+$ juicefs warmup -f /tmp/filelist
+
+# Warm a Lance dataset (parse manifest, warmup all data files automatically)
+$ juicefs warmup --lance /mnt/jfs/data/mydataset.lance
+
+# Warm only the Lance manifest file (metadata only, no data files)
+$ juicefs warmup --lance --lance-manifest-only /mnt/jfs/data/mydataset.lance
+
+# Warm a specific Lance dataset version
+$ juicefs warmup --lance --lance-version 5 /mnt/jfs/data/mydataset.lance
+
+# Warm a Lance dataset including index files
+$ juicefs warmup --lance --lance-include-indices /mnt/jfs/data/mydataset.lance`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "file",
@@ -83,6 +95,22 @@ $ juicefs warmup -f /tmp/filelist`,
 			&cli.BoolFlag{
 				Name:  "check",
 				Usage: "check whether the data blocks are cached or not",
+			},
+			&cli.BoolFlag{
+				Name:  "lance",
+				Usage: "treat paths as Lance dataset directories, parse manifest and warmup related data files",
+			},
+			&cli.StringFlag{
+				Name:  "lance-version",
+				Usage: "specific Lance dataset version to warmup (default: latest)",
+			},
+			&cli.BoolFlag{
+				Name:  "lance-manifest-only",
+				Usage: "only warmup Lance manifest files, not data files",
+			},
+			&cli.BoolFlag{
+				Name:  "lance-include-indices",
+				Usage: "also warmup Lance index files under _indices/",
 			},
 		},
 	}
@@ -153,13 +181,19 @@ END:
 }
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner) *vfs.CacheResponse {
+func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner, lanceCfg *vfs.LanceWarmupConfig) *vfs.CacheResponse {
 	paths := strings.Join(batch, "\n")
 	var back uint8
 	if background {
 		back = 1
 	}
-	headerLen, bodyLen := uint32(8), uint32(4+len(paths)+2+1+1)
+	// Base body: pathsLen(4) + paths + threads(2) + background(1) + action(1)
+	bodyLen := uint32(4 + len(paths) + 2 + 1 + 1)
+	// Optional lance config: lance_flag(1) + manifest_only(1) + include_indices(1) + version_len(2) + version
+	if lanceCfg != nil {
+		bodyLen += 1 + 1 + 1 + 2 + uint32(len(lanceCfg.Version))
+	}
+	headerLen := uint32(8)
 	wb := utils.NewBuffer(headerLen + bodyLen)
 	wb.Put32(meta.FillCache)
 	wb.Put32(bodyLen)
@@ -169,6 +203,22 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 	wb.Put16(uint16(threads))
 	wb.Put8(back)
 	wb.Put8(uint8(action))
+
+	if lanceCfg != nil {
+		wb.Put8(1) // lance flag: 1 = lance mode enabled
+		var manifestOnly uint8
+		if lanceCfg.ManifestOnly {
+			manifestOnly = 1
+		}
+		wb.Put8(manifestOnly)
+		var includeIndices uint8
+		if lanceCfg.IncludeIndices {
+			includeIndices = 1
+		}
+		wb.Put8(includeIndices)
+		wb.Put16(uint16(len(lanceCfg.Version)))
+		wb.Put([]byte(lanceCfg.Version))
+	}
 
 	if _, err := cf.Write(wb.Bytes()); err != nil {
 		logger.Fatalf("Write message: %s", err)
@@ -270,6 +320,23 @@ func warmup(ctx *cli.Context) error {
 		action = vfs.CheckCache
 	}
 
+	lanceMode := ctx.Bool("lance")
+	var lanceCfg *vfs.LanceWarmupConfig
+	if lanceMode {
+		lanceCfg = &vfs.LanceWarmupConfig{
+			Version:        ctx.String("lance-version"),
+			ManifestOnly:   ctx.Bool("lance-manifest-only"),
+			IncludeIndices: ctx.Bool("lance-include-indices"),
+		}
+		if lanceCfg.Version != "" {
+			logger.Infof("Lance mode: version=%s, manifest-only=%v, include-indices=%v",
+				lanceCfg.Version, lanceCfg.ManifestOnly, lanceCfg.IncludeIndices)
+		} else {
+			logger.Infof("Lance mode: latest version, manifest-only=%v, include-indices=%v",
+				lanceCfg.ManifestOnly, lanceCfg.IncludeIndices)
+		}
+	}
+
 	background := ctx.Bool("background")
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
@@ -291,13 +358,13 @@ func warmup(ctx *cli.Context) error {
 			continue
 		}
 		if len(batch) >= batchMax {
-			resp := sendCommand(controller, action, batch, threads, background, dspin)
+			resp := sendCommand(controller, action, batch, threads, background, dspin, lanceCfg)
 			total.Add(resp)
 			batch = batch[:0]
 		}
 	}
 	if len(batch) > 0 {
-		resp := sendCommand(controller, action, batch, threads, background, dspin)
+		resp := sendCommand(controller, action, batch, threads, background, dspin, lanceCfg)
 		total.Add(resp)
 	}
 	progress.Done()

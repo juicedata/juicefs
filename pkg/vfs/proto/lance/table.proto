@@ -1,0 +1,805 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: Copyright The Lance Authors
+
+syntax = "proto3";
+
+package lance.table;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "file.proto";
+
+/*
+
+Format:
+
++----------------------------------------+
+|       Encoded Column 0, Chunk 0        |
+           ...
+|       Encoded Column M, Chunk N - 1    |
+|       Encoded Column M, Chunk N        |
+|       Indices ...                      |
+|       Chunk Position (M x N x 8)       |
+|         Manifest (Optional)            |
+|         Metadata                       |
+| i64: metadata position                 |
+| MAJOR_VERSION | MINOR_VERSION | "LANC" |
++----------------------------------------+
+ */
+
+// UUID type. encoded as 16 bytes.
+message UUID {
+  bytes uuid = 1;
+}
+
+// Manifest is a global section shared between all the files.
+message Manifest {
+  // All fields of the dataset, including the nested fields.
+  repeated lance.file.Field fields = 1;
+
+  // Schema metadata.
+  map<string, bytes> schema_metadata = 5;
+
+  // Fragments of the dataset.
+  repeated DataFragment fragments = 2;
+
+  // Snapshot version number.
+  uint64 version = 3;
+
+  // The file position of the version auxiliary data.
+  //  * It is not inheritable between versions.
+  //  * It is not loaded by default during query.
+  uint64 version_aux_data = 4;
+
+  message WriterVersion {
+    // The name of the library that created this file.
+    string library = 1;
+    // The version of the library that created this file. Because we cannot assume
+    // that the library is semantically versioned, this is a string. However, if it
+    // is semantically versioned, it should be a valid semver string without any 'v'
+    // prefix. For example: `2.0.0`, `2.0.0-rc.1`.
+    //
+    // For forward compatibility with older readers, when writing new manifests this
+    // field should contain only the core version (major.minor.patch) without any
+    // prerelease or build metadata. The prerelease/build info should be stored in
+    // the separate prerelease and build_metadata fields instead.
+    string version = 2;
+    // Optional semver prerelease identifier.
+    //
+    // This field stores the prerelease portion of a semantic version separately
+    // from the core version number. For example, if the full version is "2.0.0-rc.1",
+    // the version field would contain "2.0.0" and prerelease would contain "rc.1".
+    //
+    // This separation ensures forward compatibility: older readers can parse the
+    // clean version field without errors, while newer readers can reconstruct the
+    // full semantic version by combining version, prerelease, and build_metadata.
+    //
+    // If absent, the version field is used as-is.
+    optional string prerelease = 3;
+    // Optional semver build metadata.
+    //
+    // This field stores the build metadata portion of a semantic version separately
+    // from the core version number. For example, if the full version is
+    // "2.0.0-rc.1+build.123", the version field would contain "2.0.0", prerelease
+    // would contain "rc.1", and build_metadata would contain "build.123".
+    //
+    // If absent, no build metadata is present.
+    optional string build_metadata = 4;
+  }
+
+  // The version of the writer that created this file.
+  //
+  // This information may be used to detect whether the file may have known bugs
+  // associated with that writer.
+  WriterVersion writer_version = 13;
+
+  // If present, the file position of the index metadata.
+  optional uint64 index_section = 6;
+
+  // Version creation Timestamp, UTC timezone
+  google.protobuf.Timestamp timestamp = 7;
+
+  // Optional version tag
+  string tag = 8;
+
+  // Feature flags for readers.
+  //
+  // A bitmap of flags that indicate which features are required to be able to
+  // read the table. If a reader does not recognize a flag that is set, it
+  // should not attempt to read the dataset.
+  //
+  // Known flags:
+  // * 1 << 0: deletion files are present
+  // * 1 << 1: row ids are stable and stored as part of the fragment metadata.
+  // * 1 << 2: use v2 format (deprecated)
+  // * 1 << 3: table config is present
+  // * 1 << 4: dataset uses multiple base paths
+  // * 1 << 5: transaction file writes are disabled
+  // * 1 << 6: data overlay files are present (see DataOverlayFile). Readers that do
+  //   not understand overlays must refuse the dataset, since ignoring an overlay
+  //   would silently return stale base values.
+  uint64 reader_feature_flags = 9;
+
+  // Feature flags for writers.
+  //
+  // A bitmap of flags that indicate which features must be used when writing to the
+  // dataset. If a writer does not recognize a flag that is set, it should not attempt to
+  // write to the dataset.
+  //
+  // The flag identities are the same as for reader_feature_flags, but the values of
+  // reader_feature_flags and writer_feature_flags are not required to be identical.
+  uint64 writer_feature_flags = 10;
+
+  // The highest fragment ID that has been used so far.
+  //
+  // This ID is not guaranteed to be present in the current version, but it may
+  // have been used in previous versions.
+  //
+  // For a single fragment, will be zero. For no fragments, will be absent.
+  optional uint32 max_fragment_id = 11;
+
+  // Path to the transaction file, relative to `{root}/_transactions`. The file at that
+  // location contains a wire-format serialized Transaction message representing the
+  // transaction that created this version.
+  //
+  // This string field "transaction_file" may be empty if no transaction file was written.
+  //
+  // The path format is "{read_version}-{uuid}.txn" where {read_version} is the version of
+  // the table the transaction read from (serialized to decimal with no padding digits),
+  // and {uuid} is a hyphen-separated UUID.
+  string transaction_file = 12;
+
+  // The file position of the transaction content. None if transaction is empty
+  // This transaction content begins with the transaction content length as u32
+  // If the transaction proto message has a length of `len`, the message ends at `len` + 4
+  optional uint64 transaction_section = 21;
+
+  // The next unused row id. If zero, then the table does not have any rows.
+  //
+  // This is only used if the "stable_row_ids" feature flag is set.
+  uint64 next_row_id = 14;
+
+  message DataStorageFormat {
+    // The format of the data files (e.g. "lance")
+    string file_format = 1;
+    // The max format version of the data files. The format of the version can vary by
+    // file_format and is not required to follow semver.
+    //
+    // Every file in this version of the dataset has the same file_format version.
+    string version = 2;
+  }
+
+  // The data storage format
+  //
+  // This specifies what format is used to store the data files.
+  DataStorageFormat data_format = 15;
+
+  // Table config.
+  //
+  // Keys with the prefix "lance." are reserved for the Lance library. Other
+  // libraries may wish to similarly prefix their configuration keys
+  // appropriately.
+  map<string, string> config = 16;
+
+  // Metadata associated with the table.
+  //
+  // This is a key-value map that can be used to store arbitrary metadata
+  // associated with the table.
+  //
+  // This is different than configuration, which is used to tell libraries how
+  // to read, write, or manage the table.
+  //
+  // This is different than schema metadata, which is used to describe the
+  // data itself and is attached to the output schema of scans.
+  map<string, string> table_metadata = 19;
+
+  // Field number 17 (`blob_dataset_version`) was used for a secondary blob dataset.
+  reserved 17;
+  reserved "blob_dataset_version";
+
+  // The base paths of data files.
+  //
+  // This is used to determine the base path of a data file. In common cases data file paths are under current dataset base path.
+  // But for shallow cloning, importing file and other multi-tier storage cases, the actual data files could be outside of the current dataset.
+  // This field is used with the `base_id` in `lance.file.File` and `lance.file.DeletionFile`.
+  //
+  // For example, if we have a dataset with base path `s3://bucket/dataset`, we have a DataFile with base_id 0, we get the actual data file path by:
+  // base_paths[id = 0] + /data/ + file.path
+  // the key(a.k.a index) starts from 0, increased by 1 for each new base path.
+  repeated BasePath base_paths = 18;
+
+  // The branch of the dataset. None means main branch.
+  optional string branch = 20;
+} // Manifest
+
+// external dataset base path
+message BasePath {
+  uint32 id = 1;
+  // This is an alias name of the base path, it is optional.
+  // When we use shallow clone and the target version is a tag, the tag name will be set here.
+  optional string name = 2;
+  // Flag indicating whether this path is a dataset root path or file directory:
+  // - true:  Path is a dataset root (actual files under subdirectories like `data`, '_deletions')
+  // - false: Path is a direct file directory (scenario like importing files)
+  bool is_dataset_root = 3;
+  // Note: This absolute path will be directly used by Path:parse(),
+  string path = 4;
+}
+
+// Auxiliary Data attached to a version.
+// Only load on-demand.
+message VersionAuxData {
+  // key-value metadata.
+  map<string, bytes> metadata = 3;
+}
+
+// Metadata describing an index.
+message IndexMetadata {
+  // Unique ID of an index. It is unique across all the dataset versions.
+  UUID uuid = 1;
+
+  // The columns to build the index. These refer to file.Field.id.
+  repeated int32 fields = 2;
+
+  // Index name. Must be unique within one dataset version.
+  string name = 3;
+
+  // The version of the dataset this index was built from.
+  uint64 dataset_version = 4;
+
+  // A bitmap of the included fragment ids.
+  //
+  // This may by used to determine how much of the dataset is covered by the
+  // index. This information can be retrieved from the dataset by looking at
+  // the dataset at `dataset_version`. However, since the old version may be
+  // deleted while the index is still in use, this information is also stored
+  // in the index.
+  //
+  // The bitmap is stored as a 32-bit Roaring bitmap.
+  bytes fragment_bitmap = 5;
+
+  // Details, specific to the index type, which are needed to load / interpret the index
+  //
+  // Indices should avoid putting large amounts of information in this field, as it will
+  // bloat the manifest.
+  //
+  // Indexes are plugins, and so the format of the details message is flexible and not fully
+  // defined by the table format.  However, there are some conventions that should be followed:
+  //
+  // - When Lance APIs refer to indexes they will use the type URL of the index details as the
+  //   identifier for the index type.  If a user provides a simple string identifier like
+  //   "btree" then it will be converted to "/lance.table.BTreeIndexDetails"
+  // - Type URLs comparisons are case-insensitive.  Thereform an index must have a unique type
+  //   URL ignoring case.
+  google.protobuf.Any index_details = 6;
+
+  // The minimum lance version that this index is compatible with.
+  optional int32 index_version = 7;
+
+  // Timestamp when the index was created (UTC timestamp in milliseconds since epoch)
+  //
+  // This field is optional for backward compatibility. For existing indices created before
+  // this field was added, this will be None/null.
+  optional uint64 created_at = 8;
+
+  // The base path index of the data file. Used when the file is imported or referred from another dataset.
+  // Lance use it as key of the base_paths field in Manifest to determine the actual base path of the data file.
+  optional uint32 base_id = 9;
+
+  // List of files and their sizes for this index segment.
+  // This enables skipping HEAD calls when opening indices and allows reporting
+  // of index sizes without extra IO.
+  // If this is empty, the index files sizes are unknown.
+  repeated IndexFile files = 10;
+}
+
+// Metadata about a single file within an index segment.
+message IndexFile {
+  // Path relative to the index directory (e.g., "index.idx", "auxiliary.idx")
+  string path = 1;
+  // Size of the file in bytes
+  uint64 size_bytes = 2;
+}
+
+// Index Section, containing a list of index metadata for one dataset version.
+message IndexSection {
+  repeated IndexMetadata indices = 1;
+}
+
+// A DataFragment is a set of files which represent the different columns of the same
+// rows. If column exists in the schema of a dataset, but the file for that column does
+// not exist within a DataFragment of that dataset, that column consists entirely of
+// nulls.
+message DataFragment {
+  // The ID of a DataFragment is unique within a dataset.
+  uint64 id = 1;
+
+  repeated DataFile files = 2;
+
+  // Optional overlay files for this fragment, which supply new values for a
+  // subset of cells without rewriting the base data files. This MUST be empty
+  // if the data overlay files feature flag (64) is not set in the manifest.
+  //
+  // Order is significant: a later entry is newer than an earlier one. When two
+  // overlays cover the same (offset, field) and share a `committed_version`, the
+  // later entry wins. See DataOverlayFile for the full resolution rules.
+  repeated DataOverlayFile overlays = 11;
+
+  // File that indicates which rows, if any, should be considered deleted.
+  DeletionFile deletion_file = 3;
+
+  // TODO: What's the simplest way we can allow an inline tombstone bitmap?
+
+  // A serialized RowIdSequence message (see rowids.proto).
+  //
+  // These are the row ids for the fragment, in order of the rows as they appear.
+  // That is, if a fragment has 3 rows, and the row ids are [1, 42, 3], then the
+  // first row is row 1, the second row is row 42, and the third row is row 3.
+  oneof row_id_sequence {
+    // If small (< 200KB), the row ids are stored inline.
+    bytes inline_row_ids = 5;
+    // Otherwise, stored as part of a file.
+    ExternalFile external_row_ids = 6;
+  } // row_id_sequence
+
+  oneof last_updated_at_version_sequence {
+    // If small (< 200KB), the row latest updated versions are stored inline.
+    bytes inline_last_updated_at_versions = 7;
+    // Otherwise, stored as part of a file.
+    ExternalFile external_last_updated_at_versions = 8;
+  } // last_updated_at_version_sequence
+
+  oneof created_at_version_sequence {
+    // If small (< 200KB), the row created at versions are stored inline.
+    bytes inline_created_at_versions = 9;
+    // Otherwise, stored as part of a file.
+    ExternalFile external_created_at_versions = 10;
+  } // created_at_version_sequence
+
+  // Number of original rows in the fragment, this includes rows that are now marked with
+  // deletion tombstones. To compute the current number of rows, subtract
+  // `deletion_file.num_deleted_rows` from this value.
+  uint64 physical_rows = 4;
+}
+
+message DataFile {
+  // Path to the root relative to the dataset's URI.
+  string path = 1;
+  // The ids of the fields/columns in this file.
+  //
+  // When a DataFile object is created in memory, every value in fields is assigned -1 by
+  // default. An object with a value in fields of -1 must not be stored to disk. -2 is
+  // used for "tombstoned", meaning a field that is no longer in use. This is often
+  // because the original field id was reassigned to a different data file.
+  //
+  // In Lance v1 IDs are assigned based on position in the file, offset by the max
+  // existing field id in the table (if any already). So when a fragment is first created
+  // with one file of N columns, the field ids will be 1, 2, ..., N. If a second fragment
+  // is created with M columns, the field ids will be N+1, N+2, ..., N+M.
+  //
+  // In Lance v1 there is one field for each field in the input schema, this includes
+  // nested fields (both struct and list).  Fixed size list fields have only a single
+  // field id (these are not considered nested fields in Lance v1).
+  //
+  // This allows column indices to be calculated from field IDs and the input schema.
+  //
+  // In Lance v2 the field IDs generally follow the same pattern but there is no
+  // way to calculate the column index from the field ID.  This is because a given
+  // field could be encoded in many different ways, some of which occupy a different
+  // number of columns.  For example, a struct field could be encoded into N + 1 columns
+  // or it could be encoded into a single packed column.  To determine column indices
+  // the column_indices property should be used instead.
+  //
+  // In Lance v1 these ids must be sorted but might not always be contiguous.
+  repeated int32 fields = 2;
+  // The top-level column indices for each field in the file.
+  //
+  // If the data file is version 1 then this property will be empty
+  //
+  // Otherwise there must be one entry for each field in `fields`.
+  //
+  // Some fields may not correspond to a top-level column in the file.  In these cases
+  // the index will -1.
+  //
+  // For example, consider the schema:
+  //
+  // - dimension: packed-struct (0):
+  //   - x: u32 (1)
+  //   - y: u32 (2)
+  // - path: `list<u32>` (3)
+  // - embedding: `fsl<768>` (4)
+  //   - fp64
+  // - borders: `fsl<4>` (5)
+  //   - simple-struct (6)
+  //     - margin: fp64 (7)
+  //     - padding: fp64 (8)
+  //
+  // One possible column indices array could be:
+  // [0, -1, -1, 1, 3, 4, 5, 6, 7]
+  //
+  // This reflects quite a few phenomenon:
+  // - The packed struct is encoded into a single column and there is no top-level column
+  //   for the x or y fields
+  // - The variable sized list is encoded into two columns
+  // - The embedding is encoded into a single column (common for FSL of primitive) and there
+  //   is not "FSL column"
+  // - The borders field actually does have an "FSL column"
+  //
+  // The column indices table may not have duplicates (other than -1)
+  repeated int32 column_indices = 3;
+  // The major file version used to create the file
+  uint32 file_major_version = 4;
+  // The minor file version used to create the file
+  //
+  // If both `file_major_version` and `file_minor_version` are set to 0,
+  // then this is a version 0.1 or version 0.2 file.
+  uint32 file_minor_version = 5;
+
+  // The known size of the file on disk in bytes.
+  //
+  // This is used to quickly find the footer of the file.
+  //
+  // When this is zero, it should be interpreted as "unknown".
+  uint64 file_size_bytes = 6;
+
+  // The base path index of the data file. Used when the file is imported or referred from another dataset.
+  // Lance use it as key of the base_paths field in Manifest to determine the actual base path of the data file.
+  optional uint32 base_id = 7;
+} // DataFile
+
+// An overlay file supplies new values for a subset of (row offset, field) cells
+// within a fragment, without rewriting the fragment's base data files. It is
+// used for efficient updates when only a small fraction of rows and/or columns
+// change.
+//
+// On read, a cell is resolved by consulting the fragment's overlays from newest
+// to oldest: the first overlay that covers that (offset, field) wins; if none
+// cover it, the value falls through to the base data file. Because deletions
+// take precedence over overlays, an overlay value for an offset that is also
+// marked deleted is dead and is ignored.
+//
+// The overlay's data file does NOT store a row-offset key column. Within a value
+// column, the position of a covered offset's value is the rank (0-based count of
+// set bits below it) of that offset within the field's coverage bitmap. Because
+// fields may cover different offset sets, the value columns of a single overlay
+// data file may have different lengths (which the Lance file format permits).
+message DataOverlayFile {
+  // The data file storing the overlay's new cell values, one value column per
+  // field in `data_file.fields`. No row-offset key column is stored.
+  DataFile data_file = 1;
+
+  // Which (offset, field) cells this overlay provides values for.
+  oneof coverage {
+    // A single 32-bit Roaring bitmap of physical row offsets that applies to
+    // every field in `data_file.fields` (a "dense" / rectangular overlay).
+    // Every covered offset has a value for every field. This is the common case
+    // for a plain UPDATE, where one SET list is applied to one set of rows.
+    bytes shared_offset_bitmap = 2;
+    // Per-field coverage for a "sparse" overlay, used when different fields cover
+    // different offset sets (e.g. a MERGE with multiple WHEN MATCHED branches).
+    FieldCoverage field_coverage = 4;
+  }
+
+  // The dataset version at which this overlay became effective: the version of
+  // the commit that introduced it, NOT the version it was read from. It is
+  // stamped at commit time and re-stamped if the commit is retried, in the same
+  // way as the created-at / last-updated-at version sequences.
+  //
+  // This drives two orderings:
+  //  * Versus index builds: an index whose `dataset_version` >= this value
+  //    already incorporates this overlay. Otherwise the overlay's covered cells
+  //    are excluded from index results for the affected fields and re-evaluated
+  //    against their current values (see the Data Overlay Files specification).
+  //  * Versus other overlays: when two overlays cover the same (offset, field),
+  //    the one with the higher `committed_version` wins. Overlays that share a
+  //    `committed_version` are ordered by their position in
+  //    `DataFragment.overlays`, where a later entry is newer and wins.
+  uint64 committed_version = 3;
+}
+
+// Per-field coverage for a sparse overlay.
+message FieldCoverage {
+  // One entry per field in the overlay's `data_file.fields`, in the same order.
+  // Each is a 32-bit Roaring bitmap of the physical row offsets covered for that
+  // field. An offset present in a field's bitmap but mapped to a NULL value
+  // means the cell is overridden to NULL (distinct from an offset that is absent,
+  // which falls through to the base data file).
+  repeated bytes offset_bitmaps = 1;
+}
+
+// Deletion File
+//
+// The path of the deletion file is constructed as:
+//   {root}/_deletions/{fragment_id}-{read_version}-{id}.{extension}
+// where {extension} depends on DeletionFileType.
+message DeletionFile {
+  // Type of deletion file, intended as a way to increase efficiency of the storage of deleted row
+  // offsets. If there are sparsely deleted rows, then ARROW_ARRAY is the most efficient. If there
+  // are densely deleted rows, then BITMAP is the most efficient.
+  enum DeletionFileType {
+    // A single Int32Array of deleted row offsets, stored as an Arrow IPC file with one batch and
+    // one column. Has a .arrow extension.
+    ARROW_ARRAY = 0;
+    // A Roaring Bitmap of deleted row offsets. Has a .bin extension.
+    BITMAP = 1;
+  }
+
+  // Type of deletion file.
+  DeletionFileType file_type = 1;
+  // The version of the dataset this deletion file was built from.
+  uint64 read_version = 2;
+  // An opaque id used to differentiate this file from others written by concurrent
+  // writers.
+  uint64 id = 3;
+  // The number of rows that are marked as deleted.
+  uint64 num_deleted_rows = 4;
+  // The base path index of the deletion file. Used when the file is imported or referred from another
+  // dataset. Lance uses it as key of the base_paths field in Manifest to determine the actual base
+  // path of the deletion file.
+  optional uint32 base_id = 7;
+} // DeletionFile
+
+message ExternalFile {
+  // Path to the file, relative to the root of the table.
+  string path = 1;
+  // The byte offset in the file where the data starts.
+  uint64 offset = 2;
+  // The size of the data in the file, in bytes.
+  uint64 size = 3;
+}
+
+// VectorIndexDetails and HnswParameters (formerly HnswIndexDetails) moved to index.proto
+
+message FragmentReuseIndexDetails {
+
+  oneof content {
+    // if < 200KB, store the content inline, otherwise store the InlineContent bytes in external file
+    InlineContent inline = 1;
+    ExternalFile external = 2;
+  }
+
+  message InlineContent {
+    repeated Version versions = 1;
+  }
+
+  message FragmentDigest {
+    uint64 id = 1;
+
+    uint64 physical_rows = 2;
+
+    uint64 num_deleted_rows = 3;
+  }
+
+  // A summarized version of the RewriteGroup information in a Rewrite transaction
+  message Group {
+    // A roaring treemap of the changed row addresses.
+    // When combined with the old fragment IDs and new fragment IDs,
+    // it can recover the full mapping of old row addresses to either new row addresses or deleted.
+    // this mapping can then be used to remap indexes or satisfy index queries for the new unindexed fragments.
+    bytes changed_row_addrs = 1;
+
+    repeated FragmentDigest old_fragments = 2;
+
+    repeated FragmentDigest new_fragments = 3;
+  }
+
+  message Version {
+    // The dataset_version at the time the index adds this version entry
+    uint64 dataset_version = 1;
+
+    repeated Group groups = 3;
+  }
+}
+
+// ============================================================================
+// MemWAL Index Types
+// ============================================================================
+
+// Lifecycle status of a WAL shard. Drives drop-table two-phase commit:
+// a SEALED shard refuses new writer claims (reversible) until the drop
+// commits (the shard dir is deleted) or rolls back (status -> ACTIVE).
+enum ShardStatus {
+  // Normal: the shard accepts writer claims.
+  ACTIVE = 0;
+  // A drop is in flight: claims are refused. Reversible to ACTIVE.
+  SEALED = 1;
+}
+
+// Shard manifest containing epoch-based fencing and WAL state.
+// Each shard has exactly one active writer at any time.
+message ShardManifest {
+  // Shard identifier (UUID v4).
+  UUID shard_id = 11;
+
+  // Manifest version number.
+  // Matches the version encoded in the filename.
+  uint64 version = 1;
+
+  // Shard spec ID this shard was created with.
+  // Set at shard creation and immutable thereafter.
+  // A value of 0 indicates a manually-created shard not governed by any spec.
+  uint32 shard_spec_id = 10;
+
+  // Computed shard field values as raw Arrow scalar bytes, keyed by shard
+  // field id. The byte encoding follows Arrow's little-endian convention:
+  // int32 is 4 LE bytes, utf8 is raw UTF-8 bytes, etc. The receiver looks
+  // up the result_type from the ShardingSpec to interpret each value.
+  repeated ShardFieldEntry shard_field_entries = 14;
+
+  // Writer fencing token - monotonically increasing.
+  // A writer must increment this when claiming the shard.
+  uint64 writer_epoch = 2;
+
+  // The most recent WAL entry position that has been flushed to a MemTable.
+  // During recovery, replay starts from replay_after_wal_entry_position + 1.
+  // WAL positions are 1-based, so the default value 0 unambiguously means
+  // "no flush has ever stamped this shard" and recovery replays from 1.
+  uint64 replay_after_wal_entry_position = 3;
+
+  // The most recent WAL entry position observed at the time the manifest was
+  // updated. WAL positions are 1-based; default 0 means no entry has been
+  // written yet. This is a hint, not authoritative - recovery must list
+  // files to find actual state.
+  uint64 wal_entry_position_last_seen = 4;
+
+  // Generation to assign to the next SSTable (incremented after each MemTable flush).
+  uint64 current_generation = 6;
+
+  // Field 7 removed: compaction progress lives in
+  // MemWalIndexDetails.compacted_sstables.
+
+  // List of SSTables created by flushing MemTables and their directory paths.
+  repeated SsTable sstables = 8;
+
+  // Lifecycle status. Default ACTIVE; SEALED marks an in-flight drop
+  // (drop-table 2PC). A SEALED manifest refuses claims at claim_epoch.
+  ShardStatus status = 15;
+}
+
+// A shard field value stored as raw Arrow scalar bytes.
+message ShardFieldEntry {
+  // Shard field id (matches ShardingField.field_id in the ShardingSpec).
+  string field_id = 1;
+
+  // Raw Arrow scalar value bytes in little-endian encoding.
+  // The data type is determined by the result_type of the matching ShardingField.
+  bytes value = 2;
+}
+
+// An SSTable: the immutable result of flushing a MemTable, stored as a Lance dataset.
+message SsTable {
+  // Generation number identifying this SSTable.
+  uint64 generation = 1;
+
+  // Directory name relative to the shard directory.
+  string path = 2;
+}
+
+// A pointer to the latest SSTable compacted for a shard.
+message CompactedSsTable {
+  // Shard identifier (UUID v4).
+  UUID shard_id = 1;
+
+  // Generation of the latest SSTable compacted into the base table for this shard.
+  uint64 generation = 2;
+}
+
+// Tracks which compacted SSTable generation a base table index has been rebuilt to cover.
+// Used to determine whether to read from SSTable indexes or base table.
+message IndexCatchupProgress {
+  // Name of the base table index (must match an entry in maintained_indexes).
+  string index_name = 1;
+
+  // Per-shard progress: the generation up to which this index covers.
+  // If a shard is not present, the index is assumed to be fully caught up
+  // (i.e., caught_up_generation >= compacted_generation for that shard).
+  repeated CompactedSsTable caught_up_generations = 2;
+}
+
+// Index details for MemWAL Index, stored in IndexMetadata.index_details.
+// This is the centralized structure for all MemWAL metadata:
+// - Configuration (sharding specs, indexes to maintain)
+// - SSTable compaction progress
+// - Shard state snapshots
+//
+// Writers read this index to get configuration before writing.
+// Readers may use shard snapshots in this index as a point-in-time
+// optimization. Readers that need the latest shard set should list shard
+// directories in storage and read each shard's latest manifest.
+// A background process updates the index periodically to keep shard snapshots current.
+//
+// Shard snapshots are stored as a Lance file with one row per shard.
+// The schema records shard discovery fields. Full mutable shard state remains
+// authoritative in the shard manifest files.
+//   shard_id: utf8
+//   shard_spec_id: uint32
+//   shard_field_{field_id}: typed per the matching ShardingField.result_type
+message MemWalIndexDetails {
+  // Snapshot timestamp (Unix timestamp in milliseconds).
+  int64 snapshot_ts_millis = 1;
+
+  // Number of shards in the snapshot.
+  // Used to determine storage format without reading the snapshot data.
+  uint32 num_shards = 2;
+
+  // Inline shard snapshots for small shard counts.
+  // When num_shards <= threshold (implementation-defined, e.g., 100),
+  // snapshots are stored inline as serialized bytes.
+  // Format: Lance file bytes with the shard snapshot schema.
+  optional bytes inline_snapshots = 3;
+
+  // Sharding specs defining how to derive shard identifiers.
+  // This configuration determines how rows are partitioned into shards.
+  repeated ShardingSpec sharding_specs = 7;
+
+  // Indexes from the base table to maintain in MemTables.
+  // These are index names referencing indexes defined on the base table.
+  // The primary key btree index is always maintained implicitly and
+  // should not be listed here.
+  //
+  // For vector indexes, MemTables inherit quantization parameters (PQ codebook,
+  // SQ params) from the base table index to ensure distance comparability.
+  repeated string maintained_indexes = 8;
+
+  // Latest SSTable compacted into the base table for each shard.
+  // This is updated atomically with merge-insert data commits, enabling
+  // conflict resolution when multiple compactors operate concurrently.
+  //
+  // Note: This is separate from shard snapshots because:
+  // 1. compacted_sstables is updated by compactors (atomic with data commit)
+  // 2. shard snapshots are updated by background index builder
+  repeated CompactedSsTable compacted_sstables = 9;
+
+  // Per-index catchup progress tracking.
+  // When data is compacted into the base table, base table indexes are rebuilt
+  // asynchronously. This field tracks which generation each index covers.
+  //
+  // For indexed queries, if an index's caught_up_generation < compacted_generation,
+  // readers should use SSTable indexes for the gap instead of
+  // scanning unindexed data in the base table.
+  //
+  // If an index is not present in this list, it is assumed to be fully caught up.
+  repeated IndexCatchupProgress index_catchup = 10;
+
+  // Default ShardWriter configuration values for this MemWAL index.
+  //
+  // A free-form string map persisted so that every writer — across
+  // processes and restarts — starts from the same default writer
+  // configuration. These are defaults only: an individual writer may
+  // still override any value at runtime in its own ShardWriterConfig
+  // (which is not persisted).
+  map<string, string> writer_config_defaults = 11;
+}
+
+// Sharding spec definition.
+message ShardingSpec {
+  // Unique identifier for this spec within the index.
+  // IDs are never reused.
+  uint32 spec_id = 1;
+
+  // Sharding field definitions that determine how to compute shard identifiers.
+  repeated ShardingField fields = 2;
+}
+
+// Sharding field definition.
+message ShardingField {
+  // Unique string identifier for this shard field.
+  string field_id = 1;
+
+  // Field IDs referencing source columns in the schema.
+  repeated int32 source_ids = 2;
+
+  // Well-known shard transform name (e.g., "identity", "year", "bucket").
+  // Mutually exclusive with expression.
+  optional string transform = 3;
+
+  // DataFusion SQL expression for custom logic.
+  // Mutually exclusive with transform.
+  optional string expression = 4;
+
+  // Output type of the shard value (Arrow type name).
+  string result_type = 5;
+
+  // Transform parameters (e.g., num_buckets for bucket transform).
+  map<string, string> parameters = 6;
+}
