@@ -407,6 +407,9 @@ func warmup(ctx *cli.Context) error {
 		count, bytes := dspin.Current()
 		switch action {
 		case vfs.WarmupCache:
+			if count == 0 {
+				logger.Warnf("warmup: 0 files cached — the dataset may not exist, or the specified version/manifest was not found")
+			}
 			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
 		case vfs.EvictCache:
 			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
