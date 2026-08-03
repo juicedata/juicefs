@@ -729,17 +729,54 @@ ls -la /mnt/jfs/data/test_lance_data.lance/data/
 
 ```bash
 # 清空 JuiceFS 本地缓存（确保预热前没有缓存）
-rm -rf /var/jfsCache/local/
+rm -rf ~/.juicefs/cache/
 
 # 预热整个 Lance 数据集
-./juicefs warmup \
-  --lance \
-  /mnt/jfs/data/test_lance_data.lance
+./juicefs warmup --lance /mnt/jfs/data/test_lance_data.lance
 
 # 预期输出:
 # Lance mode: latest version, manifest-only=false, include-indices=false
-# Warmup: <N> paths with 50 workers
-# <N> files warmed up, <X> bytes
+# warmup cache file: 6
+# (6 = manifest + 4 data files + version_hint 或其他元数据文件)
+```
+
+**缓存位置与验证：**
+
+JuiceFS 默认缓存目录为 `~/.juicefs/cache/`，按卷 UUID 子目录组织：
+
+```
+~/.juicefs/cache/
+└── <volume-uuid>/
+    ├── raw/
+    │   └── chunks/
+    │       └── 0/
+    │           └── 0/
+    │               ├── 1_0_1326828   ← slice_id=1, block_index=0, size=1326828
+    │               ├── 2_0_1328620
+    │               ├── 3_0_1328748
+    │               ├── 4_0_1329132
+    │               ├── 5_0_533
+    │               └── 6_0_1156
+    └── .lock
+```
+
+文件名格式：`{slice_id}_{block_index}_{size}`
+
+**验证缓存已生效的三种方式：**
+
+```bash
+# 方式 1: 用 --check 检查缓存命中率（推荐）
+./juicefs warmup --lance --check /mnt/jfs/data/test_lance_data.lance
+# 预期输出: 6 files checked, 5.1 MiB of 5.1 MiB (100.0%) cached
+# --check 不下载数据，只检查缓存中是否已有对应 block
+
+# 方式 2: 查看缓存目录大小
+du -sh ~/.juicefs/cache/
+# 预热前: 0 或很小；预热后: 有数据（如 5.2M）
+
+# 方式 3: 列出缓存文件
+find ~/.juicefs/cache/ -type f -name "*_*_*" | wc -l
+# 预期: 与 warmup 输出的文件数一致
 ```
 
 #### 8.5.2 仅预热 Manifest
@@ -805,7 +842,7 @@ rm -rf /var/jfsCache/local/
 # --check 模式下只检查缓存命中率，不执行下载
 
 # 查看本地缓存目录大小
-du -sh /var/jfsCache/local/
+du -sh ~/.juicefs/cache/
 ```
 
 #### 8.5.7 驱逐缓存
@@ -818,7 +855,7 @@ du -sh /var/jfsCache/local/
   /mnt/jfs/data/test_lance_data.lance
 
 # 验证缓存已被清空
-du -sh /var/jfsCache/local/
+du -sh ~/.juicefs/cache/
 ```
 
 ### 8.6 验证预热效果
@@ -827,7 +864,7 @@ du -sh /var/jfsCache/local/
 
 ```bash
 # 清空缓存后，直接读取（冷读）
-rm -rf /var/jfsCache/local/
+rm -rf ~/.juicefs/cache/
 time cat /mnt/jfs/data/test_lance_data.lance/data/*.lance > /dev/null
 
 # 预热
@@ -871,7 +908,7 @@ for col in ["id", "name", "score", "embedding"]:
 
 ```bash
 # 冷读
-rm -rf /var/jfsCache/local/
+rm -rf ~/.juicefs/cache/
 python3 verify_lance_warmup.py
 
 # 预热
@@ -888,7 +925,7 @@ python3 verify_lance_warmup.py
 umount /mnt/jfs
 
 # 清理本地存储
-rm -rf /var/jfsCache/
+rm -rf ~/.juicefs/cache/
 rm -f /tmp/juicefs-meta.db
 rm -rf /tmp/juicefs-storage/
 rm -rf /tmp/test_lance_data.lance
