@@ -37,8 +37,9 @@ func init() {
 }
 
 type fdbTxn struct {
-	fdb.Transaction
-	c *fdbClient
+	fdb.ReadTransaction
+	write fdb.Transaction
+	c     *fdbClient
 }
 
 type fdbClient struct {
@@ -71,13 +72,22 @@ func (c *fdbClient) config(key string) interface{} {
 	return nil
 }
 
+// simpleTxn runs f in a read-only snapshot transaction. Reads are performed
+// via fdb.Snapshot, which does NOT add keys to the read conflict range, so
+// the server-side resolver skips conflict tracking for these reads. This is
+// safe because all callers of simpleTxn only perform point/range reads;
+// attempts to write will panic on the nil `write` field of fdbTxn.
 func (c *fdbClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
-	return c.txn(ctx, f, retry)
+	_, err = c.client.ReadTransact(func(t fdb.ReadTransaction) (interface{}, error) {
+		e := f(&kvTxn{&fdbTxn{ReadTransaction: t.Snapshot(), c: c}, retry})
+		return nil, e
+	})
+	return err
 }
 
 func (c *fdbClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) error {
 	_, err := c.client.Transact(func(t fdb.Transaction) (interface{}, error) {
-		e := f(&kvTxn{&fdbTxn{t, c}, retry})
+		e := f(&kvTxn{&fdbTxn{ReadTransaction: t, write: t, c: c}, retry})
 		return nil, e
 	})
 	return err
@@ -206,19 +216,19 @@ func (tx *fdbTxn) exist(prefix []byte) bool {
 }
 
 func (tx *fdbTxn) set(key, value []byte) {
-	tx.Set(fdb.Key(key), value)
+	tx.write.Set(fdb.Key(key), value)
 }
 
 func (tx *fdbTxn) append(key []byte, value []byte) {
-	tx.AppendIfFits(fdb.Key(key), fdb.Key(value))
+	tx.write.AppendIfFits(fdb.Key(key), fdb.Key(value))
 }
 
 func (tx *fdbTxn) incrBy(key []byte, value int64) int64 {
-	tx.Add(fdb.Key(key), packCounter(value))
+	tx.write.Add(fdb.Key(key), packCounter(value))
 	// TODO: don't return new value if not needed
 	return parseCounter(tx.Get(fdb.Key(key)).MustGet())
 }
 
 func (tx *fdbTxn) delete(key []byte) {
-	tx.Clear(fdb.Key(key))
+	tx.write.Clear(fdb.Key(key))
 }
