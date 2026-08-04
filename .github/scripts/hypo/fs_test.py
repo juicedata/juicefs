@@ -1,7 +1,7 @@
 import os
 import unittest
-from hypothesis.stateful import RuleBasedStateMachine
 from fs import JuicefsMachine
+from hypothesis.stateful import RuleBasedStateMachine
 
 class TestFsrand2(unittest.TestCase):
     def test_issue_7315(self):
