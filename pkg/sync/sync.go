@@ -435,8 +435,8 @@ func deleteObjWithLimit(storage object.ObjectStorage, key string, dry bool, limi
 		deleted.Increment()
 		logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
 		return nil
-	} else if limit == 0 && (errors.Is(err, syscall.ENOTEMPTY) || errors.Is(err, syscall.EEXIST)) {
-		logger.Warnf("Deferred deleting non-empty directory %s from %s because the object limit was reached", key, storage)
+	} else if limit == 0 {
+		logger.Warnf("Deferring deletion of non-empty directory %s from %s; the object limit may have been reached: %s", key, storage, err)
 		return nil
 	} else {
 		failed.Increment()
