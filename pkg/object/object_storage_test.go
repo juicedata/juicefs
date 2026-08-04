@@ -845,6 +845,54 @@ func TestSftp(t *testing.T) { //skip mutate
 	testStorage(t, b)
 }
 
+func TestParseSftpEndpoint(t *testing.T) {
+	tests := []struct {
+		name               string
+		endpoint           string
+		wantHost, wantPort string
+		wantRoot           string
+	}{
+		{
+			name:     "encoded colon in root",
+			endpoint: "127.0.0.1:/backups/jfs-console-dump-2026-07-29T06%3A24%3A01.json.gz.gpg",
+			wantHost: "127.0.0.1",
+			wantPort: "22",
+			wantRoot: "/backups/jfs-console-dump-2026-07-29T06:24:01.json.gz.gpg",
+		},
+		{
+			name:     "custom port and trailing slash",
+			endpoint: "example.com:2022:/backup%3Aarchive/",
+			wantHost: "example.com",
+			wantPort: "2022",
+			wantRoot: "/backup:archive/",
+		},
+		{
+			name:     "plus remains literal",
+			endpoint: "[::1]:/backup+archive/",
+			wantHost: "::1",
+			wantPort: "22",
+			wantRoot: "/backup+archive/",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			host, port, root, err := parseSftpEndpoint(test.endpoint)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if host != test.wantHost || port != test.wantPort || root != test.wantRoot {
+				t.Fatalf("parseSftpEndpoint(%q) = (%q, %q, %q), want (%q, %q, %q)",
+					test.endpoint, host, port, root, test.wantHost, test.wantPort, test.wantRoot)
+			}
+		})
+	}
+
+	if _, _, _, err := parseSftpEndpoint("example.com:/backup%zz"); err == nil {
+		t.Fatal("expected invalid URL escape to be rejected")
+	}
+}
+
 func TestOBS(t *testing.T) { //skip mutate
 	if os.Getenv("HWCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()

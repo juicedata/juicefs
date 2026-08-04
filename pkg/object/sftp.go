@@ -484,22 +484,35 @@ func unescape(original string) string {
 	}
 }
 
-func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
+func parseSftpEndpoint(endpoint string) (host, port, root string, err error) {
 	idx := strings.LastIndex(endpoint, ":")
-	host, port, err := net.SplitHostPort(endpoint[:idx])
+	host, port, err = net.SplitHostPort(endpoint[:idx])
 	if err != nil && strings.Contains(err.Error(), "missing port") {
 		host, port, err = net.SplitHostPort(endpoint[:idx] + ":22")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse host from endpoint (%s): %q", endpoint, err)
+		return "", "", "", fmt.Errorf("unable to parse host from endpoint (%s): %q", endpoint, err)
 	}
-	root := filepath.Clean(endpoint[idx+1:])
+	root, err = url.PathUnescape(endpoint[idx+1:])
+	if err != nil {
+		return "", "", "", fmt.Errorf("unable to unescape root from endpoint (%s): %q", endpoint, err)
+	}
+	trailingSlash := strings.HasSuffix(root, dirSuffix)
+	root = filepath.Clean(root)
 	if runtime.GOOS == "windows" {
 		root = strings.ReplaceAll(root, "\\", "/")
 	}
 	// append suffix `/` removed by filepath.Clean()
-	if strings.HasSuffix(endpoint[idx+1:], dirSuffix) {
+	if trailingSlash {
 		root = root + dirSuffix
+	}
+	return host, port, root, nil
+}
+
+func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
+	host, port, root, err := parseSftpEndpoint(endpoint)
+	if err != nil {
+		return nil, err
 	}
 
 	if username == "" {
