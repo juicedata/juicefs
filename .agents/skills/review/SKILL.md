@@ -24,6 +24,7 @@ Review changes for correctness and actionable risk. Verify claims against primar
 
 - Identify the target: PR, branch diff, commit, issue, files, or code snippet. Clarify only material ambiguity; do not expand the scope without reason.
 - For remote PRs or issues, use available repository or GitHub tooling to inspect the description, comments, linked items, checks, history, and diff.
+- Unless a PR is small and self-explanatory, require the PR description or a linked issue to explain its background and motivation. If that context is missing, ask the author to add it rather than inferring the rationale solely from the diff.
 - Determine the claimed problem, trigger conditions, affected users, and visible behavior. Do not treat the PR or issue description as proof.
 - Verify the claim through code paths, tests, logs, existing behavior, history, or documentation. For external behavior, prefer official or first-party sources and cite the evidence. State anything that remains unverified.
 
@@ -48,7 +49,16 @@ Evaluate the relevant dimensions:
 - **Tests**: reproduction of the original problem, fixed behavior, boundaries, errors, concurrency, compatibility, and backend-specific paths. Check that tests are stable, minimal, readable, and use the smallest relevant commands. If tests were not run, explain why and recommend them.
 - **JuiceFS**: apply `AGENTS.md`, especially its requirements for POSIX semantics, data integrity, metadata-engine parity, dump/load and mixed-version compatibility, object-storage behavior, concurrency, and failure recovery.
 
-### 4. Report the Review
+### 4. Assess Backport Need
+
+For bug-fix PRs, evaluate whether the fix should be backported to the two currently maintained stable release branches:
+
+- Derive the branches from the development version in `pkg/version/version.go`. For example, if it is `1.5.0-dev`, inspect `release-1.4` and `release-1.3`.
+- Inspect the corresponding code on each branch to determine whether the bug exists there and whether a backport is warranted; do not infer applicability from the current branch alone.
+- Changes limited to `cmd/` or `sdk/` generally do not require backports unless the evidence indicates otherwise.
+- Record the conclusion and supporting evidence for each relevant branch in the review.
+
+### 5. Report the Review
 
 Use the following three top-level sections, in this order. This gives the reader enough context to understand the review before presenting defects and risks.
 
