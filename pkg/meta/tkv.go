@@ -669,7 +669,7 @@ func (m *kvMeta) doRefreshSession() error {
 		buf := tx.get(m.sessionKey(m.sid))
 		if buf == nil {
 			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-			tx.set(m.sessionInfoKey(m.sid), m.newSessionInfo())
+			tx.set(m.sessionInfoKey(m.sid), m.currentSessionInfo())
 		}
 		expire := m.expireTime()
 		tx.set(m.sessionKey(m.sid), m.packInt64(expire))
