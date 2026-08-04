@@ -873,6 +873,20 @@ func TestParseSftpEndpoint(t *testing.T) {
 			wantPort: "22",
 			wantRoot: "/backup+archive/",
 		},
+		{
+			name:     "root directory",
+			endpoint: "example.com:/",
+			wantHost: "example.com",
+			wantPort: "22",
+			wantRoot: "/",
+		},
+		{
+			name:     "encoded root directory",
+			endpoint: "example.com:%2F",
+			wantHost: "example.com",
+			wantPort: "22",
+			wantRoot: "/",
+		},
 	}
 
 	for _, test := range tests {
@@ -890,6 +904,12 @@ func TestParseSftpEndpoint(t *testing.T) {
 
 	if _, _, _, err := parseSftpEndpoint("example.com:/backup%zz"); err == nil {
 		t.Fatal("expected invalid URL escape to be rejected")
+	}
+}
+
+func TestParseSftpEndpointWithoutSeparator(t *testing.T) {
+	if _, _, _, err := parseSftpEndpoint("example.com"); err == nil {
+		t.Fatal("expected endpoint without path separator to be rejected")
 	}
 }
 

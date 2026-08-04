@@ -486,6 +486,9 @@ func unescape(original string) string {
 
 func parseSftpEndpoint(endpoint string) (host, port, root string, err error) {
 	idx := strings.LastIndex(endpoint, ":")
+	if idx < 0 {
+		return "", "", "", fmt.Errorf("unable to parse host from endpoint (%s): missing path separator", endpoint)
+	}
 	host, port, err = net.SplitHostPort(endpoint[:idx])
 	if err != nil && strings.Contains(err.Error(), "missing port") {
 		host, port, err = net.SplitHostPort(endpoint[:idx] + ":22")
@@ -503,7 +506,7 @@ func parseSftpEndpoint(endpoint string) (host, port, root string, err error) {
 		root = strings.ReplaceAll(root, "\\", "/")
 	}
 	// append suffix `/` removed by filepath.Clean()
-	if trailingSlash {
+	if trailingSlash && root != dirSuffix {
 		root = root + dirSuffix
 	}
 	return host, port, root, nil
