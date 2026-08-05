@@ -66,7 +66,7 @@ test_dump_load_with_copy_file_range(){
     rm -rf /tmp/test
     dd if=/dev/zero of=/tmp/test bs=1M count=1024
     cp /tmp/test /jfs/test
-    node .github/scripts/copyFile.js /jfs/test /jfs/test1
+    "${NODE_BIN:-node}" .github/scripts/copyFile.js /jfs/test /jfs/test1
     ./juicefs dump $META_URL dump.json $(get_dump_option)
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
