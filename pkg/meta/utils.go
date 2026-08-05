@@ -139,7 +139,7 @@ func errno(err error) syscall.Errno {
 	if err == nil {
 		return 0
 	}
-	if err == context.Canceled {
+	if errors.Is(err, context.Canceled) {
 		return syscall.EINTR
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
@@ -303,6 +303,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 			return st
 		}
 		var wg sync.WaitGroup
+		var statusOnce sync.Once
 		var status syscall.Errno
 		var nonDirEntries []*Entry
 		for i, e := range entries {
@@ -314,13 +315,14 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 						defer wg.Done()
 						st := m.emptyEntry(ctx, inode, name, child, skipCheckTrash, count, concurrent)
 						if st != 0 && st != syscall.ENOENT {
-							status = st
+							statusOnce.Do(func() { status = st })
 						}
 						<-concurrent
 					}(e.Inode, string(e.Name))
 				default:
 					if st := m.emptyEntry(ctx, inode, string(e.Name), e.Inode, skipCheckTrash, count, concurrent); st != 0 && st != syscall.ENOENT {
 						ctx.Cancel()
+						wg.Wait()
 						return st
 					}
 				}
@@ -328,6 +330,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 				nonDirEntries = append(nonDirEntries, e)
 			}
 			if ctx.Canceled() {
+				wg.Wait()
 				return syscall.EINTR
 			}
 			entries[i] = nil // release memory

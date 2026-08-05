@@ -1117,6 +1117,9 @@ func (m *kvMeta) txn(ctx Context, f func(tx *kvTxn) error, inodes ...Ino) error 
 			return syscall.EINTR
 		}
 		err := m.client.txn(ctx, f, i)
+		if err != nil && ctx.Canceled() {
+			return context.Canceled // preserve cancellation so `errno` do not print a full error stack
+		}
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
@@ -2026,6 +2029,10 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	var attr Attr
+	parentLocks := []Ino{parent}
+	if parent.IsTrash() {
+		parentLocks = nil // trash parent attributes are not updated, so sibling removals are independent.
+	}
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
 			return st
@@ -2121,7 +2128,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		}
 		m.genLog(tx, now, "RMDIR(%d,%s,%d):%d", parent, logEncode2(name), trash, inode)
 		return nil
-	}, parent)
+	}, parentLocks...)
 	if err == nil {
 		if trash == 0 {
 			m.updateStats(-align4K(0), -1)

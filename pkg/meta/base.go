@@ -1838,7 +1838,9 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 			m.parentMu.Unlock()
 		}
 		m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
-		m.updateDirQuota(ctx, parent, -align4K(0), -1)
+		if !parent.IsTrash() {
+			m.updateDirQuota(ctx, parent, -align4K(0), -1)
+		}
 	}
 	return st
 }
@@ -3182,7 +3184,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 		}()
 	}
 
-	concurrent := make(chan int, 1) // no effect for flatterned trash dirs
+	concurrent := make(chan int, 10)
 	for len(entries) > 0 {
 		if ctx.Canceled() {
 			return errno(ctx.Err())
