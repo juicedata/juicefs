@@ -21,6 +21,8 @@ package winfsp
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
@@ -32,10 +34,20 @@ import (
 	"github.com/winfsp/cgofuse/fuse"
 )
 
+// memkv persists its "setting" blob to this fixed path (see pkg/meta/tkv_mem.go).
+// On Windows "/tmp" resolves to the current drive root and may not exist, and the
+// file is shared across memkv clients, so we ensure the directory exists and
+// remove any stale file to start each test from a clean, isolated state.
+const memkvSettingPath = "/tmp/juicefs.memkv.setting.json"
+
 // newTestVFS builds an in-memory VFS (memkv meta + mem object store) so the test
 // has no external dependencies and can run on the Windows CI runner as-is.
 func newTestVFS(t *testing.T) *vfs.VFS {
 	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(memkvSettingPath), 0o755); err != nil {
+		t.Fatalf("prepare memkv setting dir: %s", err)
+	}
+	_ = os.Remove(memkvSettingPath)
 	metaConf := meta.DefaultConf()
 	metaConf.MountPoint = "z:"
 	m := meta.NewClient("memkv://", metaConf)
