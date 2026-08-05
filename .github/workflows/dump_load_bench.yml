@@ -87,7 +87,7 @@ jobs:
           target: ${{steps.vars.outputs.target}}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
 
