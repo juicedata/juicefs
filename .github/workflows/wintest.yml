@@ -140,7 +140,14 @@ jobs:
           $env:CGO_ENABLED=1
           $env:PATH+=";C:\mingw64\bin"
           go build -ldflags="-s -w" -o juicefs.exe .
-      
+
+      - name: Run winfsp unit tests
+        run: |
+          $env:CGO_ENABLED=1
+          $env:PATH+=";C:\mingw64\bin"
+          $env:PATH+=";C:\Program Files (x86)\WinFsp\bin"
+          go test -v -count=1 ./pkg/winfsp/...
+
       - name: Install Python2
         run: |
           choco install python2 -y
