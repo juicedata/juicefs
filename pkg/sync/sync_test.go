@@ -734,6 +734,48 @@ func TestSyncLimitDeleteDstBoundary(t *testing.T) {
 	}
 }
 
+// When --limit stops a partial sync before an extra destination directory is
+// emptied, deleting the directory is deferred rather than reported as a
+// failure. A later unlimited sync can remove the remaining contents and the
+// directory itself.
+func TestSyncLimitDeleteDstDefersNonEmptyDir(t *testing.T) {
+	t.Cleanup(func() {
+		dstDelayDelMu.Lock()
+		dstDelayDel = nil
+		dstDelayDelMu.Unlock()
+	})
+	tmpSrc := t.TempDir() + "/"
+	tmpDst := t.TempDir() + "/"
+	src, _ := object.CreateStorage("file", tmpSrc, "", "", "")
+	dst, _ := object.CreateStorage("file", tmpDst, "", "", "")
+
+	if err := dst.Put(ctx, "extra/file", bytes.NewReader([]byte("data"))); err != nil {
+		t.Fatalf("put dst extra/file: %s", err)
+	}
+
+	config := &Config{
+		Threads:     1,
+		ListThreads: 1,
+		Update:      true,
+		Dirs:        true,
+		DeleteDst:   true,
+		Limit:       2,
+		MaxSize:     math.MaxInt64,
+		Quiet:       true,
+	}
+	if err := Sync(src, dst, config); err != nil {
+		t.Fatalf("sync with exhausted limit: %s", err)
+	}
+
+	all, err := ListAll(dst, "", "", "", true)
+	if err != nil {
+		t.Fatalf("list all dst: %s", err)
+	}
+	if err := testKeysEqual(all, []string{"", "extra/", "extra/file"}); err != nil {
+		t.Fatalf("partial sync should retain non-empty directory: %s", err)
+	}
+}
+
 // Regression test: while deleting an extra dst object consumes part of the
 // --limit budget, the producer must still scan dstkeys to locate the current
 // source object's matching dst. Otherwise the object is treated as missing on
