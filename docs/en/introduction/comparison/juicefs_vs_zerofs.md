@@ -16,15 +16,11 @@ defaults, and licensing.
 
 ## Product positioning
 
-**ZeroFS** is a self-hosted file system for putting POSIX semantics on top of an S3-compatible bucket. Architecturally,
-one ZeroFS server process (the leader) is the sole writer to the backing object store: it accepts connections from
-clients and arbitrates their writes internally, but every mutation is funneled through that single
-process before it reaches object storage. High availability comes from a standby that can take over the leader role on
-failure, and read throughput scales out with any number of read-only replicas — but there is always exactly one process
-turning client writes into object-store uploads. This makes ZeroFS a good fit for self-hosting, CI build caches, kernel
-builds, home labs, and small-to-medium production services, where mandatory client-side encryption and a dependency-free
-deployment (no external metadata database) matter more than distributing the write path across independent server
-processes.
+**ZeroFS** is a self-hosted, encrypted-by-default file system for putting POSIX semantics (or a ZFS pool, or a block
+device) on top of an S3-compatible bucket, without standing up any external metadata database. It targets teams that
+want to self-host object-storage-backed file access with a reasonable operational footprint rather than teams that need
+to scale massive throughput horizontally. See [Architecture](#architecture) below for how its single-leader design and
+mandatory encryption shape that trade-off.
 
 **JuiceFS** is a cloud-native distributed file system designed for demanding AI/ML training, high-performance computing,
 and big data analytics across multiple clouds. By using a data-metadata-separation design with a pluggable,
@@ -43,11 +39,14 @@ Key architectural characteristics:
 
 - Self-contained: both metadata (LSM tree) and data (segments) live in the same object store; nothing else to deploy or
   operate.
+- One server process (the leader) is the sole writer to the backing object store. It accepts connections from any number
+  of concurrent clients and arbitrates their writes and POSIX locks internally, but every mutation is funneled through
+  that single process. See [Concurrency and write scalability](#concurrency-and-write-scalability) below.
 - Encryption and compression are mandatory on every block, with no option to disable them.
 - A dual-tier local cache (encrypted raw-parts cache for object bytes, plaintext decoded-block cache for metadata, plus
   an in-memory tail cache for each inode's most recent extent) reduces round trips to object storage.
 - High availability is a two-node leader/standby pair with automatic failover; any number of additional read-only
-  replicas can be added for read scaling, but there is exactly one writer at a time.
+  replicas can be added for read scaling, but there is exactly one writer process at a time.
 
 **JuiceFS** adopts a decoupled architecture that separates metadata management from data storage. Files are split into
 chunks (default 64 MiB, further divided into 4 MiB blocks) before being uploaded to object storage, with corresponding
