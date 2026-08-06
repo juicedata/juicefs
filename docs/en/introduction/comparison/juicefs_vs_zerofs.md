@@ -88,21 +88,47 @@ for.
 
 ### Concurrency and write scalability
 
-**ZeroFS** does allow many concurrent clients to write — the Kubernetes CSI Driver presents genuine `ReadWriteMany`
+**ZeroFS** does allow many concurrent clients to write: the Kubernetes CSI Driver presents genuine `ReadWriteMany`
 volumes, and any number of pods on any number of nodes can mount over 9P and have their POSIX byte-range locks
 arbitrated by the leader. The constraint is at the server layer, not the client layer: every one of those clients'
 writes is funneled through a single leader process before it reaches object storage, and that process cannot be
-horizontally scaled — the HA pair exists to provide failover, not write scale-out. If the leader becomes a bottleneck,
+horizontally scaled; the HA pair exists to provide failover, not write scale-out. If the leader becomes a bottleneck,
 the fix is a bigger leader, not more leaders; the standby stays synchronized as a hot backup, and read replicas serve
 reads with bounded staleness (the writer's flush interval, default 30 seconds, plus up to a 10-second replica poll
 window) rather than adding write capacity.
 
 **JuiceFS** has no single-writer bottleneck: every client, whether mounted via FUSE, the S3 Gateway, or an SDK, reads
 and writes directly against object storage and a shared metadata engine, with strong consistency coordinated by that
-engine. Metadata engines bring their own scale-out story — for example TiKV's Raft-replicated cluster, Redis
-Cluster/Sentinel, or JuiceFS Enterprise's proprietary distributed metadata engine, which is horizontally scalable and
-Raft-replicated across at least 3 copies — so both metadata throughput and the number of concurrent writers can grow
-with the workload.
+engine. Metadata engines bring their own scale-out story: TiKV's Raft-replicated cluster, Redis Cluster/Sentinel, and
+the JuiceFS Enterprise Edition's proprietary distributed metadata engine (horizontally scalable and Raft-replicated
+across at least 3 copies) all let both metadata throughput and the number of concurrent writers grow with the
+workload.
+
+### Durability and consistency
+
+**ZeroFS** buffers writes in memory: an open data segment (sealed and uploaded once it reaches 256 MiB) plus an LSM
+memtable for metadata. It only guarantees durability to object storage when a specific trigger fires: an explicit
+`fsync`, an NFS `COMMIT`, an NBD `FLUSH`/`FUA`, a `sync_writes = true` batch, the periodic flush timer
+(`flush_interval_secs`, default 30 seconds), garbage collection starting, or a graceful shutdown. Plain `close()` is
+notably absent from that list, so closing a file descriptor does not by itself force a flush. An application that
+writes and closes a file without calling `fsync()` can lose up to a flush interval's worth of writes if the leader
+crashes before the next periodic flush, even though its `write()`/`close()` calls already returned successfully.
+ZeroFS does add a safety net for the case where an application does call `fsync()`: a "verified fsync" mechanism
+returns `ESTALE` instead of falsely reporting success if the server restarted before flushing acknowledged writes.
+Once data is flushed, recovery is strongly consistent: a crash recovers to an atomic prefix of the mutations that
+were visible before it, never a partial or torn write.
+
+**JuiceFS** also buffers writes, in the client's read/write buffer (default 300 MiB), but ties the durability
+boundary directly to `close()`: `close()`, `fsync()`, and `fdatasync()` (as well as filling a 4 MiB block) all
+trigger a flush, and the client will not commit a write to the metadata engine until the corresponding data has
+actually been uploaded to object storage. This is what its default "close-to-open" consistency guarantee is built
+on: a successful `close()` already means the write is both durable in object storage and visible to any other
+client that opens the file afterward, without the application ever having to call `fsync()` itself. For more
+details, see [Cache](../../guide/cache.md#consistency) and
+[POSIX compatibility](../../reference/posix_compatibility.md). JuiceFS does offer an opt-in `--writeback` mode with a
+risk profile similar to ZeroFS's default: writes are committed to metadata immediately and uploaded from local disk
+asynchronously. However, the docs flag it explicitly ("if write cache data suffers loss before upload is complete,
+file data is lost forever") and it is off by default.
 
 ### Caching
 
@@ -161,7 +187,7 @@ clouds. See the table below for more details.
 
 **ZeroFS** is dual-licensed under the GNU AGPLv3 and a commercial license. Internal-only use does not trigger copyleft
 obligations, but hosting or distributing ZeroFS as a network service requires publishing the complete source of the
-combined work under AGPLv3 — unless a commercial license is purchased. This is a materially different obligation from a
+combined work under AGPLv3, unless a commercial license is purchased. This is a materially different obligation from a
 permissive license, and it is a factor teams need to evaluate before embedding ZeroFS in a product they distribute or
 offer as a service.
 
