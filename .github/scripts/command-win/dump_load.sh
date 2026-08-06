@@ -62,7 +62,7 @@ test_dump_load_with_quota(){
     ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL
     mkdir -p /z/d
     ./juicefs.exe quota set $META_URL --path //d --inodes 1000 --capacity 1
-    ./juicefs.exe dump --log-level error $META_URL $(get_dump_option) > dump.json
+    ./juicefs.exe dump --log-level error $META_URL $(get_dump_option) dump.json
     ./juicefs.exe umount z:
     redis-cli -h 127.0.0.1 -p 6379 -n 1 FLUSHDB
     ./juicefs.exe load $META_URL dump.json $(get_load_option)

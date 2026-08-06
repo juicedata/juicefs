@@ -81,7 +81,7 @@ test_dump_load_with_quota(){
     ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --inodes 1000 --capacity 1
-    ./juicefs dump --log-level error $META_URL $(get_dump_option) > dump.json
+    ./juicefs dump --log-level error $META_URL $(get_dump_option) dump.json
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json $(get_load_option)
