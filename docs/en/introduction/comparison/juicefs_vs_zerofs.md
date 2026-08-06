@@ -68,6 +68,24 @@ Key architectural characteristics:
 - Multi-cloud and hybrid cloud support
   with [all mainstream object storage backends](../../reference/how_to_set_up_object_storage.md).
 
+### Data path
+
+**ZeroFS** relays all file data through its server node. Neither the NFS and 9P protocol clients nor the native Linux
+kernel client talk to object storage directly, only the ZeroFS server holds the storage credentials and issues the
+GET/PUT calls. So reads and writes are proxied through that one process on its way to or from the bucket.
+
+**JuiceFS** clients, on the other hand, directly issue GET/PUT calls to the object store themselves. Metadata operations
+go through the metadata engine, but file data always travels directly between the client mounting machines and the
+object store, without an intermediate relay.
+
+This distinction carries considerations in cloud deployments. Because ZeroFS clients never reach the object store
+themselves, file data effectively crosses the network twice: once between the object store and the ZeroFS server, and
+again between the server and the client. When the server, its clients, and the object store don't all sit in the same
+network zone, that extra hop can add meaningful data-transfer charges and consumes the server's bandwidth, on top of
+whatever the object store would have charged for direct client access. JuiceFS clients talk to object storage directly,
+so aside from metadata-engine traffic, there is no equivalent relay hop or its associated data transfer cost to budget
+for.
+
 ### Concurrency and write scalability
 
 **ZeroFS** does allow many concurrent clients to write — the Kubernetes CSI Driver presents genuine `ReadWriteMany`
