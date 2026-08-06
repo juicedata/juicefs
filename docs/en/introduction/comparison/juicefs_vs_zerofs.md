@@ -16,11 +16,15 @@ defaults, and licensing.
 
 ## Product positioning
 
-**ZeroFS** is a self-hosted file system for putting POSIX semantics on top of an S3-compatible bucket. Its
-high-availability model is a leader/standby pair for failover, plus any number of read-only replicas for read scaling.
-It is best suited for single-writer or leader-based deployments (self-hosting, CI build caches, kernel builds, home
-labs, and small-to-medium production services, etc.) where mandatory client-side encryption and a simple,
-dependency-free deployment (no external metadata database) matter more than horizontal write scalability.
+**ZeroFS** is a self-hosted file system for putting POSIX semantics on top of an S3-compatible bucket. Architecturally,
+one ZeroFS server process (the leader) is the sole writer to the backing object store: it accepts connections from
+clients and arbitrates their writes internally, but every mutation is funneled through that single
+process before it reaches object storage. High availability comes from a standby that can take over the leader role on
+failure, and read throughput scales out with any number of read-only replicas — but there is always exactly one process
+turning client writes into object-store uploads. This makes ZeroFS a good fit for self-hosting, CI build caches, kernel
+builds, home labs, and small-to-medium production services, where mandatory client-side encryption and a dependency-free
+deployment (no external metadata database) matter more than distributing the write path across independent server
+processes.
 
 **JuiceFS** is a cloud-native distributed file system designed for demanding AI/ML training, high-performance computing,
 and big data analytics across multiple clouds. By using a data-metadata-separation design with a pluggable,
@@ -64,12 +68,14 @@ Key architectural characteristics:
 
 ### Concurrency and write scalability
 
-**ZeroFS** enforces a single active writer per file system. Its HA pair exists to provide failover, not write
-scale-out — the documentation is explicit that only one node accepts mutations at a time, while the standby stays
-synchronized as a hot backup and read replicas serve reads with bounded staleness (the writer's flush interval, default
-30 seconds, plus up to a 10-second replica poll window). The Kubernetes CSI Driver can still present `ReadWriteMany`
-volumes, since many pods can each mount over 9P and have their POSIX byte-range locks arbitrated by the single leader
-gateway — but every mutation still funnels through that one process.
+**ZeroFS** does allow many concurrent clients to write — the Kubernetes CSI Driver presents genuine `ReadWriteMany`
+volumes, and any number of pods on any number of nodes can mount over 9P and have their POSIX byte-range locks
+arbitrated by the leader. The constraint is at the server layer, not the client layer: every one of those clients'
+writes is funneled through a single leader process before it reaches object storage, and that process cannot be
+horizontally scaled — the HA pair exists to provide failover, not write scale-out. If the leader becomes a bottleneck,
+the fix is a bigger leader, not more leaders; the standby stays synchronized as a hot backup, and read replicas serve
+reads with bounded staleness (the writer's flush interval, default 30 seconds, plus up to a 10-second replica poll
+window) rather than adding write capacity.
 
 **JuiceFS** has no single-writer bottleneck: every client, whether mounted via FUSE, the S3 Gateway, or an SDK, reads
 and writes directly against object storage and a shared metadata engine, with strong consistency coordinated by that
@@ -117,7 +123,7 @@ clouds. See the table below for more details.
 | Clients                  | NFS, 9P, NBD (block device), native Linux kernel client, Web UI        | POSIX (FUSE), Java SDK, Python SDK, S3 Gateway           | POSIX (FUSE), Java SDK, Python SDK, S3 Gateway                     |
 | Metadata storage         | Embedded LSM tree, persisted in the same object store (no external DB) | External database (Redis, TiKV, MySQL, PostgreSQL, etc.) | Horizontally-scalable high-performance distributed metadata engine |
 | Metadata redundancy      | Leader/standby pair with automatic failover                            | Depends on the database used                             | At least 3 copies (based on the Raft consensus algorithm)          |
-| Concurrent writers       | Single active writer per volume (read replicas are read-only)          | Unlimited concurrent readers/writers                     | Unlimited concurrent readers/writers                               |
+| Concurrent writers       | Many clients, all writes funneled through one leader process           | Many clients, each writing directly to storage           | Many clients, each writing directly to storage                     |
 | Data storage             | AWS S3, S3-compatible, Google Cloud Storage, Azure Blob                | Any mainstream object storage                            | Any mainstream object storage                                      |
 | Data redundancy          | Provided by object storage                                             | Provided by object storage                               | Provided by object storage                                         |
 | Data caching             | Local disk + memory (dual-tier cache)                                  | Local cache                                              | Distributed cache                                                  |
@@ -148,11 +154,13 @@ and multi-cloud mirroring.
 
 **ZeroFS** is a self-contained, security-first file system: it needs no external metadata database, encrypts and
 compresses every block by default, and can be mounted over NFS, 9P, or a native Linux kernel client, or consumed as an
-NBD block device. Its high-availability design — a leader/standby pair plus unlimited read-only replicas — is built for
-failover and read scaling, not write scale-out; only one node accepts writes at a time. That makes it a good fit for
-self-hosted, single-writer, or leader-based deployments such as CI build caches, kernel builds, home labs, and
-small-to-medium services, especially where mandatory encryption and a dependency-free deployment matter. Its
-AGPLv3-or-commercial licensing is also a meaningful consideration for teams distributing it as part of a hosted product.
+NBD block device. Many clients can connect and write concurrently, but every one of those writes is funneled through a
+single leader process before it reaches object storage, and that process is not horizontally scalable — its
+high-availability design (a leader/standby pair plus unlimited read-only replicas) is built for failover and read
+scaling, not for adding write throughput. That makes it a good fit for self-hosted deployments such as CI build caches,
+kernel builds, home labs, and small-to-medium services, especially where mandatory encryption and a dependency-free
+deployment matter more than scaling the write path itself. Its AGPLv3-or-commercial licensing is also a meaningful
+consideration for teams distributing it as part of a hosted product.
 
 **JuiceFS** is built for the opposite end of the spectrum: large-scale, high-concurrency, multi-writer workloads. By
 decoupling metadata from data and supporting pluggable, independently scalable metadata engines (Redis, TiKV, MySQL,
