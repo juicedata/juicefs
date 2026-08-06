@@ -17,10 +17,11 @@ defaults, and licensing.
 ## Product positioning
 
 **ZeroFS** is a self-hosted, encrypted-by-default file system for putting POSIX semantics (or a ZFS pool, or a block
-device) on top of an S3-compatible bucket, without standing up any external metadata database. It targets teams that
-want to self-host object-storage-backed file access with a reasonable operational footprint rather than teams that need
-to scale massive throughput horizontally. See [Architecture](#architecture) below for how its single-leader design and
-mandatory encryption shape that trade-off.
+device) on top of an S3-compatible bucket. A single ZeroFS core service handles metadata, data, and every protocol
+endpoint, so there's no separate metadata database to run alongside it. It targets teams that want to self-host
+object-storage-backed file access with a reasonable operational footprint rather than teams that need to scale massive
+throughput horizontally. See [Architecture](#architecture) below for how its single-leader design and mandatory
+encryption shape that trade-off.
 
 **JuiceFS** is a cloud-native distributed file system designed for demanding AI/ML training, high-performance computing,
 and big data analytics across multiple clouds. By using a data-metadata-separation design with a pluggable,
@@ -37,11 +38,13 @@ not individually accessible through the S3 API, which is similar to JuiceFS' app
 
 Key architectural characteristics:
 
-- Self-contained: both metadata (LSM tree) and data (segments) live in the same object store; nothing else to deploy or
-  operate.
-- One server process (the leader) is the sole writer to the backing object store. It accepts connections from any number
-  of concurrent clients and arbitrates their writes and POSIX locks internally, but every mutation is funneled through
-  that single process. See [Concurrency and write scalability](#concurrency-and-write-scalability) below.
+- No separate metadata database: both metadata (LSM tree) and data (segments) live in the same object store, managed by
+  the ZeroFS server. When working with ZeroFS, this server (and its standby for HA and read replicas for read scaling)
+  is the main service you deploy and operate. ZeroFS folds metadata management into it instead of requiring a separate
+  metadata database.
+- One server process (the leader) is the sole writer to the backing object store. It accepts connections from concurrent
+  clients and arbitrates their writes and POSIX locks internally, but every mutation is funneled through that single
+  process. See [Concurrency and write scalability](#concurrency-and-write-scalability) below.
 - Encryption and compression are mandatory on every block, with no option to disable them.
 - A dual-tier local cache (encrypted raw-parts cache for object bytes, plaintext decoded-block cache for metadata, plus
   an in-memory tail cache for each inode's most recent extent) reduces round trips to object storage.
@@ -151,21 +154,21 @@ and multi-cloud mirroring.
 
 ## Summary
 
-**ZeroFS** is a self-contained, security-first file system: it needs no external metadata database, encrypts and
-compresses every block by default, and can be mounted over NFS, 9P, or a native Linux kernel client, or consumed as an
-NBD block device. Many clients can connect and write concurrently, but every one of those writes is funneled through a
-single leader process before it reaches object storage, and that process is not horizontally scalable — its
-high-availability design (a leader/standby pair plus unlimited read-only replicas) is built for failover and read
-scaling, not for adding write throughput. That makes it a good fit for self-hosted deployments such as CI build caches,
-kernel builds, home labs, and small-to-medium services, especially where mandatory encryption and a dependency-free
-deployment matter more than scaling the write path itself. Its AGPLv3-or-commercial licensing is also a meaningful
-consideration for teams distributing it as part of a hosted product.
+**ZeroFS** is a security-first file system that folds metadata storage into its own server process instead of requiring
+a separate database, encrypts and compresses every block by default, and can be mounted over NFS, 9P, or a native Linux
+kernel client, or consumed as an NBD block device. It's still a service you deploy and operate. You just don't operate a
+second, separate metadata database alongside it. Clients can connect and write concurrently, but every one of those
+writes is funneled through a single leader process before it reaches object storage, and that write path is not
+horizontally scalable. Its high-availability design (a leader/standby pair plus unlimited read-only replicas) is built
+for failover and read scaling, not for adding write throughput. That makes it a good fit for self-hosted deployments
+such as CI build caches, kernel builds, home labs, and small-to-medium services, especially where mandatory encryption
+and having a single service to operate matter more than scaling the write path itself.
 
 **JuiceFS** is built for the opposite end of the spectrum: large-scale, high-concurrency, multi-writer workloads. By
 decoupling metadata from data and supporting pluggable, independently scalable metadata engines (Redis, TiKV, MySQL,
-PostgreSQL, SQLite, and more, or JuiceFS Enterprise's proprietary distributed metadata engine), JuiceFS lets any number
-of clients read and write the same file system concurrently with strong consistency, across the broadest range of object
-storage backends and multiple clouds. It provides a standard POSIX interface through FUSE, a Java API for Hadoop
-ecosystems, an S3 Gateway, and a Kubernetes CSI Driver, and is released under the permissive Apache License 2.0. JuiceFS
-is widely used in big data analytics, AI/ML training, agentic AI tools, multi-cloud and hybrid cloud deployments,
-container shared storage, and high-performance computing.
+PostgreSQL, SQLite, and more, or the JuiceFS Enterprise Edition proprietary distributed metadata engine), JuiceFS lets
+any number of clients read and write the same file system concurrently with strong consistency, across the broadest
+range of object storage backends and multiple clouds. It provides a standard POSIX interface through FUSE, a Java API
+for Hadoop ecosystems, an S3 Gateway, and a Kubernetes CSI Driver. The JuiceFS Community Edition is released under the
+permissive Apache License 2.0. JuiceFS is widely used in big data analytics, AI/ML training, agentic AI tools,
+multi-cloud and hybrid cloud deployments, container shared storage, and high-performance computing.
