@@ -38,15 +38,24 @@ import (
 // with one exception: fsync(2)/fdatasync(2) reconcile immediately (see
 // fsync below), so an application's explicit sync point means what it says.
 //
-// Backing registrations are POOLED: registering a backing fd costs an ioctl
-// (or, on unprivileged broker mounts, an RPC round trip to the node broker)
-// plus a staging-file create, once per write-open. Small-file workloads open
-// thousands of times, so instead of register-at-open/unregister-at-release,
-// reconciled staging files are truncated to zero and parked for the next
-// open; after warm-up a small-file loop performs no registrations at all
-// (ENG26-869). A backing is never attached to two live opens at once:
-// checkout is exclusive, and a backing returns to the pool only after its
-// reconcile finished (data copied out, file truncated).
+// Backing registrations are NOT reused across opens: each write-open gets a
+// fresh registration (a new ioctl or, on unprivileged broker mounts, a new
+// RPC round trip to the node broker, plus a fresh staging-file create), and
+// reconcile() unregisters and removes it — for a DIFFERENT inode's next open,
+// never the same one. This was originally pooled (checked-in backings parked
+// for reuse by whichever inode opened next), which is measurably cheaper for
+// small-file-heavy workloads, but pooling handed a backing file across
+// inodes: once mmap(2) has been called on a passthrough fd, the kernel's
+// fuse_passthrough_mmap() repoints the VMA directly at the backing file
+// (vma_set_file), fully decoupling the mapping's lifetime from the fd — a
+// process can close(2) (triggering reconcile+recycle) while a still-live,
+// still-dirty mapping keeps writing to what is now, after recycling, a
+// DIFFERENT inode's staging file. There is no FUSE opcode or other userspace
+// signal that observes mmap activity on a passthrough-diverted file (the
+// entire point of passthrough is to bypass such upcalls), so there is no way
+// to detect "this backing might still be mmap'd" and only pool the ones that
+// aren't. Reusing a backing across inodes is a real, silent cross-tenant
+// data-corruption vector; not reusing it is not.
 type passthroughState struct {
 	server *fuse.Server
 	dir    string
@@ -54,17 +63,11 @@ type passthroughState struct {
 	mu       sync.Mutex
 	files    map[uint64]*ptFile // keyed by fh
 	busy     map[Ino]int        // inodes with a passthrough open or pending reconcile
-	pool     []*ptBacking       // idle registered backings, truncated to 0
-	poolSeq  int
-	disabled bool // registration failed with a permanent error; stop trying
-	paused   bool // draining for handover/shutdown; refuse new passthrough opens
+	seq      int                // monotonic counter for unique staging file names
+	disabled bool               // registration failed with a permanent error; stop trying
+	paused   bool               // draining for handover/shutdown; refuse new passthrough opens
 	warnOne  sync.Once
 }
-
-// ptPoolCap bounds the idle registered backings kept per mount. Each entry
-// pins one kernel backing registration and one empty staging file; the cap
-// only needs to cover the plausible number of concurrent write-opens.
-const ptPoolCap = 64
 
 // ptBacking is one registered kernel backing: a staging file plus the
 // backing ID the kernel handed back for it. It outlives individual opens.
@@ -111,21 +114,17 @@ func newPassthroughState(server *fuse.Server, dir string) *passthroughState {
 	}
 }
 
-// checkout returns an idle registered backing, or registers a fresh one.
+// checkout registers a fresh backing for a new passthrough open. Always a new
+// registration — see the passthroughState doc comment for why a backing is
+// never reused across inodes.
 func (p *passthroughState) checkout() (*ptBacking, bool) {
 	p.mu.Lock()
 	if p.disabled {
 		p.mu.Unlock()
 		return nil, false
 	}
-	if n := len(p.pool); n > 0 {
-		b := p.pool[n-1]
-		p.pool = p.pool[:n-1]
-		p.mu.Unlock()
-		return b, true
-	}
-	p.poolSeq++
-	seq := p.poolSeq
+	p.seq++
+	seq := p.seq
 	p.mu.Unlock()
 
 	path := filepath.Join(p.dir, fmt.Sprintf("pool-%d.tmp", seq))
@@ -164,16 +163,10 @@ func (p *passthroughState) checkout() (*ptBacking, bool) {
 	return &ptBacking{path: path, f: f, backingID: id}, true
 }
 
-// checkin parks a reconciled backing for reuse, or retires it when the pool
-// is full. The staging file MUST already be truncated to zero.
-func (p *passthroughState) checkin(b *ptBacking) {
-	p.mu.Lock()
-	if len(p.pool) < ptPoolCap {
-		p.pool = append(p.pool, b)
-		p.mu.Unlock()
-		return
-	}
-	p.mu.Unlock()
+// retire tears a backing down for good: unregisters the kernel registration,
+// closes the local fd, and removes the staging file. Never reused by another
+// inode — see the passthroughState doc comment.
+func (p *passthroughState) retire(b *ptBacking) {
 	if errno := p.server.UnregisterBackingFd(b.backingID); errno != 0 {
 		logger.Warnf("passthrough: UnregisterBackingFd(%d): %s", b.backingID, errno)
 	}
@@ -322,10 +315,10 @@ func (p *passthroughState) reconcile(ctx vfs.Context, v *vfs.VFS, fh uint64) {
 	// The kernel stops issuing passthrough I/O for this open once its release
 	// is processed, and reconcile runs from the RELEASE handler — after the
 	// application's last close, so no writes are in flight. The registration
-	// itself is kept alive for reuse (see checkin); read the staging content
-	// through a fresh path-open fd for a clean sequential pass (reading via
-	// the registered backing fd can return stale/partial data), then truncate
-	// and park the backing for the next open.
+	// is retired for good once reconciled (see retire) rather than reused by
+	// a future open, which may belong to a different inode; read the staging
+	// content through a fresh path-open fd for a clean sequential pass
+	// (reading via the registered backing fd can return stale/partial data).
 	b := pf.b
 	done := false
 	defer func() {
@@ -364,13 +357,10 @@ func (p *passthroughState) reconcile(ctx vfs.Context, v *vfs.VFS, fh uint64) {
 	// readers in this mount session see the reconciled file (read-your-writes).
 	p.server.InodeNotify(uint64(pf.ino), -1, 0)         // attributes (size/mtime)
 	p.server.InodeNotify(uint64(pf.ino), 0, int64(off)) // data range
-	// Data is safely in JuiceFS: recycle the registration for the next open.
-	if err := b.f.Truncate(0); err != nil {
-		logger.Warnf("passthrough: truncate staging %s: %s", b.path, err)
-		return // defer retires it
-	}
+	// Data is safely in JuiceFS: retire the registration and staging file for
+	// good. No truncate needed — retire removes the file outright.
 	done = true
-	p.checkin(b)
+	p.retire(b)
 }
 
 // copyStagingLocked copies the full staging content of pf into JuiceFS slices

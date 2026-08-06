@@ -22,45 +22,6 @@ import (
 	"testing"
 )
 
-// TestPassthroughPoolReuse: a checked-in backing is handed back by the next
-// checkout without a new registration (no server round trip), and pooled
-// entries come back most-recently-parked first.
-func TestPassthroughPoolReuse(t *testing.T) {
-	dir := t.TempDir()
-	p := &passthroughState{dir: dir, files: make(map[uint64]*ptFile)}
-
-	mk := func(name string) *ptBacking {
-		f, err := os.OpenFile(filepath.Join(dir, name), os.O_RDWR|os.O_CREATE, 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return &ptBacking{path: f.Name(), f: f, backingID: int32(len(p.pool) + 1)}
-	}
-
-	b1, b2 := mk("pool-1.tmp"), mk("pool-2.tmp")
-	// Under the cap, checkin parks without touching the (nil) server —
-	// a server call here would panic the test.
-	p.checkin(b1)
-	p.checkin(b2)
-	if len(p.pool) != 2 {
-		t.Fatalf("pool size = %d, want 2", len(p.pool))
-	}
-
-	// Checkout must reuse parked backings (nil server: a registration
-	// attempt would panic), most recently parked first.
-	got, ok := p.checkout()
-	if !ok || got != b2 {
-		t.Fatalf("checkout = %v, %v; want %v (LIFO reuse)", got, ok, b2)
-	}
-	got, ok = p.checkout()
-	if !ok || got != b1 {
-		t.Fatalf("checkout = %v, %v; want %v", got, ok, b1)
-	}
-	if len(p.pool) != 0 {
-		t.Fatalf("pool size = %d, want 0", len(p.pool))
-	}
-}
-
 // TestPassthroughDisabledLatch: once registration hit a permanent error the
 // state stops attempting registrations entirely — checkout must return false
 // before touching the (nil) server or the filesystem.
@@ -69,7 +30,7 @@ func TestPassthroughDisabledLatch(t *testing.T) {
 	if b, ok := p.checkout(); ok || b != nil {
 		t.Fatalf("checkout on disabled state = %v, %v; want nil, false", b, ok)
 	}
-	if p.poolSeq != 0 {
+	if p.seq != 0 {
 		t.Fatalf("disabled checkout still allocated a staging sequence")
 	}
 }
