@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
@@ -377,7 +378,14 @@ func (p *passthroughState) copyStagingLocked(ctx vfs.Context, v *vfs.VFS, pf *pt
 		return 0, false
 	}
 	defer rf.Close()
-	buf := make([]byte, 4<<20)
+	// Pooled/accounted allocation: vfs.writer's and vfs/compact's memory
+	// backpressure (utils.AllocMemory()-store.UsedMemory()) only sees bytes
+	// allocated through utils.Alloc. A raw make() here would be invisible to
+	// that accounting, so concurrent reconciles could balloon RSS well past
+	// the configured buffer budget without the compactor/writer ever
+	// throttling in response.
+	buf := utils.Alloc(4 << 20)
+	defer utils.Free(buf)
 	var off uint64
 	for {
 		n, err := rf.Read(buf)
