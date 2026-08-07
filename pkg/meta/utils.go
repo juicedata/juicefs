@@ -139,7 +139,7 @@ func errno(err error) syscall.Errno {
 	if err == nil {
 		return 0
 	}
-	if errors.Is(err, context.Canceled) {
+	if errors.Is(err, context.Canceled) || strings.Contains(err.Error(), context.Canceled.Error()) { // TiKV stringifies context cancellation in some error paths
 		return syscall.EINTR
 	}
 	if errors.Is(err, context.DeadlineExceeded) {

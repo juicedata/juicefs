@@ -1117,9 +1117,6 @@ func (m *kvMeta) txn(ctx Context, f func(tx *kvTxn) error, inodes ...Ino) error 
 			return syscall.EINTR
 		}
 		err := m.client.txn(ctx, f, i)
-		if err != nil && ctx.Canceled() {
-			return context.Canceled // preserve cancellation so `errno` do not print a full error stack
-		}
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
