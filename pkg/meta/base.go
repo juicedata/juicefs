@@ -3184,7 +3184,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 		}()
 	}
 
-	concurrent := make(chan int, 10)
+	concurrent := make(chan int, backgroundDeleteThreads)
 	for len(entries) > 0 {
 		if ctx.Canceled() {
 			return errno(ctx.Err())
