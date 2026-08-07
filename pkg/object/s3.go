@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -130,6 +131,8 @@ func (s *s3client) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 	}
 	attrs := applyGetters(getters...)
 	resp, err := s.s3.GetObject(ctx, params)
+	respJSON, jsonErr := json.Marshal(resp)
+	logger.Infof("GetObject: key=%q, off=%d, limit=%d, resp=%s, err=%v, jsonErr=%v", key, off, limit, respJSON, err, jsonErr)
 	if err != nil {
 		var re s3.ResponseError
 		if errors.As(err, &re) {
@@ -143,7 +146,7 @@ func (s *s3client) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 	if off == 0 && limit == -1 && !s.disableChecksum {
 		cs := resp.Metadata[strings.ToLower(checksumAlgr)]
 		if cs != "" && resp.ContentLength != nil {
-			resp.Body = verifyChecksum(resp.Body, cs, *resp.ContentLength)
+			resp.Body = verifyChecksum(resp.Body, cs, *resp.ContentLength, key)
 		}
 	}
 	attrs.SetStorageClass(string(resp.StorageClass))
