@@ -1,19 +1,19 @@
-# JuiceFS Lance Manifest 预热功能 — 实现文档
+# JuiceFS Lance Manifest Warmup — Implementation Documentation
 
-## 一、功能概述
+## 1. Feature Overview
 
-本文档描述 JuiceFS warmup 命令对 Lance 数据集的预热支持，包括：
+This document describes the Lance dataset warmup support added to the JuiceFS warmup command, including:
 
-1. **数据集级预热**：解析 Lance manifest，自动发现并预热所有相关文件
-2. **列级元数据预热**（V2 格式）：精确预热指定列的元数据，而非整个数据文件
+1. **Dataset-level warmup**: Parse Lance manifest files, automatically discover and warm up all related data files
+2. **Column-level metadata warmup** (V2 format): Precisely warm up metadata for specified columns instead of entire data files
 
 ---
 
-## 二、JuiceFS 架构简介
+## 2. JuiceFS Architecture Overview
 
-### 2.1 整体架构
+### 2.1 Overall Architecture
 
-JuiceFS 采用**元数据与数据分离**的架构：
+JuiceFS uses a **metadata and data separation** architecture:
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -34,84 +34,84 @@ JuiceFS 采用**元数据与数据分离**的架构：
 │   │         cachedStore                   │       │
 │   │  ┌───────────┐  ┌──────────────────┐ │       │
 │   │  │  bcache    │  │  ObjectStorage   │ │       │
-│   │  │ (本地缓存) │  │  (S3/GCS/...)    │ │       │
+│   │  │ (local)    │  │  (S3/GCS/...)    │ │       │
 │   │  └───────────┘  └──────────────────┘ │       │
 │   └──────────────────────────────────────┘       │
 └──────────────────────────────────────────────────┘
 ```
 
-### 2.2 数据模型
+### 2.2 Data Model
 
 **File → Chunk → Slice → Block**
 
-| 概念 | 说明 |
-|------|------|
-| **File** | 用户可见的文件，有 inode |
-| **Chunk** | 文件按 64MiB (ChunkSize) 切分 |
-| **Slice** | chunk 中的数据切片，有 `Id`/`Size`/`Off`/`Len` |
-| **Block** | slice 在对象存储中的存储单元，按 BlockSize(默认 4MiB) 切分 |
+| Concept | Description |
+|---------|-------------|
+| **File** | User-visible file with an inode |
+| **Chunk** | File split by 64MiB (ChunkSize) |
+| **Slice** | Data slice within a chunk, with `Id`/`Size`/`Off`/`Len` |
+| **Block** | Storage unit of a slice in object storage, split by BlockSize (default 4MiB) |
 
-对象存储 key 格式：`chunks/{id/1000/1000}/{id/1000}/{id}_{indx}_{blockSize}`
+Object storage key format: `chunks/{id/1000/1000}/{id/1000}/{id}_{indx}_{blockSize}`
 
-### 2.3 Warmup 预热流程
+### 2.3 Warmup Flow
 
 ```
 CLI (cmd/warmup.go)
-  → 写入 FillCache 消息到 .jfs.control 控制文件
+  → Writes FillCache message to .jfs.control file
 VFS (pkg/vfs/internal.go)
-  → handleMsg 解析 FillCache 消息
+  → handleMsg parses FillCache message
 CacheFiller (pkg/vfs/fill.go)
-  → Cache() / CacheWithConfig() 遍历路径，resolve() 解析 inode
-  → walkDir() 递归遍历目录
-  → cacheFile() 处理每个文件
+  → Cache() / CacheWithConfig() iterates paths, resolve() resolves inode
+  → walkDir() recursively walks directory
+  → cacheFile() processes each file
 sliceIterator
-  → meta.Read(inode, chunkIndex) 获取 slices
-  → 对每个 slice 调用 handler
+  → meta.Read(inode, chunkIndex) gets slices
+  → Calls handler for each slice
 cachedStore.FillCache(id, size)
-  → 计算 block keys → 从对象存储下载 → 写入 bcache 本地缓存
+  → Computes block keys → downloads from object storage → writes to bcache local cache
 ```
 
 ---
 
-## 三、Lance 数据格式分析
+## 3. Lance Data Format Analysis
 
-### 3.1 Lance 数据集目录结构
+### 3.1 Lance Dataset Directory Structure
 
 ```
-/path/to/dataset.lance/          ← 数据集根目录
-├── _versions/                    ← Manifest 版本目录
-│   ├── 0.manifest               ← V1 命名: {version}.manifest
+/path/to/dataset.lance/          ← Dataset root directory
+├── _versions/                    ← Manifest version directory
+│   ├── 0.manifest               ← V1 naming: {version}.manifest
 │   ├── 1.manifest
-│   ├── 99999999999999999999.manifest  ← V2 命名: {u64::MAX - version:020}.manifest
-│   ├── latest_version_hint.json  ← 版本提示: {"version": N}
-│   └── d{version}.manifest      ← Detached 版本
-├── data/                         ← 数据文件目录 (DataFile.path 相对于此)
+│   ├── 99999999999999999999.manifest  ← V2 naming: {u64::MAX - version:020}.manifest
+│   ├── latest_version_hint.json  ← Version hint: {"version": N}
+│   └── d{version}.manifest      ← Detached version
+├── data/                         ← Data file directory (DataFile.path relative to this)
 │   ├── 0000-uuid.lance
 │   ├── 0001-uuid.lance
 │   └── ...
-├── _deletions/                   ← 删除标记目录
-├── _indices/                     ← 二级索引目录
-├── _transactions/                ← 事务文件目录
-└── _overlays/                    ← Overlay 文件目录
+├── _deletions/                   ← Deletion file directory
+├── _indices/                     ← Secondary index directory
+├── _transactions/                ← Transaction file directory
+└── _overlays/                    ← Overlay file directory
 ```
 
-### 3.2 Manifest 命名方案
+### 3.2 Manifest Naming Schemes
 
-| 方案 | 格式 | 说明 |
-|------|------|------|
-| V1 | `_versions/{version}.manifest` | 简单递增 |
-| V2 | `_versions/{u64::MAX - version:020}.manifest` | 反转+零填充20位，最新版本字典序排第一 |
-| Detached | `_versions/d{version}.manifest` | 临时版本 |
+| Scheme | Format | Description |
+|--------|--------|-------------|
+| V1 | `_versions/{version}.manifest` | Simple incrementing |
+| V2 | `_versions/{u64::MAX - version:020}.manifest` | Reversed + zero-padded 20 digits, latest version sorts first |
+| Detached | `_versions/d{version}.manifest` | Temporary version |
 
-版本提示文件 `latest_version_hint.json`：`{"version": 42}`，用于 O(1) 查找最新版本。
+Version hint file `latest_version_hint.json`: `{"version": 42}`, used for O(1) latest version lookup.
 
-### 3.3 Manifest 文件物理格式
+### 3.3 Manifest File Physical Format
 
-Manifest 是 **Protobuf 二进制文件**，尾部有固定格式：
+Manifest is a **Protobuf binary file** with a fixed-format trailer:
 
 ```
 ┌─────────────────────────────────────────────┐
-│           Manifest 文件布局                  │
+│          Manifest File Layout               │
 ├─────────────────────────────────────────────┤
 │  [protobuf message length: 4 bytes LE]     │
 ├─────────────────────────────────────────────┤
@@ -127,17 +127,17 @@ Manifest 是 **Protobuf 二进制文件**，尾部有固定格式：
 └─────────────────────────────────────────────┘
 ```
 
-### 3.4 Protobuf 消息定义
+### 3.4 Protobuf Message Definitions
 
 #### Manifest (`protos/table.proto`)
 
 ```protobuf
 message Manifest {
-  repeated lance.file.Field fields = 1;          // Schema 字段
-  uint64 version = 2;                            // 数据集版本号
-  repeated DataFragment fragments = 4;            // Fragment 列表
-  optional string transaction_file = 12;          // 事务文件路径
-  // ... 其他字段
+  repeated lance.file.Field fields = 1;          // Schema fields
+  uint64 version = 2;                            // Dataset version number
+  repeated DataFragment fragments = 4;            // Fragment list
+  optional string transaction_file = 12;          // Transaction file path
+  // ... other fields
 }
 ```
 
@@ -146,9 +146,9 @@ message Manifest {
 ```protobuf
 message DataFragment {
   uint64 id = 1;                        // Fragment ID
-  repeated DataFile files = 2;          // 数据文件列表
-  optional DeletionFile deletion_file = 3;  // 删除文件
-  repeated DataOverlayFile overlays = 5;     // Overlay 文件
+  repeated DataFile files = 2;          // Data file list
+  optional DeletionFile deletion_file = 3;  // Deletion file
+  repeated DataOverlayFile overlays = 5;     // Overlay files
 }
 ```
 
@@ -156,35 +156,35 @@ message DataFragment {
 
 ```protobuf
 message DataFile {
-  string path = 1;               // 相对于 data/ 的路径
-  repeated int32 fields = 2;     // 字段 ID 列表
-  repeated int32 column_indices = 3; // 字段在文件中的列索引
+  string path = 1;               // Path relative to data/
+  repeated int32 fields = 2;     // Field ID list
+  repeated int32 column_indices = 3; // Field-to-column index mapping
   // ...
 }
 ```
 
-### 3.5 Lance V2 数据文件格式
+### 3.5 Lance V2 Data File Format
 
-V2 文件布局（来自 `protos/file2.proto`）：
+V2 file layout (from `protos/file2.proto`):
 
 ```
 ┌──────────────────────────────────────┐
-│  Data Pages                          │  ← 数据缓冲区
+│  Data Pages                          │  ← Data buffers
 │  (Data Buffer 0..N)                  │
 ├──────────────────────────────────────┤
-│  Column Metadatas                     │  ← 每列一个 ColumnMetadata protobuf
-│  Column 0 Metadata                   │  ← 包含 pages 列表、buffer_offsets/sizes
+│  Column Metadatas                     │  ← One ColumnMetadata protobuf per column
+│  Column 0 Metadata                   │  ← Contains pages list, buffer_offsets/sizes
 │  Column 1 Metadata                    │
 │  ...                                  │
 │  Column CN Metadata                   │
 ├──────────────────────────────────────┤
-│  Column Metadata Offset (CMO) Table   │  ← 每列 16 字节: position(8B) + length(8B)
+│  Column Metadata Offset (CMO) Table   │  ← 16 bytes per column: position(8B) + length(8B)
 ├──────────────────────────────────────┤
 │  Global Buffers Offset Table          │
 ├──────────────────────────────────────┤
 │  Footer (40 bytes)                    │
-│  u64: column_meta_start               │  ← Column Metadatas 区域起始位置
-│  u64: column_meta_offsets_start       │  ← CMO Table 起始位置
+│  u64: column_meta_start               │  ← Column Metadatas region start offset
+│  u64: column_meta_offsets_start       │  ← CMO Table start offset
 │  u64: global_buff_offsets_start       │
 │  u32: num_global_buffers               │
 │  u32: num_columns                      │
@@ -199,130 +199,130 @@ V2 文件布局（来自 `protos/file2.proto`）：
 ```protobuf
 message ColumnMetadata {
   message Page {
-    repeated uint64 buffer_offsets = 1;  // page 数据缓冲区在文件中的偏移
-    repeated uint64 buffer_sizes = 2;     // 每个缓冲区的大小
-    uint64 length = 3;                   // 逻辑行数
-    Encoding encoding = 4;               // 页编码方式
+    repeated uint64 buffer_offsets = 1;  // Page data buffer offsets in file
+    repeated uint64 buffer_sizes = 2;     // Size of each buffer
+    uint64 length = 3;                   // Logical row count
+    Encoding encoding = 4;               // Page encoding type
   }
-  Encoding encoding = 1;                 // 列级编码
-  repeated Page pages = 2;               // 该列的所有页
-  repeated uint64 buffer_offsets = 3;   // 列级缓冲区偏移
-  repeated uint64 buffer_sizes = 4;      // 列级缓冲区大小
+  Encoding encoding = 1;                 // Column-level encoding
+  repeated Page pages = 2;               // All pages for this column
+  repeated uint64 buffer_offsets = 3;   // Column-level buffer offsets
+  repeated uint64 buffer_sizes = 4;      // Column-level buffer sizes
 }
 ```
 
 ---
 
-## 四、已实现功能
+## 4. Implemented Features
 
-### 4.1 数据集级预热
+### 4.1 Dataset-level Warmup
 
-**功能：** 给定 Lance 数据集路径，自动解析 manifest，发现所有数据文件、删除文件、overlay 文件和事务文件，统一预热。
+**Function:** Given a Lance dataset path, automatically parse the manifest, discover all data files, deletion files, overlay files, and transaction files, and warm them up uniformly.
 
-**实现文件：**
+**Implementation files:**
 
-| 文件 | 说明 |
-|------|------|
-| `pkg/vfs/proto/lance/table.proto` | Lance manifest protobuf 定义 |
-| `pkg/vfs/proto/lance/file.proto` | Lance 文件格式 proto 定义 |
-| `pkg/vfs/proto/lance/table.pb.go` | 生成的 Go 代码 |
-| `pkg/vfs/proto/lance/file.pb.go` | 生成的 Go 代码 |
-| `pkg/vfs/lance_warmup.go` | 核心实现 |
-| `pkg/vfs/lance_warmup_test.go` | 单元测试 |
-| `cmd/warmup.go` | CLI 选项和消息编码 |
-| `pkg/vfs/internal.go` | FillCache 消息协议扩展 |
-| `pkg/vfs/fill.go` | CacheWithConfig() 方法 |
+| File | Description |
+|------|-------------|
+| `pkg/vfs/proto/lance/table.proto` | Lance manifest protobuf definition |
+| `pkg/vfs/proto/lance/file.proto` | Lance file format proto definition |
+| `pkg/vfs/proto/lance/table.pb.go` | Generated Go code |
+| `pkg/vfs/proto/lance/file.pb.go` | Generated Go code |
+| `pkg/vfs/lance_warmup.go` | Core implementation |
+| `pkg/vfs/lance_warmup_test.go` | Unit tests |
+| `cmd/warmup.go` | CLI options and message encoding |
+| `pkg/vfs/internal.go` | FillCache message protocol extension |
+| `pkg/vfs/fill.go` | CacheWithConfig() method |
 
-**核心方法：**
+**Core methods:**
 
-| 方法 | 说明 |
-|------|------|
-| `resolveLancePaths()` | 解析数据集路径，返回需要预热的文件路径列表 |
-| `findLanceManifestPath()` | 定位 manifest 文件（读 hint 或列目录） |
-| `readAndParseLanceManifest()` | 读取 manifest 文件并解析 protobuf |
-| `parseLanceManifestBytes()` | 解析 manifest 二进制（LANC 魔数 → manifest_pos → protobuf） |
-| `readFileContent()` | 通过 JuiceFS chunk store 读取文件全部内容 |
-| `isLanceDataset()` | 检测路径是否是 Lance 数据集（.lance 后缀） |
+| Method | Description |
+|--------|-------------|
+| `resolveLancePaths()` | Resolve dataset path, return file path list to warm up |
+| `findLanceManifestPath()` | Locate manifest file (read hint or list directory) |
+| `readAndParseLanceManifest()` | Read manifest file and parse protobuf |
+| `parseLanceManifestBytes()` | Parse manifest binary (LANC magic → manifest_pos → protobuf) |
+| `readFileContent()` | Read entire file content through JuiceFS chunk store |
+| `isLanceDataset()` | Check if path is a Lance dataset (.lance suffix) |
 
-**流程：**
+**Flow:**
 
 ```
 CLI: juicefs warmup --lance /mnt/jfs/data/ds.lance
-  → sendCommand 编码 Lance 配置到 FillCache 消息
-VFS: handleMsg 解析消息
+  → sendCommand encodes Lance config into FillCache message
+VFS: handleMsg parses message
   → CacheWithConfig()
-  → 检测 .lance 后缀 → isLanceDataset()
+  → Detect .lance suffix → isLanceDataset()
   → resolveLancePaths():
-      1. findLanceManifestPath() — 读 latest_version_hint.json 或列目录
-      2. readAndParseLanceManifest() — 读文件 → LANC 魔数 → protobuf 解析
-      3. 遍历 fragments → 收集 data/、_deletions/、_overlays/ 文件路径
-  → 展开后的路径走正常 warmup 流程
+      1. findLanceManifestPath() — read latest_version_hint.json or list directory
+      2. readAndParseLanceManifest() — read file → LANC magic → protobuf parsing
+      3. Iterate fragments → collect data/, _deletions/, _overlays/ file paths
+  → Expanded paths go through normal warmup flow
 ```
 
-### 4.2 列级元数据预热（V2 格式）
+### 4.2 Column-level Metadata Warmup (V2 Format)
 
-**功能：** 精确预热 Lance V2 数据文件中指定列的元数据（ColumnMetadata + page buffers），而非整个文件。
+**Function:** Precisely warm up metadata for specified columns in Lance V2 data files (ColumnMetadata + page buffers), rather than entire files.
 
-**新增文件：**
+**New files:**
 
-| 文件 | 说明 |
-|------|------|
-| `pkg/vfs/proto/lance/file2/file2.proto` | Lance V2 文件格式 protobuf 定义 |
-| `pkg/vfs/proto/lance/file2/file2.pb.go` | 生成的 Go 代码 (ColumnMetadata, Page 等) |
+| File | Description |
+|------|-------------|
+| `pkg/vfs/proto/lance/file2/file2.proto` | Lance V2 file format protobuf definition |
+| `pkg/vfs/proto/lance/file2/file2.pb.go` | Generated Go code (ColumnMetadata, Page, etc.) |
 
-**新增方法 (`pkg/vfs/lance_warmup.go`)：**
+**New methods (`pkg/vfs/lance_warmup.go`):**
 
-| 方法 | 说明 |
-|------|------|
-| `readLanceFileFooter()` | 读 V2 文件末尾 40B footer（column_meta_start, num_columns 等） |
-| `readColumnMetadataOffset()` | 读 CMO 表中指定列的 16B 条目 (position + length) |
-| `readColumnMetadata()` | 读取并 protobuf 解析指定列的 ColumnMetadata |
-| `columnByteRanges()` | 从 ColumnMetadata 提取页缓冲区和列缓冲区的字节范围 |
-| `mergeByteRanges()` | 合并重叠/相邻的字节范围，减少 meta.Read 调用 |
-| `warmupByteRanges()` | **核心**：将文件内字节范围映射到 JuiceFS slices → FillCache |
-| `buildFieldColumnMap()` | 列名 → column index 映射（支持 DataFile.fields + column_indices） |
-| `warmupLanceColumns()` | 列级预热入口：遍历数据文件 → footer → 列元数据 → 字节范围 → 预热 |
-| `readFileRange()` | 按字节范围读取文件内容（通过 chunk store） |
+| Method | Description |
+|--------|-------------|
+| `readLanceFileFooter()` | Read V2 file 40B footer (column_meta_start, num_columns, etc.) |
+| `readColumnMetadataOffset()` | Read 16B CMO table entry for specified column (position + length) |
+| `readColumnMetadata()` | Read and protobuf-parse ColumnMetadata for specified column |
+| `columnByteRanges()` | Extract page buffer and column buffer byte ranges from ColumnMetadata |
+| `mergeByteRanges()` | Merge overlapping/adjacent byte ranges to reduce meta.Read calls |
+| `warmupByteRanges()` | **Core**: Map file-internal byte ranges to JuiceFS slices → FillCache |
+| `buildFieldColumnMap()` | Column name → column index mapping (supports DataFile.fields + column_indices) |
+| `warmupLanceColumns()` | Column warmup entry point: iterate data files → footer → column metadata → byte ranges → warmup |
+| `readFileRange()` | Read file content by byte range (through chunk store) |
 
-**字节范围 → JuiceFS Slice 映射算法：**
+**Byte Range → JuiceFS Slice Mapping Algorithm:**
 
 ```
-输入: Lance 文件 inode, 字节范围 [start, end)
-输出: 预热对应的 JuiceFS slices
+Input: Lance file inode, byte range [start, end)
+Output: Warm up corresponding JuiceFS slices
 
 1. startChunk = start / ChunkSize(64MiB)
    endChunk = (end-1) / ChunkSize
 
-2. 对每个 chunkIndex ∈ [startChunk, endChunk]:
-   a. meta.Read(inode, chunkIndex, &slices)  // 从元数据引擎获取 slices
-   b. 对每个 slice:
-      - 计算文件内范围 [chunkStart + slice.Off, chunkStart + slice.Off + slice.Len)
-      - 与 [start, end) 取交集
-      - 有交集 → FillCache(slice.Id, slice.Size)
+2. For each chunkIndex ∈ [startChunk, endChunk]:
+   a. meta.Read(inode, chunkIndex, &slices)  // Get slices from metadata engine
+   b. For each slice:
+      - Compute file range [chunkStart + slice.Off, chunkStart + slice.Off + slice.Len)
+      - Intersect with [start, end)
+      - If overlap → FillCache(slice.Id, slice.Size)
 ```
 
-**列名 → Column Index 映射：**
+**Column Name → Column Index Mapping:**
 
-- 优先使用 manifest 中 DataFile 的 `fields` 和 `column_indices` 字段精确映射
-- 回退到 manifest schema 的 DFS 序分配（V2.0 规则）
+- Prefer exact mapping from manifest DataFile's `fields` and `column_indices`
+- Fall back to DFS-order assignment from manifest schema (V2.0 rule)
 
-**流程：**
+**Flow:**
 
 ```
 CLI: juicefs warmup --lance --lance-columns "col_a,col_b" /mnt/jfs/data/ds.lance
-  → sendCommand 编码列名到 FillCache 消息
-VFS: handleMsg 解析消息
+  → sendCommand encodes column names into FillCache message
+VFS: handleMsg parses message
   → CacheWithConfig(lanceCfg with Columns)
   → resolveLancePaths():
-      1. 找到并解析 manifest
+      1. Find and parse manifest
       2. warmupLanceColumns():
            for each data file:
-             a. readLanceFileFooter() — 读 40B trailer
-             b. buildFieldColumnMap() — 列名→column index
+             a. readLanceFileFooter() — read 40B trailer
+             b. buildFieldColumnMap() — column name → column index
              c. for each requested column:
-                - readColumnMetadata(inode, footer, colIdx) — 读 CMO 表 + protobuf
-                - columnByteRanges(cm) — 提取 page/col buffer 字节范围
-                - mergeByteRanges() — 合并重叠范围
+                - readColumnMetadata(inode, footer, colIdx) — read CMO table + protobuf
+                - columnByteRanges(cm) — extract page/col buffer byte ranges
+                - mergeByteRanges() — merge overlapping ranges
                 - warmupByteRanges():
                     for each range [start,end):
                       for chunk in [start/64M, end/64M]:
@@ -330,162 +330,163 @@ VFS: handleMsg 解析消息
                         slice overlaps range? → FillCache(slice.Id, slice.Size)
 ```
 
-### 4.3 FillCache 消息协议扩展
+### 4.3 FillCache Message Protocol Extension
 
-FillCache 消息在原有基础上向后兼容地扩展了 Lance 配置字段：
+The FillCache message is extended with backward-compatible Lance configuration fields:
 
 ```
-原有:  [pathsLen:4B] [paths] [threads:2B] [background:1B] [action:1B]
-新增:  [lance_flag:1B] [manifest_only:1B] [include_indices:1B]
-       [version_len:2B] [version]
-       [columns_len:2B] [columns_data] [include_data_pages:1B]
+Original:  [pathsLen:4B] [paths] [threads:2B] [background:1B] [action:1B]
+Extended:  [lance_flag:1B] [manifest_only:1B] [include_indices:1B]
+           [version_len:2B] [version]
+           [columns_len:2B] [columns_data] [include_data_pages:1B]
 ```
 
-所有新增字段都是可选的——通过 `r.HasMore()` 检查，不影响旧版本客户端。
+All extended fields are optional — checked via `r.HasMore()`, ensuring backward compatibility with older clients.
 
 ---
 
-## 五、使用方式
+## 5. Usage
 
-### 5.1 数据集级预热
+### 5.1 Dataset-level Warmup
 
 ```bash
-# 预热整个 Lance 数据集（自动解析 manifest，预热所有数据文件）
+# Warm up entire Lance dataset (auto-parse manifest, warm up all data files)
 juicefs warmup --lance /mnt/jfs/data/mydataset.lance
 
-# 预热指定版本的数据集
+# Warm up a specific dataset version
 juicefs warmup --lance --lance-version 5 /mnt/jfs/data/mydataset.lance
 
-# 仅预热 manifest 文件（元数据，不预热数据文件）
+# Only warm up manifest file (metadata only, no data files)
 juicefs warmup --lance --lance-manifest-only /mnt/jfs/data/mydataset.lance
 
-# 预热数据集包括索引文件
+# Warm up dataset including index files
 juicefs warmup --lance --lance-include-indices /mnt/jfs/data/mydataset.lance
 ```
 
-### 5.2 列级元数据预热
+### 5.2 Column-level Metadata Warmup
 
 ```bash
-# 预热 col_a 和 col_b 的列元数据（ColumnMetadata + column-level buffers）
+# Warm up column metadata for col_a and col_b (ColumnMetadata + column-level buffers)
 juicefs warmup --lance --lance-columns "col_a,col_b" /mnt/jfs/data/mydataset.lance
 
-# 预热 col_a 的列元数据 + 数据页缓冲区（page buffer offsets/sizes）
+# Warm up col_a metadata + data page buffers (page buffer offsets/sizes)
 juicefs warmup --lance --lance-columns "col_a" --lance-column-data /mnt/jfs/data/mydataset.lance
 
-# 组合使用：指定版本 + 列级预热
+# Combine: specific version + column-level warmup
 juicefs warmup --lance --lance-version 3 --lance-columns "col_a,col_b" /mnt/jfs/data/mydataset.lance
 ```
 
-### 5.3 CLI 参数汇总
+### 5.3 CLI Options Summary
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `--lance` | bool | false | 启用 Lance 数据集预热模式 |
-| `--lance-version` | string | "" (最新) | 指定 Lance 数据集版本 |
-| `--lance-manifest-only` | bool | false | 仅预热 manifest 文件 |
-| `--lance-include-indices` | bool | false | 同时预热索引文件 |
-| `--lance-columns` | string | "" | 逗号分隔的列名，预热列级元数据 |
-| `--lance-column-data` | bool | false | 同时预热列数据页缓冲区 |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--lance` | bool | false | Enable Lance dataset warmup mode |
+| `--lance-version` | string | "" (latest) | Specify Lance dataset version |
+| `--lance-manifest-only` | bool | false | Only warm up manifest files |
+| `--lance-include-indices` | bool | false | Also warm up index files |
+| `--lance-columns` | string | "" | Comma-separated column names for column-level warmup |
+| `--lance-column-data` | bool | false | Also warm up column data page buffers |
 
-### 5.4 使用场景
+### 5.4 Use Cases
 
-**场景 1：首次加载 Lance 数据集**
+**Case 1: Initial Lance dataset load**
 
 ```bash
-# 预热整个数据集，加速首次查询
+# Warm up the entire dataset to accelerate first queries
 juicefs warmup --lance /mnt/jfs/data/training_data.lance
 ```
 
-**场景 2：大宽表，只查询部分列**
+**Case 2: Wide table, querying only a few columns**
 
 ```bash
-# 500 列的表，只查询 3 列
+# 500-column table, only querying 3 columns
 juicefs warmup --lance --lance-columns "id,timestamp,feature_42" /mnt/jfs/data/wide_table.lance
 ```
 
-**场景 3：版本更新后增量预热**
+**Case 3: Incremental warmup after version update**
 
 ```bash
-# 新版本发布，只预热新版本的 manifest 和指定列
+# New version published, only warm up manifest and specified columns
 juicefs warmup --lance --lance-version 10 --lance-columns "id,label" /mnt/jfs/data/ds.lance
 ```
 
-**场景 4：仅需元数据加速（不占大量缓存空间）**
+**Case 4: Metadata-only acceleration (minimal cache space)**
 
 ```bash
-# 只预热 manifest 文件，适合元数据频繁访问但数据访问较少的场景
+# Only warm up manifest files, suitable for metadata-heavy but data-light access patterns
 juicefs warmup --lance --lance-manifest-only /mnt/jfs/data/ds.lance
 ```
 
 ---
 
-## 六、实现细节
+## 6. Implementation Details
 
-### 6.1 项目结构
+### 6.1 Project Structure
 
 ```
 juicefs/
-├── cmd/warmup.go                      # CLI: --lance 等选项, sendCommand 编码
+├── cmd/warmup.go                      # CLI: --lance options, sendCommand encoding
 ├── pkg/vfs/
-│   ├── fill.go                        # CacheWithConfig(): Lance 检测分支
-│   ├── internal.go                    # handleMsg: FillCache 消息解码
-│   ├── lance_warmup.go                # ★ 核心实现 (数据集级 + 列级预热)
-│   ├── lance_warmup_test.go           # 单元测试
+│   ├── fill.go                        # CacheWithConfig(): Lance detection branch
+│   ├── internal.go                    # handleMsg: FillCache message decoding
+│   ├── lance_warmup.go                # ★ Core implementation (dataset + column-level)
+│   ├── lance_warmup_test.go           # Unit tests
+│   ├── lance_warmup_e2e_test.go       # E2E integration tests
 │   └── proto/lance/
-│       ├── table.proto                # Lance manifest protobuf 定义
-│       ├── file.proto                 # Lance V1 文件格式 proto
-│       ├── table.pb.go               # 生成的 Go 代码
-│       ├── file.pb.go                 # 生成的 Go 代码
+│       ├── table.proto                # Lance manifest protobuf definition
+│       ├── file.proto                 # Lance V1 file format proto
+│       ├── table.pb.go               # Generated Go code
+│       ├── file.pb.go                 # Generated Go code
 │       └── file2/
-│           ├── file2.proto            # Lance V2 文件格式 proto (ColumnMetadata)
-│           └── file2.pb.go            # 生成的 Go 代码
+│           ├── file2.proto            # Lance V2 file format proto (ColumnMetadata)
+│           └── file2.pb.go            # Generated Go code
 ```
 
-### 6.2 FillCache 消息协议
+### 6.2 FillCache Message Protocol
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│ FillCache 消息体 (向后兼容扩展)                                │
+│ FillCache Message Body (backward-compatible extension)         │
 ├────────────────────────────────────────────────────────────────┤
 │ pathsLen: 4 bytes LE                                           │
-│ paths:    N bytes (pathsLen, \n 分隔的路径)                     │
+│ paths:    N bytes (pathsLen, newline-separated paths)          │
 │ threads:  2 bytes LE                                           │
 │ background: 1 byte                                             │
 │ action:   1 byte (WarmupCache=0, EvictCache=1, CheckCache=2)  │
-├──────── ─ ─ ─ ─ 以下为可选字段 (通过 HasMore 检查) ─ ─ ─ ─ ─┤
+├──────── ─ ─ ─ ─ optional fields below (HasMore check) ─ ─ ─ ─┤
 │ lance_flag:       1 byte (1=lance mode)                      │
 │ manifest_only:    1 byte                                       │
 │ include_indices:  1 byte                                       │
 │ version_len:      2 bytes LE                                   │
 │ version:          N bytes                                      │
-│ columns_len:      2 bytes LE (逗号分隔列名)                     │
+│ columns_len:      2 bytes LE (comma-separated column names)    │
 │ columns_data:     N bytes                                      │
 │ include_data_pages: 1 byte                                      │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### 6.3 测试
+### 6.3 Tests
 
-#### 单元测试
+#### Unit Tests
 
-已实现 13 个测试（9 单元 + 4 E2E），覆盖以下场景：
+13 tests implemented (9 unit + 4 E2E), covering the following scenarios:
 
-| 测试 | 说明 |
-|------|------|
-| `TestParseLanceManifestBytes` | 解析包含 fragments/files/deletion 的完整 manifest |
-| `TestParseLanceManifestBytes_TooSmall` | 过小文件返回错误 |
-| `TestParseLanceManifestBytes_BadMagic` | 错误魔数返回错误 |
-| `TestRelativeDeletionFilePath` | 删除文件路径构造 (bitmap/arrow/nil) |
-| `TestIsLanceDataset` | .lance 后缀检测 |
-| `TestMergeByteRanges` | 字节范围合并 (空/单个/不相交/重叠/相邻/包含) |
-| `TestColumnByteRanges` | 从 ColumnMetadata 提取字节范围 (仅元数据/含数据页) |
-| `TestBuildFieldColumnMap` | 列名→column index 映射 (回退/精确映射) |
-| `TestE2E_ManifestParseAndPathResolution` | 构建 manifest 二进制 → 解析 → 验证 fragments/files/deletion/txn |
-| `TestE2E_V2FooterAndColumnMetadata` | 构建 V2 数据文件 → 读 footer → 读 CMO → 解析 ColumnMetadata → 提取字节范围 |
-| `TestE2E_FieldColumnMapResolution` | manifest schema → 字段映射 (回退 DFS / 精确映射 / 子集字段) |
-| `TestE2E_FullPipeline` | 完整链路：manifest → schema → field map → V2 file → footer → column metadata → byte ranges → merge |
+| Test | Description |
+|------|-------------|
+| `TestParseLanceManifestBytes` | Parse complete manifest with fragments/files/deletions |
+| `TestParseLanceManifestBytes_TooSmall` | Too-small file returns error |
+| `TestParseLanceManifestBytes_BadMagic` | Bad magic returns error |
+| `TestRelativeDeletionFilePath` | Deletion file path construction (bitmap/arrow/nil) |
+| `TestIsLanceDataset` | .lance suffix detection |
+| `TestMergeByteRanges` | Byte range merging (empty/single/disjoint/overlapping/adjacent/contained) |
+| `TestColumnByteRanges` | Extract byte ranges from ColumnMetadata (metadata-only / with data pages) |
+| `TestBuildFieldColumnMap` | Column name → column index mapping (fallback / exact mapping) |
+| `TestE2E_ManifestParseAndPathResolution` | Build manifest binary → parse → verify fragments/files/deletions/txn |
+| `TestE2E_V2FooterAndColumnMetadata` | Build V2 data file → read footer → read CMO → parse ColumnMetadata → extract byte ranges |
+| `TestE2E_FieldColumnMapResolution` | Manifest schema → field mapping (fallback DFS / exact / subset fields) |
+| `TestE2E_FullPipeline` | Full pipeline: manifest → schema → field map → V2 file → footer → column metadata → byte ranges → merge |
 
-运行测试：
+Run tests:
 
 ```bash
 cd <juicefs-repo>
@@ -494,52 +495,52 @@ go test ./pkg/vfs/ -run "TestParseLance|TestRelativeDeletion|TestIsLance|TestMer
 
 ---
 
-## 七、限制与注意事项
+## 7. Limitations & Notes
 
-1. **V2 格式仅**：列级元数据预热仅支持 Lance V2 文件格式（footer 中 `major_version` 和 `minor_version` 标识）。不支持 V1 (legacy) 格式的 Page Table。
+1. **V2 format only**: Column-level metadata warmup only supports Lance V2 file format (identified by `major_version` and `minor_version` in the footer). V1 (legacy) format Page Table is not supported.
 
-2. **Slice 粒度限制**：JuiceFS 的预热粒度是 Slice（对象存储对象，每个最大 64MiB）。`FillCache` 会下载整个 Slice 的所有 block。因此：
-   - 小文件（< 64MiB）整个文件就是一个 slice，列级预热和全量预热效果相同
-   - 大文件（多个 slice）中，如果某列数据只跨越部分 slice，列级预热可以减少下载量
-   - 列级预热的实际效果取决于列数据在文件中的物理分布
+2. **Slice granularity limitation**: JuiceFS warmup granularity is at the Slice level (object storage objects, each up to 64MiB). `FillCache` downloads all blocks of the entire slice. Therefore:
+   - Small files (< 64MiB): the entire file is a single slice, column-level warmup has the same effect as full warmup
+   - Large files (multiple slices): if a column's data only spans a subset of slices, column-level warmup can reduce download volume
+   - The actual effectiveness of column-level warmup depends on the physical distribution of column data within the file
 
-3. **嵌套字段**：当前 `buildFieldColumnMap` 使用简单的 DFS 序分配列索引，对于复杂嵌套字段（struct/list）可能不够精确。建议优先使用 manifest 中 DataFile 的 `fields` + `column_indices` 精确映射。
+3. **Nested fields**: The current `buildFieldColumnMap` uses simple DFS-order column index assignment, which may be imprecise for complex nested fields (struct/list). Prefer using the explicit `fields` + `column_indices` mapping from the manifest's DataFile entries.
 
-4. **大文件范围读取**：`readFileRange` 通过 chunk store 按范围读取，但对于非常大的文件可能需要多次 meta.Read 调用。已实现字节范围合并优化以减少调用次数。
+4. **Large file range reads**: `readFileRange` reads through the chunk store by range, but may require multiple `meta.Read` calls for very large files. Byte range merging optimization is implemented to reduce call count.
 
-5. **Protobuf 依赖**：引入 `google.golang.org/protobuf` 依赖，增加少量二进制体积。
+5. **Protobuf dependency**: Introduces `google.golang.org/protobuf` dependency, adding a small amount of binary size.
 
-6. **并发控制**：列级预热的并发度由 `--threads` 参数控制（默认 50），与文件级预热共用并发池。
+6. **Concurrency control**: Column-level warmup concurrency is controlled by the `--threads` parameter (default 50), sharing the concurrency pool with file-level warmup.
 
 ---
 
-## 7.5 列级预热问题分析与修复记录
+## 7.5 Column Warmup Bug Analysis and Fix Record
 
-本节记录列级预热功能在手工测试中发现的问题、根因分析和修复方案，供后续维护参考。
+This section documents issues discovered during manual testing of column-level warmup, their root cause analysis, and fixes, for future maintenance reference.
 
-### 7.5.1 问题描述
+### 7.5.1 Problem Description
 
-手工测试（8.5.3 列级元数据预热）中发现：
+During manual testing (section 8.5.3 column-level metadata warmup):
 
-- 执行 `juicefs warmup --lance --lance-columns "id" /mnt/jfs/data/test_lance_large.lance` 后
-- 缓存大小（~99MB）与全量预热（~99MB）几乎一致
-- 查看 JuiceFS 日志显示 `warmup column "id" in ...lance: 0 byte ranges`
-- 即列级预热没有实际预热任何字节范围
+- After running `juicefs warmup --lance --lance-columns "id" /mnt/jfs/data/test_lance_large.lance`
+- Cache size (~99MB) was nearly identical to full warmup (~99MB)
+- JuiceFS logs showed `warmup column "id" in ...lance: 0 byte ranges`
+- Column-level warmup did not actually warm up any byte ranges
 
-### 7.5.2 根因分析
+### 7.5.2 Root Cause Analysis
 
-通过独立 Go 程序解析 V2.1 格式的 ColumnMetadata，发现三个问题：
+A standalone Go program was used to parse the ColumnMetadata of V2.1 format files, revealing three issues:
 
-#### 问题 1：`columnByteRanges(cm, false)` 返回空列表
+#### Issue 1: `columnByteRanges(cm, false)` returned empty list
 
-`columnByteRanges` 函数的逻辑：
+The logic of `columnByteRanges`:
 
 ```go
 func columnByteRanges(cm *file2pb.ColumnMetadata, includeDataPages bool) []byteRange {
     var ranges []byteRange
-    // 1. Column-level buffers (field 3/4) — 始终包含
+    // 1. Column-level buffers (field 3/4) — always included
     for i := range cm.BufferOffsets { ... }
-    // 2. Page data buffers (page.BufferOffsets/sizes) — 仅 includeDataPages=true
+    // 2. Page data buffers (page.BufferOffsets/sizes) — only when includeDataPages=true
     if includeDataPages {
         for _, page := range cm.Pages { ... }
     }
@@ -547,224 +548,224 @@ func columnByteRanges(cm *file2pb.ColumnMetadata, includeDataPages bool) []byteR
 }
 ```
 
-当 `--lance-column-data` 未指定时（`includeDataPages=false`），只收集 column-level buffers（`cm.BufferOffsets`/`cm.BufferSizes`）。但在 V2.1 格式中，这些字段**为空**：
+When `--lance-column-data` was not specified (`includeDataPages=false`), only column-level buffers (`cm.BufferOffsets`/`cm.BufferSizes`) were collected. However, in V2.1 format, these fields were **empty**:
 
 ```
-Column 0: 1 pages, 0 buffer_offsets, 0 buffer_sizes  ← column-level buffers 为空
-  Page 0: 2 buffer_offsets, 2 buffer_sizes, length=50000  ← page-level 有数据
+Column 0: 1 pages, 0 buffer_offsets, 0 buffer_sizes  ← column-level buffers empty
+  Page 0: 2 buffer_offsets, 2 buffer_sizes, length=50000  ← page-level has data
 ```
 
-V2.1 格式中，所有数据缓冲区信息存储在 Page 内部，column-level buffers 只用于 dictionaries/statistics 等辅助数据。当列没有这些辅助数据时，column-level buffers 为空，导致返回 0 个字节范围。
+In V2.1 format, all data buffer information is stored inside Pages. Column-level buffers are only used for auxiliary data like dictionaries/statistics. When a column has no such auxiliary data, column-level buffers are empty, resulting in 0 byte ranges.
 
-#### 问题 2：缺少 ColumnMetadata protobuf 自身的字节范围
+#### Issue 2: Missing ColumnMetadata protobuf byte range
 
-CMO (Column Metadata Offset) 表中记录了每列 ColumnMetadata protobuf 的位置和长度：
+The CMO (Column Metadata Offset) table records each column's ColumnMetadata protobuf position and length:
 
 ```
 CMO entry: [8B position LE][8B length LE]
 ```
 
-但 `warmupLanceColumns` 在调用 `columnByteRanges` 时没有把这个范围加入预热列表。ColumnMetadata protobuf 本身是查询列数据时必须读取的元数据（包含 page layout 信息），应该被预热。
+However, `warmupLanceColumns` did not include this range when calling `columnByteRanges`. The ColumnMetadata protobuf itself is essential metadata that must be read to query column data (it contains page layout information), and should be warmed up.
 
-#### 问题 3：`resolveLancePaths` 的 `colOnlyMode` 缺失
+#### Issue 3: Missing `colOnlyMode` in `resolveLancePaths`
 
-当指定 `--lance-columns` 时，`resolveLancePaths` 应该只返回 manifest/txn/hint 等元数据文件路径，**不**返回数据文件路径（因为数据文件由 `warmupLanceColumns` 按字节范围预热）。但原始代码中 `colOnlyMode` 逻辑未实现，导致数据文件也被加入 paths 列表，触发了全量预热。
+When `--lance-columns` was specified, `resolveLancePaths` should only return metadata file paths (manifest, txn, hint, etc.) and **not** data file paths (since data files are warmed up by `warmupLanceColumns` via byte ranges). However, the original code did not implement the `colOnlyMode` logic, causing data files to also be added to the paths list, triggering full warmup.
 
-### 7.5.3 修复方案
+### 7.5.3 Fixes
 
-#### 修复 1：`warmupLanceColumns` 增加 CMO 范围
+#### Fix 1: `warmupLanceColumns` adds CMO range
 
-在 `pkg/vfs/lance_warmup.go` 的 `warmupLanceColumns` 函数中，读取 CMO entry 获取 ColumnMetadata protobuf 的位置和长度，并将其作为第一个字节范围加入预热列表：
+In `pkg/vfs/lance_warmup.go`'s `warmupLanceColumns` function, read the CMO entry to get the ColumnMetadata protobuf position and length, and add it as the first byte range in the warmup list:
 
 ```go
-// 修复前
+// Before
 cm, err := c.readColumnMetadata(ctx, inode, footer, uint32(colIdx))
 ranges := columnByteRanges(cm, config.IncludeDataPages)
 
-// 修复后
+// After
 cmPos, cmLen, err := c.readColumnMetadataOffset(ctx, inode, footer, uint32(colIdx))
 cm, err := c.readColumnMetadata(ctx, inode, footer, uint32(colIdx))
-ranges := []byteRange{{start: cmPos, end: cmPos + cmLen}}  // CMO 范围
+ranges := []byteRange{{start: cmPos, end: cmPos + cmLen}}  // CMO range
 ranges = append(ranges, columnByteRanges(cm, config.IncludeDataPages)...)
 ```
 
-这样即使 `columnByteRanges` 返回空，CMO 范围也会被预热，确保 ColumnMetadata protobuf 本身被缓存。
+This ensures the CMO range is always warmed up even if `columnByteRanges` returns empty, guaranteeing the ColumnMetadata protobuf itself is cached.
 
-#### 修复 2：`resolveLancePaths` 增加 `colOnlyMode`
+#### Fix 2: `resolveLancePaths` adds `colOnlyMode`
 
-在 `pkg/vfs/lance_warmup.go` 的 `resolveLancePaths` 函数中，当 `config.Columns` 非空时设置 `colOnlyMode = true`，跳过数据文件路径的添加：
+In `pkg/vfs/lance_warmup.go`'s `resolveLancePaths` function, set `colOnlyMode = true` when `config.Columns` is non-empty, skipping data file path addition:
 
 ```go
 colOnlyMode := len(config.Columns) > 0
 // ...
 if !colOnlyMode {
-    // 添加数据文件路径
+    // Add data file paths
     paths = append(paths, dataFilePath)
 }
 ```
 
-这避免了在列级模式下同时执行全量路径预热和字节范围预热。
+This avoids simultaneously performing full path warmup and byte range warmup in column mode.
 
-### 7.5.4 预热范围设计
+### 7.5.4 Warmup Range Design
 
-修复后，列级预热的字节范围构成：
+After the fix, column-level warmup byte ranges consist of:
 
-| 范围类型 | 来源 | 始终包含 | 说明 |
-|---------|------|---------|------|
-| ColumnMetadata protobuf | CMO table `[pos, pos+length)` | ✅ | 列的元数据本身（page layout 等） |
-| Column-level buffers | `cm.BufferOffsets`/`cm.BufferSizes` | ✅ | dictionaries, statistics |
-| Page data buffers | `page.BufferOffsets`/`page.BufferSizes` | ❌ | 仅当 `--lance-column-data` |
+| Range Type | Source | Always Included | Description |
+|-----------|--------|:--:|------|
+| ColumnMetadata protobuf | CMO table `[pos, pos+length)` | ✅ | Column metadata itself (page layout, etc.) |
+| Column-level buffers | `cm.BufferOffsets`/`cm.BufferSizes` | ✅ | Dictionaries, statistics |
+| Page data buffers | `page.BufferOffsets`/`page.BufferSizes` | ❌ | Only when `--lance-column-data` |
 
-数据流：
+Data flow:
 
 ```
 Manifest → Schema → field_id → DataFile.column_indices → column index
                                                          ↓
-V2 File → Footer → CMO table → [cmPos, cmPos+cmLen)  → 预热范围 ①
+V2 File → Footer → CMO table → [cmPos, cmPos+cmLen)  → Warmup range ①
                               → ColumnMetadata protobuf
                                 ↓
-                                ├── cm.BufferOffsets/Sizes    → 预热范围 ②
-                                └── pages[].BufferOffsets    → 预热范围 ③ (可选)
+                                ├── cm.BufferOffsets/Sizes    → Warmup range ②
+                                └── pages[].BufferOffsets    → Warmup range ③ (optional)
                                                          ↓
-                                           mergeByteRanges → 去重合并
+                                           mergeByteRanges → dedup + merge
                                                          ↓
-                                           warmupByteRanges → 映射到 slice
+                                           warmupByteRanges → map to slices
                                                          ↓
-                                           FillCache → 下载 block
+                                           FillCache → download blocks
 ```
 
-### 7.5.5 验证结果
+### 7.5.5 Verification Results
 
-使用 200MB Lance 数据集（3 列 × 200K 行 × 2 文件，每文件 ~197MB / 4 chunks）验证：
+Using a 200MB Lance dataset (3 columns × 200K rows × 2 files, ~197MB per file / 4 chunks):
 
-| 预热方式 | 缓存大小 | 缓存文件数 | 说明 |
-|---------|---------|-----------|------|
-| 全量预热 | 395M | 103 | 所有数据 |
-| id 列 + 数据页 | **11M** | 7 | id 列数据在文件末尾，只命中 1 个 slice |
-| large_blob 列 + 数据页 | 395M | 103 | large_blob 占文件绝大部分数据 |
+| Warmup Method | Cache Size | Cache Files | Notes |
+|--------------|-----------|-------------|-------|
+| Full warmup | 395M | 103 | All data |
+| id column + data pages | **11M** | 7 | id column data at file tail, only hits 1 slice |
+| large_blob column + data pages | 395M | 103 | large_blob occupies most of the file data |
 
-**id 列**（int64，每行 8B，200K 行 ≈ 1.6MB）的数据集中在每个文件末尾的 chunk 3 中，只命中 1 个 slice (~5MB)，所以缓存仅 11MB，相比全量 395MB 减少了 **97%**。
+**id column** (int64, 8B per row, 200K rows ≈ 1.6MB) has data concentrated in the last chunk 3 of each file, hitting only 1 slice (~5MB), resulting in only 11MB cache — **97% reduction** compared to 395MB full warmup.
 
-**large_blob 列**（binary，每行 2KB，200K 行 ≈ 390MB）占文件绝大部分数据，跨所有 chunk，所以缓存与全量一致。
+**large_blob column** (binary, 2KB per row, 200K rows ≈ 390MB) occupies most of the file data, spanning all chunks, so cache is identical to full warmup.
 
-### 7.5.6 架构限制说明：JuiceFS Slice 与 Lance 列数据的关系
+### 7.5.6 Architecture Limitation: JuiceFS Slice vs Lance Column Data
 
-#### 关键概念
+#### Key Concepts
 
-**Lance V2 文件结构**：一个 `.lance` 数据文件包含**所有列**的数据，按列顺序排列：
+**Lance V2 file structure**: A single `.lance` data file contains **all column** data, arranged sequentially by column:
 
 ```
-单个 .lance 文件 (197MB, 3列 × 200K行)
+Single .lance file (197MB, 3 columns × 200K rows)
 ┌─────────────────────────────────────────────────────────────┐
-│ large_blob 列数据   [0           ~ 205,200,000)    ~195MB   │
-│ name 列数据         [201,326,592 ~ 205,600,000)     ~4.1MB   │
-│ id 列数据           [205,600,064 ~ 205,823,840)     ~224KB   │
-│ ColumnMetadata      [206,605,482 ~ 206,633,082)     ~28KB   │
-│ CMO表 + Footer      [206,633,082 ~ 206,633,122)      40B   │
+│ large_blob column data   [0           ~ 205,200,000)    ~195MB   │
+│ name column data         [201,326,592 ~ 205,600,000)     ~4.1MB   │
+│ id column data           [205,600,064 ~ 205,823,840)     ~224KB   │
+│ ColumnMetadata           [206,605,482 ~ 206,633,082)     ~28KB   │
+│ CMO table + Footer       [206,633,082 ~ 206,633,122)      40B   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**不是**每列一个文件——所有列的数据都在同一个文件中，按列物理排列。
+**Not** one file per column — all columns' data is in the same file, physically arranged by column.
 
-**JuiceFS 存储模型**：JuiceFS 将这个 197MB 的文件按 64MiB 切分为多个 slice：
+**JuiceFS storage model**: JuiceFS splits this 197MB file into multiple slices by 64MiB:
 
 ```
-文件: 197MB .lance 文件
+File: 197MB .lance file
 ┌──────────────────┬──────────────────┬──────────────────┬───────────┐
 │    Slice 0        │    Slice 1        │    Slice 2        │  Slice 3   │
 │    [0, 64MB)      │    [64MB, 128MB)  │    [128MB, 192MB) │ [192MB, ] │
 │    64MB           │    64MB           │    64MB           │ 5MB       │
 │                  │                  │                  │            │
-│  large_blob 数据  │  large_blob 数据  │  large_blob 数据  │ name + id │
-│                  │                  │                  │ + 元数据    │
+│  large_blob data  │  large_blob data  │  large_blob data  │ name + id │
+│                  │                  │                  │ + metadata │
 └──────────────────┴──────────────────┴──────────────────┴───────────┘
 ```
 
-#### 列级预热如何工作
+#### How Column-level Warmup Works
 
-1. 解析 Lance manifest → 获取数据文件路径
-2. 解析 V2 footer → CMO 表 → 每列 ColumnMetadata → page buffer_offsets/sizes
-3. 计算目标列的字节范围（如 id 列在 [205,600,064, 205,823,840)）
-4. 映射到 JuiceFS slice（id 列数据在 Slice 3 中）
-5. 调用 `FillCache` 下载对应的 slice
+1. Parse Lance manifest → get data file paths
+2. Parse V2 footer → CMO table → per-column ColumnMetadata → page buffer_offsets/sizes
+3. Compute target column byte ranges (e.g., id column at [205,600,064, 205,823,840))
+4. Map to JuiceFS slices (id column data is in Slice 3)
+5. Call `FillCache` to download the corresponding slice
 
-#### 为什么列级预热不一定减少下载量
+#### Why Column-level Warmup Doesn't Always Reduce Download Volume
 
-`FillCache(sliceID, sliceSize)` 下载的是**整个 slice 的所有 block**。如果：
+`FillCache(sliceID, sliceSize)` downloads **all blocks of the entire slice**. Thus:
 
-- **id 列**（224KB，在文件末尾）→ 只命中 Slice 3 → 下载 5MB ✅ 减少 97%
-- **large_blob 列**（195MB，占文件大部分）→ 命中 Slice 0+1+2+3 → 下载 197MB ❌ 无差异
+- **id column** (224KB, at file tail) → only hits Slice 3 → downloads 5MB ✅ 97% reduction
+- **large_blob column** (195MB, spans most of file) → hits Slices 0+1+2+3 → downloads 197MB ❌ no difference
 
-只有当目标列的数据**集中在少数 slice 中**时，列级预热才能减少下载量。这是 JuiceFS 对象存储架构的固有特性——预热粒度是 slice/block，不是任意字节范围。
+Column-level warmup only reduces download volume when the target column's data is concentrated in a **small subset of slices**. This is an inherent characteristic of the JuiceFS object storage architecture — warmup granularity is at the slice/block level, not arbitrary byte ranges.
 
 ---
 
-## 八、手工测试指南
+## 8. Manual Testing Guide
 
-本章描述从编译 JuiceFS、创建 Lance 数据集、挂载文件系统到验证预热功能的完整流程。
+This chapter describes the complete workflow from building JuiceFS, creating a Lance dataset, mounting the filesystem, to verifying warmup functionality.
 
-### 8.1 环境准备
+### 8.1 Environment Setup
 
-#### 必要软件
+#### Required Software
 
 ```bash
-# Go (编译 JuiceFS)
-go version  # 需要 1.21+
+# Go (build JuiceFS)
+go version  # Requires 1.21+
 
-# Python + pylance (创建 Lance 数据集)
+# Python + pylance (create Lance dataset)
 python3 --version  # 3.8+
-pip3 install pylance  # 已安装: pylance 9.1.0b4 / lance 1.2.1
+pip3 install pylance
 
-# Redis (JuiceFS 元数据引擎，可选，也可用 SQLite 替代)
-# 如果没有 redis-server，可以使用 SQLite 作为元数据引擎
+# Redis (JuiceFS metadata engine, optional, SQLite can be used instead)
+# If redis-server is unavailable, SQLite can be used as the metadata engine
 ```
 
-#### 8.1.1 编译 JuiceFS
+#### 8.1.1 Building JuiceFS
 
 ```bash
 cd juicefs
 
-# 切换到 lance 分支
+# Switch to lance branch
 git checkout lance
 
-# 编译
+# Build
 go build -o juicefs .
 
-# 验证
+# Verify
 ./juicefs --version
-# 预期输出: juicefs version 1.5.0-dev+unknown
+# Expected output: juicefs version 1.5.0-dev+unknown
 
-# 查看 warmup 命令帮助
+# Check warmup command help
 ./juicefs warmup --help
-# 确认可以看到 --lance, --lance-columns, --lance-column-data 等选项
+# Confirm --lance, --lance-columns, --lance-column-data options are visible
 ```
 
-#### 8.1.2 运行单元测试
+#### 8.1.2 Running Unit Tests
 
 ```bash
 cd juicefs
 
-# 运行全部 Lance 相关测试
+# Run all Lance-related tests
 go test ./pkg/vfs/ \
   -run "TestParseLance|TestRelativeDeletion|TestIsLance|TestMergeByte|TestColumnByte|TestBuildField|TestE2E" \
   -v -count=1
 
-# 预期: 13 个测试全部 PASS
+# Expected: 13 tests all PASS
 ```
 
-### 8.2 创建 Lance 数据集
+### 8.2 Creating a Lance Dataset
 
-使用 Python + pylance 在本地创建一个测试用 Lance 数据集：
+Use Python + pylance to create a test Lance dataset locally:
 
 ```python
 #!/usr/bin/env python3
-"""create_lance_dataset.py — 创建测试用 Lance 数据集"""
+"""create_lance_dataset.py — Create a test Lance dataset"""
 
 import lance
 import pyarrow as pa
 import os
 
-# 1. 定义 schema 和测试数据
+# 1. Define schema and test data
 schema = pa.schema([
     pa.field("id", pa.int64()),
     pa.field("name", pa.string()),
@@ -784,23 +785,23 @@ table = pa.table({
     ),
 }, schema=schema)
 
-# 2. 写入 Lance 数据集
+# 2. Write Lance dataset
 dataset_path = "/tmp/test_lance_data.lance"
 if os.path.exists(dataset_path):
     import shutil
     shutil.rmtree(dataset_path)
 
-# 写入数据，分多个 fragment
+# Write data with multiple fragments
 lance.write_dataset(
     table,
     dataset_path,
     mode="overwrite",
-    max_rows_per_file=2500,  # 4 个 fragment
+    max_rows_per_file=2500,  # 4 fragments
 )
 
 print(f"Lance dataset created at: {dataset_path}")
 
-# 3. 验证目录结构
+# 3. Verify directory structure
 for root, dirs, files in os.walk(dataset_path):
     level = root.replace(dataset_path, "").count(os.sep)
     indent = "  " * level
@@ -811,7 +812,7 @@ for root, dirs, files in os.walk(dataset_path):
         size = os.path.getsize(filepath)
         print(f"{subindent}{file} ({size:,} bytes)")
 
-# 4. 打印 manifest 信息
+# 4. Print manifest info
 import lance
 ds = lance.dataset(dataset_path)
 print(f"\nDataset info:")
@@ -824,13 +825,13 @@ for frag in ds.get_fragments():
         print(f"      - {f.path}")
 ```
 
-运行：
+Run:
 
 ```bash
 python3 create_lance_dataset.py
 ```
 
-预期输出（目录结构类似）：
+Expected output (directory structure similar to):
 
 ```
 test_lance_data.lance/
@@ -849,89 +850,89 @@ Dataset info:
   Num fragments: 4
 ```
 
-### 8.3 挂载 JuiceFS
+### 8.3 Mounting JuiceFS
 
-JuiceFS 需要先 `format` 格式化卷，再 `mount` 挂载。meta URL 是位置参数，不是 `--meta` 选项。
+JuiceFS requires `format` to format the volume first, then `mount` to mount it. The meta URL is a positional argument, not a `--meta` option.
 
-#### 8.3.1 使用 SQLite 元数据引擎（无需 Redis）
+#### 8.3.1 Using SQLite Metadata Engine (No Redis Required)
 
 ```bash
-# 创建挂载点
+# Create mount point
 mkdir -p /mnt/jfs
 
-# 1. 格式化卷（仅需执行一次）
-#    SQLite 作为元数据引擎，本地磁盘默认作为对象存储 (--storage file)
+# 1. Format volume (only needed once)
+#    SQLite as metadata engine, local disk as default object storage (--storage file)
 ./juicefs format sqlite3:///tmp/juicefs-meta.db mylance
 
-# 2. 挂载（meta URL 作为位置参数传入）
+# 2. Mount (meta URL as positional argument)
 ./juicefs mount sqlite3:///tmp/juicefs-meta.db /mnt/jfs -d
 ```
 
-挂载成功后，`/mnt/jfs` 就是一个可用的 JuiceFS 文件系统。
+After successful mount, `/mnt/jfs` is a usable JuiceFS filesystem.
 
-#### 8.3.2 使用 Redis 元数据引擎（可选）
+#### 8.3.2 Using Redis Metadata Engine (Optional)
 
 ```bash
-# 先启动 Redis
+# Start Redis first
 redis-server --daemonize yes
 
-# 格式化
+# Format
 ./juicefs format redis://127.0.0.1:6379/1 mylance
 
-# 挂载
+# Mount
 ./juicefs mount redis://127.0.0.1:6379/1 /mnt/jfs -d
 ```
 
-#### 8.3.3 后台挂载（推荐）
+#### 8.3.3 Background Mounting (Recommended)
 
 ```bash
-# -d 等同于 --background，后台运行模式
+# -d is equivalent to --background, background mode
 ./juicefs format sqlite3:///tmp/juicefs-meta.db mylance
 ./juicefs mount sqlite3:///tmp/juicefs-meta.db /mnt/jfs -d
 
-# 验证挂载
+# Verify mount
 df -h /mnt/jfs
-# 预期: JuiceFS:mylance  1.0P  0  1.0P  0% /mnt/jfs
+# Expected: JuiceFS:mylance  1.0P  0  1.0P  0% /mnt/jfs
 
 ls /mnt/jfs
-# 预期: 可以正常列目录
+# Expected: can list directory normally
 ```
 
-### 8.4 将 Lance 数据集复制到 JuiceFS
+### 8.4 Copy Lance Dataset to JuiceFS
 
 ```bash
-# 创建数据目录
+# Create data directory
 mkdir -p /mnt/jfs/data
 
-# 复制 Lance 数据集到 JuiceFS
+# Copy Lance dataset to JuiceFS
 cp -r /tmp/test_lance_data.lance /mnt/jfs/data/
 
-# 验证文件在 JuiceFS 中
+# Verify files in JuiceFS
 ls -la /mnt/jfs/data/test_lance_data.lance/
 ls -la /mnt/jfs/data/test_lance_data.lance/_versions/
 ls -la /mnt/jfs/data/test_lance_data.lance/data/
 ```
 
-### 8.5 测试预热功能
+### 8.5 Testing Warmup
 
-#### 8.5.1 数据集级预热
+#### 8.5.1 Dataset-level Warmup
 
 ```bash
-# 清空 JuiceFS 本地缓存（确保预热前没有缓存）
+# Clear JuiceFS local cache (ensure no cache before warmup)
 rm -rf ~/.juicefs/cache/
 
-# 预热整个 Lance 数据集
+# Warm up entire Lance dataset
 ./juicefs warmup --lance /mnt/jfs/data/test_lance_data.lance
 
-# 预期输出:
+# Expected output:
 # Lance mode: latest version, manifest-only=false, include-indices=false
 # warmup cache file: 6
-# (6 = manifest + 4 data files + version_hint 或其他元数据文件)
+# (6 = manifest + 4 data files + version_hint or other metadata files)
 ```
 
-**缓存位置与验证：**
+**Cache location and verification:**
 
-JuiceFS 默认缓存目录为 `~/.juicefs/cache/`，按卷 UUID 子目录组织：
+JuiceFS default cache directory is `~/.juicefs/cache/`, organized by volume UUID subdirectory:
 
 ```
 ~/.juicefs/cache/
@@ -949,66 +950,66 @@ JuiceFS 默认缓存目录为 `~/.juicefs/cache/`，按卷 UUID 子目录组织�
     └── .lock
 ```
 
-文件名格式：`{slice_id}_{block_index}_{size}`
+File naming format: `{slice_id}_{block_index}_{size}`
 
-**验证缓存已生效的三种方式：**
+**Three ways to verify cache is effective:**
 
 ```bash
-# 方式 1: 用 --check 检查缓存命中率（推荐）
+# Method 1: Use --check to verify cache hit rate (recommended)
 ./juicefs warmup --lance --check /mnt/jfs/data/test_lance_data.lance
-# 预期输出: 6 files checked, 5.1 MiB of 5.1 MiB (100.0%) cached
-# --check 不下载数据，只检查缓存中是否已有对应 block
+# Expected output: 6 files checked, 5.1 MiB of 5.1 MiB (100.0%) cached
+# --check does not download data, only checks if blocks are already in cache
 
-# 方式 2: 查看缓存目录大小
+# Method 2: Check cache directory size
 du -sh ~/.juicefs/cache/
-# 预热前: 0 或很小；预热后: 有数据（如 5.2M）
+# Before warmup: 0 or very small; after warmup: has data (e.g., 5.2M)
 
-# 方式 3: 列出缓存文件
+# Method 3: List cache files
 find ~/.juicefs/cache/ -type f -name "*_*_*" | wc -l
-# 预期: 与 warmup 输出的文件数一致
+# Expected: matches the file count from warmup output
 ```
 
-#### 8.5.2 仅预热 Manifest
+#### 8.5.2 Manifest-only Warmup
 
 ```bash
-# 只预热 manifest 文件
+# Only warm up manifest files
 ./juicefs warmup \
   --lance \
   --lance-manifest-only \
   /mnt/jfs/data/test_lance_data.lance
 
-# 预期: 只预热 _versions/ 下的 manifest 文件，不预热 data/ 目录
+# Expected: only warms up manifest files under _versions/, not data/ directory
 ```
 
-#### 8.5.3 列级元数据预热
+#### 8.5.3 Column-level Metadata Warmup
 
 ```bash
-# 预热 id 和 name 列的元数据（ColumnMetadata protobuf + column-level buffers）
+# Warm up id and name column metadata (ColumnMetadata protobuf + column-level buffers)
 ./juicefs warmup --lance --lance-columns "id,name" /mnt/jfs/data/test_lance_data.lance
 
-# 预热 id 列的元数据 + 数据页缓冲区（page buffer offsets/sizes）
+# Warm up id column metadata + data page buffers (page buffer offsets/sizes)
 ./juicefs warmup --lance --lance-columns "id" --lance-column-data /mnt/jfs/data/test_lance_data.lance
 ```
 
-**列级预热的工作原理：**
+**How column-level warmup works:**
 
-列级预热通过解析 V2 文件 footer 中的 CMO (Column Metadata Offset) 表，定位指定列的 ColumnMetadata protobuf，提取 page buffer 和 column buffer 的字节范围，然后映射到 JuiceFS slices 进行预热。
+Column-level warmup locates the specified column's ColumnMetadata protobuf by parsing the CMO (Column Metadata Offset) table in the V2 file footer, extracts byte ranges for page buffers and column buffers, then maps them to JuiceFS slices for warmup.
 
-预热范围包含：
-1. **ColumnMetadata protobuf 自身**（从 CMO 表获取位置和长度）
-2. **Column-level buffers**（dictionaries, statistics 等）
-3. **Page data buffers**（仅当 `--lance-column-data` 时）
+Warmup ranges include:
+1. **ColumnMetadata protobuf itself** (position and length from CMO table)
+2. **Column-level buffers** (dictionaries, statistics, etc.)
+3. **Page data buffers** (only when `--lance-column-data`)
 
-**注意事项：**
+**Important notes:**
 
-JuiceFS 预热的最小粒度是 slice（对象存储对象，每个最大 64MiB）。`FillCache` 会下载整个 slice 的所有 block。因此：
-- 小文件（< 64MiB）整个文件就是一个 slice，列级预热和全量预热效果相同
-- 大文件（多个 slice）中，如果某列数据只跨越部分 slice，列级预热可以减少下载量
+JuiceFS warmup minimum granularity is the slice (object storage object, each up to 64MiB). `FillCache` downloads all blocks of the entire slice. Therefore:
+- Small files (< 64MiB): the entire file is one slice, column-level warmup same as full warmup
+- Large files (multiple slices): if a column's data only spans a subset of slices, column-level warmup can reduce download volume
 
-**验证列级预热效果（需要大文件数据集）：**
+**Verifying column-level warmup (requires large dataset):**
 
 ```bash
-# 创建大尺寸数据集（每个文件 ~200MB，跨 4 个 chunk）
+# Create large dataset (each file ~200MB, spans 4 chunks)
 python3 -c "
 import lance, pyarrow as pa, os, numpy as np
 
@@ -1022,104 +1023,104 @@ table = pa.table({
 lance.write_dataset(table, '/tmp/test_lance_huge.lance', mode='overwrite', max_rows_per_file=100000)
 "
 
-# 复制到 JuiceFS
+# Copy to JuiceFS
 cp -r /tmp/test_lance_huge.lance /mnt/jfs/
 
-# 全量预热
+# Full warmup
 rm -rf ~/.juicefs/cache/
 ./juicefs warmup --lance /mnt/jfs/test_lance_huge.lance
 du -sh ~/.juicefs/cache/
-# 预期: ~395M (全量数据)
+# Expected: ~395M (full data)
 
-# id 列预热（含数据页，id 列数据在文件末尾，只占 1 个 slice）
+# id column warmup (with data pages, id column data at file tail, only 1 slice)
 rm -rf ~/.juicefs/cache/
 ./juicefs warmup --lance --lance-columns "id" --lance-column-data /mnt/jfs/test_lance_huge.lance
 du -sh ~/.juicefs/cache/
-# 预期: ~11M (仅最后一个 chunk 的 slice)
+# Expected: ~11M (only the last chunk's slice)
 
-# large_blob 列预热（数据占文件大部分，跨所有 chunk）
+# large_blob column warmup (data spans most of file, all chunks)
 rm -rf ~/.juicefs/cache/
 ./juicefs warmup --lance --lance-columns "large_blob" --lance-column-data /mnt/jfs/test_lance_huge.lance
 du -sh ~/.juicefs/cache/
-# 预期: ~395M (large_blob 占了绝大部分数据)
+# Expected: ~395M (large_blob occupies most of the data)
 ```
 
-**实测结果（200MB 数据集，3 列 × 200K 行 × 2 文件）：**
+**Measured results (200MB dataset, 3 columns × 200K rows × 2 files):**
 
-| 预热方式 | 缓存大小 | 缓存文件数 | 说明 |
-|---------|---------|-----------|------|
-| 全量预热 | 395M | 103 | 所有数据 |
-| id 列 + 数据页 | 11M | 7 | id 列数据在文件末尾，只命中 1 个 slice |
-| large_blob 列 + 数据页 | 395M | 103 | large_blob 占文件绝大部分数据 |
+| Warmup Method | Cache Size | Cache Files | Notes |
+|--------------|-----------|-------------|-------|
+| Full warmup | 395M | 103 | All data |
+| id column + data pages | 11M | 7 | id column data at file tail, only hits 1 slice |
+| large_blob column + data pages | 395M | 103 | large_blob occupies most of the file data |
 
-**结论：** 列级预热的实际效果取决于列数据在文件中的物理分布。当目标列的数据集中在一部分 slice 时（如小列在文件末尾），可以显著减少下载量；当列数据占文件大部分时，效果不明显。
+**Conclusion:** The actual effectiveness of column-level warmup depends on the physical distribution of column data within the file. When the target column's data is concentrated in a subset of slices (e.g., a small column at the file tail), it can significantly reduce download volume; when the column data occupies most of the file, the effect is minimal.
 
-#### 8.5.4 指定版本预热
+#### 8.5.4 Version-specific Warmup
 
 ```bash
-# 预热版本 0
+# Warm up version 0
 ./juicefs warmup \
   --lance \
   --lance-version 0 \
   /mnt/jfs/data/test_lance_data.lance
 
-# 预期输出包含:
+# Expected output includes:
 # Lance mode: version=0, manifest-only=false, include-indices=false
 ```
 
-#### 8.5.5 检查缓存状态
+#### 8.5.5 Checking Cache Status
 
 ```bash
-# 检查哪些数据块已缓存（不实际预热）
+# Check which data blocks are cached (no actual warmup)
 ./juicefs warmup \
   --lance \
   --check \
   /mnt/jfs/data/test_lance_data.lance
 
-# --check 模式下只检查缓存命中率，不执行下载
+# --check mode only checks cache hit rate, does not perform downloads
 
-# 查看本地缓存目录大小
+# Check local cache directory size
 du -sh ~/.juicefs/cache/
 ```
 
-#### 8.5.6 驱逐缓存
+#### 8.5.6 Evicting Cache
 
 ```bash
-# 驱逐已缓存的数据块
+# Evict cached data blocks
 ./juicefs warmup \
   --lance \
   --evict \
   /mnt/jfs/data/test_lance_data.lance
 
-# 验证缓存已被清空
+# Verify cache has been cleared
 du -sh ~/.juicefs/cache/
 ```
 
-### 8.6 验证预热效果
+### 8.6 Verifying Warmup Effectiveness
 
-#### 方法 1：读取延迟对比
+#### Method 1: Read Latency Comparison
 
 ```bash
-# 清空缓存后，直接读取（冷读）
+# Clear cache, read directly (cold read)
 rm -rf ~/.juicefs/cache/
 time cat /mnt/jfs/data/test_lance_data.lance/data/*.lance > /dev/null
 
-# 预热
+# Warm up
 ./juicefs warmup \
   --lance \
   /mnt/jfs/data/test_lance_data.lance
 
-# 再次读取（热读）
+# Read again (hot read)
 time cat /mnt/jfs/data/test_lance_data.lance/data/*.lance > /dev/null
 
-# 预期: 热读明显快于冷读
+# Expected: hot read noticeably faster than cold read
 ```
 
-#### 方法 2：通过 Python 读取 Lance 验证
+#### Method 2: Verify via Python Lance Read
 
 ```python
 #!/usr/bin/env python3
-"""verify_lance_warmup.py — 验证预热后的 Lance 数据集可正常读取"""
+"""verify_lance_warmup.py — Verify Lance dataset readability after warmup"""
 
 import lance
 import time
@@ -1127,13 +1128,13 @@ import time
 ds = lance.dataset("/mnt/jfs/data/test_lance_data.lance")
 print(f"Dataset: version={ds.version}, fragments={len(list(ds.get_fragments()))}")
 
-# 冷读 / 热读对比
+# Cold/hot read comparison
 start = time.time()
 table = ds.to_table()
 elapsed = time.time() - start
 print(f"Full scan: {len(table)} rows in {elapsed:.3f}s")
 
-# 列级读取
+# Column-level read
 for col in ["id", "name", "score", "embedding"]:
     start = time.time()
     col_data = ds.to_table(columns=[col])
@@ -1141,42 +1142,42 @@ for col in ["id", "name", "score", "embedding"]:
     print(f"Column '{col}': {col_data.count_rows()} rows in {elapsed:.3f}s")
 ```
 
-运行：
+Run:
 
 ```bash
-# 冷读
+# Cold read
 rm -rf ~/.juicefs/cache/
 python3 verify_lance_warmup.py
 
-# 预热
+# Warm up
 ./juicefs warmup --lance /mnt/jfs/data/test_lance_data.lance
 
-# 热读
+# Hot read
 python3 verify_lance_warmup.py
 ```
 
-### 8.7 测试后清理
+### 8.7 Post-test Cleanup
 
 ```bash
-# 卸载 JuiceFS
+# Unmount JuiceFS
 umount /mnt/jfs
 
-# 清理本地存储
+# Clean up local storage
 rm -rf ~/.juicefs/cache/
 rm -f /tmp/juicefs-meta.db
 rm -rf /tmp/juicefs-storage/
 rm -rf /tmp/test_lance_data.lance
-rm -f ./juicefs  # 可选: 删除编译产物
+rm -f ./juicefs  # Optional: remove build artifact
 ```
 
-### 8.8 故障排查
+### 8.8 Troubleshooting
 
-| 问题 | 可能原因 | 解决方法 |
-|------|---------|---------|
-| `open control file: no such file` | JuiceFS 未挂载 | 确认 `mount` 命令成功，`df -h /mnt/jfs` 有输出 |
-| `find lance manifest: no manifest files found` | 目录结构不完整 | 确认 `_versions/` 下有 `.manifest` 文件 |
-| `read footer: file too small` | 数据文件损坏 | 重新复制 Lance 数据集到 JuiceFS |
-| `column "xxx" not found` | 列名不匹配 | 用 `python3 -c "import lance; print(lance.dataset(path).schema)"` 检查列名 |
-| `warmup lance columns: ...` 警告 | V1 格式数据文件 | 确保数据文件是 V2 格式（pylance 1.x 默认写 V2） |
-| JuiceFS 挂载失败 | 元数据引擎连接问题 | 确认 `format` 和 `mount` 命令中的 meta URL 格式正确，SQLite 用 `sqlite3:///path/to/db` |
-| 权限不足 | warmup 需要 root | 确保当前用户对挂载点有读写权限|
+| Problem | Possible Cause | Solution |
+|---------|---------------|----------|
+| `open control file: no such file` | JuiceFS not mounted | Confirm `mount` succeeded, `df -h /mnt/jfs` shows output |
+| `find lance manifest: no manifest files found` | Incomplete directory structure | Confirm `.manifest` files exist under `_versions/` |
+| `read footer: file too small` | Corrupted data file | Re-copy Lance dataset to JuiceFS |
+| `column "xxx" not found` | Column name mismatch | Check column names with `python3 -c "import lance; print(lance.dataset(path).schema)"` |
+| `warmup lance columns: ...` warning | V1 format data file | Ensure data files are V2 format (pylance 1.x writes V2 by default) |
+| JuiceFS mount fails | Metadata engine connection issue | Confirm `format` and `mount` meta URL format is correct, SQLite uses `sqlite3:///path/to/db` |
+| Permission denied | warmup requires root | Ensure current user has read/write permissions on the mount point |
