@@ -6255,3 +6255,167 @@ func TestRedisStaleReadLockCleanup(t *testing.T) {
 	}
 	_ = m.Flock(ctx, inode, owner+1, syscall.F_UNLCK, false)
 }
+
+// TestRedisLockIndexRelease covers the release side of the locked$<sid> index:
+// the index entry must be dropped as soon as no owner of the session holds a
+// lock on the inode, and must NOT be dropped while at least one owner does —
+// regardless of locks held by other sessions on the same inode.
+func TestRedisLockIndexRelease(t *testing.T) {
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
+	m1, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
+	if err != nil {
+		t.Fatalf("create meta1: %s", err)
+	}
+	if err := m1.Reset(); err != nil {
+		t.Fatalf("reset meta1: %s", err)
+	}
+	if err := m1.Init(testFormat(), false); err != nil {
+		t.Fatalf("init meta1: %s", err)
+	}
+	if err := m1.NewSession(true); err != nil {
+		t.Fatalf("new session1: %s", err)
+	}
+	defer m1.CloseSession()
+
+	m2, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
+	if err != nil {
+		t.Fatalf("create meta2: %s", err)
+	}
+	if _, err := m2.Load(true); err != nil {
+		t.Fatalf("load meta2: %s", err)
+	}
+	if err := m2.NewSession(true); err != nil {
+		t.Fatalf("new session2: %s", err)
+	}
+	defer m2.CloseSession()
+
+	r1, ok := m1.(*redisMeta)
+	if !ok {
+		t.Fatal("meta1 is not redisMeta")
+	}
+	r2, ok := m2.(*redisMeta)
+	if !ok {
+		t.Fatal("meta2 is not redisMeta")
+	}
+	ctx := Background()
+	var inode Ino
+	var attr = &Attr{}
+	if st := m1.Create(ctx, 1, "f_lockidx", 0644, 0, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	defer m1.Unlink(ctx, 1, "f_lockidx")
+
+	lockedLists := func(r *redisMeta, ino Ino) bool {
+		ms, err := r.rdb.SMembers(ctx, r.lockedKey(r.sid)).Result()
+		if err != nil {
+			t.Fatalf("SMembers %s: %s", r.lockedKey(r.sid), err)
+		}
+		for _, k := range ms {
+			if k == r.flockKey(ino) || k == r.plockKey(ino) {
+				return true
+			}
+		}
+		return false
+	}
+	fieldsOf := func(r *redisMeta, key string) map[string]string {
+		fields, err := r.rdb.HGetAll(ctx, key).Result()
+		if err != nil {
+			t.Fatalf("HGetAll %s: %s", key, err)
+		}
+		return fields
+	}
+
+	// BSD flock: two sessions share a read-lock; releasing in session1 must
+	// drop session1's index entry even though the hash is not globally empty
+	// (this is the leak the reviewer pointed at), and keep session2's lock.
+	if st := m1.Flock(ctx, inode, 1, syscall.F_RDLCK, false); st != 0 {
+		t.Fatalf("session1 rlock: %s", st)
+	}
+	if st := m2.Flock(ctx, inode, 1, syscall.F_RDLCK, false); st != 0 {
+		t.Fatalf("session2 rlock: %s", st)
+	}
+	if st := m1.Flock(ctx, inode, 1, syscall.F_UNLCK, false); st != 0 {
+		t.Fatalf("session1 unlock: %s", st)
+	}
+	if lockedLists(r1, inode) {
+		t.Fatalf("locked$%d still lists flock inode after the session released its last owner", r1.sid)
+	}
+	if fields := fieldsOf(r2, r2.flockKey(inode)); len(fields) != 1 {
+		t.Fatalf("session2 flock must survive session1 unlock, got %v", fields)
+	}
+	if st := m2.Flock(ctx, inode, 1, syscall.F_UNLCK, false); st != 0 {
+		t.Fatalf("session2 unlock: %s", st)
+	}
+	if lockedLists(r2, inode) {
+		t.Fatalf("locked$%d still lists flock inode", r2.sid)
+	}
+	if fields := fieldsOf(r1, r1.flockKey(inode)); len(fields) != 0 {
+		t.Fatalf("flock hash not empty: %v", fields)
+	}
+
+	// Same session, two owners: the index entry must survive until the last
+	// owner of the session releases.
+	if st := m1.Flock(ctx, inode, 1, syscall.F_RDLCK, false); st != 0 {
+		t.Fatalf("rlock owner1: %s", st)
+	}
+	if st := m1.Flock(ctx, inode, 2, syscall.F_RDLCK, false); st != 0 {
+		t.Fatalf("rlock owner2: %s", st)
+	}
+	if st := m1.Flock(ctx, inode, 1, syscall.F_UNLCK, false); st != 0 {
+		t.Fatalf("unlock owner1: %s", st)
+	}
+	if !lockedLists(r1, inode) {
+		t.Fatalf("locked$%d lost the flock inode while owner2 still holds it", r1.sid)
+	}
+	if st := m1.Flock(ctx, inode, 2, syscall.F_UNLCK, false); st != 0 {
+		t.Fatalf("unlock owner2: %s", st)
+	}
+	if lockedLists(r1, inode) {
+		t.Fatalf("locked$%d still lists flock inode after last owner released", r1.sid)
+	}
+
+	// POSIX locks: shared read ranges from two sessions; same leak, same fix.
+	if st := m1.Setlk(ctx, inode, 1, false, syscall.F_RDLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("session1 plock: %s", st)
+	}
+	if st := m2.Setlk(ctx, inode, 1, false, syscall.F_RDLCK, 0, 0xFFFF, 2); st != 0 {
+		t.Fatalf("session2 plock: %s", st)
+	}
+	if st := m1.Setlk(ctx, inode, 1, false, syscall.F_UNLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("session1 punlock: %s", st)
+	}
+	if lockedLists(r1, inode) {
+		t.Fatalf("locked$%d still lists plock inode after the session released its last owner", r1.sid)
+	}
+	if fields := fieldsOf(r2, r2.plockKey(inode)); len(fields) != 1 {
+		t.Fatalf("session2 plock must survive session1 unlock, got %v", fields)
+	}
+	if st := m2.Setlk(ctx, inode, 1, false, syscall.F_UNLCK, 0, 0xFFFF, 2); st != 0 {
+		t.Fatalf("session2 punlock: %s", st)
+	}
+	if lockedLists(r2, inode) {
+		t.Fatalf("locked$%d still lists plock inode", r2.sid)
+	}
+
+	// Same session, two plock owners: entry survives until the last owner.
+	if st := m1.Setlk(ctx, inode, 1, false, syscall.F_RDLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("plock owner1: %s", st)
+	}
+	if st := m1.Setlk(ctx, inode, 2, false, syscall.F_RDLCK, 0x10000, 0x20000, 2); st != 0 {
+		t.Fatalf("plock owner2: %s", st)
+	}
+	if st := m1.Setlk(ctx, inode, 1, false, syscall.F_UNLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("punlock owner1: %s", st)
+	}
+	if !lockedLists(r1, inode) {
+		t.Fatalf("locked$%d lost the plock inode while owner2 still holds it", r1.sid)
+	}
+	if st := m1.Setlk(ctx, inode, 2, false, syscall.F_UNLCK, 0x10000, 0x20000, 2); st != 0 {
+		t.Fatalf("punlock owner2: %s", st)
+	}
+	if lockedLists(r1, inode) {
+		t.Fatalf("locked$%d still lists plock inode after last owner released", r1.sid)
+	}
+}
