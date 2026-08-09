@@ -358,6 +358,8 @@ replace github.com/urfave/cli/v2 v2.19.3 => github.com/juicedata/cli/v2 v2.19.4-
 
 replace github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b => github.com/juicedata/go-nfs-client v0.0.0-20250220101412-d3a8c1ca64a1
 
+exclude google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a
+
 replace github.com/mattn/go-colorable v0.1.13 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db
 
 replace github.com/mattn/go-colorable v0.1.12 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db

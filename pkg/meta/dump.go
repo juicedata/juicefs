@@ -410,7 +410,7 @@ func dumpAttr(a *Attr, d *DumpedAttr) {
 	d.Ctimensec = a.Ctimensec
 	d.Nlink = a.Nlink
 	d.Rdev = a.Rdev
-	if a.Typ == TypeFile {
+	if a.Typ == TypeFile || a.Typ == TypeLink {
 		d.Length = a.Length
 	} else {
 		d.Length = 0

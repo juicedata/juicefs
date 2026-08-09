@@ -57,16 +57,25 @@ const (
 	OpSummary = 1007
 	// CompactPath is a message to trigger compact
 	CompactPath = 1008
+	// ExternalLink is a message for external link in EE
+	ExternalLink = 1009
+	// Unref is a message to remove a ref in EE
+	Unref = 1010
 )
 
 const (
-	TypeFile      = 1 // type for regular file
-	TypeDirectory = 2 // type for directory
-	TypeSymlink   = 3 // type for symlink
-	TypeFIFO      = 4 // type for FIFO node
-	TypeBlockDev  = 5 // type for block device
-	TypeCharDev   = 6 // type for character device
-	TypeSocket    = 7 // type for socket
+	ELink syscall.Errno = 0x7FFFFFFF + iota
+)
+
+const (
+	TypeFile      = 1  // type for regular file
+	TypeDirectory = 2  // type for directory
+	TypeSymlink   = 3  // type for symlink
+	TypeFIFO      = 4  // type for FIFO node
+	TypeBlockDev  = 5  // type for block device
+	TypeCharDev   = 6  // type for character device
+	TypeSocket    = 7  // type for socket
+	TypeLink      = 10 // type for across-zone link
 )
 
 const (
@@ -285,6 +294,8 @@ func typeToString(_type uint8) string {
 		return "chardev"
 	case TypeSocket:
 		return "socket"
+	case TypeLink:
+		return "link"
 	default:
 		return "unknown"
 	}
@@ -306,6 +317,8 @@ func typeFromString(s string) uint8 {
 		return TypeCharDev
 	case "socket":
 		return TypeSocket
+	case "link":
+		return TypeLink
 	default:
 		panic(s)
 	}

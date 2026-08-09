@@ -1583,7 +1583,7 @@ func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, paren
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	if _type < TypeFile || _type > TypeSocket {
+	if _type < TypeFile || _type > TypeLink {
 		return syscall.EINVAL
 	}
 	if parent.IsTrash() {
