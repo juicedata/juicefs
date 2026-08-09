@@ -1297,6 +1297,9 @@ var errBusy error
 var errEdgeChanged = errors.New("edge was changed by a concurrent transaction")
 
 func (m *dbMeta) shouldRetry(err error) bool {
+	if err == ELink {
+		return false
+	}
 	if errors.Is(err, errEdgeChanged) {
 		return true
 	}
@@ -1609,6 +1612,14 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}))
 }
 
+func (m *dbMeta) checkLink(n *node) bool {
+	if n.Type == TypeLink {
+		m.newMsg(ExternalLink, uint64(n.Inode), n.Length, n.Rdev)
+		return true
+	}
+	return false
+}
+
 func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var cur = node{Inode: inode}
@@ -1618,6 +1629,9 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		}
 		if !ok {
 			return syscall.ENOENT
+		}
+		if m.checkLink(&cur) {
+			return ELink
 		}
 		var curAttr Attr
 		m.parseAttr(&cur, &curAttr)
@@ -1715,6 +1729,9 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		if !ok {
 			return syscall.ENOENT
 		}
+		if m.checkLink(&nodeAttr) {
+			return ELink
+		}
 		if nodeAttr.Type != TypeFile || nodeAttr.Flags&(FlagImmutable|FlagAppend) != 0 || (flags == 0 && nodeAttr.Parent > TrashInode) {
 			return syscall.EPERM
 		}
@@ -1786,6 +1803,9 @@ func (m *dbMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		}
 		if !ok {
 			return syscall.ENOENT
+		}
+		if m.checkLink(&nodeAttr) {
+			return ELink
 		}
 		if nodeAttr.Type == TypeFIFO {
 			return syscall.EPIPE
@@ -1871,6 +1891,9 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 		if !ok {
 			return syscall.ENOENT
 		}
+		if m.checkLink(&nodeAttr) {
+			return ELink
+		}
 		if nodeAttr.Type != TypeSymlink {
 			return syscall.EINVAL
 		}
@@ -1932,6 +1955,9 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		if !ok {
 			return syscall.ENOENT
+		}
+		if m.checkLink(&pn) {
+			return ELink
 		}
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
@@ -2187,6 +2213,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if !ok {
 			return syscall.ENOENT
 		}
+		if m.checkLink(&pn) {
+			return ELink
+		}
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -2329,6 +2358,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if n.Type == TypeFile && n.Nlink == 0 {
 				m.fileDeleted(opened, parent.IsTrash(), n.Inode, n.Length)
 			}
+			if n.Type == TypeLink {
+				m.newMsg(Unref, n.Inode, n.Length, n.Rdev)
+			}
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, n.Uid, n.Gid, newSpace, newInode)
 		} else {
@@ -2364,6 +2396,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		if !ok {
 			return syscall.ENOENT
 		}
+		if m.checkLink(&pn) {
+			return ELink
+		}
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -2381,6 +2416,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		}
 		if !ok {
 			return syscall.ENOENT
+		}
+		if e.Type == TypeLink {
+			return syscall.ENOTSUP
 		}
 		if e.Type != TypeDirectory {
 			return syscall.ENOTDIR
@@ -2520,6 +2558,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		err := m.getNodes(s, &spn, &dpn)
 		if err != nil {
 			return err
+		}
+		if m.checkLink(&spn) || m.checkLink(&dpn) {
+			return ELink
 		}
 		if spn.Type != TypeDirectory || dpn.Type != TypeDirectory {
 			return syscall.ENOTDIR
@@ -2861,6 +2902,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if dn.Type == TypeFile && dn.Nlink == 0 {
 				m.fileDeleted(opened, false, dino, dn.Length)
 			}
+			if dn.Type == TypeLink {
+				m.newMsg(Unref, dino, dn.Length, dn.Rdev)
+			}
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, dn.Uid, dn.Gid, newSpace, newInode)
 		}
@@ -2877,6 +2921,9 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		}
 		if !ok {
 			return syscall.ENOENT
+		}
+		if m.checkLink(&pn) {
+			return ELink
 		}
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
@@ -2908,6 +2955,9 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		}
 		if !ok {
 			return syscall.ENOENT
+		}
+		if n.Type == TypeLink {
+			return syscall.ENOTSUP
 		}
 		if n.Type == TypeDirectory {
 			return syscall.EPERM
@@ -2954,7 +3004,6 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 }
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
-
 	return errno(m.simpleTxn(ctx, func(s *xorm.Session) error {
 		s = s.Table(&edge{})
 		if plus != 0 {
@@ -2966,6 +3015,19 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		var nodes []namedNode
 		if err := s.Find(&nodes, &edge{Parent: inode}); err != nil {
 			return err
+		}
+		if len(nodes) == 0 {
+			var pn = node{Inode: inode}
+			ok, err := s.Get(&pn)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if m.checkLink(&pn) {
+				return ELink
+			}
 		}
 		for _, n := range nodes {
 			if len(n.Name) == 0 {
@@ -3040,6 +3102,9 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			}
 			if !ok {
 				return syscall.ENOENT
+			}
+			if m.checkLink(&pn) {
+				return ELink
 			}
 			if pn.Type != TypeDirectory {
 				return syscall.ENOTDIR
@@ -3543,7 +3608,23 @@ func (m *dbMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) erro
 func (m *dbMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno) {
 	var c = chunk{Inode: inode, Indx: indx}
 	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		_, err := s.MustCols("indx").Get(&c)
+		ok, err := s.MustCols("indx").Get(&c)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			var pn = node{Inode: inode}
+			ok, err := s.Get(&pn)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if m.checkLink(&pn) {
+				return ELink
+			}
+		}
 		return err
 	}); err != nil {
 		return nil, errno(err)
@@ -3579,6 +3660,9 @@ func (m *dbMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 		}
 		if !ok {
 			return syscall.ENOENT
+		}
+		if m.checkLink(&nodeAttr) {
+			return ELink
 		}
 		if nodeAttr.Type != TypeFile {
 			return syscall.EPERM
@@ -3635,6 +3719,9 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		err := m.getNodesForUpdate(s, &nin, &nout)
 		if err != nil {
 			return err
+		}
+		if m.checkLink(&nin) || m.checkLink(&nout) {
+			return ELink
 		}
 		if nin.Type != TypeFile {
 			return syscall.EINVAL
@@ -4460,6 +4547,17 @@ func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 			return err
 		}
 		if !ok {
+			var n = node{Inode: inode}
+			ok, err := s.Get(&n)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if m.checkLink(&n) {
+				return ELink
+			}
 			return ENOATTR
 		}
 		*vbuff = x.Value
@@ -4489,6 +4587,9 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 		} else if !ok {
 			return syscall.ENOENT
 		}
+		if m.checkLink(&n) {
+			return ELink
+		}
 		attr := &Attr{}
 		m.parseAttr(&n, attr)
 		setXAttrACL(names, attr.AccessACL, attr.DefaultACL)
@@ -4506,6 +4607,19 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 		ok, err := s.ForUpdate().Get(k)
 		if err != nil {
 			return err
+		}
+		if !ok {
+			var n = node{Inode: inode}
+			ok, err := s.Get(&n)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if m.checkLink(&n) {
+				return ELink
+			}
 		}
 		existing := k.Value
 		k.Value = nil
@@ -4543,6 +4657,17 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 		if err != nil {
 			return err
 		} else if n == 0 {
+			var n = node{Inode: inode}
+			ok, err := s.Get(&n)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if m.checkLink(&n) {
+				return ELink
+			}
 			return ENOATTR
 		} else {
 			m.genLog(ctx, s, time.Now().UnixNano(), "REMOVEXATTR(%d,%s)", inode, logEncode2(name))
@@ -5637,6 +5762,9 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		if !ok {
 			return syscall.ENOENT
 		}
+		if m.checkLink(&n) {
+			return syscall.ENOTSUP
+		}
 		n.Inode = ino
 		n.Parent = parent
 		now := m.now()
@@ -5810,6 +5938,9 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			sn, ok := srcNodeMap[info.srcIno]
 			if !ok {
 				return syscall.ENOENT
+			}
+			if m.checkLink(sn) {
+				return syscall.ENOTSUP
 			}
 			if sn.Type == TypeDirectory {
 				return syscall.EINVAL
@@ -6069,6 +6200,9 @@ func (m *dbMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 		if !ok {
 			return syscall.ENOENT
 		}
+		if m.checkLink(&curNode) {
+			return ELink
+		}
 		m.parseAttr(&curNode, attr)
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
@@ -6165,6 +6299,9 @@ func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 		} else if !ok {
 			return syscall.ENOENT
 		}
+		if m.checkLink(n) {
+			return ELink
+		}
 		m.parseAttr(n, attr)
 
 		if ctx.Uid() != 0 && ctx.Uid() != attr.Uid {
@@ -6215,6 +6352,9 @@ func (m *dbMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, ru
 				return err
 			} else if !ok {
 				return syscall.ENOENT
+			}
+			if m.checkLink(n) {
+				return ELink
 			}
 			m.parseAttr(n, attr)
 			m.of.Update(ino, attr)
