@@ -6198,9 +6198,6 @@ func newFuseDefaultCtx(uid, primaryGid uint32) *fuseDefaultCtx {
 // on the same inode return EAGAIN forever. This test reproduces the crash +
 // cleanup + a fresh write-lock.
 func TestRedisStaleReadLockCleanup(t *testing.T) {
-	if os.Getenv("SKIP_NON_CORE") == "true" {
-		t.Skipf("skip non-core test")
-	}
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
@@ -6261,9 +6258,6 @@ func TestRedisStaleReadLockCleanup(t *testing.T) {
 // lock on the inode, and must NOT be dropped while at least one owner does —
 // regardless of locks held by other sessions on the same inode.
 func TestRedisLockIndexRelease(t *testing.T) {
-	if os.Getenv("SKIP_NON_CORE") == "true" {
-		t.Skipf("skip non-core test")
-	}
 	m1, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
 	if err != nil {
 		t.Fatalf("create meta1: %s", err)

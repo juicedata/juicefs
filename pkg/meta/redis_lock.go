@@ -29,10 +29,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// lastLockOfSession reports whether no field in the lock hash other than lkey
-// belongs to this session. It decides when the locked$<sid> index entry must
-// be dropped on release: locks held by other sessions on the same inode must
-// neither keep our index entry alive nor be removed by us.
 func (r *redisMeta) lastLockOfSession(lkeys []string, lkey string) bool {
 	prefix := strconv.FormatUint(r.sid, 10) + "_"
 	for _, k := range lkeys {
