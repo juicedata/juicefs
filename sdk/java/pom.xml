@@ -13,6 +13,7 @@
 		<hadoop.version>3.1.4</hadoop.version>
 		<flink.version>1.16.3</flink.version>
 		<ranger.version>2.8.0</ranger.version>
+		<ranger.audit.version>2.3.0</ranger.audit.version>
 		<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true
 			-Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path}
 			-Djdk.attach.allowAttachSelf=true</argLine>
@@ -395,8 +396,19 @@
 		</dependency>
 		<dependency>
 			<groupId>org.apache.ranger</groupId>
-			<artifactId>ranger-plugins-audit</artifactId>
+			<artifactId>ranger-authz-api</artifactId>
 			<version>${ranger.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>*</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.ranger</groupId>
+			<artifactId>ranger-plugins-audit</artifactId>
+			<version>${ranger.audit.version}</version>
 			<exclusions>
 				<exclusion>
 					<groupId>*</groupId>
