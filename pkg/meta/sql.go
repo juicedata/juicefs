@@ -5697,7 +5697,7 @@ func (m *dbMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 	if err != nil || !exist {
 		return errno(err)
 	}
-	rmConcurrent := make(chan int, 10)
+	rmConcurrent := make(chan int, backgroundDeleteThreads)
 	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}

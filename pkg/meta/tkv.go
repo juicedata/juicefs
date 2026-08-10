@@ -2026,6 +2026,10 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	var attr Attr
+	parentLocks := []Ino{parent}
+	if parent.IsTrash() {
+		parentLocks = nil // trash parent attributes are not updated, so sibling removals are independent.
+	}
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
 			return st
@@ -2121,7 +2125,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		}
 		m.genLog(tx, now, "RMDIR(%d,%s,%d):%d", parent, logEncode2(name), trash, inode)
 		return nil
-	}, parent)
+	}, parentLocks...)
 	if err == nil {
 		if trash == 0 {
 			m.updateStats(-align4K(0), -1)
@@ -4535,7 +4539,7 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 	if err != nil || buf == nil {
 		return errno(err)
 	}
-	rmConcurrent := make(chan int, 10)
+	rmConcurrent := make(chan int, backgroundDeleteThreads)
 	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}

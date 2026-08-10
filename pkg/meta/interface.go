@@ -121,6 +121,8 @@ const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
 
 const RmrDefaultThreads = 50
 
+const backgroundDeleteThreads = 10
+
 func (i Ino) String() string {
 	return strconv.FormatUint(uint64(i), 10)
 }
@@ -529,7 +531,7 @@ type Meta interface {
 	OnReload(func(new *Format))
 
 	HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32, quotas map[string]*Quota, strict, repair bool, create bool) error
-	//Triggers a global user group quota scan
+	// Triggers a global user group quota scan
 	ScanUserGroupUsage(ctx Context) error
 
 	// Dump the tree under root, which may be modified by checkRoot
