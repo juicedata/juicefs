@@ -213,12 +213,23 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 	if !n.gConf.MultiBucket {
 		return minio.BucketNotEmpty{Bucket: bucket}
 	}
-	if eno := n.fs.Delete(mctx, n.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)); eno != 0 {
+	// Remove the bucket directory first so that its metadata is only cleaned up
+	// after the bucket has actually been deleted. When forceDelete is set the
+	// bucket is removed recursively even if it still contains objects.
+	var eno syscall.Errno
+	if forceDelete {
+		eno = n.fs.Rmr(mctx, n.path(bucket), true, meta.RmrDefaultThreads)
+	} else {
+		eno = n.fs.Delete(mctx, n.path(bucket))
+	}
+	if eno != 0 {
+		return jfsToObjectErr(ctx, eno, bucket)
+	}
+	if eno := n.fs.Delete(mctx, n.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)); eno != 0 && eno != syscall.ENOENT {
 		logger.Errorf("delete bucket metadata: %s", eno)
 	}
 	_ = n.fs.Delete(mctx, n.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket))
-	eno := n.fs.Delete(mctx, n.path(bucket))
-	return jfsToObjectErr(ctx, eno, bucket)
+	return nil
 }
 
 func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, options minio.BucketOptions) error {

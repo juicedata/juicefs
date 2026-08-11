@@ -147,6 +147,50 @@ func newTestGateway(t *testing.T, conf Config) (*jfsObjects, *fs.FileSystem, str
 	return jfsObj, jfs, format.Name
 }
 
+func TestDeleteBucket(t *testing.T) {
+	metadataFile := func(bucket string) string {
+		return sep + minio.PathJoin(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)
+	}
+
+	t.Run("non-empty bucket keeps metadata on failed delete", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		ctx := context.Background()
+		if err := jfsObj.MakeBucketWithLocation(ctx, "b1", minio.BucketOptions{}); err != nil {
+			t.Fatalf("make bucket: %s", err)
+		}
+		createTestFile(t, jfs, "/b1/obj")
+
+		if err := jfsObj.DeleteBucket(ctx, "b1", false); err == nil {
+			t.Fatalf("delete of non-empty bucket should fail")
+		}
+		if _, eno := jfs.Stat(mctx, metadataFile("b1")); eno != 0 {
+			t.Fatalf("bucket metadata should be preserved after failed delete: %s", eno)
+		}
+		if _, eno := jfs.Stat(mctx, "/b1"); eno != 0 {
+			t.Fatalf("bucket should still exist after failed delete: %s", eno)
+		}
+	})
+
+	t.Run("force delete removes non-empty bucket and metadata", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		ctx := context.Background()
+		if err := jfsObj.MakeBucketWithLocation(ctx, "b2", minio.BucketOptions{}); err != nil {
+			t.Fatalf("make bucket: %s", err)
+		}
+		createTestFile(t, jfs, "/b2/obj")
+
+		if err := jfsObj.DeleteBucket(ctx, "b2", true); err != nil {
+			t.Fatalf("force delete of non-empty bucket should succeed: %s", err)
+		}
+		if _, eno := jfs.Stat(mctx, "/b2"); eno == 0 {
+			t.Fatalf("bucket should be removed after force delete")
+		}
+		if _, eno := jfs.Stat(mctx, metadataFile("b2")); eno == 0 {
+			t.Fatalf("bucket metadata should be removed after force delete")
+		}
+	})
+}
+
 func createTestFile(t *testing.T, jfs *fs.FileSystem, name string) {
 	t.Helper()
 	f, eno := jfs.Create(mctx, name, 0666, 022)
