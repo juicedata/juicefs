@@ -5004,6 +5004,116 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 	return nil
 }
 
+func (m *dbMeta) replaceEntry(s *xorm.Session, inode Ino, target uint64) error {
+	var cur = node{Inode: inode}
+	ok, err := s.ForUpdate().Get(&cur)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return syscall.ENOENT
+	}
+	if m.checkLink(&cur) {
+		return syscall.EPERM
+	}
+	if _, err := s.Delete(&xattr{Inode: inode}); err != nil {
+		return err
+	}
+	switch cur.Type {
+	case TypeFile:
+		if _, err := s.Delete(&chunk{Inode: inode}); err != nil {
+			return err
+		}
+	case TypeSymlink:
+		if _, err := s.Delete(&symlink{Inode: inode}); err != nil {
+			return err
+		}
+	case TypeDirectory:
+		if _, err := s.Delete(&edge{Parent: inode}); err != nil {
+			return err
+		}
+		if _, err := s.Delete(&dirStats{Inode: inode}); err != nil {
+			return err
+		}
+	}
+	cur.Type = TypeLink
+	cur.Length = uint64(target)
+	cur.setCtime(time.Now().UnixNano())
+	cur.AccessACLId = aclAPI.None
+	cur.DefaultACLId = aclAPI.None
+	_, err = s.Cols("type", "ctime", "ctimensec", "access_acl_id", "default_acl_id", "length").Update(&cur, &node{Inode: inode})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) error {
+	if err := m.replaceEntry(s, inode, mapping[inode]); err != nil {
+		return err
+	}
+	for _, e := range entry.Entries {
+		if err := m.replaceTree(s, e.Attr.Inode, e, mapping); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, typ uint8, entry *DumpedEntry) error {
+	m.dumpEntry(s, inode, typ, entry, nil)
+	if typ == TypeDirectory {
+		var edges []*edge
+		err := s.Find(&edges, &edge{Parent: inode})
+		if err != nil {
+			return err
+		}
+		entry.Entries = make(map[string]*DumpedEntry, len(edges))
+		for _, edge := range edges {
+			name := string(edge.Name)
+			ce := entryPool.Get()
+			ce.Name = name
+			ce.Attr.Inode = edge.Inode
+			ce.Attr.Type = typeToString(edge.Type)
+			entry.Entries[name] = ce
+			if err := m.dumpTree(s, edge.Inode, edge.Type, ce); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) error {
+	var entry2 = DumpedEntry{Attr: &DumpedAttr{}}
+	err := m.dumpTree(s, inode, typeFromString(entry.Attr.Type), &entry2)
+	if err != nil {
+		return err
+	}
+	d1, err := json.MarshalIndent(&entry, "", "  ")
+	if err != nil {
+		return err
+	}
+	d2, err := json.MarshalIndent(&entry2, "", "  ")
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(d1, d2) {
+		return syscall.EAGAIN
+	}
+	// TODO: check chunks and slices
+	return nil
+}
+
+func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		if err := m.checkEntry(s, inode, entry); err != nil {
+			return err
+		}
+		return m.replaceTree(s, inode, entry, mapping)
+	}))
+}
+
 func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 	e := &DumpedEntry{}
 	n, ok := m.snap.node[inode]

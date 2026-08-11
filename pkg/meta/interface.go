@@ -607,6 +607,8 @@ type Meta interface {
 	ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 
 	ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error
+
+	Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno
 }
 
 type ScanSlicesOption struct {
