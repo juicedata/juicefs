@@ -29,6 +29,16 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+func (r *redisMeta) lastLockOfSession(lkeys []string, lkey string) bool {
+	prefix := strconv.FormatUint(r.sid, 10) + "_"
+	for _, k := range lkeys {
+		if k != lkey && strings.HasPrefix(k, prefix) {
+			return false
+		}
+	}
+	return true
+}
+
 func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
 	ikey := r.flockKey(inode)
 	lkey := r.ownerKey(owner)
@@ -41,7 +51,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.HDel(ctx, ikey, lkey)
-				if len(lkeys) == 1 && lkeys[0] == lkey {
+				if r.lastLockOfSession(lkeys, lkey) {
 					pipe.SRem(ctx, r.lockedKey(r.sid), ikey)
 				}
 				r.genLog(ctx, pipe, time.Now(), "FLOCK(%d,%d,U)", inode, owner)
@@ -66,6 +76,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 				}
 				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					pipe.HSet(ctx, ikey, lkey, "R")
+					pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
 					r.genLog(ctx, pipe, time.Now(), "FLOCK(%d,%d,R)", inode, owner)
 					return nil
 				})
@@ -164,7 +175,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					if len(ls) == 0 {
 						pipe.HDel(ctx, ikey, lkey)
-						if len(lkeys) == 1 && lkeys[0] == lkey {
+						if r.lastLockOfSession(lkeys, lkey) {
 							pipe.SRem(ctx, r.lockedKey(r.sid), ikey)
 						}
 					} else {
