@@ -214,15 +214,8 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 		return minio.BucketNotEmpty{Bucket: bucket}
 	}
 	// Remove the bucket directory first so that its metadata is only cleaned up
-	// after the bucket has actually been deleted. When forceDelete is set the
-	// bucket is removed recursively even if it still contains objects.
-	var eno syscall.Errno
-	if forceDelete {
-		eno = n.fs.Rmr(mctx, n.path(bucket), true, meta.RmrDefaultThreads)
-	} else {
-		eno = n.fs.Delete(mctx, n.path(bucket))
-	}
-	if eno != 0 {
+	// after the bucket has actually been deleted.
+	if eno := n.fs.Delete(mctx, n.path(bucket)); eno != 0 {
 		return jfsToObjectErr(ctx, eno, bucket)
 	}
 	if eno := n.fs.Delete(mctx, n.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)); eno != 0 && eno != syscall.ENOENT {
