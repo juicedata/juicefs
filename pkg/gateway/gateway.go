@@ -213,6 +213,11 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 	if !n.gConf.MultiBucket {
 		return minio.BucketNotEmpty{Bucket: bucket}
 	}
+	if uploads, err := n.ListMultipartUploads(ctx, bucket, "", "", "", "", 1); err != nil {
+		return err
+	} else if len(uploads.Uploads) > 0 {
+		return minio.BucketNotEmpty{Bucket: bucket}
+	}
 	if eno := n.fs.Delete(mctx, n.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)); eno != 0 {
 		logger.Errorf("delete bucket metadata: %s", eno)
 	}

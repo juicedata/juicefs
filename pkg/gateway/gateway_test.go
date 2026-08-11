@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"syscall"
 	"testing"
 	"time"
 
@@ -145,6 +146,49 @@ func newTestGateway(t *testing.T, conf Config) (*jfsObjects, *fs.FileSystem, str
 	}
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
 	return jfsObj, jfs, format.Name
+}
+
+func TestDeleteBucketWithMultipartUpload(t *testing.T) {
+	jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+	ctx := context.Background()
+	const bucket = "bucket1"
+	if eno := jfs.Mkdir(mctx, minio.MinioMetaBucket, 0777, 022); eno != 0 {
+		t.Fatalf("mkdir meta bucket: %s", eno)
+	}
+	if err := jfsObj.MakeBucketWithLocation(ctx, bucket, minio.BucketOptions{}); err != nil {
+		t.Fatalf("make bucket: %s", err)
+	}
+	uploadID, err := jfsObj.NewMultipartUpload(ctx, bucket, "object", minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("new multipart upload: %s", err)
+	}
+	partPath := jfsObj.ppath(bucket, uploadID, "1")
+	createTestFile(t, jfs, partPath)
+
+	err = jfsObj.DeleteBucket(ctx, bucket, false)
+	if !errors.As(err, &minio.BucketNotEmpty{}) {
+		t.Fatalf("delete bucket with multipart fragments should return BucketNotEmpty, got %T: %v", err, err)
+	}
+	if _, eno := jfs.Stat(mctx, jfsObj.path(bucket)); eno != 0 {
+		t.Fatalf("bucket should remain after failed delete: %s", eno)
+	}
+	if _, eno := jfs.Stat(mctx, partPath); eno != 0 {
+		t.Fatalf("multipart fragment should remain after failed delete: %s", eno)
+	}
+	metadataPath := jfsObj.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)
+	if _, eno := jfs.Stat(mctx, metadataPath); eno != 0 {
+		t.Fatalf("bucket metadata should remain after failed delete: %s", eno)
+	}
+
+	if err = jfsObj.AbortMultipartUpload(ctx, bucket, "object", uploadID, minio.ObjectOptions{}); err != nil {
+		t.Fatalf("abort multipart upload: %s", err)
+	}
+	if err = jfsObj.DeleteBucket(ctx, bucket, false); err != nil {
+		t.Fatalf("delete bucket after aborting multipart upload: %s", err)
+	}
+	if _, eno := jfs.Stat(mctx, jfsObj.path(bucket)); eno != syscall.ENOENT {
+		t.Fatalf("bucket should be deleted after aborting multipart upload: %s", eno)
+	}
 }
 
 func createTestFile(t *testing.T, jfs *fs.FileSystem, name string) {
