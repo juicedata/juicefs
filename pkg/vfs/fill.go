@@ -32,8 +32,14 @@ import (
 )
 
 type _file struct {
-	ino  Ino
-	size uint64
+	ino    Ino
+	size   uint64
+	ranges []ByteRange // optional byte ranges for range-based warmup
+}
+
+type ByteRange struct {
+	Start int64
+	End   int64
 }
 
 type CacheAction uint8
@@ -118,7 +124,7 @@ func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *Cach
 			}
 		}
 
-		iter := newSliceIterator(ctx, c.meta, f.ino, f.size, resp)
+		iter := newSliceIterator(ctx, c.meta, f.ino, f.size, resp, f.ranges)
 		err := iter.Iterate(handler, concurrent)
 		if err != nil {
 			logger.Errorf("%s error : %s", action, err)
@@ -151,15 +157,22 @@ func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string
 	var inode Ino
 	var attr = &Attr{}
 	for _, p := range paths {
-		if st := c.resolve(ctx, p, &inode, attr); st != 0 {
-			logger.Warnf("Failed to resolve path %s: %s", p, st)
+		// Parse path and optional byte ranges (tab-separated)
+		// Format: "path" or "path\tstart-end;start-end;..."
+		pathOnly, ranges := p, []ByteRange(nil)
+		if idx := strings.IndexByte(p, '\t'); idx >= 0 {
+			pathOnly = p[:idx]
+			ranges = parseRanges(p[idx+1:])
+		}
+		if st := c.resolve(ctx, pathOnly, &inode, attr); st != 0 {
+			logger.Warnf("Failed to resolve path %s: %s", pathOnly, st)
 			continue
 		}
-		logger.Debugf("path %s", p)
+		logger.Debugf("path %s", pathOnly)
 		if attr.Typ == meta.TypeDirectory {
 			c.walkDir(ctx, inode, todo)
 		} else if attr.Typ == meta.TypeFile {
-			_ = sendFile(ctx, todo, _file{inode, attr.Length})
+			_ = sendFile(ctx, todo, _file{inode, attr.Length, ranges})
 		}
 		if ctx.Canceled() {
 			break
@@ -181,6 +194,28 @@ func sendFile(ctx meta.Context, todo chan _file, f _file) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func parseRanges(s string) []ByteRange {
+	parts := strings.Split(s, ";")
+	var ranges []ByteRange
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		sep := strings.IndexByte(part, '-')
+		if sep < 0 {
+			continue
+		}
+		start, err1 := strconv.ParseInt(strings.TrimSpace(part[:sep]), 10, 64)
+		end, err2 := strconv.ParseInt(strings.TrimSpace(part[sep+1:]), 10, 64)
+		if err1 != nil || err2 != nil || start < 0 || end <= start {
+			continue
+		}
+		ranges = append(ranges, ByteRange{Start: start, End: end})
+	}
+	return ranges
 }
 
 func (c *CacheFiller) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscall.Errno {
@@ -263,7 +298,7 @@ func (c *CacheFiller) walkDir(ctx meta.Context, inode Ino, todo chan _file) {
 				if f.Attr.Typ == meta.TypeDirectory {
 					pending = append(pending, f.Inode)
 				} else if f.Attr.Typ != meta.TypeSymlink {
-					_ = sendFile(ctx, todo, _file{f.Inode, f.Attr.Length})
+					_ = sendFile(ctx, todo, _file{f.Inode, f.Attr.Length, nil})
 				}
 				if ctx.Canceled() {
 					return
@@ -286,9 +321,22 @@ type sliceIterator struct {
 	nextChunkIndex uint32
 	nextSliceIndex uint64
 	slices         []meta.Slice
+	ranges         []ByteRange // optional byte ranges for filtering
 }
 
 type sliceHandler func(s meta.Slice) error
+
+func (iter *sliceIterator) overlapsRange(start, end uint64) bool {
+	if len(iter.ranges) == 0 {
+		return true // no ranges specified → warmup everything
+	}
+	for _, r := range iter.ranges {
+		if start < uint64(r.End) && end > uint64(r.Start) {
+			return true
+		}
+	}
+	return false
+}
 
 func (iter *sliceIterator) hasNext() bool {
 	if iter.err != nil {
@@ -302,6 +350,15 @@ func (iter *sliceIterator) hasNext() bool {
 	}
 
 	for iter.nextSliceIndex >= uint64(len(iter.slices)) {
+		// Skip chunks that don't overlap with any range
+		for iter.nextChunkIndex < iter.chunkCnt {
+			chunkStart := uint64(iter.nextChunkIndex) * meta.ChunkSize
+			chunkEnd := chunkStart + meta.ChunkSize
+			if iter.overlapsRange(chunkStart, chunkEnd) {
+				break
+			}
+			iter.nextChunkIndex++
+		}
 		if iter.nextChunkIndex >= iter.chunkCnt {
 			return false
 		}
@@ -316,7 +373,18 @@ func (iter *sliceIterator) hasNext() bool {
 		iter.nextChunkIndex++
 	}
 
-	return true
+	// Skip slices that don't overlap with any range
+	for iter.nextSliceIndex < uint64(len(iter.slices)) {
+		s := iter.slices[iter.nextSliceIndex]
+		chunkStart := uint64(iter.nextChunkIndex-1) * meta.ChunkSize
+		sliceStart := chunkStart + uint64(s.Off)
+		sliceEnd := sliceStart + uint64(s.Len)
+		if iter.overlapsRange(sliceStart, sliceEnd) {
+			return true
+		}
+		iter.nextSliceIndex++
+	}
+	return false // need to read next chunk
 }
 
 func (iter *sliceIterator) next() meta.Slice {
@@ -360,12 +428,13 @@ func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent chan token) 
 	return iter.err
 }
 
-func newSliceIterator(ctx meta.Context, mClient meta.Meta, ino Ino, size uint64, stat *CacheResponse) *sliceIterator {
+func newSliceIterator(ctx meta.Context, mClient meta.Meta, ino Ino, size uint64, stat *CacheResponse, ranges []ByteRange) *sliceIterator {
 	return &sliceIterator{
 		ctx:     ctx,
 		mClient: mClient,
 		ino:     ino,
 		stat:    stat,
+		ranges:  ranges,
 
 		nextSliceIndex: 0,
 		nextChunkIndex: 0,

@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -77,5 +78,37 @@ func TestWarmup(t *testing.T) {
 			t.Fatalf("warmup: %s; got content %s", err, content)
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func TestWarmupWithRangeFile(t *testing.T) {
+	mountTemp(t, nil, nil, nil)
+	defer umountTemp(t)
+
+	// Create a test file
+	if err := os.WriteFile(fmt.Sprintf("%s/f1.txt", testMountPoint), []byte("hello world"), 0644); err != nil {
+		t.Fatalf("write file failed: %s", err)
+	}
+
+	// Create a file list with path only (backward compatible)
+	fileList := filepath.Join(t.TempDir(), "filelist.txt")
+	if err := os.WriteFile(fileList, []byte(fmt.Sprintf("%s/f1.txt\n", testMountPoint)), 0644); err != nil {
+		t.Fatalf("write filelist: %s", err)
+	}
+
+	// Warmup with file list (no ranges) - should work as before
+	if err := Main([]string{"", "warmup", "-f", fileList, testMountPoint}); err != nil {
+		t.Fatalf("warmup with file list: %s", err)
+	}
+
+	// Create a file list with ranges
+	fileList2 := filepath.Join(t.TempDir(), "filelist2.txt")
+	if err := os.WriteFile(fileList2, []byte(fmt.Sprintf("%s/f1.txt 0-5\n", testMountPoint)), 0644); err != nil {
+		t.Fatalf("write filelist2: %s", err)
+	}
+
+	// Warmup with file list containing ranges - should not panic
+	if err := Main([]string{"", "warmup", "-f", fileList2, testMountPoint}); err != nil {
+		t.Fatalf("warmup with range file list: %s", err)
 	}
 }

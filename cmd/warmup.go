@@ -221,12 +221,24 @@ func warmup(ctx *cli.Context) error {
 		defer fd.Close()
 		scanner := bufio.NewScanner(fd)
 		for scanner.Scan() {
-			if p := strings.TrimSpace(scanner.Text()); p != "" {
-				if abs, e := filepath.Abs(p); e == nil {
-					paths = append(paths, abs)
-				} else {
-					logger.Warnf("Skipped path %q because it fails to get absolute path: %s", p, e)
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			// Parse: "path" or "path  start-end;start-end;..."
+			// Ranges are separated by space from the path, semicolon-delimited
+			pathStr, ranges := line, ""
+			if idx := strings.IndexByte(line, ' '); idx >= 0 {
+				pathStr = strings.TrimSpace(line[:idx])
+				ranges = strings.TrimSpace(line[idx+1:])
+			}
+			if abs, e := filepath.Abs(pathStr); e == nil {
+				if ranges != "" {
+					abs = abs + "\t" + ranges
 				}
+				paths = append(paths, abs)
+			} else {
+				logger.Warnf("Skipped path %q because it fails to get absolute path: %s", pathStr, e)
 			}
 		}
 		if err = scanner.Err(); err != nil {
@@ -277,17 +289,23 @@ func warmup(ctx *cli.Context) error {
 	dspin := progress.AddDoubleSpinnerTwo(fmt.Sprintf("%s file", action), fmt.Sprintf("%s size", action))
 	total := &vfs.CacheResponse{Locations: make(map[string]uint64)}
 	for _, path := range paths {
+		// Extract path and optional ranges (tab-separated)
+		pathOnly, rangesPart := path, ""
+		if idx := strings.IndexByte(path, '\t'); idx >= 0 {
+			pathOnly = path[:idx]
+			rangesPart = path[idx:] // include tab
+		}
 		if mp == "/" {
-			inode, err := utils.GetFileInode(path)
+			inode, err := utils.GetFileInode(pathOnly)
 			if err != nil {
 				logger.Errorf("lookup inode for %q: %s", mp, err)
 				continue
 			}
-			batch = append(batch, fmt.Sprintf("inode:%d", inode))
-		} else if strings.HasPrefix(path, mp) {
-			batch = append(batch, path[start:])
+			batch = append(batch, fmt.Sprintf("inode:%d", inode)+rangesPart)
+		} else if strings.HasPrefix(pathOnly, mp) {
+			batch = append(batch, pathOnly[start:]+rangesPart)
 		} else {
-			logger.Errorf("Path %q is not under mount point %q", path, mp)
+			logger.Errorf("Path %q is not under mount point %q", pathOnly, mp)
 			continue
 		}
 		if len(batch) >= batchMax {
