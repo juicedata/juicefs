@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"syscall"
 	"testing"
 	"time"
 
@@ -171,6 +172,44 @@ func TestDeleteBucket(t *testing.T) {
 		}
 		if _, eno := jfs.Stat(mctx, "/bucket1"); eno != 0 {
 			t.Fatalf("bucket should still exist after failed delete: %s", eno)
+		}
+	})
+
+	t.Run("bucket with pending multipart upload is not deleted", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		ctx := context.Background()
+		if eno := jfs.Mkdir(mctx, minio.MinioMetaBucket, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir meta bucket: %s", eno)
+		}
+		if err := jfsObj.MakeBucketWithLocation(ctx, "bucket1", minio.BucketOptions{}); err != nil {
+			t.Fatalf("make bucket: %s", err)
+		}
+		uploadID, err := jfsObj.NewMultipartUpload(ctx, "bucket1", "obj", minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("new multipart upload: %s", err)
+		}
+
+		if err := jfsObj.DeleteBucket(ctx, "bucket1", false); err == nil {
+			t.Fatalf("delete of bucket with pending multipart upload should fail")
+		}
+		if _, eno := jfs.Stat(mctx, "/bucket1"); eno != 0 {
+			t.Fatalf("bucket should still exist while fragments remain: %s", eno)
+		}
+		if _, eno := jfs.Stat(mctx, jfsObj.upath("bucket1", uploadID)); eno != 0 {
+			t.Fatalf("multipart fragments should be preserved: %s", eno)
+		}
+
+		if err := jfsObj.AbortMultipartUpload(ctx, "bucket1", "obj", uploadID, minio.ObjectOptions{}); err != nil {
+			t.Fatalf("abort multipart upload: %s", err)
+		}
+		if err := jfsObj.DeleteBucket(ctx, "bucket1", false); err != nil {
+			t.Fatalf("delete of empty bucket should succeed: %s", err)
+		}
+		if _, eno := jfs.Stat(mctx, "/bucket1"); eno != syscall.ENOENT {
+			t.Fatalf("bucket should be removed after delete: %s", eno)
+		}
+		if _, eno := jfs.Stat(mctx, jfsObj.tpath("bucket1")); eno != syscall.ENOENT {
+			t.Fatalf("bucket multipart scaffolding should be removed after delete: %s", eno)
 		}
 	})
 }

@@ -213,10 +213,22 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 	if !n.gConf.MultiBucket {
 		return minio.BucketNotEmpty{Bucket: bucket}
 	}
+	// Refuse to delete a bucket that still has incomplete multipart uploads:
+	// their parts are stored under metaBucket and would be left orphaned if the
+	// bucket were removed while they still exist.
+	if lmi, err := n.ListMultipartUploads(ctx, bucket, "", "", "", "", 1); err != nil {
+		return err
+	} else if len(lmi.Uploads) > 0 {
+		return minio.BucketNotEmpty{Bucket: bucket}
+	}
 	// Remove the bucket directory first so that its metadata is only cleaned up
 	// after the bucket has actually been deleted.
 	if eno := n.fs.Delete(mctx, n.path(bucket)); eno != 0 {
 		return jfsToObjectErr(ctx, eno, bucket)
+	}
+	// The bucket is gone now; drop its (empty) multipart scaffolding under metaBucket.
+	if eno := n.fs.Rmr(mctx, n.tpath(bucket), true, meta.RmrDefaultThreads); eno != 0 && eno != syscall.ENOENT {
+		logger.Errorf("delete bucket upload dir: %s", eno)
 	}
 	if eno := n.fs.Delete(mctx, n.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)); eno != 0 && eno != syscall.ENOENT {
 		logger.Errorf("delete bucket metadata: %s", eno)
