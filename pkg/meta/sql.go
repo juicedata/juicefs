@@ -2034,14 +2034,14 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if !ok {
 			return syscall.ENOENT
 		}
-		if e.Type == TypeDirectory {
-			return syscall.EPERM
-		}
 
 		n = node{Inode: e.Inode}
 		ok, err = s.ForUpdate().Get(&n)
 		if err != nil {
 			return err
+		}
+		if e.Type == TypeDirectory && (!ok || n.Type == TypeDirectory) {
+			return syscall.EPERM
 		}
 		now := time.Now().UnixNano()
 		if ok {
@@ -4714,6 +4714,7 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 }
 
 func (m *dbMeta) replaceEntry(s *xorm.Session, inode Ino, target uint64) error {
+	logger.Infof("replaceEntry: inode=%d, target=%d", inode, target)
 	var cur = node{Inode: inode}
 	ok, err := s.ForUpdate().Get(&cur)
 	if err != nil {
@@ -4758,19 +4759,22 @@ func (m *dbMeta) replaceEntry(s *xorm.Session, inode Ino, target uint64) error {
 }
 
 func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) error {
-	if err := m.replaceEntry(s, inode, mapping[inode]); err != nil {
-		return err
-	}
 	for _, e := range entry.Entries {
 		if err := m.replaceTree(s, e.Attr.Inode, e, mapping); err != nil {
 			return err
 		}
 	}
+	if err := m.replaceEntry(s, inode, mapping[inode]); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, typ uint8, entry *DumpedEntry) error {
-	m.dumpEntry(s, inode, typ, entry, nil)
+	err := m.dumpEntry(s, inode, typ, entry, nil)
+	if err != nil {
+		return err
+	}
 	if typ == TypeDirectory {
 		var edges []*edge
 		err := s.Find(&edges, &edge{Parent: inode})
@@ -4808,6 +4812,7 @@ func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) erro
 		return err
 	}
 	if !bytes.Equal(d1, d2) {
+		logger.Infof("checkEntry: inode=%d, entry=%s, entry2=%s", inode, string(d1), string(d2))
 		return syscall.EAGAIN
 	}
 	// TODO: check chunks and slices

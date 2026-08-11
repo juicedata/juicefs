@@ -371,6 +371,9 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, 
 	if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
 		return st
 	}
+	if attr.Typ == TypeLink {
+		return syscall.ENOTSUP
+	}
 	if attr.Typ != TypeDirectory {
 		if count != nil {
 			atomic.AddUint64(count, 1)
