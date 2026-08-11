@@ -171,6 +171,30 @@ function delete_bucket() {
     return $rv
 }
 
+function abort_multipart_uploads() {
+    local bucket_name="$1"
+    local uploads rv key upload_id out
+
+    uploads=$(${AWS} s3api list-multipart-uploads --bucket "$bucket_name" 2>&1)
+    rv=$?
+    if [ $rv -ne 0 ]; then
+        echo "$uploads"
+        return $rv
+    fi
+
+    while IFS=$'\t' read -r key upload_id; do
+        if [ -z "$upload_id" ]; then
+            continue
+        fi
+        out=$(${AWS} s3api abort-multipart-upload --bucket "$bucket_name" --key "$key" --upload-id "$upload_id" 2>&1)
+        rv=$?
+        if [ $rv -ne 0 ]; then
+            echo "$out"
+            return $rv
+        fi
+    done < <(echo "$uploads" | jq -r '.Uploads[]? | [.Key, .UploadId] | @tsv')
+}
+
 # Tests creating, stat and delete on a bucket.
 function test_create_bucket() {
     # log start time
@@ -816,6 +840,12 @@ function test_multipart_upload() {
     fi
 
     if [ $rv -eq 0 ]; then
+        function="abort_multipart_uploads"
+        out=$(abort_multipart_uploads "$bucket_name")
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
         function="delete_bucket"
         out=$(delete_bucket "$bucket_name")
         rv=$?
@@ -827,6 +857,7 @@ function test_multipart_upload() {
         log_success "$(get_duration "$start_time")" "${test_function}"
     else
         # clean up and log error
+        abort_multipart_uploads "$bucket_name" > /dev/null 2>&1
         ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
         rm -f /tmp/multipart
         log_failure "$(get_duration "$start_time")" "${function}" "${out}"
