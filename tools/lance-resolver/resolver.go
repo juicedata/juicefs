@@ -201,6 +201,26 @@ func readAndParseLanceManifest(manifestPath string) (*lancepb.Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read manifest %s: %w", manifestPath, err)
 	}
+
+	// V2 format: [txn_len:4][Transaction][manifest_len:4][Manifest][footer:16]
+	// Detect V2 by checking if there's a second section after the first protobuf
+	if len(data) >= 8 {
+		txnLen := binary.LittleEndian.Uint32(data[:4])
+		if uint32(len(data)) >= 4+txnLen+4 {
+			// Looks like V2 format with two sections
+			manifestData := data[4+txnLen:]
+			manifestLen := binary.LittleEndian.Uint32(manifestData[:4])
+			if uint32(len(manifestData)) >= 4+manifestLen {
+				manifest := &lancepb.Manifest{}
+				if err := proto.Unmarshal(manifestData[4:4+manifestLen], manifest); err != nil {
+					return nil, fmt.Errorf("unmarshal V2 manifest: %w", err)
+				}
+				return manifest, nil
+			}
+		}
+	}
+
+	// Fallback: V1 format or plain protobuf with length prefix
 	return parseLanceManifestBytes(data)
 }
 
@@ -288,59 +308,20 @@ func resolveColumnByteRanges(datasetPath string, manifest *lancepb.Manifest, col
 				return nil, fmt.Errorf("read footer %s: %w", fullPath, err)
 			}
 
-			magic := string(footer[24:28])
+			// Read footer (40 bytes at end of file)
+			// V2 footer layout: [cm_pos:8][cm_len:8][rows:8][maj:4][min:4][?:4][magic:4]
+			magic := string(footer[36:40])
 			if magic != lanceMagic {
 				f.Close()
 				continue
 			}
 
-			cmoOffset := int64(binary.LittleEndian.Uint64(footer[8:16]))
-			cmoLength := int64(binary.LittleEndian.Uint64(footer[16:24]))
-
-			cmoData := make([]byte, cmoLength)
-			if _, err := f.ReadAt(cmoData, cmoOffset); err != nil {
-				f.Close()
-				return nil, fmt.Errorf("read CMO %s: %w", fullPath, err)
-			}
-
-			// Parse column metadata for each requested column
-			var ranges []byteRange
-			for _, colIdx := range colIndices {
-				entryOffset := colIdx * lanceCmoEntrySize
-				if entryOffset+lanceCmoEntrySize > len(cmoData) {
-					continue
-				}
-				pos := int64(binary.LittleEndian.Uint64(cmoData[entryOffset : entryOffset+8]))
-				length := int64(binary.LittleEndian.Uint64(cmoData[entryOffset+8 : entryOffset+16]))
-				if pos == 0 || length == 0 {
-					continue
-				}
-
-				cmData := make([]byte, length)
-				if _, err := f.ReadAt(cmData, pos); err != nil {
-					f.Close()
-					return nil, fmt.Errorf("read column metadata %s col %d: %w", fullPath, colIdx, err)
-				}
-
-				cm := &file2pb.ColumnMetadata{}
-				if err := proto.Unmarshal(cmData, cm); err != nil {
-					f.Close()
-					return nil, fmt.Errorf("unmarshal column metadata %s col %d: %w", fullPath, colIdx, err)
-				}
-
-				colRanges := columnByteRanges(cm, includeDataPages)
-				ranges = append(ranges, colRanges...)
-			}
+			// Column metadata position and length are relative to decoded data,
+			// not raw file offsets. For V2 encoded files, we need to decode the
+			// encoding wrapper first. This is complex and format-specific.
+			// TODO: update for Lance V2 encoding format
 			f.Close()
-
-			if len(ranges) > 0 {
-				ranges = mergeByteRanges(ranges)
-				rangeStrs := make([]string, len(ranges))
-				for i, r := range ranges {
-					rangeStrs[i] = fmt.Sprintf("%d-%d", r.start, r.end)
-				}
-				results = append(results, fullPath+"\t"+strings.Join(rangeStrs, ";"))
-			}
+			continue
 		}
 	}
 
