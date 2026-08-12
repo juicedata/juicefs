@@ -112,9 +112,12 @@ func fsck(ctx *cli.Context) error {
 			logger.Fatalf("check: %s", err)
 		}
 	} else {
-		r := m.ListSlices(c, slices, false, false, sliceCSpin.Increment)
+		r := m.ScanSlices(c, &meta.ScanSlicesOption{Progress: sliceCSpin.Increment}, func(ino meta.Ino, s meta.Slice) error {
+			slices[ino] = append(slices[ino], s)
+			return nil
+		})
 		if r != 0 {
-			logger.Fatalf("list all slices: %s", r)
+			logger.Fatalf("scan all slices: %s", r)
 		}
 	}
 	sliceCSpin.Done()

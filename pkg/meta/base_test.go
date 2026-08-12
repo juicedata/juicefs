@@ -1821,7 +1821,10 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	}
 	p.Done()
 	sliceMap := make(map[Ino][]Slice)
-	if st := m.ListSlices(ctx, sliceMap, false, false, nil); st != 0 {
+	if st := m.ScanSlices(ctx, &ScanSlicesOption{}, func(ino Ino, s Slice) error {
+		sliceMap[ino] = append(sliceMap[ino], s)
+		return nil
+	}); st != 0 {
 		t.Fatalf("list all slices: %s", st)
 	}
 
@@ -2035,7 +2038,10 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 	var total int64
 	slices := make(map[Ino][]Slice)
-	m.ListSlices(ctx, slices, false, false, func() { total++ })
+	m.ScanSlices(ctx, &ScanSlicesOption{Progress: func() { total++ }}, func(ino Ino, s Slice) error {
+		slices[ino] = append(slices[ino], s)
+		return nil
+	})
 	var totalSlices int
 	for _, ss := range slices {
 		totalSlices += len(ss)
@@ -2050,7 +2056,10 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 
 	time.Sleep(time.Millisecond * 100)
 	slices = make(map[Ino][]Slice)
-	m.ListSlices(ctx, slices, false, false, nil)
+	m.ScanSlices(ctx, &ScanSlicesOption{}, func(ino Ino, s Slice) error {
+		slices[ino] = append(slices[ino], s)
+		return nil
+	})
 	totalSlices = 0
 	for _, ss := range slices {
 		totalSlices += len(ss)

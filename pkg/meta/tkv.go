@@ -3187,13 +3187,14 @@ func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 	})
 }
 
-func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
-	if delete {
+func (m *kvMeta) ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno {
+	if opt.Delete {
 		_ = m.doCleanupSlices(ctx, nil)
 	}
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	if err := m.client.scan(m.fmtKey("A"), func(key, value []byte) bool {
+	var cbErr error
+	err := m.client.scan(m.fmtKey("A"), func(key, value []byte) bool {
 		if len(key) != klen || key[1+8] != 'C' {
 			return true
 		}
@@ -3205,38 +3206,54 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, de
 		}
 		for _, s := range ss {
 			if s.id > 0 {
-				slices[inode] = append(slices[inode], Slice{Id: s.id, Size: s.size})
-				if showProgress != nil {
-					showProgress()
+				if cbErr = fn(inode, Slice{Id: s.id, Size: s.size}); cbErr != nil {
+					return false
+				}
+				if opt.Progress != nil {
+					opt.Progress()
 				}
 			}
 		}
 		return true
-	}); err != nil {
+	})
+	if cbErr != nil {
+		return errno(cbErr)
+	}
+	if err != nil {
 		return errno(err)
 	}
 
-	if scanPending {
+	if opt.ScanPending {
 		// slice refs: Kccccccccnnnn
 		klen = 1 + 8 + 4
-		_ = m.client.scan(m.fmtKey("K"), func(k, v []byte) bool {
+		cbErr = nil
+		err = m.client.scan(m.fmtKey("K"), func(k, v []byte) bool {
 			if len(k) == klen && len(v) == 8 && parseCounter(v) < 0 {
 				rb := utils.FromBuffer([]byte(k)[1:])
-				slices[0] = append(slices[0], Slice{Id: rb.Get64(), Size: rb.Get32()})
+				if cbErr = fn(0, Slice{Id: rb.Get64(), Size: rb.Get32()}); cbErr != nil {
+					return false
+				}
 			}
 			return true
-
 		})
+		if cbErr != nil {
+			return errno(cbErr)
+		}
+		if err != nil {
+			return errno(err)
+		}
 	}
 
 	if m.getFormat().TrashDays == 0 {
 		return 0
 	}
 	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
-		slices[1] = append(slices[1], ss...)
-		if showProgress != nil {
-			for range ss {
-				showProgress()
+		for _, s := range ss {
+			if err := fn(1, s); err != nil {
+				return false, err
+			}
+			if opt.Progress != nil {
+				opt.Progress()
 			}
 		}
 		return false, nil
