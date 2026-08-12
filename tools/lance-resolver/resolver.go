@@ -48,14 +48,14 @@ type lanceVersionHint struct {
 }
 
 // resolveLanceDataset resolves a Lance dataset path into individual file paths
-// with optional byte ranges, formatted for "juicefs warmup -f -".
+// with optional byte ranges, formatted for "juicefs warmup -f".
 func resolveLanceDataset(datasetPath, version string, manifestOnly bool, includeIndices bool, columns []string, includeDataPages bool) ([]string, error) {
 	// 1. Find manifest file path
 	manifestPath, err := findLanceManifestPath(datasetPath, version)
 	if err != nil {
 		return nil, fmt.Errorf("find lance manifest: %w", err)
 	}
-	// Output manifest path using tab separator for byte ranges
+	// Output manifest path - byte ranges will use space separator (matching warmup -f format)
 	paths := []string{manifestPath}
 
 	if manifestOnly {
@@ -261,7 +261,8 @@ func isLanceDataset(p string) bool {
 }
 
 // resolveColumnByteRanges resolves column-level byte ranges for V2 Lance data files.
-// Returns paths with byte ranges in the format: "path\tstart-end;start-end;..."
+// Returns paths with byte ranges in the format: "path start-end;start-end;..."
+// This matches the "juicefs warmup -f" file format (space-separated path and ranges).
 func resolveColumnByteRanges(datasetPath string, manifest *lancepb.Manifest, columns []string, includeDataPages bool) ([]string, error) {
 	var results []string
 
@@ -455,12 +456,14 @@ Options:
   --include-data-pages    Include data page buffers in column ranges
   -h, --help              Show this help message
 
-Output format (for "juicefs warmup -f -"):
+Output format (for "juicefs warmup -f"):
   /path/to/file.lance
   /path/to/file.lance 205600064-205823840;206605482-206633082
 
 Examples:
-  lance-resolver /mnt/jfs/data/ds.lance | juicefs warmup -f -
-  lance-resolver --columns id,name /mnt/jfs/data/ds.lance | juicefs warmup -f -
+  lance-resolver /mnt/jfs/dataset.lance > /tmp/list.txt
+  juicefs warmup -f /tmp/list.txt
+  lance-resolver --columns id,name /mnt/jfs/dataset.lance > /tmp/list.txt
+  juicefs warmup -f /tmp/list.txt
 `)
 }
