@@ -503,8 +503,9 @@ type Meta interface {
 	// Compact chunks for specified path
 	Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno
 
-	// ListSlices returns all slices used by all files.
-	ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno
+	// ScanSlices scans all slices used by all files, calling fn for each slice.
+	// Ino is 0 for pending slices, 1 for trash slices, or the actual inode.
+	ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno
 	// Remove all files and directories recursively.
 	// count represents the number of attempted deletions of entries (even if failed).
 	Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno
@@ -557,6 +558,12 @@ type Meta interface {
 	ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 
 	ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error
+}
+
+type ScanSlicesOption struct {
+	ScanPending bool
+	Delete      bool
+	Progress    func()
 }
 
 type CheckOpt struct {

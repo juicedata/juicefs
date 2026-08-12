@@ -195,9 +195,12 @@ func gc(ctx *cli.Context) error {
 
 	// List all slices in metadata engine
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, true, delete, sliceCSpin.Increment)
+	r := m.ScanSlices(c, &meta.ScanSlicesOption{ScanPending: true, Delete: delete, Progress: sliceCSpin.Increment}, func(ino meta.Ino, s meta.Slice) error {
+		slices[ino] = append(slices[ino], s)
+		return nil
+	})
 	if r != 0 {
-		logger.Fatalf("list all slices: %s", r)
+		logger.Fatalf("scan all slices: %s", r)
 	}
 
 	delayedSliceSpin := progress.AddDoubleSpinnerTwo("Trash slices", "Trash data")
