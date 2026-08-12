@@ -5062,6 +5062,10 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	return nil
 }
 
+func (m *redisMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
+	return syscall.ENOTSUP
+}
+
 func (m *redisMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
 	return syscall.ENOTSUP
 }

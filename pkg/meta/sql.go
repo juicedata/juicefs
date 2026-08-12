@@ -1614,7 +1614,7 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 
 func (m *dbMeta) checkLink(n *node) bool {
 	if n.Type == TypeLink {
-		m.newMsg(ExternalLink, uint64(n.Inode), n.Length, n.Rdev)
+		m.newMsg(ExternalLink, uint64(n.Inode), n.Length)
 		return true
 	}
 	return false
@@ -2359,7 +2359,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				m.fileDeleted(opened, parent.IsTrash(), n.Inode, n.Length)
 			}
 			if n.Type == TypeLink {
-				m.newMsg(Unref, n.Inode, n.Length, n.Rdev)
+				m.newMsg(Unref, n.Inode, n.Length)
 			}
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, n.Uid, n.Gid, newSpace, newInode)
@@ -2903,7 +2903,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				m.fileDeleted(opened, false, dino, dn.Length)
 			}
 			if dn.Type == TypeLink {
-				m.newMsg(Unref, dino, dn.Length, dn.Rdev)
+				m.newMsg(Unref, dino, dn.Length)
 			}
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, dn.Uid, dn.Gid, newSpace, newInode)
@@ -4924,6 +4924,9 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 	} else {
 		m.parseAttr(n, attr)
 	}
+	if e.Attr == nil {
+		e.Attr = &DumpedAttr{}
+	}
 	dumpAttr(attr, e.Attr)
 	e.Attr.Inode = inode
 
@@ -5061,12 +5064,42 @@ func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, map
 	return nil
 }
 
-func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, typ uint8, entry *DumpedEntry) error {
-	err := m.dumpEntry(s, inode, typ, entry, nil)
+func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error {
+	err := m.dumpEntry(s, inode, 0, entry, nil)
 	if err != nil {
 		return err
 	}
-	if typ == TypeDirectory {
+	if len(entry.Parents) > 1 {
+		return syscall.ENOTSUP
+	}
+	if entry.Chunks != nil {
+		if len(entry.Chunks) > 12000 {
+			return syscall.EPERM
+		}
+		var ids []uint64
+		for _, c := range entry.Chunks {
+			for _, s := range c.Slices {
+				ids = append(ids, s.Id)
+			}
+		}
+		if len(ids) > 12000 {
+			return syscall.EPERM
+		}
+		var sliceRefs []sliceRef
+		err = s.In("chunkid", ids).Find(&sliceRefs)
+		if err != nil {
+			return err
+		}
+		for _, c := range sliceRefs {
+			if c.Refs > 1 {
+				logger.Infof("dumpTree: inode=%d, chunk has slice with refs=%d, id=%d", inode, c.Refs, c.Id)
+				return syscall.EPERM
+			}
+		}
+	}
+
+	// TODO: check lock
+	if entry.Attr.Type == "directory" {
 		var edges []*edge
 		err := s.Find(&edges, &edge{Parent: inode})
 		if err != nil {
@@ -5075,12 +5108,12 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, typ uint8, entry *DumpedEn
 		entry.Entries = make(map[string]*DumpedEntry, len(edges))
 		for _, edge := range edges {
 			name := string(edge.Name)
-			ce := entryPool.Get()
+			ce := &DumpedEntry{Attr: &DumpedAttr{}}
 			ce.Name = name
 			ce.Attr.Inode = edge.Inode
 			ce.Attr.Type = typeToString(edge.Type)
 			entry.Entries[name] = ce
-			if err := m.dumpTree(s, edge.Inode, edge.Type, ce); err != nil {
+			if err := m.dumpTree(s, edge.Inode, ce); err != nil {
 				return err
 			}
 		}
@@ -5090,10 +5123,11 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, typ uint8, entry *DumpedEn
 
 func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) error {
 	var entry2 = DumpedEntry{Attr: &DumpedAttr{}}
-	err := m.dumpTree(s, inode, typeFromString(entry.Attr.Type), &entry2)
+	err := m.dumpTree(s, inode, &entry2)
 	if err != nil {
 		return err
 	}
+	// TODO: faster compare
 	d1, err := json.MarshalIndent(&entry, "", "  ")
 	if err != nil {
 		return err
@@ -5110,12 +5144,27 @@ func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) erro
 	return nil
 }
 
+func (m *dbMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
+	return errno(m.roTxn(Background(), func(s *xorm.Session) error {
+		return m.dumpTree(s, inode, entry)
+	}))
+}
+
 func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		if err := m.checkEntry(s, inode, entry); err != nil {
 			return err
 		}
-		return m.replaceTree(s, inode, entry, mapping)
+		err := m.replaceTree(s, inode, entry, mapping)
+		if err != nil {
+			return err
+		}
+		var ss []string
+		for ino, target := range mapping {
+			ss = append(ss, fmt.Sprintf("%d:%d", ino, target))
+		}
+		m.genLog(ctx, s, time.Now().UnixNano(), "REPLACE(%d,%s)", inode, strings.Join(ss, ","))
+		return nil
 	}))
 }
 
