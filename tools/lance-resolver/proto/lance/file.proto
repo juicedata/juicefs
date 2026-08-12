@@ -1,0 +1,207 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: Copyright The Lance Authors
+
+syntax = "proto3";
+
+package lance.file;
+
+// A file descriptor that describes the contents of a Lance file
+message FileDescriptor {
+  // The schema of the file
+  Schema schema = 1;
+  // The number of rows in the file
+  uint64 length = 2;
+}
+
+// A schema which describes the data type of each of the columns
+message Schema {
+  // All fields in this file, including the nested fields.
+  repeated lance.file.Field fields = 1;
+  // Schema metadata.
+  map<string, bytes> metadata = 5;
+}
+
+// Metadata of one Lance file.
+message Metadata {
+  // 4 was used for StatisticsMetadata in the past, but has been moved to
+  // prevent a bug in older readers.
+  reserved 4;
+
+  // Position of the manifest in the file. If it is zero, the manifest is stored
+  // externally.
+  uint64 manifest_position = 1;
+
+  // Logical offsets of each chunk group, i.e., number of the rows in each
+  // chunk.
+  repeated int32 batch_offsets = 2;
+
+  // The file position that page table is stored.
+  //
+  // A page table is a matrix of N x M x 2, where N = num_fields, and M =
+  // num_batches. Each cell in the table is a pair of <position:int64,
+  // length:int64> of the page. Both position and length are int64 values. The
+  // <position, length> of all the pages in the same column are then
+  // contiguously stored.
+  //
+  // Every field that is a part of the file will have a run in the page table.
+  // This includes struct columns, which will have a run of length 0 since
+  // they don't store any actual data.
+  //
+  // For example, for the column 5 and batch 4, we have:
+  // ```text
+  //   position = page_table[5][4][0];
+  //   length = page_table[5][4][1];
+  // ```
+  uint64 page_table_position = 3;
+
+  message StatisticsMetadata {
+    // The schema of the statistics.
+    //
+    // This might be empty, meaning there are no statistics. It also might not
+    // contain statistics for every field.
+    repeated Field schema = 1;
+
+    // The field ids of the statistics leaf fields.
+    //
+    // This plays a similar role to the `fields` field in the DataFile message.
+    // Each of these field ids corresponds to a field in the stats_schema. There
+    // is one per column in the stats page table.
+    repeated int32 fields = 2;
+
+    // The file position of the statistics page table
+    //
+    // The page table is a matrix of N x 2, where N = length of stats_fields.
+    // This is the same layout as the main page table, except there is always
+    // only one batch.
+    //
+    // For example, to get the stats column 5, we have:
+    // ```text
+    //   position = stats_page_table[5][0];
+    //   length = stats_page_table[5][1];
+    // ```
+    uint64 page_table_position = 3;
+  }
+
+  StatisticsMetadata statistics = 5;
+}  // Metadata
+
+// Supported encodings.
+enum Encoding {
+  // Invalid encoding.
+  NONE = 0;
+  // Plain encoding.
+  PLAIN = 1;
+  // Var-length binary encoding.
+  VAR_BINARY = 2;
+  // Dictionary encoding.
+  DICTIONARY = 3;
+  // Run-length encoding.
+  RLE = 4;
+}
+
+// Dictionary field metadata
+message Dictionary {
+  /// The file offset for storing the dictionary value.
+  /// It is only valid if encoding is DICTIONARY.
+  ///
+  /// The logic type presents the value type of the column, i.e., string value.
+  int64 offset = 1;
+
+  /// The length of dictionary values.
+  int64 length = 2;
+}
+
+// Field metadata for a column.
+message Field {
+  enum Type {
+    PARENT = 0;
+    REPEATED = 1;
+    LEAF = 2;
+  }
+  Type type = 1;
+
+  // Fully qualified name.
+  string name = 2;
+  /// Field Id.
+  ///
+  /// See the comment in `DataFile.fields` for how field ids are assigned.
+  int32 id = 3;
+  /// Parent Field ID. If not set, this is a top-level column.
+  int32 parent_id = 4;
+
+  // Logical types, support parameterized Arrow Type.
+  //
+  // PARENT types will always have logical type "struct".
+  //
+  // REPEATED types may have logical types:
+  // * "list"
+  // * "large_list"
+  // * "list.struct"
+  // * "large_list.struct"
+  // The final two are used if the list values are structs, and therefore the
+  // field is both implicitly REPEATED and PARENT.
+  //
+  // LEAF types may have logical types:
+  // * "null"
+  // * "bool"
+  // * "int8" / "uint8"
+  // * "int16" / "uint16"
+  // * "int32" / "uint32"
+  // * "int64" / "uint64"
+  // * "halffloat" / "float" / "double"
+  // * "string" / "large_string"
+  // * "binary" / "large_binary"
+  // * "date32:day"
+  // * "date64:ms"
+  // * "decimal:128:{precision}:{scale}" / "decimal:256:{precision}:{scale}"
+  // * "time:{unit}" / "timestamp:{unit}" / "duration:{unit}", where unit is
+  // "s", "ms", "us", "ns"
+  // * "dict:{value_type}:{index_type}:false"
+  string logical_type = 5;
+  // If this field is nullable.
+  bool nullable = 6;
+
+  // optional field metadata (e.g. extension type name/parameters)
+  map<string, bytes> metadata = 10;  
+
+  bool unenforced_primary_key = 12;
+
+  // Position of this field in the primary key (1-based).
+  // 0 means the field is part of the primary key but uses schema field id for ordering.
+  // When set to a positive value, primary key fields are ordered by this position.
+  uint32 unenforced_primary_key_position = 13;
+
+  // Reserved for future use. Use unenforced_clustering_key_position instead.
+  bool unenforced_clustering_key = 14;
+
+  // Position of this field in the clustering key (1-based).
+  // 0 means the field is not part of the clustering key.
+  uint32 unenforced_clustering_key_position = 15;
+
+  // DEPRECATED ----------------------------------------------------------------
+
+  // Deprecated: Only used in V1 file format. V2 uses variable encodings defined
+  // per page.
+  //
+  // The global encoding to use for this field.
+  Encoding encoding = 7;
+
+  // Deprecated: Only used in V1 file format. V2 dynamically chooses when to
+  // do dictionary encoding and keeps the dictionary in the data files.
+  //
+  // The file offset for storing the dictionary value.
+  // It is only valid if encoding is DICTIONARY.
+  //
+  // The logic type presents the value type of the column, i.e., string value.
+  Dictionary dictionary = 8;
+
+  // Deprecated: optional extension type name, use metadata field
+  // ARROW:extension:name
+  string extension_name = 9;
+
+  // Field number 11 was previously `string storage_class`.
+  // Keep it reserved so older manifests remain compatible while new writers
+  // avoid reusing the slot.
+  reserved 11;
+  reserved "storage_class";
+}
