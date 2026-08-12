@@ -937,6 +937,16 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 			sig := <-signalChan
 			logger.Infof("Received signal %s, exiting...", sig.String())
 			if sig == syscall.SIGHUP {
+				// A passthrough open's data lives only in this process's
+				// staging files; the successor inherits the FUSE session but
+				// has no record of them, so their release-time reconciles
+				// would never run and every byte written through them would
+				// be lost. Drain first; if live opens remain, refuse the
+				// handover and keep serving.
+				if !fuse.DrainPassthrough(time.Second * 10) {
+					logger.Warnf("passthrough opens still in flight, don't restart")
+					continue
+				}
 				path := fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 				if err := v.FlushAll(""); err == nil {
 					fuse.Shutdown()
@@ -955,6 +965,19 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 			}
 			go func() {
 				time.Sleep(time.Second * 30)
+				// The umount is stuck, but a passthrough reconcile may still
+				// be copying staging data whose close(2) already returned;
+				// FlushAll now would commit the mid-copy prefix as a durable
+				// short file. Extend the deadline while reconciles are in
+				// flight, with a hard cap so a wedged reconcile can't hold
+				// the exit hostage.
+				hardStop := time.Now().Add(time.Minute * 10)
+				for v.ExternalFlushes() > 0 && time.Now().Before(hardStop) {
+					time.Sleep(time.Millisecond * 100)
+				}
+				if n := v.ExternalFlushes(); n > 0 {
+					logger.Errorf("force exit with %d unfinished passthrough reconcile(s); their files may be committed incomplete", n)
+				}
 				if err := v.FlushAll(""); err != nil {
 					logger.Errorf("flush all: %s", err)
 				}
