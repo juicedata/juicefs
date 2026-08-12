@@ -4438,9 +4438,9 @@ func TestQuotaEdgeCases(t *testing.T) {
 	m.groupQuotas = make(map[uint64]*Quota)
 	m.quotaMu = sync.RWMutex{}
 
-	m.fmt = &Format{
+	m.setFormat(&Format{
 		UserGroupQuota: true,
-	}
+	})
 
 	fileOwnerUid := uint32(1001)
 	fileOwnerGid := uint32(2001)
@@ -4498,9 +4498,9 @@ func TestCheckQuotaFileOwner(t *testing.T) {
 	m.groupQuotas = make(map[uint64]*Quota)
 	m.quotaMu = sync.RWMutex{}
 
-	m.fmt = &Format{
+	m.setFormat(&Format{
 		UserGroupQuota: true,
-	}
+	})
 
 	fileOwnerUid := uint32(1001)
 	fileOwnerGid := uint32(2001)
