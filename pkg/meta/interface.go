@@ -569,6 +569,7 @@ type Meta interface {
 
 	ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error
 
+	DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno
 	Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno
 }
 

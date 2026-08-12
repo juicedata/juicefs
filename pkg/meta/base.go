@@ -1630,7 +1630,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 		attr.Nlink = 1
 		if _type == TypeSymlink {
 			attr.Length = uint64(len(path))
-		} else {
+		} else if _type != TypeLink {
 			attr.Length = 0
 			attr.Rdev = rdev
 		}

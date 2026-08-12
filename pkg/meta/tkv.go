@@ -3884,6 +3884,10 @@ func (m *kvMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dep
 	return nil
 }
 
+func (m *kvMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
+	return syscall.ENOTSUP
+}
+
 func (m *kvMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
 	return syscall.ENOTSUP
 }

@@ -1512,7 +1512,7 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 
 func (m *dbMeta) checkLink(n *node) bool {
 	if n.Type == TypeLink {
-		m.newMsg(ExternalLink, uint64(n.Inode), n.Length, n.Rdev)
+		m.newMsg(ExternalLink, uint64(n.Inode), n.Length)
 		return true
 	}
 	return false
@@ -2157,7 +2157,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				m.fileDeleted(opened, parent.IsTrash(), n.Inode, n.Length)
 			}
 			if n.Type == TypeLink {
-				m.newMsg(Unref, n.Inode, n.Length, n.Rdev)
+				m.newMsg(Unref, n.Inode, n.Length)
 			}
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, n.Uid, n.Gid, newSpace, newInode)
@@ -2706,7 +2706,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				m.fileDeleted(opened, false, dino, dn.Length)
 			}
 			if dn.Type == TypeLink {
-				m.newMsg(Unref, dino, dn.Length, dn.Rdev)
+				m.newMsg(Unref, dino, dn.Length)
 			}
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, dn.Uid, dn.Gid, newSpace, newInode)
@@ -4633,6 +4633,9 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 	} else {
 		m.parseAttr(n, attr)
 	}
+	if e.Attr == nil {
+		e.Attr = &DumpedAttr{}
+	}
 	dumpAttr(attr, e.Attr)
 	e.Attr.Inode = inode
 
@@ -4770,12 +4773,42 @@ func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, map
 	return nil
 }
 
-func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, typ uint8, entry *DumpedEntry) error {
-	err := m.dumpEntry(s, inode, typ, entry, nil)
+func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error {
+	err := m.dumpEntry(s, inode, 0, entry, nil)
 	if err != nil {
 		return err
 	}
-	if typ == TypeDirectory {
+	if len(entry.Parents) > 1 {
+		return syscall.ENOTSUP
+	}
+	if entry.Chunks != nil {
+		if len(entry.Chunks) > 12000 {
+			return syscall.EPERM
+		}
+		var ids []uint64
+		for _, c := range entry.Chunks {
+			for _, s := range c.Slices {
+				ids = append(ids, s.Id)
+			}
+		}
+		if len(ids) > 12000 {
+			return syscall.EPERM
+		}
+		var sliceRefs []sliceRef
+		err = s.In("chunkid", ids).Find(&sliceRefs)
+		if err != nil {
+			return err
+		}
+		for _, c := range sliceRefs {
+			if c.Refs > 1 {
+				logger.Infof("dumpTree: inode=%d, chunk has slice with refs=%d, id=%d", inode, c.Refs, c.Id)
+				return syscall.EPERM
+			}
+		}
+	}
+
+	// TODO: check lock
+	if entry.Attr.Type == "directory" {
 		var edges []*edge
 		err := s.Find(&edges, &edge{Parent: inode})
 		if err != nil {
@@ -4784,12 +4817,12 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, typ uint8, entry *DumpedEn
 		entry.Entries = make(map[string]*DumpedEntry, len(edges))
 		for _, edge := range edges {
 			name := string(edge.Name)
-			ce := entryPool.Get()
+			ce := &DumpedEntry{Attr: &DumpedAttr{}}
 			ce.Name = name
 			ce.Attr.Inode = edge.Inode
 			ce.Attr.Type = typeToString(edge.Type)
 			entry.Entries[name] = ce
-			if err := m.dumpTree(s, edge.Inode, edge.Type, ce); err != nil {
+			if err := m.dumpTree(s, edge.Inode, ce); err != nil {
 				return err
 			}
 		}
@@ -4799,10 +4832,11 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, typ uint8, entry *DumpedEn
 
 func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) error {
 	var entry2 = DumpedEntry{Attr: &DumpedAttr{}}
-	err := m.dumpTree(s, inode, typeFromString(entry.Attr.Type), &entry2)
+	err := m.dumpTree(s, inode, &entry2)
 	if err != nil {
 		return err
 	}
+	// TODO: faster compare
 	d1, err := json.MarshalIndent(&entry, "", "  ")
 	if err != nil {
 		return err
@@ -4819,12 +4853,27 @@ func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) erro
 	return nil
 }
 
+func (m *dbMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
+	return errno(m.roTxn(Background(), func(s *xorm.Session) error {
+		return m.dumpTree(s, inode, entry)
+	}))
+}
+
 func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		if err := m.checkEntry(s, inode, entry); err != nil {
 			return err
 		}
-		return m.replaceTree(s, inode, entry, mapping)
+		err := m.replaceTree(s, inode, entry, mapping)
+		if err != nil {
+			return err
+		}
+		var ss []string
+		for ino, target := range mapping {
+			ss = append(ss, fmt.Sprintf("%d:%d", ino, target))
+		}
+		m.genLog(ctx, s, time.Now().UnixNano(), "REPLACE(%d,%s)", inode, strings.Join(ss, ","))
+		return nil
 	}))
 }
 
@@ -5105,17 +5154,17 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		}
 	}()
 
-	progress := utils.NewProgress(false)
+	progress := utils.NewProgress(true)
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 	return m.roTxn(Background(), func(s *xorm.Session) error {
-		// var lastChangelog int64
-		// if m.getFormat().ChangeLog {
-		// 	var maxLog changeLog
-		// 	if ok, _ := s.Desc("id").Limit(1).Get(&maxLog); ok {
-		// 		lastChangelog = maxLog.Id
-		// 	}
-		// }
+		var lastChangelog int64
+		if m.getFormat().ChangeLog {
+			var maxLog changeLog
+			if ok, _ := s.Desc("id").Limit(1).Get(&maxLog); ok {
+				lastChangelog = maxLog.Id
+			}
+		}
 		if root == RootInode && fast {
 			defer func() { m.snap = nil }()
 			bar := progress.AddCountBar("Snapshot keys", 0)
@@ -5156,113 +5205,113 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		}
 		tree.Name = "FSTree"
 
-		// var drows []delfile
-		// // the statement remembers the table of last Iterator
-		// if err := s.Table(&delfile{}).Find(&drows); err != nil {
-		// 	return err
-		// }
-		// dels := make([]*DumpedDelFile, 0, len(drows))
-		// for _, row := range drows {
-		// 	dels = append(dels, &DumpedDelFile{row.Inode, row.Length, row.Expire})
-		// }
-		// var crows []counter
-		// if err = s.Find(&crows); err != nil {
-		// 	return err
-		// }
-		// counters := &DumpedCounters{}
-		// for _, row := range crows {
-		// 	switch row.Name {
-		// 	case "usedSpace":
-		// 		counters.UsedSpace = row.Value
-		// 	case "totalInodes":
-		// 		counters.UsedInodes = row.Value
-		// 	case "nextInode":
-		// 		counters.NextInode = row.Value
-		// 	case "nextChunk":
-		// 		counters.NextChunk = row.Value
-		// 	case "nextSession":
-		// 		counters.NextSession = row.Value
-		// 	case "nextTrash":
-		// 		counters.NextTrash = row.Value
-		// 	}
-		// }
-		// counters.LastChangelog = lastChangelog
+		var drows []delfile
+		// the statement remembers the table of last Iterator
+		if err := s.Table(&delfile{}).Find(&drows); err != nil {
+			return err
+		}
+		dels := make([]*DumpedDelFile, 0, len(drows))
+		for _, row := range drows {
+			dels = append(dels, &DumpedDelFile{row.Inode, row.Length, row.Expire})
+		}
+		var crows []counter
+		if err = s.Find(&crows); err != nil {
+			return err
+		}
+		counters := &DumpedCounters{}
+		for _, row := range crows {
+			switch row.Name {
+			case "usedSpace":
+				counters.UsedSpace = row.Value
+			case "totalInodes":
+				counters.UsedInodes = row.Value
+			case "nextInode":
+				counters.NextInode = row.Value
+			case "nextChunk":
+				counters.NextChunk = row.Value
+			case "nextSession":
+				counters.NextSession = row.Value
+			case "nextTrash":
+				counters.NextTrash = row.Value
+			}
+		}
+		counters.LastChangelog = lastChangelog
 
-		// var srows []sustained
-		// if err := s.Find(&srows); err != nil {
-		// 	return err
-		// }
-		// ss := make(map[uint64][]Ino)
-		// for _, row := range srows {
-		// 	ss[row.Sid] = append(ss[row.Sid], row.Inode)
-		// }
-		// sessions := make([]*DumpedSustained, 0, len(ss))
-		// for k, v := range ss {
-		// 	sessions = append(sessions, &DumpedSustained{k, v})
-		// }
+		var srows []sustained
+		if err := s.Find(&srows); err != nil {
+			return err
+		}
+		ss := make(map[uint64][]Ino)
+		for _, row := range srows {
+			ss[row.Sid] = append(ss[row.Sid], row.Inode)
+		}
+		sessions := make([]*DumpedSustained, 0, len(ss))
+		for k, v := range ss {
+			sessions = append(sessions, &DumpedSustained{k, v})
+		}
 
 		// Load and build dir quotas
-		// var dirQuotaRows []dirQuota
-		// if err := s.Find(&dirQuotaRows); err != nil {
-		// 	return err
-		// }
-		// dirQuotas := make(map[Ino]*DumpedQuota, len(dirQuotaRows))
-		// for _, q := range dirQuotaRows {
-		// 	dirQuotas[Ino(q.Inode)] = &DumpedQuota{
-		// 		MaxSpace:   q.MaxSpace,
-		// 		MaxInodes:  q.MaxInodes,
-		// 		UsedSpace:  q.UsedSpace,
-		// 		UsedInodes: q.UsedInodes,
-		// 	}
-		// }
+		var dirQuotaRows []dirQuota
+		if err := s.Find(&dirQuotaRows); err != nil {
+			return err
+		}
+		dirQuotas := make(map[Ino]*DumpedQuota, len(dirQuotaRows))
+		for _, q := range dirQuotaRows {
+			dirQuotas[Ino(q.Inode)] = &DumpedQuota{
+				MaxSpace:   q.MaxSpace,
+				MaxInodes:  q.MaxInodes,
+				UsedSpace:  q.UsedSpace,
+				UsedInodes: q.UsedInodes,
+			}
+		}
 
-		// // Load and build user/group quotas
-		// var userGroupQuotaRows []userGroupQuota
-		// if err := s.In("qtype", UserQuotaType, GroupQuotaType).Find(&userGroupQuotaRows); err != nil {
-		// 	return err
-		// }
-		// userQuotas := make(map[uint64]*DumpedQuota, len(userGroupQuotaRows))
-		// groupQuotas := make(map[uint64]*DumpedQuota, len(userGroupQuotaRows))
-		// for _, q := range userGroupQuotaRows {
-		// 	// Skip unlimited quotas (MaxSpace == -1 && MaxInodes == -1)
-		// 	if q.MaxSpace == -1 && q.MaxInodes == -1 {
-		// 		continue
-		// 	}
-		// 	quota := &DumpedQuota{
-		// 		MaxSpace:   q.MaxSpace,
-		// 		MaxInodes:  q.MaxInodes,
-		// 		UsedSpace:  q.UsedSpace,
-		// 		UsedInodes: q.UsedInodes,
-		// 	}
-		// 	switch q.Qtype {
-		// 	case UserQuotaType:
-		// 		userQuotas[q.Qkey] = quota
-		// 	case GroupQuotaType:
-		// 		groupQuotas[q.Qkey] = quota
-		// 	}
-		// }
+		// Load and build user/group quotas
+		var userGroupQuotaRows []userGroupQuota
+		if err := s.In("qtype", UserQuotaType, GroupQuotaType).Find(&userGroupQuotaRows); err != nil {
+			return err
+		}
+		userQuotas := make(map[uint64]*DumpedQuota, len(userGroupQuotaRows))
+		groupQuotas := make(map[uint64]*DumpedQuota, len(userGroupQuotaRows))
+		for _, q := range userGroupQuotaRows {
+			// Skip unlimited quotas (MaxSpace == -1 && MaxInodes == -1)
+			if q.MaxSpace == -1 && q.MaxInodes == -1 {
+				continue
+			}
+			quota := &DumpedQuota{
+				MaxSpace:   q.MaxSpace,
+				MaxInodes:  q.MaxInodes,
+				UsedSpace:  q.UsedSpace,
+				UsedInodes: q.UsedInodes,
+			}
+			switch q.Qtype {
+			case UserQuotaType:
+				userQuotas[q.Qkey] = quota
+			case GroupQuotaType:
+				groupQuotas[q.Qkey] = quota
+			}
+		}
 
 		dm := DumpedMeta{
-			//		Setting: *m.getFormat(),
-			// Counters: counters,
-			// Sustained: sessions,
-			// DelFiles:  dels,
-			// Quotas:    dirQuotas,
-			// UserQuotas:  userQuotas,
-			// GroupQuotas: groupQuotas,
+			Setting:     *m.getFormat(),
+			Counters:    counters,
+			Sustained:   sessions,
+			DelFiles:    dels,
+			Quotas:      dirQuotas,
+			UserQuotas:  userQuotas,
+			GroupQuotas: groupQuotas,
 		}
-		// if root != RootInode {
-		// 	dm.UserQuotas = nil
-		// 	dm.GroupQuotas = nil
-		// }
-		// if !keepSecret && dm.Setting.SecretKey != "" {
-		// 	dm.Setting.SecretKey = "removed"
-		// 	logger.Warnf("Secret key is removed for the sake of safety")
-		// }
-		// if !keepSecret && dm.Setting.SessionToken != "" {
-		// 	dm.Setting.SessionToken = "removed"
-		// 	logger.Warnf("Session token is removed for the sake of safety")
-		// }
+		if root != RootInode {
+			dm.UserQuotas = nil
+			dm.GroupQuotas = nil
+		}
+		if !keepSecret && dm.Setting.SecretKey != "" {
+			dm.Setting.SecretKey = "removed"
+			logger.Warnf("Secret key is removed for the sake of safety")
+		}
+		if !keepSecret && dm.Setting.SessionToken != "" {
+			dm.Setting.SessionToken = "removed"
+			logger.Warnf("Session token is removed for the sake of safety")
+		}
 		bw, err := dm.writeJsonWithOutTree(w)
 		if err != nil {
 			return err
