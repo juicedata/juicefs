@@ -60,7 +60,8 @@ const (
 	// ExternalLink is a message for external link in EE
 	ExternalLink = 1009
 	// Unref is a message to remove a ref in EE
-	Unref = 1010
+	Unref     = 1010
+	UpdateRef = 1011
 )
 
 const (
