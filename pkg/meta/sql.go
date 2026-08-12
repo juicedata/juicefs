@@ -1512,7 +1512,7 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 
 func (m *dbMeta) checkLink(n *node) bool {
 	if n.Type == TypeLink {
-		m.newMsg(ExternalLink, uint64(n.Inode), n.Length)
+		m.newMsg(ExternalLink, n.Inode, n.Length)
 		return true
 	}
 	return false
@@ -4716,63 +4716,6 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 	return nil
 }
 
-func (m *dbMeta) replaceEntry(s *xorm.Session, inode Ino, target uint64) error {
-	logger.Infof("replaceEntry: inode=%d, target=%d", inode, target)
-	var cur = node{Inode: inode}
-	ok, err := s.ForUpdate().Get(&cur)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return syscall.ENOENT
-	}
-	if m.checkLink(&cur) {
-		return syscall.EPERM
-	}
-	if _, err := s.Delete(&xattr{Inode: inode}); err != nil {
-		return err
-	}
-	switch cur.Type {
-	case TypeFile:
-		if _, err := s.Delete(&chunk{Inode: inode}); err != nil {
-			return err
-		}
-	case TypeSymlink:
-		if _, err := s.Delete(&symlink{Inode: inode}); err != nil {
-			return err
-		}
-	case TypeDirectory:
-		if _, err := s.Delete(&edge{Parent: inode}); err != nil {
-			return err
-		}
-		if _, err := s.Delete(&dirStats{Inode: inode}); err != nil {
-			return err
-		}
-	}
-	cur.Type = TypeLink
-	cur.Length = uint64(target)
-	cur.setCtime(time.Now().UnixNano())
-	cur.AccessACLId = aclAPI.None
-	cur.DefaultACLId = aclAPI.None
-	_, err = s.Cols("type", "ctime", "ctimensec", "access_acl_id", "default_acl_id", "length").Update(&cur, &node{Inode: inode})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) error {
-	for _, e := range entry.Entries {
-		if err := m.replaceTree(s, e.Attr.Inode, e, mapping); err != nil {
-			return err
-		}
-	}
-	if err := m.replaceEntry(s, inode, mapping[inode]); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error {
 	err := m.dumpEntry(s, inode, 0, entry, nil)
 	if err != nil {
@@ -4830,6 +4773,12 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error 
 	return nil
 }
 
+func (m *dbMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
+	return errno(m.roTxn(Background(), func(s *xorm.Session) error {
+		return m.dumpTree(s, inode, entry)
+	}))
+}
+
 func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) error {
 	var entry2 = DumpedEntry{Attr: &DumpedAttr{}}
 	err := m.dumpTree(s, inode, &entry2)
@@ -4853,14 +4802,61 @@ func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) erro
 	return nil
 }
 
-func (m *dbMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
-	return errno(m.roTxn(Background(), func(s *xorm.Session) error {
-		return m.dumpTree(s, inode, entry)
-	}))
+func (m *dbMeta) replaceEntry(s *xorm.Session, inode Ino, target uint64) error {
+	var cur = node{Inode: inode}
+	ok, err := s.ForUpdate().Get(&cur)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return syscall.ENOENT
+	}
+	if _, err := s.Delete(&xattr{Inode: inode}); err != nil {
+		return err
+	}
+	switch cur.Type {
+	case TypeFile:
+		if _, err := s.Delete(&chunk{Inode: inode}); err != nil {
+			return err
+		}
+	case TypeSymlink:
+		if _, err := s.Delete(&symlink{Inode: inode}); err != nil {
+			return err
+		}
+	case TypeDirectory:
+		if _, err := s.Delete(&edge{Parent: inode}); err != nil {
+			return err
+		}
+		if _, err := s.Delete(&dirStats{Inode: inode}); err != nil {
+			return err
+		}
+	}
+	cur.Type = TypeLink
+	cur.Length = uint64(target)
+	cur.setCtime(time.Now().UnixNano())
+	cur.AccessACLId = aclAPI.None
+	cur.DefaultACLId = aclAPI.None
+	_, err = s.Cols("type", "ctime", "ctimensec", "access_acl_id", "default_acl_id", "length").Update(&cur, &node{Inode: inode})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) error {
+	for _, e := range entry.Entries {
+		if err := m.replaceTree(s, e.Attr.Inode, e, mapping); err != nil {
+			return err
+		}
+	}
+	if err := m.replaceEntry(s, inode, mapping[inode]); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
-	return errno(m.txn(func(s *xorm.Session) error {
+	r := errno(m.txn(func(s *xorm.Session) error {
 		if err := m.checkEntry(s, inode, entry); err != nil {
 			return err
 		}
@@ -4875,6 +4871,14 @@ func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map
 		m.genLog(ctx, s, time.Now().UnixNano(), "REPLACE(%d,%s)", inode, strings.Join(ss, ","))
 		return nil
 	}))
+	if r == 0 {
+		for _, e := range entry.Entries {
+			if e.Attr.Type == "link" {
+				m.newMsg(UpdateRef, e.Attr.Inode, e.Attr.Length, mapping[e.Attr.Inode])
+			}
+		}
+	}
+	return r
 }
 
 func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
