@@ -4831,7 +4831,10 @@ func (m *dbMeta) replaceEntry(s *xorm.Session, inode Ino, target uint64) error {
 			return err
 		}
 	}
-	cur.Type = TypeLink
+	if cur.Type != TypeLink {
+		cur.Rdev = uint32(cur.Type)
+		cur.Type = TypeLink
+	}
 	cur.Length = uint64(target)
 	cur.setCtime(time.Now().UnixNano())
 	cur.AccessACLId = aclAPI.None

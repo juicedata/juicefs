@@ -154,6 +154,21 @@ func buildSlice(ss []*slice) []Slice {
 	return chunk
 }
 
+func MergeSlices(ss []*DumpedSlice) []*DumpedSlice {
+	var ss2 = make([]*slice, len(ss))
+	for i, s := range ss {
+		ss2[i] = newSlice(s.Pos, s.Id, s.Size, s.Off, s.Len)
+	}
+	ss3 := buildSlice(ss2)
+	var r []*DumpedSlice
+	var pos uint32
+	for _, s := range ss3 {
+		r = append(r, &DumpedSlice{Pos: pos, Id: s.Id, Size: s.Size, Off: s.Off, Len: s.Len})
+		pos += s.Len
+	}
+	return r
+}
+
 func compactChunk(ss []*slice) (uint32, uint32, []Slice) {
 	var chunk = buildSlice(ss)
 	var pos uint32
