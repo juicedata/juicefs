@@ -4035,7 +4035,7 @@ func (m *redisMeta) ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, 
 	}
 
 	if opt.ScanPending {
-		if err := m.hscan(Background(), m.sliceRefs(), func(keys []string) error {
+		if err := m.hscan(ctx, m.sliceRefs(), func(keys []string) error {
 			for i := 0; i < len(keys); i += 2 {
 				key, val := keys[i], keys[i+1]
 				if strings.HasPrefix(val, "-") { // < 0
