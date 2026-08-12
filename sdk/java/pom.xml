@@ -13,6 +13,7 @@
 		<hadoop.version>3.1.4</hadoop.version>
 		<flink.version>1.16.3</flink.version>
 		<ranger.version>2.8.0</ranger.version>
+		<ranger.hadoop.version>3.4.2</ranger.hadoop.version>
 		<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true
 			-Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path}
 			-Djdk.attach.allowAttachSelf=true</argLine>
@@ -381,7 +382,7 @@
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
 			<artifactId>hadoop-client-runtime</artifactId>
-			<version>3.4.2</version>
+			<version>${ranger.hadoop.version}</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
