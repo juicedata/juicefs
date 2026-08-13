@@ -351,6 +351,7 @@ func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, e
 	}
 	conf.Host = host
 	conf.Protocol = uri.Scheme
+	conf.AdditionalUserAgent = UserAgent
 	if uri.Scheme == "http" {
 		conf.Port = 80
 	} else {

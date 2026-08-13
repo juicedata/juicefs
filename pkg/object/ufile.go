@@ -116,7 +116,7 @@ func (u *ufile) Create(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	setUserAgent(req)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err

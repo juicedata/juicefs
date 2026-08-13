@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -36,6 +37,10 @@ var ctx = context.Background()
 var logger = utils.GetLogger("juicefs")
 
 var UserAgent = "JuiceFS"
+
+func setUserAgent(req *http.Request) {
+	req.Header.Set("User-Agent", UserAgent)
+}
 
 type MtimeChanger interface {
 	Chtimes(path string, mtime time.Time) error

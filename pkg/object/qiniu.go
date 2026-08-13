@@ -38,6 +38,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/qiniu/go-sdk/v7/auth"
+	qiniuclient "github.com/qiniu/go-sdk/v7/client"
 	"github.com/qiniu/go-sdk/v7/storage"
 )
 
@@ -73,6 +74,7 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	now := time.Now().UTC().Format(http.TimeFormat)
+	setUserAgent(req)
 	req.Header.Add("Date", now)
 	if off > 0 || limit > 0 {
 		if limit > 0 {
@@ -219,12 +221,9 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		options.EndpointOptions.DisableHTTPS = uri.Scheme == "http"
 		options.UsePathStyle = true
 		options.HTTPClient = httpClient
-		options.APIOptions = append(options.APIOptions,
-			func(stack *smithymiddleware.Stack) error {
-				return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
-			},
-			middleware.AddUserAgentKey(UserAgent),
-		)
+		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
+			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
+		}, middleware.AddUserAgentKey(UserAgent))
 		options.RetryMaxAttempts = 1
 	})
 	s3c := s3client{bucket: bucket, s3: client, region: region}
@@ -247,6 +246,9 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		zone.SrcUpHosts = []string{"free-qvm-z0-xs.qiniup.com"}
 	}
 	cfg.Zone = zone
+	if err := qiniuclient.SetAppName(UserAgent); err != nil {
+		return nil, fmt.Errorf("set Qiniu User-Agent: %s", err)
+	}
 	cred := auth.New(accessKey, secretKey)
 	bucketManager := storage.NewBucketManager(cred, &cfg)
 	return &qiniu{s3c, bucketManager, cred, &cfg, ""}, nil

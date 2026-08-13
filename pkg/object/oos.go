@@ -97,7 +97,7 @@ func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		options.BaseEndpoint = aws.String(endpoint)
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
-		})
+		}, addS3UserAgent)
 		options.RetryMaxAttempts = 1
 	})
 	return &oos{s3client{bucket: bucket, s3: client, region: region}}, nil
