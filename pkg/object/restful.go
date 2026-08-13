@@ -35,7 +35,25 @@ import (
 
 var resolver = dnscache.New(time.Minute)
 var httpClient *http.Client
+var httpTransport *http.Transport
 
+// parseHTTPConnMaxAge reads the opt-in connection max age from the environment.
+// Invalid values are ignored so the process can keep the previous behavior.
+func parseHTTPConnMaxAge() time.Duration {
+	value := os.Getenv("JFS_HTTP_CONN_MAX_AGE")
+	if value == "" {
+		return 0
+	}
+	maxAge, err := time.ParseDuration(value)
+	if err != nil || maxAge < 0 {
+		logger.Warnf("invalid JFS_HTTP_CONN_MAX_AGE=%q, ignored", value)
+		return 0
+	}
+	return maxAge
+}
+
+// splitIPsByVersion keeps IPv6 and IPv4 addresses separate so dialing can
+// preserve the existing happy-eyeballs style fallback order.
 func splitIPsByVersion(ips []net.IP) ([]net.IP, []net.IP) {
 	ipv6 := make([]net.IP, 0, len(ips))
 	ipv4 := make([]net.IP, 0, len(ips))
@@ -125,6 +143,8 @@ func dialParallel(ctx context.Context, dialer *net.Dialer, network string, prima
 	}
 }
 
+// dialRandom tries the provided addresses in a randomized order until one
+// succeeds or the context is canceled.
 func dialRandom(ctx context.Context, dialer *net.Dialer, network string, ips []net.IP, port string) (net.Conn, error) {
 	var lastErr error
 	n := len(ips)
@@ -148,46 +168,59 @@ func dialRandom(ctx context.Context, dialer *net.Dialer, network string, ips []n
 	return nil, lastErr
 }
 
+// init builds the shared HTTP transport first, then optionally wraps it with
+// connection max-age management while keeping the base *http.Transport exposed
+// for SDK paths that require the concrete type.
 func init() {
 	dialer := &net.Dialer{Timeout: time.Second * 10}
-	httpClient = &http.Client{
-		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			TLSHandshakeTimeout:   time.Second * 20,
-			ResponseHeaderTimeout: time.Second * 30,
-			IdleConnTimeout:       time.Second * 300,
-			MaxIdleConnsPerHost:   500,
-			ReadBufferSize:        32 << 10,
-			WriteBufferSize:       32 << 10,
-			DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
-				host, port, err := net.SplitHostPort(address)
-				if err != nil {
-					return nil, err
-				}
-				if ip := net.ParseIP(host); ip != nil {
-					return dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-				}
-				ips, err := resolver.Fetch(host)
-				if err != nil {
-					return nil, err
-				}
-				if len(ips) == 0 {
-					return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
-				}
-				ipv6, ipv4 := splitIPsByVersion(ips)
-				return dialParallel(ctx, dialer, network, ipv6, ipv4, port)
-			},
-			DisableCompression: true,
-			TLSClientConfig:    &tls.Config{},
+	httpConnMaxAge := parseHTTPConnMaxAge()
+	httpTransport = &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		TLSHandshakeTimeout:   time.Second * 20,
+		ResponseHeaderTimeout: time.Second * 30,
+		IdleConnTimeout:       time.Second * 300,
+		MaxIdleConnsPerHost:   500,
+		ReadBufferSize:        32 << 10,
+		WriteBufferSize:       32 << 10,
+		DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(address)
+			if err != nil {
+				return nil, err
+			}
+			if ip := net.ParseIP(host); ip != nil {
+				return dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+			}
+			ips, err := resolver.Fetch(host)
+			if err != nil {
+				return nil, err
+			}
+			if len(ips) == 0 {
+				return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+			}
+			ipv6, ipv4 := splitIPsByVersion(ips)
+			return dialParallel(ctx, dialer, network, ipv6, ipv4, port)
 		},
-		Timeout: time.Hour,
+		DisableCompression: true,
+		TLSClientConfig:    &tls.Config{},
+	}
+	httpClient = &http.Client{
+		Transport: newHTTPConnMaxAgeTransport(httpTransport, httpConnMaxAge),
+		Timeout:   time.Hour,
 	}
 }
 
+// GetHttpClient returns the shared object-storage HTTP client.
 func GetHttpClient() *http.Client {
 	return httpClient
 }
 
+// GetHttpTransport returns the shared base transport for integrations that
+// need direct access to the concrete *http.Transport.
+func GetHttpTransport() *http.Transport {
+	return httpTransport
+}
+
+// cleanup drains and closes a response body so its connection can be reused.
 func cleanup(response *http.Response) {
 	if response != nil && response.Body != nil {
 		_, _ = io.Copy(io.Discard, response.Body)
