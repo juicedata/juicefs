@@ -2810,7 +2810,7 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	return errno(m.simpleTxn(ctx, func(s *xorm.Session) error {
 		s = s.Table(&edge{})
 		if plus != 0 {
-			s = s.Join("INNER", &node{}, m.sqlConv("edge.inode=node.inode"))
+			s = s.Join("INNER", &node{}, m.sqlConv("edge.inode=node.inode")).Cols(m.sqlConv("edge.name"), m.sqlConv("node.*"))
 		}
 		if limit > 0 {
 			s = s.Limit(limit, 0)
@@ -4841,7 +4841,7 @@ func (m *dbMeta) replaceEntry(s *xorm.Session, inode Ino, target uint64) error {
 	cur.setCtime(time.Now().UnixNano())
 	cur.AccessACLId = aclAPI.None
 	cur.DefaultACLId = aclAPI.None
-	_, err = s.Cols("type", "ctime", "ctimensec", "access_acl_id", "default_acl_id", "length").Update(&cur, &node{Inode: inode})
+	_, err = s.Cols("type", "ctime", "ctimensec", "access_acl_id", "default_acl_id", "length", "rdev").Update(&cur, &node{Inode: inode})
 	if err != nil {
 		return err
 	}
@@ -4854,10 +4854,7 @@ func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, map
 			return err
 		}
 	}
-	if err := m.replaceEntry(s, inode, mapping[inode]); err != nil {
-		return err
-	}
-	return nil
+	return m.replaceEntry(s, inode, mapping[inode])
 }
 
 func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
