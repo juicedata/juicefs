@@ -276,26 +276,25 @@ func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
 		m.statsUpdater(&ckpt.Stats)
 	}
 
+	ckpt.Lock()
 	ckpt.UpdatedAt = time.Now()
-
-	ckpt.RLock()
 	prefixCount := len(ckpt.PrefixState)
 	for _, state := range ckpt.PrefixState {
 		state.RLock()
 	}
 	m.multipartUploadStore.RLock()
-	data, err := json.Marshal(ckpt)
-	m.multipartUploadStore.RUnlock()
-	for _, state := range ckpt.PrefixState {
-		state.RUnlock()
-	}
 	srcDelayDelMu.Lock()
 	ckpt.SrcDelayDel = append([]string(nil), srcDelayDel...)
 	srcDelayDelMu.Unlock()
 	dstDelayDelMu.Lock()
 	ckpt.DstDelayDel = append([]string(nil), dstDelayDel...)
 	dstDelayDelMu.Unlock()
-	ckpt.RUnlock()
+	data, err := json.Marshal(ckpt)
+	m.multipartUploadStore.RUnlock()
+	for _, state := range ckpt.PrefixState {
+		state.RUnlock()
+	}
+	ckpt.Unlock()
 
 	if err != nil {
 		return fmt.Errorf("failed to marshal checkpoint: %w", err)
