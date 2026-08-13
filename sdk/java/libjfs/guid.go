@@ -19,10 +19,30 @@ package main
 import (
 	"crypto/md5"
 	"encoding/binary"
+	"fmt"
 	"os/user"
 	"strconv"
 	"sync"
 )
+
+func guidMask(value, metaName string) (uint32, error) {
+	if value != "" {
+		mask, err := strconv.ParseUint(value, 0, 32)
+		if err != nil {
+			return 0, fmt.Errorf("invalid guid-mask %q: expected an unsigned 32-bit integer", value)
+		}
+		if mask == 0 {
+			return 0, fmt.Errorf("invalid guid-mask %q: value must be greater than zero", value)
+		}
+		return uint32(mask), nil
+	}
+	switch metaName {
+	case "mysql", "postgres", "sqlite3":
+		return uint32(0x7FFFFFFF), nil
+	default:
+		return 0, nil
+	}
+}
 
 type pwent struct {
 	id   uint32
