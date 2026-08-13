@@ -2759,8 +2759,8 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if !ok {
 			return syscall.ENOENT
 		}
-		if n.Type == TypeLink {
-			return syscall.ENOTSUP
+		if m.checkLink(&pn) {
+			return ELink
 		}
 		if n.Type == TypeDirectory {
 			return syscall.EPERM
