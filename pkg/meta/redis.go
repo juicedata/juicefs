@@ -4478,6 +4478,95 @@ func (m *redisMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 	return err
 }
 
+const quotaLoadBatchSize = 1000
+
+type quotaLoadEntry struct {
+	key        string
+	id         uint64
+	usedInodes int64
+	usedSpace  *redis.StringCmd
+	quota      *redis.StringCmd
+}
+
+func (m *redisMeta) loadQuotaBatch(ctx Context, config *quotaKeys, name string, keys []string, quotas map[uint64]*Quota) error {
+	if len(keys)%2 != 0 {
+		return fmt.Errorf("invalid HSCAN result for %s quotas: odd number of fields", name)
+	}
+
+	entries := make([]quotaLoadEntry, 0, len(keys)/2)
+	for i := 0; i < len(keys); i += 2 {
+		key := keys[i]
+		id, err := strconv.ParseUint(key, 10, 64)
+		if err != nil {
+			logger.Errorf("invalid key in %s: %s", name, key)
+			continue
+		}
+		usedInodes, err := strconv.ParseInt(keys[i+1], 10, 64)
+		if err != nil {
+			logger.Errorf("invalid usedInodes for %s %s: %s", name, key, keys[i+1])
+			continue
+		}
+		entries = append(entries, quotaLoadEntry{
+			key:        key,
+			id:         id,
+			usedInodes: usedInodes,
+		})
+	}
+
+	for start := 0; start < len(entries); start += quotaLoadBatchSize {
+		end := start + quotaLoadBatchSize
+		if end > len(entries) {
+			end = len(entries)
+		}
+		if err := m.loadQuotaEntries(ctx, config, name, entries[start:end], quotas); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// loadQuotaEntries fetches used space and limits for a batch of entries in one
+// pipeline round trip, keeping the per-entry semantics of doLoadQuotas.
+func (m *redisMeta) loadQuotaEntries(ctx Context, config *quotaKeys, name string, batch []quotaLoadEntry, quotas map[uint64]*Quota) error {
+	_, err := m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		for i := range batch {
+			batch[i].usedSpace = pipe.HGet(ctx, config.usedSpaceKey, batch[i].key)
+			batch[i].quota = pipe.HGet(ctx, config.quotaKey, batch[i].key)
+		}
+		return nil
+	})
+	if err != nil && err != redis.Nil {
+		return err
+	}
+
+	for i := range batch {
+		entry := &batch[i]
+		usedSpace, err := entry.usedSpace.Int64()
+		if err != nil && err != redis.Nil {
+			return err
+		}
+
+		var maxSpace, maxInodes int64 = -1, -1
+		if buf, err := entry.quota.Bytes(); err == nil {
+			if len(buf) != 16 {
+				logger.Errorf("invalid quota value for %s %s: len=%d", name, entry.key, len(buf))
+				continue
+			}
+			maxSpace, maxInodes = m.parseQuota(buf)
+		} else if err != redis.Nil {
+			return err
+		}
+
+		quotas[entry.id] = &Quota{
+			MaxSpace:   maxSpace,
+			MaxInodes:  maxInodes,
+			UsedSpace:  usedSpace,
+			UsedInodes: entry.usedInodes,
+		}
+	}
+	return nil
+}
+
 func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
 	format := m.getFormat()
 	dirQuotas := make(map[uint64]*Quota)
@@ -4505,43 +4594,7 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 			return nil, nil, nil, fmt.Errorf("failed to load %s quotas: %w", qt.name, err)
 		}
 		if err := m.hscan(ctx, config.usedInodesKey, func(keys []string) error {
-			for i := 0; i < len(keys); i += 2 {
-				key := keys[i]
-				id, err := strconv.ParseUint(key, 10, 64)
-				if err != nil {
-					logger.Errorf("invalid key in %s: %s", qt.name, key)
-					continue
-				}
-				usedInodes, err := strconv.ParseInt(keys[i+1], 10, 64)
-				if err != nil {
-					logger.Errorf("invalid usedInodes for %s %s: %s", qt.name, key, keys[i+1])
-					continue
-				}
-
-				usedSpace, err := m.rdb.HGet(ctx, config.usedSpaceKey, key).Int64()
-				if err != nil && err != redis.Nil {
-					return err
-				}
-
-				var maxSpace, maxInodes int64 = -1, -1
-				if buf, err := m.rdb.HGet(ctx, config.quotaKey, key).Bytes(); err == nil {
-					if len(buf) != 16 {
-						logger.Errorf("invalid quota value for %s %s: len=%d", qt.name, key, len(buf))
-						continue
-					}
-					maxSpace, maxInodes = m.parseQuota(buf)
-				} else if err != redis.Nil {
-					return err
-				}
-
-				qt.quotas[id] = &Quota{
-					MaxSpace:   maxSpace,
-					MaxInodes:  maxInodes,
-					UsedSpace:  usedSpace,
-					UsedInodes: usedInodes,
-				}
-			}
-			return nil
+			return m.loadQuotaBatch(ctx, config, qt.name, keys, qt.quotas)
 		}); err != nil {
 			return nil, nil, nil, err
 		}
