@@ -5003,6 +5003,8 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 				e.Entries[name] = ce
 			}
 		}
+	} else if attr.Typ == TypeLink {
+		m.newMsg(ExternalLink, inode, attr.Length)
 	}
 	return nil
 }
