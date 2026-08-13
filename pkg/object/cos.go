@@ -302,6 +302,7 @@ func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, er
 			SessionToken: token,
 		},
 	})
+	client.UserAgent = UserAgent
 	s, _, err := client.Service.Get(ctx)
 	if err != nil {
 		return "", err
