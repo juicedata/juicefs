@@ -125,12 +125,12 @@ func TestGc(t *testing.T) {
 	require.NoError(t, os.WriteFile(leaked, leakedData, 0644))
 	beforeExternalGc := getFileCount(dataDir)
 	workDir := t.TempDir()
-	if err := Main([]string{"", "gc", "--work-dir", workDir, testMeta}); err != nil {
+	if err := Main([]string{"", "gc", "--external-sort-dir", workDir, testMeta}); err != nil {
 		t.Fatalf("gc external sort failed: %s", err)
 	}
 	require.True(t, utils.Exists(leaked))
 
-	if err := Main([]string{"", "gc", "--work-dir", workDir, "--delete", testMeta}); err != nil {
+	if err := Main([]string{"", "gc", "--external-sort-dir", workDir, "--delete", testMeta}); err != nil {
 		t.Fatalf("gc external sort delete failed: %s", err)
 	}
 	require.False(t, utils.Exists(leaked))
@@ -182,15 +182,16 @@ func TestMergeGcSortedRecords(t *testing.T) {
 	compacted := progress.AddDoubleSpinner("compacted")
 	leaked := progress.AddDoubleSpinner("leaked")
 	leakedKeys := make(chan string, 6)
+	gcStats := &gcStats{valid: valid, pending: pending, compacted: compacted, leaked: leaked}
 
-	stats, err := mergeGcSortedRecords(ctx, metaSorter, objSorter, 4, valid, pending, compacted, leaked, leakedKeys)
+	err = mergeGcSortedRecords(ctx, metaSorter, objSorter, 4, gcStats, leakedKeys)
 	require.NoError(t, err)
 	require.Equal(t, gcMergeStats{
 		valid:     gcObjectCounter{count: externalSortChunkSize + 2, bytes: externalSortChunkSize*4 + 5},
 		pending:   gcObjectCounter{count: 1, bytes: 4},
 		compacted: gcObjectCounter{count: 1, bytes: 3},
 		leaked:    gcObjectCounter{count: 2, bytes: 13},
-	}, stats)
+	}, gcStats.objects)
 
 	close(leakedKeys)
 	var keys []string
