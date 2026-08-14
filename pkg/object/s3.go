@@ -47,6 +47,10 @@ import (
 const awsDefaultRegion = "us-east-1"
 const s3RequestIDKey = "X-Amz-Request-Id"
 
+func addS3UserAgent(stack *smithymiddleware.Stack) error {
+	return middleware.AddUserAgentKey(UserAgent)(stack)
+}
+
 type s3client struct {
 	tierStorage
 	s3              *s3.Client
@@ -596,7 +600,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		options.Region = region
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
-		})
+		}, addS3UserAgent)
 		options.RetryMaxAttempts = 1
 	})
 

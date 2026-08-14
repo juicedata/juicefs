@@ -74,7 +74,7 @@ func newWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, err
 		options.HTTPClient = httpClient
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
-		})
+		}, addS3UserAgent)
 		options.RetryMaxAttempts = 1
 	})
 	return &wasabi{s3client{bucket: bucket, s3: client, region: region}}, nil

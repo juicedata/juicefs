@@ -194,6 +194,7 @@ func (d *dragonfly) Create(ctx context.Context) error {
 	if err != nil && !isExists(err) {
 		return err
 	}
+	setUserAgent(req)
 
 	resp, err := d.client.Do(req)
 	if err != nil {
@@ -225,6 +226,7 @@ func (d *dragonfly) Head(ctx context.Context, key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
+	setUserAgent(req)
 
 	// Head object.
 	resp, err := d.client.Do(req)
@@ -283,6 +285,7 @@ func (d *dragonfly) Get(ctx context.Context, key string, off, limit int64, gette
 	if err != nil {
 		return nil, err
 	}
+	setUserAgent(req)
 
 	req.Header.Set(headers.Range, getRange(off, limit))
 	resp, err := d.client.Do(req)
@@ -348,6 +351,7 @@ func (d *dragonfly) Put(ctx context.Context, key string, data io.Reader, getters
 	if err != nil {
 		return err
 	}
+	setUserAgent(req)
 	req.Header.Add(headers.ContentType, writer.FormDataContentType())
 
 	// Put object.
@@ -389,6 +393,7 @@ func (d *dragonfly) Copy(ctx context.Context, dst, src string) error {
 	if err != nil {
 		return err
 	}
+	setUserAgent(req)
 
 	req.Header.Add(headers.ContentType, writer.FormDataContentType())
 	req.Header.Add(HeaderDragonflyObjectOperation, fmt.Sprint(CopyOperation))
@@ -424,6 +429,7 @@ func (d *dragonfly) Delete(ctx context.Context, key string, getters ...AttrGette
 	if err != nil {
 		return err
 	}
+	setUserAgent(req)
 
 	// Delete object.
 	resp, err := http.DefaultClient.Do(req)
@@ -473,6 +479,7 @@ func (d *dragonfly) List(ctx context.Context, prefix, marker, token, delimiter s
 	if err != nil {
 		return nil, false, "", err
 	}
+	setUserAgent(req)
 
 	// List object.
 	resp, err := d.client.Do(req)
@@ -588,7 +595,6 @@ func getObjectStorageMetadata(endpoint string) (*ObjectStorageMetadata, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	// Get object storage Metadata.
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
