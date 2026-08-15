@@ -4439,6 +4439,56 @@ func testAtime(t *testing.T, m Meta) {
 	}
 }
 
+// memkv seeds every client from settingPath and writes the setting back to it,
+// so a test must neither inherit one nor leave one behind.
+func newTestMemKV(t *testing.T, name string, format *Format) Meta {
+	t.Helper()
+	_ = os.Remove(settingPath)
+	t.Cleanup(func() { _ = os.Remove(settingPath) })
+	m, err := newKVMeta("memkv", name, testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init: %s", err)
+	}
+	return m
+}
+
+// The Format published by setFormat is shared with every reader that calls
+// getFormat, so a change has to be published as a new value: mutating the live
+// one races with those readers. The atomic pointer guards the pointer, not the
+// struct it points at.
+func TestPublishedFormatIsNotMutated(t *testing.T) {
+	t.Run("reload callbacks", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-reload", testFormat())
+		base := m.getBase()
+		// leave the published format differing from the stored one, so the
+		// reload counts as a change and runs the callbacks
+		stale := *base.getFormat()
+		stale.Bucket = "stale"
+		base.setFormat(&stale)
+
+		var called, live bool
+		base.OnReload(func(f *Format) {
+			called = true
+			live = base.getFormat() == f
+			f.Bucket = "patched"
+		})
+		base.reloadFormat()
+
+		if !called {
+			t.Fatalf("reload callback was not called")
+		}
+		if live {
+			t.Fatalf("reload published the format before the callbacks patched it")
+		}
+		if got := base.getFormat().Bucket; got != "patched" {
+			t.Fatalf("the callback's patch was not published: Bucket=%q", got)
+		}
+	})
+}
+
 // TestQuotaEdgeCases
 func TestQuotaEdgeCases(t *testing.T) {
 	m := &baseMeta{}
