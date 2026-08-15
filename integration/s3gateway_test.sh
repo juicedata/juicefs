@@ -510,8 +510,8 @@ function test_list_objects() {
           test_function=${function}
           out=$($function)
           rv=$?
-          output=$(echo "$out")
-          if [ $rv -eq 0 ] && [ "$output" != "" ]; then
+          entry_count=$(echo "$out" | jq '((.Contents // []) | length) + ((.CommonPrefixes // []) | length)')
+          if [ $rv -eq 0 ] && [ "$entry_count" != "0" ]; then
               rv=1
               # since rv is 0, command passed, but didn't return expected value. In this case set the output
               out="list-objects with prefix is dir failed"
