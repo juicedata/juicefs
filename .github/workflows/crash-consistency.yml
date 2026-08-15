@@ -1,0 +1,106 @@
+name: "crash-consistency"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '**.java'
+      - '**/pom.xml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '**.java'
+      - '**/pom.xml'
+  schedule:
+    - cron:  '30 20 * * *'
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  build-matrix:
+    runs-on: ubuntu-24.04
+    steps:
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch" ]]; then
+            echo 'meta_matrix=["sqlite3", "redis", "badger", "mysql", "tikv", "postgres"]' >> $GITHUB_OUTPUT
+          elif [[ "${{github.event_name}}" == "pull_request" || "${{github.event_name}}" == "push" ]]; then
+            echo 'meta_matrix=["redis", "sqlite3"]' >> $GITHUB_OUTPUT
+          else
+            echo 'event name is not supported' && exit 1
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
+  crash-consistency:
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: Build
+        uses: ./.github/actions/build
+
+      - name: Prepare meta db
+        run: |
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+
+      - name: Test crash consistency
+        timeout-minutes: 30
+        run: |
+          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/crash_consistency.sh
+
+      - name: log
+        if: always()
+        run: |
+          if [ -f /var/log/juicefs.log ]; then
+            tail -300 /var/log/juicefs.log
+            grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          fi
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
+
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
