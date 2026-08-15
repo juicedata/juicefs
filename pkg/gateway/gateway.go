@@ -868,7 +868,11 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 
 	applyObjTaggingFunc(tmpname)
 
-	eno = n.fs.Rename(mctx, tmpname, object, 0)
+	renameFlags := uint32(0)
+	if opts.IfNoneMatch {
+		renameFlags = meta.RenameNoReplace
+	}
+	eno = n.fs.Rename(mctx, tmpname, object, renameFlags)
 	if eno == syscall.ENOENT {
 		if strings.HasPrefix(object, sep+metaBucket+sep) {
 			err = jfsToObjectErr(ctx, eno, bucket, object, path.Base(path.Dir(object)))
@@ -879,7 +883,10 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 			err = jfsToObjectErr(ctx, err, bucket, object)
 			return
 		}
-		eno = n.fs.Rename(mctx, tmpname, object, 0)
+		eno = n.fs.Rename(mctx, tmpname, object, renameFlags)
+	}
+	if opts.IfNoneMatch && eno == syscall.EEXIST {
+		return minio.PreConditionFailed{}
 	}
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket, object)
@@ -895,7 +902,19 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	var etag string
 	p := n.path(bucket, object)
 	if strings.HasSuffix(object, sep) {
-		if err = n.mkdirAllInBucket(ctx, bucket, p); err != nil {
+		if opts.IfNoneMatch {
+			directoryPath := strings.TrimSuffix(p, sep)
+			if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(directoryPath)); err == nil {
+				err = n.fs.Mkdir(mctx, directoryPath, 0777, n.gConf.Umask)
+			}
+			if errors.Is(err, syscall.EEXIST) {
+				err = minio.PreConditionFailed{}
+				return
+			}
+		} else {
+			err = n.mkdirAllInBucket(ctx, bucket, p)
+		}
+		if err != nil {
 			err = jfsToObjectErr(ctx, err, bucket, object)
 			return
 		}
@@ -1326,7 +1345,11 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	}
 
 	name := n.path(bucket, object)
-	eno = n.fs.Rename(mctx, tmp, name, 0)
+	renameFlags := uint32(0)
+	if opts.IfNoneMatch {
+		renameFlags = meta.RenameNoReplace
+	}
+	eno = n.fs.Rename(mctx, tmp, name, renameFlags)
 	if eno == syscall.ENOENT {
 		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(name)); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(name), err)
@@ -1334,7 +1357,11 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 			err = jfsToObjectErr(ctx, err, bucket, object, uploadID)
 			return
 		}
-		eno = n.fs.Rename(mctx, tmp, name, 0)
+		eno = n.fs.Rename(mctx, tmp, name, renameFlags)
+	}
+	if opts.IfNoneMatch && eno == syscall.EEXIST {
+		_ = n.fs.Delete(mctx, tmp)
+		return objInfo, minio.PreConditionFailed{}
 	}
 	if eno != 0 {
 		_ = n.fs.Delete(mctx, tmp)

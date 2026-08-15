@@ -17,9 +17,13 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,6 +33,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	minio "github.com/minio/minio/cmd"
+	miniohash "github.com/minio/minio/pkg/hash"
 )
 
 func TestGatewayLock(t *testing.T) {
@@ -180,6 +185,156 @@ func createTestFile(t *testing.T, jfs *fs.FileSystem, name string) {
 	}
 	if eno = f.Close(mctx); eno != 0 {
 		t.Fatalf("close %s: %s", name, eno)
+	}
+}
+
+func newPutObjectReader(t *testing.T, data []byte) *minio.PutObjReader {
+	t.Helper()
+	reader, err := miniohash.NewReader(bytes.NewReader(data), int64(len(data)), "", "", int64(len(data)))
+	if err != nil {
+		t.Fatalf("create put object reader: %s", err)
+	}
+	return minio.NewPutObjReader(reader)
+}
+
+func readGatewayObject(t *testing.T, gateway *jfsObjects, bucket, object string) []byte {
+	t.Helper()
+	reader, err := gateway.GetObjectNInfo(context.Background(), bucket, object, nil, nil, minio.LockType(0), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("get %s: %s", object, err)
+	}
+	defer reader.Close()
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read %s: %s", object, err)
+	}
+	return data
+}
+
+func assertPreconditionFailed(t *testing.T, err error) {
+	t.Helper()
+	var preconditionFailed minio.PreConditionFailed
+	if !errors.As(err, &preconditionFailed) {
+		t.Fatalf("expected PreConditionFailed, got %T: %v", err, err)
+	}
+}
+
+func TestPutObjectIfNoneMatch(t *testing.T) {
+	t.Run("existing object remains unchanged", func(t *testing.T) {
+		gateway, _, bucket := newTestGateway(t, Config{})
+		ctx := context.Background()
+		original := []byte("original")
+		if _, err := gateway.PutObject(ctx, bucket, "object", newPutObjectReader(t, original), minio.ObjectOptions{}); err != nil {
+			t.Fatalf("create original object: %s", err)
+		}
+
+		_, err := gateway.PutObject(ctx, bucket, "object", newPutObjectReader(t, []byte("replacement")), minio.ObjectOptions{IfNoneMatch: true})
+		assertPreconditionFailed(t, err)
+		if got := readGatewayObject(t, gateway, bucket, "object"); !bytes.Equal(got, original) {
+			t.Fatalf("existing object changed: got %q, want %q", got, original)
+		}
+	})
+
+	t.Run("concurrent creates have one winner", func(t *testing.T) {
+		gateway, _, bucket := newTestGateway(t, Config{})
+		ctx := context.Background()
+		const writers = 16
+		start := make(chan struct{})
+		results := make(chan error, writers)
+		payloads := make(map[string]struct{}, writers)
+		readers := make([]*minio.PutObjReader, writers)
+		var waitGroup sync.WaitGroup
+		for i := 0; i < writers; i++ {
+			payload := []byte(fmt.Sprintf("writer-%02d", i))
+			payloads[string(payload)] = struct{}{}
+			readers[i] = newPutObjectReader(t, payload)
+			waitGroup.Add(1)
+			go func(reader *minio.PutObjReader) {
+				defer waitGroup.Done()
+				<-start
+				_, err := gateway.PutObject(ctx, bucket, "race", reader, minio.ObjectOptions{IfNoneMatch: true})
+				results <- err
+			}(readers[i])
+		}
+		close(start)
+		waitGroup.Wait()
+		close(results)
+
+		succeeded := 0
+		failed := 0
+		for err := range results {
+			if err == nil {
+				succeeded++
+				continue
+			}
+			var preconditionFailed minio.PreConditionFailed
+			if errors.As(err, &preconditionFailed) {
+				failed++
+				continue
+			}
+			t.Fatalf("unexpected concurrent PUT error: %T: %v", err, err)
+		}
+		if succeeded != 1 || failed != writers-1 {
+			t.Fatalf("conditional create results: succeeded=%d failed=%d", succeeded, failed)
+		}
+		stored := string(readGatewayObject(t, gateway, bucket, "race"))
+		if _, ok := payloads[stored]; !ok {
+			t.Fatalf("stored unexpected payload %q", stored)
+		}
+	})
+
+	t.Run("directory marker can only be created once", func(t *testing.T) {
+		gateway, _, bucket := newTestGateway(t, Config{})
+		ctx := context.Background()
+		opts := minio.ObjectOptions{IfNoneMatch: true}
+		if _, err := gateway.PutObject(ctx, bucket, "prefix/", newPutObjectReader(t, nil), opts); err != nil {
+			t.Fatalf("conditionally create directory marker: %s", err)
+		}
+		_, err := gateway.PutObject(ctx, bucket, "prefix/", newPutObjectReader(t, nil), opts)
+		assertPreconditionFailed(t, err)
+	})
+}
+
+func TestCompleteMultipartUploadIfNoneMatch(t *testing.T) {
+	gateway, _, bucket := newTestGateway(t, Config{})
+	ctx := context.Background()
+	original := []byte("original")
+	if _, err := gateway.PutObject(ctx, bucket, "object", newPutObjectReader(t, original), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("create original object: %s", err)
+	}
+
+	uploadID, err := gateway.NewMultipartUpload(ctx, bucket, "object", minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("create multipart upload: %s", err)
+	}
+	part, err := gateway.PutObjectPart(ctx, bucket, "object", uploadID, 1, newPutObjectReader(t, []byte("replacement")), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("put multipart part: %s", err)
+	}
+	_, err = gateway.CompleteMultipartUpload(ctx, bucket, "object", uploadID,
+		[]minio.CompletePart{{PartNumber: 1, ETag: part.ETag}}, minio.ObjectOptions{IfNoneMatch: true})
+	assertPreconditionFailed(t, err)
+	if got := readGatewayObject(t, gateway, bucket, "object"); !bytes.Equal(got, original) {
+		t.Fatalf("existing object changed: got %q, want %q", got, original)
+	}
+
+	newObject := "new-object"
+	uploadID, err = gateway.NewMultipartUpload(ctx, bucket, newObject, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("create multipart upload for new object: %s", err)
+	}
+	part, err = gateway.PutObjectPart(ctx, bucket, newObject, uploadID, 1,
+		newPutObjectReader(t, []byte("created")), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("put multipart part for new object: %s", err)
+	}
+	_, err = gateway.CompleteMultipartUpload(ctx, bucket, newObject, uploadID,
+		[]minio.CompletePart{{PartNumber: 1, ETag: part.ETag}}, minio.ObjectOptions{IfNoneMatch: true})
+	if err != nil {
+		t.Fatalf("conditionally complete new object: %s", err)
+	}
+	if got := readGatewayObject(t, gateway, bucket, newObject); !bytes.Equal(got, []byte("created")) {
+		t.Fatalf("new multipart object: got %q, want %q", got, "created")
 	}
 }
 
