@@ -710,10 +710,13 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
+// ErrNotFormatted is returned when the volume holds no format yet.
+var ErrNotFormatted = errors.New("database is not formatted, please run `juicefs format ...` first")
+
 func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	body, err := m.en.doLoad()
 	if err == nil && len(body) == 0 {
-		err = fmt.Errorf("database is not formatted, please run `juicefs format ...` first")
+		err = ErrNotFormatted
 	}
 	if err != nil {
 		return nil, err
@@ -913,7 +916,7 @@ func (m *baseMeta) refresh(ctx Context) {
 
 		old := m.getFormat()
 		if format, err := m.Load(false); err != nil {
-			if strings.HasPrefix(err.Error(), "database is not formatted") {
+			if errors.Is(err, ErrNotFormatted) {
 				logger.Errorf("reload setting: %s", err)
 				os.Exit(UmountCode)
 			}
