@@ -4588,6 +4588,31 @@ func TestPublishedFormatIsNotMutated(t *testing.T) {
 		}
 	})
 
+	t.Run("status", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-status", &Format{Name: "test", SecretKey: "secret"})
+		base := m.getBase()
+		// the reload callbacks patch the live format; Status must not republish
+		// the stored one over their patches
+		published := base.getFormat()
+		published.Bucket = "patched"
+
+		sections := &Sections{}
+		if err := Status(context.Background(), m, false, sections); err != nil {
+			t.Fatalf("status: %s", err)
+		}
+		// only the reported copy may be scrubbed, not the format every reader
+		// shares: a later doInit would persist the scrubbed secrets
+		if got := base.getFormat().SecretKey; got != "secret" {
+			t.Fatalf("Status removed the secret from the published format: SecretKey=%q", got)
+		}
+		if sections.Setting.SecretKey != "removed" {
+			t.Fatalf("Status reported the secret: SecretKey=%q", sections.Setting.SecretKey)
+		}
+		if got := base.getFormat().Bucket; got != "patched" {
+			t.Fatalf("Status republished the stored format over the live one: Bucket=%q", got)
+		}
+	})
+
 	t.Run("reload callbacks", func(t *testing.T) {
 		m := newTestMemKV(t, "test-format-reload", testFormat())
 		base := m.getBase()
