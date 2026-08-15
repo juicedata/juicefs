@@ -4548,6 +4548,10 @@ func TestQuotaSetFailsWhenFormatUpdateFails(t *testing.T) {
 	if err == nil {
 		t.Fatalf("handleQuotaSet returned no error although DirStats could not be enabled")
 	}
+	// a failed store is not a bad request: the caller has to be able to retry
+	if !errors.Is(err, syscall.EIO) {
+		t.Fatalf("handleQuotaSet did not report the failed store as EIO: %v", err)
+	}
 }
 
 // TestQuotaEdgeCases
