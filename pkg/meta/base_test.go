@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path"
 	"reflect"
 	"runtime"
 	"sort"
@@ -4455,6 +4456,20 @@ func newTestMemKV(t *testing.T, name string, format *Format) Meta {
 	return m
 }
 
+// A client whose writes fail: doInit gets past the initial read, which goes
+// through simpleTxn, and then fails where the setting would be stored.
+type failWriteClient struct {
+	tkvClient
+	fail bool
+}
+
+func (c *failWriteClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) error {
+	if c.fail {
+		return fmt.Errorf("injected write failure")
+	}
+	return c.tkvClient.txn(ctx, f, retry)
+}
+
 // The Format published by setFormat is shared with every reader that calls
 // getFormat, so a change has to be published as a new value: mutating the live
 // one races with those readers. The atomic pointer guards the pointer, not the
@@ -4502,6 +4517,60 @@ func TestPublishedFormatIsNotMutated(t *testing.T) {
 		}
 		if !stored.DirStats {
 			t.Fatalf("handleQuotaSet did not store DirStats")
+		}
+	})
+
+	// Init publishes the format only after the engine stored it, so a failed
+	// one must not leave this client running on a format the volume never got.
+	t.Run("failed init", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-doinit", &Format{Name: "test"})
+		kv := m.(*kvMeta)
+		if kv.getFormat().Capacity != 0 {
+			t.Fatalf("Capacity has to start at 0 for this test")
+		}
+
+		client := &failWriteClient{tkvClient: kv.client}
+		kv.client = client
+		client.fail = true
+
+		// Capacity avoids the branches that clean up dir stats or quotas, so
+		// the first write doInit attempts is the setting itself
+		newFormat := *kv.getFormat()
+		newFormat.Capacity = 1 << 30
+		if err := kv.Init(&newFormat, false); err == nil {
+			t.Fatalf("Init returned no error although the setting could not be stored")
+		}
+		if got := kv.getFormat().Capacity; got != 0 {
+			t.Fatalf("Init published the format although storing it failed: Capacity=%d", got)
+		}
+	})
+
+	// the same invariant on the SQL engine: its doInit writes through txn,
+	// which refuses to run on a read-only client, while the read it does first
+	// goes through simpleTxn and still succeeds
+	t.Run("failed init (sql)", func(t *testing.T) {
+		m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-format.db"), testConfig())
+		if err != nil {
+			t.Fatalf("create meta: %s", err)
+		}
+		if err := m.Init(&Format{Name: "test"}, false); err != nil {
+			t.Fatalf("init: %s", err)
+		}
+		db := m.(*dbMeta)
+		if db.getFormat().Capacity != 0 {
+			t.Fatalf("Capacity has to start at 0 for this test")
+		}
+
+		db.conf.ReadOnly = true
+		defer func() { db.conf.ReadOnly = false }()
+
+		newFormat := *db.getFormat()
+		newFormat.Capacity = 1 << 30
+		if err := db.Init(&newFormat, false); err == nil {
+			t.Fatalf("Init returned no error although the setting could not be stored")
+		}
+		if got := db.getFormat().Capacity; got != 0 {
+			t.Fatalf("Init published the format although storing it failed: Capacity=%d", got)
 		}
 	})
 

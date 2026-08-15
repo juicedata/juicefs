@@ -1033,8 +1033,15 @@ func (m *baseMeta) FlushSession() {
 	logger.Infof("flush session %d:", m.sid)
 }
 
+// Init stores the format and publishes it once the engine has committed it, so
+// a caller that gets an error back is never left with a format the volume never
+// received, whichever engine is in use.
 func (m *baseMeta) Init(format *Format, force bool) error {
-	return m.en.doInit(format, force)
+	if err := m.en.doInit(format, force); err != nil {
+		return err
+	}
+	m.setFormat(format)
+	return nil
 }
 
 // enableFormatFlag turns a feature flag on in the stored format. It starts from
