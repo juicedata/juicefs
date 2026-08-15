@@ -39,6 +39,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -4517,6 +4518,19 @@ func TestPublishedFormatIsNotMutated(t *testing.T) {
 		}
 		if !stored.DirStats {
 			t.Fatalf("handleQuotaSet did not store DirStats")
+		}
+	})
+
+	// Tiers is a map, so a copy sharing it would let a caller patching its own
+	// copy (the .config handler does) write into the format every reader shares
+	t.Run("tiers are copied", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-tiers", &Format{Name: "test", Tiers: object.NewTiers("standard")})
+		base := m.getBase()
+
+		f := m.GetFormat()
+		f.Tiers[0] = object.Tier{ID: 0, Sc: "patched"}
+		if got := base.getFormat().Tiers[0].Sc; got == "patched" {
+			t.Fatalf("GetFormat shares Tiers with the published format: Sc=%q", got)
 		}
 	})
 

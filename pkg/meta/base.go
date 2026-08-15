@@ -2835,7 +2835,7 @@ func (m *baseMeta) setFormat(format *Format) {
 }
 
 func (m *baseMeta) GetFormat() Format {
-	return *m.getFormat()
+	return *m.getFormat().Clone()
 }
 
 func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
