@@ -4460,6 +4460,51 @@ func newTestMemKV(t *testing.T, name string, format *Format) Meta {
 // one races with those readers. The atomic pointer guards the pointer, not the
 // struct it points at.
 func TestPublishedFormatIsNotMutated(t *testing.T) {
+	t.Run("quota set", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-quota", &Format{Name: "test"})
+		base := m.getBase()
+		published := base.getFormat()
+		if published.DirStats {
+			t.Fatalf("DirStats has to start disabled for this test")
+		}
+
+		// quotas holds no entry for dpath, so handleQuotaSet returns right
+		// after turning DirStats on, which is the part under test
+		if err := base.handleQuotaSet(Background(), DirQuotaType, 0, "/d", map[string]*Quota{}, false); err != nil {
+			t.Fatalf("handleQuotaSet: %s", err)
+		}
+		if published.DirStats {
+			t.Fatalf("handleQuotaSet turned DirStats on in the published format")
+		}
+		if !base.getFormat().DirStats {
+			t.Fatalf("handleQuotaSet did not publish the updated format")
+		}
+	})
+
+	// the flag has to be stored on top of what the volume holds: the published
+	// format may carry the overrides this client was started with
+	t.Run("quota set keeps the local overrides local", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-override", &Format{Name: "test"})
+		base := m.getBase()
+		patched := *base.getFormat()
+		patched.Bucket = "local-override"
+		base.setFormat(&patched)
+
+		if err := base.handleQuotaSet(Background(), DirQuotaType, 0, "/d", map[string]*Quota{}, false); err != nil {
+			t.Fatalf("handleQuotaSet: %s", err)
+		}
+		stored, err := base.loadFormat(false)
+		if err != nil {
+			t.Fatalf("load format: %s", err)
+		}
+		if stored.Bucket == "local-override" {
+			t.Fatalf("handleQuotaSet stored this client's override in the volume")
+		}
+		if !stored.DirStats {
+			t.Fatalf("handleQuotaSet did not store DirStats")
+		}
+	})
+
 	t.Run("reload callbacks", func(t *testing.T) {
 		m := newTestMemKV(t, "test-format-reload", testFormat())
 		base := m.getBase()
@@ -4487,6 +4532,22 @@ func TestPublishedFormatIsNotMutated(t *testing.T) {
 			t.Fatalf("the callback's patch was not published: Bucket=%q", got)
 		}
 	})
+}
+
+// A quota whose format update failed would be created but never accounted:
+// updateDirQuota gives up as soon as it sees DirStats disabled.
+func TestQuotaSetFailsWhenFormatUpdateFails(t *testing.T) {
+	m := newTestMemKV(t, "test-quota-init-error", &Format{Name: "test"})
+	kv := m.(*kvMeta)
+	// corrupt the stored setting, so the doInit that turns DirStats on fails
+	if err := kv.setValue(kv.fmtKey("setting"), []byte("not json")); err != nil {
+		t.Fatalf("corrupt setting: %s", err)
+	}
+
+	err := m.getBase().handleQuotaSet(Background(), DirQuotaType, 0, "/d", map[string]*Quota{}, false)
+	if err == nil {
+		t.Fatalf("handleQuotaSet returned no error although DirStats could not be enabled")
+	}
 }
 
 // TestQuotaEdgeCases

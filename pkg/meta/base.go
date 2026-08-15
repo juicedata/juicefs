@@ -276,6 +276,9 @@ type baseMeta struct {
 	// fmt is reloaded in the background while other goroutines read it, so it is
 	// only ever accessed through getFormat/setFormat
 	fmt atomic.Pointer[Format]
+	// serializes the load-modify-store sequences that update the stored format,
+	// so two of them cannot drop each other's change
+	fmtMu sync.Mutex
 
 	root         Ino
 	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict
@@ -1032,6 +1035,21 @@ func (m *baseMeta) FlushSession() {
 
 func (m *baseMeta) Init(format *Format, force bool) error {
 	return m.en.doInit(format, force)
+}
+
+// enableFormatFlag turns a feature flag on in the stored format. It starts from
+// a fresh copy of what the volume holds rather than the published one, which
+// may carry the overrides this client was started with, and the lock keeps a
+// concurrent call from storing a format without the flag the other just set.
+func (m *baseMeta) enableFormatFlag(set func(*Format)) error {
+	m.fmtMu.Lock()
+	defer m.fmtMu.Unlock()
+	format, err := m.loadFormat(false)
+	if err != nil {
+		return err
+	}
+	set(format)
+	return m.Init(format, false)
 }
 
 func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
