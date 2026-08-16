@@ -4718,29 +4718,113 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 	return nil
 }
 
+func (m *dbMeta) makeSnap0(ses *xorm.Session, inode Ino) (*dbSnap, error) {
+	start := time.Now()
+	snap := &dbSnap{
+		node:    make(map[Ino]*node),
+		symlink: make(map[Ino]*symlink),
+		xattr:   make(map[Ino][]*xattr),
+		edges:   make(map[Ino][]*edge),
+		chunk:   make(map[string]*chunk),
+	}
+	const paramLimit = 900
+
+	var edges []*edge
+	if err := ses.Table(&edge{}).Find(&edges, &edge{Parent: inode}); err != nil {
+		return nil, err
+	}
+	for _, e := range edges {
+		snap.edges[e.Parent] = append(snap.edges[e.Parent], e)
+	}
+
+	var inodes []Ino = make([]Ino, len(edges))
+	for i, e := range edges {
+		inodes[i] = e.Inode
+	}
+	for len(inodes) > 0 {
+		var nodes []*node
+		batch := inodes[:min(len(inodes), paramLimit)]
+		if err := ses.In("inode", batch).Find(&nodes); err != nil {
+			return nil, err
+		}
+		for _, n := range nodes {
+			snap.node[n.Inode] = n
+		}
+		var xattrs []*xattr
+		if err := ses.In("inode", batch).Find(&xattrs); err != nil {
+			return nil, err
+		}
+		for _, x := range xattrs {
+			snap.xattr[x.Inode] = append(snap.xattr[x.Inode], x)
+		}
+		var chunks []*chunk
+		if err := ses.In("inode", batch).Find(&chunks); err != nil {
+			return nil, err
+		}
+		for _, c := range chunks {
+			snap.chunk[fmt.Sprintf("%d-%d", c.Inode, c.Indx)] = c
+		}
+		inodes = inodes[len(batch):]
+	}
+
+	inodes = inodes[:0]
+	for _, e := range edges {
+		if e.Type == TypeSymlink {
+			inodes = append(inodes, e.Inode)
+		}
+	}
+	for len(inodes) > 0 {
+		var symlinks []*symlink
+		batch := inodes[:min(len(inodes), paramLimit)]
+		if err := ses.In("inode", batch).Find(&symlinks); err != nil {
+			return nil, err
+		}
+		for _, l := range symlinks {
+			snap.symlink[l.Inode] = l
+		}
+		inodes = inodes[len(batch):]
+	}
+
+	logger.Debugf("makeSnap0: inode=%d, nodes=%d, xattrs=%d, chunks=%d, symlinks=%d, took= %s", inode, len(snap.node), len(snap.xattr), len(snap.chunk), len(snap.symlink), time.Since(start))
+	return snap, nil
+}
+
 func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error {
 	err := m.dumpEntry(s, inode, 0, entry, nil)
 	if err != nil {
 		return err
 	}
-	if len(entry.Parents) > 1 {
-		return syscall.ENOTSUP
-	}
-	if entry.Chunks != nil {
-		if len(entry.Chunks) > 12000 {
-			return syscall.EPERM
+
+	// TODO: check lock
+	if entry.Attr.Type == "directory" {
+		snap, err := m.makeSnap0(s, inode)
+		if err != nil {
+			return err
 		}
-		var ids []uint64
-		for _, c := range entry.Chunks {
+		edges := snap.edges[inode]
+		entry.Entries = make(map[string]*DumpedEntry, len(edges))
+		for _, edge := range edges {
+			entry.Entries[string(edge.Name)] = m.dumpEntryFast(snap, edge.Inode, 0)
+		}
+	}
+
+	var allSlices []uint64
+	for _, c := range entry.Chunks {
+		for _, s := range c.Slices {
+			allSlices = append(allSlices, s.Id)
+		}
+	}
+	for _, e := range entry.Entries {
+		for _, c := range e.Chunks {
 			for _, s := range c.Slices {
-				ids = append(ids, s.Id)
+				allSlices = append(allSlices, s.Id)
 			}
 		}
-		if len(ids) > 12000 {
-			return syscall.EPERM
-		}
+	}
+	for len(allSlices) > 0 {
 		var sliceRefs []sliceRef
-		err = s.In("chunkid", ids).Find(&sliceRefs)
+		batch := allSlices[:min(len(allSlices), 900)]
+		err = s.In("chunkid", batch).Where("refs > ?", 1).Find(&sliceRefs)
 		if err != nil {
 			return err
 		}
@@ -4750,27 +4834,7 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error 
 				return syscall.EPERM
 			}
 		}
-	}
-
-	// TODO: check lock
-	if entry.Attr.Type == "directory" {
-		var edges []*edge
-		err := s.Find(&edges, &edge{Parent: inode})
-		if err != nil {
-			return err
-		}
-		entry.Entries = make(map[string]*DumpedEntry, len(edges))
-		for _, edge := range edges {
-			name := string(edge.Name)
-			ce := &DumpedEntry{Attr: &DumpedAttr{}}
-			ce.Name = name
-			ce.Attr.Inode = edge.Inode
-			ce.Attr.Type = typeToString(edge.Type)
-			entry.Entries[name] = ce
-			if err := m.dumpTree(s, edge.Inode, ce); err != nil {
-				return err
-			}
-		}
+		allSlices = allSlices[len(batch):]
 	}
 	return nil
 }
@@ -4787,7 +4851,6 @@ func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) erro
 	if err != nil {
 		return err
 	}
-	// TODO: faster compare
 	d1, err := json.MarshalIndent(&entry, "", "  ")
 	if err != nil {
 		return err
@@ -4797,10 +4860,9 @@ func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) erro
 		return err
 	}
 	if !bytes.Equal(d1, d2) {
-		logger.Infof("checkEntry: inode=%d, entry=%s, entry2=%s", inode, string(d1), string(d2))
+		logger.Debugf("checkEntry: inode=%d, entry=%s, entry2=%s", inode, string(d1), string(d2))
 		return syscall.EAGAIN
 	}
-	// TODO: check chunks and slices
 	return nil
 }
 
@@ -4813,26 +4875,6 @@ func (m *dbMeta) replaceEntry(s *xorm.Session, inode Ino, target uint64) error {
 	if !ok {
 		return syscall.ENOENT
 	}
-	if _, err := s.Delete(&xattr{Inode: inode}); err != nil {
-		return err
-	}
-	switch cur.Type {
-	case TypeFile:
-		if _, err := s.Delete(&chunk{Inode: inode}); err != nil {
-			return err
-		}
-	case TypeSymlink:
-		if _, err := s.Delete(&symlink{Inode: inode}); err != nil {
-			return err
-		}
-	case TypeDirectory:
-		if _, err := s.Delete(&edge{Parent: inode}); err != nil {
-			return err
-		}
-		if _, err := s.Delete(&dirStats{Inode: inode}); err != nil {
-			return err
-		}
-	}
 	if cur.Type != TypeLink {
 		cur.Rdev = uint32(cur.Type)
 		cur.Type = TypeLink
@@ -4842,15 +4884,65 @@ func (m *dbMeta) replaceEntry(s *xorm.Session, inode Ino, target uint64) error {
 	cur.AccessACLId = aclAPI.None
 	cur.DefaultACLId = aclAPI.None
 	_, err = s.Cols("type", "ctime", "ctimensec", "access_acl_id", "default_acl_id", "length", "rdev").Update(&cur, &node{Inode: inode})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) error {
+	var inodes, symlinks []Ino
+	var slices []uint64
+	collect := func(e *DumpedEntry) {
+		inodes = append(inodes, inode)
+		switch e.Attr.Type {
+		case "symlink":
+			symlinks = append(symlinks, e.Attr.Inode)
+		}
+		for _, c := range e.Chunks {
+			for _, s := range c.Slices {
+				if s.Chunkid > 0 {
+					slices = append(slices, s.Chunkid)
+				}
+			}
+		}
+	}
+
+	collect(entry)
 	for _, e := range entry.Entries {
 		if err := m.replaceTree(s, e.Attr.Inode, e, mapping); err != nil {
+			return err
+		}
+		collect(e)
+	}
+
+	for len(inodes) > 0 {
+		batch := inodes[:min(len(inodes), 900)]
+		if _, err := s.In("inode", batch).Delete(&xattr{}); err != nil {
+			return err
+		}
+		if _, err := s.In("inode", batch).Delete(&chunk{}); err != nil {
+			return err
+		}
+		inodes = inodes[len(batch):]
+	}
+	for len(symlinks) > 0 {
+		batch := symlinks[:min(len(symlinks), 900)]
+		if _, err := s.In("inode", batch).Delete(&symlink{}); err != nil {
+			return err
+		}
+		symlinks = symlinks[len(batch):]
+	}
+	for len(slices) > 0 {
+		batch := slices[:min(len(slices), 900)]
+		if _, err := s.In("chunkid", batch).Delete(&sliceRef{}); err != nil {
+			return err
+		}
+		slices = slices[len(batch):]
+	}
+	switch entry.Attr.Type {
+	case "directory":
+		if _, err := s.Delete(&edge{Parent: inode}); err != nil {
+			return err
+		}
+		if _, err := s.Delete(&dirStats{Inode: inode}); err != nil {
 			return err
 		}
 	}
@@ -4883,9 +4975,9 @@ func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map
 	return r
 }
 
-func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
+func (m *dbMeta) dumpEntryFast(snap *dbSnap, inode Ino, typ uint8) *DumpedEntry {
 	e := &DumpedEntry{}
-	n, ok := m.snap.node[inode]
+	n, ok := snap.node[inode]
 	if !ok && inode != TrashInode {
 		logger.Warnf("Corrupt inode: %d, missing attribute", inode)
 	}
@@ -4903,7 +4995,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 	dumpAttr(attr, e.Attr)
 	e.Attr.Inode = inode
 
-	rows, ok := m.snap.xattr[inode]
+	rows, ok := snap.xattr[inode]
 	if ok && len(rows) > 0 {
 		xattrs := make([]*DumpedXattr, 0, len(rows))
 		for _, x := range rows {
@@ -4922,7 +5014,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 
 	if attr.Typ == TypeFile {
 		for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
-			c, ok := m.snap.chunk[fmt.Sprintf("%d-%d", inode, indx)]
+			c, ok := snap.chunk[fmt.Sprintf("%d-%d", inode, indx)]
 			if !ok {
 				continue
 			}
@@ -4937,7 +5029,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 			e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 		}
 	} else if attr.Typ == TypeSymlink {
-		l, ok := m.snap.symlink[inode]
+		l, ok := snap.symlink[inode]
 		if !ok {
 			logger.Warnf("no link target for inode %d", inode)
 			l = &symlink{}
@@ -5052,7 +5144,7 @@ func (m *dbMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dep
 	sort.Slice(edges, func(i, j int) bool { return bytes.Compare(edges[i].Name, edges[j].Name) == -1 })
 
 	for i, e := range edges {
-		entry := m.dumpEntryFast(e.Inode, e.Type)
+		entry := m.dumpEntryFast(m.snap, e.Inode, e.Type)
 		if entry == nil {
 			logger.Warnf("ignore broken entry %s (inode: %d) in %s", string(e.Name), e.Inode, inode)
 			continue
@@ -5178,9 +5270,9 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 				return fmt.Errorf("Fetch all metadata from DB: %s", err)
 			}
 			bar.Done()
-			tree = m.dumpEntryFast(root, TypeDirectory)
+			tree = m.dumpEntryFast(m.snap, root, TypeDirectory)
 			if !skipTrash {
-				trash = m.dumpEntryFast(TrashInode, TypeDirectory)
+				trash = m.dumpEntryFast(m.snap, TrashInode, TypeDirectory)
 			}
 		} else {
 			tree = &DumpedEntry{
