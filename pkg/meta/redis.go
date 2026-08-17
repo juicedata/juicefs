@@ -3973,7 +3973,10 @@ func (m *redisMeta) hscan(ctx context.Context, key string, f func([]string) erro
 func (m *redisMeta) hscanToMap(ctx context.Context, key string) (map[string]string, error) {
 	result := make(map[string]string)
 	err := m.hscan(ctx, key, func(keys []string) error {
-		for i := 0; i+1 < len(keys); i += 2 {
+		if len(keys)%2 != 0 {
+			return fmt.Errorf("invalid HSCAN response for %s: odd number of elements: %d", key, len(keys))
+		}
+		for i := 0; i < len(keys); i += 2 {
 			result[keys[i]] = keys[i+1]
 		}
 		return nil
