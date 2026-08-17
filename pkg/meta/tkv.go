@@ -1742,6 +1742,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		opened bool
 		length uint64
 	}
+	skipFlags := ignoreAttrFlags(ctx)
 	for len(entries) > 0 {
 		batchSize := batchNum
 		if batchSize > len(entries) {
@@ -1781,7 +1782,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 				return st
 			}
-			if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			if !skipFlags && ((pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0) {
 				return syscall.EPERM
 			}
 
@@ -1848,7 +1849,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 						return syscall.EACCES
 					}
-					if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
+					if !skipFlags && ((attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0) {
 						return syscall.EPERM
 					}
 					if (attr.Flags & FlagSkipTrash) != 0 {
@@ -2065,7 +2066,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
-		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+		if !ignoreAttrFlags(ctx) && ((pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0) {
 			return syscall.EPERM
 		}
 		if tx.exist(m.entryKey(inode, "")) {
@@ -4555,7 +4556,7 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		return errno(err)
 	}
 	rmConcurrent := make(chan int, backgroundDeleteThreads)
-	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
+	if eno := m.emptyDir(withIgnoredAttrFlags(ctx), ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}
 	m.updateStats(-align4K(0), -1)
