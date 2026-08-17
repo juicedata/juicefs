@@ -845,6 +845,79 @@ func TestSftp(t *testing.T) { //skip mutate
 	testStorage(t, b)
 }
 
+func TestParseSftpEndpoint(t *testing.T) {
+	tests := []struct {
+		name               string
+		endpoint           string
+		wantHost, wantPort string
+		wantRoot           string
+		wantErr            string
+	}{
+		{
+			name:     "default port with timestamp colons",
+			endpoint: "host:/path/T05:53:21",
+			wantHost: "host",
+			wantPort: "22",
+			wantRoot: "/path/T05:53:21",
+		},
+		{
+			name:     "explicit port with timestamp colons",
+			endpoint: "host:2022:/path/T05:53:21",
+			wantHost: "host",
+			wantPort: "2022",
+			wantRoot: "/path/T05:53:21",
+		},
+		{
+			name:     "IPv6 explicit port with timestamp colons",
+			endpoint: "[2001:db8::1]:2022:/path/T05:53:21",
+			wantHost: "2001:db8::1",
+			wantPort: "2022",
+			wantRoot: "/path/T05:53:21",
+		},
+		{
+			name:     "relative path remains supported",
+			endpoint: "host:backup/path",
+			wantHost: "host",
+			wantPort: "22",
+			wantRoot: "backup/path",
+		},
+		{
+			name:     "missing port path separator",
+			endpoint: "host:2022/path",
+			wantErr:  "missing colon between port and path",
+		},
+		{
+			name:     "IPv6 missing port path separator",
+			endpoint: "[2001:db8::1]:2022/path",
+			wantErr:  "missing colon between port and path",
+		},
+		{
+			name:     "console endpoint missing port path separator",
+			endpoint: "172.28.39.219:22/root/bak/jfs-console-dump-2026-07-23T05:53:21.json.gz.gpg",
+			wantErr:  "missing colon between port and path",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			host, port, root, err := parseSftpEndpoint(test.endpoint)
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("parseSftpEndpoint(%q) error = %v, want error containing %q", test.endpoint, err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if host != test.wantHost || port != test.wantPort || root != test.wantRoot {
+				t.Fatalf("parseSftpEndpoint(%q) = (%q, %q, %q), want (%q, %q, %q)",
+					test.endpoint, host, port, root, test.wantHost, test.wantPort, test.wantRoot)
+			}
+		})
+	}
+}
+
 func TestOBS(t *testing.T) { //skip mutate
 	if os.Getenv("HWCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()

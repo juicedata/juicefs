@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -484,22 +485,55 @@ func unescape(original string) string {
 	}
 }
 
-func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
-	idx := strings.LastIndex(endpoint, ":")
-	host, port, err := net.SplitHostPort(endpoint[:idx])
+func parseSftpEndpoint(endpoint string) (host, port, root string, err error) {
+	idx := strings.Index(endpoint, ":")
+	// IPv6 hosts contain colons, so use the colon after the closing bracket.
+	if strings.HasPrefix(endpoint, "[") {
+		if end := strings.Index(endpoint, "]"); end >= 0 && len(endpoint) > end+1 && endpoint[end+1] == ':' {
+			idx = end + 1
+		}
+	}
+	if idx < 0 {
+		return "", "", "", fmt.Errorf("unable to parse host from endpoint (%s): missing path separator", endpoint)
+	}
+
+	rest := endpoint[idx+1:]
+	separator := strings.Index(rest, ":")
+	slash := strings.Index(rest, "/")
+	if slash > 0 && (separator < 0 || slash < separator) {
+		if _, parseErr := strconv.Atoi(rest[:slash]); parseErr == nil {
+			return "", "", "", fmt.Errorf("unable to parse host from endpoint (%s): missing colon between port and path", endpoint)
+		}
+	}
+	if separator >= 0 {
+		if slash < 0 || separator < slash {
+			idx += separator + 1
+		}
+	}
+
+	host, port, err = net.SplitHostPort(endpoint[:idx])
 	if err != nil && strings.Contains(err.Error(), "missing port") {
 		host, port, err = net.SplitHostPort(endpoint[:idx] + ":22")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse host from endpoint (%s): %q", endpoint, err)
+		return "", "", "", fmt.Errorf("unable to parse host from endpoint (%s): %q", endpoint, err)
 	}
-	root := filepath.Clean(endpoint[idx+1:])
+	rawRoot := endpoint[idx+1:]
+	root = filepath.Clean(rawRoot)
 	if runtime.GOOS == "windows" {
 		root = strings.ReplaceAll(root, "\\", "/")
 	}
 	// append suffix `/` removed by filepath.Clean()
-	if strings.HasSuffix(endpoint[idx+1:], dirSuffix) {
+	if strings.HasSuffix(rawRoot, dirSuffix) {
 		root = root + dirSuffix
+	}
+	return host, port, root, nil
+}
+
+func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
+	host, port, root, err := parseSftpEndpoint(endpoint)
+	if err != nil {
+		return nil, err
 	}
 
 	if username == "" {
