@@ -105,6 +105,54 @@ func TestCheckpointManagerSaveAndLoad(t *testing.T) {
 	}
 }
 
+func TestCheckpointManagerSaveDelayDeletes(t *testing.T) {
+	srcStore, _ := object.CreateStorage("mem", "delay-delete-src", "", "", "")
+	store, _ := object.CreateStorage("mem", "delay-delete-dst", "", "", "")
+
+	srcDelayDelMu.Lock()
+	savedSrcDelayDel := srcDelayDel
+	srcDelayDel = []string{"src-dir-a"}
+	srcDelayDelMu.Unlock()
+	dstDelayDelMu.Lock()
+	savedDstDelayDel := dstDelayDel
+	dstDelayDel = []string{"dst-dir-a"}
+	dstDelayDelMu.Unlock()
+	t.Cleanup(func() {
+		srcDelayDelMu.Lock()
+		srcDelayDel = savedSrcDelayDel
+		srcDelayDelMu.Unlock()
+		dstDelayDelMu.Lock()
+		dstDelayDel = savedDstDelayDel
+		dstDelayDelMu.Unlock()
+	})
+
+	manager := NewCheckpointManager(srcStore, store, nil)
+	if err := manager.Save(manager.checkpoint); err != nil {
+		t.Fatalf("save initial checkpoint: %v", err)
+	}
+
+	srcDelayDelMu.Lock()
+	srcDelayDel = append(srcDelayDel, "src-dir-b")
+	srcDelayDelMu.Unlock()
+	dstDelayDelMu.Lock()
+	dstDelayDel = append(dstDelayDel, "dst-dir-b")
+	dstDelayDelMu.Unlock()
+	if err := manager.Save(manager.checkpoint); err != nil {
+		t.Fatalf("save final checkpoint: %v", err)
+	}
+
+	loaded, err := NewCheckpointManager(srcStore, store, nil).Load()
+	if err != nil {
+		t.Fatalf("load checkpoint: %v", err)
+	}
+	if !reflect.DeepEqual(loaded.SrcDelayDel, []string{"src-dir-a", "src-dir-b"}) {
+		t.Fatalf("unexpected source delayed deletes: %v", loaded.SrcDelayDel)
+	}
+	if !reflect.DeepEqual(loaded.DstDelayDel, []string{"dst-dir-a", "dst-dir-b"}) {
+		t.Fatalf("unexpected destination delayed deletes: %v", loaded.DstDelayDel)
+	}
+}
+
 func TestCheckpointManagerPrefixStateLifecycle(t *testing.T) {
 	srcStore, _ := object.CreateStorage("mem", "src", "", "", "")
 	store, _ := object.CreateStorage("mem", "", "", "", "")

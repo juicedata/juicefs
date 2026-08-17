@@ -1536,12 +1536,12 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				sendTask(withSize(obj, markChecksum))
 			} else if config.DeleteSrc {
 				if obj.IsDir() {
-					if checkpointMgr != nil {
-						checkpointMgr.UpdateLastListedKey(prefix, obj)
-					}
 					srcDelayDelMu.Lock()
 					srcDelayDel = append(srcDelayDel, obj.Key())
 					srcDelayDelMu.Unlock()
+					if checkpointMgr != nil {
+						checkpointMgr.UpdateLastListedKey(prefix, obj)
+					}
 				} else {
 					sendTask(withSize(obj, markDeleteSrc))
 				}
