@@ -330,7 +330,9 @@ func mergeGcSortedRecords(
 			continue
 		}
 
-		if isLeakedBlock(obj.index, obj.blockSize, int(meta.size), blockSize) {
+		if meta.state == gcStateTrash {
+			stats.addObject(meta.state, obj.objectSize)
+		} else if isLeakedBlock(obj.index, obj.blockSize, int(meta.size), blockSize) {
 			markLeaked(obj)
 		} else {
 			stats.addObject(meta.state, obj.objectSize)

@@ -331,7 +331,9 @@ func gcInMemory(
 		}
 		indx, _ := strconv.Atoi(parts[1])
 		csize, _ := strconv.Atoi(parts[2])
-		if isLeakedBlock(indx, csize, int(size), chunkConf.BlockSize) {
+		if cobj {
+			stats.addObject(gcStateTrash, obj.Size())
+		} else if isLeakedBlock(indx, csize, int(size), chunkConf.BlockSize) {
 			if csize == chunkConf.BlockSize {
 				logger.Warnf("size of slice %d is larger than expected: %d > %d", cid, indx*chunkConf.BlockSize+csize, size)
 			} else {
@@ -340,8 +342,6 @@ func gcInMemory(
 			foundLeaked(obj)
 		} else if pobj {
 			stats.addObject(gcStatePending, obj.Size())
-		} else if cobj {
-			stats.addObject(gcStateTrash, obj.Size())
 		} else {
 			stats.addObject(gcStateUsed, obj.Size())
 		}
