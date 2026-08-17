@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setState(s *cacheStore, state int) {
+func setState(s *diskCache, state int) {
 	s.stateLock.Lock()
 	defer s.stateLock.Unlock()
 	s.state.stop()

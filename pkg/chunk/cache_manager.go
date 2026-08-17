@@ -39,8 +39,8 @@ var errNotCached = errors.New("not cached")
 type cacheManager struct {
 	sync.Mutex
 	consistentMap *consistenthash.Map
-	storeMap      map[string]*cacheStore
-	stores        []*cacheStore
+	storeMap      map[string]*diskCache
+	stores        []*diskCache
 	metrics       *cacheManagerMetrics
 }
 
@@ -132,15 +132,15 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 	dirCacheItems := config.CacheItems / int64(len(dirs))
 	m := &cacheManager{
 		consistentMap: consistenthash.New(100, murmur3.Sum32),
-		storeMap:      make(map[string]*cacheStore, len(dirs)),
-		stores:        make([]*cacheStore, len(dirs)),
+		storeMap:      make(map[string]*diskCache, len(dirs)),
+		stores:        make([]*diskCache, len(dirs)),
 		metrics:       metrics,
 	}
 
 	// 20% of buffer could be used for pending pages
 	pendingPages := int(config.BufferSize) * 2 / 10 / config.BlockSize / len(dirs)
 	for i, d := range dirs {
-		store := newCacheStore(metrics, strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, dirCacheItems, pendingPages, config, uploader)
+		store := newDiskCache(metrics, strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, dirCacheItems, pendingPages, config, uploader)
 		m.stores[i] = store
 		m.storeMap[store.id] = store
 		m.consistentMap.Add(store.id)
@@ -197,7 +197,7 @@ func (m *cacheManager) removeStore(id string) {
 	logger.Errorf("cache dir `%s`(%s) is unavailable, removed", dir, id)
 }
 
-func (m *cacheManager) getStore(key string) *cacheStore {
+func (m *cacheManager) getStore(key string) *diskCache {
 	for {
 		m.Lock()
 		id := m.consistentMap.Get(key)
@@ -219,7 +219,7 @@ func (m *cacheManager) removeStage(key string) error {
 }
 
 // Deprecated: use getStore instead
-func (m *cacheManager) getStoreLegacy(key string) *cacheStore {
+func (m *cacheManager) getStoreLegacy(key string) *diskCache {
 	return m.stores[legacyKeyHash(key)%uint32(len(m.stores))]
 }
 
