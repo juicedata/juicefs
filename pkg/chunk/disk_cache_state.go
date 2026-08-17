@@ -70,7 +70,7 @@ const (
 
 // dcState disk cache state
 type dcState interface {
-	init(cs *cacheStore)
+	init(cs *diskCache)
 	tick()
 	stop()
 	state() int
@@ -82,11 +82,11 @@ type dcState interface {
 }
 
 type baseDC struct {
-	cache  *cacheStore
+	cache  *diskCache
 	stopCh chan struct{}
 }
 
-func newDCState(state int, cs *cacheStore) dcState {
+func newDCState(state int, cs *diskCache) dcState {
 	var s dcState
 	switch state {
 	case dcNormal:
@@ -103,7 +103,7 @@ func newDCState(state int, cs *cacheStore) dcState {
 	return s
 }
 
-func (dc *baseDC) init(cs *cacheStore) {
+func (dc *baseDC) init(cs *diskCache) {
 	dc.cache = cs
 	dc.stopCh = make(chan struct{})
 }
@@ -132,7 +132,7 @@ type normalDC struct {
 
 func (dc *normalDC) state() int { return dcNormal }
 
-func (dc *normalDC) init(cs *cacheStore) {
+func (dc *normalDC) init(cs *diskCache) {
 	dc.baseDC.init(cs)
 	_ = os.RemoveAll(dc.cache.cachePath(probeDir))
 }
@@ -168,7 +168,7 @@ type unstableDC struct {
 
 func (dc *unstableDC) state() int { return dcUnstable }
 
-func (dc *unstableDC) init(cs *cacheStore) {
+func (dc *unstableDC) init(cs *diskCache) {
 	dc.baseDC.init(cs)
 	dc.startTime = time.Now()
 }
@@ -260,7 +260,7 @@ type downDC struct {
 func (dc *downDC) state() int          { return dcDown }
 func (dc *downDC) checkCacheOp() error { return errCacheDown }
 
-func (cache *cacheStore) event(eventType int) {
+func (cache *diskCache) event(eventType int) {
 	cache.stateLock.Lock()
 	defer cache.stateLock.Unlock()
 	state := cache.state.state()

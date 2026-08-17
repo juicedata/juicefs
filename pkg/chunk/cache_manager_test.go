@@ -145,7 +145,7 @@ func TestExpand(t *testing.T) {
 	}
 }
 
-func shutdownStore(s *cacheStore) {
+func shutdownStore(s *diskCache) {
 	s.stateLock.Lock()
 	defer s.stateLock.Unlock()
 	s.state.stop()

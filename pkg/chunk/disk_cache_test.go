@@ -39,7 +39,7 @@ func testConf() Config {
 func TestNewCacheStore(t *testing.T) {
 	conf := testConf()
 	defer os.RemoveAll(conf.CacheDir)
-	s := newCacheStore(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+	s := newDiskCache(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	if s == nil {
 		t.Fatalf("Create new cache store failed")
 	}
@@ -49,7 +49,7 @@ func TestScanCached(t *testing.T) {
 	var err error
 	cfg := defaultConf
 	cfg.CacheEviction = EvictionNone
-	cache := &cacheStore{
+	cache := &diskCache{
 		opTs: make(map[time.Duration]func() error),
 	}
 	cache.state = newDCState(dcUnchanged, cache)
@@ -73,7 +73,7 @@ func TestScanCached(t *testing.T) {
 func BenchmarkLoadCached(b *testing.B) {
 	conf := testConf()
 	defer os.RemoveAll(conf.CacheDir)
-	s := newCacheStore(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+	s := newDiskCache(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	p := NewPage(make([]byte, 1024))
 	key := "/chunks/1_1024"
 	s.cache(key, p, false, false)
@@ -91,7 +91,7 @@ func BenchmarkLoadCached(b *testing.B) {
 func BenchmarkLoadUncached(b *testing.B) {
 	conf := testConf()
 	defer os.RemoveAll(conf.CacheDir)
-	s := newCacheStore(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+	s := newDiskCache(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	key := "chunks/222_1024"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -195,7 +195,7 @@ func TestAtimeNotLost(t *testing.T) {
 func TestSetlimitByFreeRatio(t *testing.T) {
 	conf := testConf()
 	defer os.RemoveAll(conf.CacheDir)
-	cache := newCacheStore(nil, conf.CacheDir, 1<<30, 1000, 1, &conf, nil)
+	cache := newDiskCache(nil, conf.CacheDir, 1<<30, 1000, 1, &conf, nil)
 
 	usage := DiskFreeRatio{
 		spaceCap: 1 << 30,
@@ -217,7 +217,7 @@ func TestSetlimitByFreeRatio(t *testing.T) {
 func TestSetLimitByFreeRatioUnknownInodesKeepExplicitMaxItems(t *testing.T) {
 	conf := testConf()
 	defer os.RemoveAll(conf.CacheDir)
-	cache := newCacheStore(nil, conf.CacheDir, 1<<30, 1000, 1, &conf, nil)
+	cache := newDiskCache(nil, conf.CacheDir, 1<<30, 1000, 1, &conf, nil)
 
 	usage := DiskFreeRatio{
 		spaceCap: 1 << 30,
@@ -237,7 +237,7 @@ func TestUnknownInodeStatsShouldNotMarkCacheAsRawFull(t *testing.T) {
 		conf.CacheDir = t.TempDir()
 		m := new(cacheManagerMetrics)
 		m.initMetrics()
-		s := newCacheStore(m, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+		s := newDiskCache(m, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 
 		require.Never(t, func() bool {
 			s.Lock()
@@ -259,7 +259,7 @@ func Test2RandomEviction(t *testing.T) {
 
 		m := new(cacheManagerMetrics)
 		m.initMetrics()
-		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		s := newDiskCache(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
 		require.NotNil(t, s)
 		if _, ok := s.keys.(*randomEviction); !ok {
 			t.Fatalf("Expected randomEviction, but got %T", s.keys)
@@ -288,7 +288,7 @@ func TestLruEviction(t *testing.T) {
 
 		m := new(cacheManagerMetrics)
 		m.initMetrics()
-		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		s := newDiskCache(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
 		require.NotNil(t, s)
 		le := s.keys.(*lruEviction)
 
@@ -343,7 +343,7 @@ func TestLruEviction(t *testing.T) {
 		// TODO: delete me
 		m := new(cacheManagerMetrics)
 		m.initMetrics()
-		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		s := newDiskCache(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
 		require.NotNil(t, s)
 		le := s.keys.(*lruEviction)
 
@@ -384,7 +384,7 @@ func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
 	conf.CacheScanInterval = -1
 	m := new(cacheManagerMetrics)
 	m.initMetrics()
-	cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
+	cache := newDiskCache(m, dir, 1<<30, 1000, 1, &conf, nil)
 	cache.scanned = true
 	key := "0_0_4"
 
@@ -404,9 +404,9 @@ func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
 	})
 }
 
-func newTestCacheStore(dir string, conf *Config, uploader func(key, path string, force bool) bool) *cacheStore {
+func newTestCacheStore(dir string, conf *Config, uploader func(key, path string, force bool) bool) *diskCache {
 	keyIndex, _ := NewKeyIndex(conf)
-	c := &cacheStore{
+	c := &diskCache{
 		dir:       dir,
 		mode:      0600,
 		capacity:  1 << 30,
