@@ -39,12 +39,24 @@ kill_tiup_playground() {
     return 0
 }
 
+# Dump why a playground failed: its own log plus any kernel OOM-killer records,
+# the usual reason a freshly bootstrapped pd-server/tikv-server dies within
+# seconds on a CI runner.
+dump_playground_diagnostics() {
+    local log=$1
+    echo "=== $log ==="
+    cat "$log" 2>/dev/null || true
+    echo "=== kernel OOM messages ==="
+    { dmesg 2>/dev/null || sudo dmesg 2>/dev/null; } | grep -iE "out of memory|oom-kill|killed process" | tail -20 || true
+    return 0
+}
+
 install_tikv(){
     [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
     make -C tcli && sudo cp tcli/bin/tcli /usr/local/bin
     # retry because of: https://github.com/pingcap/tiup/issues/2057
     echo 'head -1' > /tmp/head.txt
-    if lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt; then
+    if lsof -i:2379 && pgrep pd-server && timeout 10 tcli -pd 127.0.0.1:2379 < /tmp/head.txt; then
         echo "TiKV is already running and healthy"
         return 0
     fi
@@ -81,13 +93,15 @@ install_tikv(){
         # Check if tiup playground process is still alive
         if ! kill -0 $pid 2>/dev/null; then
             echo "tiup playground process (pid=$pid) exited unexpectedly."
-            echo "=== tikv.log ==="
-            cat tikv.log || true
+            dump_playground_diagnostics tikv.log
             kill_tiup_playground "$tiup" 2379 2380 20160 20180
             exit 1
         fi
         echo 'head -1' > /tmp/head.txt
-        lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt && exit_code=0 || exit_code=$?
+        # Bound the probe with timeout: tcli keeps an internal PD client that
+        # retries forever, so if pd-server dies mid-probe the readiness check
+        # would hang and mask the timeout below (never dumping tikv.log).
+        lsof -i:2379 && pgrep pd-server && timeout 10 tcli -pd 127.0.0.1:2379 < /tmp/head.txt && exit_code=0 || exit_code=$?
         if [ $exit_code -eq 0 ]; then
             echo "TiKV is running."
             exit 0
@@ -96,8 +110,7 @@ install_tikv(){
         count=$((count+1))
         if [ $count -eq $timeout ]; then
             echo "TiKV failed to start within $timeout seconds."
-            echo "=== tikv.log ==="
-            cat tikv.log || true
+            dump_playground_diagnostics tikv.log
             kill -9 $pid 2>/dev/null || true
             kill_tiup_playground "$tiup" 2379 2380 20160 20180
             exit 1
@@ -133,7 +146,7 @@ install_tidb(){
     timeout=60
     count=0
     while true; do
-        lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();" && exit_code=0 || exit_code=$?
+        lsof -i:4000 && pgrep pd-server && timeout 10 mysql -h127.0.0.1 -P4000 -uroot -e "select version();" && exit_code=0 || exit_code=$?
         if [ $exit_code -eq 0 ]; then
             echo "TiDB is running."
             exit 0
@@ -142,8 +155,7 @@ install_tidb(){
         count=$((count+1))
         if [ $count -eq $timeout ]; then
             echo "TiDB failed to start within $timeout seconds."
-            echo "=== tidb.log ==="
-            cat tidb.log || true
+            dump_playground_diagnostics tidb.log
             kill -9 $pid 2>/dev/null || true
             kill_tiup_playground "$tiup" 4000 10080 2379 2380 20160 20180
             exit 1
