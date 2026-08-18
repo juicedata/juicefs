@@ -17,6 +17,15 @@ from typing import Any
 
 STABLE_TAG_RE = re.compile(r"^v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)$")
 BASE_VERSION_RE = re.compile(r"(?<![0-9])(?P<version>[0-9]+\.[0-9]+\.[0-9]+)(?![0-9])")
+CHECKSUM_RE = re.compile(r"^(?P<checksum>[0-9a-fA-F]{64})[ \t]+\*?(?P<filename>\S+)$")
+CDN_CLIENT_ARTIFACT_SUFFIXES = (
+    "linux-amd64.tar.gz",
+    "linux-arm64.tar.gz",
+    "darwin-amd64.tar.gz",
+    "darwin-arm64.tar.gz",
+    "windows-amd64.tar.gz",
+    "windows-amd64.zip",
+)
 UTC = dt.timezone.utc
 
 
@@ -105,15 +114,21 @@ class HttpClient:
         *,
         headers: dict[str, str] | None = None,
         method: str = "GET",
+        read_limit: int | None = None,
     ) -> bytes:
+        if read_limit is not None and read_limit < 0:
+            raise CheckError("read limit must not be negative")
         request_headers = {**self.default_headers, **(headers or {})}
         request = urllib.request.Request(url, headers=request_headers, method=method)
         last_error: Exception | None = None
         for attempt in range(self.retries):
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    return response.read()
-            except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
+                    content = response.read() if read_limit is None else response.read(read_limit)
+                    if read_limit and not content:
+                        raise CheckError(f"empty response from {url}")
+                    return content
+            except (OSError, urllib.error.URLError, urllib.error.HTTPError, CheckError) as exc:
                 last_error = exc
                 if attempt + 1 < self.retries:
                     time.sleep(2**attempt)
@@ -136,6 +151,9 @@ class HttpClient:
             self.request(url, method="HEAD")
         except CheckError:
             self.request(url, headers={"Range": "bytes=0-0"})
+
+    def probe_download(self, url: str) -> None:
+        self.request(url, headers={"Range": "bytes=0-0"}, read_limit=1)
 
 
 def github_latest_release(
@@ -261,6 +279,21 @@ def aggregate_versions(
     )
 
 
+def parse_checksums(checksum_text: str) -> tuple[dict[str, str], list[int]]:
+    checksums: dict[str, str] = {}
+    invalid_lines: list[int] = []
+    for line_number, raw_line in enumerate(checksum_text.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        match = CHECKSUM_RE.fullmatch(line)
+        if not match or match.group("filename") in checksums:
+            invalid_lines.append(line_number)
+            continue
+        checksums[match.group("filename")] = match.group("checksum").lower()
+    return checksums, invalid_lines
+
+
 def check_cdn(
     client: HttpClient,
     expected: str,
@@ -269,27 +302,48 @@ def check_cdn(
     base_url = "https://d.juicefs.com/juicefs/releases"
     latest = client.get_text(f"{base_url}/latest-version.txt").strip()
     checksum_text = client.get_text(f"{base_url}/download/v{expected}/checksums.txt")
+    required_assets = [
+        f"juicefs-{expected}-{suffix}" for suffix in CDN_CLIENT_ARTIFACT_SUFFIXES
+    ]
     assets = release_payload.get("assets")
     if not isinstance(assets, list):
         return CheckResult("CDN", "invalid", expected, latest or "unknown", "release assets are missing")
-    prefix = f"juicefs-{expected}-"
-    expected_assets = [
-        asset.get("name")
+    release_assets = {
+        asset["name"]
         for asset in assets
-        if isinstance(asset, dict)
-        and isinstance(asset.get("name"), str)
-        and asset["name"].startswith(prefix)
-        and asset["name"].endswith((".tar.gz", ".zip"))
-    ]
-    if not expected_assets:
-        return CheckResult("CDN", "invalid", expected, latest or "unknown", "no client archives in GitHub release")
-    missing_checksums = [name for name in expected_assets if name not in checksum_text]
-    for name in expected_assets:
-        client.probe(f"{base_url}/download/v{expected}/{name}")
-    details = [f"{len(expected_assets)} client archives are reachable"]
+        if isinstance(asset, dict) and isinstance(asset.get("name"), str)
+    }
+    missing_release_assets = [name for name in required_assets if name not in release_assets]
+    checksums, invalid_checksum_lines = parse_checksums(checksum_text)
+    missing_checksums = [name for name in required_assets if name not in checksums]
+    download_failures: list[str] = []
+    for name in required_assets:
+        try:
+            client.probe_download(f"{base_url}/download/v{expected}/{name}")
+        except CheckError:
+            download_failures.append(name)
+    passed_downloads = len(required_assets) - len(download_failures)
+    details = [f"{passed_downloads}/{len(required_assets)} ranged GET download probes passed"]
+    if download_failures:
+        details.append("failed download probes: " + ", ".join(download_failures))
+    if missing_release_assets:
+        details.append("missing release assets: " + ", ".join(missing_release_assets))
     if missing_checksums:
-        details.append("missing checksums: " + ", ".join(missing_checksums))
-    status = "current" if latest == expected and not missing_checksums else "stale"
+        details.append("missing or invalid checksums: " + ", ".join(missing_checksums))
+    if invalid_checksum_lines:
+        lines = ", ".join(str(line) for line in invalid_checksum_lines)
+        details.append(f"invalid checksum lines: {lines}")
+    if download_failures:
+        status = "unavailable"
+    elif (
+        latest == expected
+        and not missing_release_assets
+        and not missing_checksums
+        and not invalid_checksum_lines
+    ):
+        status = "current"
+    else:
+        status = "stale"
     return CheckResult("CDN", status, expected, latest or "unknown", "; ".join(details))
 
 

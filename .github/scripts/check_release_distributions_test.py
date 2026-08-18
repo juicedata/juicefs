@@ -10,12 +10,24 @@ from unittest import mock
 import check_release_distributions as checker
 
 
+CDN_ASSETS = [
+    "juicefs-1.4.1-linux-amd64.tar.gz",
+    "juicefs-1.4.1-linux-arm64.tar.gz",
+    "juicefs-1.4.1-darwin-amd64.tar.gz",
+    "juicefs-1.4.1-darwin-arm64.tar.gz",
+    "juicefs-1.4.1-windows-amd64.tar.gz",
+    "juicefs-1.4.1-windows-amd64.zip",
+]
+
+
 class FakeClient:
-    def __init__(self, *, json_values=None, text_values=None, fail=False):
+    def __init__(self, *, json_values=None, text_values=None, fail=False, download_error=False):
         self.json_values = json_values or {}
         self.text_values = text_values or {}
         self.fail = fail
+        self.download_error = download_error
         self.urls = []
+        self.download_urls = []
 
     def _lookup(self, values, url):
         if self.fail:
@@ -37,6 +49,12 @@ class FakeClient:
         self.urls.append(url)
         if self.fail:
             raise checker.CheckError("network unavailable")
+
+    def probe_download(self, url):
+        self.urls.append(url)
+        self.download_urls.append(url)
+        if self.fail or self.download_error:
+            raise checker.CheckError("download unavailable")
 
 
 class ReleaseResolutionTest(unittest.TestCase):
@@ -157,6 +175,49 @@ class ReleaseResolutionTest(unittest.TestCase):
                 checker.parse_latest_release(payload)
 
 
+class HttpClientTest(unittest.TestCase):
+    def test_download_probe_uses_range_get_and_reads_only_one_byte(self):
+        requests = []
+        read_sizes = []
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self, size=-1):
+                read_sizes.append(size)
+                return b"x"
+
+        def urlopen(request, timeout):
+            requests.append(request)
+            return Response()
+
+        with mock.patch.object(checker.urllib.request, "urlopen", urlopen):
+            checker.HttpClient(retries=1).probe_download("https://cdn.example/client.tar.gz")
+
+        self.assertEqual("GET", requests[0].get_method())
+        self.assertEqual("bytes=0-0", requests[0].get_header("Range"))
+        self.assertEqual([1], read_sizes)
+
+    def test_download_probe_rejects_an_empty_response(self):
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self, size=-1):
+                return b""
+
+        with mock.patch.object(checker.urllib.request, "urlopen", lambda request, timeout: Response()):
+            with self.assertRaises(checker.CheckError):
+                checker.HttpClient(retries=1).probe_download("https://cdn.example/empty.tar.gz")
+
+
 class VersionTest(unittest.TestCase):
     def test_package_and_binary_revisions_use_the_base_version(self):
         current = [
@@ -232,11 +293,9 @@ class VerifyVersionCommandTest(unittest.TestCase):
 class ChannelFixtureTest(unittest.TestCase):
     expected = "1.4.1"
     release_payload = {
-        "assets": [
-            {"name": "checksums.txt"},
-            {"name": "juicefs-1.4.1-linux-amd64.tar.gz"},
-            {"name": "juicefs-hadoop-1.4.1.jar"},
-        ]
+        "assets": [{"name": "checksums.txt"}]
+        + [{"name": name} for name in CDN_ASSETS]
+        + [{"name": "juicefs-hadoop-1.4.1.jar"}]
     }
 
     def assert_current_and_stale(self, build):
@@ -245,21 +304,64 @@ class ChannelFixtureTest(unittest.TestCase):
         self.assertEqual("stale", stale.status)
 
     def test_cdn_current_and_stale(self):
-        def build():
-            common = {"checksums.txt": "hash  juicefs-1.4.1-linux-amd64.tar.gz\n"}
-            current = checker.check_cdn(
-                FakeClient(text_values={"latest-version.txt": "1.4.1\n", **common}),
-                self.expected,
-                self.release_payload,
-            )
-            stale = checker.check_cdn(
-                FakeClient(text_values={"latest-version.txt": "1.3.3\n", **common}),
-                self.expected,
-                self.release_payload,
-            )
-            return current, stale
+        checksums = "".join(f"{'a' * 64}  {name}\n" for name in CDN_ASSETS)
+        current_client = FakeClient(
+            text_values={"latest-version.txt": "1.4.1\n", "checksums.txt": checksums}
+        )
+        stale_client = FakeClient(
+            text_values={"latest-version.txt": "1.3.3\n", "checksums.txt": checksums}
+        )
 
-        self.assert_current_and_stale(build)
+        current = checker.check_cdn(current_client, self.expected, self.release_payload)
+        stale = checker.check_cdn(stale_client, self.expected, self.release_payload)
+
+        self.assertEqual("current", current.status)
+        self.assertEqual("stale", stale.status)
+        self.assertEqual(6, len(current_client.download_urls))
+        self.assertIn("6/6 ranged GET", current.detail)
+
+    def test_cdn_requires_every_fixed_client_asset(self):
+        checksums = "".join(f"{'a' * 64}  {name}\n" for name in CDN_ASSETS)
+        payload = {"assets": [{"name": name} for name in CDN_ASSETS[:-1]]}
+        result = checker.check_cdn(
+            FakeClient(text_values={"latest-version.txt": "1.4.1", "checksums.txt": checksums}),
+            self.expected,
+            payload,
+        )
+
+        self.assertEqual("stale", result.status)
+        self.assertIn(CDN_ASSETS[-1], result.detail)
+
+    def test_cdn_rejects_missing_or_invalid_checksums(self):
+        checksums = "".join(
+            ("not-a-sha" if index == 0 else "a" * 64) + f"  {name}\n"
+            for index, name in enumerate(CDN_ASSETS[:-1])
+        )
+        result = checker.check_cdn(
+            FakeClient(text_values={"latest-version.txt": "1.4.1", "checksums.txt": checksums}),
+            self.expected,
+            self.release_payload,
+        )
+
+        self.assertEqual("stale", result.status)
+        self.assertIn(CDN_ASSETS[0], result.detail)
+        self.assertIn(CDN_ASSETS[-1], result.detail)
+
+    def test_cdn_download_failure_is_unavailable(self):
+        checksums = "".join(f"{'a' * 64}  {name}\n" for name in CDN_ASSETS)
+        client = FakeClient(
+            text_values={"latest-version.txt": "1.4.1", "checksums.txt": checksums},
+            download_error=True,
+        )
+        result = checker.run_channel(
+            "CDN",
+            self.expected,
+            lambda: checker.check_cdn(client, self.expected, self.release_payload),
+        )
+
+        self.assertEqual("unavailable", result.status)
+        self.assertIn("0/6 ranged GET", result.detail)
+        self.assertIn(CDN_ASSETS[0], result.detail)
 
     def test_homebrew_current_and_stale(self):
         self.assert_current_and_stale(
