@@ -186,12 +186,18 @@ func TestMergeGcSortedRecords(t *testing.T) {
 
 	err = mergeGcSortedRecords(ctx, metaSorter, objSorter, 4, gcStats, leakedKeys)
 	require.NoError(t, err)
-	require.Equal(t, gcMergeStats{
-		valid:     gcObjectCounter{count: externalSortChunkSize + 2, bytes: externalSortChunkSize*4 + 5},
-		pending:   gcObjectCounter{count: 1, bytes: 4},
-		compacted: gcObjectCounter{count: 1, bytes: 3},
-		leaked:    gcObjectCounter{count: 2, bytes: 13},
-	}, gcStats.objects)
+	count, bytes := valid.Current()
+	require.EqualValues(t, externalSortChunkSize+2, count)
+	require.EqualValues(t, externalSortChunkSize*4+5, bytes)
+	count, bytes = pending.Current()
+	require.EqualValues(t, 1, count)
+	require.EqualValues(t, 4, bytes)
+	count, bytes = compacted.Current()
+	require.EqualValues(t, 1, count)
+	require.EqualValues(t, 3, bytes)
+	count, bytes = leaked.Current()
+	require.EqualValues(t, 2, count)
+	require.EqualValues(t, 13, bytes)
 
 	close(leakedKeys)
 	var keys []string

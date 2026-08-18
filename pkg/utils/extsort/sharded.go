@@ -47,6 +47,7 @@ const (
 type Sorter[T any] struct {
 	input   chan T
 	sorter  *lanratextsort.GenericSorter[T]
+	errCh   <-chan error
 	workDir string
 }
 
@@ -78,7 +79,7 @@ func New[T any](ctx context.Context, cfg Config, codec Codec[T]) (*Sorter[T], er
 		_ = os.RemoveAll(workDir)
 		return nil, fmt.Errorf("create external sorter: %w", err)
 	}
-	s := &Sorter[T]{input: input, sorter: sorter, workDir: workDir}
+	s := &Sorter[T]{input: input, sorter: sorter, errCh: errCh, workDir: workDir}
 	go sorter.Sort(ctx)
 	return s, nil
 }
@@ -97,13 +98,13 @@ func (s *Sorter[T]) Next(ctx context.Context) (T, bool, error) {
 
 func (s *Sorter[T]) Done() error {
 	var err error
-	for {
-		_, ok, nextErr := s.Next(context.Background())
-		if !ok {
-			err = nextErr
-			break
-		}
+	select {
+	case err = <-s.errCh:
+	default:
 	}
-	_ = os.RemoveAll(s.workDir)
-	return err
+	removeErr := os.RemoveAll(s.workDir)
+	if err != nil {
+		return err
+	}
+	return removeErr
 }

@@ -90,7 +90,7 @@ func gcExternalSort(
 	if sortErr != nil {
 		return sortErr
 	}
-	if err := scanGcTrashSlices(m, c, stats.delayedSlices, stats.cleanedSlices, delFlag, edge); err != nil {
+	if err := scanTrashSlices(c, m, stats, delFlag, edge); err != nil {
 		return errors.Errorf("trash slice scan: %s", err)
 	}
 	stats.finish(delFlag, compact)

@@ -234,13 +234,11 @@ func gcInMemory(
 		logger.Fatalf("scan all slices: %s", r)
 	}
 
-	err := scanGcTrashSlices(m, c, stats.delayedSlices, stats.cleanedSlices, delFlag, edge)
+	err := scanTrashSlices(c, m, stats, delFlag, edge)
 	if err != nil {
 		logger.Fatalf("statistic: %s", err)
 	}
 
-	// Scan all objects to find leaked ones
-	blob = object.WithPrefix(blob, "chunks/")
 	vkeys := make(map[uint64]uint32)
 	pkeys := make(map[uint64]uint32)
 	ckeys := make(map[uint64]uint32)
@@ -271,6 +269,8 @@ func gcInMemory(
 
 	stats.scanned.SetTotal(total)
 
+	// Scan all objects to find leaked ones
+	blob = object.WithPrefix(blob, "chunks/")
 	leakedObj, waitLeakedObj := startGcObjectDeleters(c, blob, threads, delFlag)
 	objs := make(chan object.Object, max(threads, 1))
 	listErr := make(chan error, 1)
@@ -375,7 +375,6 @@ type gcStats struct {
 	compacted     *utils.DoubleSpinner
 	leaked        *utils.DoubleSpinner
 	skipped       *utils.DoubleSpinner
-	objects       gcMergeStats
 }
 
 func newGcStats(progress *utils.Progress, external bool, deletedSlices *utils.Bar, cleanedFiles *utils.DoubleSpinner) *gcStats {
@@ -401,14 +400,14 @@ func newGcStats(progress *utils.Progress, external bool, deletedSlices *utils.Ba
 	return stats
 }
 
-func scanGcTrashSlices(m meta.Meta, c meta.Context, delayed, cleaned *utils.DoubleSpinner, delFlag bool, edge time.Time) error {
+func scanTrashSlices(c meta.Context, m meta.Meta, stats *gcStats, delFlag bool, edge time.Time) error {
 	err := m.ScanDeletedObject(
 		c,
 		func(ss []meta.Slice, ts int64) (bool, error) {
 			for _, slice := range ss {
-				delayed.IncrInt64(int64(slice.Size))
+				stats.delayedSlices.IncrInt64(int64(slice.Size))
 				if delFlag && ts < edge.Unix() {
-					cleaned.IncrInt64(int64(slice.Size))
+					stats.cleanedSlices.IncrInt64(int64(slice.Size))
 				}
 			}
 			return delFlag && ts < edge.Unix(), nil
@@ -418,24 +417,24 @@ func scanGcTrashSlices(m meta.Meta, c meta.Context, delayed, cleaned *utils.Doub
 	if err != nil {
 		return err
 	}
-	delayed.Done()
-	cleaned.Done()
+	stats.delayedSlices.Done()
+	stats.cleanedSlices.Done()
 	return nil
 }
 
 func (s *gcStats) addObject(state uint8, size int64) {
 	switch state {
 	case gcStatePending:
-		addGcObjectStat(&s.objects.pending, s.pending, size)
+		s.pending.IncrInt64(size)
 	case gcStateTrash:
-		addGcObjectStat(&s.objects.compacted, s.compacted, size)
+		s.compacted.IncrInt64(size)
 	default:
-		addGcObjectStat(&s.objects.valid, s.valid, size)
+		s.valid.IncrInt64(size)
 	}
 }
 
 func (s *gcStats) addLeaked(size int64) {
-	addGcObjectStat(&s.objects.leaked, s.leaked, size)
+	s.leaked.IncrInt64(size)
 }
 
 func startGcObjectDeleters(ctx context.Context, blob object.ObjectStorage, threads int, enabled bool) (chan string, func()) {
@@ -468,9 +467,10 @@ func (s *gcStats) finish(delFlag, compact bool) {
 			logger.Infof("Deleted %d pending slices", s.deletedSlices.Current())
 		}
 	}
+	leakedCount, _ := s.leaked.Current()
 	s.progress.Done()
-	logGcSummary(s.scanned.Current(), s.objects, s.cleanedSlices, s.cleanedFiles, s.skipped)
-	if s.objects.leaked.count > 0 && !delFlag {
+	s.logSummary()
+	if leakedCount > 0 && !delFlag {
 		logger.Infof("Please add `--delete` to clean leaked objects")
 	}
 }
@@ -613,31 +613,16 @@ func filterGcObject(ctx context.Context, blob object.ObjectStorage, obj object.O
 	return obj, true
 }
 
-type gcObjectCounter struct {
-	count int64
-	bytes int64
-}
-
-type gcMergeStats struct {
-	valid     gcObjectCounter
-	pending   gcObjectCounter
-	compacted gcObjectCounter
-	leaked    gcObjectCounter
-}
-
-func addGcObjectStat(counter *gcObjectCounter, spinner *utils.DoubleSpinner, size int64) {
-	counter.count++
-	counter.bytes += size
-	spinner.IncrInt64(size)
-}
-
-func logGcSummary(scanned int64, stats gcMergeStats, cleanedSliceSpin, cleanedFileSpin, skipped *utils.DoubleSpinner) {
-	dsc, dsb := cleanedSliceSpin.Current()
-	fc, fb := cleanedFileSpin.Current()
-	sc, sb := skipped.Current()
+func (s *gcStats) logSummary() {
+	vc, _ := s.valid.Current()
+	pc, pb := s.pending.Current()
+	cc, cb := s.compacted.Current()
+	lc, lb := s.leaked.Current()
+	dsc, dsb := s.cleanedSlices.Current()
+	fc, fb := s.cleanedFiles.Current()
+	sc, sb := s.skipped.Current()
 	logger.Infof("scanned %d objects, %d valid, %d pending delete (%d bytes), %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes)",
-		scanned, stats.valid.count, stats.pending.count, stats.pending.bytes, stats.compacted.count, stats.compacted.bytes,
-		stats.leaked.count, stats.leaked.bytes, dsc, dsb, fc, fb, sc, sb)
+		s.scanned.Current(), vc, pc, pb, cc, cb, lc, lb, dsc, dsb, fc, fb, sc, sb)
 }
 
 func isLeakedBlock(index, blockSize, sliceSize, configuredBlockSize int) bool {
