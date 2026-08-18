@@ -37,16 +37,21 @@ install_tikv(){
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sudo sh
         export PATH=/root/.tiup/bin:$PATH
         tiup=/root/.tiup/bin/tiup
+        tiup_home=/root/.tiup
     elif [[ "$user" == "runner" ]]; then
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         export PATH=/home/runner/.tiup/bin:$PATH
         tiup=/home/runner/.tiup/bin/tiup
+        tiup_home=/home/runner/.tiup
     else
         echo "Unknown user $user"
         exit 1
     fi
     echo tiup is $tiup
     echo $(whoami) $(pwd)
+    # Drop stale manifest pointers so tiup re-resolves the current component
+    # manifest version instead of a pruned one, see https://github.com/pingcap/tiup/issues/2057
+    rm -f "$tiup_home/manifests/snapshot.json" "$tiup_home/manifests/timestamp.json"
     # TODO update to latest TiDB 
     $tiup playground 8.5.5 --mode tikv-slim > tikv.log 2>&1  &
     pid=$!
@@ -84,15 +89,20 @@ install_tidb(){
     if [[ "$user" == "root" ]]; then
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sudo sh
         tiup=/root/.tiup/bin/tiup
+        tiup_home=/root/.tiup
     elif [[ "$user" == "runner" ]]; then
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         tiup=/home/runner/.tiup/bin/tiup
+        tiup_home=/home/runner/.tiup
     else
         echo "Unknown user $user"
         exit 1
     fi
     echo tiup is $tiup
     
+    # Drop stale manifest pointers so tiup re-resolves the current component
+    # manifest version instead of a pruned one, see https://github.com/pingcap/tiup/issues/2057
+    rm -f "$tiup_home/manifests/snapshot.json" "$tiup_home/manifests/timestamp.json"
     $tiup playground 8.5.5 > tidb.log 2>&1  &
     pid=$!
     timeout=60
