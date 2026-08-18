@@ -22,6 +22,23 @@ retry() {
     done
 }
 
+# Reap a tiup playground and every process it spawned. Killing only the tiup
+# parent orphans its pd-server/tikv-server/tidb-server children, which keep
+# holding the cluster ports and poison the next retry attempt with
+# "mismatch cluster id" / "connection refused" errors. Clean up the data dir
+# and kill whoever still holds the given ports (by their actual PIDs).
+kill_tiup_playground() {
+    local tiup_bin=$1
+    shift
+    local port pids
+    for port in "$@"; do
+        pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
+        [ -n "$pids" ] && kill -9 $pids 2>/dev/null || true
+    done
+    "$tiup_bin" clean --all >/dev/null 2>&1 || true
+    return 0
+}
+
 install_tikv(){
     [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
     make -C tcli && sudo cp tcli/bin/tcli /usr/local/bin
@@ -49,6 +66,9 @@ install_tikv(){
     fi
     echo tiup is $tiup
     echo $(whoami) $(pwd)
+    # Reap orphaned pd-server/tikv-server left behind by a previous retry
+    # attempt so a fresh cluster can bootstrap cleanly, see tiup#2057.
+    kill_tiup_playground "$tiup" 2379 2380 20160 20180
     # Drop stale manifest pointers so tiup re-resolves the current component
     # manifest version instead of a pruned one, see https://github.com/pingcap/tiup/issues/2057
     rm -f "$tiup_home/manifests/snapshot.json" "$tiup_home/manifests/timestamp.json"
@@ -63,6 +83,7 @@ install_tikv(){
             echo "tiup playground process (pid=$pid) exited unexpectedly."
             echo "=== tikv.log ==="
             cat tikv.log || true
+            kill_tiup_playground "$tiup" 2379 2380 20160 20180
             exit 1
         fi
         echo 'head -1' > /tmp/head.txt
@@ -76,8 +97,9 @@ install_tikv(){
         if [ $count -eq $timeout ]; then
             echo "TiKV failed to start within $timeout seconds."
             echo "=== tikv.log ==="
-            tail -50 tikv.log || true
-            kill -9 $pid || true
+            cat tikv.log || true
+            kill -9 $pid 2>/dev/null || true
+            kill_tiup_playground "$tiup" 2379 2380 20160 20180
             exit 1
         fi
     done
@@ -100,6 +122,9 @@ install_tidb(){
     fi
     echo tiup is $tiup
     
+    # Reap orphaned pd-server/tikv-server/tidb-server left behind by a previous
+    # retry attempt so a fresh cluster can bootstrap cleanly, see tiup#2057.
+    kill_tiup_playground "$tiup" 4000 10080 2379 2380 20160 20180
     # Drop stale manifest pointers so tiup re-resolves the current component
     # manifest version instead of a pruned one, see https://github.com/pingcap/tiup/issues/2057
     rm -f "$tiup_home/manifests/snapshot.json" "$tiup_home/manifests/timestamp.json"
@@ -117,7 +142,10 @@ install_tidb(){
         count=$((count+1))
         if [ $count -eq $timeout ]; then
             echo "TiDB failed to start within $timeout seconds."
-            kill -9 $pid || true
+            echo "=== tidb.log ==="
+            cat tidb.log || true
+            kill -9 $pid 2>/dev/null || true
+            kill_tiup_playground "$tiup" 4000 10080 2379 2380 20160 20180
             exit 1
         fi
     done
