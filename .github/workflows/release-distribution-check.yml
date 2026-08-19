@@ -22,12 +22,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - name: Test release distribution checker
         run: python3 .github/scripts/check_release_distributions_test.py
 
-      - name: Resolve explicitly marked latest release
+      - name: Resolve target release
         id: latest
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -52,6 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - name: Check distribution metadata
@@ -80,6 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - name: Install from the official CDN
         id: install
@@ -124,6 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - name: Install with Homebrew
         id: install
@@ -159,6 +163,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - name: Install from the x86 PPA
         id: install
@@ -196,6 +201,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - name: Install with Scoop
         id: install
@@ -239,6 +245,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - name: Run the versioned and latest community images
         id: run
@@ -294,6 +301,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - uses: actions/setup-java@v4
         with:

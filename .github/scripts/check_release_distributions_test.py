@@ -79,6 +79,28 @@ class ReleaseResolutionTest(unittest.TestCase):
             client.urls,
         )
 
+    def test_release_event_uses_the_trigger_release_tag(self):
+        client = FakeClient(
+            json_values={
+                "/releases/tags/v1.3.4": {
+                    "id": 410000001,
+                    "tag_name": "v1.3.4",
+                    "published_at": "2026-08-19T06:00:00Z",
+                    "draft": False,
+                    "prerelease": False,
+                }
+            }
+        )
+
+        release, _ = checker.github_target_release(client, "juicedata/juicefs", "v1.3.4")
+
+        self.assertEqual("v1.3.4", release.tag)
+        self.assertEqual("1.3.4", release.version)
+        self.assertEqual(
+            ["https://api.github.com/repos/juicedata/juicefs/releases/tags/v1.3.4"],
+            client.urls,
+        )
+
     def test_github_token_is_scoped_to_the_latest_release_request(self):
         requests = []
 
@@ -113,7 +135,40 @@ class ReleaseResolutionTest(unittest.TestCase):
         self.assertEqual("Bearer dummy-token", requests[0].get_header("Authorization"))
         self.assertIsNone(requests[1].get_header("Authorization"))
 
-    def test_resolve_command_exports_the_explicit_latest_release(self):
+    def test_resolve_command_exports_the_trigger_release(self):
+        payload = {
+            "id": 410000001,
+            "tag_name": "v1.3.4",
+            "published_at": "2026-08-19T06:00:00Z",
+            "draft": False,
+            "prerelease": False,
+        }
+        original_client = checker.HttpClient
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir, "output.txt")
+            summary_path = Path(temp_dir, "summary.md")
+            checker.HttpClient = lambda: FakeClient(json_values={"/releases/tags/v1.3.4": payload})
+            try:
+                result = checker.resolve_command(
+                    Namespace(
+                        repository="juicedata/juicefs",
+                        trigger_tag="v1.3.4",
+                        github_output=str(output_path),
+                        summary=str(summary_path),
+                    )
+                )
+            finally:
+                checker.HttpClient = original_client
+
+            self.assertEqual(0, result)
+            outputs = output_path.read_text(encoding="utf-8")
+            self.assertIn("target_version=1.3.4", outputs)
+            self.assertIn("release_id=410000001", outputs)
+            summary = summary_path.read_text(encoding="utf-8")
+            self.assertIn("Trigger release: `v1.3.4`", summary)
+            self.assertIn("Target release: `v1.3.4`", summary)
+
+    def test_resolve_command_exports_the_latest_release_without_trigger(self):
         payload = {
             "id": 362269109,
             "tag_name": "v1.4.1",
@@ -130,7 +185,7 @@ class ReleaseResolutionTest(unittest.TestCase):
                 result = checker.resolve_command(
                     Namespace(
                         repository="juicedata/juicefs",
-                        trigger_tag="v1.3.3",
+                        trigger_tag="",
                         github_output=str(output_path),
                         summary=str(summary_path),
                     )
@@ -141,29 +196,9 @@ class ReleaseResolutionTest(unittest.TestCase):
             self.assertEqual(0, result)
             outputs = output_path.read_text(encoding="utf-8")
             self.assertIn("target_version=1.4.1", outputs)
-            self.assertIn("release_id=362269109", outputs)
             summary = summary_path.read_text(encoding="utf-8")
-            self.assertIn("Trigger release: `v1.3.3`", summary)
-            self.assertIn("Target latest release: `v1.4.1`", summary)
-
-    def test_latest_release_is_not_replaced_by_later_trigger(self):
-        latest = checker.parse_latest_release(
-            {
-                "id": 362269109,
-                "tag_name": "v1.4.1",
-                "published_at": "2026-07-30T08:03:19Z",
-                "draft": False,
-                "prerelease": False,
-            }
-        )
-
-        self.assertEqual("v1.4.1", latest.tag)
-        self.assertEqual("1.4.1", latest.version)
-        self.assertLess(
-            latest.published_at,
-            checker.parse_datetime("2026-08-07T09:12:29Z"),
-            "the later v1.3.3 trigger must not become the target release",
-        )
+            self.assertIn("Trigger release: `schedule/manual`", summary)
+            self.assertIn("Target release: `v1.4.1`", summary)
 
     def test_invalid_latest_release_is_rejected(self):
         cases = [
@@ -241,7 +276,7 @@ class GracePeriodTest(unittest.TestCase):
     def setUp(self):
         self.published = checker.parse_datetime("2026-07-30T08:03:19Z")
 
-    def test_grace_uses_latest_release_publication_time(self):
+    def test_grace_uses_target_release_publication_time(self):
         self.assertFalse(
             checker.grace_expired(
                 self.published,
@@ -256,10 +291,6 @@ class GracePeriodTest(unittest.TestCase):
                 checker.parse_datetime("2026-07-31T08:03:19Z"),
             )
         )
-
-    def test_later_maintenance_release_does_not_reset_grace(self):
-        later_v133 = checker.parse_datetime("2026-08-07T09:12:29Z")
-        self.assertTrue(checker.grace_expired(self.published, 24, later_v133))
 
     def test_stale_and_unavailable_fail_only_after_grace(self):
         results = [checker.CheckResult("test", "stale", "1.4.1", "1.3.3")]

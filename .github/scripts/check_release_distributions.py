@@ -9,6 +9,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
@@ -62,18 +63,18 @@ def parse_datetime(value: str) -> dt.datetime:
     return parsed.astimezone(UTC)
 
 
-def parse_latest_release(payload: dict[str, Any]) -> ReleaseInfo:
+def parse_latest_release(payload: dict[str, Any], label: str = "GitHub latest release") -> ReleaseInfo:
     if payload.get("draft"):
-        raise CheckError("GitHub latest release is a draft")
+        raise CheckError(f"{label} is a draft")
     if payload.get("prerelease"):
-        raise CheckError("GitHub latest release is a prerelease")
+        raise CheckError(f"{label} is a prerelease")
     tag = payload.get("tag_name")
     match = STABLE_TAG_RE.fullmatch(tag or "")
     if not match:
-        raise CheckError(f"GitHub latest release has an invalid stable tag: {tag!r}")
+        raise CheckError(f"{label} has an invalid stable tag: {tag!r}")
     release_id = payload.get("id")
     if not isinstance(release_id, int):
-        raise CheckError("GitHub latest release has no numeric id")
+        raise CheckError(f"{label} has no numeric id")
     return ReleaseInfo(
         release_id=release_id,
         tag=tag,
@@ -161,7 +162,38 @@ def github_latest_release(
     repository: str,
     token: str = "",
 ) -> tuple[ReleaseInfo, dict[str, Any]]:
-    url = f"https://api.github.com/repos/{repository}/releases/latest"
+    return github_release_request(client, repository, "latest", "GitHub latest release", token)
+
+
+def github_release_by_tag(
+    client: HttpClient,
+    repository: str,
+    tag: str,
+    token: str = "",
+) -> tuple[ReleaseInfo, dict[str, Any]]:
+    tag_path = urllib.parse.quote(tag, safe="")
+    return github_release_request(client, repository, f"tags/{tag_path}", f"GitHub release {tag}", token)
+
+
+def github_target_release(
+    client: HttpClient,
+    repository: str,
+    trigger_tag: str = "",
+    token: str = "",
+) -> tuple[ReleaseInfo, dict[str, Any]]:
+    if trigger_tag:
+        return github_release_by_tag(client, repository, trigger_tag, token)
+    return github_latest_release(client, repository, token)
+
+
+def github_release_request(
+    client: HttpClient,
+    repository: str,
+    path: str,
+    label: str,
+    token: str = "",
+) -> tuple[ReleaseInfo, dict[str, Any]]:
+    url = f"https://api.github.com/repos/{repository}/releases/{path}"
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -173,8 +205,8 @@ def github_latest_release(
         headers=headers,
     )
     if not isinstance(payload, dict):
-        raise CheckError("GitHub latest release response is not an object")
-    return parse_latest_release(payload), payload
+        raise CheckError(f"{label} response is not an object")
+    return parse_latest_release(payload, label), payload
 
 
 def run_channel(
@@ -233,7 +265,7 @@ def render_results_summary(
         "## JuiceFS release distribution check",
         "",
         f"- Trigger release: `{trigger}`",
-        f"- Target latest release: `{release.tag}` (GitHub release `{release.release_id}`)",
+        f"- Target release: `{release.tag}` (GitHub release `{release.release_id}`)",
         f"- Published at: `{release.published_at.isoformat()}`",
         f"- Grace period: `{grace_hours}h` ({'expired' if expired else 'active'})",
         "",
@@ -544,9 +576,10 @@ def perform_checks(
 def check_command(args: argparse.Namespace) -> int:
     client = HttpClient()
     try:
-        release, release_payload = github_latest_release(
+        release, release_payload = github_target_release(
             client,
             args.repository,
+            args.trigger_tag,
             token=os.environ.get("GITHUB_TOKEN", ""),
         )
     except CheckError as exc:
@@ -593,13 +626,14 @@ def check_command(args: argparse.Namespace) -> int:
 def resolve_command(args: argparse.Namespace) -> int:
     client = HttpClient()
     try:
-        release, _ = github_latest_release(
+        release, _ = github_target_release(
             client,
             args.repository,
+            args.trigger_tag,
             token=os.environ.get("GITHUB_TOKEN", ""),
         )
     except CheckError as exc:
-        append_summary(args.summary, f"## JuiceFS latest release\n\n❌ {exc}")
+        append_summary(args.summary, f"## JuiceFS target release\n\n❌ {exc}")
         print(exc, file=sys.stderr)
         return 1
     append_github_output(
@@ -616,10 +650,10 @@ def resolve_command(args: argparse.Namespace) -> int:
         args.summary,
         "\n".join(
             [
-                "## JuiceFS latest release",
+                "## JuiceFS target release",
                 "",
                 f"- Trigger release: `{trigger}`",
-                f"- Target latest release: `{release.tag}` (GitHub release `{release.release_id}`)",
+                f"- Target release: `{release.tag}` (GitHub release `{release.release_id}`)",
             ]
         ),
     )
