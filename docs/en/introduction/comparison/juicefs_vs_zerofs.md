@@ -49,12 +49,13 @@ Key architectural characteristics:
 - Encryption and compression are mandatory on every block, with no option to disable them.
 - A dual-tier local cache (encrypted raw-parts cache for object bytes, plaintext decoded-block cache for metadata, plus
   an in-memory tail cache for each inode's most recent extent) reduces round trips to object storage.
-- High availability is a two-node leader/standby pair with automatic failover; any number of additional read-only
-  replicas can be added for read scaling, but there is exactly one writer process at a time.
+- For High availability, ZeroFS supports a leader/standby replication design with a single active writer and writer
+  fencing. Read-replica behavior, failover orchestration, and staleness depend on the configured replication
+  implementation and version.
 
 **JuiceFS** adopts a decoupled architecture that separates metadata management from data storage. Files are split into
-chunks (default 64 MiB, further divided into 4 MiB blocks) before being uploaded to object storage, with corresponding
-metadata stored in a separate, pluggable database engine.
+chunks (default up to 64 MiB, further divided into 4 MiB blocks) before being uploaded to object storage, with
+corresponding metadata stored in a separate, pluggable database engine.
 
 ![JuiceFS-arch](../../images/juicefs-arch.svg)
 
@@ -98,11 +99,11 @@ the fix is a bigger leader, not more leaders; the standby stays synchronized as 
 reads with bounded staleness (the writer's flush interval, default 30 seconds, plus up to a 10-second replica poll
 window) rather than adding write capacity.
 
-**JuiceFS** has no single-writer bottleneck: every client, whether mounted via FUSE, the S3 Gateway, or an SDK, reads
-and writes directly against object storage and a shared metadata engine, with strong consistency coordinated by that
-engine. Metadata engines bring their own scale-out story: TiKV's Raft-replicated cluster, Redis Cluster/Sentinel, and
-the JuiceFS Enterprise Edition's proprietary distributed metadata engine (horizontally scalable and Raft-replicated
-across at least 3 copies) all let both metadata throughput and the number of concurrent writers grow with the workload.
+**JuiceFS** avoids a single file system server data relay. Clients perform file I/O and communicate with both the
+metadata engine and object storage. Metadata engines bring their own scale-out story: Redis Cluster/Sentinel, TiKV's
+Raft-replicated cluster, and the JuiceFS Enterprise Edition's proprietary distributed metadata engine (horizontally
+scalable and Raft-replicated across at least 3 copies). This design lets both metadata throughput and the number of
+concurrent writers grow with the workload.
 
 ### Durability and consistency
 
@@ -149,8 +150,6 @@ see [Cache](../../guide/cache.md).
 leaves the client, with no unencrypted mode available. Keys are derived from a user-supplied password (via Argon2id)
 that wraps a data-encryption key; losing the password makes the data permanently unrecoverable. This is a strong default
 for security-sensitive deployments, but it is not optional and adds a mandatory encrypt/decrypt step on every I/O path.
-Its network protocols (NFS, 9P, NBD, RPC, web UI) do not provide transport encryption or client authentication, so the
-project recommends binding them to loopback or otherwise restricted networks.
 
 **JuiceFS** supports encryption as an optional, configurable feature rather than a mandatory default, so users can
 choose the trade-off between security overhead and raw performance that fits their workload.
@@ -166,7 +165,7 @@ clouds. See the table below for more details.
 
 | Features                 | ZeroFS                                                                 | JuiceFS Community Edition                                | JuiceFS Enterprise Edition                                         |
 |--------------------------|------------------------------------------------------------------------|----------------------------------------------------------|--------------------------------------------------------------------|
-| Clients                  | NFS, 9P, NBD (block device), native Linux kernel client, Web UI        | POSIX (FUSE), Java SDK, Python SDK, S3 Gateway           | POSIX (FUSE), Java SDK, Python SDK, S3 Gateway                     |
+| Clients                  | NFS, 9P, NBD (block device)                                            | POSIX (FUSE), Java SDK, Python SDK, S3 Gateway           | POSIX (FUSE), Java SDK, Python SDK, S3 Gateway                     |
 | Metadata storage         | Embedded LSM tree, persisted in the same object store (no external DB) | External database (Redis, TiKV, MySQL, PostgreSQL, etc.) | Horizontally-scalable high-performance distributed metadata engine |
 | Metadata redundancy      | Leader/standby pair with automatic failover                            | Depends on the database used                             | At least 3 copies (based on the Raft consensus algorithm)          |
 | Concurrent writers       | Many clients, all writes funneled through one leader process           | Many clients, each writing directly to storage           | Many clients, each writing directly to storage                     |
@@ -175,21 +174,19 @@ clouds. See the table below for more details.
 | Data caching             | Local disk + memory (dual-tier cache)                                  | Local cache                                              | Distributed cache                                                  |
 | Encryption               | ✓ Mandatory, always on (XChaCha20-Poly1305)                           | ✓ Supported (optional)                                  | ✓ Supported (optional)                                            |
 | Compression              | ✓ Mandatory (Zstd or LZ4)                                             | ✓ Supported                                             | ✓ Supported                                                       |
-| Quota management         | ◐ capacity quota at file system-level                                  | ✓ Supported                                             | ✓ Supported                                                       |
+| Quota management         | ◐ Configurable file system size limits                                 | ✓ Supported                                             | ✓ Supported                                                       |
 | POSIX compliance         | ✓ Fully compatible                                                    | ✓ Fully compatible                                      | ✓ Fully compatible                                                |
 | POSIX ACL                | Not publicly documented                                                | ✓ Supported                                             | ✓ Supported                                                       |
 | Kubernetes CSI           | ✓ Supported (RWO/ROX/RWX)                                             | ✓ Supported                                             | ✓ Supported                                                       |
-| Cross-region replication | ◐ Read replicas only (single writer region)                            | ◐ Relies on external service                             | ✓ Supported                                                       |
+| Cross-region replication | ◐ Relies on external service                                           | ◐ Relies on external service                             | ✓ Supported                                                       |
 | Multi-cloud mirroring    | ✕ Not supported                                                       | ✕ Not supported                                         | ✓ Supported                                                       |
 | Pricing                  | AGPLv3, or commercial license                                          | Open source and free (Apache License 2.0)                | Commercial license, volume pricing                                 |
 
 ## Licensing implications
 
-**ZeroFS** is dual-licensed under the GNU AGPLv3 and a commercial license. Internal-only use does not trigger copyleft
-obligations, but hosting or distributing ZeroFS as a network service requires publishing the complete source of the
-combined work under AGPLv3, unless a commercial license is purchased. This is a materially different obligation from a
-permissive license, and it is a factor teams need to evaluate before embedding ZeroFS in a product they distribute or
-offer as a service.
+**ZeroFS** is dual-licensed under the GNU AGPLv3 and a commercial license. The AGPLv3 can impose source-offering and
+corresponding-source obligations when modified software is conveyed or made available for network interaction, subject
+to the license's precise terms. Organizations should obtain legal advice for hosted, embedded, or distributed offerings.
 
 **JuiceFS Community Edition** is released under the Apache License 2.0, a permissive license with no copyleft or
 source-disclosure obligations for internal use, distribution, or hosted services. JuiceFS Enterprise Edition is
@@ -208,11 +205,11 @@ for failover and read scaling, not for adding write throughput. That makes it a 
 such as CI build caches, kernel builds, home labs, and small-to-medium services, especially where mandatory encryption
 and having a single service to operate matter more than scaling the write path itself.
 
-**JuiceFS** is built for the opposite end of the spectrum: large-scale, high-concurrency, multi-writer workloads. By
-decoupling metadata from data and supporting pluggable, independently scalable metadata engines (Redis, TiKV, MySQL,
-PostgreSQL, SQLite, and more, or the JuiceFS Enterprise Edition proprietary distributed metadata engine), JuiceFS lets
-any number of clients read and write the same file system concurrently with strong consistency, across the broadest
-range of object storage backends and multiple clouds. It provides a standard POSIX interface through FUSE, a Java API
-for Hadoop ecosystems, an S3 Gateway, and a Kubernetes CSI Driver. The JuiceFS Community Edition is released under the
-permissive Apache License 2.0. JuiceFS is widely used in big data analytics, AI/ML training, agentic AI tools,
-multi-cloud and hybrid cloud deployments, container shared storage, and high-performance computing.
+**JuiceFS** is built for large-scale, high-concurrency, multi-writer workloads. By decoupling metadata from data and
+supporting pluggable, independently scalable metadata engines (Redis, TiKV, MySQL, PostgreSQL, SQLite, and more, or the
+JuiceFS Enterprise Edition proprietary distributed metadata engine), JuiceFS lets any number of clients read and write
+the same file system concurrently with strong consistency, across the broadest range of object storage backends and
+multiple clouds. It provides a standard POSIX interface through FUSE, a Java API for Hadoop ecosystems, an S3 Gateway,
+and a Kubernetes CSI Driver. The JuiceFS Community Edition is released under the permissive Apache License 2.0. JuiceFS
+is widely used in big data analytics, AI/ML training, agentic AI tools, multi-cloud and hybrid cloud deployments,
+container shared storage, and high-performance computing.
