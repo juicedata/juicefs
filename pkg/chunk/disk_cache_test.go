@@ -538,3 +538,27 @@ func TestStagingBlocksExcludedFromStats(t *testing.T) {
 	require.EqualValues(t, 1, cnt)
 	require.EqualValues(t, 1024+4096, used)
 }
+
+// Staged blocks cannot be evicted, so counting them against --cache-items makes
+// cleanupFull chase a target it can never reach and drop read cache blocks
+// instead. The byte limit already excludes them through used.
+func TestStagingBlocksExcludedFromItemLimit(t *testing.T) {
+	conf := testConf()
+	conf.Writeback = true
+	conf.FreeSpace = 0.00001
+	conf.CacheScanInterval = -1
+	conf.CacheItems = 10
+	defer os.RemoveAll(conf.CacheDir)
+	s := newDiskCache(newCacheManagerMetrics(nil), conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+
+	for i := 0; i < 20; i++ { // twice the item limit, none of them evictable
+		_, err := s.stage(fmt.Sprintf("chunks/0/0/%d_0_1024", i), make([]byte, 1024), 0)
+		require.NoError(t, err)
+	}
+	for i := 100; i < 105; i++ { // read cache blocks arriving afterwards
+		s.add(fmt.Sprintf("chunks/0/0/%d_0_1024", i), 1024, uint32(time.Now().Unix()))
+	}
+
+	cnt, _ := s.stats()
+	require.EqualValues(t, 5, cnt, "read cache must survive when staged blocks exceed cache-items")
+}
