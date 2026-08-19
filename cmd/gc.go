@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"strconv"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/urfave/cli/v2"
 )
@@ -53,7 +55,10 @@ $ juicefs gc redis://localhost
 $ juicefs gc redis://localhost --compact
 
 # Delete leaked objects or metadata and delayed deleted slices or files
-$ juicefs gc redis://localhost --delete`,
+$ juicefs gc redis://localhost --delete
+
+# Use external sort to reduce memory usage on large volumes
+$ juicefs gc redis://localhost --external-sort-dir /tmp/gc-work`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "compact",
@@ -68,6 +73,10 @@ $ juicefs gc redis://localhost --delete`,
 				Aliases: []string{"p"},
 				Value:   10,
 				Usage:   "number threads to delete leaked objects",
+			},
+			&cli.StringFlag{
+				Name:  "external-sort-dir",
+				Usage: "working directory for external sort temporary files (enables external sort mode)",
 			},
 		},
 	}
@@ -103,11 +112,12 @@ func gc(ctx *cli.Context) error {
 	// Scan all chunks first and do compaction if necessary
 	progress := utils.NewProgress(false)
 	// Delete pending slices while listing all slices
-	delete := ctx.Bool("delete")
+	delFlag := ctx.Bool("delete")
+	extSortDir := ctx.String("external-sort-dir")
 	threads := ctx.Int("threads")
 	compact := ctx.Bool("compact")
-	if (delete || compact) && threads <= 0 {
-		logger.Fatal("threads should be greater than 0 to delete or compact objects")
+	if (delFlag || compact || extSortDir != "") && threads <= 0 {
+		logger.Fatal("threads should be greater than 0 to delete, compact, or externally sort objects")
 	}
 	maxMtime := time.Now().Add(time.Hour * -1)
 	strDuration := os.Getenv("JFS_GC_SKIPPEDTIME")
@@ -120,10 +130,9 @@ func gc(ctx *cli.Context) error {
 		}
 	}
 
-	var wg sync.WaitGroup
 	var delSpin *utils.Bar
 
-	if delete || compact {
+	if delFlag || compact {
 		delSpin = progress.AddCountSpinner("Cleaned pending slices")
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 			delSpin.Increment()
@@ -135,7 +144,7 @@ func gc(ctx *cli.Context) error {
 	delayedFileSpin := progress.AddDoubleSpinnerTwo("Pending deleted files", "Pending deleted data")
 	cleanedFileSpin := progress.AddDoubleSpinnerTwo("Cleaned pending files", "Cleaned pending data")
 	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)
-	if delete {
+	if delFlag {
 		cleanTrashSpin := progress.AddCountSpinner("Cleaned trash")
 		_ = m.CleanupTrashBefore(c, edge, cleanTrashSpin.IncrBy, nil)
 		cleanTrashSpin.Done()
@@ -150,7 +159,7 @@ func gc(ctx *cli.Context) error {
 		nil, nil, nil,
 		func(_ meta.Ino, size uint64, ts int64) (bool, error) {
 			delayedFileSpin.IncrInt64(int64(size))
-			if delete {
+			if delFlag {
 				cleanedFileSpin.IncrInt64(int64(size))
 				return true, nil
 			}
@@ -176,8 +185,8 @@ func gc(ctx *cli.Context) error {
 		})
 		if st := m.CompactAll(meta.Background(), ctx.Int("threads"), bar); st == 0 {
 			if progress.Quiet {
-				c, b := spin.Current()
-				logger.Infof("Compacted %d chunks (%d slices, %d bytes).", bar.Current(), c, b)
+				cn, b := spin.Current()
+				logger.Infof("Compacted %d chunks (%d slices, %d bytes).", bar.Current(), cn, b)
 			}
 		} else {
 			logger.Errorf("compact all chunks: %s", st)
@@ -190,12 +199,34 @@ func gc(ctx *cli.Context) error {
 		})
 	}
 
-	// put it above delete count spinner
-	sliceCSpin := progress.AddCountSpinner("Listed slices")
+	stats := newGcStats(progress, extSortDir != "", delSpin, cleanedFileSpin)
+	var gcErr error
+	if extSortDir != "" {
+		gcErr = gcExternalSort(c, m, &chunkConf, blob, stats, extSortDir, threads, delFlag, compact, edge, maxMtime)
+	} else {
+		gcErr = gcInMemory(c, m, &chunkConf, blob, stats, threads, delFlag, compact, edge, maxMtime)
+	}
+	m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
+		return errors.New("stop deleting slice")
+	})
+	return gcErr
+}
 
+func gcInMemory(
+	c meta.Context,
+	m meta.Meta,
+	chunkConf *chunk.Config,
+	blob object.ObjectStorage,
+	stats *gcStats,
+	threads int,
+	delFlag bool,
+	compact bool,
+	edge time.Time,
+	maxMtime time.Time,
+) error {
 	// List all slices in metadata engine
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ScanSlices(c, &meta.ScanSlicesOption{ScanPending: true, Delete: delete, Progress: sliceCSpin.Increment}, func(ino meta.Ino, s meta.Slice) error {
+	r := m.ScanSlices(c, &meta.ScanSlicesOption{ScanPending: true, Delete: delFlag, Progress: stats.slices.Increment}, func(ino meta.Ino, s meta.Slice) error {
 		slices[ino] = append(slices[ino], s)
 		return nil
 	})
@@ -203,37 +234,11 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("scan all slices: %s", r)
 	}
 
-	delayedSliceSpin := progress.AddDoubleSpinnerTwo("Trash slices", "Trash data")
-	cleanedSliceSpin := progress.AddDoubleSpinnerTwo("Cleaned trash slices", "Cleaned trash data")
-
-	err = m.ScanDeletedObject(
-		c,
-		func(ss []meta.Slice, ts int64) (bool, error) {
-			for _, s := range ss {
-				delayedSliceSpin.IncrInt64(int64(s.Size))
-				if delete && ts < edge.Unix() {
-					cleanedSliceSpin.IncrInt64(int64(s.Size))
-				}
-			}
-			if delete && ts < edge.Unix() {
-				return true, nil
-			}
-			return false, nil
-		},
-		nil, nil, nil,
-	)
+	err := scanTrashSlices(c, m, stats, delFlag, edge)
 	if err != nil {
 		logger.Fatalf("statistic: %s", err)
 	}
-	delayedSliceSpin.Done()
-	cleanedSliceSpin.Done()
 
-	// Scan all objects to find leaked ones
-	blob = object.WithPrefix(blob, "chunks/")
-	objs, err := object.ListAll(ctx.Context, blob, "", "", true, false)
-	if err != nil {
-		logger.Fatalf("list all blocks: %s", err)
-	}
 	vkeys := make(map[uint64]uint32)
 	pkeys := make(map[uint64]uint32)
 	ckeys := make(map[uint64]uint32)
@@ -258,34 +263,33 @@ func gc(ctx *cli.Context) error {
 			totalBytes += uint64(s.Size)
 		}
 	}
-	if progress.Quiet {
+	if stats.progress.Quiet {
 		logger.Infof("using %d slices (%d bytes)", len(vkeys)+len(ckeys), totalBytes)
 	}
 
-	bar := progress.AddCountBar("Scanned objects", total)
-	valid := progress.AddDoubleSpinnerTwo("Valid objects", "Valid data")
-	pending := progress.AddDoubleSpinnerTwo("Pending delete objects", "Pending delete data")
-	compacted := progress.AddDoubleSpinnerTwo("Compacted objects", "Compacted data")
-	leaked := progress.AddDoubleSpinnerTwo("Leaked objects", "Leaked data")
-	skipped := progress.AddDoubleSpinnerTwo("Skipped objects", "Skipped data")
+	stats.scanned.SetTotal(total)
 
-	var leakedObj = make(chan string, 10240)
-	for i := 0; i < threads; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for key := range leakedObj {
-				if err := blob.Delete(ctx.Context, key); err != nil {
-					logger.Warnf("delete %s: %s", key, err)
-				}
+	// Scan all objects to find leaked ones
+	blob = object.WithPrefix(blob, "chunks/")
+	leakedObj, waitLeakedObj := startGcObjectDeleters(c, blob, threads, delFlag)
+	objs := make(chan object.Object, max(threads, 1))
+	listErr := make(chan error, 1)
+	go func() {
+		defer close(objs)
+		listErr <- scanGcChunkObjects(c, blob, max(threads, 1), chunkConf.HashPrefix, stats.prefixes, func(obj object.Object) error {
+			select {
+			case objs <- obj:
+				return nil
+			case <-c.Done():
+				return c.Err()
 			}
-		}()
-	}
+		})
+	}()
 
 	foundLeaked := func(obj object.Object) {
-		bar.IncrTotal(1)
-		leaked.IncrInt64(obj.Size())
-		if delete {
+		stats.scanned.IncrTotal(1)
+		stats.addLeaked(obj.Size())
+		if leakedObj != nil {
 			leakedObj <- obj.Key()
 		}
 	}
@@ -294,23 +298,9 @@ func gc(ctx *cli.Context) error {
 		if obj == nil {
 			break // failed listing
 		}
-		if obj.IsDir() {
-			continue
-		}
-		if obj.Size() == 0 || obj.Mtime().Unix() == 0 {
-			headObj, err := blob.Head(ctx.Context, obj.Key())
-			if err != nil {
-				logger.Warnf("head %s: %s", obj.Key(), err)
-				bar.Increment()
-				skipped.IncrInt64(obj.Size())
-				continue
-			}
-			obj = headObj
-		}
-		if obj.Mtime().After(maxMtime) {
-			logger.Debugf("ignore new block: %s %s", obj.Key(), obj.Mtime())
-			bar.Increment()
-			skipped.IncrInt64(obj.Size())
+		var ok bool
+		obj, ok = filterGcObject(c, blob, obj, maxMtime, stats.scanned, stats.skipped)
+		if !ok {
 			continue
 		}
 
@@ -324,7 +314,7 @@ func gc(ctx *cli.Context) error {
 		if len(parts) != 3 {
 			continue
 		}
-		bar.Increment()
+		stats.scanned.Increment()
 		cid, _ := strconv.Atoi(parts[0])
 		size := vkeys[uint64(cid)]
 		var pobj, cobj bool
@@ -341,55 +331,303 @@ func gc(ctx *cli.Context) error {
 		}
 		indx, _ := strconv.Atoi(parts[1])
 		csize, _ := strconv.Atoi(parts[2])
-		if csize == chunkConf.BlockSize {
-			if (indx+1)*csize > int(size) {
+		if cobj {
+			stats.addObject(gcStateTrash, obj.Size())
+		} else if pobj {
+			stats.addObject(gcStatePending, obj.Size())
+		} else if isLeakedBlock(indx, csize, int(size), chunkConf.BlockSize) {
+			if csize == chunkConf.BlockSize {
 				logger.Warnf("size of slice %d is larger than expected: %d > %d", cid, indx*chunkConf.BlockSize+csize, size)
-				foundLeaked(obj)
-			} else if pobj {
-				pending.IncrInt64(obj.Size())
-			} else if cobj {
-				compacted.IncrInt64(obj.Size())
 			} else {
-				valid.IncrInt64(obj.Size())
-			}
-		} else {
-			if indx*chunkConf.BlockSize+csize != int(size) {
 				logger.Warnf("size of slice %d is %d, but expect %d", cid, indx*chunkConf.BlockSize+csize, size)
-				foundLeaked(obj)
-			} else if pobj {
-				pending.IncrInt64(obj.Size())
-			} else if cobj {
-				compacted.IncrInt64(obj.Size())
-			} else {
-				valid.IncrInt64(obj.Size())
 			}
+			foundLeaked(obj)
+		} else {
+			stats.addObject(gcStateUsed, obj.Size())
 		}
 	}
-	m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
-		return errors.New("stop deleting slice")
-	})
-	close(leakedObj)
-	wg.Wait()
-	if delete || compact {
-		delSpin.Done()
-		if progress.Quiet {
-			logger.Infof("Deleted %d pending slices", delSpin.Current())
-		}
+	waitLeakedObj()
+	if err := <-listErr; err != nil {
+		return errors.Errorf("list all blocks: %s", err)
 	}
-	sliceCSpin.Done()
-	progress.Done()
+	stats.slices.Done()
+	stats.finish(delFlag, compact)
+	return nil
+}
 
-	vc, _ := valid.Current()
-	pc, pb := pending.Current()
-	cc, cb := compacted.Current()
-	lc, lb := leaked.Current()
-	sc, sb := skipped.Current()
-	dsc, dsb := cleanedSliceSpin.Current()
-	fc, fb := cleanedFileSpin.Current()
-	logger.Infof("scanned %d objects, %d valid, %d pending delete (%d bytes), %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes)",
-		bar.Current(), vc, pc, pb, cc, cb, lc, lb, dsc, dsb, fc, fb, sc, sb)
-	if lc > 0 && !delete {
+const (
+	gcStateUsed    uint8 = 0
+	gcStatePending uint8 = 1
+	gcStateTrash   uint8 = 2
+)
+
+type gcStats struct {
+	progress      *utils.Progress
+	deletedSlices *utils.Bar
+	cleanedFiles  *utils.DoubleSpinner
+	slices        *utils.Bar
+	delayedSlices *utils.DoubleSpinner
+	cleanedSlices *utils.DoubleSpinner
+	prefixes      *utils.Bar
+	scanned       *utils.Bar
+	valid         *utils.DoubleSpinner
+	pending       *utils.DoubleSpinner
+	compacted     *utils.DoubleSpinner
+	leaked        *utils.DoubleSpinner
+	skipped       *utils.DoubleSpinner
+}
+
+func newGcStats(progress *utils.Progress, external bool, deletedSlices *utils.Bar, cleanedFiles *utils.DoubleSpinner) *gcStats {
+	stats := &gcStats{
+		progress:      progress,
+		deletedSlices: deletedSlices,
+		cleanedFiles:  cleanedFiles,
+		slices:        progress.AddCountSpinner("Listed slices"),
+		delayedSlices: progress.AddDoubleSpinnerTwo("Trash slices", "Trash data"),
+		cleanedSlices: progress.AddDoubleSpinnerTwo("Cleaned trash slices", "Cleaned trash data"),
+		prefixes:      progress.AddCountBar("Listed prefixes", 0),
+	}
+	if external {
+		stats.scanned = progress.AddCountSpinner("Scanned objects")
+	} else {
+		stats.scanned = progress.AddCountBar("Scanned objects", 0)
+	}
+	stats.valid = progress.AddDoubleSpinnerTwo("Valid objects", "Valid data")
+	stats.pending = progress.AddDoubleSpinnerTwo("Pending delete objects", "Pending delete data")
+	stats.compacted = progress.AddDoubleSpinnerTwo("Compacted objects", "Compacted data")
+	stats.leaked = progress.AddDoubleSpinnerTwo("Leaked objects", "Leaked data")
+	stats.skipped = progress.AddDoubleSpinnerTwo("Skipped objects", "Skipped data")
+	return stats
+}
+
+func scanTrashSlices(c meta.Context, m meta.Meta, stats *gcStats, delFlag bool, edge time.Time) error {
+	err := m.ScanDeletedObject(
+		c,
+		func(ss []meta.Slice, ts int64) (bool, error) {
+			for _, slice := range ss {
+				stats.delayedSlices.IncrInt64(int64(slice.Size))
+				if delFlag && ts < edge.Unix() {
+					stats.cleanedSlices.IncrInt64(int64(slice.Size))
+				}
+			}
+			return delFlag && ts < edge.Unix(), nil
+		},
+		nil, nil, nil,
+	)
+	if err != nil {
+		return err
+	}
+	stats.delayedSlices.Done()
+	stats.cleanedSlices.Done()
+	return nil
+}
+
+func (s *gcStats) addObject(state uint8, size int64) {
+	switch state {
+	case gcStatePending:
+		s.pending.IncrInt64(size)
+	case gcStateTrash:
+		s.compacted.IncrInt64(size)
+	default:
+		s.valid.IncrInt64(size)
+	}
+}
+
+func (s *gcStats) addLeaked(size int64) {
+	s.leaked.IncrInt64(size)
+}
+
+func startGcObjectDeleters(ctx context.Context, blob object.ObjectStorage, threads int, enabled bool) (chan string, func()) {
+	if !enabled {
+		return nil, func() {}
+	}
+	leakedObj := make(chan string, 10240)
+	var wg sync.WaitGroup
+	for i := 0; i < threads; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for key := range leakedObj {
+				if err := blob.Delete(ctx, key); err != nil {
+					logger.Warnf("delete %s: %s", key, err)
+				}
+			}
+		}()
+	}
+	return leakedObj, func() {
+		close(leakedObj)
+		wg.Wait()
+	}
+}
+
+func (s *gcStats) finish(delFlag, compact bool) {
+	if delFlag || compact {
+		s.deletedSlices.Done()
+		if s.progress.Quiet {
+			logger.Infof("Deleted %d pending slices", s.deletedSlices.Current())
+		}
+	}
+	leakedCount, _ := s.leaked.Current()
+	s.progress.Done()
+	s.logSummary()
+	if leakedCount > 0 && !delFlag {
 		logger.Infof("Please add `--delete` to clean leaked objects")
 	}
+}
+
+const gcObjectListBatch = 10000
+
+func scanGcChunkObjects(ctx context.Context, blob object.ObjectStorage, threads int, hashPrefix bool, prefixSpin *utils.Bar, handle func(object.Object) error) error {
+	defer prefixSpin.Done()
+	prefixes := make(chan string, threads)
+	eg, scanCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		defer close(prefixes)
+		depth := 2
+		if hashPrefix {
+			depth = 1
+		}
+		return walkGcChunkObjectPrefixes(scanCtx, blob, "", depth, true, func(prefix string) error {
+			prefixSpin.IncrTotal(1)
+			select {
+			case prefixes <- prefix:
+				return nil
+			case <-scanCtx.Done():
+				return scanCtx.Err()
+			}
+		})
+	})
+
+	for range threads {
+		eg.Go(func() error {
+			for {
+				select {
+				case prefix, ok := <-prefixes:
+					if !ok {
+						return nil
+					}
+					if err := scanGcChunkObjectsPrefix(scanCtx, blob, prefix, handle); err != nil {
+						return errors.Errorf("list chunks from %s: %s", blob, err)
+					}
+					prefixSpin.Increment()
+				case <-scanCtx.Done():
+					return scanCtx.Err()
+				}
+			}
+		})
+	}
+	return eg.Wait()
+}
+
+func walkGcChunkObjectPrefixes(ctx context.Context, blob object.ObjectStorage, prefix string, depth int, allowFallback bool, fn func(string) error) error {
+	seenPrefixes := make(map[string]struct{})
+	var marker, token string
+	firstPage := true
+	for {
+		objs, hasMore, nextToken, err := blob.List(ctx, prefix, marker, token, "/", gcObjectListBatch, true)
+		if err != nil {
+			if allowFallback && firstPage {
+				logger.Warnf("can't find chunk prefixes: %s, list chunks using single thread", err)
+				return fn("")
+			}
+			return err
+		}
+		firstPage = false
+		if len(objs) > 0 && marker != "" && objs[0].Key() == marker {
+			objs = objs[1:]
+		}
+		if hasMore && len(objs) == 0 && nextToken == token {
+			return errors.New("list chunk prefixes made no progress")
+		}
+		for _, obj := range objs {
+			if obj == nil || obj.Key() == "" {
+				continue
+			}
+			key := obj.Key()
+			if key == prefix {
+				marker = key
+				continue
+			}
+			if obj.IsDir() {
+				if _, ok := seenPrefixes[key]; !ok {
+					seenPrefixes[key] = struct{}{}
+					if depth == 1 {
+						if err := fn(key); err != nil {
+							return err
+						}
+					} else {
+						if err := walkGcChunkObjectPrefixes(ctx, blob, key, depth-1, false, fn); err != nil {
+							return err
+						}
+					}
+				}
+			} else if strings.Contains(strings.TrimPrefix(key, prefix), "/") {
+				return errors.Errorf("delimiter list returned nested object %s", key)
+			}
+			marker = key
+		}
+		if !hasMore {
+			break
+		}
+		token = nextToken
+	}
 	return nil
+}
+
+func scanGcChunkObjectsPrefix(ctx context.Context, blob object.ObjectStorage, prefix string, handle func(object.Object) error) error {
+	objs, err := object.ListAll(ctx, blob, prefix, "", true, false)
+	if err != nil {
+		return errors.Errorf("list chunk prefix %s: %s", prefix, err)
+	}
+	for obj := range objs {
+		if obj == nil {
+			return errors.Errorf("list chunk prefix %s failed", prefix)
+		}
+		if err := handle(obj); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func filterGcObject(ctx context.Context, blob object.ObjectStorage, obj object.Object, maxMtime time.Time, scanned *utils.Bar, skipped *utils.DoubleSpinner) (object.Object, bool) {
+	if obj.IsDir() {
+		return nil, false
+	}
+	if obj.Size() == 0 || obj.Mtime().Unix() == 0 {
+		headObj, err := blob.Head(ctx, obj.Key())
+		if err != nil {
+			logger.Warnf("head %s: %s", obj.Key(), err)
+			scanned.Increment()
+			skipped.IncrInt64(obj.Size())
+			return nil, false
+		}
+		obj = headObj
+	}
+	if obj.Mtime().After(maxMtime) {
+		logger.Debugf("ignore new block: %s %s", obj.Key(), obj.Mtime())
+		scanned.Increment()
+		skipped.IncrInt64(obj.Size())
+		return nil, false
+	}
+	return obj, true
+}
+
+func (s *gcStats) logSummary() {
+	vc, _ := s.valid.Current()
+	pc, pb := s.pending.Current()
+	cc, cb := s.compacted.Current()
+	lc, lb := s.leaked.Current()
+	dsc, dsb := s.cleanedSlices.Current()
+	fc, fb := s.cleanedFiles.Current()
+	sc, sb := s.skipped.Current()
+	logger.Infof("scanned %d objects, %d valid, %d pending delete (%d bytes), %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes)",
+		s.scanned.Current(), vc, pc, pb, cc, cb, lc, lb, dsc, dsb, fc, fb, sc, sb)
+}
+
+func isLeakedBlock(index, blockSize, sliceSize, configuredBlockSize int) bool {
+	if blockSize == configuredBlockSize {
+		return (index+1)*blockSize > sliceSize
+	}
+	return index*configuredBlockSize+blockSize != sliceSize
 }

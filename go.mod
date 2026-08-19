@@ -54,6 +54,7 @@ require (
 	github.com/juju/ratelimit v1.0.2
 	github.com/ks3sdklib/aws-sdk-go v1.6.0
 	github.com/l0wl3vel/bunny-storage-go-sdk v1.0.0
+	github.com/lanrat/extsort v1.4.2
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/minio/cli v1.24.2
@@ -375,3 +376,5 @@ replace github.com/mattn/go-colorable v0.0.9 => github.com/juicedata/go-colorabl
 replace github.com/cloudsoda/go-smb2 => github.com/juicedata/go-smb2 v0.0.0-20260310064141-58f27d06634e
 
 replace github.com/hashicorp/golang-lru/v2 v2.0.7 => github.com/juicedata/golang-lru/v2 v2.0.8-0.20251126062551-1b321869f904
+
+replace github.com/lanrat/extsort => github.com/juicedata/extsort v1.0.2-0.20260716070150-94a8c0fbe780
