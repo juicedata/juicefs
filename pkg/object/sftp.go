@@ -520,6 +520,9 @@ func parseSftpEndpoint(endpoint string) (host, port, root string, err error) {
 			rawRoot = rawRoot[portEnd+1:]
 		}
 	}
+	if rawRoot == "" {
+		return "", "", "", fmt.Errorf("unable to parse host from endpoint (%s): missing path", endpoint)
+	}
 
 	host, port, err = net.SplitHostPort(hostPort)
 	if err != nil {

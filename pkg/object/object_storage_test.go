@@ -910,6 +910,42 @@ func TestParseSftpEndpoint(t *testing.T) {
 			wantRoot: "backup/path",
 		},
 		{
+			name:     "relative path with symbols",
+			endpoint: "host:!@#$%^&*()_+-=[]{}|;,.<>?",
+			wantHost: "host",
+			wantPort: "22",
+			wantRoot: "!@#$%^&*()_+-=[]{}|;,.<>?",
+		},
+		{
+			name:     "relative path starts with colon",
+			endpoint: "host::backup/path",
+			wantHost: "host",
+			wantPort: "22",
+			wantRoot: ":backup/path",
+		},
+		{
+			name:     "numeric relative path",
+			endpoint: "host:2022",
+			wantHost: "host",
+			wantPort: "22",
+			wantRoot: "2022",
+		},
+		{
+			name:     "empty path",
+			endpoint: "host:",
+			wantErr:  "missing path",
+		},
+		{
+			name:     "explicit port with empty path",
+			endpoint: "host:2022:",
+			wantErr:  "missing path",
+		},
+		{
+			name:     "IPv6 default port with empty path",
+			endpoint: "[2001:db8::1]:",
+			wantErr:  "missing path",
+		},
+		{
 			name:     "missing port path separator",
 			endpoint: "host:2022/path",
 			wantErr:  "missing colon between port and path",
