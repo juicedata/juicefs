@@ -3970,6 +3970,23 @@ func (m *redisMeta) hscan(ctx context.Context, key string, f func([]string) erro
 	return nil
 }
 
+func (m *redisMeta) hscanToMap(ctx context.Context, key string) (map[string]string, error) {
+	result := make(map[string]string)
+	err := m.hscan(ctx, key, func(keys []string) error {
+		if len(keys)%2 != 0 {
+			return fmt.Errorf("invalid HSCAN response for %s: odd number of elements: %d", key, len(keys))
+		}
+		for i := 0; i < len(keys); i += 2 {
+			result[keys[i]] = keys[i+1]
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (m *redisMeta) ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno {
 	logger.Debugf("start cleanup...")
 	m.cleanupLeakedInodes(opt.Delete)
@@ -4504,46 +4521,55 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to load %s quotas: %w", qt.name, err)
 		}
-		if err := m.hscan(ctx, config.usedInodesKey, func(keys []string) error {
-			for i := 0; i < len(keys); i += 2 {
-				key := keys[i]
-				id, err := strconv.ParseUint(key, 10, 64)
-				if err != nil {
-					logger.Errorf("invalid key in %s: %s", qt.name, key)
+
+		usedInodesMap, err := m.hscanToMap(ctx, config.usedInodesKey)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		usedSpaceMap, err := m.hscanToMap(ctx, config.usedSpaceKey)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		quotaMap, err := m.hscanToMap(ctx, config.quotaKey)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		for key, usedInodesStr := range usedInodesMap {
+			id, err := strconv.ParseUint(key, 10, 64)
+			if err != nil {
+				logger.Errorf("invalid key in %s: %s", qt.name, key)
+				continue
+			}
+			usedInodes, err := strconv.ParseInt(usedInodesStr, 10, 64)
+			if err != nil {
+				logger.Errorf("invalid usedInodes for %s %s: %s", qt.name, key, usedInodesStr)
+				continue
+			}
+
+			var usedSpace int64
+			if v, ok := usedSpaceMap[key]; ok {
+				if usedSpace, err = strconv.ParseInt(v, 10, 64); err != nil {
+					logger.Errorf("invalid usedSpace for %s %s: %s", qt.name, key, v)
 					continue
-				}
-				usedInodes, err := strconv.ParseInt(keys[i+1], 10, 64)
-				if err != nil {
-					logger.Errorf("invalid usedInodes for %s %s: %s", qt.name, key, keys[i+1])
-					continue
-				}
-
-				usedSpace, err := m.rdb.HGet(ctx, config.usedSpaceKey, key).Int64()
-				if err != nil && err != redis.Nil {
-					return err
-				}
-
-				var maxSpace, maxInodes int64 = -1, -1
-				if buf, err := m.rdb.HGet(ctx, config.quotaKey, key).Bytes(); err == nil {
-					if len(buf) != 16 {
-						logger.Errorf("invalid quota value for %s %s: len=%d", qt.name, key, len(buf))
-						continue
-					}
-					maxSpace, maxInodes = m.parseQuota(buf)
-				} else if err != redis.Nil {
-					return err
-				}
-
-				qt.quotas[id] = &Quota{
-					MaxSpace:   maxSpace,
-					MaxInodes:  maxInodes,
-					UsedSpace:  usedSpace,
-					UsedInodes: usedInodes,
 				}
 			}
-			return nil
-		}); err != nil {
-			return nil, nil, nil, err
+
+			var maxSpace, maxInodes int64 = -1, -1
+			if v, ok := quotaMap[key]; ok {
+				if len(v) != 16 {
+					logger.Errorf("invalid quota value for %s %s: len=%d", qt.name, key, len(v))
+					continue
+				}
+				maxSpace, maxInodes = m.parseQuota([]byte(v))
+			}
+
+			qt.quotas[id] = &Quota{
+				MaxSpace:   maxSpace,
+				MaxInodes:  maxInodes,
+				UsedSpace:  usedSpace,
+				UsedInodes: usedInodes,
+			}
 		}
 	}
 
