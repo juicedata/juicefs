@@ -204,6 +204,14 @@ juicefs sync /media/ "username:password"@192.168.1.100:/backup/
 
 当使用 SFTP/SSH 协议时，如果没有指定密码，执行 sync 任务时会提示输入密码。如果希望显式指定用户名和密码，则需要用半角引号把用户名和密码括起来，用户名和密码之间用半角冒号分隔。
 
+SFTP 远端路径支持以下格式：
+
+- 使用默认 SSH 端口：`username@host:/path`
+- 指定 SSH 端口：`username@host:port:/path`
+- IPv6 地址并指定 SSH 端口：`username@[2001:db8::1]:2022:/path`
+
+指定 SSH 端口时，端口和路径之间的冒号不能省略。例如，应使用 `username@192.168.1.100:2022:/backup/`，不能写成 `username@192.168.1.100:2022/backup/`。远端路径开始后的冒号会被视为路径的一部分，因此 `/backup/2026-07-23T05:53:21/` 这样的时间戳路径无需进行 URL 编码。
+
 ## 同步行为
 
 ### 增量同步与全量同步 {#incremental-and-full-synchronization}

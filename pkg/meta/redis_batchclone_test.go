@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"syscall"
@@ -605,4 +606,59 @@ func TestRedisBatchClonePartialFailureLeavesState(t *testing.T) {
 		t.Fatalf("expected partial writes after failed BatchClone, got usedDelta=%d inodeDelta=%d", usedDelta, inodeDelta)
 	}
 	t.Logf("failed BatchClone left state: status=%s leakedIno=%d usedDelta=%d inodeDelta=%d", st, leakedIno, usedDelta, inodeDelta)
+}
+
+func TestRedisHscanToMap(t *testing.T) {
+	m := newTestRedisMeta(t, 13)
+	ctx := Background()
+
+	// empty hash returns an empty map
+	got, err := m.hscanToMap(ctx, "jfs_hscan_empty")
+	if err != nil {
+		t.Fatalf("hscanToMap empty: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected empty map, got %v", got)
+	}
+
+	// small hash returns all fields
+	small := "jfs_hscan_small"
+	if err := m.rdb.Del(ctx, small).Err(); err != nil {
+		t.Fatalf("del %s: %v", small, err)
+	}
+	want := map[string]string{"a": "1", "b": "2", "c": "3"}
+	if err := m.rdb.HSet(ctx, small, want).Err(); err != nil {
+		t.Fatalf("hset %s: %v", small, err)
+	}
+	got, err = m.hscanToMap(ctx, small)
+	if err != nil {
+		t.Fatalf("hscanToMap small: %v", err)
+	}
+	if !reflect.DeepEqual(want, got) {
+		t.Fatalf("small hash mismatch: want %v got %v", want, got)
+	}
+
+	// large hash spanning multiple HSCAN batches
+	large := "jfs_hscan_large"
+	if err := m.rdb.Del(ctx, large).Err(); err != nil {
+		t.Fatalf("del %s: %v", large, err)
+	}
+	wantLarge := make(map[string]string, 20000)
+	pairs := make([]interface{}, 0, 40000)
+	for i := 0; i < 20000; i++ {
+		f := fmt.Sprintf("field-%d", i)
+		v := fmt.Sprintf("value-%d", i)
+		wantLarge[f] = v
+		pairs = append(pairs, f, v)
+	}
+	if err := m.rdb.HSet(ctx, large, pairs...).Err(); err != nil {
+		t.Fatalf("hset %s: %v", large, err)
+	}
+	got, err = m.hscanToMap(ctx, large)
+	if err != nil {
+		t.Fatalf("hscanToMap large: %v", err)
+	}
+	if !reflect.DeepEqual(wantLarge, got) {
+		t.Fatalf("large hash mismatch: want %d entries got %d entries", len(wantLarge), len(got))
+	}
 }
