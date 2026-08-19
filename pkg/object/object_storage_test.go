@@ -875,10 +875,38 @@ func TestParseSftpEndpoint(t *testing.T) {
 			wantRoot: "/path/T05:53:21",
 		},
 		{
+			name:     "IPv6 default port with timestamp colons",
+			endpoint: "[2001:db8::1]:/path/T05:53:21",
+			wantHost: "2001:db8::1",
+			wantPort: "22",
+			wantRoot: "/path/T05:53:21",
+		},
+		{
 			name:     "relative path remains supported",
 			endpoint: "host:backup/path",
 			wantHost: "host",
 			wantPort: "22",
+			wantRoot: "backup/path",
+		},
+		{
+			name:     "relative path with timestamp colons",
+			endpoint: "host:T05:53:21",
+			wantHost: "host",
+			wantPort: "22",
+			wantRoot: "T05:53:21",
+		},
+		{
+			name:     "relative path with ISO timestamp colons",
+			endpoint: "host:2026-07-23T05:53:21",
+			wantHost: "host",
+			wantPort: "22",
+			wantRoot: "2026-07-23T05:53:21",
+		},
+		{
+			name:     "explicit port with relative path",
+			endpoint: "host:2022:backup/path",
+			wantHost: "host",
+			wantPort: "2022",
 			wantRoot: "backup/path",
 		},
 		{
