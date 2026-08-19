@@ -32,16 +32,17 @@ necessary for large-scale, performance-driven, POSIX-compliant workloads.
 
 **ZeroFS** splits files into 32 KiB extents, which are compressed (Zstd by default, or LZ4) and encrypted
 (XChaCha20-Poly1305, without an unencrypted mode), then packed into immutable 256 MiB segments uploaded as individual
-objects. The metadata lives in an LSM tree that is itself persisted to the same object store, so ZeroFS has no external
-database dependency. Because files are packed into opaque segments rather than mapped 1:1 to objects, ZeroFS files are
-not individually accessible through the S3 API, which is similar to JuiceFS' approach in this regard.
+objects. ZeroFS stores file system metadata in an object-backed LSM tree and stores file contents separately in
+immutable segment objects in the same object store, so it has no external database dependency. Because files are packed
+into opaque segments rather than mapped 1:1 to objects, ZeroFS files are not individually accessible through the S3 API,
+which is similar to JuiceFS' approach in this regard.
 
 Key architectural characteristics:
 
-- No separate metadata database: both metadata (LSM tree) and data (segments) live in the same object store, managed by
-  the ZeroFS server. When working with ZeroFS, this server (and its standby for HA and read replicas for read scaling)
-  is the main service you deploy and operate. ZeroFS folds metadata management into it instead of requiring a separate
-  metadata database.
+- No separate metadata database: metadata (inodes, directory entries, extent pointers, manifests) lives in an
+  object-backed LSM tree, while file contents live separately in immutable segment objects, both managed by the ZeroFS
+  server. When working with ZeroFS, this server (and its standby for HA and read replicas for read scaling) is the main
+  service you deploy and operate.
 - One server process (the leader) is the sole writer to the backing object store. It accepts connections from concurrent
   clients and arbitrates their writes and POSIX locks internally, but every mutation is funneled through that single
   process. See [Concurrency and write scalability](#concurrency-and-write-scalability) below.
@@ -101,8 +102,7 @@ window) rather than adding write capacity.
 and writes directly against object storage and a shared metadata engine, with strong consistency coordinated by that
 engine. Metadata engines bring their own scale-out story: TiKV's Raft-replicated cluster, Redis Cluster/Sentinel, and
 the JuiceFS Enterprise Edition's proprietary distributed metadata engine (horizontally scalable and Raft-replicated
-across at least 3 copies) all let both metadata throughput and the number of concurrent writers grow with the
-workload.
+across at least 3 copies) all let both metadata throughput and the number of concurrent writers grow with the workload.
 
 ### Durability and consistency
 
@@ -110,25 +110,25 @@ workload.
 memtable for metadata. It only guarantees durability to object storage when a specific trigger fires: an explicit
 `fsync`, an NFS `COMMIT`, an NBD `FLUSH`/`FUA`, a `sync_writes = true` batch, the periodic flush timer
 (`flush_interval_secs`, default 30 seconds), garbage collection starting, or a graceful shutdown. Plain `close()` is
-notably absent from that list, so closing a file descriptor does not by itself force a flush. An application that
-writes and closes a file without calling `fsync()` can lose up to a flush interval's worth of writes if the leader
-crashes before the next periodic flush, even though its `write()`/`close()` calls already returned successfully.
-ZeroFS does add a safety net for the case where an application does call `fsync()`: a "verified fsync" mechanism
-returns `ESTALE` instead of falsely reporting success if the server restarted before flushing acknowledged writes.
-Once data is flushed, recovery is strongly consistent: a crash recovers to an atomic prefix of the mutations that
-were visible before it, never a partial or torn write.
+notably absent from that list, so closing a file descriptor does not by itself force a flush. An application that writes
+and closes a file without calling `fsync()` can lose up to a flush interval's worth of writes if the leader crashes
+before the next periodic flush, even though its `write()`/`close()` calls already returned successfully. ZeroFS does add
+a safety net for the case where an application does call `fsync()`: a "verified fsync" mechanism returns `ESTALE`
+instead of falsely reporting success if the server restarted before flushing acknowledged writes. Once data is flushed,
+recovery is strongly consistent: a crash recovers to an atomic prefix of the mutations that were visible before it,
+never a partial or torn write.
 
-**JuiceFS** also buffers writes, in the client's read/write buffer (default 300 MiB), but ties the durability
-boundary directly to `close()`: `close()`, `fsync()`, and `fdatasync()` (as well as filling a 4 MiB block) all
-trigger a flush, and the client will not commit a write to the metadata engine until the corresponding data has
-actually been uploaded to object storage. This is what its default "close-to-open" consistency guarantee is built
-on: a successful `close()` already means the write is both durable in object storage and visible to any other
-client that opens the file afterward, without the application ever having to call `fsync()` itself. For more
-details, see [Cache](../../guide/cache.md#consistency) and
+**JuiceFS** also buffers writes, in the client's read/write buffer (default 300 MiB), but ties the durability boundary
+directly to `close()`: `close()`, `fsync()`, and `fdatasync()` (as well as filling a 4 MiB block) all trigger a flush,
+and the client will not commit a write to the metadata engine until the corresponding data has actually been uploaded to
+object storage. This is what its default "close-to-open" consistency guarantee is built on: a successful `close()`
+already means the write is both durable in object storage and visible to any other client that opens the file afterward,
+without the application ever having to call `fsync()` itself. For more details,
+see [Cache](../../guide/cache.md#consistency) and
 [POSIX compatibility](../../reference/posix_compatibility.md). JuiceFS does offer an opt-in `--writeback` mode with a
 risk profile similar to ZeroFS's default: writes are committed to metadata immediately and uploaded from local disk
-asynchronously. However, the docs flag it explicitly ("if write cache data suffers loss before upload is complete,
-file data is lost forever") and it is off by default.
+asynchronously. However, the docs flag it explicitly ("if write cache data suffers loss before upload is complete, file
+data is lost forever") and it is off by default.
 
 ### Caching
 
@@ -175,7 +175,7 @@ clouds. See the table below for more details.
 | Data caching             | Local disk + memory (dual-tier cache)                                  | Local cache                                              | Distributed cache                                                  |
 | Encryption               | ✓ Mandatory, always on (XChaCha20-Poly1305)                           | ✓ Supported (optional)                                  | ✓ Supported (optional)                                            |
 | Compression              | ✓ Mandatory (Zstd or LZ4)                                             | ✓ Supported                                             | ✓ Supported                                                       |
-| Quota management         | ◐ Filesystem-level capacity quota                                      | ✓ Supported                                             | ✓ Supported                                                       |
+| Quota management         | ◐ capacity quota at file system-level                                  | ✓ Supported                                             | ✓ Supported                                                       |
 | POSIX compliance         | ✓ Fully compatible                                                    | ✓ Fully compatible                                      | ✓ Fully compatible                                                |
 | POSIX ACL                | Not publicly documented                                                | ✓ Supported                                             | ✓ Supported                                                       |
 | Kubernetes CSI           | ✓ Supported (RWO/ROX/RWX)                                             | ✓ Supported                                             | ✓ Supported                                                       |
