@@ -512,3 +512,29 @@ func TestSpaceToFreeNoAction(t *testing.T) {
 		require.Equal(t, 0, uploadCount, "should not upload when disk has enough free space and inodes")
 	})
 }
+
+// A staging block is linked into the cache dir but excluded from used, so the
+// block count has to exclude it too: otherwise blockcache_blocks and
+// blockcache_bytes report different sets of blocks.
+func TestStagingBlocksExcludedFromStats(t *testing.T) {
+	conf := testConf()
+	conf.Writeback = true
+	conf.FreeSpace = 0.00001
+	defer os.RemoveAll(conf.CacheDir)
+	s := newDiskCache(newCacheManagerMetrics(nil), conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+
+	key := "chunks/0/0/1_0_1024"
+	_, err := s.stage(key, make([]byte, 1024), 0)
+	require.NoError(t, err)
+
+	cnt, used := s.stats()
+	require.EqualValues(t, 0, cnt, "staging block must not count as a cached block")
+	require.EqualValues(t, 0, used)
+
+	s.uploaded(key, 1024)
+	require.NoError(t, s.removeStage(key))
+
+	cnt, used = s.stats()
+	require.EqualValues(t, 1, cnt)
+	require.EqualValues(t, 1024+4096, used)
+}
