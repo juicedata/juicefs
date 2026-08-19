@@ -45,7 +45,7 @@ type filestore struct {
 }
 
 func (d *filestore) Symlink(oldName, newName string) error {
-	p, err := d.safePath(newName)
+	p, err := d.path(newName)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (d *filestore) Symlink(oldName, newName string) error {
 }
 
 func (d *filestore) Readlink(name string) (string, error) {
-	p, err := d.safePath(name)
+	p, err := d.path(name)
 	if err != nil {
 		return "", err
 	}
@@ -74,21 +74,13 @@ func (d *filestore) String() string {
 	return "file://" + d.root
 }
 
-func (d *filestore) path(key string) string {
+func (d *filestore) path(key string) (string, error) {
+	var p string
 	if strings.HasSuffix(d.root, dirSuffix) {
-		return filepath.Join(d.root, key)
+		p = filepath.Join(d.root, key)
+	} else {
+		p = filepath.Clean(d.root + key)
 	}
-	return filepath.Clean(d.root + key)
-}
-
-// safePath is like path, but rejects a key that would resolve outside the
-// storage root (or, when root is used as a flat-namespace prefix rather
-// than a directory, outside root's parent directory). An object key
-// commonly originates from another, possibly remote or shared, object
-// storage backend's own listing, which unlike a real local filesystem
-// walk has no character restrictions on what a key can contain.
-func (d *filestore) safePath(key string) (string, error) {
-	p := d.path(key)
 
 	boundary := d.root
 	if !strings.HasSuffix(boundary, dirSuffix) {
@@ -104,7 +96,7 @@ func (d *filestore) safePath(key string) (string, error) {
 }
 
 func (d *filestore) Head(ctx context.Context, key string) (Object, error) {
-	p, err := d.safePath(key)
+	p, err := d.path(key)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +142,7 @@ type SectionReaderCloser struct {
 }
 
 func (d *filestore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	p, err := d.safePath(key)
+	p, err := d.path(key)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +172,7 @@ func (d *filestore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	p, err := d.safePath(key)
+	p, err := d.path(key)
 	if err != nil {
 		return err
 	}
@@ -248,7 +240,7 @@ func (d *filestore) Copy(ctx context.Context, dst, src string) error {
 }
 
 func (d *filestore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	p, err := d.safePath(key)
+	p, err := d.path(key)
 	if err != nil {
 		return err
 	}
@@ -332,6 +324,9 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
+	if _, err := d.path(prefix); err != nil {
+		return nil, false, "", err
+	}
 	var dir string = d.root + prefix
 	var objs []Object
 	if !strings.HasSuffix(dir, dirSuffix) {
@@ -384,7 +379,7 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 }
 
 func (d *filestore) Chmod(key string, mode os.FileMode) error {
-	p, err := d.safePath(key)
+	p, err := d.path(key)
 	if err != nil {
 		return err
 	}
@@ -392,7 +387,7 @@ func (d *filestore) Chmod(key string, mode os.FileMode) error {
 }
 
 func (d *filestore) Chown(key string, owner, group string) error {
-	p, err := d.safePath(key)
+	p, err := d.path(key)
 	if err != nil {
 		return err
 	}
