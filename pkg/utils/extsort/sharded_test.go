@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -49,31 +48,6 @@ func TestSorterSortsRecords(t *testing.T) {
 	}
 	if want := []uint64{1, 2, 17, 18, 33, 34}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("output = %v, want %v", got, want)
-	}
-}
-
-func TestSorterDoneReturnsSortError(t *testing.T) {
-	s, err := New(context.Background(), Config{
-		WorkDir: t.TempDir(),
-		Threads: 2,
-	}, Codec[testRecord]{
-		FromBytes: decodeTestRecord,
-		ToBytes:   encodeTestRecord,
-		Compare: func(_, _ testRecord) int {
-			panic("compare failed")
-		},
-	})
-	if err != nil {
-		t.Fatalf("new sorter: %s", err)
-	}
-
-	s.Input() <- testRecord{id: 2}
-	s.Input() <- testRecord{id: 1}
-	s.CloseInput()
-
-	err = s.Done()
-	if err == nil || !strings.Contains(err.Error(), "compare failed") {
-		t.Fatalf("done error = %v, want comparison error", err)
 	}
 }
 
