@@ -27,11 +27,14 @@ on:
 jobs:
 
   build-matrix:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Configure fast APT mirror
+        uses: vegardit/fast-apt-mirror.sh@v1
 
       - name: Set up Go
         uses: actions/setup-go@v3
@@ -113,7 +116,7 @@ jobs:
       fail-fast: false
       matrix:
         test_file: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       pull-requests: write
     steps:
@@ -205,7 +208,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [build-matrix, mutate-test]
     if: always() && !github.event.pull_request.draft
     steps:

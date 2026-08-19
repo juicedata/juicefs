@@ -57,6 +57,9 @@ jobs:
         with:
           fetch-depth: 0  # Need full history for checking out specific commits
 
+      - name: Configure fast APT mirror
+        uses: vegardit/fast-apt-mirror.sh@v1
+
       - name: Install dependencies
         run: |
           sudo apt-get update

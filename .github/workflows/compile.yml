@@ -25,7 +25,7 @@ on:
 
 jobs:
   build-matrix:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - id: set-matrix
         run: |
@@ -152,7 +152,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [compile]
     if: always()
     steps:

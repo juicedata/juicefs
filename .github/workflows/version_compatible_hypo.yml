@@ -41,7 +41,7 @@ jobs:
             meta: 'postgres'
             storage: 'minio'
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -157,7 +157,7 @@ jobs:
 
 
   success-all-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [vc-hypo]
     if: always()
     steps:

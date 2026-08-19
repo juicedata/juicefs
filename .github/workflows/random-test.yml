@@ -170,7 +170,7 @@ jobs:
           wait-timeout-minutes: 10
 
   success-all-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [random-test]
     if: always()
     steps:

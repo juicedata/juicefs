@@ -31,7 +31,7 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/setup-go@v3
         with:
@@ -53,10 +53,13 @@ jobs:
       fail-fast: false
       matrix:
         version: ["1.25", "1.26"]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out code
         uses: actions/checkout@v3
+
+      - name: Configure fast APT mirror
+        uses: vegardit/fast-apt-mirror.sh@v1
 
       - name: Set up Go
         uses: actions/setup-go@v3

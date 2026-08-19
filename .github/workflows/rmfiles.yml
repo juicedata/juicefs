@@ -27,7 +27,7 @@ jobs:
       matrix:
         meta: [ 'sqlite3', 'redis', 'mysql',  'postgres', 'tikv', 'fdb', 'badger', 'etcd']
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -151,7 +151,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [rmr-test]
     if: always()
     steps:
