@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestFilestoreRejectsKeyPathTraversal verifies that an object key
@@ -56,5 +57,17 @@ func TestFilestoreRejectsKeyPathTraversal(t *testing.T) {
 
 	if _, err := store.Head(context.Background(), maliciousKey); err == nil {
 		t.Fatal("expected Head to reject a key escaping the storage root")
+	}
+
+	if _, _, _, err := store.List(context.Background(), maliciousKey, "", "", "/", 1000, false); err == nil {
+		t.Fatal("expected List to reject a prefix escaping the storage root")
+	}
+
+	mtimeChanger, ok := store.(MtimeChanger)
+	if !ok {
+		t.Fatal("filestore should support changing mtime")
+	}
+	if err := mtimeChanger.Chtimes(maliciousKey, time.Now()); err == nil {
+		t.Fatal("expected Chtimes to reject a key escaping the storage root")
 	}
 }
