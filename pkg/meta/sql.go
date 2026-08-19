@@ -1311,7 +1311,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		}
 		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") ||
 			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "serialize access") ||
-			strings.Contains(msg, "bad connection") || errors.Is(err, io.EOF) // could not send data to client: No buffer space available
+			strings.Contains(msg, "bad connection") || strings.Contains(msg, "unexpected eof") || errors.Is(err, io.EOF) // could not send data to client: No buffer space available
 	default:
 		return false
 	}
