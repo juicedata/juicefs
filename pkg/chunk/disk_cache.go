@@ -240,7 +240,7 @@ func (c *diskCache) enabled() bool {
 }
 
 func (c *diskCache) full() bool {
-	return c.used > c.capacity || (c.maxItems != 0 && int64(c.keys.len()) > c.maxItems)
+	return c.used > c.capacity || (c.maxItems != 0 && c.cachedBlocks > c.maxItems)
 }
 
 func (cache *diskCache) checkErr(f func() error) error {
@@ -395,7 +395,7 @@ func (cache *diskCache) cleanupExpire() {
 			}
 		}
 		if len(todel) > 0 {
-			logger.Debugf("cleanup expired cache (%s): %d blocks (%s), expired %d blocks (%s)", cache.dir, cache.keys.len(), humanize.IBytes(uint64(cache.used)), len(todel), humanize.IBytes(uint64(freed)))
+			logger.Debugf("cleanup expired cache (%s): %d blocks (%s), expired %d blocks (%s)", cache.dir, cache.cachedBlocks, humanize.IBytes(uint64(cache.used)), len(todel), humanize.IBytes(uint64(freed)))
 		}
 		cache.Unlock()
 		for _, k := range todel {
@@ -774,7 +774,7 @@ func (cache *diskCache) add(key string, size int32, atime uint32) {
 		cache.cachedBlocks++
 	}
 	if cache.full() && cache.keys.name() != EvictionNone {
-		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%s)", cache.dir, cache.keys.len(), humanize.IBytes(uint64(cache.used)))
+		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%s)", cache.dir, cache.cachedBlocks, humanize.IBytes(uint64(cache.used)))
 		cache.cleanupFull()
 	}
 }
@@ -832,7 +832,7 @@ func (cache *diskCache) cleanupFull() {
 	}
 
 	goal := cache.capacity * 95 / 100
-	num := int64(cache.keys.len()) * 99 / 100
+	num := cache.cachedBlocks * 99 / 100
 	if cache.maxItems != 0 && num > cache.maxItems*99/100 {
 		num = cache.maxItems * 99 / 100
 	}
@@ -848,13 +848,13 @@ func (cache *diskCache) cleanupFull() {
 		}
 	}
 	if toFree := cache.inodesToFree(usage); toFree > 0 {
-		if toFree > int64(cache.keys.len()) {
+		if toFree > cache.cachedBlocks {
 			num = 0
 		} else {
-			num = (int64(cache.keys.len()) - toFree) * 99 / 100
+			num = (cache.cachedBlocks - toFree) * 99 / 100
 		}
 	}
-	if int64(cache.keys.len()) <= num && cache.used <= goal {
+	if cache.cachedBlocks <= num && cache.used <= goal {
 		return // some other thread has done the cleanup
 	}
 
@@ -871,12 +871,12 @@ func (cache *diskCache) cleanupFull() {
 		logger.Debugf("remove %s from cache, age: %ds", k, now-item.atime)
 		cache.m.cacheEvicts.Add(1)
 
-		if int64(cache.keys.len()) <= num && cache.used <= goal {
+		if cache.cachedBlocks <= num && cache.used <= goal {
 			break
 		}
 	}
 	if len(todel) > 0 {
-		logger.Debugf("cleanup cache (%s) using %s eviction: %d blocks (%s), freed %d blocks (%s)", cache.dir, cache.keys.name(), cache.keys.len(), humanize.IBytes(uint64(cache.used)), len(todel), humanize.IBytes(uint64(freed)))
+		logger.Debugf("cleanup cache (%s) using %s eviction: %d blocks (%s), freed %d blocks (%s)", cache.dir, cache.keys.name(), cache.cachedBlocks, humanize.IBytes(uint64(cache.used)), len(todel), humanize.IBytes(uint64(freed)))
 	}
 	cache.Unlock()
 	for _, k := range todel {
