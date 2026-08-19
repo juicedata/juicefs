@@ -669,7 +669,14 @@ func shutdownGraceful(mp string) {
 		return
 	}
 	for i := 0; i < 600; i++ {
-		if err := syscall.Kill(conf.Pid, syscall.SIGHUP); err != nil {
+		if i == 0 {
+			if err := syscall.Kill(conf.Pid, syscall.SIGHUP); err != nil {
+				os.Setenv("_FUSE_STATE_PATH", conf.StatePath)
+				os.Setenv("_JFS_META_SID", strconv.Itoa(int(conf.Meta.Sid)))
+				return
+			}
+		}
+		if err := syscall.Kill(conf.Pid, syscall.Signal(0)); err != nil {
 			os.Setenv("_FUSE_STATE_PATH", conf.StatePath)
 			os.Setenv("_JFS_META_SID", strconv.Itoa(int(conf.Meta.Sid)))
 			return
@@ -939,7 +946,10 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 			if sig == syscall.SIGHUP {
 				path := fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 				if err := v.FlushAll(""); err == nil {
-					fuse.Shutdown()
+					if !fuse.Shutdown() {
+						logger.Warnf("FUSE session is busy, don't restart")
+						continue
+					}
 					err = v.FlushAll(path)
 					if err != nil {
 						logger.Fatalf("flush buffered data failed: %s", err)
