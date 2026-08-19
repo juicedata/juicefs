@@ -193,6 +193,14 @@ juicefs sync /media/ "username:password"@192.168.1.100:/backup/
 
 When using the SFTP/SSH protocol, if no password is specified, the sync task will prompt for the password. If you want to explicitly specify the username and password, you need to enclose them in double quotation marks, with a colon separating the username and password.
 
+SFTP remote paths use the following formats:
+
+- Default SSH port: `username@host:/path`
+- Custom SSH port: `username@host:port:/path`
+- IPv6 with a custom SSH port: `username@[2001:db8::1]:2022:/path`
+
+When specifying a custom SSH port, the colon between the port and path is required and cannot be omitted. For example, use `username@192.168.1.100:2022:/backup/`, not `username@192.168.1.100:2022/backup/`. Colons after the remote path starts are treated as part of the path, so timestamped names such as `/backup/2026-07-23T05:53:21/` can be used without URL encoding.
+
 ## Sync behavior {#sync-behavior}
 
 ### Incremental and full synchronization {#incremental-and-full-synchronization}
