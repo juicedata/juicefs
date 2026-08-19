@@ -79,13 +79,15 @@ type diskCache struct {
 	pages         map[string]*Page
 	m             *cacheManagerMetrics
 
-	used      int64
-	keys      KeyIndex
-	scanned   bool
-	stageFull bool
-	rawFull   bool
-	checksum  string // checksum level
-	uploader  func(key, path string, force bool) bool
+	used int64
+	// cachedBlocks counts the same blocks as used, excluding staging ones.
+	cachedBlocks int64
+	keys         KeyIndex
+	scanned      bool
+	stageFull    bool
+	rawFull      bool
+	checksum     string // checksum level
+	uploader     func(key, path string, force bool) bool
 
 	opTs map[time.Duration]func() error
 	opMu sync.Mutex
@@ -331,7 +333,7 @@ func (cache *diskCache) usedMemory() int64 {
 func (cache *diskCache) stats() (int64, int64) {
 	cache.Lock()
 	defer cache.Unlock()
-	return int64(len(cache.pages) + cache.keys.len()), cache.used + cache.usedMemory()
+	return int64(len(cache.pages)) + cache.cachedBlocks, cache.used + cache.usedMemory()
 }
 
 func (cache *diskCache) isFull(usage DiskFreeRatio, stage bool) bool {
@@ -386,6 +388,7 @@ func (cache *diskCache) cleanupExpire() {
 					deleted++
 					freed += int64(v.size + 4096)
 					cache.used -= int64(v.size + 4096)
+					cache.cachedBlocks--
 					todel = append(todel, k)
 					cache.m.cacheEvicts.Add(1)
 				}
@@ -638,6 +641,7 @@ func (cache *diskCache) remove(key string, staging bool) {
 	if it := cache.keys.remove(k, staging); it != nil {
 		if it.size > 0 {
 			cache.used -= int64(it.size + 4096)
+			cache.cachedBlocks--
 		}
 	} else if cache.scanned || !staging {
 		path = "" // not existed or staging block
@@ -682,6 +686,7 @@ func (cache *diskCache) load(key string) (ReadCloser, error) {
 	if err != nil {
 		if it := cache.keys.remove(k, false); it != nil {
 			cache.used -= int64(it.size + 4096)
+			cache.cachedBlocks--
 		}
 	}
 	return f, err
@@ -712,6 +717,7 @@ func (cache *diskCache) exist(key string) (bool, error) {
 		return true, nil
 	} else if it := cache.keys.remove(k, false); it != nil {
 		cache.used -= int64(it.size + 4096)
+		cache.cachedBlocks--
 	}
 	return false, err
 }
@@ -758,12 +764,14 @@ func (cache *diskCache) add(key string, size int32, atime uint32) {
 	} else {
 		if iter.size > 0 {
 			cache.used -= int64(iter.size + 4096)
+			cache.cachedBlocks--
 		}
 		iter.size = size
 	}
 	cache.keys.add(k, *iter) // add or update
 	if size > 0 {
 		cache.used += int64(size + 4096)
+		cache.cachedBlocks++
 	}
 	if cache.full() && cache.keys.name() != EvictionNone {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%s)", cache.dir, cache.keys.len(), humanize.IBytes(uint64(cache.used)))
@@ -857,6 +865,7 @@ func (cache *diskCache) cleanupFull() {
 	for k, item := range cache.keys.evictionIter() {
 		freed += int64(item.size + 4096)
 		cache.used -= int64(item.size + 4096)
+		cache.cachedBlocks--
 		todel = append(todel, k)
 
 		logger.Debugf("remove %s from cache, age: %ds", k, now-item.atime)
@@ -940,6 +949,7 @@ func (cache *diskCache) uploadStaging() {
 func (cache *diskCache) scanCached(fast bool) {
 	cache.Lock()
 	cache.used = 0
+	cache.cachedBlocks = 0
 	// atime in memory is more accurate than on disk, inherit it for the next round
 	lastSnap := cache.keys.reset()
 	cache.scanned = false
@@ -998,7 +1008,7 @@ func (cache *diskCache) scanCached(fast bool) {
 	})
 	cache.Lock()
 	cache.scanned = true
-	logger.Debugf("Found %s cached blocks (%s) in %s with %s", humanize.Comma(int64(cache.keys.len())), humanize.IBytes(uint64(cache.used)), cache.dir, time.Since(start))
+	logger.Debugf("Found %s cached blocks (%s) in %s with %s", humanize.Comma(cache.cachedBlocks), humanize.IBytes(uint64(cache.used)), cache.dir, time.Since(start))
 	cache.Unlock()
 }
 

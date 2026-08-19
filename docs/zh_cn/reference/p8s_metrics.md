@@ -68,8 +68,8 @@ sidebar_position: 4
 
 | 名称                                      | 描述          | 单位 |
 |-----------------------------------------|-------------|----|
-| `juicefs_blockcache_blocks`             | 缓存块的总个数     |    |
-| `juicefs_blockcache_bytes`              | 缓存块的总大小     | 字节 |
+| `juicefs_blockcache_blocks`             | 缓存块总数，不含暂存块 |    |
+| `juicefs_blockcache_bytes`              | 缓存块大小，不含暂存块 | 字节 |
 | `juicefs_blockcache_hits`               | 命中缓存块的总次数   |    |
 | `juicefs_blockcache_miss`               | 没有命中缓存块的总次数 |    |
 | `juicefs_blockcache_writes`             | 写入缓存块的总次数   |    |
