@@ -484,22 +484,65 @@ func unescape(original string) string {
 	}
 }
 
-func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
-	idx := strings.LastIndex(endpoint, ":")
-	host, port, err := net.SplitHostPort(endpoint[:idx])
-	if err != nil && strings.Contains(err.Error(), "missing port") {
-		host, port, err = net.SplitHostPort(endpoint[:idx] + ":22")
+func parseSftpEndpoint(endpoint string) (host, port, root string, err error) {
+	hostEnd := strings.Index(endpoint, ":")
+	if strings.HasPrefix(endpoint, "[") {
+		if end := strings.Index(endpoint, "]"); end >= 0 {
+			hostEnd = end + 1
+		}
 	}
+	if hostEnd < 0 || endpoint[hostEnd] != ':' {
+		return "", "", "", fmt.Errorf("unable to parse host from endpoint (%s): missing path separator", endpoint)
+	}
+
+	isDigits := func(s string) bool {
+		if s == "" {
+			return false
+		}
+		for _, c := range s {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+		return true
+	}
+
+	hostPort := endpoint[:hostEnd] + ":22"
+	rawRoot := endpoint[hostEnd+1:]
+	portEnd := strings.Index(rawRoot, ":")
+	slash := strings.Index(rawRoot, "/")
+	if slash > 0 && (portEnd < 0 || slash < portEnd) && isDigits(rawRoot[:slash]) {
+		return "", "", "", fmt.Errorf("unable to parse host from endpoint (%s): missing colon between port and path", endpoint)
+	}
+	if portEnd >= 0 && (slash < 0 || portEnd < slash) {
+		if isDigits(rawRoot[:portEnd]) {
+			hostPort = endpoint[:hostEnd+1+portEnd]
+			rawRoot = rawRoot[portEnd+1:]
+		}
+	}
+	if rawRoot == "" {
+		return "", "", "", fmt.Errorf("unable to parse host from endpoint (%s): missing path", endpoint)
+	}
+
+	host, port, err = net.SplitHostPort(hostPort)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse host from endpoint (%s): %q", endpoint, err)
+		return "", "", "", fmt.Errorf("unable to parse host from endpoint (%s): %q", endpoint, err)
 	}
-	root := filepath.Clean(endpoint[idx+1:])
+	root = filepath.Clean(rawRoot)
 	if runtime.GOOS == "windows" {
 		root = strings.ReplaceAll(root, "\\", "/")
 	}
 	// append suffix `/` removed by filepath.Clean()
-	if strings.HasSuffix(endpoint[idx+1:], dirSuffix) {
+	if strings.HasSuffix(rawRoot, dirSuffix) {
 		root = root + dirSuffix
+	}
+	return host, port, root, nil
+}
+
+func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
+	host, port, root, err := parseSftpEndpoint(endpoint)
+	if err != nil {
+		return nil, err
 	}
 
 	if username == "" {
