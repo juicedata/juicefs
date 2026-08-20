@@ -59,7 +59,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Configure fast APT mirror
-        uses: vegardit/fast-apt-mirror.sh@v1
+        uses: vegardit/fast-apt-mirror.sh@1.4.5
 
       - name: Set up Go
         uses: actions/setup-go@v3

@@ -1,7 +1,7 @@
 FROM ubuntu:22.04
 #RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list && \
 #    sed -i 's|http://security.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list && \
-ADD https://raw.githubusercontent.com/vegardit/fast-apt-mirror.sh/v1/fast-apt-mirror.sh /usr/local/bin/fast-apt-mirror.sh
+ADD https://raw.githubusercontent.com/vegardit/fast-apt-mirror.sh/1.4.5/fast-apt-mirror.sh /usr/local/bin/fast-apt-mirror.sh
 RUN chmod 755 /usr/local/bin/fast-apt-mirror.sh && \
     /usr/local/bin/fast-apt-mirror.sh find --apply --ignore-sync-state || true
 RUN apt update && apt install --no-install-recommends openssh-server sudo -y
