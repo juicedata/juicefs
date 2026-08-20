@@ -1,0 +1,335 @@
+name: release distribution check
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  latest-release:
+    if: ${{ github.event_name != 'release' || (github.event.release.draft == false && github.event.release.prerelease == false) }}
+    runs-on: ubuntu-latest
+    outputs:
+      target_version: ${{ steps.latest.outputs.target_version }}
+      target_tag: ${{ steps.latest.outputs.target_tag }}
+      release_id: ${{ steps.latest.outputs.release_id }}
+      published_at: ${{ steps.latest.outputs.published_at }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Test release distribution checker
+        run: python3 .github/scripts/check_release_distributions_test.py
+
+      - name: Resolve target release
+        id: latest
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TRIGGER_TAG: ${{ github.event.release.tag_name || '' }}
+        run: |
+          python3 .github/scripts/check_release_distributions.py resolve \
+            --repository "$GITHUB_REPOSITORY" \
+            --trigger-tag "$TRIGGER_TAG"
+
+  metadata:
+    needs: latest-release
+    runs-on: ubuntu-latest
+    outputs:
+      target_version: ${{ steps.check.outputs.target_version }}
+      target_tag: ${{ steps.check.outputs.target_tag }}
+      release_id: ${{ steps.check.outputs.release_id }}
+      published_at: ${{ steps.check.outputs.published_at }}
+      grace_expired: ${{ steps.check.outputs.grace_expired }}
+    concurrency:
+      group: release-distribution-check-${{ github.repository }}-${{ needs.latest-release.outputs.release_id }}-${{ needs.latest-release.outputs.target_version }}-metadata
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Check distribution metadata
+        id: check
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TRIGGER_TAG: ${{ github.event.release.tag_name || '' }}
+        run: |
+          python3 .github/scripts/check_release_distributions.py check \
+            --repository "$GITHUB_REPOSITORY" \
+            --trigger-tag "$TRIGGER_TAG" \
+            --grace-hours 24
+
+      - name: Fail on overdue metadata mismatch
+        if: ${{ steps.check.outcome == 'failure' }}
+        run: exit 1
+
+  cdn-installer:
+    needs: [latest-release, metadata]
+    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-cdn
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Install from the official CDN
+        id: install
+        env:
+          TARGET_VERSION: ${{ needs.metadata.outputs.target_version }}
+        run: |
+          set +e
+          smoke_dir=$(mktemp -d)
+          mkdir -p "$smoke_dir/bin"
+          curl -fsSL --retry 3 --max-time 30 https://d.juicefs.com/install -o "$smoke_dir/install.sh"
+          command_status=$?
+          if [ "$command_status" -eq 0 ]; then
+            sh "$smoke_dir/install.sh" "$smoke_dir/bin"
+            command_status=$?
+          fi
+          if [ "$command_status" -eq 0 ]; then
+            "$smoke_dir/bin/juicefs" version > actual-version.txt 2>&1
+            command_status=$?
+          else
+            echo "CDN installer failed; see the step log" > actual-version.txt
+          fi
+          rm -rf "$smoke_dir"
+          echo "command_status=$command_status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Verify installed CDN version
+        run: |
+          python3 .github/scripts/check_release_distributions.py verify-version \
+            --channel "CDN installer" \
+            --expected "${{ needs.metadata.outputs.target_version }}" \
+            --actual-file actual-version.txt \
+            --command-status "${{ steps.install.outputs.command_status }}" \
+            --published-at "${{ needs.metadata.outputs.published_at }}" \
+            --grace-hours 24
+
+  homebrew:
+    needs: [latest-release, metadata]
+    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    runs-on: macos-latest
+    concurrency:
+      group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-homebrew
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Install with Homebrew
+        id: install
+        run: |
+          set +e
+          brew update && brew install juicefs
+          command_status=$?
+          if [ "$command_status" -eq 0 ]; then
+            juicefs version > actual-version.txt 2>&1
+            command_status=$?
+          else
+            echo "Homebrew installation failed; see the step log" > actual-version.txt
+          fi
+          echo "command_status=$command_status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Verify Homebrew version
+        run: |
+          python3 .github/scripts/check_release_distributions.py verify-version \
+            --channel "Homebrew install" \
+            --expected "${{ needs.metadata.outputs.target_version }}" \
+            --actual-file actual-version.txt \
+            --command-status "${{ steps.install.outputs.command_status }}" \
+            --published-at "${{ needs.metadata.outputs.published_at }}" \
+            --grace-hours 24
+
+  ubuntu-ppa:
+    needs: [latest-release, metadata]
+    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-ppa
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Install from the x86 PPA
+        id: install
+        run: |
+          set +e
+          sudo add-apt-repository -y ppa:juicefs/ppa && \
+            sudo apt-get update && \
+            sudo apt-get install -y juicefs
+          command_status=$?
+          if [ "$command_status" -eq 0 ]; then
+            juicefs version > actual-version.txt 2>&1
+            command_status=$?
+          else
+            echo "PPA installation failed; see the step log" > actual-version.txt
+          fi
+          echo "command_status=$command_status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Verify PPA version
+        run: |
+          python3 .github/scripts/check_release_distributions.py verify-version \
+            --channel "Ubuntu PPA install" \
+            --expected "${{ needs.metadata.outputs.target_version }}" \
+            --actual-file actual-version.txt \
+            --command-status "${{ steps.install.outputs.command_status }}" \
+            --published-at "${{ needs.metadata.outputs.published_at }}" \
+            --grace-hours 24
+
+  scoop:
+    needs: [latest-release, metadata]
+    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    runs-on: windows-latest
+    concurrency:
+      group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-scoop
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Install with Scoop
+        id: install
+        shell: pwsh
+        run: |
+          $commandStatus = 0
+          try {
+            Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+            Invoke-WebRequest -UseBasicParsing `
+              'https://raw.githubusercontent.com/ScoopInstaller/Install/master/install.ps1' `
+              -OutFile 'install-scoop.ps1'
+            .\install-scoop.ps1 -RunAsAdmin
+            if ($LASTEXITCODE -ne 0) { throw "Scoop installer exited with $LASTEXITCODE" }
+            scoop install juicefs
+            if ($LASTEXITCODE -ne 0) { throw "scoop install exited with $LASTEXITCODE" }
+            juicefs version 2>&1 | Out-File actual-version.txt -Encoding utf8
+            if ($LASTEXITCODE -ne 0) { throw "juicefs version exited with $LASTEXITCODE" }
+          } catch {
+            $commandStatus = 1
+            $_ | Out-String | Tee-Object -FilePath actual-version.txt
+          }
+          "command_status=$commandStatus" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Verify Scoop version
+        shell: pwsh
+        run: |
+          python .github/scripts/check_release_distributions.py verify-version `
+            --channel "Scoop install" `
+            --expected "${{ needs.metadata.outputs.target_version }}" `
+            --actual-file actual-version.txt `
+            --command-status "${{ steps.install.outputs.command_status }}" `
+            --published-at "${{ needs.metadata.outputs.published_at }}" `
+            --grace-hours 24
+
+  docker:
+    needs: [latest-release, metadata]
+    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-docker
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Run the versioned and latest community images
+        id: run
+        env:
+          TARGET_VERSION: ${{ needs.metadata.outputs.target_version }}
+        run: |
+          set +e
+          docker pull "juicedata/mount:ce-v${TARGET_VERSION}" && \
+            docker run --rm "juicedata/mount:ce-v${TARGET_VERSION}" juicefs version \
+              > versioned-actual.txt 2>&1
+          versioned_status=$?
+          if [ "$versioned_status" -ne 0 ]; then
+            echo "versioned Docker image failed; see the step log" > versioned-actual.txt
+          fi
+          docker pull juicedata/mount:latest && \
+            docker run --rm juicedata/mount:latest juicefs version \
+              > latest-actual.txt 2>&1
+          latest_status=$?
+          if [ "$latest_status" -ne 0 ]; then
+            echo "latest Docker image failed; see the step log" > latest-actual.txt
+          fi
+          echo "versioned_status=$versioned_status" >> "$GITHUB_OUTPUT"
+          echo "latest_status=$latest_status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Verify Docker image versions
+        run: |
+          set +e
+          python3 .github/scripts/check_release_distributions.py verify-version \
+            --channel "Docker ce-v${{ needs.metadata.outputs.target_version }}" \
+            --expected "${{ needs.metadata.outputs.target_version }}" \
+            --actual-file versioned-actual.txt \
+            --command-status "${{ steps.run.outputs.versioned_status }}" \
+            --published-at "${{ needs.metadata.outputs.published_at }}" \
+            --grace-hours 24
+          versioned_check=$?
+          python3 .github/scripts/check_release_distributions.py verify-version \
+            --channel "Docker latest" \
+            --expected "${{ needs.metadata.outputs.target_version }}" \
+            --actual-file latest-actual.txt \
+            --command-status "${{ steps.run.outputs.latest_status }}" \
+            --published-at "${{ needs.metadata.outputs.published_at }}" \
+            --grace-hours 24
+          latest_check=$?
+          [ "$versioned_check" -eq 0 ] && [ "$latest_check" -eq 0 ]
+
+  maven-central:
+    needs: [latest-release, metadata]
+    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-maven
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+      - name: Resolve the Java SDK from Maven Central
+        id: resolve
+        env:
+          TARGET_VERSION: ${{ needs.metadata.outputs.target_version }}
+        run: |
+          set +e
+          mvn --batch-mode --quiet dependency:get \
+            -Dartifact="io.juicefs:juicefs-hadoop:${TARGET_VERSION}" \
+            -Dtransitive=false
+          command_status=$?
+          if [ "$command_status" -eq 0 ]; then
+            echo "$TARGET_VERSION" > actual-version.txt
+          else
+            echo "Maven dependency resolution failed; see the step log" > actual-version.txt
+          fi
+          echo "command_status=$command_status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Verify Maven Central version
+        run: |
+          python3 .github/scripts/check_release_distributions.py verify-version \
+            --channel "Maven Central resolve" \
+            --expected "${{ needs.metadata.outputs.target_version }}" \
+            --actual-file actual-version.txt \
+            --command-status "${{ steps.resolve.outputs.command_status }}" \
+            --published-at "${{ needs.metadata.outputs.published_at }}" \
+            --grace-hours 24
