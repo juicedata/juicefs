@@ -5,6 +5,10 @@ on:
     tags:
       - v*
 
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   releaser:
     runs-on: ubuntu-22.04
