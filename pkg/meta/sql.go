@@ -3396,10 +3396,8 @@ func (m *dbMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 		if err = m.upsertSlice(s, inode, indx, buf, &insert); err != nil {
 			return err
 		}
-		if slice.Id > 0 {
-			if err = mustInsert(s, sliceRef{slice.Id, slice.Size, 1}); err != nil {
-				return err
-			}
+		if err = mustInsert(s, sliceRef{slice.Id, slice.Size, 1}); err != nil {
+			return err
 		}
 		_, err = s.Cols("length", "mtime", "ctime", "mtimensec", "ctimensec").Update(&nodeAttr, &node{Inode: inode})
 		if err == nil && !insert {
