@@ -1074,6 +1074,25 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 	}
 }
 
+func (m *baseMeta) CleanupSlices(ctx Context, delete bool) syscall.Errno {
+	var err error
+	if delete {
+		err = m.en.doCleanupSlices(ctx, nil)
+	}
+	m.WaitDeleteSlices()
+	return errno(err)
+}
+
+func (m *baseMeta) WaitDeleteSlices() {
+	m.dSliceMu.Lock()
+	async := m.dslices != nil
+	m.dSliceMu.Unlock()
+	if async {
+		m.stopDeleteSliceTasks()
+		m.startDeleteSliceTasks()
+	}
+}
+
 func parseChangelogTime(entry string) (time.Time, error) {
 	idx := strings.IndexByte(entry, '|')
 	if idx < 0 {

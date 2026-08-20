@@ -503,6 +503,10 @@ type Meta interface {
 	// Compact chunks for specified path
 	Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno
 
+	// CleanupSlices performs metadata cleanup and waits for pending slice deletion tasks.
+	CleanupSlices(ctx Context, delete bool) syscall.Errno
+	// WaitDeleteSlices waits for pending slice deletion tasks.
+	WaitDeleteSlices()
 	// ScanSlices scans all slices used by all files, calling fn for each slice.
 	// Ino is 0 for pending slices, 1 for trash slices, or the actual inode.
 	ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno
@@ -562,7 +566,6 @@ type Meta interface {
 
 type ScanSlicesOption struct {
 	ScanPending bool
-	Delete      bool
 	Progress    func()
 }
 

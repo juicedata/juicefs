@@ -3192,9 +3192,6 @@ func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 }
 
 func (m *kvMeta) ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno {
-	if opt.Delete {
-		_ = m.doCleanupSlices(ctx, nil)
-	}
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
 	var cbErr error

@@ -42,8 +42,6 @@ func gcExternalSort(
 	extSortDir string,
 	threads int,
 	delFlag bool,
-	compact bool,
-	edge time.Time,
 	maxMtime time.Time,
 ) error {
 	logger.Infof("Using external sort mode, dir: %s", extSortDir)
@@ -60,7 +58,7 @@ func gcExternalSort(
 
 	eg.Go(func() error {
 		defer stats.slices.Done()
-		if err := scanGcMetaRecords(sortMetaCtx, m, metaSorter.Input(), stats.slices, delFlag); err != nil {
+		if err := scanGcMetaRecords(sortMetaCtx, m, metaSorter.Input(), stats.slices); err != nil {
 			return errors.Errorf("produce meta records: %s", err)
 		}
 		metaSorter.CloseInput()
@@ -90,10 +88,6 @@ func gcExternalSort(
 	if sortErr != nil {
 		return sortErr
 	}
-	if err := scanTrashSlices(c, m, stats, delFlag, edge); err != nil {
-		return errors.Errorf("trash slice scan: %s", err)
-	}
-	stats.finish(delFlag, compact)
 	return nil
 }
 
@@ -130,8 +124,8 @@ func newGcExternalSorters(ctx context.Context, extSortDir string, threads int) (
 	return metaSorter, objSorter, nil
 }
 
-func scanGcMetaRecords(c meta.Context, m meta.Meta, output chan<- gcMetaRecord, metaSliceSpin *utils.Bar, delFlag bool) error {
-	st := m.ScanSlices(c, &meta.ScanSlicesOption{ScanPending: true, Delete: delFlag}, func(ino meta.Ino, s meta.Slice) error {
+func scanGcMetaRecords(c meta.Context, m meta.Meta, output chan<- gcMetaRecord, metaSliceSpin *utils.Bar) error {
+	st := m.ScanSlices(c, &meta.ScanSlicesOption{ScanPending: true}, func(ino meta.Ino, s meta.Slice) error {
 		select {
 		case <-c.Done():
 			return c.Err()
