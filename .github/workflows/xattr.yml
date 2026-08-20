@@ -142,7 +142,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: [xattr]
     if: always()
     steps:
