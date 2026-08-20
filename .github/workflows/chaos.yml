@@ -39,6 +39,9 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Configure fast APT mirror
+        uses: vegardit/fast-apt-mirror.sh@1.4.5
+
       - uses: actions/setup-go@v3
         with:
           go-version: 'oldstable'

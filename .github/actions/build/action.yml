@@ -11,6 +11,10 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Configure fast APT mirror
+      if: runner.os == 'Linux'
+      uses: vegardit/fast-apt-mirror.sh@1.4.5
+
     - uses: actions/setup-go@v3
       with:
         go-version: 'oldstable'
