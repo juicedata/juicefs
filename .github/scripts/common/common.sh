@@ -23,14 +23,14 @@ cleanup_test_mounts() {
     case "$PLATFORM" in
         mac)
             for mp in ~/jfs3 ~/jfs2 ~/jfs; do
-                ./juicefs umount "$mp" 2>/dev/null || true
                 umount_jfs "$mp" "$META_URL"
+                ./juicefs umount "$mp" 2>/dev/null || true
             done
             ;;
         linux)
             for mp in /jfs3 /jfs2 /jfs; do
-                ./juicefs umount "$mp" 2>/dev/null || true
                 umount_jfs "$mp" "$META_URL"
+                ./juicefs umount "$mp" 2>/dev/null || true
             done
             ;;
     esac
