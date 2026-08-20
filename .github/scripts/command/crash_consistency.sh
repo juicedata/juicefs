@@ -121,7 +121,7 @@ test_crash_writeback(){
     prepare_test
     rm -rf $CACHE_DIR
     ./juicefs format $META_URL myjfs
-    mount_jfs $META_URL /jfs --cache-dir $CACHE_DIR --writeback --upload-delay 60s
+    mount_jfs $META_URL /jfs --cache-dir $CACHE_DIR --writeback --upload-delay 1h
     start_writer
     local staged
     staged=$(count_staged)
