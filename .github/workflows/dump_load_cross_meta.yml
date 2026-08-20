@@ -46,7 +46,7 @@ jobs:
           # - meta1: tikv
           #   meta2: redis
 
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -124,7 +124,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     needs: [dump_load_cross_meta]
     if: always()
     steps:
@@ -162,5 +162,3 @@ jobs:
       - name: Success
         if: success()
         run: echo "All Done"
-              
-        

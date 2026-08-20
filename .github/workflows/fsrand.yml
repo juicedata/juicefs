@@ -37,7 +37,7 @@ jobs:
         meta: ['redis', 'mysql', 'tikv']
         # meta: ['redis']
         
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -168,7 +168,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     needs: [fsrand]
     if: always()
     steps:

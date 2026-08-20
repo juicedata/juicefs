@@ -45,7 +45,7 @@ jobs:
       matrix:
         meta: [ 'sqlite3', 'redis', 'badger' ]
 
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: shogo82148/actions-setup-perl@v1
         with:
@@ -130,7 +130,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     needs: [pjdfstest]
     if: always()
     steps:

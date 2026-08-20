@@ -201,7 +201,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     needs: [gateway]
     if: always()
     steps:

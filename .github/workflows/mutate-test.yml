@@ -27,7 +27,7 @@ on:
 jobs:
 
   build-matrix:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -116,7 +116,7 @@ jobs:
       fail-fast: false
       matrix:
         test_file: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     permissions:
       pull-requests: write
     steps:
@@ -208,7 +208,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     needs: [build-matrix, mutate-test]
     if: always() && !github.event.pull_request.draft
     steps:
@@ -258,4 +258,3 @@ jobs:
       - name: Success
         if: success()
         run: echo "All Done"
-
