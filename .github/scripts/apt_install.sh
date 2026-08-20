@@ -4,39 +4,6 @@ set -e
 
 # Set the maximum number of retries
 MAX_RETRIES=3
-FAST_APT_MIRROR_VERSION=1.4.5
-FAST_APT_MIRROR_MARKER=/tmp/juicefs-fast-apt-mirror-configured
-
-function configure_fast_apt_mirror() {
-  if [[ -e "$FAST_APT_MIRROR_MARKER" ]]; then
-    return
-  fi
-
-  local mirror_script
-  mirror_script=$(mktemp)
-  if command -v curl >/dev/null 2>&1; then
-    if ! curl -fsSL -o "$mirror_script" "https://raw.githubusercontent.com/vegardit/fast-apt-mirror.sh/${FAST_APT_MIRROR_VERSION}/fast-apt-mirror.sh"; then
-      echo "WARNING: failed to download fast APT mirror script."
-      rm -f "$mirror_script"
-      return
-    fi
-  elif command -v wget >/dev/null 2>&1; then
-    if ! wget -q -O "$mirror_script" "https://raw.githubusercontent.com/vegardit/fast-apt-mirror.sh/${FAST_APT_MIRROR_VERSION}/fast-apt-mirror.sh"; then
-      echo "WARNING: failed to download fast APT mirror script."
-      rm -f "$mirror_script"
-      return
-    fi
-  else
-    echo "WARNING: curl and wget are unavailable; skip fast APT mirror configuration."
-    rm -f "$mirror_script"
-    return
-  fi
-
-  chmod 755 "$mirror_script"
-  "$mirror_script" find --apply --ignore-sync-state || echo "WARNING: failed to configure fast APT mirror."
-  rm -f "$mirror_script"
-  touch "$FAST_APT_MIRROR_MARKER" 2>/dev/null || true
-}
 
 # Define a function to run a command and check the return code
 # The function takes two arguments: the command to run and a description of the command
@@ -69,8 +36,6 @@ function run_command() {
     fi
   done
 }
-
-configure_fast_apt_mirror
 
 # Run apt-get update and check the return code
 run_command "apt-get update -y" 
