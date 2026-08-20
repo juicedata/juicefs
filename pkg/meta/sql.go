@@ -2262,7 +2262,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 	var n node
 	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
-		ok, err := m.forUpdate(s).Get(&pn)
+		ok, err := s.Get(&pn)
 		if err != nil {
 			return err
 		}
