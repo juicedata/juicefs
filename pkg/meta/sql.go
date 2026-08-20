@@ -2050,10 +2050,8 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			updateParent = true
 		}
 
-		if n, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
+		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
-		} else if n != 1 {
-			return syscall.ENOENT
 		}
 
 		if n.Nlink > 0 {
@@ -2153,7 +2151,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 	var n node
 	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
-		ok, err := m.forUpdate(s).Get(&pn)
+		ok, err := s.Get(&pn)
 		if err != nil {
 			return err
 		}
@@ -2228,7 +2226,6 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		pn.setMtime(now)
 		pn.setCtime(now)
 
-		// FIXME: Check affected rows to detect a concurrent removal of this edge.
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
