@@ -42,7 +42,7 @@ kill_mount_hard(){
 
 start_writer(){
     rm -f $MANIFEST
-    python3 .github/scripts/crash_writer.py /jfs $MANIFEST $FILE_COUNT $FILE_SIZE &
+    python3 .github/scripts/command/crash_writer.py /jfs $MANIFEST $FILE_COUNT $FILE_SIZE &
     WRITER_PID=$!
     # let it get far enough in that the kill lands mid-stream
     sleep $WRITE_SECONDS
@@ -81,7 +81,7 @@ verify_from_object_storage(){
     umount_jfs /jfs $META_URL
     rm -rf $CACHE_DIR
     mount_jfs $META_URL /jfs --cache-dir $CACHE_DIR
-    python3 .github/scripts/crash_verify.py /jfs $MANIFEST
+    python3 .github/scripts/command/crash_verify.py /jfs $MANIFEST
 }
 
 # A crash must not leave metadata pointing at objects that were never uploaded.
@@ -99,7 +99,7 @@ test_crash_default(){
     stop_writer
 
     mount_jfs $META_URL /jfs --cache-dir $CACHE_DIR
-    python3 .github/scripts/crash_verify.py /jfs $MANIFEST
+    python3 .github/scripts/command/crash_verify.py /jfs $MANIFEST
     check_no_dangling_objects
     verify_from_object_storage
 }
@@ -136,7 +136,7 @@ test_crash_writeback(){
     # same cache dir, no delay: the staged blocks are still there and the mount
     # has to upload them
     mount_jfs $META_URL /jfs --cache-dir $CACHE_DIR --writeback
-    python3 .github/scripts/crash_verify.py /jfs $MANIFEST
+    python3 .github/scripts/command/crash_verify.py /jfs $MANIFEST
     wait_staging_drained
     check_no_dangling_objects
     verify_from_object_storage

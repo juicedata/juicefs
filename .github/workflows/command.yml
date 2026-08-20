@@ -130,6 +130,11 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/fsck.sh
 
+      - name: Test Crash Consistency
+        timeout-minutes: 20
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/crash_consistency.sh
+
       - name: Test Gateway
         timeout-minutes: 10
         run: |
