@@ -19,9 +19,37 @@ package vfs
 import (
 	"os"
 	"testing"
+	"time"
 
+	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 )
+
+type cacheCall struct {
+	action               CacheAction
+	id                   uint64
+	size, offset, length uint32
+}
+
+type recordingChunkStore struct {
+	chunk.ChunkStore
+	calls chan cacheCall
+}
+
+func (s *recordingChunkStore) FillCache(id uint64, size, offset, length uint32) (uint64, error) {
+	s.calls <- cacheCall{WarmupCache, id, size, offset, length}
+	return 4096, nil
+}
+
+func (s *recordingChunkStore) EvictCache(id uint64, size, offset, length uint32) (uint64, error) {
+	s.calls <- cacheCall{EvictCache, id, size, offset, length}
+	return 4096, nil
+}
+
+func (s *recordingChunkStore) CheckCache(id uint64, size, offset, length uint32, handler func(bool, string, int)) (uint64, error) {
+	s.calls <- cacheCall{CheckCache, id, size, offset, length}
+	return 4096, nil
+}
 
 func TestFill(t *testing.T) {
 	v, _ := createTestVFS(nil, "")
@@ -46,4 +74,32 @@ func TestFill(t *testing.T) {
 	}
 	// bad cases
 	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/file", "/sym2", "/sym3", "/.stats", "/not_exists"}, 2, nil)
+}
+
+func TestCacheFillerUsesVisibleSliceRange(t *testing.T) {
+	v, _ := createTestVFS(nil, "")
+	ctx := meta.Background()
+	var inode meta.Ino
+	var attr meta.Attr
+	if st := v.Meta.Create(ctx, meta.RootInode, "partial", 0644, 0, 0, &inode, &attr); st != 0 {
+		t.Fatalf("create file: %s", st)
+	}
+	slice := meta.Slice{Id: 123, Size: 8 << 20, Off: 3 << 20, Len: 2 << 20}
+	if st := v.Meta.Write(ctx, inode, 0, 0, slice, time.Now()); st != 0 {
+		t.Fatalf("write slice: %s", st)
+	}
+
+	store := &recordingChunkStore{ChunkStore: v.Store, calls: make(chan cacheCall, 3)}
+	v.cacheFiller.store = store
+	for _, action := range []CacheAction{WarmupCache, EvictCache, CheckCache} {
+		resp := &CacheResponse{Locations: make(map[string]uint64)}
+		v.cacheFiller.Cache(ctx, action, []string{"/partial"}, 1, resp)
+		call := <-store.calls
+		if call.action != action || call.id != slice.Id || call.size != slice.Size || call.offset != slice.Off || call.length != slice.Len {
+			t.Fatalf("unexpected cache call: %+v", call)
+		}
+		if resp.TotalBytes != 4096 {
+			t.Fatalf("total bytes: %d, want 4096", resp.TotalBytes)
+		}
+	}
 }

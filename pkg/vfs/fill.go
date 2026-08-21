@@ -89,8 +89,8 @@ func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *Cach
 		var handler sliceHandler
 		switch action {
 		case WarmupCache:
-			handler = func(s meta.Slice) error {
-				return c.store.FillCache(s.Id, s.Size)
+			handler = func(s meta.Slice) (uint64, error) {
+				return c.store.FillCache(s.Id, s.Size, s.Off, s.Len)
 			}
 
 			if c.conf.Meta.OpenCache > 0 {
@@ -100,8 +100,8 @@ func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *Cach
 				_ = c.meta.Close(ctx, f.ino)
 			}
 		case EvictCache:
-			handler = func(s meta.Slice) error {
-				return c.store.EvictCache(s.Id, s.Size)
+			handler = func(s meta.Slice) (uint64, error) {
+				return c.store.EvictCache(s.Id, s.Size, s.Off, s.Len)
 			}
 		case CheckCache:
 			blockHandler := func(exists bool, loc string, size int) {
@@ -113,8 +113,8 @@ func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *Cach
 					atomic.AddUint64(&resp.MissBytes, uint64(size))
 				}
 			}
-			handler = func(s meta.Slice) error {
-				return c.store.CheckCache(s.Id, s.Size, blockHandler)
+			handler = func(s meta.Slice) (uint64, error) {
+				return c.store.CheckCache(s.Id, s.Size, s.Off, s.Len, blockHandler)
 			}
 		}
 
@@ -288,7 +288,7 @@ type sliceIterator struct {
 	slices         []meta.Slice
 }
 
-type sliceHandler func(s meta.Slice) error
+type sliceHandler func(s meta.Slice) (uint64, error)
 
 func (iter *sliceIterator) hasNext() bool {
 	if iter.err != nil {
@@ -336,7 +336,6 @@ func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent chan token) 
 			continue
 		}
 		atomic.AddUint64(&iter.stat.SliceCount, 1)
-		atomic.AddUint64(&iter.stat.TotalBytes, uint64(s.Size))
 
 		select {
 		case concurrent <- token{}:
@@ -346,12 +345,16 @@ func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent chan token) 
 					<-concurrent
 					wg.Done()
 				}()
-				if err := handler(s); err != nil {
+				bytes, err := handler(s)
+				atomic.AddUint64(&iter.stat.TotalBytes, bytes)
+				if err != nil {
 					iter.err = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
 				}
 			}()
 		default:
-			if err := handler(s); err != nil {
+			bytes, err := handler(s)
+			atomic.AddUint64(&iter.stat.TotalBytes, bytes)
+			if err != nil {
 				iter.err = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
 			}
 		}

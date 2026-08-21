@@ -82,16 +82,17 @@ func (s *rSlice) index(off int) int {
 	return off / s.store.conf.BlockSize
 }
 
-func (s *rSlice) keys() []string {
-	if s.length <= 0 {
-		return nil
+func (s *rSlice) blockRange(offset, length uint32) (int, int, uint64, error) {
+	if uint64(offset) > uint64(s.length) || uint64(length) > uint64(s.length)-uint64(offset) {
+		return 0, -1, 0, fmt.Errorf("invalid range [%d,%d) for slice %d with size %d", offset, uint64(offset)+uint64(length), s.id, s.length)
 	}
-	lastIndx := (s.length - 1) / s.store.conf.BlockSize
-	keys := make([]string, lastIndx+1)
-	for i := 0; i <= lastIndx; i++ {
-		keys[i] = s.key(i)
+	if length == 0 {
+		return 0, -1, 0, nil
 	}
-	return keys
+	first := int(offset) / s.store.conf.BlockSize
+	last := int(uint64(offset)+uint64(length)-1) / s.store.conf.BlockSize
+	bytes := uint64(last-first)*uint64(s.store.conf.BlockSize) + uint64(s.blockSize(last))
+	return first, last, bytes, nil
 }
 
 func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err error) {
@@ -1174,11 +1175,15 @@ func (store *cachedStore) Remove(id uint64, length int) error {
 	return r.Remove()
 }
 
-func (store *cachedStore) FillCache(id uint64, length uint32) error {
-	r := sliceForRead(id, int(length), store)
-	keys := r.keys()
+func (store *cachedStore) FillCache(id uint64, size, offset, length uint32) (uint64, error) {
+	r := sliceForRead(id, int(size), store)
+	first, last, bytes, rangeErr := r.blockRange(offset, length)
+	if rangeErr != nil {
+		return 0, rangeErr
+	}
 	var err error
-	for _, k := range keys {
+	for i := first; i <= last; i++ {
+		k := r.key(i)
 		if _, existed := store.bcache.exist(k); existed { // already cached
 			continue
 		}
@@ -1194,30 +1199,36 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 		}
 		p.Release()
 	}
-	return err
+	return bytes, err
 }
 
-func (store *cachedStore) EvictCache(id uint64, length uint32) error {
-	r := sliceForRead(id, int(length), store)
-	keys := r.keys()
-	for _, k := range keys {
-		store.bcache.remove(k, false)
+func (store *cachedStore) EvictCache(id uint64, size, offset, length uint32) (uint64, error) {
+	r := sliceForRead(id, int(size), store)
+	first, last, bytes, err := r.blockRange(offset, length)
+	if err != nil {
+		return 0, err
 	}
-	return nil
+	for i := first; i <= last; i++ {
+		store.bcache.remove(r.key(i), false)
+	}
+	return bytes, nil
 }
 
-func (store *cachedStore) CheckCache(id uint64, length uint32, handler func(exists bool, loc string, size int)) error {
-	r := sliceForRead(id, int(length), store)
-	keys := r.keys()
+func (store *cachedStore) CheckCache(id uint64, size, offset, length uint32, handler func(exists bool, loc string, size int)) (uint64, error) {
+	r := sliceForRead(id, int(size), store)
+	first, last, bytes, err := r.blockRange(offset, length)
+	if err != nil {
+		return 0, err
+	}
 	var loc string
 	var existed bool
-	for i, k := range keys {
-		loc, existed = store.bcache.exist(k)
+	for i := first; i <= last; i++ {
+		loc, existed = store.bcache.exist(r.key(i))
 		if handler != nil {
 			handler(existed, loc, r.blockSize(i))
 		}
 	}
-	return nil
+	return bytes, nil
 }
 
 func (store *cachedStore) UsedMemory() int64 {

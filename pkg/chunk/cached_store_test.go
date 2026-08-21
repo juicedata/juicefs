@@ -212,10 +212,7 @@ func TestForceUpload(t *testing.T) {
 	store := NewCachedStore(blob, config, nil)
 	cleanCache := func() {
 		rSlice := sliceForRead(1, 1024, store.(*cachedStore))
-		keys := rSlice.keys()
-		for _, k := range keys {
-			store.(*cachedStore).bcache.remove(k, true)
-		}
+		store.(*cachedStore).bcache.remove(rSlice.key(0), true)
 	}
 	readSlice := func(id uint64, length int) error {
 		p := NewPage(make([]byte, length))
@@ -300,10 +297,10 @@ func TestFillCache(t *testing.T) {
 	if cnt, used := bcache.stats(); cnt != 1 || used != 1024+4096 { // only chunk 10 cached
 		t.Fatalf("cache cnt %d used %d, expect cnt 1 used 5120", cnt, used)
 	}
-	if err := store.FillCache(10, 1024); err != nil {
+	if _, err := store.FillCache(10, 1024, 0, 1024); err != nil {
 		t.Fatalf("fill cache 10 1024: %s", err)
 	}
-	if err := store.FillCache(11, uint32(bsize)); err != nil {
+	if _, err := store.FillCache(11, uint32(bsize), 0, uint32(bsize)); err != nil {
 		t.Fatalf("fill cache 11 %d: %s", bsize, err)
 	}
 	time.Sleep(time.Second)
@@ -319,17 +316,17 @@ func TestFillCache(t *testing.T) {
 		}
 	}
 	// check
-	err := store.CheckCache(10, 1024, handler)
+	_, err := store.CheckCache(10, 1024, 0, 1024, handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(0), missBytes)
 
 	missBytes = 0
-	err = store.CheckCache(11, uint32(bsize), handler)
+	_, err = store.CheckCache(11, uint32(bsize), 0, uint32(bsize), handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(0), missBytes)
 
 	// evict slice 11
-	err = store.EvictCache(11, uint32(bsize))
+	_, err = store.EvictCache(11, uint32(bsize), 0, uint32(bsize))
 	assert.Nil(t, err)
 
 	// stat
@@ -339,9 +336,88 @@ func TestFillCache(t *testing.T) {
 
 	// check again
 	missBytes = 0
-	err = store.CheckCache(11, uint32(bsize), handler)
+	_, err = store.CheckCache(11, uint32(bsize), 0, uint32(bsize), handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(bsize), missBytes)
+}
+
+func TestCacheBlockRange(t *testing.T) {
+	conf := defaultConf
+	bsize := conf.BlockSize
+	store := &cachedStore{conf: conf}
+	r := sliceForRead(1, bsize*5/2, store)
+	tests := []struct {
+		name    string
+		offset  uint32
+		length  uint32
+		first   int
+		last    int
+		bytes   uint64
+		wantErr bool
+	}{
+		{"full slice", 0, uint32(bsize * 5 / 2), 0, 2, uint64(bsize * 5 / 2), false},
+		{"first byte", 0, 1, 0, 0, uint64(bsize), false},
+		{"exact block", uint32(bsize), uint32(bsize), 1, 1, uint64(bsize), false},
+		{"cross boundary", uint32(bsize - 1), 2, 0, 1, uint64(bsize * 2), false},
+		{"short last block", uint32(bsize * 2), uint32(bsize / 2), 2, 2, uint64(bsize / 2), false},
+		{"empty at end", uint32(bsize * 5 / 2), 0, 0, -1, 0, false},
+		{"offset beyond end", uint32(bsize*5/2 + 1), 0, 0, 0, 0, true},
+		{"range beyond end", uint32(bsize * 2), uint32(bsize), 0, 0, 0, true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			first, last, bytes, err := r.blockRange(test.offset, test.length)
+			if test.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, test.first, first)
+			assert.Equal(t, test.last, last)
+			assert.Equal(t, test.bytes, bytes)
+		})
+	}
+}
+
+func TestCacheVisibleBlocks(t *testing.T) {
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
+	conf := defaultConf
+	conf.CacheDir = "memory"
+	conf.CacheSize = 10 << 20
+	store := NewCachedStore(mem, conf, nil)
+	bsize := conf.BlockSize
+	size := bsize * 5 / 2
+	if err := forgetSlice(store, 12, size); err != nil {
+		t.Fatalf("forge slice: %s", err)
+	}
+	defer store.Remove(12, size)
+
+	if _, err := store.EvictCache(12, uint32(size), 0, uint32(size)); err != nil {
+		t.Fatalf("evict full slice: %s", err)
+	}
+	bytes, err := store.FillCache(12, uint32(size), uint32(bsize), uint32(bsize))
+	if err != nil {
+		t.Fatalf("fill visible block: %s", err)
+	}
+	assert.Equal(t, uint64(bsize), bytes)
+
+	check := func(offset, length uint32) bool {
+		t.Helper()
+		var cached bool
+		_, err := store.CheckCache(12, uint32(size), offset, length, func(exists bool, _ string, _ int) {
+			cached = exists
+		})
+		assert.NoError(t, err)
+		return cached
+	}
+	assert.False(t, check(0, uint32(bsize)))
+	assert.True(t, check(uint32(bsize), uint32(bsize)))
+	assert.False(t, check(uint32(bsize*2), uint32(bsize/2)))
+
+	bytes, err = store.EvictCache(12, uint32(size), uint32(bsize), uint32(bsize))
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(bsize), bytes)
+	assert.False(t, check(uint32(bsize), uint32(bsize)))
 }
 
 func BenchmarkCachedRead(b *testing.B) {
