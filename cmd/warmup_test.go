@@ -112,3 +112,53 @@ func TestWarmupWithRangeFile(t *testing.T) {
 		t.Fatalf("warmup with range file list: %s", err)
 	}
 }
+
+func TestSplitPathRanges(t *testing.T) {
+	tests := []struct {
+		target     string
+		wantPath   string
+		wantRanges string
+	}{
+		{"/data/file.lance", "/data/file.lance", ""},
+		{"/data/file.lance\t0-100", "/data/file.lance", "\t0-100"},
+		{"/data/a\tb\t0-100;200-300", "/data/a\tb", "\t0-100;200-300"},
+	}
+	for _, tt := range tests {
+		gotPath, gotRanges := splitPathRanges(tt.target)
+		if gotPath != tt.wantPath || gotRanges != tt.wantRanges {
+			t.Errorf("splitPathRanges(%q) = (%q, %q), want (%q, %q)", tt.target, gotPath, gotRanges, tt.wantPath, tt.wantRanges)
+		}
+	}
+}
+
+func TestRangeLineRegex(t *testing.T) {
+	tests := []struct {
+		line       string
+		wantMatch  bool
+		wantPath   string
+		wantRanges string
+	}{
+		{"/data/file.lance", false, "", ""},
+		{"/data/my file.lance", false, "", ""},
+		{"/data/10-20", false, "", ""},
+		{"/data/file.lance 0-100", true, "/data/file.lance", "0-100"},
+		{"/data/my file.lance 0-100;200-300", true, "/data/my file.lance", "0-100;200-300"},
+		{"relative/file 5-10", true, "relative/file", "5-10"},
+	}
+	for _, tt := range tests {
+		m := rangeLineRe.FindStringSubmatch(tt.line)
+		if !tt.wantMatch {
+			if m != nil {
+				t.Errorf("%q unexpectedly matched: %v", tt.line, m)
+			}
+			continue
+		}
+		if m == nil {
+			t.Errorf("%q did not match", tt.line)
+			continue
+		}
+		if gotPath, gotRanges := m[1], m[2]; gotPath != tt.wantPath || gotRanges != tt.wantRanges {
+			t.Errorf("%q => path %q ranges %q, want path %q ranges %q", tt.line, gotPath, gotRanges, tt.wantPath, tt.wantRanges)
+		}
+	}
+}
