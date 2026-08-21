@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -94,6 +95,23 @@ const maxInterval = 300
 const minInterval = 1
 
 var interval int
+
+// rangeLineRe matches a warmup file line that ends with a byte-range list:
+// "path start-end[;start-end]...". The path may itself contain whitespace, so
+// ranges are recognized only when they form a strict, whitespace-free token at
+// the end of the line. A line without such a token is treated as a plain path
+// for backward compatibility.
+var rangeLineRe = regexp.MustCompile(`^(.+)\s+([0-9]+-[0-9]+(?:;[0-9]+-[0-9]+)*)$`)
+
+// splitPathRanges separates an internal warmup target into its path and an
+// optional trailing range list (including the leading tab separator). The split
+// happens at the last tab, since the range list is always appended at the end.
+func splitPathRanges(target string) (path, ranges string) {
+	if idx := strings.LastIndexByte(target, '\t'); idx >= 0 {
+		return target[:idx], target[idx:]
+	}
+	return target, ""
+}
 
 func readControl(cf *os.File, resp []byte) int {
 	if interval <= 0 {
@@ -221,12 +239,25 @@ func warmup(ctx *cli.Context) error {
 		defer fd.Close()
 		scanner := bufio.NewScanner(fd)
 		for scanner.Scan() {
-			if p := strings.TrimSpace(scanner.Text()); p != "" {
-				if abs, e := filepath.Abs(p); e == nil {
-					paths = append(paths, abs)
-				} else {
-					logger.Warnf("Skipped path %q because it fails to get absolute path: %s", p, e)
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			// A line is either a plain path or "path start-end[;start-end]...".
+			// Trailing ranges are matched with a regex so that paths containing
+			// spaces still parse correctly.
+			pathStr, ranges := line, ""
+			if m := rangeLineRe.FindStringSubmatch(line); m != nil {
+				pathStr = strings.TrimSpace(m[1])
+				ranges = m[2]
+			}
+			if abs, e := filepath.Abs(pathStr); e == nil {
+				if ranges != "" {
+					abs += "\t" + ranges
 				}
+				paths = append(paths, abs)
+			} else {
+				logger.Warnf("Skipped path %q because it fails to get absolute path: %s", pathStr, e)
 			}
 		}
 		if err = scanner.Err(); err != nil {
@@ -239,7 +270,7 @@ func warmup(ctx *cli.Context) error {
 	}
 
 	// find mount point
-	first := paths[0]
+	first, _ := splitPathRanges(paths[0])
 	controller, err := openController(first)
 	if err != nil {
 		return fmt.Errorf("open control file for %s: %s", first, err)
@@ -277,17 +308,19 @@ func warmup(ctx *cli.Context) error {
 	dspin := progress.AddDoubleSpinnerTwo(fmt.Sprintf("%s file", action), fmt.Sprintf("%s size", action))
 	total := &vfs.CacheResponse{Locations: make(map[string]uint64)}
 	for _, path := range paths {
+		// Extract path and optional ranges (tab-separated).
+		pathOnly, rangesPart := splitPathRanges(path)
 		if mp == "/" {
-			inode, err := utils.GetFileInode(path)
+			inode, err := utils.GetFileInode(pathOnly)
 			if err != nil {
 				logger.Errorf("lookup inode for %q: %s", mp, err)
 				continue
 			}
-			batch = append(batch, fmt.Sprintf("inode:%d", inode))
-		} else if strings.HasPrefix(path, mp) {
-			batch = append(batch, path[start:])
+			batch = append(batch, fmt.Sprintf("inode:%d", inode)+rangesPart)
+		} else if strings.HasPrefix(pathOnly, mp) {
+			batch = append(batch, pathOnly[start:]+rangesPart)
 		} else {
-			logger.Errorf("Path %q is not under mount point %q", path, mp)
+			logger.Errorf("Path %q is not under mount point %q", pathOnly, mp)
 			continue
 		}
 		if len(batch) >= batchMax {
