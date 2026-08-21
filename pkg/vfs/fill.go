@@ -129,6 +129,13 @@ func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *Cach
 }
 
 func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string, threads int, resp *CacheResponse) {
+	c.CacheWithConfig(ctx, action, paths, threads, resp, nil)
+}
+
+// CacheWithConfig is like Cache but accepts an optional LanceWarmupConfig.
+// When lanceCfg is non-nil and a path looks like a Lance dataset (ending in .lance),
+// the manifest is parsed to discover all related data files automatically.
+func (c *CacheFiller) CacheWithConfig(ctx meta.Context, action CacheAction, paths []string, threads int, resp *CacheResponse, lanceCfg *LanceWarmupConfig) {
 	if resp == nil {
 		resp = &CacheResponse{Locations: make(map[string]uint64)}
 	}
@@ -151,6 +158,31 @@ func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string
 	var inode Ino
 	var attr = &Attr{}
 	for _, p := range paths {
+		// Lance dataset: resolve manifest → expand to file paths → warmup
+		if lanceCfg != nil && isLanceDataset(p) {
+			lancePaths, err := c.resolveLancePaths(ctx, p, lanceCfg)
+			if err != nil {
+				logger.Warnf("resolve lance dataset %s: %s", p, err)
+				continue
+			}
+			logger.Infof("Lance dataset %s expanded to %d paths", p, len(lancePaths))
+			for _, lp := range lancePaths {
+				if st := c.resolve(ctx, lp, &inode, attr); st != 0 {
+					logger.Warnf("Failed to resolve lance path %s: %s", lp, st)
+					continue
+				}
+				if attr.Typ == meta.TypeDirectory {
+					c.walkDir(ctx, inode, todo)
+				} else if attr.Typ == meta.TypeFile {
+					_ = sendFile(ctx, todo, _file{inode, attr.Length})
+				}
+			}
+			if ctx.Canceled() {
+				break
+			}
+			continue
+		}
+
 		if st := c.resolve(ctx, p, &inode, attr); st != 0 {
 			logger.Warnf("Failed to resolve path %s: %s", p, st)
 			continue

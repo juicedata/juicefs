@@ -597,17 +597,53 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			action = CacheAction(r.Get8())
 		}
 
-		logger.Infof("Start to %s %d paths with %d workers, background=%d", action, len(paths), concurrent, background)
+		// Optional: Lance warmup config
+		var lanceCfg *LanceWarmupConfig
+		if r.HasMore() {
+			lanceFlag := r.Get8()
+			if lanceFlag == 1 {
+				lanceCfg = &LanceWarmupConfig{}
+				if r.HasMore() {
+					lanceCfg.ManifestOnly = r.Get8() == 1
+				}
+				if r.HasMore() {
+					lanceCfg.IncludeIndices = r.Get8() == 1
+				}
+				if r.HasMore() {
+					verLen := int(r.Get16())
+					if verLen > 0 && r.HasMore() {
+						lanceCfg.Version = string(r.Get(verLen))
+					}
+				}
+				// Optional: column names
+				if r.HasMore() {
+					colLen := int(r.Get16())
+					if colLen > 0 && r.HasMore() {
+						colData := string(r.Get(colLen))
+						lanceCfg.Columns = strings.Split(colData, ",")
+						for i, c := range lanceCfg.Columns {
+							lanceCfg.Columns[i] = strings.TrimSpace(c)
+						}
+					}
+				}
+				// Optional: include data pages flag
+				if r.HasMore() {
+					lanceCfg.IncludeDataPages = r.Get8() == 1
+				}
+			}
+		}
+
+		logger.Infof("Start to %s %d paths with %d workers, background=%d, lance=%v", action, len(paths), concurrent, background, lanceCfg != nil)
 		stat := &CacheResponse{Locations: make(map[string]uint64)}
 		if background == 0 {
 			done := make(chan struct{})
 			go func() {
-				v.cacheFiller.Cache(ctx, action, paths, int(concurrent), stat)
+				v.cacheFiller.CacheWithConfig(ctx, action, paths, int(concurrent), stat, lanceCfg)
 				close(done)
 			}()
 			writeProgress(&stat.FileCount, &stat.TotalBytes, out, done)
 		} else {
-			go v.cacheFiller.Cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(concurrent), nil)
+			go v.cacheFiller.CacheWithConfig(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(concurrent), nil, lanceCfg)
 		}
 		data, err := json.Marshal(stat)
 		if err != nil {
