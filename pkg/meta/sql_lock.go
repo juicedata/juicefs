@@ -43,14 +43,14 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 	var err syscall.Errno
 	for {
 		err = errno(m.txn(func(s *xorm.Session) error {
-			if exists, err := s.ForUpdate().Get(&node{Inode: inode}); err != nil || !exists {
+			if exists, err := m.forUpdate(s).Get(&node{Inode: inode}); err != nil || !exists {
 				if err == nil && !exists {
 					err = syscall.ENOENT
 				}
 				return err
 			}
 			var fs []flock
-			err := s.ForUpdate().Find(&fs, &flock{Inode: inode})
+			err := m.forUpdate(s).Find(&fs, &flock{Inode: inode})
 			if err != nil {
 				return err
 			}
@@ -168,7 +168,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 	owner := int64(owner_)
 	for {
 		err = errno(m.txn(func(s *xorm.Session) error {
-			if exists, err := s.ForUpdate().Get(&node{Inode: inode}); err != nil || !exists {
+			if exists, err := m.forUpdate(s).Get(&node{Inode: inode}); err != nil || !exists {
 				if err == nil && !exists {
 					err = syscall.ENOENT
 				}
@@ -176,7 +176,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 			}
 			if ltype == F_UNLCK {
 				var l = plock{Inode: inode, Owner: owner, Sid: m.sid}
-				ok, err := s.ForUpdate().MustCols("inode", "owner", "sid").Get(&l)
+				ok, err := m.forUpdate(s).MustCols("inode", "owner", "sid").Get(&l)
 				if err != nil {
 					return err
 				}
@@ -199,7 +199,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				return err
 			}
 			var ps []plock
-			err := s.ForUpdate().Find(&ps, &plock{Inode: inode})
+			err := m.forUpdate(s).Find(&ps, &plock{Inode: inode})
 			if err != nil {
 				return err
 			}
