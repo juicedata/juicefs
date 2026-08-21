@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path"
 	"reflect"
 	"runtime"
 	"sort"
@@ -38,6 +39,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -4436,6 +4438,227 @@ func testAtime(t *testing.T, m Meta) {
 		if ret := testFn(name); ret != exp {
 			t.Fatalf("Test %s: expected %v, got %v", name, exp, ret)
 		}
+	}
+}
+
+// memkv seeds every client from settingPath and writes the setting back to it,
+// so a test must neither inherit one nor leave one behind.
+func newTestMemKV(t *testing.T, name string, format *Format) Meta {
+	t.Helper()
+	_ = os.Remove(settingPath)
+	t.Cleanup(func() { _ = os.Remove(settingPath) })
+	m, err := newKVMeta("memkv", name, testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init: %s", err)
+	}
+	return m
+}
+
+// A client whose writes fail: doInit gets past the initial read, which goes
+// through simpleTxn, and then fails where the setting would be stored.
+type failWriteClient struct {
+	tkvClient
+	fail bool
+}
+
+func (c *failWriteClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) error {
+	if c.fail {
+		return fmt.Errorf("injected write failure")
+	}
+	return c.tkvClient.txn(ctx, f, retry)
+}
+
+// The Format published by setFormat is shared with every reader that calls
+// getFormat, so a change has to be published as a new value: mutating the live
+// one races with those readers. The atomic pointer guards the pointer, not the
+// struct it points at.
+func TestPublishedFormatIsNotMutated(t *testing.T) {
+	t.Run("quota set", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-quota", &Format{Name: "test"})
+		base := m.getBase()
+		published := base.getFormat()
+		if published.DirStats {
+			t.Fatalf("DirStats has to start disabled for this test")
+		}
+
+		// quotas holds no entry for dpath, so handleQuotaSet returns right
+		// after turning DirStats on, which is the part under test
+		if err := base.handleQuotaSet(Background(), DirQuotaType, 0, "/d", map[string]*Quota{}, false); err != nil {
+			t.Fatalf("handleQuotaSet: %s", err)
+		}
+		if published.DirStats {
+			t.Fatalf("handleQuotaSet turned DirStats on in the published format")
+		}
+		if !base.getFormat().DirStats {
+			t.Fatalf("handleQuotaSet did not publish the updated format")
+		}
+	})
+
+	// the flag has to be stored on top of what the volume holds: the published
+	// format may carry the overrides this client was started with
+	t.Run("quota set keeps the local overrides local", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-override", &Format{Name: "test"})
+		base := m.getBase()
+		patched := *base.getFormat()
+		patched.Bucket = "local-override"
+		base.setFormat(&patched)
+
+		if err := base.handleQuotaSet(Background(), DirQuotaType, 0, "/d", map[string]*Quota{}, false); err != nil {
+			t.Fatalf("handleQuotaSet: %s", err)
+		}
+		stored, err := base.loadFormat(false)
+		if err != nil {
+			t.Fatalf("load format: %s", err)
+		}
+		if stored.Bucket == "local-override" {
+			t.Fatalf("handleQuotaSet stored this client's override in the volume")
+		}
+		if !stored.DirStats {
+			t.Fatalf("handleQuotaSet did not store DirStats")
+		}
+	})
+
+	// Tiers is a map, so a copy sharing it would let a caller patching its own
+	// copy (the .config handler does) write into the format every reader shares
+	t.Run("tiers are copied", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-tiers", &Format{Name: "test", Tiers: object.NewTiers("standard")})
+		base := m.getBase()
+
+		f := m.GetFormat()
+		f.Tiers[0] = object.Tier{ID: 0, Sc: "patched"}
+		if got := base.getFormat().Tiers[0].Sc; got == "patched" {
+			t.Fatalf("GetFormat shares Tiers with the published format: Sc=%q", got)
+		}
+	})
+
+	// Init publishes the format only after the engine stored it, so a failed
+	// one must not leave this client running on a format the volume never got.
+	t.Run("failed init", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-doinit", &Format{Name: "test"})
+		kv := m.(*kvMeta)
+		if kv.getFormat().Capacity != 0 {
+			t.Fatalf("Capacity has to start at 0 for this test")
+		}
+
+		client := &failWriteClient{tkvClient: kv.client}
+		kv.client = client
+		client.fail = true
+
+		// Capacity avoids the branches that clean up dir stats or quotas, so
+		// the first write doInit attempts is the setting itself
+		newFormat := *kv.getFormat()
+		newFormat.Capacity = 1 << 30
+		if err := kv.Init(&newFormat, false); err == nil {
+			t.Fatalf("Init returned no error although the setting could not be stored")
+		}
+		if got := kv.getFormat().Capacity; got != 0 {
+			t.Fatalf("Init published the format although storing it failed: Capacity=%d", got)
+		}
+	})
+
+	// the same invariant on the SQL engine: its doInit writes through txn,
+	// which refuses to run on a read-only client, while the read it does first
+	// goes through simpleTxn and still succeeds
+	t.Run("failed init (sql)", func(t *testing.T) {
+		m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-format.db"), testConfig())
+		if err != nil {
+			t.Fatalf("create meta: %s", err)
+		}
+		if err := m.Init(&Format{Name: "test"}, false); err != nil {
+			t.Fatalf("init: %s", err)
+		}
+		db := m.(*dbMeta)
+		if db.getFormat().Capacity != 0 {
+			t.Fatalf("Capacity has to start at 0 for this test")
+		}
+
+		db.conf.ReadOnly = true
+		defer func() { db.conf.ReadOnly = false }()
+
+		newFormat := *db.getFormat()
+		newFormat.Capacity = 1 << 30
+		if err := db.Init(&newFormat, false); err == nil {
+			t.Fatalf("Init returned no error although the setting could not be stored")
+		}
+		if got := db.getFormat().Capacity; got != 0 {
+			t.Fatalf("Init published the format although storing it failed: Capacity=%d", got)
+		}
+	})
+
+	t.Run("status", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-status", &Format{Name: "test", SecretKey: "secret"})
+		base := m.getBase()
+		// the reload callbacks patch the live format; Status must not republish
+		// the stored one over their patches
+		published := base.getFormat()
+		published.Bucket = "patched"
+
+		sections := &Sections{}
+		if err := Status(context.Background(), m, false, sections); err != nil {
+			t.Fatalf("status: %s", err)
+		}
+		// only the reported copy may be scrubbed, not the format every reader
+		// shares: a later doInit would persist the scrubbed secrets
+		if got := base.getFormat().SecretKey; got != "secret" {
+			t.Fatalf("Status removed the secret from the published format: SecretKey=%q", got)
+		}
+		if sections.Setting.SecretKey != "removed" {
+			t.Fatalf("Status reported the secret: SecretKey=%q", sections.Setting.SecretKey)
+		}
+		if got := base.getFormat().Bucket; got != "patched" {
+			t.Fatalf("Status republished the stored format over the live one: Bucket=%q", got)
+		}
+	})
+
+	t.Run("reload callbacks", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-reload", testFormat())
+		base := m.getBase()
+		// leave the published format differing from the stored one, so the
+		// reload counts as a change and runs the callbacks
+		stale := *base.getFormat()
+		stale.Bucket = "stale"
+		base.setFormat(&stale)
+
+		var called, live bool
+		base.OnReload(func(f *Format) {
+			called = true
+			live = base.getFormat() == f
+			f.Bucket = "patched"
+		})
+		base.reloadFormat()
+
+		if !called {
+			t.Fatalf("reload callback was not called")
+		}
+		if live {
+			t.Fatalf("reload published the format before the callbacks patched it")
+		}
+		if got := base.getFormat().Bucket; got != "patched" {
+			t.Fatalf("the callback's patch was not published: Bucket=%q", got)
+		}
+	})
+}
+
+// A quota whose format update failed would be created but never accounted:
+// updateDirQuota gives up as soon as it sees DirStats disabled.
+func TestQuotaSetFailsWhenFormatUpdateFails(t *testing.T) {
+	m := newTestMemKV(t, "test-quota-init-error", &Format{Name: "test"})
+	kv := m.(*kvMeta)
+	// corrupt the stored setting, so the doInit that turns DirStats on fails
+	if err := kv.setValue(kv.fmtKey("setting"), []byte("not json")); err != nil {
+		t.Fatalf("corrupt setting: %s", err)
+	}
+
+	err := m.getBase().handleQuotaSet(Background(), DirQuotaType, 0, "/d", map[string]*Quota{}, false)
+	if err == nil {
+		t.Fatalf("handleQuotaSet returned no error although DirStats could not be enabled")
+	}
+	// a failed store is not a bad request: the caller has to be able to retry
+	if !errors.Is(err, syscall.EIO) {
+		t.Fatalf("handleQuotaSet did not report the failed store as EIO: %v", err)
 	}
 }
 

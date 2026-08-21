@@ -276,6 +276,9 @@ type baseMeta struct {
 	// fmt is reloaded in the background while other goroutines read it, so it is
 	// only ever accessed through getFormat/setFormat
 	fmt atomic.Pointer[Format]
+	// serializes the load-modify-store sequences that update the stored format,
+	// so two of them cannot drop each other's change
+	fmtMu sync.Mutex
 
 	root         Ino
 	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict
@@ -710,10 +713,15 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
-func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
+// ErrNotFormatted is returned when the volume holds no format yet.
+var ErrNotFormatted = errors.New("database is not formatted, please run `juicefs format ...` first")
+
+// loadFormat reads the stored format without publishing it, so a caller can
+// finish preparing it before other goroutines can observe it.
+func (m *baseMeta) loadFormat(checkVersion bool) (*Format, error) {
 	body, err := m.en.doLoad()
 	if err == nil && len(body) == 0 {
-		err = fmt.Errorf("database is not formatted, please run `juicefs format ...` first")
+		err = ErrNotFormatted
 	}
 	if err != nil {
 		return nil, err
@@ -729,6 +737,14 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	}
 	if format.Tiers == nil {
 		format.Tiers = object.NewTiers(format.StorageClass)
+	}
+	return format, nil
+}
+
+func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
+	format, err := m.loadFormat(checkVersion)
+	if err != nil {
+		return nil, err
 	}
 	m.setFormat(format)
 	return format, nil
@@ -889,6 +905,40 @@ func (m *baseMeta) OnReload(fn func(f *Format)) {
 
 const UmountCode = 11
 
+func (m *baseMeta) reloadFormat() {
+	old := m.getFormat()
+	format, err := m.loadFormat(false)
+	if err != nil {
+		if errors.Is(err, ErrNotFormatted) {
+			logger.Errorf("reload setting: %s", err)
+			os.Exit(UmountCode)
+		}
+		logger.Warnf("reload setting: %s", err)
+		return
+	}
+	if format.MetaVersion > MaxVersion {
+		logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
+		os.Exit(UmountCode)
+	}
+	if format.UUID != old.UUID {
+		logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
+		os.Exit(UmountCode)
+	}
+	if reflect.DeepEqual(format, old) {
+		return
+	}
+	m.msgCallbacks.Lock()
+	cbs := m.reloadCb
+	m.msgCallbacks.Unlock()
+	// the callbacks patch the format (the mount overrides it with the options
+	// given on the command line); run them before publishing it, so readers
+	// never see it change under them
+	for _, cb := range cbs {
+		cb(format)
+	}
+	m.setFormat(format)
+}
+
 func (m *baseMeta) refresh(ctx Context) {
 	for {
 		if ctx.Canceled() {
@@ -911,27 +961,7 @@ func (m *baseMeta) refresh(ctx Context) {
 		}
 		m.sesMu.Unlock()
 
-		old := m.getFormat()
-		if format, err := m.Load(false); err != nil {
-			if strings.HasPrefix(err.Error(), "database is not formatted") {
-				logger.Errorf("reload setting: %s", err)
-				os.Exit(UmountCode)
-			}
-			logger.Warnf("reload setting: %s", err)
-		} else if format.MetaVersion > MaxVersion {
-			logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
-			os.Exit(UmountCode)
-		} else if format.UUID != old.UUID {
-			logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
-			os.Exit(UmountCode)
-		} else if !reflect.DeepEqual(format, old) {
-			m.msgCallbacks.Lock()
-			cbs := m.reloadCb
-			m.msgCallbacks.Unlock()
-			for _, cb := range cbs {
-				cb(format)
-			}
-		}
+		m.reloadFormat()
 
 		if v, err := m.en.getCounter(usedSpace); err == nil {
 			atomic.StoreInt64(&m.usedSpace, v)
@@ -1003,8 +1033,30 @@ func (m *baseMeta) FlushSession() {
 	logger.Infof("flush session %d:", m.sid)
 }
 
+// Init stores the format and publishes it once the engine has committed it, so
+// a caller that gets an error back is never left with a format the volume never
+// received, whichever engine is in use.
 func (m *baseMeta) Init(format *Format, force bool) error {
-	return m.en.doInit(format, force)
+	if err := m.en.doInit(format, force); err != nil {
+		return err
+	}
+	m.setFormat(format)
+	return nil
+}
+
+// enableFormatFlag turns a feature flag on in the stored format. It starts from
+// a fresh copy of what the volume holds rather than the published one, which
+// may carry the overrides this client was started with, and the lock keeps a
+// concurrent call from storing a format without the flag the other just set.
+func (m *baseMeta) enableFormatFlag(set func(*Format)) error {
+	m.fmtMu.Lock()
+	defer m.fmtMu.Unlock()
+	format, err := m.loadFormat(false)
+	if err != nil {
+		return err
+	}
+	set(format)
+	return m.Init(format, false)
 }
 
 func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
@@ -2783,7 +2835,7 @@ func (m *baseMeta) setFormat(format *Format) {
 }
 
 func (m *baseMeta) GetFormat() Format {
-	return *m.getFormat()
+	return *m.getFormat().Clone()
 }
 
 func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
