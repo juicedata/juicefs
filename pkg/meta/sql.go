@@ -2158,7 +2158,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
-		if pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0 {
+		if !ignoreAttrFlags(ctx) && (pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0) {
 			return syscall.EPERM
 		}
 		var e = edge{Parent: parent, Name: []byte(name)}
@@ -2799,6 +2799,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		length uint64
 	}
 	delNodes := make(map[Ino]*dNode)
+	skipFlags := ignoreAttrFlags(ctx)
 
 	batchSize := m.getTxnBatchNum()
 	for len(entries) > 0 {
@@ -2838,7 +2839,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 				return st
 			}
-			if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
+			if !skipFlags && ((pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0) {
 				return syscall.EPERM
 			}
 			now := time.Now().UnixNano()
@@ -2896,7 +2897,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
 						return syscall.EACCES
 					}
-					if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
+					if !skipFlags && ((n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0) {
 						return syscall.EPERM
 					}
 					if (n.Flags & FlagSkipTrash) != 0 {
@@ -5704,7 +5705,7 @@ func (m *dbMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		return errno(err)
 	}
 	rmConcurrent := make(chan int, backgroundDeleteThreads)
-	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
+	if eno := m.emptyDir(withIgnoredAttrFlags(ctx), ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}
 	m.updateStats(-align4K(0), -1)
