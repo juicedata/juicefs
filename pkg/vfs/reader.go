@@ -275,6 +275,7 @@ func (s *sliceReader) delete() {
 }
 
 type session struct {
+	cnt        uint32
 	lastOffset uint64
 	total      uint64
 	readahead  uint64
@@ -407,9 +408,15 @@ func (f *fileReader) guessSession(block *frange) int {
 		f.sessions[idx].lastOffset = block.off
 		f.sessions[idx].total = block.len
 		f.sessions[idx].readahead = 0
+		f.sessions[idx].cnt = 0
 	} else {
 		if block.end() > f.sessions[idx].lastOffset {
 			f.sessions[idx].total += block.end() - f.sessions[idx].lastOffset
+		}
+		if block.off == f.sessions[idx].lastOffset {
+			f.sessions[idx].cnt++
+		} else {
+			f.sessions[idx].cnt = 0
 		}
 	}
 	f.sessions[idx].atime = time.Now()
@@ -422,7 +429,8 @@ func (f *fileReader) checkReadahead(block *frange) int {
 	seqdata := ses.total
 	readahead := ses.readahead
 	used := uint64(readBufferUsed.Load())
-	if readahead == 0 && f.r.blockSize <= f.r.readAheadMax && (block.off == 0 || seqdata > block.len) { // begin with read-ahead turned on
+	cnt := ses.cnt
+	if readahead == 0 && f.r.blockSize <= f.r.readAheadMax && (block.off == 0 || seqdata > block.len || cnt > 3) { // begin with read-ahead turned on
 		ses.readahead = f.r.blockSize
 	} else if readahead < f.r.readAheadMax && seqdata >= readahead && f.r.readAheadTotal > used+readahead*4 {
 		ses.readahead *= 2
