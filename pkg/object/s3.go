@@ -45,7 +45,6 @@ import (
 )
 
 const awsDefaultRegion = "us-east-1"
-const s3RequestIDKey = "X-Amz-Request-Id"
 
 func addS3UserAgent(stack *smithymiddleware.Stack) error {
 	return middleware.AddUserAgentKey(UserAgent)(stack)
@@ -78,11 +77,6 @@ func (s *s3client) Limits() Limits {
 		MaxPartSize:              5 << 30,
 		MaxPartCount:             10000,
 	}
-}
-
-func isExists(err error) bool {
-	msg := err.Error()
-	return strings.Contains(msg, "BucketAlreadyExists") || strings.Contains(msg, "BucketAlreadyOwnedByYou")
 }
 
 func (s *s3client) Create(ctx context.Context) error {
@@ -481,11 +475,6 @@ func parseRegion(endpoint string) string {
 		region = awsDefaultRegion
 	}
 	return region
-}
-
-func defaultPathStyle() bool {
-	v := os.Getenv("JFS_S3_VHOST_STYLE")
-	return v == "" || v == "0" || v == "false"
 }
 
 var oracleCompileRegexp = `^(?:.*\.)?(?:compat|vhcompat)\.objectstorage\.([^.]+)\.(?:oraclecloud\.com|oci\.customer-oci\.com)$`

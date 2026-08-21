@@ -451,3 +451,15 @@ func getOrDefaultScValue(v, defaultValue string) string {
 	}
 	return v
 }
+
+const s3RequestIDKey = "X-Amz-Request-Id"
+
+func isExists(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "BucketAlreadyExists") || strings.Contains(msg, "BucketAlreadyOwnedByYou")
+}
+
+func defaultPathStyle() bool {
+	v := os.Getenv("JFS_S3_VHOST_STYLE")
+	return v == "" || v == "0" || v == "false"
+}
