@@ -525,6 +525,63 @@ class ChannelFixtureTest(unittest.TestCase):
             )
         )
 
+    def test_release_assets_require_versioned_artifacts(self):
+        payload = {
+            "assets": [{"name": name} for name in CDN_ASSETS[:-1]]
+            + [{"name": "checksums.txt"}, {"name": "juicefs-hadoop-1.3.3.jar"}]
+        }
+
+        result = checker.check_release_assets(self.expected, payload)
+
+        self.assertEqual("stale", result.status)
+        self.assertIn(CDN_ASSETS[-1], result.detail)
+        self.assertIn("juicefs-hadoop-1.4.1.jar", result.detail)
+        self.assertIn("juicefs-hadoop-1.3.3.jar", result.detail)
+
+    def test_cdn_artifacts_do_not_require_latest_version_marker(self):
+        checksums = "".join(f"{'a' * 64}  {name}\n" for name in CDN_ASSETS)
+        client = FakeClient(text_values={"checksums.txt": checksums})
+
+        result = checker.check_cdn_artifacts(client, self.expected)
+
+        self.assertEqual("current", result.status)
+        self.assertEqual(self.expected, result.actual)
+        self.assertFalse(any("latest-version.txt" in url for url in client.urls))
+
+    def test_target_mode_checks_only_versioned_artifacts(self):
+        checksums = "".join(f"{'a' * 64}  {name}\n" for name in CDN_ASSETS)
+        maven_metadata = (
+            "<metadata><versioning>"
+            "<latest>1.3.3</latest><release>1.3.3</release>"
+            "<versions><version>1.3.3</version><version>1.4.1</version></versions>"
+            "</versioning></metadata>"
+        )
+        client = FakeClient(
+            json_values={"ce-v1.4.1": {"tag_status": "active"}},
+            text_values={"checksums.txt": checksums, "maven-metadata": maven_metadata},
+        )
+        release = checker.ReleaseInfo(
+            release_id=362269109,
+            tag="v1.4.1",
+            version=self.expected,
+            published_at=checker.parse_datetime("2026-07-30T08:03:19Z"),
+        )
+
+        results = checker.perform_checks(client, release, self.release_payload, check_mode="target")
+
+        self.assertEqual(
+            [
+                "GitHub release assets",
+                "CDN artifacts",
+                "Docker Hub versioned image",
+                "Maven Central artifact",
+            ],
+            [result.channel for result in results],
+        )
+        self.assertTrue(all(result.status == "current" for result in results))
+        self.assertFalse(any("formulae.brew.sh" in url for url in client.urls))
+        self.assertFalse(any(url.endswith("/latest") for url in client.urls))
+
     def test_every_channel_reports_unavailable_without_hiding_others(self):
         client = FakeClient(fail=True)
         checks = [
