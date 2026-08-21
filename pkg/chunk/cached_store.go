@@ -375,6 +375,7 @@ func (store *cachedStore) upload(ctx context.Context, key string, block *Page, s
 		return fmt.Errorf("Compress block key %s: %s", key, err)
 	}
 	buf.Data = buf.Data[:n]
+	ctx = object.WithPutRequest(ctx)
 
 	try, max := 0, 3
 	if sync {
