@@ -40,7 +40,7 @@ import (
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
-	pd "github.com/tikv/pd/client"
+	"github.com/tikv/pd/client/opt"
 	"go.uber.org/zap"
 )
 
@@ -95,7 +95,7 @@ func newTikvClient(addr string) (tkvClient, error) {
 	}
 
 	if strings.ToLower(query.Get("open-tso-follower-proxy")) == "true" {
-		if err := client.KVStore.GetPDClient().UpdateOption(pd.EnableTSOFollowerProxy, true); err != nil {
+		if err := client.KVStore.GetPDClient().UpdateOption(opt.EnableTSOFollowerProxy, true); err != nil {
 			logger.Warnf("Failed to enable TSO Follower Proxy: %v", err)
 		} else {
 			logger.Infof("Enabling TSO Follower Proxy")
@@ -104,7 +104,7 @@ func newTikvClient(addr string) (tkvClient, error) {
 
 	if waitStr := query.Get("max-tso-batch-wait-interval"); waitStr != "" {
 		if waitDur, err := time.ParseDuration(waitStr); err == nil {
-			if err := client.KVStore.GetPDClient().UpdateOption(pd.MaxTSOBatchWaitInterval, waitDur); err != nil {
+			if err := client.KVStore.GetPDClient().UpdateOption(opt.MaxTSOBatchWaitInterval, waitDur); err != nil {
 				logger.Warnf("Failed to set MaxTSOBatchWaitInterval: %v", err)
 			} else {
 				logger.Infof("Set MaxTSOBatchWaitInterval to %s", waitDur)
@@ -130,7 +130,7 @@ func (tx *tikvTxn) get(key []byte) []byte {
 	if err != nil {
 		panic(err)
 	}
-	return value
+	return value.Value
 }
 
 func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
@@ -140,7 +140,7 @@ func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
 	}
 	values := make([][]byte, len(keys))
 	for i, key := range keys {
-		values[i] = ret[string(key)]
+		values[i] = ret[string(key)].Value
 	}
 	return values
 }
