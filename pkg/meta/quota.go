@@ -188,7 +188,11 @@ func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int
 	stat.length += length
 	stat.inodes += inodes
 	stat.space += space
-	m.dirStats[ino] = stat
+	if stat == (dirStat{}) {
+		delete(m.dirStats, ino)
+	} else {
+		m.dirStats[ino] = stat
+	}
 }
 
 func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, space int64) {
