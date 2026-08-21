@@ -45,7 +45,10 @@ type filestore struct {
 }
 
 func (d *filestore) Symlink(oldName, newName string) error {
-	p := d.path(newName)
+	p, err := d.path(newName)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(filepath.Dir(p)); err != nil && os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
 			return err
@@ -57,7 +60,11 @@ func (d *filestore) Symlink(oldName, newName string) error {
 }
 
 func (d *filestore) Readlink(name string) (string, error) {
-	return os.Readlink(d.path(name))
+	p, err := d.path(name)
+	if err != nil {
+		return "", err
+	}
+	return os.Readlink(p)
 }
 
 func (d *filestore) String() string {
@@ -67,15 +74,32 @@ func (d *filestore) String() string {
 	return "file://" + d.root
 }
 
-func (d *filestore) path(key string) string {
+func (d *filestore) path(key string) (string, error) {
+	var p string
 	if strings.HasSuffix(d.root, dirSuffix) {
-		return filepath.Join(d.root, key)
+		p = filepath.Join(d.root, key)
+	} else {
+		p = filepath.Clean(d.root + key)
 	}
-	return filepath.Clean(d.root + key)
+
+	boundary := d.root
+	if !strings.HasSuffix(boundary, dirSuffix) {
+		boundary = filepath.Dir(boundary)
+	}
+
+	rel, err := filepath.Rel(boundary, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("object key %q escapes storage root %q", key, d.root)
+	}
+
+	return p, nil
 }
 
 func (d *filestore) Head(ctx context.Context, key string) (Object, error) {
-	p := d.path(key)
+	p, err := d.path(key)
+	if err != nil {
+		return nil, err
+	}
 	fi, err := os.Lstat(p)
 	if err != nil {
 		return nil, err
@@ -118,7 +142,10 @@ type SectionReaderCloser struct {
 }
 
 func (d *filestore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	p := d.path(key)
+	p, err := d.path(key)
+	if err != nil {
+		return nil, err
+	}
 
 	f, err := os.Open(p)
 	if err != nil {
@@ -145,7 +172,10 @@ func (d *filestore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	p := d.path(key)
+	p, err := d.path(key)
+	if err != nil {
+		return err
+	}
 
 	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
 		return os.MkdirAll(p, os.FileMode(0777))
@@ -210,7 +240,11 @@ func (d *filestore) Copy(ctx context.Context, dst, src string) error {
 }
 
 func (d *filestore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	err := os.Remove(d.path(key))
+	p, err := d.path(key)
+	if err != nil {
+		return err
+	}
+	err = os.Remove(p)
 	if err != nil && os.IsNotExist(err) {
 		err = nil
 	}
@@ -290,6 +324,9 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
+	if _, err := d.path(prefix); err != nil {
+		return nil, false, "", err
+	}
 	var dir string = d.root + prefix
 	var objs []Object
 	if !strings.HasSuffix(dir, dirSuffix) {
@@ -342,12 +379,18 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 }
 
 func (d *filestore) Chmod(key string, mode os.FileMode) error {
-	p := d.path(key)
+	p, err := d.path(key)
+	if err != nil {
+		return err
+	}
 	return os.Chmod(p, mode)
 }
 
 func (d *filestore) Chown(key string, owner, group string) error {
-	p := d.path(key)
+	p, err := d.path(key)
+	if err != nil {
+		return err
+	}
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
 	if uid == -1 || gid == -1 {
