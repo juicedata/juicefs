@@ -32,7 +32,7 @@ import (
 	"time"
 
 	etcd "go.etcd.io/etcd/client/v3"
-	"go.etcd.io/etcd/pkg/transport"
+	"go.etcd.io/etcd/client/pkg/v3/transport"
 )
 
 type etcdClient struct {
@@ -154,12 +154,12 @@ func (c *etcdClient) List(ctx context.Context, prefix, start, token, delimiter s
 func buildTlsConfig(u *url.URL) (*tls.Config, error) {
 	var tsinfo transport.TLSInfo
 	q := u.Query()
-	tsinfo.CAFile = q.Get("cacert")
+	tsinfo.TrustedCAFile = q.Get("cacert")
 	tsinfo.CertFile = q.Get("cert")
 	tsinfo.KeyFile = q.Get("key")
 	tsinfo.ServerName = q.Get("server-name")
 	tsinfo.InsecureSkipVerify = q.Get("insecure-skip-verify") != ""
-	if tsinfo.CAFile != "" || tsinfo.CertFile != "" || tsinfo.KeyFile != "" || tsinfo.ServerName != "" {
+	if tsinfo.TrustedCAFile != "" || tsinfo.CertFile != "" || tsinfo.KeyFile != "" || tsinfo.ServerName != "" {
 		return tsinfo.ClientConfig()
 	}
 	return nil, nil

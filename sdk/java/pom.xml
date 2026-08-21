@@ -273,6 +273,12 @@
 			<artifactId>hadoop-common</artifactId>
 			<version>${hadoop.version}</version>
 			<scope>provided</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>commons-lang</groupId>
+					<artifactId>commons-lang</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
@@ -280,12 +286,24 @@
 			<version>${hadoop.version}</version>
 			<scope>test</scope>
 			<type>test-jar</type>
+			<exclusions>
+				<exclusion>
+					<groupId>commons-lang</groupId>
+					<artifactId>commons-lang</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
 			<artifactId>hadoop-client</artifactId>
 			<version>${hadoop.version}</version>
 			<scope>provided</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>commons-lang</groupId>
+					<artifactId>commons-lang</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
@@ -316,6 +334,10 @@
 					<groupId>org.apache.hadoop</groupId>
 					<artifactId>hadoop-annotations</artifactId>
 				</exclusion>
+				<exclusion>
+					<groupId>commons-lang</groupId>
+					<artifactId>commons-lang</artifactId>
+				</exclusion>
 			</exclusions>
 			<scope>
 				provided
@@ -344,6 +366,12 @@
 			<artifactId>hadoop-minicluster</artifactId>
 			<version>${hadoop.version}</version>
 			<scope>test</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>commons-lang</groupId>
+					<artifactId>commons-lang</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.flink</groupId>
@@ -364,9 +392,9 @@
 			</exclusions>
 		</dependency>
 		<dependency>
-			<groupId>commons-lang</groupId>
-			<artifactId>commons-lang</artifactId>
-			<version>2.6</version>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-lang3</artifactId>
+			<version>3.18.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.ranger</groupId>
