@@ -203,9 +203,8 @@ func gc(ctx *cli.Context) error {
 	}
 
 	stats := newGcStats(progress, extSortDir != "", delSpin, cleanedFileSpin)
-	trashErr := scanTrashSlices(c, m, stats, delFlag, edge)
-	if trashErr != nil {
-		return errors.Errorf("scan trash slices: %s", trashErr)
+	if err := scanTrashSlices(c, m, stats, delFlag, edge); err != nil {
+		return errors.Errorf("scan trash slices: %s", err)
 	}
 	m.WaitDeleteSlices()
 	m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {

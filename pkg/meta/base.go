@@ -1079,18 +1079,11 @@ func (m *baseMeta) CleanupSlices(ctx Context, delete bool) syscall.Errno {
 	if delete {
 		err = m.en.doCleanupSlices(ctx, nil)
 	}
-	m.WaitDeleteSlices()
 	return errno(err)
 }
 
 func (m *baseMeta) WaitDeleteSlices() {
-	m.dSliceMu.Lock()
-	async := m.dslices != nil
-	m.dSliceMu.Unlock()
-	if async {
-		m.stopDeleteSliceTasks()
-		m.startDeleteSliceTasks()
-	}
+	m.stopDeleteSliceTasks()
 }
 
 func parseChangelogTime(entry string) (time.Time, error) {
