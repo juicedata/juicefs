@@ -27,6 +27,7 @@ CDN_CLIENT_ARTIFACT_SUFFIXES = (
     "windows-amd64.tar.gz",
     "windows-amd64.zip",
 )
+CHECK_MODES = ("latest", "target")
 UTC = dt.timezone.utc
 
 
@@ -256,6 +257,7 @@ def result_icon(result: CheckResult, expired: bool) -> str:
 def render_results_summary(
     release: ReleaseInfo,
     trigger_tag: str,
+    check_mode: str,
     grace_hours: int,
     expired: bool,
     results: list[CheckResult],
@@ -266,6 +268,7 @@ def render_results_summary(
         "",
         f"- Trigger release: `{trigger}`",
         f"- Target release: `{release.tag}` (GitHub release `{release.release_id}`)",
+        f"- Check mode: `{check_mode}`",
         f"- Published at: `{release.published_at.isoformat()}`",
         f"- Grace period: `{grace_hours}h` ({'expired' if expired else 'active'})",
         "",
@@ -326,6 +329,48 @@ def parse_checksums(checksum_text: str) -> tuple[dict[str, str], list[int]]:
     return checksums, invalid_lines
 
 
+def required_client_assets(expected: str) -> list[str]:
+    return [f"juicefs-{expected}-{suffix}" for suffix in CDN_CLIENT_ARTIFACT_SUFFIXES]
+
+
+def release_asset_names(release_payload: dict[str, Any]) -> set[str]:
+    assets = release_payload.get("assets")
+    if not isinstance(assets, list):
+        raise CheckError("release assets are missing")
+    return {
+        asset["name"]
+        for asset in assets
+        if isinstance(asset, dict) and isinstance(asset.get("name"), str)
+    }
+
+
+def check_release_assets(expected: str, release_payload: dict[str, Any]) -> CheckResult:
+    try:
+        release_assets = release_asset_names(release_payload)
+    except CheckError as exc:
+        return CheckResult("GitHub release assets", "invalid", expected, "unknown", str(exc))
+    hadoop_asset = f"juicefs-hadoop-{expected}.jar"
+    required_assets = ["checksums.txt"] + required_client_assets(expected) + [hadoop_asset]
+    missing_assets = [name for name in required_assets if name not in release_assets]
+    unexpected_hadoop_assets = sorted(
+        name
+        for name in release_assets
+        if name.startswith("juicefs-hadoop-") and name.endswith(".jar") and name != hadoop_asset
+    )
+    details: list[str] = []
+    if missing_assets:
+        details.append("missing release assets: " + ", ".join(missing_assets))
+    if unexpected_hadoop_assets:
+        details.append("unexpected Hadoop SDK assets: " + ", ".join(unexpected_hadoop_assets))
+    return CheckResult(
+        "GitHub release assets",
+        "stale" if missing_assets else "current",
+        expected,
+        f"{len(required_assets) - len(missing_assets)}/{len(required_assets)} present",
+        "; ".join(details),
+    )
+
+
 def check_cdn(
     client: HttpClient,
     expected: str,
@@ -334,18 +379,48 @@ def check_cdn(
     base_url = "https://d.juicefs.com/juicefs/releases"
     latest = client.get_text(f"{base_url}/latest-version.txt").strip()
     checksum_text = client.get_text(f"{base_url}/download/v{expected}/checksums.txt")
-    required_assets = [
-        f"juicefs-{expected}-{suffix}" for suffix in CDN_CLIENT_ARTIFACT_SUFFIXES
-    ]
-    assets = release_payload.get("assets")
-    if not isinstance(assets, list):
-        return CheckResult("CDN", "invalid", expected, latest or "unknown", "release assets are missing")
-    release_assets = {
-        asset["name"]
-        for asset in assets
-        if isinstance(asset, dict) and isinstance(asset.get("name"), str)
-    }
+    required_assets = required_client_assets(expected)
+    try:
+        release_assets = release_asset_names(release_payload)
+    except CheckError as exc:
+        return CheckResult("CDN", "invalid", expected, latest or "unknown", str(exc))
     missing_release_assets = [name for name in required_assets if name not in release_assets]
+    return check_cdn_artifacts_from_checksums(
+        client,
+        expected,
+        required_assets,
+        checksum_text,
+        "CDN",
+        latest or "unknown",
+        missing_release_assets,
+    )
+
+
+def check_cdn_artifacts(client: HttpClient, expected: str) -> CheckResult:
+    base_url = "https://d.juicefs.com/juicefs/releases"
+    checksum_text = client.get_text(f"{base_url}/download/v{expected}/checksums.txt")
+    required_assets = required_client_assets(expected)
+    return check_cdn_artifacts_from_checksums(
+        client,
+        expected,
+        required_assets,
+        checksum_text,
+        "CDN artifacts",
+        expected,
+        [],
+    )
+
+
+def check_cdn_artifacts_from_checksums(
+    client: HttpClient,
+    expected: str,
+    required_assets: list[str],
+    checksum_text: str,
+    channel: str,
+    actual: str,
+    missing_release_assets: list[str],
+) -> CheckResult:
+    base_url = "https://d.juicefs.com/juicefs/releases"
     checksums, invalid_checksum_lines = parse_checksums(checksum_text)
     missing_checksums = [name for name in required_assets if name not in checksums]
     download_failures: list[str] = []
@@ -368,7 +443,7 @@ def check_cdn(
     if download_failures:
         status = "unavailable"
     elif (
-        latest == expected
+        actual == expected
         and not missing_release_assets
         and not missing_checksums
         and not invalid_checksum_lines
@@ -376,7 +451,7 @@ def check_cdn(
         status = "current"
     else:
         status = "stale"
-    return CheckResult("CDN", status, expected, latest or "unknown", "; ".join(details))
+    return CheckResult(channel, status, expected, actual, "; ".join(details))
 
 
 def check_homebrew(client: HttpClient, expected: str) -> CheckResult:
@@ -530,7 +605,22 @@ def check_docker(client: HttpClient, expected: str) -> CheckResult:
     )
 
 
-def check_maven(client: HttpClient, expected: str) -> CheckResult:
+def check_docker_artifact(client: HttpClient, expected: str) -> CheckResult:
+    tag = f"ce-v{expected}"
+    payload = client.get_json(
+        f"https://hub.docker.com/v2/repositories/juicedata/mount/tags/{tag}"
+    )
+    state = payload.get("tag_status") if isinstance(payload, dict) else None
+    actual = f"{tag}={state or 'unknown'}"
+    return CheckResult(
+        "Docker Hub versioned image",
+        "current" if state == "active" else "stale",
+        expected,
+        actual,
+    )
+
+
+def read_maven_metadata(client: HttpClient) -> tuple[str, str, set[str]]:
     base_url = "https://repo1.maven.org/maven2/io/juicefs/juicefs-hadoop"
     metadata = client.get_text(f"{base_url}/maven-metadata.xml")
     try:
@@ -540,6 +630,12 @@ def check_maven(client: HttpClient, expected: str) -> CheckResult:
     latest = root.findtext("./versioning/latest") or "unknown"
     release = root.findtext("./versioning/release") or "unknown"
     versions = {item.text for item in root.findall("./versioning/versions/version") if item.text}
+    return latest, release, versions
+
+
+def check_maven(client: HttpClient, expected: str) -> CheckResult:
+    base_url = "https://repo1.maven.org/maven2/io/juicefs/juicefs-hadoop"
+    latest, release, versions = read_maven_metadata(client)
     status = "current" if latest == expected and release == expected and expected in versions else "stale"
     if expected in versions:
         client.probe(f"{base_url}/{expected}/juicefs-hadoop-{expected}.pom")
@@ -553,12 +649,43 @@ def check_maven(client: HttpClient, expected: str) -> CheckResult:
     )
 
 
+def check_maven_artifact(client: HttpClient, expected: str) -> CheckResult:
+    base_url = "https://repo1.maven.org/maven2/io/juicefs/juicefs-hadoop"
+    latest, release, versions = read_maven_metadata(client)
+    if expected in versions:
+        client.probe(f"{base_url}/{expected}/juicefs-hadoop-{expected}.pom")
+        client.probe(f"{base_url}/{expected}/juicefs-hadoop-{expected}.jar")
+        status = "current"
+        detail = "POM and JAR checked"
+    else:
+        status = "stale"
+        detail = "target version is absent"
+    return CheckResult(
+        "Maven Central artifact",
+        status,
+        expected,
+        f"latest={latest}, release={release}",
+        detail,
+    )
+
+
 def perform_checks(
     client: HttpClient,
     release: ReleaseInfo,
     release_payload: dict[str, Any],
+    check_mode: str = "latest",
 ) -> list[CheckResult]:
     expected = release.version
+    if check_mode == "target":
+        checkers: list[tuple[str, Callable[[], CheckResult]]] = [
+            ("GitHub release assets", lambda: check_release_assets(expected, release_payload)),
+            ("CDN artifacts", lambda: check_cdn_artifacts(client, expected)),
+            ("Docker Hub versioned image", lambda: check_docker_artifact(client, expected)),
+            ("Maven Central artifact", lambda: check_maven_artifact(client, expected)),
+        ]
+        return [run_channel(name, expected, checker) for name, checker in checkers]
+    if check_mode != "latest":
+        raise CheckError(f"invalid check mode: {check_mode}")
     checkers: list[tuple[str, Callable[[], CheckResult]]] = [
         ("CDN", lambda: check_cdn(client, expected, release_payload)),
         ("Homebrew", lambda: check_homebrew(client, expected)),
@@ -595,12 +722,14 @@ def check_command(args: argparse.Namespace) -> int:
             "release_id": str(release.release_id),
             "published_at": release.published_at.isoformat(),
             "grace_expired": str(expired).lower(),
+            "check_mode": args.check_mode,
         },
     )
-    results = perform_checks(client, release, release_payload)
+    results = perform_checks(client, release, release_payload, args.check_mode)
     summary = render_results_summary(
         release,
         args.trigger_tag,
+        args.check_mode,
         args.grace_hours,
         expired,
         results,
@@ -613,6 +742,7 @@ def check_command(args: argparse.Namespace) -> int:
                 {
                     "release": dataclasses.asdict(release),
                     "trigger_tag": args.trigger_tag,
+                    "check_mode": args.check_mode,
                     "grace_expired": expired,
                     "results": [dataclasses.asdict(result) for result in results],
                 },
@@ -668,6 +798,7 @@ def build_parser() -> argparse.ArgumentParser:
     check = subparsers.add_parser("check", help="check all official stable distribution channels")
     check.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", "juicedata/juicefs"))
     check.add_argument("--trigger-tag", default="")
+    check.add_argument("--check-mode", choices=CHECK_MODES, default="latest")
     check.add_argument("--grace-hours", type=int, default=24)
     check.add_argument("--github-output", default=os.environ.get("GITHUB_OUTPUT", ""))
     check.add_argument("--summary", default=os.environ.get("GITHUB_STEP_SUMMARY", ""))
