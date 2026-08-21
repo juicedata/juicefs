@@ -18,6 +18,8 @@ package vfs
 
 import (
 	"os"
+	"reflect"
+	"syscall"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -149,4 +151,69 @@ func TestFillWithRanges(t *testing.T) {
 
 	// Bad cases: range beyond file size should still work (slices beyond file size won't exist)
 	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile\t1000000-2000000"}, 2, nil)
+}
+
+// fakeSliceMeta returns canned slice lists per chunk so the slice iterator can
+// be exercised without a real metadata service.
+type fakeSliceMeta struct {
+	meta.Meta
+	slicesByChunk map[uint32][]meta.Slice
+}
+
+func (f *fakeSliceMeta) Read(_ meta.Context, _ Ino, indx uint32, slices *[]meta.Slice) syscall.Errno {
+	*slices = f.slicesByChunk[indx]
+	return 0
+}
+
+func collectSliceIDs(iter *sliceIterator) []uint64 {
+	var ids []uint64
+	for iter.hasNext() {
+		s := iter.next()
+		if s.Id != 0 {
+			ids = append(ids, s.Id)
+		}
+	}
+	return ids
+}
+
+func TestSliceIteratorRanges(t *testing.T) {
+	const cs = meta.ChunkSize
+	newIter := func(ranges []ByteRange, slicesByChunk map[uint32][]meta.Slice, chunkCnt uint32) *sliceIterator {
+		return &sliceIterator{
+			ctx:      meta.Background(),
+			mClient:  &fakeSliceMeta{slicesByChunk: slicesByChunk},
+			ino:      1,
+			chunkCnt: chunkCnt,
+			stat:     &CacheResponse{Locations: make(map[string]uint64)},
+			ranges:   ranges,
+		}
+	}
+
+	// Slice positions within a chunk are accumulated from Len, not Slice.Off.
+	iter := newIter([]ByteRange{{Start: 1500, End: 1600}}, map[uint32][]meta.Slice{
+		0: {{Id: 11, Off: 777, Len: 1000}, {Id: 12, Off: 888, Len: 1000}},
+	}, 1)
+	if got := collectSliceIDs(iter); !reflect.DeepEqual(got, []uint64{12}) {
+		t.Fatalf("slice offset: got %v, want [12]", got)
+	}
+
+	// A chunk whose slices don't overlap must not stop iteration before a later
+	// overlapping chunk is reached.
+	iter = newIter([]ByteRange{{Start: cs + 500, End: cs + 600}, {Start: 2*cs + 10, End: 2*cs + 20}}, map[uint32][]meta.Slice{
+		0: {{Id: 1, Off: 0, Len: 100}},
+		1: {{Id: 2, Off: 0, Len: 100}},
+		2: {{Id: 3, Off: 0, Len: 100}},
+	}, 3)
+	if got := collectSliceIDs(iter); !reflect.DeepEqual(got, []uint64{3}) {
+		t.Fatalf("later chunk: got %v, want [3]", got)
+	}
+
+	// Without ranges the iterator visits every slice.
+	iter = newIter(nil, map[uint32][]meta.Slice{
+		0: {{Id: 1, Off: 0, Len: 100}, {Id: 2, Off: 0, Len: 100}},
+		1: {{Id: 3, Off: 0, Len: 100}},
+	}, 2)
+	if got := collectSliceIDs(iter); !reflect.DeepEqual(got, []uint64{1, 2, 3}) {
+		t.Fatalf("no ranges: got %v, want [1 2 3]", got)
+	}
 }

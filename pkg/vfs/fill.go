@@ -160,7 +160,7 @@ func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string
 		// Parse path and optional byte ranges (tab-separated)
 		// Format: "path" or "path\tstart-end;start-end;..."
 		pathOnly, ranges := p, []ByteRange(nil)
-		if idx := strings.IndexByte(p, '\t'); idx >= 0 {
+		if idx := strings.LastIndexByte(p, '\t'); idx >= 0 {
 			pathOnly = p[:idx]
 			ranges = parseRanges(p[idx+1:])
 		}
@@ -320,6 +320,7 @@ type sliceIterator struct {
 	err            error
 	nextChunkIndex uint32
 	nextSliceIndex uint64
+	sliceOffset    uint64 // offset of slices[nextSliceIndex] within its chunk
 	slices         []meta.Slice
 	ranges         []ByteRange // optional byte ranges for filtering
 }
@@ -349,8 +350,21 @@ func (iter *sliceIterator) hasNext() bool {
 		return false
 	}
 
-	for iter.nextSliceIndex >= uint64(len(iter.slices)) {
-		// Skip chunks that don't overlap with any range
+	for {
+		// Skip slices in the current chunk that don't overlap any range.
+		for iter.nextSliceIndex < uint64(len(iter.slices)) {
+			s := iter.slices[iter.nextSliceIndex]
+			chunkStart := uint64(iter.nextChunkIndex-1) * meta.ChunkSize
+			sliceStart := chunkStart + iter.sliceOffset
+			sliceEnd := sliceStart + uint64(s.Len)
+			if iter.overlapsRange(sliceStart, sliceEnd) {
+				return true
+			}
+			iter.nextSliceIndex++
+			iter.sliceOffset += uint64(s.Len)
+		}
+
+		// Current chunk is exhausted; advance to the next overlapping chunk.
 		for iter.nextChunkIndex < iter.chunkCnt {
 			chunkStart := uint64(iter.nextChunkIndex) * meta.ChunkSize
 			chunkEnd := chunkStart + meta.ChunkSize
@@ -365,6 +379,7 @@ func (iter *sliceIterator) hasNext() bool {
 
 		iter.slices = nil
 		iter.nextSliceIndex = 0
+		iter.sliceOffset = 0
 		if st := iter.mClient.Read(iter.ctx, iter.ino, iter.nextChunkIndex, &iter.slices); st != 0 {
 			iter.err = fmt.Errorf("get slices of inode %d index %d error: %d", iter.ino, iter.nextChunkIndex, st)
 			logger.Error(iter.err)
@@ -372,24 +387,12 @@ func (iter *sliceIterator) hasNext() bool {
 		}
 		iter.nextChunkIndex++
 	}
-
-	// Skip slices that don't overlap with any range
-	for iter.nextSliceIndex < uint64(len(iter.slices)) {
-		s := iter.slices[iter.nextSliceIndex]
-		chunkStart := uint64(iter.nextChunkIndex-1) * meta.ChunkSize
-		sliceStart := chunkStart + uint64(s.Off)
-		sliceEnd := sliceStart + uint64(s.Len)
-		if iter.overlapsRange(sliceStart, sliceEnd) {
-			return true
-		}
-		iter.nextSliceIndex++
-	}
-	return false // need to read next chunk
 }
 
 func (iter *sliceIterator) next() meta.Slice {
 	s := iter.slices[iter.nextSliceIndex]
 	iter.nextSliceIndex++
+	iter.sliceOffset += uint64(s.Len)
 	return s
 }
 
