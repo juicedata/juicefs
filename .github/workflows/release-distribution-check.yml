@@ -52,6 +52,7 @@ jobs:
       release_id: ${{ steps.check.outputs.release_id }}
       published_at: ${{ steps.check.outputs.published_at }}
       grace_expired: ${{ steps.check.outputs.grace_expired }}
+      check_mode: ${{ steps.check.outputs.check_mode }}
     concurrency:
       group: release-distribution-check-${{ github.repository }}-${{ needs.latest-release.outputs.release_id }}-${{ needs.latest-release.outputs.target_version }}-metadata
       cancel-in-progress: true
@@ -67,10 +68,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           TRIGGER_TAG: ${{ github.event.release.tag_name || inputs.target_tag || '' }}
+          TARGET_TAG: ${{ inputs.target_tag || '' }}
         run: |
+          check_mode=latest
+          if [ -n "$TARGET_TAG" ]; then
+            check_mode=target
+          fi
           python3 .github/scripts/check_release_distributions.py check \
             --repository "$GITHUB_REPOSITORY" \
             --trigger-tag "$TRIGGER_TAG" \
+            --check-mode "$check_mode" \
             --grace-hours 24
 
       - name: Fail on overdue metadata mismatch
@@ -79,7 +86,7 @@ jobs:
 
   cdn-installer:
     needs: [latest-release, metadata]
-    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    if: ${{ always() && needs.metadata.outputs.target_version != '' && needs.metadata.outputs.check_mode != 'target' }}
     runs-on: ubuntu-latest
     concurrency:
       group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-cdn
@@ -124,7 +131,7 @@ jobs:
 
   homebrew:
     needs: [latest-release, metadata]
-    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    if: ${{ always() && needs.metadata.outputs.target_version != '' && needs.metadata.outputs.check_mode != 'target' }}
     runs-on: macos-latest
     concurrency:
       group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-homebrew
@@ -160,7 +167,7 @@ jobs:
 
   ubuntu-ppa:
     needs: [latest-release, metadata]
-    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    if: ${{ always() && needs.metadata.outputs.target_version != '' && needs.metadata.outputs.check_mode != 'target' }}
     runs-on: ubuntu-latest
     concurrency:
       group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-ppa
@@ -198,7 +205,7 @@ jobs:
 
   scoop:
     needs: [latest-release, metadata]
-    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    if: ${{ always() && needs.metadata.outputs.target_version != '' && needs.metadata.outputs.check_mode != 'target' }}
     runs-on: windows-latest
     concurrency:
       group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-scoop
@@ -242,7 +249,7 @@ jobs:
 
   docker:
     needs: [latest-release, metadata]
-    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    if: ${{ always() && needs.metadata.outputs.target_version != '' && needs.metadata.outputs.check_mode != 'target' }}
     runs-on: ubuntu-latest
     concurrency:
       group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-docker
@@ -298,7 +305,7 @@ jobs:
 
   maven-central:
     needs: [latest-release, metadata]
-    if: ${{ always() && needs.metadata.outputs.target_version != '' }}
+    if: ${{ always() && needs.metadata.outputs.target_version != '' && needs.metadata.outputs.check_mode != 'target' }}
     runs-on: ubuntu-latest
     concurrency:
       group: release-distribution-check-${{ github.repository }}-${{ needs.metadata.outputs.release_id }}-${{ needs.metadata.outputs.target_version }}-maven
