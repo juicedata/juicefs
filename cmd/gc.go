@@ -198,17 +198,30 @@ func gc(ctx *cli.Context) error {
 			return nil // ignore compaction
 		})
 	}
+	if delFlag {
+		if st := m.CleanupSlices(c); st != 0 {
+			logger.Fatalf("cleanup slices: %s", st)
+		}
+	}
 
 	stats := newGcStats(progress, extSortDir != "", delSpin, cleanedFileSpin)
-	var gcErr error
-	if extSortDir != "" {
-		gcErr = gcExternalSort(c, m, &chunkConf, blob, stats, extSortDir, threads, delFlag, compact, edge, maxMtime)
-	} else {
-		gcErr = gcInMemory(c, m, &chunkConf, blob, stats, threads, delFlag, compact, edge, maxMtime)
+	if err := scanTrashSlices(c, m, stats, delFlag, edge); err != nil {
+		return errors.Errorf("scan trash slices: %s", err)
 	}
+	m.WaitDeleteSlices()
 	m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 		return errors.New("stop deleting slice")
 	})
+
+	var gcErr error
+	if extSortDir != "" {
+		gcErr = gcExternalSort(c, m, &chunkConf, blob, stats, extSortDir, threads, delFlag, maxMtime)
+	} else {
+		gcErr = gcInMemory(c, m, &chunkConf, blob, stats, threads, delFlag, maxMtime)
+	}
+	if gcErr == nil {
+		stats.finish(delFlag, compact)
+	}
 	return gcErr
 }
 
@@ -220,23 +233,16 @@ func gcInMemory(
 	stats *gcStats,
 	threads int,
 	delFlag bool,
-	compact bool,
-	edge time.Time,
 	maxMtime time.Time,
 ) error {
 	// List all slices in metadata engine
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ScanSlices(c, &meta.ScanSlicesOption{ScanPending: true, Delete: delFlag, Progress: stats.slices.Increment}, func(ino meta.Ino, s meta.Slice) error {
+	r := m.ScanSlices(c, &meta.ScanSlicesOption{ScanPending: true, Progress: stats.slices.Increment}, func(ino meta.Ino, s meta.Slice) error {
 		slices[ino] = append(slices[ino], s)
 		return nil
 	})
 	if r != 0 {
 		logger.Fatalf("scan all slices: %s", r)
-	}
-
-	err := scanTrashSlices(c, m, stats, delFlag, edge)
-	if err != nil {
-		logger.Fatalf("statistic: %s", err)
 	}
 
 	vkeys := make(map[uint64]uint32)
@@ -351,7 +357,6 @@ func gcInMemory(
 		return errors.Errorf("list all blocks: %s", err)
 	}
 	stats.slices.Done()
-	stats.finish(delFlag, compact)
 	return nil
 }
 

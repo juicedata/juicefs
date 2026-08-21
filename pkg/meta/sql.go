@@ -3961,9 +3961,6 @@ func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 }
 
 func (m *dbMeta) ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno {
-	if opt.Delete {
-		_ = m.doCleanupSlices(ctx, nil)
-	}
 	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		var cs []chunk
 		err := s.Find(&cs)
