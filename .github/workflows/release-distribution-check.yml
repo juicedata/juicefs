@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
+    inputs:
+      target_tag:
+        description: "Stable release tag to check, for example v1.3.3. Leave empty for GitHub latest release."
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -32,7 +37,7 @@ jobs:
         id: latest
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          TRIGGER_TAG: ${{ github.event.release.tag_name || '' }}
+          TRIGGER_TAG: ${{ github.event.release.tag_name || inputs.target_tag || '' }}
         run: |
           python3 .github/scripts/check_release_distributions.py resolve \
             --repository "$GITHUB_REPOSITORY" \
@@ -61,7 +66,7 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          TRIGGER_TAG: ${{ github.event.release.tag_name || '' }}
+          TRIGGER_TAG: ${{ github.event.release.tag_name || inputs.target_tag || '' }}
         run: |
           python3 .github/scripts/check_release_distributions.py check \
             --repository "$GITHUB_REPOSITORY" \
