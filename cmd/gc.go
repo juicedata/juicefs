@@ -198,8 +198,10 @@ func gc(ctx *cli.Context) error {
 			return nil // ignore compaction
 		})
 	}
-	if st := m.CleanupSlices(c, delFlag); st != 0 {
-		logger.Fatalf("cleanup slices: %s", st)
+	if delFlag {
+		if st := m.CleanupSlices(c); st != 0 {
+			logger.Fatalf("cleanup slices: %s", st)
+		}
 	}
 
 	stats := newGcStats(progress, extSortDir != "", delSpin, cleanedFileSpin)

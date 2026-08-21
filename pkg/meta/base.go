@@ -1074,12 +1074,8 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 	}
 }
 
-func (m *baseMeta) CleanupSlices(ctx Context, delete bool) syscall.Errno {
-	var err error
-	if delete {
-		err = m.en.doCleanupSlices(ctx, nil)
-	}
-	return errno(err)
+func (m *baseMeta) CleanupSlices(ctx Context) syscall.Errno {
+	return errno(m.en.doCleanupSlices(ctx, nil))
 }
 
 func (m *baseMeta) WaitDeleteSlices() {

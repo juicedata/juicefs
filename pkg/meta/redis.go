@@ -3987,12 +3987,12 @@ func (m *redisMeta) hscanToMap(ctx context.Context, key string) (map[string]stri
 	return result, nil
 }
 
-func (m *redisMeta) CleanupSlices(ctx Context, delete bool) syscall.Errno {
+func (m *redisMeta) CleanupSlices(ctx Context) syscall.Errno {
 	logger.Debugf("start cleanup...")
-	m.cleanupLeakedInodes(delete)
-	m.cleanupLeakedChunks(delete)
-	m.cleanupOldSliceRefs(delete)
-	return m.baseMeta.CleanupSlices(ctx, delete)
+	m.cleanupLeakedInodes(true)
+	m.cleanupLeakedChunks(true)
+	m.cleanupOldSliceRefs(true)
+	return m.baseMeta.CleanupSlices(ctx)
 }
 
 func (m *redisMeta) ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno {

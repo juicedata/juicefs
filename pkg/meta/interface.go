@@ -504,7 +504,7 @@ type Meta interface {
 	Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno
 
 	// CleanupSlices performs metadata cleanup and schedules slice deletion tasks.
-	CleanupSlices(ctx Context, delete bool) syscall.Errno
+	CleanupSlices(ctx Context) syscall.Errno
 	// WaitDeleteSlices waits for pending slice deletion tasks and stops the workers.
 	WaitDeleteSlices()
 	// ScanSlices scans all slices used by all files, calling fn for each slice.
