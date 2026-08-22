@@ -649,7 +649,7 @@ func mount(c *cli.Context) error {
 			foreground = os.Getppid() == 1 && !insideContainer()
 		}
 		if foreground {
-			go checkMountpoint(format.Name, mp, c.String("log"), false)
+			go checkMountpoint(format.Name, mp, c.String("log"), false, vfsConf.Fusemac)
 		} else {
 			daemonRun(c, addr, vfsConf) // only stage 0 needs the vfsConf
 		}
