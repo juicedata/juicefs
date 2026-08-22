@@ -209,7 +209,7 @@ func readThreadStats(pid int, tid string, b *strings.Builder) {
 	}
 }
 
-func watchdog(ctx context.Context, mp string) {
+func watchdog(ctx context.Context, mp string, fusemac bool) {
 	var lastActive int64 = time.Now().Unix()
 	var pid int
 	var agentAddr string
@@ -224,7 +224,8 @@ func watchdog(ctx context.Context, mp string) {
 			var confStat syscall.Stat_t
 			err := syscall.Stat(filepath.Join(mp, confName), &confStat)
 			ino, _ := vfs.GetInternalNodeByName(confName)
-			if err == nil && confStat.Ino == uint64(ino) {
+			// fusemac remaps internal-node inodes; fall back to a regular-file check.
+			if err == nil && (confStat.Ino == uint64(ino) || (fusemac && runtime.GOOS == "darwin" && confStat.Mode&syscall.S_IFMT == syscall.S_IFREG)) {
 				if dev == 0 && runtime.GOOS == "linux" {
 					var st syscall.Stat_t
 					if err := syscall.Stat(mp, &st); err == nil && st.Ino == 1 {
@@ -297,7 +298,7 @@ func parseFuseFd(mountPoint string) (fd int) {
 	return fd
 }
 
-func checkMountpoint(name, mp, logPath string, background bool) {
+func checkMountpoint(name, mp, logPath string, background bool, fusemac bool) {
 	if parseFuseFd(mp) > 0 {
 		logger.Infof("\033[92mOK\033[0m, %s with special mount point %q", name, mp)
 		return
@@ -316,7 +317,8 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 		time.Sleep(time.Duration(interval) * time.Millisecond)
 		st, err := os.Stat(mp)
 		if err == nil {
-			if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Ino == uint64(meta.RootInode) {
+			// fusemac may report the root as fileid 2 instead of 1.
+			if sys, ok := st.Sys().(*syscall.Stat_t); ok && (sys.Ino == uint64(meta.RootInode) || (fusemac && sys.Ino == 2)) {
 				// in pod, pid probably the same
 				if csiCommPath == "" && oldConf != nil {
 					_, newConf, _ := loadConfig(mp)
@@ -560,10 +562,15 @@ func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
 	rawOpts, mt, noxattr, noacl, maxWrite := genFuseOptExt(c, format)
 	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite))
 	vfsConf.FuseOpts = &options
+	if runtime.GOOS == "darwin" {
+		if backend, err := parseBackend(c.String("o")); err == nil && backend != "" {
+			vfsConf.Fusemac = true
+		}
+	}
 }
 
 func genFuseOpt(c *cli.Context, name string) string {
-	fuseOpt := c.String("o")
+	fuseOpt := stripBackendOpt(c.String("o"))
 	// todo: remove ?
 	prefix := os.Getenv("FSTAB_NAME_PREFIX")
 	if prefix == "" {
@@ -584,6 +591,41 @@ func genFuseOpt(c *cli.Context, name string) string {
 	}
 	fuseOpt = strings.TrimLeft(fuseOpt, ",")
 	return fuseOpt
+}
+
+var darwinBackends = map[string]struct{}{
+	"nfs":   {},
+	"smb":   {},
+	"fskit": {},
+}
+
+func stripBackendOpt(opts string) string {
+	kept := make([]string, 0, strings.Count(opts, ",")+1)
+	for _, opt := range strings.Split(opts, ",") {
+		opt = strings.TrimSpace(opt)
+		if key, _, ok := strings.Cut(opt, "="); ok && strings.TrimSpace(key) == "backend" {
+			continue
+		}
+		kept = append(kept, opt)
+	}
+	return strings.Join(kept, ",")
+}
+
+// parseBackend extracts -o backend=<name>; errors on an unknown value.
+func parseBackend(opts string) (string, error) {
+	for _, opt := range strings.Split(opts, ",") {
+		opt = strings.TrimSpace(opt)
+		key, val, ok := strings.Cut(opt, "=")
+		if !ok || strings.TrimSpace(key) != "backend" {
+			continue
+		}
+		name := strings.TrimSpace(val)
+		if _, ok := darwinBackends[name]; !ok {
+			return "", fmt.Errorf("unsupported FUSE backend %q (supported: fskit, nfs, smb)", name)
+		}
+		return name, nil
+	}
+	return "", nil
 }
 
 func prepareMp(mp string) {
@@ -891,7 +933,7 @@ func makeDaemon(c *cli.Context, conf *vfs.Config) error {
 	mp := conf.Meta.MountPoint
 	attrs.OnExit = func(stage int) error {
 		if stage == 0 {
-			checkMountpoint(conf.Format.Name, mp, logfile, true)
+			checkMountpoint(conf.Format.Name, mp, logfile, true, conf.Fusemac)
 		}
 		return nil
 	}
@@ -940,13 +982,14 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 	signalChan := make(chan os.Signal, 10)
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	go func() {
+		var tornDown atomic.Bool
 		for {
 			sig := <-signalChan
 			logger.Infof("Received signal %s, exiting...", sig.String())
 			if sig == syscall.SIGHUP {
 				path := fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 				if err := v.FlushAll(""); err == nil {
-					if !fuse.Shutdown() {
+					if !fuseShutdown(v.Conf.Fusemac) {
 						logger.Warnf("FUSE session is busy, don't restart")
 						continue
 					}
@@ -963,6 +1006,9 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 					continue
 				}
 			}
+			if !tornDown.CompareAndSwap(false, true) {
+				continue
+			}
 			go func() {
 				time.Sleep(time.Second * 30)
 				if err := v.FlushAll(""); err != nil {
@@ -971,11 +1017,35 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 				logger.Errorf("exit after receiving signal %s, but umount does not finish in 30 seconds, force exit", sig)
 				os.Exit(meta.UmountCode)
 			}()
-			go func() { _ = doUmount(mp, true) }()
+			go func() {
+				if v.Conf.Fusemac {
+					if err := v.FlushAll(""); err != nil {
+						logger.Errorf("flush all: %s", err)
+					}
+					_ = m.CloseSession()
+				}
+				unmountActive(v.Conf.Fusemac)
+				if err := doUmount(mp, true); err != nil {
+					logger.Debugf("forced umount: %s", err)
+				}
+				if v.Conf.Fusemac {
+					for i := 0; i < 50; i++ {
+						if _, err := os.Stat(filepath.Join(mp, ".config")); err != nil {
+							logger.Infof("The juicefs mount process exit successfully, mountpoint: %q", mp)
+							os.Exit(0)
+						}
+						time.Sleep(100 * time.Millisecond)
+					}
+				}
+			}()
 		}
 	}()
 }
+
 func launchMount(c *cli.Context, mp string, conf *vfs.Config) error {
+	if conf.Fusemac {
+		signal.Ignore(syscall.SIGPIPE)
+	}
 	increaseRlimit()
 	utils.AdjustOOMKiller(-1000)
 	utils.SetIOFlusher()
@@ -1045,7 +1115,7 @@ func launchMount(c *cli.Context, mp string, conf *vfs.Config) error {
 		}
 
 		ctx, cancel := context.WithCancel(context.TODO())
-		go watchdog(ctx, mp)
+		go watchdog(ctx, mp, conf.Fusemac)
 		err = cmd.Wait()
 		cancel()
 		if notInCSI {
@@ -1057,10 +1127,19 @@ func launchMount(c *cli.Context, mp string, conf *vfs.Config) error {
 		} else {
 			var exitError *exec.ExitError
 			if ok := errors.As(err, &exitError); ok {
-				if waitStatus, ok := exitError.Sys().(syscall.WaitStatus); ok && waitStatus.ExitStatus() == meta.UmountCode {
-					logger.Errorf("received umount exit code")
-					_ = doUmount(mp, true)
-					return nil
+				if waitStatus, ok := exitError.Sys().(syscall.WaitStatus); ok {
+					teardownKill := conf.Fusemac && runtime.GOOS == "darwin" &&
+						waitStatus.Signaled() && waitStatus.Signal() == syscall.SIGPIPE
+					switch {
+					case waitStatus.ExitStatus() == meta.UmountCode:
+						logger.Errorf("received umount exit code (%s)", err)
+						_ = doUmount(mp, true)
+						return nil
+					case teardownKill:
+						logger.Infof("mount process %d was terminated by the FUSE backend during unmount", mountPid)
+						_ = doUmount(mp, true)
+						return nil
+					}
 				}
 			}
 			if fuseFd < 0 {
@@ -1163,7 +1242,7 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 		}
 	}
 	logger.Infof("Mounting volume %s at %q ...", conf.Format.Name, conf.Meta.MountPoint)
-	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"), c.Bool("enable-ioctl"))
+	err := mountServe(v, c.String("o"), c.Bool("enable-xattr"), c.Bool("enable-ioctl"), c)
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)
 	}
