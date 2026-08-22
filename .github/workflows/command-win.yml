@@ -55,11 +55,15 @@ jobs:
 
       - name: Download WinFsp
         run: |
-          choco install wget
-          mkdir "C:\wfsp\"
-          wget -O winfsp.msi https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi
-          copy winfsp.msi "C:\wfsp\"
-          choco install 7zip -y
+          $ProgressPreference = "SilentlyContinue"
+          New-Item -ItemType Directory -Force -Path "C:\wfsp\" | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi" -OutFile winfsp.msi
+          Copy-Item winfsp.msi "C:\wfsp\"
+          $sevenZip = Get-Command 7z.exe -ErrorAction SilentlyContinue
+          if (-not $sevenZip) {
+            throw "7z.exe is required but was not found in PATH"
+          }
+          Write-Host "Using 7-Zip: $($sevenZip.Source)"
 
       - name: Install WinFsp
         run: |
@@ -104,7 +108,8 @@ jobs:
 
       - name: Download winsw
         run: |
-          wget https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe -q --show-progress -O winsw.exe
+          $ProgressPreference = "SilentlyContinue"
+          Invoke-WebRequest -Uri "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe" -OutFile winsw.exe
           ls winsw.exe
 
       - name: Start Redis
@@ -133,19 +138,35 @@ jobs:
 
       - name: Download MinGW
         run: |
-          wget https://github.com/niXman/mingw-builds-binaries/releases/download/14.2.0-rt_v12-rev1/x86_64-14.2.0-release-win32-seh-msvcrt-rt_v12-rev1.7z -q --show-progress -O mingw.7z
-          7z.exe x mingw.7z -oC:\mingw64
+          $ProgressPreference = "SilentlyContinue"
+          Invoke-WebRequest -Uri "https://github.com/niXman/mingw-builds-binaries/releases/download/14.2.0-rt_v12-rev1/x86_64-14.2.0-release-win32-seh-msvcrt-rt_v12-rev1.7z" -OutFile mingw.7z
+          7z.exe x mingw.7z -oC:\mingw64 -y
           ls C:\mingw64\bin
 
       - name: Install Git
         run: |
-          if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-              Write-Host "Installing Git..."
-              $gitInstaller = "$env:TEMP\Git-Installer.exe"
-              Invoke-WebRequest -Uri "https://github.com/git-for-windows/git/releases/download/v2.44.0.windows.1/Git-2.44.0-64-bit.exe" -OutFile $gitInstaller
-              
-              Start-Process -Wait -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS", "/COMPONENTS=""icons,ext\reg\shellhere,assoc,assoc_sh"""
-              $env:Path += ";C:\Program Files\Git\bin"
+          $gitRoot = "C:\git-for-windows-2.44"
+          $gitArchive = "$env:TEMP\PortableGit-2.44.0-64-bit.7z.exe"
+          Remove-Item -Recurse -Force $gitRoot -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $gitRoot | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/git-for-windows/git/releases/download/v2.44.0.windows.1/PortableGit-2.44.0-64-bit.7z.exe" -OutFile $gitArchive
+          7z.exe x $gitArchive "-o$gitRoot" -y
+
+          $gitPaths = @(
+            "$gitRoot\bin",
+            "$gitRoot\cmd",
+            "$gitRoot\mingw64\bin",
+            "$gitRoot\usr\bin"
+          )
+          $env:Path = ($gitPaths -join ";") + ";$env:Path"
+          $gitPaths | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          $gitVersion = git --version
+          $bashVersion = (bash --version | Select-Object -First 1)
+          Write-Host $gitVersion
+          Write-Host $bashVersion
+          if ($gitVersion -ne "git version 2.44.0.windows.1") {
+            throw "Expected Git for Windows 2.44.0.windows.1, got: $gitVersion"
           }
        
 
@@ -203,6 +224,18 @@ jobs:
           export LC_ALL=C.UTF-8
           META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/acl.sh
 
+      - name: Enable Windows crash dumps
+        shell: pwsh
+        run: |
+          $dumpRoot = "C:\jfs-diagnostics\crash-dumps"
+          New-Item -ItemType Directory -Force -Path $dumpRoot | Out-Null
+          $localDumps = "HKCU:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
+          New-Item -Path $localDumps -Force | Out-Null
+          New-ItemProperty -Path $localDumps -Name DumpFolder -PropertyType ExpandString -Value $dumpRoot -Force | Out-Null
+          New-ItemProperty -Path $localDumps -Name DumpType -PropertyType DWord -Value 2 -Force | Out-Null
+          New-ItemProperty -Path $localDumps -Name DumpCount -PropertyType DWord -Value 10 -Force | Out-Null
+          Get-ItemProperty -Path $localDumps | Format-List DumpFolder, DumpType, DumpCount
+
       - name: Test clone
         timeout-minutes: 10
         shell: bash
@@ -212,6 +245,59 @@ jobs:
           export LANG=C.UTF-8
           export LC_ALL=C.UTF-8
           META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/clone.sh
+
+      - name: Collect Windows clone diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          $diagRoot = "C:\jfs-diagnostics"
+          New-Item -ItemType Directory -Force -Path $diagRoot | Out-Null
+
+          "== git version ==" | Out-File "$diagRoot\environment.txt"
+          git --version 2>&1 | Out-File "$diagRoot\environment.txt" -Append
+          "== git path ==" | Out-File "$diagRoot\environment.txt" -Append
+          where.exe git 2>&1 | Out-File "$diagRoot\environment.txt" -Append
+          "== Z: volume ==" | Out-File "$diagRoot\environment.txt" -Append
+          fsutil fsinfo volumeinfo z: 2>&1 | Out-File "$diagRoot\environment.txt" -Append
+          "== Z: root ==" | Out-File "$diagRoot\environment.txt" -Append
+          cmd.exe /c dir z:\ 2>&1 | Out-File "$diagRoot\environment.txt" -Append
+
+          $crashDumpRoot = Join-Path $diagRoot "crash-dumps"
+          New-Item -ItemType Directory -Force -Path $crashDumpRoot | Out-Null
+          $defaultDumpDir = Join-Path $env:LOCALAPPDATA "CrashDumps"
+          $defaultDumps = Get-ChildItem -Path $defaultDumpDir -Filter "*.dmp" -File -ErrorAction SilentlyContinue
+          if ($defaultDumps) {
+            Copy-Item -Path $defaultDumps.FullName -Destination $crashDumpRoot -Force
+          }
+
+          $eventRoot = Join-Path $diagRoot "event-logs"
+          New-Item -ItemType Directory -Force -Path $eventRoot | Out-Null
+          $logs = @(
+            "Application",
+            "Microsoft-Windows-WER-Diag/Operational",
+            "Microsoft-Windows-Windows Error Reporting/Operational"
+          )
+          $availableLogs = wevtutil el
+          foreach ($log in $logs) {
+            $safeName = $log -replace '[\\\/]', '-'
+            if ($availableLogs -contains $log) {
+              wevtutil epl $log "$eventRoot\$safeName.evtx" /ow:true
+              wevtutil qe $log /f:text /c:200 /rd:true > "$eventRoot\$safeName.txt"
+            } else {
+              "Event log not found: $log" | Out-File "$eventRoot\$safeName.txt"
+            }
+          }
+
+          Get-ChildItem -Path $diagRoot -Recurse -Force | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize | Out-File "$diagRoot\diagnostic-files.txt"
+
+      - name: Upload Windows clone diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: command-win-clone-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: C:\jfs-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Test fsck
         timeout-minutes: 10
