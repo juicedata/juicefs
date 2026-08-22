@@ -3427,7 +3427,7 @@ func (m *redisMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, 
 		return nil, errno(errSpace)
 	}
 	usedInodes, errInodes := m.rdb.HGet(ctx, m.dirUsedInodesKey(), field).Int64()
-	if errInodes != nil && errSpace != redis.Nil {
+	if errInodes != nil && errInodes != redis.Nil {
 		return nil, errno(errInodes)
 	}
 	if errLength != redis.Nil && errSpace != redis.Nil && errInodes != redis.Nil {
