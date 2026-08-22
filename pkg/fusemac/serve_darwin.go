@@ -133,9 +133,13 @@ func buildDarwinMountOptions(conf *vfs.Config, userOpts string) []string {
 		}
 	}
 	for opt := range strings.SplitSeq(userOpts, ",") {
-		if opt = strings.TrimSpace(opt); opt != "" {
-			opts = append(opts, "-o", opt)
+		opt = strings.TrimSpace(opt)
+		// JuiceFS-internal flags are consumed by CheckBackend and must not
+		// reach libfuse, which rejects unknown options.
+		if opt == "" || opt == allowUnsafeFskit {
+			continue
 		}
+		opts = append(opts, "-o", opt)
 	}
 	return opts
 }
