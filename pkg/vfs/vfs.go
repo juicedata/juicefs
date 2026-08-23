@@ -560,12 +560,16 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 			err = syscall.EACCES
 			return
 		}
-		h := v.newHandle(ino, true, 0)
-		fh = h.fh
 		n := getInternalNode(ino)
 		if n == nil {
 			return
 		}
+		if ino == controlInode && ctx.Uid() != 0 && ctx.Uid() != n.attr.Uid {
+			err = syscall.EACCES
+			return
+		}
+		h := v.newHandle(ino, true, 0)
+		fh = h.fh
 		entry = &meta.Entry{Inode: ino, Attr: n.attr}
 		switch ino {
 		case logInode:

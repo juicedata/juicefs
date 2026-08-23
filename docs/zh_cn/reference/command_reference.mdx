@@ -71,6 +71,8 @@ COPYRIGHT:
    Apache License 2.0
 ```
 
+通过已挂载文件系统的内部 `.control` 接口工作的命令（例如 `info`、`summary`、`warmup`、`rmr`、`clone` 和 `compact`）必须由挂载进程的所有者或 root 执行。
+
 ## 自动补全 {#auto-completion}
 
 通过加载 [`hack/autocomplete`](https://github.com/juicedata/juicefs/tree/main/hack/autocomplete) 目录下的对应脚本可以启用命令的自动补全，例如：

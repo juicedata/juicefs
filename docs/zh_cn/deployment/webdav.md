@@ -25,6 +25,8 @@ juicefs webdav META-URL LISTENING-ADDRESS:PORT
 sudo juicefs webdav sqlite3://myjfs.db 192.168.1.8:80
 ```
 
+这两个环境变量必须同时设置。只设置其中一个时服务会拒绝启动；仅在明确需要匿名服务时才应同时留空。
+
 WebDAV 服务需要通过设定的监听地址和端口进行访问，如上例中使用了内网的 IP 地址 `192.168.1.8`，以及标准的 Web 端口号 `80`，访问时无需指定端口，直接访问 `http://192.168.1.8` 即可。
 
 如果使用了其他端口号，则需要在地址中明确指定，例如，监听 `9007` 端口，访问地址则应该用 `http://192.168.1.8:9007`。
@@ -50,6 +52,8 @@ sudo juicefs webdav sqlite3://myjfs.db 192.168.1.8:80
 ## 启用 HTTPS 支持
 
 JuiceFS 支持配置通过 HTTPS 协议保护的 WebDAV 服务，通过 `--cert-file` 和 `--key-file` 选项指定证书和私钥，既可以使用受信任的数字证书颁发机构 CA 签发的证书，也可以使用 OpenSSL 创建自签名证书。
+
+`--cert-file` 和 `--key-file` 必须同时指定，TLS 配置不完整时服务会拒绝启动。
 
 ### 自签名证书
 

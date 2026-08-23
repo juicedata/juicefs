@@ -119,3 +119,27 @@ func TestWebdavNoPprofExposure(t *testing.T) {
 		}
 	}
 }
+
+func TestWebdavConfigValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  WebdavConfig
+		wantErr bool
+	}{
+		{name: "anonymous plaintext", config: WebdavConfig{}},
+		{name: "authenticated", config: WebdavConfig{Username: "user", Password: "pass"}},
+		{name: "authenticated TLS", config: WebdavConfig{Username: "user", Password: "pass", CertFile: "cert.pem", KeyFile: "key.pem"}},
+		{name: "username only", config: WebdavConfig{Username: "user"}, wantErr: true},
+		{name: "password only", config: WebdavConfig{Password: "pass"}, wantErr: true},
+		{name: "certificate only", config: WebdavConfig{CertFile: "cert.pem"}, wantErr: true},
+		{name: "key only", config: WebdavConfig{KeyFile: "key.pem"}, wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.config.Validate()
+			if (err != nil) != test.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %v", err, test.wantErr)
+			}
+		})
+	}
+}

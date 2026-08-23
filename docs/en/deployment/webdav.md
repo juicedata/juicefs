@@ -47,9 +47,13 @@ export WEBDAV_PASSWORD=mypassword
 sudo juicefs webdav sqlite3://myjfs.db 192.168.1.8:80
 ```
 
+Set both variables together. Setting only one is rejected at startup; leave both empty only when intentionally running an anonymous server.
+
 ## Enable HTTPS support
 
 JuiceFS supports configuring WebDAV server protected by the HTTPS protocol, specifying certificates and private keys through `--cert-file` and `--key-file` options, either using a certificate issued by a trusted digital certificate authority CA or using OpenSSL to create self-signed certificate.
+
+`--cert-file` and `--key-file` must be specified together. An incomplete TLS configuration is rejected at startup.
 
 ### Self-signed certificate
 

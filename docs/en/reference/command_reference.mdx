@@ -71,6 +71,8 @@ COPYRIGHT:
    Apache License 2.0
 ```
 
+Commands that use a mounted file system's internal `.control` interface—such as `info`, `summary`, `warmup`, `rmr`, `clone`, and `compact`—must be run as the mount process owner or root.
+
 ## Auto completion {#auto-completion}
 
 To enable commands completion, simply source the script provided within [`hack/autocomplete`](https://github.com/juicedata/juicefs/tree/main/hack/autocomplete) directory. For example:

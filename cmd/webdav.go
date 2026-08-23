@@ -96,8 +96,7 @@ func webdav(c *cli.Context) error {
 	setup(c, 2)
 	metaUrl := c.Args().Get(0)
 	listenAddr := c.Args().Get(1)
-	_, jfs := initForSvc(c, c.String("mountpoint"), "webdav", metaUrl, listenAddr)
-	fs.StartHTTPServer(jfs, fs.WebdavConfig{
+	config := fs.WebdavConfig{
 		Addr:            listenAddr,
 		DisallowList:    c.Bool("disallowList"),
 		EnableGzip:      c.Bool("gzip"),
@@ -107,6 +106,11 @@ func webdav(c *cli.Context) error {
 		KeyFile:         c.String("key-file"),
 		EnableProppatch: c.Bool("enable-proppatch"),
 		MaxDeletes:      c.Int("threads"),
-	})
+	}
+	if err := config.Validate(); err != nil {
+		return err
+	}
+	_, jfs := initForSvc(c, c.String("mountpoint"), "webdav", metaUrl, listenAddr)
+	fs.StartHTTPServer(jfs, config)
 	return jfs.Meta().CloseSession()
 }

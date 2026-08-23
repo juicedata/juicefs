@@ -715,6 +715,12 @@ func TestInternalFile(t *testing.T) {
 	if e != 0 {
 		t.Fatalf("lookup .control: %s", e)
 	}
+	if fe.Attr.Mode != 0600 {
+		t.Fatalf(".control mode is %04o, want 0600", fe.Attr.Mode)
+	}
+	if _, _, e = v.Open(ctx2, fe.Inode, syscall.O_RDWR); e != syscall.EACCES {
+		t.Fatalf("other user opened .control: %s", e)
+	}
 	fe, fh, e = v.Open(ctx, fe.Inode, syscall.O_RDWR)
 	if e != 0 {
 		t.Fatalf("open .stats: %s", e)

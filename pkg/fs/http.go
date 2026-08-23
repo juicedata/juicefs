@@ -258,6 +258,16 @@ type WebdavConfig struct {
 	MaxDeletes      int
 }
 
+func (c WebdavConfig) Validate() error {
+	if (c.Username == "") != (c.Password == "") {
+		return errors.New("WebDAV username and password must be configured together")
+	}
+	if (c.CertFile == "") != (c.KeyFile == "") {
+		return errors.New("WebDAV certificate and key must be configured together")
+	}
+	return nil
+}
+
 type indexHandler struct {
 	*webdav.Handler
 	WebdavConfig
@@ -362,6 +372,9 @@ func newWebdavHandler(fs *FileSystem, config WebdavConfig) http.Handler {
 }
 
 func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
+	if err := config.Validate(); err != nil {
+		logger.Fatalf("Invalid WebDAV configuration: %v", err)
+	}
 	handler := newWebdavHandler(fs, config)
 	logger.Infof("WebDAV listening on %s", config.Addr)
 	var err error
