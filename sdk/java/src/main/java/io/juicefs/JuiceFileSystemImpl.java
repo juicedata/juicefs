@@ -67,17 +67,14 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
-import java.util.zip.ZipEntry;
 
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
@@ -797,7 +794,6 @@ public class JuiceFileSystemImpl extends FileSystem {
     String resourceFormat = "libjfs-%s.%s.gz";
     String nameFormat = "libjfs-%s.%s.%s";
 
-    File dir = new File("/tmp");
     String os = System.getProperty("os.name");
     String arch = System.getProperty("os.arch");
     if (arch.contains("aarch64")) {
@@ -805,105 +801,52 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     if (os.toLowerCase().contains("windows")) {
       osId = "dll";
-      dir = new File(System.getProperty("java.io.tmpdir"));
     } else if (os.toLowerCase().contains("mac")) {
       osId = "dylib";
     }
 
     String resource = String.format(resourceFormat, archId, osId);
     String name = String.format(nameFormat, archId, gitVer, osId);
-
-    File libFile = new File(dir, name);
-
-    InputStream ins = null;
-    long soTime;
-    URL location = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation();
-    if (location == null) {
-      // jar may changed
-      return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
-    }
-    URLConnection con;
+    File dir;
+    File libFile;
     try {
-      try {
-        con = location.openConnection();
-      } catch (FileNotFoundException e) {
-        // jar may changed
-        return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
+      dir = NativeLibraryDirectory.create();
+      libFile = new File(dir, name);
+      InputStream ins = JuiceFileSystemImpl.class.getClassLoader().getResourceAsStream(resource);
+      if (ins == null) {
+        throw new FileNotFoundException("Native library resource not found: " + resource);
       }
-      if (location.getProtocol().equals("jar") && (con instanceof JarURLConnection)) {
-        LOG.debug("juicefs-hadoop.jar is a nested jar");
-        JarURLConnection connection = (JarURLConnection) con;
-        JarFile jfsJar = connection.getJarFile();
-        ZipEntry entry = jfsJar.getJarEntry(resource);
-        soTime = entry.getLastModifiedTime().toMillis();
-        ins = jfsJar.getInputStream(entry);
-      } else {
-        URI locationUri;
-        try {
-          locationUri = location.toURI();
-        } catch (URISyntaxException e) {
-          return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
-        }
-        if (Files.isDirectory(Paths.get(locationUri))) { // for debug: sdk/java/target/classes
-          soTime = con.getLastModified();
-          ins = JuiceFileSystemImpl.class.getClassLoader().getResourceAsStream(resource);
-        } else {
-          JarFile jfsJar;
-          try {
-            jfsJar = new JarFile(locationUri.getPath());
-          } catch (FileNotFoundException fne) {
-            return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
-          }
-          ZipEntry entry = jfsJar.getJarEntry(resource);
-          soTime = entry.getLastModifiedTime().toMillis();
-          ins = jfsJar.getInputStream(entry);
+      try (InputStream reader = new GZIPInputStream(ins);
+           FileOutputStream writer = new FileOutputStream(libFile)) {
+        byte[] buffer = new byte[128 << 10];
+        int bytesRead;
+        while ((bytesRead = reader.read(buffer)) != -1) {
+          writer.write(buffer, 0, bytesRead);
         }
       }
-
-      synchronized (JuiceFileSystemImpl.class) {
-        if (!libFile.exists() || libFile.lastModified() < soTime) {
-          // try the name for current user
-          libFile = new File(dir, System.getProperty("user.name") + "-" + name);
-          if (!libFile.exists() || libFile.lastModified() < soTime) {
-            File tmp = File.createTempFile(name, null, dir);
-            try (InputStream reader = new GZIPInputStream(ins);
-                 FileOutputStream writer = new FileOutputStream(tmp)) {
-              byte[] buffer = new byte[128 << 10];
-              int bytesRead = 0;
-              while ((bytesRead = reader.read(buffer)) != -1) {
-                writer.write(buffer, 0, bytesRead);
-              }
-            }
-            tmp.setLastModified(soTime);
-            tmp.setReadable(true, false);
-            try {
-              File org = new File(dir, name);
-              Files.move(tmp.toPath(), org.toPath(), StandardCopyOption.ATOMIC_MOVE);
-              libFile = org;
-            } catch (Exception ade) {
-              Files.move(tmp.toPath(), libFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
-            }
-          }
-        }
-      }
+      libFile.setReadable(true, true);
+      libFile.deleteOnExit();
     } catch (Exception e) {
       throw new RuntimeException("Init libjfs failed", e);
-    } finally {
-      if (ins != null) {
-        try {
-          ins.close();
-        } catch (Exception ignore){}
-      }
     }
     return libjfsLibraryLoader.load(libFile.getAbsolutePath());
   }
 
-  private static Libjfs loadExistLib(LibraryLoader<Libjfs> libjfsLibraryLoader, File dir, String name, File libFile) {
-    File currentUserLib = new File(dir, System.getProperty("user.name") + "-" + name);
-    if (currentUserLib.exists()) {
-      return libjfsLibraryLoader.load(currentUserLib.getAbsolutePath());
-    } else {
-      return libjfsLibraryLoader.load(libFile.getAbsolutePath());
+  static final class NativeLibraryDirectory {
+    private NativeLibraryDirectory() {
+    }
+
+    static File create() throws IOException {
+      java.nio.file.Path path;
+      try {
+        path = Files.createTempDirectory("juicefs-native-",
+            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+      } catch (UnsupportedOperationException ignored) {
+        path = Files.createTempDirectory("juicefs-native-");
+      }
+      File dir = path.toFile();
+      dir.deleteOnExit();
+      return dir;
     }
   }
 
