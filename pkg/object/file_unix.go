@@ -26,7 +26,23 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/sftp"
+	"golang.org/x/sys/unix"
 )
+
+func openFileAt(parent *os.File, name string) (*os.File, error) {
+	fd, err := unix.Openat(int(parent.Fd()), name, unix.O_RDONLY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, &os.PathError{Op: "openat", Path: name, Err: err}
+	}
+	return os.NewFile(uintptr(fd), name), nil
+}
+
+func chmodAt(parent *os.File, name string, mode os.FileMode) error {
+	if err := unix.Fchmodat(int(parent.Fd()), name, uint32(mode.Perm()), 0); err != nil {
+		return &os.PathError{Op: "chmodat", Path: name, Err: err}
+	}
+	return nil
+}
 
 func getOwnerGroup(info os.FileInfo) (string, string) {
 	var owner, group string
@@ -42,9 +58,15 @@ func getOwnerGroup(info os.FileInfo) (string, string) {
 }
 
 func (d *filestore) Chtimes(key string, mtime time.Time) error {
-	p, err := d.path(key)
+	root, name, err := d.rootedPath(key, false)
 	if err != nil {
 		return err
 	}
-	return lchtimes(p, time.Time{}, mtime)
+	defer root.Close()
+	parent, base, err := openRootParent(root, name)
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	return lchtimesat(int(parent.Fd()), base, time.Time{}, mtime)
 }

@@ -28,6 +28,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -45,26 +46,24 @@ type filestore struct {
 }
 
 func (d *filestore) Symlink(oldName, newName string) error {
-	p, err := d.path(newName)
+	root, name, err := d.rootedPath(newName, true)
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(filepath.Dir(p)); err != nil && os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
-			return err
-		}
-	} else if err != nil && !os.IsNotExist(err) {
+	defer root.Close()
+	if err := root.MkdirAll(filepath.Dir(name), os.FileMode(0777)); err != nil {
 		return err
 	}
-	return os.Symlink(oldName, p)
+	return root.Symlink(oldName, name)
 }
 
 func (d *filestore) Readlink(name string) (string, error) {
-	p, err := d.path(name)
+	root, name, err := d.rootedPath(name, false)
 	if err != nil {
 		return "", err
 	}
-	return os.Readlink(p)
+	defer root.Close()
+	return root.Readlink(name)
 }
 
 func (d *filestore) String() string {
@@ -95,18 +94,76 @@ func (d *filestore) path(key string) (string, error) {
 	return p, nil
 }
 
-func (d *filestore) Head(ctx context.Context, key string) (Object, error) {
+func (d *filestore) rootedPath(key string, create bool) (*os.Root, string, error) {
 	p, err := d.path(key)
+	if err != nil {
+		return nil, "", err
+	}
+	boundary := d.root
+	if !strings.HasSuffix(boundary, dirSuffix) {
+		boundary = filepath.Dir(boundary)
+	}
+	if create {
+		if err := os.MkdirAll(boundary, os.FileMode(0777)); err != nil {
+			return nil, "", err
+		}
+	}
+	root, err := os.OpenRoot(boundary)
+	if err != nil {
+		return nil, "", err
+	}
+	name, err := filepath.Rel(boundary, p)
+	if err != nil {
+		_ = root.Close()
+		return nil, "", err
+	}
+	return root, name, nil
+}
+
+func openRootFileFollowingFinal(root *os.Root, name string) (*os.File, error) {
+	parent, base, err := openRootParent(root, name)
 	if err != nil {
 		return nil, err
 	}
-	fi, err := os.Lstat(p)
+	defer parent.Close()
+	return openFileAt(parent, base)
+}
+
+func openRootParent(root *os.Root, name string) (*os.File, string, error) {
+	parent, err := root.Open(filepath.Dir(name))
+	if err != nil {
+		return nil, "", err
+	}
+	fi, err := parent.Stat()
+	if err != nil {
+		_ = parent.Close()
+		return nil, "", err
+	}
+	if !fi.IsDir() {
+		_ = parent.Close()
+		return nil, "", &os.PathError{Op: "open", Path: filepath.Dir(name), Err: syscall.ENOTDIR}
+	}
+	return parent, filepath.Base(name), nil
+}
+
+func (d *filestore) Head(ctx context.Context, key string) (Object, error) {
+	root, name, err := d.rootedPath(key, false)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	fi, err := root.Lstat(name)
 	if err != nil {
 		return nil, err
 	}
 	isSymlink := fi.Mode()&os.ModeSymlink != 0
 	if isSymlink {
-		fi, err = os.Stat(p)
+		f, err := openRootFileFollowingFinal(root, name)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		fi, err = f.Stat()
 		if err != nil {
 			return nil, err
 		}
@@ -142,12 +199,12 @@ type SectionReaderCloser struct {
 }
 
 func (d *filestore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	p, err := d.path(key)
+	root, name, err := d.rootedPath(key, false)
 	if err != nil {
 		return nil, err
 	}
-
-	f, err := os.Open(p)
+	f, err := openRootFileFollowingFinal(root, name)
+	_ = root.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -172,38 +229,39 @@ func (d *filestore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	p, err := d.path(key)
+	root, name, err := d.rootedPath(key, true)
 	if err != nil {
 		return err
 	}
+	defer root.Close()
 
 	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
-		return os.MkdirAll(p, os.FileMode(0777))
+		return root.MkdirAll(name, os.FileMode(0777))
 	}
 
 	var tmp string
 	if PutInplace {
-		tmp = p
+		tmp = name
 	} else {
-		name := filepath.Base(p)
-		if len(name) > 200 {
-			name = name[:200]
+		base := filepath.Base(name)
+		if len(base) > 200 {
+			base = base[:200]
 		}
-		tmp = TmpFilePath(p, name)
+		tmp = TmpFilePath(name, base)
 		defer func() {
 			if err != nil {
-				if e := os.Remove(tmp); e != nil && !os.IsNotExist(e) {
+				if e := root.Remove(tmp); e != nil && !os.IsNotExist(e) {
 					logger.Warnf("delete %s: %s", tmp, e)
 				}
 			}
 		}()
 	}
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	f, err := root.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil && os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
+		if err := root.MkdirAll(filepath.Dir(name), os.FileMode(0777)); err != nil {
 			return err
 		}
-		f, err = os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		f, err = root.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	}
 	if err != nil {
 		return err
@@ -225,7 +283,7 @@ func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters .
 		return err
 	}
 	if !PutInplace {
-		err = os.Rename(tmp, p)
+		err = root.Rename(tmp, name)
 	}
 	return err
 }
@@ -240,11 +298,12 @@ func (d *filestore) Copy(ctx context.Context, dst, src string) error {
 }
 
 func (d *filestore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	p, err := d.path(key)
+	root, name, err := d.rootedPath(key, false)
 	if err != nil {
 		return err
 	}
-	err = os.Remove(p)
+	defer root.Close()
+	err = root.Remove(name)
 	if err != nil && os.IsNotExist(err) {
 		err = nil
 	}
@@ -278,8 +337,8 @@ func (m *mEntry) IsDir() bool {
 
 // readDirSorted reads the directory named by dir and returns
 // a sorted list of directory entries.
-func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
-	f, err := os.Open(dir)
+func readDirSorted(root *os.Root, dir string, followLink bool) ([]*mEntry, error) {
+	f, err := openRootFileFollowingFinal(root, dir)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +354,13 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 		if e.IsDir() {
 			mEntries = append(mEntries, &mEntry{e, e.Name() + dirSuffix, nil, false})
 		} else if isSymlink && followLink {
-			fi, err := os.Stat(filepath.Join(dir, e.Name()))
+			target, err := openFileAt(f, e.Name())
+			if err != nil {
+				mEntries = append(mEntries, &mEntry{e, e.Name(), nil, true})
+				continue
+			}
+			fi, err := target.Stat()
+			_ = target.Close()
 			if err != nil {
 				mEntries = append(mEntries, &mEntry{e, e.Name(), nil, true})
 				continue
@@ -324,12 +389,21 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
-	if _, err := d.path(prefix); err != nil {
+	prefixPath, err := d.path(prefix)
+	if err != nil {
 		return nil, false, "", err
 	}
-	var dir string = d.root + prefix
+	root, _, err := d.rootedPath(prefix, false)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, "", nil
+		}
+		return nil, false, "", err
+	}
+	defer root.Close()
+	var dir string = prefixPath
 	var objs []Object
-	if !strings.HasSuffix(dir, dirSuffix) {
+	if !strings.HasSuffix(d.root+prefix, dirSuffix) {
 		dir = path.Dir(dir)
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
@@ -344,7 +418,15 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 		}
 		objs = append(objs, obj)
 	}
-	entries, err := readDirSorted(dir, followLink)
+	boundary := d.root
+	if !strings.HasSuffix(boundary, dirSuffix) {
+		boundary = filepath.Dir(boundary)
+	}
+	rootedDir, err := filepath.Rel(boundary, dir)
+	if err != nil {
+		return nil, false, "", err
+	}
+	entries, err := readDirSorted(root, rootedDir, followLink)
 	if err != nil {
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", dir, err)
@@ -379,24 +461,31 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 }
 
 func (d *filestore) Chmod(key string, mode os.FileMode) error {
-	p, err := d.path(key)
+	root, name, err := d.rootedPath(key, false)
 	if err != nil {
 		return err
 	}
-	return os.Chmod(p, mode)
+	defer root.Close()
+	parent, base, err := openRootParent(root, name)
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	return chmodAt(parent, base, mode)
 }
 
 func (d *filestore) Chown(key string, owner, group string) error {
-	p, err := d.path(key)
+	root, name, err := d.rootedPath(key, false)
 	if err != nil {
 		return err
 	}
+	defer root.Close()
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
 	if uid == -1 || gid == -1 {
 		return fmt.Errorf("user(%s):group(%s) not found", owner, group)
 	}
-	return os.Lchown(p, uid, gid)
+	return root.Lchown(name, uid, gid)
 }
 
 func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {

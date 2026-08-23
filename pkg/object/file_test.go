@@ -71,3 +71,41 @@ func TestFilestoreRejectsKeyPathTraversal(t *testing.T) {
 		t.Fatal("expected Chtimes to reject a key escaping the storage root")
 	}
 }
+
+func TestFilestoreRejectsSymlinkAncestorEscape(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "dest") + "/"
+	outside := filepath.Join(base, "outside")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outside, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "link")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	store, err := newDisk(root, "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(context.Background(), "link/pwned.txt", strings.NewReader("PWNED")); err == nil {
+		t.Fatal("expected Put to reject a symlink ancestor escaping the storage root")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "pwned.txt")); !os.IsNotExist(err) {
+		t.Fatalf("escaped file should not exist, got %v", err)
+	}
+	if err := store.Put(context.Background(), "nested/ok.txt", strings.NewReader("OK")); err != nil {
+		t.Fatalf("legitimate nested Put failed: %v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "nested", "ok.txt")); err != nil || string(data) != "OK" {
+		t.Fatalf("legitimate nested Put produced %q, %v", data, err)
+	}
+	links := store.(SupportSymlink)
+	if err := links.Symlink(outside, "external-link"); err != nil {
+		t.Fatalf("creating a symlink object should remain supported: %v", err)
+	}
+	if target, err := links.Readlink("external-link"); err != nil || target != outside {
+		t.Fatalf("readlink returned %q, %v", target, err)
+	}
+}

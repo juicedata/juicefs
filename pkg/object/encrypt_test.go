@@ -268,6 +268,29 @@ func TestDataEncryptor(t *testing.T) {
 	}
 }
 
+func TestDataEncryptorRejectsInvalidNonceLength(t *testing.T) {
+	cases := []struct {
+		name string
+		kek  string
+		algo string
+	}{
+		{"rsa_aesgcm", "rsa", AES256GCM_RSA},
+		{"rsa_chacha20", "rsa", CHACHA20_RSA},
+		{"sm2_sm4gcm", "sm2", SM4GCM},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			de, err := NewDataEncryptor(NewKeyEncryptor(genPrivateKey(c.kek)), c.algo)
+			require.NoError(t, err)
+			ciphertext, err := de.Encrypt([]byte("hello"))
+			require.NoError(t, err)
+			ciphertext[2] = 0
+			_, err = de.Decrypt(ciphertext)
+			require.ErrorContains(t, err, "nonce length")
+		})
+	}
+}
+
 func TestEncryptorMaxOverhead(t *testing.T) {
 	rsa1024Key, err := rsa.GenerateKey(rand.Reader, 1024)
 	require.NoError(t, err)

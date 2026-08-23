@@ -277,6 +277,9 @@ func (e *dataEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(nonce) != aead.NonceSize() {
+		return nil, fmt.Errorf("malformed ciphertext: nonce length %d, expected %d", len(nonce), aead.NonceSize())
+	}
 	return aead.Open(ciphertext[:0], nonce, ciphertext, nil)
 }
 

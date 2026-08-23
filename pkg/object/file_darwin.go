@@ -34,6 +34,10 @@ func getAtime(fi os.FileInfo) time.Time {
 }
 
 func lchtimes(name string, atime time.Time, mtime time.Time) error {
+	return lchtimesat(unix.AT_FDCWD, name, atime, mtime)
+}
+
+func lchtimesat(dirfd int, name string, atime time.Time, mtime time.Time) error {
 	var ts = make([]unix.Timespec, 2)
 	///Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include//sys/stat.h
 	// define UTIME_NOW       -1
@@ -41,7 +45,7 @@ func lchtimes(name string, atime time.Time, mtime time.Time) error {
 	// only change mtime
 	ts[0] = unix.Timespec{Sec: -2, Nsec: -2}
 	ts[1] = unix.NsecToTimespec(mtime.UnixNano())
-	if e := unix.UtimesNanoAt(unix.AT_FDCWD, name, ts, unix.AT_SYMLINK_NOFOLLOW); e != nil {
+	if e := unix.UtimesNanoAt(dirfd, name, ts, unix.AT_SYMLINK_NOFOLLOW); e != nil {
 		return &os.PathError{Op: "lchtimes", Path: name, Err: e}
 	}
 	return nil

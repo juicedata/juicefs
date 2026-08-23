@@ -18,8 +18,17 @@ package object
 
 import (
 	"os"
+	"path/filepath"
 	"time"
 )
+
+func openFileAt(parent *os.File, name string) (*os.File, error) {
+	return os.Open(filepath.Join(parent.Name(), name))
+}
+
+func chmodAt(parent *os.File, name string, mode os.FileMode) error {
+	return os.Chmod(filepath.Join(parent.Name(), name), mode)
+}
 
 func getOwnerGroup(info os.FileInfo) (string, string) {
 	return "", ""
@@ -34,9 +43,10 @@ func lookupGroup(name string) int {
 }
 
 func (d *filestore) Chtimes(key string, mtime time.Time) error {
-	p, err := d.path(key)
+	root, name, err := d.rootedPath(key, false)
 	if err != nil {
 		return err
 	}
-	return os.Chtimes(p, time.Time{}, mtime)
+	defer root.Close()
+	return root.Chtimes(name, time.Time{}, mtime)
 }
