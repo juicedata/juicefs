@@ -19,6 +19,7 @@ package object
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -26,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -42,6 +44,8 @@ import (
 
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 
@@ -979,6 +983,72 @@ func TestParseSftpEndpoint(t *testing.T) {
 					test.endpoint, host, port, root, test.wantHost, test.wantPort, test.wantRoot)
 			}
 		})
+	}
+}
+
+func TestSftpPathRejectsTraversal(t *testing.T) {
+	store := &sftpStore{root: "/safe/root/"}
+	for key, want := range map[string]string{
+		"":               "/safe/root/",
+		"file":           "/safe/root/file",
+		"nested/file":    "/safe/root/nested/file",
+		"nested/dir/":    "/safe/root/nested/dir/",
+		"repeated//file": "/safe/root/repeated/file",
+	} {
+		got, err := store.path(key)
+		if err != nil {
+			t.Fatalf("path(%q): %v", key, err)
+		}
+		if got != want {
+			t.Fatalf("path(%q) = %q, want %q", key, got, want)
+		}
+	}
+	for _, key := range []string{"../outside", "dir/../outside", "./file", "dir/./file", "/absolute", "nul\x00byte"} {
+		if got, err := store.path(key); err == nil {
+			t.Fatalf("path(%q) accepted traversal as %q", key, got)
+		}
+	}
+}
+
+func TestSftpHostKeyVerificationFailsClosed(t *testing.T) {
+	t.Setenv("SSH_KNOWN_HOSTS", "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if _, err := sftpHostKeyCallback(); err == nil {
+		t.Fatal("missing known_hosts should fail closed")
+	}
+	sshDir := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	knownHosts := filepath.Join(sshDir, "known_hosts")
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := ssh.NewSignerFromKey(privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := knownhosts.Line([]string{"test.example"}, signer.PublicKey()) + "\n"
+	if err := os.WriteFile(knownHosts, []byte(line), 0600); err != nil {
+		t.Fatal(err)
+	}
+	callback, err := sftpHostKeyCallback()
+	if err != nil {
+		t.Fatalf("standard known_hosts should be accepted: %v", err)
+	}
+	remote := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 22}
+	if err := callback("test.example:22", remote, signer.PublicKey()); err != nil {
+		t.Fatalf("known host key should be accepted: %v", err)
+	}
+	if err := callback("unknown.example:22", remote, signer.PublicKey()); err == nil {
+		t.Fatal("unknown host key should be rejected")
+	}
+	t.Setenv("SSH_KNOWN_HOSTS", knownHosts)
+	t.Setenv("HOME", "")
+	if _, err := sftpHostKeyCallback(); err != nil {
+		t.Fatalf("configured known_hosts should be accepted: %v", err)
 	}
 }
 

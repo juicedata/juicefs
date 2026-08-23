@@ -17,7 +17,9 @@ package sync
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -52,6 +54,10 @@ type file struct {
 	obj
 }
 
+type endlessReader struct{}
+
+func (endlessReader) Read(p []byte) (int, error) { return len(p), nil }
+
 func (o *file) Owner() string     { return "" }
 func (o *file) Group() string     { return "" }
 func (o *file) Mode() os.FileMode { return 0 }
@@ -71,21 +77,37 @@ func TestCluster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp, err := http.Get("http://" + addr + "/debug/pprof/cmdline"); err != nil {
+	conf.Manager = addr
+	client, err := getClusterHTTPClient(&conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp, err := client.Get("https://" + addr + "/debug/pprof/cmdline"); err != nil {
 		t.Fatalf("get pprof: %s", err)
 	} else {
 		body, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
-		if resp.StatusCode != http.StatusNotFound {
-			t.Fatalf("manager exposed /debug/pprof: status %d", resp.StatusCode)
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("manager accepted unauthenticated request: status %d", resp.StatusCode)
 		}
 		if strings.Contains(string(body), os.Args[0]) {
 			t.Fatalf("manager leaked process command line via /debug/pprof/cmdline")
 		}
 	}
-	// sendStats(addr)
+	req, err := http.NewRequest(http.MethodGet, "https://"+addr+"/debug/pprof/cmdline", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+conf.Env[managerTokenEnv])
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("manager exposed authenticated pprof route: status %d", resp.StatusCode)
+	}
 	// worker
-	conf.Manager = addr
 	mytodo := make(chan object.Object, 100)
 	go fetchJobs(mytodo, &conf, nil)
 
@@ -98,6 +120,87 @@ func TestCluster(t *testing.T) {
 	}
 	if _, ok := <-mytodo; ok {
 		t.Fatalf("should end")
+	}
+}
+
+func TestClusterStatsRejectUnauthorizedState(t *testing.T) {
+	srcDelayDelMu.Lock()
+	savedDelayDel := srcDelayDel
+	srcDelayDel = nil
+	srcDelayDelMu.Unlock()
+	t.Cleanup(func() {
+		srcDelayDelMu.Lock()
+		srcDelayDel = savedDelayDel
+		srcDelayDelMu.Unlock()
+	})
+
+	tasks := make(chan object.Object, 1)
+	config := &Config{Workers: []string{"127.0.0.1"}}
+	addr, err := startManager(config, tasks, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Manager = addr
+	tasks <- &obj{key: "issued", isDir: true}
+	close(tasks)
+	if _, err := httpRequest(config, "/fetch", nil); err != nil {
+		t.Fatal(err)
+	}
+	client, err := getClusterHTTPClient(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unauthenticated, err := http.NewRequest(http.MethodPost, "https://"+addr+"/stats", bytes.NewReader([]byte("{}")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Do(unauthenticated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated stats returned %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+	oversizedBody := io.LimitReader(endlessReader{}, maxClusterStatsSize+1)
+	oversized, err := http.NewRequest(http.MethodPost, "https://"+addr+"/stats", oversizedBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oversized.ContentLength = maxClusterStatsSize + 1
+	oversized.Header.Set("Authorization", "Bearer "+config.Env[managerTokenEnv])
+	oversized.Header.Set("Expect", "100-continue")
+	resp, err = client.Do(oversized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized stats returned %d, want %d", resp.StatusCode, http.StatusRequestEntityTooLarge)
+	}
+	if err := validateClusterStat(&Config{DeleteSrc: true}, &Stat{DelayDelDir: []string{"issued"}}, map[string]struct{}{"issued": {}}); err != nil {
+		t.Fatalf("valid stats were rejected: %v", err)
+	}
+
+	for _, stat := range []Stat{
+		{DelayDelDir: []string{"issued"}},
+		{CompletedKeys: []string{"not-issued"}},
+		{Copied: -1},
+		{Copied: math.MaxInt64, Deleted: 1},
+	} {
+		body, err := json.Marshal(stat)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = httpRequest(config, "/stats", body); err == nil {
+			t.Fatalf("manager accepted invalid stats: %+v", stat)
+		}
+	}
+
+	srcDelayDelMu.Lock()
+	defer srcDelayDelMu.Unlock()
+	if len(srcDelayDel) != 0 {
+		t.Fatalf("invalid stats scheduled source deletion: %v", srcDelayDel)
 	}
 }
 

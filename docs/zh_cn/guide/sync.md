@@ -204,6 +204,8 @@ juicefs sync /media/ "username:password"@192.168.1.100:/backup/
 
 当使用 SFTP/SSH 协议时，如果没有指定密码，执行 sync 任务时会提示输入密码。如果希望显式指定用户名和密码，则需要用半角引号把用户名和密码括起来，用户名和密码之间用半角冒号分隔。
 
+JuiceFS 会使用 `~/.ssh/known_hosts` 验证服务器主机密钥。如需使用其他 known-hosts 文件，可通过 `SSH_KNOWN_HOSTS` 设置符合当前平台格式的文件列表。未知主机或主机密钥已变化时连接会被拒绝；添加密钥前，请先通过可信渠道核对服务器指纹。
+
 SFTP 远端路径支持以下格式：
 
 - 使用默认 SSH 端口：`username@host:/path`
@@ -318,7 +320,7 @@ juicefs sync ./empty-dir/ s3://mybucket.s3.us-east-2.amazonaws.com/ --match-full
 
 Manager 作为主控执行 `sync` 命令，通过 `--worker` 参数定义多个 Worker 节点（Manager 自身也参与同步），JuiceFS 会根据 Worker 的总数量，动态拆分同步任务并分发给各个节点并发执行，单位时间内能处理的数据量更大，总带宽也成倍增加。
 
-在配置多机并发同步任务时，需要提前配置好 Manager 节点到 Worker 节点的 SSH 免密登录，如果 Worker 节点的 SSH 端口不是默认的 22，请在 Manager 节点的 `~/.ssh/config` 设置其端口号。Manager 会将 JuiceFS 客户端程序分发到 Worker 节点，为避免兼容性问题，Manager 和 Worker 应使用相同类型和架构的操作系统。
+在配置多机并发同步任务时，需要提前配置好 Manager 节点到 Worker 节点的 SSH 免密登录，并将所有 Worker 的 SSH 主机密钥预先加入 Manager 的 `~/.ssh/known_hosts`；JuiceFS 会拒绝未知或发生变化的主机密钥。添加密钥前，请先通过可信渠道核对服务器指纹。如果 Worker 节点的 SSH 端口不是默认的 22，请在 Manager 节点的 `~/.ssh/config` 设置其端口号。Manager 会将 JuiceFS 客户端程序分发到 Worker 节点，为避免兼容性问题，Manager 和 Worker 应使用相同类型和架构的操作系统。Manager 与 Worker 之间的任务通信会自动使用每次运行生成的凭据进行身份验证和加密。
 
 举例说明，用分布式同步的方式进行对象存储间的数据同步：
 

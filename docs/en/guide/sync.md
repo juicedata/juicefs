@@ -193,6 +193,8 @@ juicefs sync /media/ "username:password"@192.168.1.100:/backup/
 
 When using the SFTP/SSH protocol, if no password is specified, the sync task will prompt for the password. If you want to explicitly specify the username and password, you need to enclose them in double quotation marks, with a colon separating the username and password.
 
+JuiceFS verifies the server host key against `~/.ssh/known_hosts`. Set `SSH_KNOWN_HOSTS` to a platform-specific list of alternate known-hosts files when needed. Unknown or changed host keys are rejected; verify the server fingerprint through a trusted channel before adding it.
+
 SFTP remote paths use the following formats:
 
 - Default SSH port: `username@host:/path`
@@ -308,7 +310,7 @@ When copying large scale data, node bandwidth can easily bottleneck the synchron
 
 The manager node executes the `sync` command as the master and defines multiple worker nodes by setting the `--worker` option (the manager node also serves as a worker node). JuiceFS splits the workload and distributes it to workers for distributed synchronization. This increases the amount of data that can be processed per unit time, and the total bandwidth is also multiplied.
 
-When using distributed syncing, you should configure SSH logins so that the manager can access all worker nodes without a password. If the SSH port is not the default 22, you need to include that in the manager's `~/.ssh/config`. The manager will distribute the JuiceFS Client to all worker nodes, so they should all use the same architecture to avoid compatibility problems.
+When using distributed syncing, you should configure SSH logins so that the manager can access all worker nodes without a password. The workers' SSH host keys must already be present in the manager's `~/.ssh/known_hosts`; JuiceFS rejects unknown or changed host keys. Verify each fingerprint through a trusted channel before adding it. If the SSH port is not the default 22, you need to include that in the manager's `~/.ssh/config`. The manager will distribute the JuiceFS Client to all worker nodes, so they should all use the same architecture to avoid compatibility problems. Manager-to-worker task traffic is authenticated and encrypted automatically with per-run credentials.
 
 For example, to synchronize data between two object storage services:
 

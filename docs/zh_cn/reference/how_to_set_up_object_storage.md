@@ -1241,6 +1241,7 @@ juicefs format  \
 - `--bucket` 用来设置服务器的地址及存储路径，格式为 `[sftp://]<IP/Domain>:[port]:<Path>`。注意，目录名应该以 `/` 结尾，端口号为可选项默认为 `22`，例如 `192.168.1.11:22:myjfs/`。
 - `--access-key` 用来设置远程服务器的用户名
 - `--secret-key` 用来设置远程服务器的密码
+- JuiceFS 会使用 `~/.ssh/known_hosts` 验证 SFTP 服务器的主机密钥。如需使用其他 known-hosts 文件，可通过 `SSH_KNOWN_HOSTS` 设置符合当前平台格式的文件列表。未知主机或主机密钥已变化时连接会被拒绝；添加密钥前，请先通过可信渠道核对服务器指纹。
 
 ### CIFS/SMB {#cifs}
 

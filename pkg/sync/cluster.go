@@ -19,10 +19,21 @@ package sync
 import (
 	"bufio"
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/subtle"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/big"
 	"net"
 	"net/http"
 	"net/url"
@@ -60,6 +71,13 @@ type Stat struct {
 
 const maxClusterWorkerConfigSize = 16 << 20
 
+const (
+	managerTokenEnv        = "JFS_MANAGER_TOKEN"
+	managerCAEnv           = "JFS_MANAGER_CA"
+	maxClusterStatsSize    = 16 << 20
+	maxClusterResponseSize = 64 << 20
+)
+
 type clusterWorkerConfig struct {
 	Source      string            `json:"source"`
 	Destination string            `json:"destination"`
@@ -88,22 +106,64 @@ func updateStats(r *Stat) {
 	handled.IncrInt64(r.Copied + r.Deleted + r.Skipped + r.Failed)
 }
 
-func httpRequest(url string, body []byte) (ans []byte, err error) {
+var clusterHTTPClients sync.Map
+
+func getClusterHTTPClient(config *Config) (*http.Client, error) {
+	ca := config.Env[managerCAEnv]
+	if ca == "" {
+		return nil, errors.New("missing cluster manager CA")
+	}
+	if cached, ok := clusterHTTPClients.Load(ca); ok {
+		return cached.(*http.Client), nil
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM([]byte(ca)) {
+		return nil, errors.New("invalid cluster manager CA")
+	}
+	client := &http.Client{Transport: &http.Transport{
+		TLSClientConfig:       &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS13},
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 5 * time.Minute,
+		IdleConnTimeout:       time.Minute,
+	}}
+	actual, _ := clusterHTTPClients.LoadOrStore(ca, client)
+	return actual.(*http.Client), nil
+}
+
+func httpRequest(config *Config, endpoint string, body []byte) (ans []byte, err error) {
 	method := "GET"
 	if body != nil {
 		method = "POST"
 	}
-	req, err := http.NewRequest(method, url, bytes.NewReader(body))
+	req, err := http.NewRequest(method, fmt.Sprintf("https://%s%s", config.Manager, endpoint), bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
-	var resp *http.Response
-	resp, err = http.DefaultClient.Do(req)
+	token := config.Env[managerTokenEnv]
+	if token == "" {
+		return nil, errors.New("missing cluster manager token")
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	client, err := getClusterHTTPClient(config)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
+	ans, err = io.ReadAll(io.LimitReader(resp.Body, maxClusterResponseSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(ans) > maxClusterResponseSize {
+		return nil, errors.New("cluster manager response is too large")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("cluster manager returned %s: %s", resp.Status, strings.TrimSpace(string(ans)))
+	}
+	return ans, nil
 }
 
 var sendStatMu sync.Mutex
@@ -175,7 +235,7 @@ func clearSentMultipartParts(workerUploads *workerMultipartUploads, uploads map[
 	}
 }
 
-func sendStats(addr string, multipartUploads *workerMultipartUploads) {
+func sendStats(config *Config, multipartUploads *workerMultipartUploads) {
 	sendStatMu.Lock()
 	defer sendStatMu.Unlock()
 	var r Stat
@@ -205,7 +265,7 @@ func sendStats(addr string, multipartUploads *workerMultipartUploads) {
 	}
 	r.MultipartUploads = getMultipartUploads(multipartUploads)
 	d, _ := json.Marshal(r)
-	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
+	ans, err := httpRequest(config, "/stats", d)
 	if err != nil || string(ans) != "OK" {
 		srcDelayDelMu.Lock()
 		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
@@ -238,9 +298,117 @@ func sendStats(addr string, multipartUploads *workerMultipartUploads) {
 	}
 }
 
+func generateClusterCredentials(addr string) (string, string, tls.Certificate, error) {
+	tokenBytes := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, tokenBytes); err != nil {
+		return "", "", tls.Certificate{}, err
+	}
+	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return "", "", tls.Certificate{}, err
+	}
+	serialLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serial, err := rand.Int(rand.Reader, serialLimit)
+	if err != nil {
+		return "", "", tls.Certificate{}, err
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "juicefs-sync-manager"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", "", tls.Certificate{}, err
+	}
+	host = strings.Trim(host, "[]")
+	if ip := net.ParseIP(host); ip != nil {
+		tmpl.IPAddresses = []net.IP{ip}
+	} else {
+		tmpl.DNSNames = []string{host}
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		return "", "", tls.Certificate{}, err
+	}
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return "", "", tls.Certificate{}, err
+	}
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return "", "", tls.Certificate{}, err
+	}
+	return token, string(certPEM), cert, nil
+}
+
+func authenticateClusterRequest(token string, next http.Handler) http.Handler {
+	want := []byte("Bearer " + token)
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		got := []byte(req.Header.Get("Authorization"))
+		if len(got) != len(want) || subtle.ConstantTimeCompare(got, want) != 1 {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, req)
+	})
+}
+
+func validateClusterStat(config *Config, r *Stat, issued map[string]struct{}) error {
+	counters := []int64{r.Copied, r.CopiedBytes, r.Checked, r.CheckedBytes, r.Deleted, r.Skipped, r.SkippedBytes, r.Failed}
+	for _, value := range counters {
+		if value < 0 {
+			return errors.New("negative cluster statistic")
+		}
+	}
+	handledCounters := []int64{r.Copied, r.Deleted, r.Skipped, r.Failed}
+	var handledTotal int64
+	for _, value := range handledCounters {
+		if value > math.MaxInt64-handledTotal {
+			return errors.New("cluster statistic overflow")
+		}
+		handledTotal += value
+	}
+	if len(r.DelayDelDir) > 0 && !config.DeleteSrc && !config.DeleteSrcAfter {
+		return errors.New("source deletion was not enabled")
+	}
+	check := func(key string) error {
+		if _, ok := issued[key]; !ok {
+			return fmt.Errorf("key %q was not issued to a worker", key)
+		}
+		return nil
+	}
+	for _, keys := range [][]string{r.DelayDelDir, r.CompletedKeys, r.FailedKeys} {
+		for _, key := range keys {
+			if err := check(key); err != nil {
+				return err
+			}
+		}
+	}
+	for key := range r.MultipartUploads {
+		if err := check(key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *CheckpointManager) (string, error) {
 	mux := http.NewServeMux()
+	var issuedMu sync.Mutex
+	issued := make(map[string]struct{})
 	mux.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "GET required", http.StatusMethodNotAllowed)
+			return
+		}
 		var objs []object.Object
 		var total int64
 		obj, ok := <-tasks
@@ -274,6 +442,11 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 				}
 			}
 		}
+		issuedMu.Lock()
+		for _, o := range objs {
+			issued[o.Key()] = struct{}{}
+		}
+		issuedMu.Unlock()
 		d, err := marshalObjects(objs)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -287,13 +460,25 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 			http.Error(w, "POST required", http.StatusBadRequest)
 			return
 		}
+		if req.ContentLength > maxClusterStatsSize {
+			http.Error(w, "request body is too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		req.Body = http.MaxBytesReader(w, req.Body, maxClusterStatsSize)
 		d, err := io.ReadAll(req.Body)
 		if err != nil {
-			logger.Errorf("read: %s", err)
+			http.Error(w, "request body is too large", http.StatusRequestEntityTooLarge)
 			return
 		}
 		var r Stat
 		err = json.Unmarshal(d, &r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		issuedMu.Lock()
+		err = validateClusterStat(config, &r, issued)
+		issuedMu.Unlock()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -347,8 +532,26 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 	if err != nil {
 		return "", fmt.Errorf("listen: %s", err)
 	}
+	token, ca, cert, err := generateClusterCredentials(l.Addr().String())
+	if err != nil {
+		_ = l.Close()
+		return "", fmt.Errorf("generate cluster credentials: %s", err)
+	}
+	if config.Env == nil {
+		config.Env = make(map[string]string)
+	}
+	config.Env[managerTokenEnv] = token
+	config.Env[managerCAEnv] = ca
 	logger.Infof("Listen at %s", l.Addr())
-	go func() { _ = http.Serve(l, mux) }()
+	server := &http.Server{
+		Handler:           authenticateClusterRequest(token, mux),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       time.Minute,
+		MaxHeaderBytes:    16 << 10,
+	}
+	tlsListener := tls.NewListener(l, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13})
+	go func() { _ = server.Serve(tlsListener) }()
 	return l.Addr().String(), nil
 }
 
@@ -439,12 +642,12 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				return
 			}
 			rpath := filepath.Join("/tmp", filepath.Base(path))
-			cmd := exec.Command("rsync", "-a", "-e", "ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no", path, host+":"+rpath)
+			cmd := exec.Command("rsync", "-a", "-e", "ssh -o StrictHostKeyChecking=yes -o PasswordAuthentication=no", path, host+":"+rpath)
 			output, err := cmd.CombinedOutput()
 			logger.Debugf("exec: %q,err: %s", cmd.String(), string(output))
 			if err != nil {
 				// fallback to scp
-				cmd = exec.Command("scp", "-o", "StrictHostKeyChecking=no", "-o", "PasswordAuthentication=no", path, host+":"+rpath)
+				cmd = exec.Command("scp", "-o", "StrictHostKeyChecking=yes", "-o", "PasswordAuthentication=no", path, host+":"+rpath)
 				output, err = cmd.CombinedOutput()
 				logger.Debugf("exec: %q,err: %s", cmd.String(), string(output))
 			}
@@ -460,7 +663,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 			defer clear(payload)
 			logger.Debugf("launch worker command args: [ssh, %q]", strings.Join(args, ", "))
-			cmd = exec.Command("ssh", args...)
+			cmd = exec.Command("ssh", append([]string{"-o", "StrictHostKeyChecking=yes"}, args...)...)
 			cmd.Stdin = bytes.NewReader(payload)
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
@@ -561,8 +764,7 @@ func unmarshalObjects(d []byte) ([]object.Object, error) {
 
 func fetchJobs(tasks chan<- object.Object, config *Config, uploads multipartUploads) {
 	for {
-		url := fmt.Sprintf("http://%s/fetch", config.Manager)
-		ans, err := httpRequest(url, nil)
+		ans, err := httpRequest(config, "/fetch", nil)
 		if err != nil {
 			logger.Errorf("fetch jobs: %s", err)
 			time.Sleep(time.Second)

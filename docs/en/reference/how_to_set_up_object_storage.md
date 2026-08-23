@@ -1285,6 +1285,7 @@ juicefs format  \
 - `--bucket` is used to set the server address and storage path in the format `[sftp://]<IP/Domain>:[port]:<Path>`. Note that the directory name should end with `/`, and the port number is optionally defaulted to `22`, e.g. `192.168.1.11:22:myjfs/`.
 - `--access-key` set the username of the remote server
 - `--secret-key` set the password of the remote server
+- JuiceFS verifies the SFTP server host key against `~/.ssh/known_hosts`. Set `SSH_KNOWN_HOSTS` to a platform-specific list of alternate known-hosts files when needed. Connections to unknown hosts or hosts whose keys have changed are rejected; verify the server fingerprint through a trusted channel before adding it.
 
 ### CIFS/SMB {#cifs}
 

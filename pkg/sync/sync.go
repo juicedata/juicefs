@@ -2317,9 +2317,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				}
 			}
 		} else {
-			sendStats(config.Manager, workerUploads)
+			sendStats(config, workerUploads)
 			for len(srcDelayDel) > 0 {
-				sendStats(config.Manager, workerUploads)
+				sendStats(config, workerUploads)
 			}
 			logger.Infof("This worker process has already completed its tasks")
 		}
@@ -2399,7 +2399,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		go fetchJobs(tasks, config, uploads)
 		go func() {
 			for {
-				sendStats(config.Manager, workerUploads)
+				sendStats(config, workerUploads)
 				time.Sleep(time.Second)
 			}
 		}()
