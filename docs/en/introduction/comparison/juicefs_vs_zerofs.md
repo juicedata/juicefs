@@ -197,7 +197,7 @@ and multi-cloud mirroring.
 
 **ZeroFS** is a security-first file system that folds metadata storage into its own server process instead of requiring
 a separate database, encrypts and compresses every block by default, and can be mounted over NFS, 9P, or a native Linux
-kernel client, or consumed as an NBD block device. It's still a service you deploy and operate. You just don't operate a
+kernel client, or consumed as an NBD block device. It is still a service you deploy and operate. You just do not operate a
 second, separate metadata database alongside it. Clients can connect and write concurrently, but every one of those
 writes is funneled through a single leader process before it reaches object storage, and that write path is not
 horizontally scalable. Its high-availability design (a leader/standby pair plus unlimited read-only replicas) is built
