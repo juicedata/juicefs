@@ -19,6 +19,7 @@ package vfs
 import (
 	"fmt"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,8 +39,41 @@ type _file struct {
 }
 
 type ByteRange struct {
-	Start int64
-	End   int64
+	Start uint64
+	End   uint64
+}
+
+// targetRe matches "path [start-end;...]". The brackets delimit the range list,
+// so paths containing spaces are still parsed correctly.
+var targetRe = regexp.MustCompile(`^(.*\S)\s+\[([0-9]+-[0-9]+(?:;[0-9]+-[0-9]+)*)\]$`)
+
+// bracketSuffixRe detects a trailing bracket group, i.e. an attempt to specify
+// ranges, so that a malformed one is rejected instead of read as part of the path.
+var bracketSuffixRe = regexp.MustCompile(`\s\[[^\[\]]*\]$`)
+
+// SplitTarget splits a warmup target into its path and byte ranges. A target is
+// either "path" (whole file, nil ranges) or "path [start-end;...]". The brackets
+// delimit the range list, so paths containing spaces are still parsed correctly.
+func SplitTarget(target string) (path, spec string, ranges []ByteRange, err error) {
+	m := targetRe.FindStringSubmatch(target)
+	if m == nil {
+		if bracketSuffixRe.MatchString(target) {
+			return "", "", nil, fmt.Errorf("malformed byte ranges, expect %q", "path [start-end;...]")
+		}
+		return target, "", nil, nil
+	}
+	if ranges, err = parseRanges(m[2]); err != nil {
+		return "", "", nil, err
+	}
+	return m[1], m[2], ranges, nil
+}
+
+// JoinTarget builds a warmup target from a path and an optional range spec.
+func JoinTarget(path, spec string) string {
+	if spec == "" {
+		return path
+	}
+	return path + " [" + spec + "]"
 }
 
 type CacheAction uint8
@@ -157,12 +191,10 @@ func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string
 	var inode Ino
 	var attr = &Attr{}
 	for _, p := range paths {
-		// Parse path and optional byte ranges (tab-separated)
-		// Format: "path" or "path\tstart-end;start-end;..."
-		pathOnly, ranges := p, []ByteRange(nil)
-		if idx := strings.LastIndexByte(p, '\t'); idx >= 0 {
-			pathOnly = p[:idx]
-			ranges = parseRanges(p[idx+1:])
+		pathOnly, _, ranges, err := SplitTarget(p)
+		if err != nil {
+			logger.Warnf("Skipped %q: %s", p, err)
+			continue
 		}
 		if st := c.resolve(ctx, pathOnly, &inode, attr); st != 0 {
 			logger.Warnf("Failed to resolve path %s: %s", pathOnly, st)
@@ -196,26 +228,27 @@ func sendFile(ctx meta.Context, todo chan _file, f _file) error {
 	}
 }
 
-func parseRanges(s string) []ByteRange {
-	parts := strings.Split(s, ";")
+func parseRanges(spec string) ([]ByteRange, error) {
 	var ranges []ByteRange
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
+	for _, part := range strings.Split(spec, ";") {
 		sep := strings.IndexByte(part, '-')
 		if sep < 0 {
-			continue
+			return nil, fmt.Errorf("invalid range %q", part)
 		}
-		start, err1 := strconv.ParseInt(strings.TrimSpace(part[:sep]), 10, 64)
-		end, err2 := strconv.ParseInt(strings.TrimSpace(part[sep+1:]), 10, 64)
-		if err1 != nil || err2 != nil || start < 0 || end <= start {
-			continue
+		start, err := strconv.ParseUint(part[:sep], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid range %q: %w", part, err)
+		}
+		end, err := strconv.ParseUint(part[sep+1:], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid range %q: %w", part, err)
+		}
+		if end <= start {
+			return nil, fmt.Errorf("invalid range %q: end must be greater than start", part)
 		}
 		ranges = append(ranges, ByteRange{Start: start, End: end})
 	}
-	return ranges
+	return ranges, nil
 }
 
 func (c *CacheFiller) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscall.Errno {
@@ -332,7 +365,7 @@ func (iter *sliceIterator) overlapsRange(start, end uint64) bool {
 		return true // no ranges specified → warmup everything
 	}
 	for _, r := range iter.ranges {
-		if start < uint64(r.End) && end > uint64(r.Start) {
+		if start < r.End && end > r.Start {
 			return true
 		}
 	}
@@ -350,27 +383,10 @@ func (iter *sliceIterator) hasNext() bool {
 		return false
 	}
 
-	for {
-		// Skip slices in the current chunk that don't overlap any range.
-		for iter.nextSliceIndex < uint64(len(iter.slices)) {
-			s := iter.slices[iter.nextSliceIndex]
-			chunkStart := uint64(iter.nextChunkIndex-1) * meta.ChunkSize
-			sliceStart := chunkStart + iter.sliceOffset
-			sliceEnd := sliceStart + uint64(s.Len)
-			if iter.overlapsRange(sliceStart, sliceEnd) {
-				return true
-			}
-			iter.nextSliceIndex++
-			iter.sliceOffset += uint64(s.Len)
-		}
-
-		// Current chunk is exhausted; advance to the next overlapping chunk.
-		for iter.nextChunkIndex < iter.chunkCnt {
-			chunkStart := uint64(iter.nextChunkIndex) * meta.ChunkSize
-			chunkEnd := chunkStart + meta.ChunkSize
-			if iter.overlapsRange(chunkStart, chunkEnd) {
-				break
-			}
+	for iter.nextSliceIndex >= uint64(len(iter.slices)) {
+		// Skip chunks that don't overlap any range.
+		for iter.nextChunkIndex < iter.chunkCnt &&
+			!iter.overlapsRange(uint64(iter.nextChunkIndex)*meta.ChunkSize, uint64(iter.nextChunkIndex+1)*meta.ChunkSize) {
 			iter.nextChunkIndex++
 		}
 		if iter.nextChunkIndex >= iter.chunkCnt {
@@ -387,12 +403,19 @@ func (iter *sliceIterator) hasNext() bool {
 		}
 		iter.nextChunkIndex++
 	}
+
+	return true
 }
 
 func (iter *sliceIterator) next() meta.Slice {
 	s := iter.slices[iter.nextSliceIndex]
 	iter.nextSliceIndex++
+	chunkStart := uint64(iter.nextChunkIndex-1) * meta.ChunkSize
+	sliceStart := chunkStart + iter.sliceOffset
 	iter.sliceOffset += uint64(s.Len)
+	if !iter.overlapsRange(sliceStart, sliceStart+uint64(s.Len)) {
+		return meta.Slice{Id: 0}
+	}
 	return s
 }
 

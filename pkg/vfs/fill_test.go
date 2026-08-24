@@ -52,34 +52,75 @@ func TestFill(t *testing.T) {
 
 func TestParseRanges(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  string
-		expect []ByteRange
+		name    string
+		input   string
+		expect  []ByteRange
+		wantErr bool
 	}{
-		{"empty", "", nil},
-		{"single range", "0-100", []ByteRange{{0, 100}}},
-		{"multiple ranges", "0-100;200-300", []ByteRange{{0, 100}, {200, 300}}},
-		{"with spaces", " 0-100 ; 200-300 ", []ByteRange{{0, 100}, {200, 300}}},
-		{"large values", "205600064-205823840;206605482-206633082", []ByteRange{{205600064, 205823840}, {206605482, 206633082}}},
-		{"invalid - missing separator", "100", nil},
-		{"invalid - negative start", "-1-100", nil},
-		{"invalid - end <= start", "100-50", nil},
-		{"invalid - end equals start", "100-100", nil},
-		{"mixed valid/invalid", "0-100;invalid;200-300", []ByteRange{{0, 100}, {200, 300}}},
+		{"single range", "0-100", []ByteRange{{0, 100}}, false},
+		{"multiple ranges", "0-100;200-300", []ByteRange{{0, 100}, {200, 300}}, false},
+		{"large values", "205600064-205823840;206605482-206633082", []ByteRange{{205600064, 205823840}, {206605482, 206633082}}, false},
+		{"missing separator", "100", nil, true},
+		{"negative start", "-1-100", nil, true},
+		{"end < start", "100-50", nil, true},
+		{"end equals start", "100-100", nil, true},
+		{"one invalid part rejects all", "0-100;invalid;200-300", nil, true},
+		{"overflow", "99999999999999999999-99999999999999999999", nil, true},
+		{"empty", "", nil, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseRanges(tt.input)
-			if len(got) != len(tt.expect) {
+			got, err := parseRanges(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseRanges(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(got, tt.expect) {
 				t.Fatalf("parseRanges(%q) = %v, want %v", tt.input, got, tt.expect)
 			}
-			for i := range got {
-				if got[i] != tt.expect[i] {
-					t.Fatalf("parseRanges(%q)[%d] = %v, want %v", tt.input, i, got[i], tt.expect[i])
-				}
-			}
 		})
+	}
+}
+
+func TestSplitTarget(t *testing.T) {
+	tests := []struct {
+		target   string
+		wantPath string
+		wantSpec string
+		wantErr  bool
+	}{
+		{"/data/file.lance", "/data/file.lance", "", false},
+		{"/data/my file.lance", "/data/my file.lance", "", false},
+		{"/data/10-20", "/data/10-20", "", false},
+		{"inode:42", "inode:42", "", false},
+		{"/data/file.lance [0-100]", "/data/file.lance", "0-100", false},
+		{"/data/my file.lance [0-100;200-300]", "/data/my file.lance", "0-100;200-300", false},
+		{"inode:42 [0-100]", "inode:42", "0-100", false},
+		// malformed range groups are rejected rather than read as part of the path
+		{"/data/file [0-100 200-300]", "", "", true},
+		{"/data/file [abc]", "", "", true},
+		{"/data/file []", "", "", true},
+		{"/data/file [0-100;]", "", "", true},
+		{"/data/file [100-50]", "", "", true},
+	}
+	for _, tt := range tests {
+		gotPath, gotSpec, gotRanges, err := SplitTarget(tt.target)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("SplitTarget(%q) error = %v, wantErr %v", tt.target, err, tt.wantErr)
+			continue
+		}
+		if gotPath != tt.wantPath || gotSpec != tt.wantSpec {
+			t.Errorf("SplitTarget(%q) = (%q, %q), want (%q, %q)", tt.target, gotPath, gotSpec, tt.wantPath, tt.wantSpec)
+		}
+		if tt.wantErr {
+			continue
+		}
+		if (gotSpec == "") != (gotRanges == nil) {
+			t.Errorf("SplitTarget(%q) spec %q and ranges %v disagree", tt.target, gotSpec, gotRanges)
+		}
+		if got := JoinTarget(gotPath, gotSpec); got != tt.target {
+			t.Errorf("JoinTarget(%q, %q) = %q, want %q", gotPath, gotSpec, got, tt.target)
+		}
 	}
 }
 
@@ -141,16 +182,19 @@ func TestFillWithRanges(t *testing.T) {
 	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile"}, 2, nil)
 
 	// Range-based warmup: only warmup first 64KB
-	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile\t0-65536"}, 2, nil)
+	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile [0-65536]"}, 2, nil)
 
 	// Range-based warmup: multiple ranges
-	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile\t0-4096;65536-69632"}, 2, nil)
+	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile [0-4096;65536-69632]"}, 2, nil)
 
 	// Bad cases: path with ranges but invalid file
-	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/not_exists\t0-100"}, 2, nil)
+	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/not_exists [0-100]"}, 2, nil)
 
 	// Bad cases: range beyond file size should still work (slices beyond file size won't exist)
-	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile\t1000000-2000000"}, 2, nil)
+	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile [1000000-2000000]"}, 2, nil)
+
+	// Bad cases: malformed ranges are skipped instead of warming the whole file
+	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile [100-50]", "/test/bigfile [abc]"}, 2, nil)
 }
 
 // fakeSliceMeta returns canned slice lists per chunk so the slice iterator can
@@ -215,5 +259,19 @@ func TestSliceIteratorRanges(t *testing.T) {
 	}, 2)
 	if got := collectSliceIDs(iter); !reflect.DeepEqual(got, []uint64{1, 2, 3}) {
 		t.Fatalf("no ranges: got %v, want [1 2 3]", got)
+	}
+
+	// meta.Read may hand back a list shared with the open-file cache, so
+	// filtering must not modify it in place.
+	cached := map[uint32][]meta.Slice{
+		0: {{Id: 1, Off: 0, Len: 100}, {Id: 2, Off: 0, Len: 100}, {Id: 3, Off: 0, Len: 100}},
+	}
+	want := append([]meta.Slice(nil), cached[0]...)
+	iter = newIter([]ByteRange{{Start: 150, End: 160}}, cached, 1)
+	if got := collectSliceIDs(iter); !reflect.DeepEqual(got, []uint64{2}) {
+		t.Fatalf("shared list: got %v, want [2]", got)
+	}
+	if !reflect.DeepEqual(cached[0], want) {
+		t.Fatalf("slices returned by Read were modified: got %v, want %v", cached[0], want)
 	}
 }
