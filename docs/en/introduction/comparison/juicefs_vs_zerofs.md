@@ -18,7 +18,7 @@ defaults, and licensing.
 
 **ZeroFS** is a self-hosted, encrypted-by-default file system for putting POSIX semantics (or a ZFS pool, or a block
 device) on top of an S3-compatible bucket. A single ZeroFS core service handles metadata, data, and every protocol
-endpoint, so there's no separate metadata database to run alongside it. It targets teams that want to self-host
+endpoint, so there is no separate metadata database to run alongside it. It targets teams that want to self-host
 object-storage-backed file access with a reasonable operational footprint rather than teams that need to scale massive
 throughput horizontally. See [Architecture](#architecture) below for how its single-leader design and mandatory
 encryption shape that trade-off.
