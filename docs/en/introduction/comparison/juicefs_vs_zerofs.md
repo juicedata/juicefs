@@ -37,6 +37,8 @@ immutable segment objects in the same object store, so it has no external databa
 into opaque segments rather than mapped 1:1 to objects, ZeroFS files are not individually accessible through the S3 API,
 which is similar to JuiceFS' approach in this regard.
 
+![ZeroFS-arch](../../images/zerofs-arch.svg)
+
 Key architectural characteristics:
 
 - No separate metadata database: metadata (inodes, directory entries, extent pointers, manifests) lives in an

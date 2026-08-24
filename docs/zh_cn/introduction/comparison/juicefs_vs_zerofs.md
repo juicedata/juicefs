@@ -29,6 +29,8 @@ Leader 设计和强制加密如何影响这一权衡，详见下文的[系统架
 LSM 树中，文件内容则单独存储在同一对象存储中的不可变 Segment 对象里，因此不依赖任何外部数据库。由于文件被打包进不透明的
 Segment，而不是与对象一一映射，因此无法通过 S3 API 单独访问 ZeroFS 中的文件，这一点与 JuiceFS 的做法类似。
 
+![ZeroFS-arch](../../images/zerofs-arch.svg)
+
 关键架构特点：
 
 - 无需单独的元数据数据库：元数据（inode、目录项、Extent 指针、Manifest 等）存储在基于对象存储的 LSM 树中，文件内容则单独存储在不可变的
