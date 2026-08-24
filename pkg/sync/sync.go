@@ -68,7 +68,7 @@ var (
 	extra, extraBytes       *utils.Bar
 	deleted, failed         *utils.Bar
 	listedPrefix            *utils.Bar
-	concurrent              chan int
+	concurrent              = make(chan int, 10) // default for standalone CopyData; Sync overrides it
 	limiter                 *mixedLimiter
 	totalHandled            atomic.Int64
 )
@@ -762,7 +762,9 @@ func (w *withProgress) Read(b []byte) (int, error) {
 		limiter.Wait(int64(len(b)))
 	}
 	n, err := w.r.Read(b)
-	copiedBytes.IncrInt64(int64(n))
+	if copiedBytes != nil { // not set by standalone CopyData callers, e.g. metadata backup
+		copiedBytes.IncrInt64(int64(n))
+	}
 	return n, err
 }
 
@@ -997,13 +999,6 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 	}
 
 	return chksum, nil
-}
-
-func InitForCopyData() {
-	concurrent = make(chan int, 10)
-	progress := utils.NewProgress(true)
-	copied = progress.AddCountSpinner("Copied objects")
-	copiedBytes = progress.AddByteSpinner("Copied bytes")
 }
 
 func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
