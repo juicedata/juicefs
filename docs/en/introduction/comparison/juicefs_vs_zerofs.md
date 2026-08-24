@@ -94,12 +94,11 @@ for.
 
 **ZeroFS** does allow many concurrent clients to write: the Kubernetes CSI Driver presents genuine `ReadWriteMany`
 volumes, and any number of pods on any number of nodes can mount over 9P and have their POSIX byte-range locks
-arbitrated by the leader. The constraint is at the server layer, not the client layer: every one of those clients'
-writes is funneled through a single leader process before it reaches object storage, and that process cannot be
-horizontally scaled; the HA pair exists to provide failover, not write scale-out. If the leader becomes a bottleneck,
-the fix is a bigger leader, not more leaders; the standby stays synchronized as a hot backup, and read replicas serve
-reads with bounded staleness (the writer's flush interval, default 30 seconds, plus up to a 10-second replica poll
-window) rather than adding write capacity.
+arbitrated by the leader. ZeroFS' scalability constraint is at the server layer, not the client layer. Every one of
+those clients' writes is funneled through a single leader process before it reaches object storage, and that process
+cannot be horizontally scaled. The leader/standby HA pair exists to provide failover, not write scale-out. If the leader
+becomes a bottleneck, the solution is a bigger leader, not more leaders. The standby serves as a hot backup for high
+availability, while read replicas manage read requests with bounded staleness instead of expanding write capacity.
 
 **JuiceFS** avoids a single file system server data relay. Clients perform file I/O and communicate with both the
 metadata engine and object storage. Metadata engines bring their own scale-out story: Redis Cluster/Sentinel, TiKV's
@@ -129,7 +128,7 @@ already means the write is both durable in object storage and visible to any oth
 without the application ever having to call `fsync()` itself. For more details,
 see [Cache](../../guide/cache.md#consistency) and
 [POSIX compatibility](../../reference/posix_compatibility.md). JuiceFS does offer an opt-in `--writeback` mode with a
-risk profile similar to ZeroFS's default: writes are committed to metadata immediately and uploaded from local disk
+risk profile similar to ZeroFS' default: writes are committed to metadata immediately and uploaded from local disk
 asynchronously. However, the docs flag it explicitly ("if write cache data suffers loss before upload is complete, file
 data is lost forever") and it is off by default.
 
@@ -171,9 +170,9 @@ clouds. See the table below for more details.
 | Metadata storage         | Embedded LSM tree, persisted in the same object store (no external DB) | External database (Redis, TiKV, MySQL, PostgreSQL, etc.) | Horizontally-scalable high-performance distributed metadata engine |
 | Metadata redundancy      | Leader/standby pair with automatic failover                            | Depends on the database used                             | At least 3 copies (based on the Raft consensus algorithm)          |
 | Concurrent writers       | Many clients, all writes funneled through one leader process           | Many clients, each writing directly to storage           | Many clients, each writing directly to storage                     |
-| Data storage             | AWS S3, S3-compatible, Google Cloud Storage, Azure Blob                | Any mainstream object storage                            | Any mainstream object storage                                      |
-| Data redundancy          | Provided by object storage                                             | Provided by object storage                               | Provided by object storage                                         |
-| Data caching             | Local disk + memory (dual-tier cache)                                  | Local cache                                              | Distributed cache                                                  |
+| Data storage             | AWS S3, S3-compatible, Google Cloud Storage, Azure Blob                | Any mainstream object storage or other types of storage  | Any mainstream object storage or other types of storage            |
+| Data redundancy          | Provided by object storage                                             | Provided by the data storage layer                       | Provided by the data storage layer                                 |
+| Data caching             | Local disk + memory (dual-tier cache)                                  | Local cache                                              | Memory + local cache + distributed cache                           |
 | Encryption               | ✓ Mandatory, always on (XChaCha20-Poly1305)                           | ✓ Supported (optional)                                  | ✓ Supported (optional)                                            |
 | Compression              | ✓ Mandatory (Zstd or LZ4)                                             | ✓ Supported                                             | ✓ Supported                                                       |
 | Quota management         | ◐ Configurable file system size limits                                 | ✓ Supported                                             | ✓ Supported                                                       |
@@ -181,7 +180,7 @@ clouds. See the table below for more details.
 | POSIX ACL                | Not publicly documented                                                | ✓ Supported                                             | ✓ Supported                                                       |
 | Kubernetes CSI           | ✓ Supported                                                           | ✓ Supported                                             | ✓ Supported                                                       |
 | Cross-region replication | ◐ Relies on external service                                           | ◐ Relies on external service                             | ✓ Supported                                                       |
-| Multi-cloud mirroring    | ✕ Not supported                                                       | ✕ Not supported                                         | ✓ Supported                                                       |
+| Multi-cloud mirroring    | ✕ Not supported                                                       | ✕ Not supported                                         | ✓ Supported (with no extra cost for private deployments)          |
 | Pricing                  | AGPLv3, or commercial license                                          | Open source and free (Apache License 2.0)                | Commercial license, volume pricing                                 |
 
 ## Licensing implications
@@ -199,8 +198,8 @@ and multi-cloud mirroring.
 
 **ZeroFS** is a security-first file system that folds metadata storage into its own server process instead of requiring
 a separate database, encrypts and compresses every block by default, and can be mounted over NFS, 9P, or a native Linux
-kernel client, or consumed as an NBD block device. It is still a service you deploy and operate. You just do not operate a
-second, separate metadata database alongside it. Clients can connect and write concurrently, but every one of those
+kernel client, or consumed as an NBD block device. It is still a service you deploy and operate. You just do not operate
+a second, separate metadata database alongside it. Clients can connect and write concurrently, but every one of those
 writes is funneled through a single leader process before it reaches object storage, and that write path is not
 horizontally scalable. Its high-availability design (a leader/standby pair plus unlimited read-only replicas) is built
 for failover and read scaling, not for adding write throughput. That makes it a good fit for self-hosted deployments
