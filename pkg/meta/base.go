@@ -2029,6 +2029,11 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st sy
 		}
 	}()
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
+		if attr != nil && attr.Typ == TypeLink {
+			m.of.Close(inode) // undo the reference added by OpenCheck
+			m.newMsg(ExternalLink, inode, attr.Length)
+			return ELink
+		}
 		return 0
 	}
 	// attr may be valid, see fs.Open()
@@ -2036,6 +2041,10 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st sy
 		if st = m.GetAttr(ctx, inode, attr); st != 0 {
 			return
 		}
+	}
+	if attr != nil && attr.Typ == TypeLink {
+		m.newMsg(ExternalLink, inode, attr.Length)
+		return ELink
 	}
 	var mmask uint8 = 0
 	switch flags & (syscall.O_RDONLY | syscall.O_WRONLY | syscall.O_RDWR) {
