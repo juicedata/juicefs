@@ -24,7 +24,7 @@ throughput horizontally. See [Architecture](#architecture) below for how its sin
 encryption shape that trade-off.
 
 **JuiceFS** is a cloud-native distributed file system designed for demanding AI/ML training, high-performance computing,
-and big data analytics across multiple clouds. By using a data-metadata-separation design with a pluggable,
+and big data analytics across multiple clouds. By using a data-metadata-separation design with an interchangeable,
 independently scalable metadata engine, JuiceFS supports concurrent access from massive numbers of clients, which is
 necessary for large-scale, performance-driven, POSIX-compliant workloads.
 
