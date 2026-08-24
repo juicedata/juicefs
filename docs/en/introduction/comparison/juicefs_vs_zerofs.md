@@ -49,7 +49,7 @@ Key architectural characteristics:
 - Encryption and compression are mandatory on every block, with no option to disable them.
 - A dual-tier local cache (encrypted raw-parts cache for object bytes, plaintext decoded-block cache for metadata, plus
   an in-memory tail cache for each inode's most recent extent) reduces round trips to object storage.
-- For High availability, ZeroFS supports a leader/standby replication design with a single active writer and writer
+- For high availability, ZeroFS supports a leader/standby replication design with a single active writer and writer
   fencing. Read-replica behavior, failover orchestration, and staleness depend on the configured replication
   implementation and version.
 
