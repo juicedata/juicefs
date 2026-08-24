@@ -82,7 +82,7 @@ object store, without an intermediate relay.
 
 This distinction carries considerations in cloud deployments. Because ZeroFS clients never reach the object store
 themselves, file data effectively crosses the network twice: once between the object store and the ZeroFS server, and
-again between the server and the client. When the server, its clients, and the object store don't all sit in the same
+again between the server and the client. When the server, its clients, and the object store do not all sit in the same
 network zone, that extra hop can add meaningful data-transfer charges and consumes the server's bandwidth, on top of
 whatever the object store would have charged for direct client access. JuiceFS clients talk to object storage directly,
 so aside from metadata-engine traffic, there is no equivalent relay hop or its associated data transfer cost to budget
