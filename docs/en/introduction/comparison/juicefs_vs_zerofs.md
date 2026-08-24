@@ -133,7 +133,7 @@ data is lost forever") and it is off by default.
 
 ### Caching
 
-**ZeroFS** implements a dual-tier local cache split between disk and memory budgets (`disk_size_gb` / `memory_size_gb`
+**ZeroFS** implements a dual-tier local cache split between disk and memory budgets (`disk_size_gb`/`memory_size_gb`
 in its configuration). A raw-parts cache stores object bytes exactly as fetched — still compressed and encrypted — at
 128 KiB granularity, while a separate decoded-block cache holds plaintext metadata blocks, and an in-memory tail cache
 keeps each inode's most recently written extent. An adaptive readahead layer tracks up to 4 concurrent sequential
