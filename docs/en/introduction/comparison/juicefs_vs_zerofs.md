@@ -73,7 +73,7 @@ Key architectural characteristics:
 ### Data path
 
 **ZeroFS** relays all file data through its server node. Neither the NFS and 9P protocol clients nor the native Linux
-kernel client talk to object storage directly, only the ZeroFS server holds the storage credentials and issues the
+kernel client talk to object storage directly. Only the ZeroFS server holds the storage credentials and issues the
 GET/PUT calls. So reads and writes are proxied through that one process on its way to or from the bucket.
 
 **JuiceFS** clients, on the other hand, directly issue GET/PUT calls to the object store themselves. Metadata operations
