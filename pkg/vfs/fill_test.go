@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 )
 
@@ -212,12 +213,25 @@ func (f *fakeSliceMeta) Read(_ meta.Context, _ Ino, indx uint32, slices *[]meta.
 func collectSliceIDs(iter *sliceIterator) []uint64 {
 	var ids []uint64
 	for iter.hasNext() {
-		s := iter.next()
-		if s.Id != 0 {
+		s, parts := iter.next()
+		if len(parts) > 0 {
 			ids = append(ids, s.Id)
 		}
 	}
 	return ids
+}
+
+// collectParts returns, for each slice that has work to do, its id and the
+// object ranges the iterator asks the store to operate on.
+func collectParts(iter *sliceIterator) map[uint64][]chunk.Range {
+	got := make(map[uint64][]chunk.Range)
+	for iter.hasNext() {
+		s, parts := iter.next()
+		if len(parts) > 0 {
+			got[s.Id] = parts
+		}
+	}
+	return got
 }
 
 func TestSliceIteratorRanges(t *testing.T) {
@@ -273,5 +287,111 @@ func TestSliceIteratorRanges(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cached[0], want) {
 		t.Fatalf("slices returned by Read were modified: got %v, want %v", cached[0], want)
+	}
+}
+
+// A slice that was partially overwritten keeps its original Size while Len
+// shrinks, so operating on Size would touch data that can no longer be read.
+func TestSliceIteratorSkipsOverwrittenData(t *testing.T) {
+	// 64MiB object, overwritten except for its last 1MiB.
+	const size, visible = 64 << 20, 1 << 20
+	iter := &sliceIterator{
+		ctx: meta.Background(),
+		mClient: &fakeSliceMeta{slicesByChunk: map[uint32][]meta.Slice{
+			0: {
+				{Id: 200, Size: size - visible, Off: 0, Len: size - visible},
+				{Id: 100, Size: size, Off: size - visible, Len: visible},
+			},
+		}},
+		ino:      1,
+		chunkCnt: 1,
+		stat:     &CacheResponse{Locations: make(map[string]uint64)},
+	}
+	got := collectParts(iter)
+	want := map[uint64][]chunk.Range{
+		200: {{Off: 0, Len: size - visible}},
+		100: {{Off: size - visible, Len: visible}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("parts = %v, want %v", got, want)
+	}
+}
+
+func TestSliceIteratorParts(t *testing.T) {
+	const cs = meta.ChunkSize
+	newIter := func(ranges []ByteRange, slicesByChunk map[uint32][]meta.Slice, chunkCnt uint32) *sliceIterator {
+		return &sliceIterator{
+			ctx:      meta.Background(),
+			mClient:  &fakeSliceMeta{slicesByChunk: slicesByChunk},
+			ino:      1,
+			chunkCnt: chunkCnt,
+			stat:     &CacheResponse{Locations: make(map[string]uint64)},
+			ranges:   ranges,
+		}
+	}
+
+	// A range is translated from file coordinates to object coordinates by way
+	// of the slice's offset inside its object.
+	iter := newIter([]ByteRange{{Start: 1200, End: 1300}}, map[uint32][]meta.Slice{
+		0: {{Id: 1, Size: 8192, Off: 4096, Len: 2000}},
+	}, 1)
+	if got, want := collectParts(iter), map[uint64][]chunk.Range{
+		1: {{Off: 4096 + 1200, Len: 100}},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("translated part = %v, want %v", got, want)
+	}
+
+	// A range is clipped to the visible portion of the slice.
+	iter = newIter([]ByteRange{{Start: 500, End: 100000}}, map[uint32][]meta.Slice{
+		0: {{Id: 1, Size: 8192, Off: 4096, Len: 2000}},
+	}, 1)
+	if got, want := collectParts(iter), map[uint64][]chunk.Range{
+		1: {{Off: 4096 + 500, Len: 1500}},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("clipped part = %v, want %v", got, want)
+	}
+
+	// Several ranges hitting the same slice produce several parts.
+	iter = newIter([]ByteRange{{Start: 10, End: 20}, {Start: 900, End: 950}}, map[uint32][]meta.Slice{
+		0: {{Id: 1, Size: 4096, Off: 0, Len: 1000}},
+	}, 1)
+	if got, want := collectParts(iter), map[uint64][]chunk.Range{
+		1: {{Off: 10, Len: 10}, {Off: 900, Len: 50}},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("multiple parts = %v, want %v", got, want)
+	}
+
+	// Ranges are relative to the file, so a slice in a later chunk is offset by
+	// the chunk start.
+	iter = newIter([]ByteRange{{Start: cs + 100, End: cs + 200}}, map[uint32][]meta.Slice{
+		0: {{Id: 1, Size: 1000, Off: 0, Len: 1000}},
+		1: {{Id: 2, Size: 1000, Off: 0, Len: 1000}},
+	}, 2)
+	if got, want := collectParts(iter), map[uint64][]chunk.Range{
+		2: {{Off: 100, Len: 100}},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("later chunk part = %v, want %v", got, want)
+	}
+}
+
+func TestParseRangesMerge(t *testing.T) {
+	tests := []struct {
+		input  string
+		expect []ByteRange
+	}{
+		{"200-300;0-100", []ByteRange{{0, 100}, {200, 300}}},
+		{"0-100;50-200", []ByteRange{{0, 200}}},
+		{"0-100;100-200", []ByteRange{{0, 200}}},
+		{"0-100;10-20", []ByteRange{{0, 100}}},
+		{"0-10;20-30;5-25", []ByteRange{{0, 30}}},
+	}
+	for _, tt := range tests {
+		got, err := parseRanges(tt.input)
+		if err != nil {
+			t.Fatalf("parseRanges(%q): %s", tt.input, err)
+		}
+		if !reflect.DeepEqual(got, tt.expect) {
+			t.Errorf("parseRanges(%q) = %v, want %v", tt.input, got, tt.expect)
+		}
 	}
 }

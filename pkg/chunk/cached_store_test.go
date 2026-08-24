@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -300,10 +301,10 @@ func TestFillCache(t *testing.T) {
 	if cnt, used := bcache.stats(); cnt != 1 || used != 1024+4096 { // only chunk 10 cached
 		t.Fatalf("cache cnt %d used %d, expect cnt 1 used 5120", cnt, used)
 	}
-	if err := store.FillCache(10, 1024); err != nil {
+	if err := store.FillCache(10, 1024, nil); err != nil {
 		t.Fatalf("fill cache 10 1024: %s", err)
 	}
-	if err := store.FillCache(11, uint32(bsize)); err != nil {
+	if err := store.FillCache(11, uint32(bsize), nil); err != nil {
 		t.Fatalf("fill cache 11 %d: %s", bsize, err)
 	}
 	time.Sleep(time.Second)
@@ -319,17 +320,17 @@ func TestFillCache(t *testing.T) {
 		}
 	}
 	// check
-	err := store.CheckCache(10, 1024, handler)
+	err := store.CheckCache(10, 1024, nil, handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(0), missBytes)
 
 	missBytes = 0
-	err = store.CheckCache(11, uint32(bsize), handler)
+	err = store.CheckCache(11, uint32(bsize), nil, handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(0), missBytes)
 
 	// evict slice 11
-	err = store.EvictCache(11, uint32(bsize))
+	err = store.EvictCache(11, uint32(bsize), nil)
 	assert.Nil(t, err)
 
 	// stat
@@ -339,7 +340,7 @@ func TestFillCache(t *testing.T) {
 
 	// check again
 	missBytes = 0
-	err = store.CheckCache(11, uint32(bsize), handler)
+	err = store.CheckCache(11, uint32(bsize), nil, handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(bsize), missBytes)
 }
@@ -407,4 +408,38 @@ func TestStoreRetry(t *testing.T) {
 	defer p.Release()
 	cs.(*cachedStore).load(context.TODO(), "non", p, false, false) // wont retry
 	require.Equal(t, int32(1), s.cnt)
+}
+
+func TestBlockIndexes(t *testing.T) {
+	conf := defaultConf
+	conf.BlockSize = 1 << 20 // 1MiB
+	store := &cachedStore{conf: conf}
+	const size = 4 << 20 // 4 blocks
+
+	cases := []struct {
+		name   string
+		length int
+		parts  []Range
+		expect []int
+	}{
+		{"nil parts select every block", size, nil, []int{0, 1, 2, 3}},
+		{"one part inside a block", size, []Range{{Off: 10, Len: 10}}, []int{0}},
+		{"part spanning two blocks", size, []Range{{Off: (1 << 20) - 1, Len: 2}}, []int{0, 1}},
+		{"last block only", size, []Range{{Off: 3 << 20, Len: 5}}, []int{3}},
+		// two parts in the same block must not process it twice
+		{"same block once", size, []Range{{Off: 0, Len: 10}, {Off: 1000, Len: 10}}, []int{0}},
+		{"adjacent parts sharing a block", size, []Range{{Off: 0, Len: 1 << 20}, {Off: 1 << 20, Len: 10}}, []int{0, 1}},
+		{"part beyond the object is clipped", size, []Range{{Off: 3 << 20, Len: 100 << 20}}, []int{3}},
+		{"part starting past the end", size, []Range{{Off: 8 << 20, Len: 10}}, nil},
+		{"empty part", size, []Range{{Off: 0, Len: 0}}, nil},
+		{"zero length object", 0, nil, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := sliceForRead(1, c.length, store)
+			if got := r.blockIndexes(c.parts); !reflect.DeepEqual(got, c.expect) {
+				t.Fatalf("blockIndexes(%v) = %v, want %v", c.parts, got, c.expect)
+			}
+		})
+	}
 }

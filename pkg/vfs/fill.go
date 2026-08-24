@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -129,8 +130,8 @@ func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *Cach
 		var handler sliceHandler
 		switch action {
 		case WarmupCache:
-			handler = func(s meta.Slice) error {
-				return c.store.FillCache(s.Id, s.Size)
+			handler = func(s meta.Slice, parts []chunk.Range) error {
+				return c.store.FillCache(s.Id, s.Size, parts)
 			}
 
 			if c.conf.Meta.OpenCache > 0 {
@@ -140,8 +141,8 @@ func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *Cach
 				_ = c.meta.Close(ctx, f.ino)
 			}
 		case EvictCache:
-			handler = func(s meta.Slice) error {
-				return c.store.EvictCache(s.Id, s.Size)
+			handler = func(s meta.Slice, parts []chunk.Range) error {
+				return c.store.EvictCache(s.Id, s.Size, parts)
 			}
 		case CheckCache:
 			blockHandler := func(exists bool, loc string, size int) {
@@ -153,8 +154,8 @@ func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *Cach
 					atomic.AddUint64(&resp.MissBytes, uint64(size))
 				}
 			}
-			handler = func(s meta.Slice) error {
-				return c.store.CheckCache(s.Id, s.Size, blockHandler)
+			handler = func(s meta.Slice, parts []chunk.Range) error {
+				return c.store.CheckCache(s.Id, s.Size, parts, blockHandler)
 			}
 		}
 
@@ -248,7 +249,18 @@ func parseRanges(spec string) ([]ByteRange, error) {
 		}
 		ranges = append(ranges, ByteRange{Start: start, End: end})
 	}
-	return ranges, nil
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].Start < ranges[j].Start })
+	merged := ranges[:0]
+	for _, r := range ranges {
+		if n := len(merged); n > 0 && r.Start <= merged[n-1].End {
+			if r.End > merged[n-1].End {
+				merged[n-1].End = r.End
+			}
+			continue
+		}
+		merged = append(merged, r)
+	}
+	return merged, nil
 }
 
 func (c *CacheFiller) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscall.Errno {
@@ -358,7 +370,7 @@ type sliceIterator struct {
 	ranges         []ByteRange // optional byte ranges for filtering
 }
 
-type sliceHandler func(s meta.Slice) error
+type sliceHandler func(s meta.Slice, parts []chunk.Range) error
 
 func (iter *sliceIterator) overlapsRange(start, end uint64) bool {
 	if len(iter.ranges) == 0 {
@@ -407,16 +419,49 @@ func (iter *sliceIterator) hasNext() bool {
 	return true
 }
 
-func (iter *sliceIterator) next() meta.Slice {
+// next returns the next slice of the current chunk together with the parts of
+// its object that must be processed. Position within the chunk is accumulated
+// from Len, since Slice.Off is the offset inside the underlying object, not
+// within the chunk.
+//
+// The parts are always clamped to [Off, Off+Len), the portion of the object
+// still visible in this chunk: an object that has been partially overwritten
+// keeps its original Size, so operating on Size would touch data that can no
+// longer be read. When byte ranges are requested, the parts are narrowed
+// further to their intersection with those ranges, translated to object
+// coordinates. An empty result means the slice can be skipped.
+func (iter *sliceIterator) next() (meta.Slice, []chunk.Range) {
 	s := iter.slices[iter.nextSliceIndex]
 	iter.nextSliceIndex++
 	chunkStart := uint64(iter.nextChunkIndex-1) * meta.ChunkSize
 	sliceStart := chunkStart + iter.sliceOffset
 	iter.sliceOffset += uint64(s.Len)
-	if !iter.overlapsRange(sliceStart, sliceStart+uint64(s.Len)) {
-		return meta.Slice{Id: 0}
+	if s.Id == 0 || s.Len == 0 {
+		return s, nil
 	}
-	return s
+	if len(iter.ranges) == 0 {
+		return s, []chunk.Range{{Off: s.Off, Len: s.Len}}
+	}
+
+	sliceEnd := sliceStart + uint64(s.Len)
+	var parts []chunk.Range
+	for _, r := range iter.ranges {
+		start, end := r.Start, r.End
+		if start < sliceStart {
+			start = sliceStart
+		}
+		if end > sliceEnd {
+			end = sliceEnd
+		}
+		if start >= end {
+			continue
+		}
+		parts = append(parts, chunk.Range{
+			Off: s.Off + uint32(start-sliceStart),
+			Len: uint32(end - start),
+		})
+	}
+	return s, parts
 }
 
 func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent chan token) error {
@@ -425,12 +470,16 @@ func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent chan token) 
 	}
 	var wg sync.WaitGroup
 	for iter.hasNext() {
-		s := iter.next()
-		if s.Id == 0 {
+		s, parts := iter.next()
+		if len(parts) == 0 {
 			continue
 		}
+		var bytes uint64
+		for _, p := range parts {
+			bytes += uint64(p.Len)
+		}
 		atomic.AddUint64(&iter.stat.SliceCount, 1)
-		atomic.AddUint64(&iter.stat.TotalBytes, uint64(s.Size))
+		atomic.AddUint64(&iter.stat.TotalBytes, bytes)
 
 		select {
 		case concurrent <- token{}:
@@ -440,12 +489,12 @@ func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent chan token) 
 					<-concurrent
 					wg.Done()
 				}()
-				if err := handler(s); err != nil {
+				if err := handler(s, parts); err != nil {
 					iter.err = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
 				}
 			}()
 		default:
-			if err := handler(s); err != nil {
+			if err := handler(s, parts); err != nil {
 				iter.err = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
 			}
 		}

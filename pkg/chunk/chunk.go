@@ -37,13 +37,20 @@ type Writer interface {
 	Abort()
 }
 
+// Range is a byte interval inside a slice object, used to limit cache
+// operations to the part of the object that is actually needed.
+type Range struct {
+	Off uint32
+	Len uint32
+}
+
 type ChunkStore interface {
 	NewReader(id uint64, length int) Reader
 	NewWriter(id uint64, tierID uint8) Writer
 	Remove(id uint64, length int) error
-	FillCache(id uint64, length uint32) error
-	EvictCache(id uint64, length uint32) error
-	CheckCache(id uint64, length uint32, handler func(exists bool, loc string, size int)) error
+	FillCache(id uint64, size uint32, parts []Range) error
+	EvictCache(id uint64, size uint32, parts []Range) error
+	CheckCache(id uint64, size uint32, parts []Range, handler func(exists bool, loc string, size int)) error
 	UsedMemory() int64
 	UpdateLimit(upload, download int64)
 	BlobStorage() object.ObjectStorage

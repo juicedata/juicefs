@@ -44,9 +44,13 @@ type blockingChunkStore struct {
 func (s *blockingChunkStore) NewReader(id uint64, length int) chunk.Reader   { return s.reader }
 func (s *blockingChunkStore) NewWriter(id uint64, tierID uint8) chunk.Writer { return nil }
 func (s *blockingChunkStore) Remove(id uint64, length int) error             { return nil }
-func (s *blockingChunkStore) FillCache(id uint64, length uint32) error       { return nil }
-func (s *blockingChunkStore) EvictCache(id uint64, length uint32) error      { return nil }
-func (s *blockingChunkStore) CheckCache(id uint64, length uint32, handler func(bool, string, int)) error {
+func (s *blockingChunkStore) FillCache(id uint64, size uint32, parts []chunk.Range) error {
+	return nil
+}
+func (s *blockingChunkStore) EvictCache(id uint64, size uint32, parts []chunk.Range) error {
+	return nil
+}
+func (s *blockingChunkStore) CheckCache(id uint64, size uint32, parts []chunk.Range, handler func(bool, string, int)) error {
 	return nil
 }
 func (s *blockingChunkStore) UsedMemory() int64                  { return 0 }

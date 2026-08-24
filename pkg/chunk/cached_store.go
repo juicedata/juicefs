@@ -1174,11 +1174,51 @@ func (store *cachedStore) Remove(id uint64, length int) error {
 	return r.Remove()
 }
 
-func (store *cachedStore) FillCache(id uint64, length uint32) error {
-	r := sliceForRead(id, int(length), store)
-	keys := r.keys()
+// blockIndexes returns the indexes of the blocks overlapping parts, in
+// ascending order and without duplicates, so that a block shared by several
+// parts is handled only once. Empty parts select the whole object.
+func (s *rSlice) blockIndexes(parts []Range) []int {
+	if s.length <= 0 {
+		return nil
+	}
+	lastIndx := (s.length - 1) / s.store.conf.BlockSize
+	if len(parts) == 0 {
+		indexes := make([]int, lastIndx+1)
+		for i := range indexes {
+			indexes[i] = i
+		}
+		return indexes
+	}
+	var indexes []int
+	next := 0
+	for _, p := range parts {
+		if p.Len == 0 || int(p.Off) >= s.length {
+			continue
+		}
+		end := int(p.Off) + int(p.Len)
+		if end > s.length {
+			end = s.length
+		}
+		first := int(p.Off) / s.store.conf.BlockSize
+		last := (end - 1) / s.store.conf.BlockSize
+		if first < next {
+			first = next
+		}
+		for i := first; i <= last; i++ {
+			indexes = append(indexes, i)
+		}
+		if last >= next {
+			next = last + 1
+		}
+	}
+	return indexes
+}
+
+func (store *cachedStore) FillCache(id uint64, size uint32, parts []Range) error {
+	r := sliceForRead(id, int(size), store)
 	var err error
-	for _, k := range keys {
+	for _, i := range r.blockIndexes(parts) {
+		k := r.key(i)
 		if _, existed := store.bcache.exist(k); existed { // already cached
 			continue
 		}
@@ -1197,22 +1237,20 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 	return err
 }
 
-func (store *cachedStore) EvictCache(id uint64, length uint32) error {
-	r := sliceForRead(id, int(length), store)
-	keys := r.keys()
-	for _, k := range keys {
-		store.bcache.remove(k, false)
+func (store *cachedStore) EvictCache(id uint64, size uint32, parts []Range) error {
+	r := sliceForRead(id, int(size), store)
+	for _, i := range r.blockIndexes(parts) {
+		store.bcache.remove(r.key(i), false)
 	}
 	return nil
 }
 
-func (store *cachedStore) CheckCache(id uint64, length uint32, handler func(exists bool, loc string, size int)) error {
-	r := sliceForRead(id, int(length), store)
-	keys := r.keys()
+func (store *cachedStore) CheckCache(id uint64, size uint32, parts []Range, handler func(exists bool, loc string, size int)) error {
+	r := sliceForRead(id, int(size), store)
 	var loc string
 	var existed bool
-	for i, k := range keys {
-		loc, existed = store.bcache.exist(k)
+	for _, i := range r.blockIndexes(parts) {
+		loc, existed = store.bcache.exist(r.key(i))
 		if handler != nil {
 			handler(existed, loc, r.blockSize(i))
 		}

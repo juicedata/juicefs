@@ -877,13 +877,31 @@ echo '/jfs/f1
 /jfs/f2
 /jfs/f3' > /tmp/filelist.txt
 juicefs warmup -f /tmp/filelist.txt
+
+# Warm up only some byte ranges of a file
+echo '/jfs/f1
+/jfs/f2 [0-4096]
+/jfs/f3 [0-4096;1048576-1052672]' > /tmp/filelist.txt
+juicefs warmup -f /tmp/filelist.txt
 ```
+
+Each line of the file is either a path, which warms up the whole file, or a path
+followed by a bracketed list of byte ranges. Ranges are `start-end` pairs
+separated by `;`, where `start` is inclusive and `end` is exclusive, so `[0-4096]`
+covers the first 4096 bytes. Because the brackets delimit the list, paths
+containing spaces need no quoting. A line whose bracketed list is malformed is
+reported and skipped, rather than being treated as a path.
+
+Ranges select which blocks to work on, and a block is the smallest unit of the
+cache, so a range always covers at least one whole block (`--block-size`, 4 MiB
+by default). Keep this in mind with `--evict`, which discards every block the
+ranges touch, and with `--check`, which reports whole blocks as well.
 
 #### Options
 
 |Items|Description|
 |-|-|
-|`--file=path, -f path`|file containing a list of paths (each line is a file path)|
+|`--file=path, -f path`|file containing a list of paths (each line is `path` or `path [start-end;...]`)|
 |`--threads=50, -p 50`|number of concurrent workers, default to 50. Reduce this number in low bandwidth environment to avoid download timeouts|
 |`--background, -b`|run in background (default: false)|
 |`--evict` <VersionAdd>1.2</VersionAdd>|evict cached blocks|

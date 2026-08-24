@@ -63,7 +63,7 @@ $ juicefs warmup -f /tmp/filelist`,
 			&cli.StringFlag{
 				Name:    "file",
 				Aliases: []string{"f"},
-				Usage:   "file containing a list of paths",
+				Usage:   "file containing a list of paths, each line being `path` or `path [start-end;...]`",
 			},
 			&cli.UintFlag{
 				Name:    "threads",
