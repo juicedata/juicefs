@@ -67,21 +67,21 @@ S3 Files integrates seamlessly with existing S3 buckets, making it a natural cho
 ## Feature comparison
 
 | Features                 | S3 Files                        | JuiceFS Community Edition                                | JuiceFS Enterprise Edition                                         |
-| ------------------------ | ------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+|--------------------------|---------------------------------|----------------------------------------------------------|--------------------------------------------------------------------|
 | Clients                  | POSIX (FUSE) + S3 direct access | POSIX (FUSE), Java SDK, Python SDK, S3 Gateway           | POSIX (FUSE), Java SDK, Python SDK, S3 Gateway                     |
 | Metadata storage         | EFS                             | External database (Redis, TiKV, MySQL, PostgreSQL, etc.) | Horizontally-scalable high-performance distributed metadata engine |
 | Metadata redundancy      | Provided by EFS                 | Depends on the database used                             | At least 3 copies (based on the Raft consensus algorithm)          |
-| Data storage             | S3 only                         | Any mainstream object storage                            | Any mainstream object storage storage                              |
-| Data redundancy          | Provided by S3                  | Provided by object storage                               | Provided by object storage                                         |
-| Data caching             | EFS                             | Local cache                                              | Distributed cache                                                  |
-| Encryption               | ✓ Supported                     | ✓ Supported                                              | ✓ Supported                                                        |
-| Compression              | ✕ Not supported                 | ✓ Supported                                              | ✓ Supported                                                        |
-| Quota management         | ✕ Not supported                 | ✓ Supported                                              | ✓ Supported                                                        |
-| POSIX compliance         | ✓ Fully compatible              | ✓ Fully compatible                                       | ✓ Fully compatible                                                 |
-| POSIX ACL                | ✓ Supported                     | ✓ Supported                                              | ✓ Supported                                                        |
-| Kubernetes CSI           | ✓ Supported                     | ✓ Supported                                              | ✓ Supported                                                        |
-| Cross-region replication | ◐ Relies on S3                  | ◐ Relies on external service                             | ✓ Supported                                                        |
-| Multi-cloud mirroring    | ✕ Not supported                 | ✕ Not supported                                          | ✓ Supported                                                        |
+| Data storage             | S3 only                         | Any mainstream object storage or other types of storage  | Any mainstream object storage or other types of storage            |
+| Data redundancy          | Provided by S3                  | Provided by the data storage layer                       | Provided by the data storage layer                                 |
+| Data caching             | EFS                             | Local cache                                              | Memory + local cache + distributed cache                           |
+| Encryption               | ✓ Supported                    | ✓ Supported                                             | ✓ Supported                                                       |
+| Compression              | ✕ Not supported                | ✓ Supported                                             | ✓ Supported                                                       |
+| Quota management         | ✕ Not supported                | ✓ Supported                                             | ✓ Supported                                                       |
+| POSIX compliance         | ✓ Fully compatible             | ✓ Fully compatible                                      | ✓ Fully compatible                                                |
+| POSIX ACL                | ✓ Supported                    | ✓ Supported                                             | ✓ Supported                                                       |
+| Kubernetes CSI           | ✓ Supported                    | ✓ Supported                                             | ✓ Supported                                                       |
+| Cross-region replication | ◐ Relies on S3                  | ◐ Relies on external service                             | ✓ Supported                                                       |
+| Multi-cloud mirroring    | ✕ Not supported                | ✕ Not supported                                         | ✓ Supported (with no extra cost for private deployments)          |
 | Pricing                  | S3 + S3 Files pricing           | Open source and free (Apache License 2.0)                | Commercial license, volume pricing                                 |
 
 ## Cost implications
