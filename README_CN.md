@@ -224,4 +224,4 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 
 ## 历史加星
 
-[![Stargazers over time](https://starchart.cc/juicedata/juicefs.svg)](https://starchart.cc/juicedata/juicefs)
+[![Stargazers over time](https://api.star-history.com/chart?repos=juicedata/juicefs&type=date&legend=top-left&sealed_token=YlzRuLnesjVEGDsZfhxQn_x-AFvNcHrCh-GCEfzzeyrGEJ3OIcLwrd23Yo576hxaTuFXCms0QDsFoBmiDB8XYm6Gbtetv8qW1UFDXbbjrm7-pFJyioXO6A)](https://www.star-history.com/?type=date&repos=juicedata%2Fjuicefs)
