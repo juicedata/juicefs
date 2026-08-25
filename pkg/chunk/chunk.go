@@ -37,8 +37,6 @@ type Writer interface {
 	Abort()
 }
 
-// Range is a byte interval inside a slice object, used to limit cache
-// operations to the part of the object that is actually needed.
 type Range struct {
 	Off uint32
 	Len uint32

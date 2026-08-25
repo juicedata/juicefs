@@ -44,17 +44,13 @@ type ByteRange struct {
 	End   uint64
 }
 
-// targetRe matches "path [start-end;...]". The brackets delimit the range list,
-// so paths containing spaces are still parsed correctly.
+// targetRe matches "path [start-end;...]"
 var targetRe = regexp.MustCompile(`^(.*\S)\s+\[([0-9]+-[0-9]+(?:;[0-9]+-[0-9]+)*)\]$`)
 
-// bracketSuffixRe detects a trailing bracket group, i.e. an attempt to specify
-// ranges, so that a malformed one is rejected instead of read as part of the path.
+// bracketSuffixRe detects a trailing bracket group
 var bracketSuffixRe = regexp.MustCompile(`\s\[[^\[\]]*\]$`)
 
-// SplitTarget splits a warmup target into its path and byte ranges. A target is
-// either "path" (whole file, nil ranges) or "path [start-end;...]". The brackets
-// delimit the range list, so paths containing spaces are still parsed correctly.
+// SplitTarget splits a warmup target into its path and byte ranges.
 func SplitTarget(target string) (path, spec string, ranges []ByteRange, err error) {
 	m := targetRe.FindStringSubmatch(target)
 	if m == nil {
@@ -365,7 +361,7 @@ type sliceIterator struct {
 	err            error
 	nextChunkIndex uint32
 	nextSliceIndex uint64
-	sliceOffset    uint64 // offset of slices[nextSliceIndex] within its chunk
+	sliceOffset    uint64 // offset within chunk
 	slices         []meta.Slice
 	ranges         []ByteRange // optional byte ranges for filtering
 }
@@ -420,21 +416,11 @@ func (iter *sliceIterator) hasNext() bool {
 }
 
 // next returns the next slice of the current chunk together with the parts of
-// its object that must be processed. Position within the chunk is accumulated
-// from Len, since Slice.Off is the offset inside the underlying object, not
-// within the chunk.
-//
-// The parts are always clamped to [Off, Off+Len), the portion of the object
-// still visible in this chunk: an object that has been partially overwritten
-// keeps its original Size, so operating on Size would touch data that can no
-// longer be read. When byte ranges are requested, the parts are narrowed
-// further to their intersection with those ranges, translated to object
-// coordinates. An empty result means the slice can be skipped.
+// its object that must be processed.
 func (iter *sliceIterator) next() (meta.Slice, []chunk.Range) {
 	s := iter.slices[iter.nextSliceIndex]
 	iter.nextSliceIndex++
-	chunkStart := uint64(iter.nextChunkIndex-1) * meta.ChunkSize
-	sliceStart := chunkStart + iter.sliceOffset
+	sliceStart := uint64(iter.nextChunkIndex-1)*meta.ChunkSize + iter.sliceOffset
 	iter.sliceOffset += uint64(s.Len)
 	if s.Id == 0 || s.Len == 0 {
 		return s, nil
@@ -443,23 +429,16 @@ func (iter *sliceIterator) next() (meta.Slice, []chunk.Range) {
 		return s, []chunk.Range{{Off: s.Off, Len: s.Len}}
 	}
 
-	sliceEnd := sliceStart + uint64(s.Len)
 	var parts []chunk.Range
 	for _, r := range iter.ranges {
-		start, end := r.Start, r.End
-		if start < sliceStart {
-			start = sliceStart
+		start := max(r.Start, sliceStart)
+		end := min(r.End, sliceStart+uint64(s.Len))
+		if start < end {
+			parts = append(parts, chunk.Range{
+				Off: s.Off + uint32(start-sliceStart),
+				Len: uint32(end - start),
+			})
 		}
-		if end > sliceEnd {
-			end = sliceEnd
-		}
-		if start >= end {
-			continue
-		}
-		parts = append(parts, chunk.Range{
-			Off: s.Off + uint32(start-sliceStart),
-			Len: uint32(end - start),
-		})
 	}
 	return s, parts
 }

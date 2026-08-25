@@ -1175,19 +1175,13 @@ func (store *cachedStore) Remove(id uint64, length int) error {
 }
 
 // blockIndexes returns the indexes of the blocks overlapping parts, in
-// ascending order and without duplicates, so that a block shared by several
-// parts is handled only once. Empty parts select the whole object.
+// ascending order and without duplicates. Empty parts select the whole object.
 func (s *rSlice) blockIndexes(parts []Range) []int {
 	if s.length <= 0 {
 		return nil
 	}
-	lastIndx := (s.length - 1) / s.store.conf.BlockSize
 	if len(parts) == 0 {
-		indexes := make([]int, lastIndx+1)
-		for i := range indexes {
-			indexes[i] = i
-		}
-		return indexes
+		parts = []Range{{Len: uint32(s.length)}}
 	}
 	var indexes []int
 	next := 0
@@ -1195,21 +1189,14 @@ func (s *rSlice) blockIndexes(parts []Range) []int {
 		if p.Len == 0 || int(p.Off) >= s.length {
 			continue
 		}
-		end := int(p.Off) + int(p.Len)
-		if end > s.length {
-			end = s.length
-		}
-		first := int(p.Off) / s.store.conf.BlockSize
+		end := min(int(p.Off)+int(p.Len), s.length)
+		// next skips the blocks already collected for an earlier part
+		first := max(int(p.Off)/s.store.conf.BlockSize, next)
 		last := (end - 1) / s.store.conf.BlockSize
-		if first < next {
-			first = next
-		}
 		for i := first; i <= last; i++ {
 			indexes = append(indexes, i)
 		}
-		if last >= next {
-			next = last + 1
-		}
+		next = max(next, last+1)
 	}
 	return indexes
 }
