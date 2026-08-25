@@ -63,7 +63,7 @@ $ juicefs warmup -f /tmp/filelist`,
 			&cli.StringFlag{
 				Name:    "file",
 				Aliases: []string{"f"},
-				Usage:   "file containing a list of paths",
+				Usage:   "file containing a list of paths, each line being `path` or `path [start-end;...]`",
 			},
 			&cli.UintFlag{
 				Name:    "threads",
@@ -221,13 +221,22 @@ func warmup(ctx *cli.Context) error {
 		defer fd.Close()
 		scanner := bufio.NewScanner(fd)
 		for scanner.Scan() {
-			if p := strings.TrimSpace(scanner.Text()); p != "" {
-				if abs, e := filepath.Abs(p); e == nil {
-					paths = append(paths, abs)
-				} else {
-					logger.Warnf("Skipped path %q because it fails to get absolute path: %s", p, e)
-				}
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
 			}
+			// Each line is either "path" or "path [start-end;...]".
+			pathStr, spec, _, e := vfs.SplitTarget(line)
+			if e != nil {
+				logger.Warnf("Skipped line %q: %s", line, e)
+				continue
+			}
+			abs, e := filepath.Abs(pathStr)
+			if e != nil {
+				logger.Warnf("Skipped path %q because it fails to get absolute path: %s", pathStr, e)
+				continue
+			}
+			paths = append(paths, vfs.JoinTarget(abs, spec))
 		}
 		if err = scanner.Err(); err != nil {
 			logger.Fatalf("Reading file %q failed with error: %s", fname, err)
@@ -239,7 +248,7 @@ func warmup(ctx *cli.Context) error {
 	}
 
 	// find mount point
-	first := paths[0]
+	first, _, _, _ := vfs.SplitTarget(paths[0])
 	controller, err := openController(first)
 	if err != nil {
 		return fmt.Errorf("open control file for %s: %s", first, err)
@@ -277,17 +286,19 @@ func warmup(ctx *cli.Context) error {
 	dspin := progress.AddDoubleSpinnerTwo(fmt.Sprintf("%s file", action), fmt.Sprintf("%s size", action))
 	total := &vfs.CacheResponse{Locations: make(map[string]uint64)}
 	for _, path := range paths {
+		// Keep the range spec attached to the rewritten path.
+		pathOnly, spec, _, _ := vfs.SplitTarget(path)
 		if mp == "/" {
-			inode, err := utils.GetFileInode(path)
+			inode, err := utils.GetFileInode(pathOnly)
 			if err != nil {
 				logger.Errorf("lookup inode for %q: %s", mp, err)
 				continue
 			}
-			batch = append(batch, fmt.Sprintf("inode:%d", inode))
-		} else if strings.HasPrefix(path, mp) {
-			batch = append(batch, path[start:])
+			batch = append(batch, vfs.JoinTarget(fmt.Sprintf("inode:%d", inode), spec))
+		} else if strings.HasPrefix(pathOnly, mp) {
+			batch = append(batch, vfs.JoinTarget(pathOnly[start:], spec))
 		} else {
-			logger.Errorf("Path %q is not under mount point %q", path, mp)
+			logger.Errorf("Path %q is not under mount point %q", pathOnly, mp)
 			continue
 		}
 		if len(batch) >= batchMax {
