@@ -21,12 +21,14 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1400,5 +1402,49 @@ func TestGlobalLimitDrainWaitersOnFailure(t *testing.T) {
 	}
 	if g.healthy.Load() {
 		t.Fatalf("expected global limit to be marked unhealthy")
+	}
+}
+
+func TestCopyDataWithoutProgress(t *testing.T) {
+	savedCopied, savedCopiedBytes := copied, copiedBytes
+	copied, copiedBytes = nil, nil
+	defer func() { copied, copiedBytes = savedCopied, savedCopiedBytes }()
+
+	src, err := object.CreateStorage("mem", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create src: %s", err)
+	}
+	dst, err := object.CreateStorage("mem", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create dst: %s", err)
+	}
+	data := bytes.Repeat([]byte("juicefs"), 50)
+	if err = src.Put(ctx, "backup", bytes.NewReader(data)); err != nil {
+		t.Fatalf("put: %s", err)
+	}
+	wantChksum := crc32.Checksum(data, crc32.MakeTable(crc32.Castagnoli))
+
+	settleGoroutines := func() {
+		runtime.GC()
+		time.Sleep(300 * time.Millisecond)
+		runtime.GC()
+	}
+	settleGoroutines()
+	base := runtime.NumGoroutine()
+
+	const cycles = 50
+	for i := 0; i < cycles; i++ {
+		chksum, err := CopyData(src, dst, "backup", int64(len(data)), true)
+		if err != nil {
+			t.Fatalf("CopyData: %s", err)
+		}
+		if chksum != wantChksum {
+			t.Fatalf("checksum mismatch: got %d, want %d", chksum, wantChksum)
+		}
+	}
+
+	settleGoroutines()
+	if leaked := runtime.NumGoroutine() - base; leaked > cycles/10 {
+		t.Fatalf("leaked %d goroutines after %d CopyData calls", leaked, cycles)
 	}
 }
