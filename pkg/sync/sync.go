@@ -68,7 +68,7 @@ var (
 	extra, extraBytes       *utils.Bar
 	deleted, failed         *utils.Bar
 	listedPrefix            *utils.Bar
-	concurrent              = make(chan int, 10) // default for standalone CopyData; Sync overrides it
+	concurrent              = make(chan int, 10)
 	limiter                 *mixedLimiter
 	totalHandled            atomic.Int64
 )
@@ -762,7 +762,7 @@ func (w *withProgress) Read(b []byte) (int, error) {
 		limiter.Wait(int64(len(b)))
 	}
 	n, err := w.r.Read(b)
-	if copiedBytes != nil { // not set by standalone CopyData callers, e.g. metadata backup
+	if copiedBytes != nil {
 		copiedBytes.IncrInt64(int64(n))
 	}
 	return n, err

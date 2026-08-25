@@ -1405,8 +1405,6 @@ func TestGlobalLimitDrainWaitersOnFailure(t *testing.T) {
 	}
 }
 
-// CopyData must be usable standalone (e.g. by metadata backup) without the
-// progress bars set up by Sync, and must not leak goroutines per call.
 func TestCopyDataWithoutProgress(t *testing.T) {
 	savedCopied, savedCopiedBytes := copied, copiedBytes
 	copied, copiedBytes = nil, nil
