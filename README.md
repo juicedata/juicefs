@@ -226,4 +226,4 @@ For more FAQs, please see the [full list](https://juicefs.com/docs/community/faq
 
 ## Stargazers over time
 
-[![Star History Chart](https://api.star-history.com/svg?repos=juicedata/juicefs&type=Date)](https://star-history.com/#juicedata/juicefs&Date)
+[![Star History Chart](docs/en/images/star-history.svg)](https://github.com/juicedata/juicefs/stargazers)

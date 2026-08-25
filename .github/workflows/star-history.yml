@@ -1,0 +1,44 @@
+name: "Star History"
+
+on:
+  schedule:
+    - cron: '15 20 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  star-history:
+    if: github.repository == 'juicedata/juicefs'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Generate Star History Chart
+        env:
+          # GitHub restricts the stargazers API to a repository's own admins
+          # and collaborators, so the chart is rendered here instead of by a
+          # third-party service. Falls back to a PAT when the default token
+          # is not accepted by that endpoint.
+          GITHUB_TOKEN: ${{ secrets.STAR_HISTORY_TOKEN || secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/gen_star_history.py
+
+      - name: Commit Updated Chart
+        run: |
+          # --porcelain also reports the file when it is untracked or deleted,
+          # which git diff alone would silently treat as unchanged.
+          if [ -z "$(git status --porcelain -- docs/en/images/star-history.svg)" ]; then
+            echo "chart unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/en/images/star-history.svg
+          git commit -m "docs: update star history chart"
+          git push
