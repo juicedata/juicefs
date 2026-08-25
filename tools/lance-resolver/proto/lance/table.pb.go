@@ -216,6 +216,13 @@ type Manifest struct {
 	//   - 1 << 6: data overlay files are present (see DataOverlayFile). Readers that do
 	//     not understand overlays must refuse the dataset, since ignoring an overlay
 	//     would silently return stale base values.
+	//   - 1 << 7: some index declares covering columns, so IndexMetadata.fields means
+	//     the keyed columns followed by the carried ones named in covering_fields (see
+	//     IndexMetadata). Readers that do not understand it must refuse the dataset,
+	//     since selecting an index by membership of fields would answer a query on a
+	//     merely-carried column with an index keyed on a different column. Writers must
+	//     refuse it too: one that treats every entry of fields as keyed would maintain
+	//     the index against the wrong dependency set.
 	ReaderFeatureFlags uint64 `protobuf:"varint,9,opt,name=reader_feature_flags,json=readerFeatureFlags,proto3" json:"reader_feature_flags,omitempty"`
 	// Feature flags for writers.
 	//
@@ -586,6 +593,9 @@ type IndexMetadata struct {
 	// Unique ID of an index. It is unique across all the dataset versions.
 	Uuid *UUID `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
 	// The columns to build the index. These refer to file.Field.id.
+	//
+	// fields[0] is always a column the index is keyed on. Trailing entries may
+	// instead be merely carried, not keyed on -- see `covering_fields` below.
 	Fields []int32 `protobuf:"varint,2,rep,packed,name=fields,proto3" json:"fields,omitempty"`
 	// Index name. Must be unique within one dataset version.
 	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
@@ -629,9 +639,31 @@ type IndexMetadata struct {
 	// This enables skipping HEAD calls when opening indices and allows reporting
 	// of index sizes without extra IO.
 	// If this is empty, the index files sizes are unknown.
-	Files         []*IndexFile `protobuf:"bytes,10,rep,name=files,proto3" json:"files,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Files []*IndexFile `protobuf:"bytes,10,rep,name=files,proto3" json:"files,omitempty"`
+	// The subset of `fields` whose values this index co-locates alongside its own
+	// data, so a query projecting only those columns can be answered from the
+	// index without a take against the base table.
+	//
+	// Must be a suffix of `fields`: the columns the index is keyed on come first,
+	// the columns it merely carries come last, and at least one keyed column
+	// always remains. Empty for an index that carries no extra columns, which is
+	// every index written before this field existed.
+	//
+	// Carried columns are listed in `fields` as well. That is deliberate: every
+	// consumer that reads `fields` as the index's dependency set -- staleness,
+	// commit conflict detection, schema evolution guards -- then covers them with
+	// no change and no way to forget one.
+	//
+	// This declaration is not authoritative for what the segment can actually
+	// serve. The segment's own storage schema is: a reader must confirm the
+	// storage carries a column before answering a query from it, and fall back to
+	// a take against the base table otherwise. A declaration naming columns the
+	// storage does not hold is a legal state, not corruption -- a maintenance
+	// operation that cannot carry the values through a rebuild is permitted to
+	// withdraw the payload while leaving this declaration in place.
+	CoveringFields []int32 `protobuf:"varint,11,rep,packed,name=covering_fields,json=coveringFields,proto3" json:"covering_fields,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *IndexMetadata) Reset() {
@@ -730,6 +762,13 @@ func (x *IndexMetadata) GetBaseId() uint32 {
 func (x *IndexMetadata) GetFiles() []*IndexFile {
 	if x != nil {
 		return x.Files
+	}
+	return nil
+}
+
+func (x *IndexMetadata) GetCoveringFields() []int32 {
+	if x != nil {
+		return x.CoveringFields
 	}
 	return nil
 }
@@ -1983,8 +2022,9 @@ type IndexCatchupProgress struct {
 	// Name of the base table index (must match an entry in maintained_indexes).
 	IndexName string `protobuf:"bytes,1,opt,name=index_name,json=indexName,proto3" json:"index_name,omitempty"`
 	// Per-shard progress: the generation up to which this index covers.
-	// If a shard is not present, the index is assumed to be fully caught up
-	// (i.e., caught_up_generation >= compacted_generation for that shard).
+	//
+	// An absent shard means *unknown*: this index has recorded no catch-up for
+	// that shard, so its SSTables must be retained and a repair scheduled.
 	CaughtUpGenerations []*CompactedSsTable `protobuf:"bytes,2,rep,name=caught_up_generations,json=caughtUpGenerations,proto3" json:"caught_up_generations,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
@@ -2092,7 +2132,11 @@ type MemWalIndexDetails struct {
 	// readers should use SSTable indexes for the gap instead of
 	// scanning unindexed data in the base table.
 	//
-	// If an index is not present in this list, it is assumed to be fully caught up.
+	// An index absent from this list has recorded no catch-up, so the SSTables it
+	// would need stay live until a repair records it. Only the dedicated WAL
+	// index-repair path may add entries here;
+	// ordinary index operations have their entry removed automatically when they
+	// change an index, since they do not report what the new index covers.
 	IndexCatchup []*IndexCatchupProgress `protobuf:"bytes,10,rep,name=index_catchup,json=indexCatchup,proto3" json:"index_catchup,omitempty"`
 	// Default ShardWriter configuration values for this MemWAL index.
 	//
@@ -2785,7 +2829,7 @@ const file_table_proto_rawDesc = "" +
 	"\bmetadata\x18\x03 \x03(\v2).lance.table.VersionAuxData.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\"\xb6\x03\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\"\xdf\x03\n" +
 	"\rIndexMetadata\x12%\n" +
 	"\x04uuid\x18\x01 \x01(\v2\x11.lance.table.UUIDR\x04uuid\x12\x16\n" +
 	"\x06fields\x18\x02 \x03(\x05R\x06fields\x12\x12\n" +
@@ -2798,7 +2842,8 @@ const file_table_proto_rawDesc = "" +
 	"created_at\x18\b \x01(\x04H\x01R\tcreatedAt\x88\x01\x01\x12\x1c\n" +
 	"\abase_id\x18\t \x01(\rH\x02R\x06baseId\x88\x01\x01\x12,\n" +
 	"\x05files\x18\n" +
-	" \x03(\v2\x16.lance.table.IndexFileR\x05filesB\x10\n" +
+	" \x03(\v2\x16.lance.table.IndexFileR\x05files\x12'\n" +
+	"\x0fcovering_fields\x18\v \x03(\x05R\x0ecoveringFieldsB\x10\n" +
 	"\x0e_index_versionB\r\n" +
 	"\v_created_atB\n" +
 	"\n" +

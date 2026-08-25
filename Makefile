@@ -121,6 +121,9 @@ test.pkg:
 test.tools:
 	go test -v -count=1 -failfast -timeout=8m ./tools/...
 
+gen-lance-protos:
+	./tools/lance-resolver/gen-protos.sh
+
 test.cmd:
 	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword GOMAXPROCS=8 go test -v -count=1 -failfast -cover -timeout=8m ./cmd/... -coverpkg=./pkg/...,./cmd/... -args -test.gocoverdir="$(shell realpath cover/)"
 
