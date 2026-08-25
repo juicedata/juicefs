@@ -181,6 +181,7 @@ func testMeta(t *testing.T, m Meta) {
 	testLocks(t, m)
 	testListLocks(t, m)
 	testConcurrentWrite(t, m)
+	testRace(t, m)
 	testCompaction(t, m, false)
 	time.Sleep(time.Second)
 	testCompaction(t, m, true)
@@ -2062,6 +2063,165 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	g2.Wait()
 	if errno != 0 {
 		t.Fatal()
+	}
+}
+
+func testRace(t *testing.T, m Meta) {
+	t.Run("TrashSliceClaim", func(t *testing.T) {
+		testTrashSliceClaimRace(t, m)
+	})
+}
+
+func testTrashSliceClaimRace(t *testing.T, m Meta) {
+	format := testFormat()
+	format.TrashDays = 1
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init meta with trash: %v", err)
+	}
+	defer func() {
+		if err := m.Init(testFormat(), false); err != nil {
+			t.Fatalf("restore meta format: %v", err)
+		}
+	}()
+
+	if err := m.NewSession(false); err != nil {
+		t.Fatalf("new session: %v", err)
+	}
+	defer m.CloseSession()
+
+	ctx := Background()
+	_ = m.Unlink(ctx, RootInode, "race")
+	var inode Ino
+	if st := m.Create(ctx, RootInode, "race", 0650, 022, 0, &inode, nil); st != 0 {
+		t.Fatalf("create file: %s", st)
+	}
+	defer m.Unlink(ctx, RootInode, "race")
+
+	const sliceSize = 100
+	var liveSlice, delayedSlice uint64
+	if st := m.NewSlice(ctx, &liveSlice); st != 0 {
+		t.Fatalf("new live slice: %s", st)
+	}
+	if st := m.Write(ctx, inode, 0, 0, Slice{Id: liveSlice, Size: sliceSize, Len: sliceSize}, time.Now()); st != 0 {
+		t.Fatalf("write live slice: %s", st)
+	}
+	if st := m.NewSlice(ctx, &delayedSlice); st != 0 {
+		t.Fatalf("new delayed slice: %s", st)
+	}
+	if st := m.Write(ctx, inode, 0, sliceSize, Slice{Id: delayedSlice, Size: sliceSize, Len: sliceSize}, time.Now()); st != 0 {
+		t.Fatalf("write delayed slice: %s", st)
+	}
+	var copied uint64
+	if st := m.CopyFileRange(ctx, inode, 0, inode, ChunkSize, sliceSize, 0, &copied, nil); st != 0 {
+		t.Fatalf("copy live slice: %s", st)
+	} else if copied != sliceSize {
+		t.Fatalf("copied bytes: got %d, want %d", copied, sliceSize)
+	}
+
+	var mu sync.Mutex
+	deletedLive := 0
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
+		if args[0].(uint64) == liveSlice {
+			mu.Lock()
+			deletedLive++
+			mu.Unlock()
+		}
+		return nil
+	})
+	m.OnMsg(CompactChunk, func(args ...interface{}) error { return nil })
+	compactor, ok := m.(compactor)
+	if !ok {
+		t.Fatalf("meta %s does not support compaction", m.Name())
+	}
+	compactor.compactChunk(inode, 0, false, true, 0)
+
+	var live []Slice
+	if st := m.Read(ctx, inode, 1, &live); st != 0 {
+		t.Fatalf("read live slice: %s", st)
+	}
+	if len(live) != 1 || live[0].Id != liveSlice {
+		t.Fatalf("live slice after compaction: got %+v, want %d", live, liveSlice)
+	}
+
+	base := m.getBase()
+	base.stopDeleteSliceTasks()
+	defer base.startDeleteSliceTasks()
+
+	ready := make(chan struct{}, 2)
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseScanners := func() { releaseOnce.Do(func() { close(release) }) }
+	defer releaseScanners()
+	scan := func(ss []Slice, _ int64) (bool, error) {
+		for _, s := range ss {
+			if s.Id == liveSlice {
+				select {
+				case ready <- struct{}{}:
+				default:
+				}
+				<-release
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() { errs <- m.ScanDeletedObject(ctx, scan, nil, nil, nil) }()
+	}
+	select {
+	case <-ready:
+	case err := <-errs:
+		t.Fatalf("scan returned before loading delayed slice: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for delayed slice scan")
+	}
+
+	concurrent := false
+	wait := time.Second
+	if m.Name() == "mysql" || m.Name() == "postgres" {
+		wait = 10 * time.Second
+	}
+	select {
+	case <-ready:
+		concurrent = true
+	case <-time.After(wait):
+	}
+	releaseScanners()
+	for range 2 {
+		select {
+		case err := <-errs:
+			if err != nil {
+				t.Fatalf("scan trash slices: %v", err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for trash slice scanners")
+		}
+	}
+	if (m.Name() == "mysql" || m.Name() == "postgres") && !concurrent {
+		t.Fatalf("meta %s did not run concurrent delayed-slice transactions", m.Name())
+	}
+
+	mu.Lock()
+	deletes := deletedLive
+	mu.Unlock()
+	if deletes != 0 {
+		t.Fatalf("live slice %d was deleted %d times", liveSlice, deletes)
+	}
+	remaining := 0
+	if err := m.ScanDeletedObject(ctx, func(ss []Slice, _ int64) (bool, error) {
+		for _, s := range ss {
+			if s.Id == liveSlice {
+				remaining++
+			}
+		}
+		return false, nil
+	}, nil, nil, nil); err != nil {
+		t.Fatalf("scan remaining trash slices: %v", err)
+	}
+	if remaining != 0 {
+		t.Fatalf("live slice remains in %d delayed entries", remaining)
 	}
 }
 

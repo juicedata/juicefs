@@ -4043,8 +4043,9 @@ func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	}
 	var ss []Slice
 	for _, ds := range dss {
-		var clean bool
+		var claimed bool
 		err = m.txn(func(tx *xorm.Session) error {
+			claimed = false
 			ss = ss[:0]
 			del := delslices{Id: ds.Id}
 			found, err := tx.Get(&del)
@@ -4055,25 +4056,38 @@ func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 				return nil
 			}
 			m.decodeDelayedSlices(del.Slices, &ss)
-			clean, err = scan(ss, del.Deleted)
+			clean, err := scan(ss, del.Deleted)
 			if err != nil {
 				return err
 			}
-			if clean {
-				for _, s := range ss {
-					if _, e := tx.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? AND size=?"), s.Id, s.Size); e != nil {
-						return e
-					}
-				}
-				_, err = tx.Delete(del)
-				m.genLog(ctx, tx, time.Now().UnixNano(), "CLEANUP_TRASH_SLICES(%d,%d)", del.Id, del.Deleted)
+			if !clean {
+				return nil
 			}
-			return err
+
+			// Deleting the delayed row claims cleanup; rollback restores it on failure.
+			affected, err := tx.Delete(&delslices{Id: del.Id})
+			if err != nil {
+				return errors.Wrapf(err, "claim delayed slice %d", del.Id)
+			}
+			if affected == 0 {
+				return nil
+			}
+			if affected != 1 {
+				return fmt.Errorf("delete delayed slice %d affected %d rows", del.Id, affected)
+			}
+			for _, s := range ss {
+				if _, e := tx.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? AND size=?"), s.Id, s.Size); e != nil {
+					return e
+				}
+			}
+			m.genLog(ctx, tx, time.Now().UnixNano(), "CLEANUP_TRASH_SLICES(%d,%d)", del.Id, del.Deleted)
+			claimed = true
+			return nil
 		})
 		if err != nil {
 			return err
 		}
-		if clean {
+		if claimed {
 			for _, s := range ss {
 				var ref = sliceRef{Id: s.Id}
 				err := m.simpleTxn(ctx, func(tx *xorm.Session) error {
