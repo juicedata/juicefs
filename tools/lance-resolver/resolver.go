@@ -19,8 +19,8 @@
 // It reads a Lance dataset directory and outputs file paths with optional byte ranges
 // in a format that "juicefs warmup -f" can consume:
 //
-//	/path/to/file.lance
-//	/path/to/file.lance [205600064-205823840;206605482-206633082]
+//  /path/to/file.lance
+//  /path/to/file.lance [205600064-205823840;206605482-206633082]
 //
 // This is the "external resolver" approach: JuiceFS stays format-agnostic,
 // and this tool handles all Lance-specific format parsing.
@@ -29,6 +29,7 @@ package main
 import (
 	"encoding/binary"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -40,15 +41,15 @@ import (
 )
 
 const (
-	lanceMagic           = "LANC"
-	lanceManifestDir     = "_versions"
-	lanceDataDir         = "data"
-	lanceDeletionsDir    = "_deletions"
-	lanceIndicesDir      = "_indices"
-	lanceTransactionsDir = "_transactions"
-	lanceVersionHintFile = "latest_version_hint.json"
-	lanceManifestExt     = ".manifest"
-	lanceFileFooterLen   = 40
+	lanceMagic             = "LANC"
+	lanceManifestDir       = "_versions"
+	lanceDataDir           = "data"
+	lanceDeletionsDir      = "_deletions"
+	lanceIndicesDir        = "_indices"
+	lanceTransactionsDir   = "_transactions"
+	lanceVersionHintFile   = "latest_version_hint.json"
+	lanceManifestExt       = ".manifest"
+	lanceManifestFooterLen = 16
 )
 
 type lanceVersionHint struct {
@@ -57,7 +58,7 @@ type lanceVersionHint struct {
 
 // resolveLanceDataset resolves a Lance dataset path into individual file paths
 // with optional byte ranges, formatted for "juicefs warmup -f".
-func resolveLanceDataset(datasetPath, version string, manifestOnly bool, includeIndices bool, columns []string, includeDataPages bool) ([]string, error) {
+func resolveLanceDataset(datasetPath, version string, manifestOnly bool, includeIndices bool, columns []string) ([]string, error) {
 	// 1. Find manifest file path
 	manifestPath, err := findLanceManifestPath(datasetPath, version)
 	if err != nil {
@@ -76,14 +77,16 @@ func resolveLanceDataset(datasetPath, version string, manifestOnly bool, include
 		return nil, fmt.Errorf("parse lance manifest %s: %w", manifestPath, err)
 	}
 
-	// 3. Collect all fragment data files
-	colOnlyMode := len(columns) > 0
+	// 3. Collect all fragment data files.
+	//
+	// Column-level byte ranges are not implemented yet, so data files are
+	// always emitted in full; --columns therefore falls back to full-file
+	// warmup rather than silently producing an incomplete list.
+	_ = columns
 	for _, frag := range manifest.Fragments {
 		for _, dataFile := range frag.Files {
 			fullPath := path.Join(datasetPath, lanceDataDir, dataFile.Path)
-			if !colOnlyMode {
-				paths = append(paths, fullPath)
-			}
+			paths = append(paths, fullPath)
 		}
 
 		if frag.DeletionFile != nil {
@@ -96,9 +99,7 @@ func resolveLanceDataset(datasetPath, version string, manifestOnly bool, include
 		for _, overlay := range frag.Overlays {
 			if overlay.DataFile != nil && overlay.DataFile.Path != "" {
 				overlayPath := path.Join(datasetPath, lanceDataDir, overlay.DataFile.Path)
-				if !colOnlyMode {
-					paths = append(paths, overlayPath)
-				}
+				paths = append(paths, overlayPath)
 			}
 		}
 	}
@@ -116,16 +117,6 @@ func resolveLanceDataset(datasetPath, version string, manifestOnly bool, include
 	// 5. Transaction file
 	if manifest.TransactionFile != "" {
 		paths = append(paths, path.Join(datasetPath, lanceTransactionsDir, manifest.TransactionFile))
-	}
-
-	// 6. Column-level byte ranges (V2 format only)
-	if len(columns) > 0 {
-		colPaths, err := resolveColumnByteRanges(datasetPath, manifest, columns, includeDataPages)
-		if err != nil {
-			return nil, fmt.Errorf("resolve column byte ranges: %w", err)
-		}
-		// Merge column paths with existing paths
-		paths = append(paths, colPaths...)
 	}
 
 	return paths, nil
@@ -182,17 +173,25 @@ func findLatestManifestByListing(versionsDir string) (string, error) {
 			continue
 		}
 		base := strings.TrimSuffix(name, lanceManifestExt)
-		if v, err := strconv.ParseUint(base, 10, 64); err == nil {
-			// V1 naming: {version}.manifest
-			if v > latestVersion {
-				latestVersion = v
-				latestPath = path.Join(versionsDir, name)
+
+		if len(base) == 20 {
+			// V2 naming: {u64::MAX - version:020}.manifest. The parsed value
+			// is the inverted version; recover the real version and pick the
+			// largest one.
+			if v2, err := strconv.ParseUint(base, 10, 64); err == nil {
+				v := ^uint64(0) - v2
+				if latestPath == "" || v > latestVersion {
+					latestVersion = v
+					latestPath = path.Join(versionsDir, name)
+				}
+				continue
 			}
-		} else {
-			// V2 naming: {inverted}.manifest
-			inverted := ^uint64(0) - latestVersion
-			invStr := fmt.Sprintf("%020d", inverted)
-			if base == invStr {
+		}
+
+		// V1 naming: {version}.manifest
+		if v, err := strconv.ParseUint(base, 10, 64); err == nil {
+			if latestPath == "" || v > latestVersion {
+				latestVersion = v
 				latestPath = path.Join(versionsDir, name)
 			}
 		}
@@ -209,39 +208,48 @@ func readAndParseLanceManifest(manifestPath string) (*lancepb.Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read manifest %s: %w", manifestPath, err)
 	}
-
-	// V2 format: [txn_len:4][Transaction][manifest_len:4][Manifest][footer:16]
-	// Detect V2 by checking if there's a second section after the first protobuf
-	if len(data) >= 8 {
-		txnLen := binary.LittleEndian.Uint32(data[:4])
-		if uint32(len(data)) >= 4+txnLen+4 {
-			// Looks like V2 format with two sections
-			manifestData := data[4+txnLen:]
-			manifestLen := binary.LittleEndian.Uint32(manifestData[:4])
-			if uint32(len(manifestData)) >= 4+manifestLen {
-				manifest := &lancepb.Manifest{}
-				if err := proto.Unmarshal(manifestData[4:4+manifestLen], manifest); err != nil {
-					return nil, fmt.Errorf("unmarshal V2 manifest: %w", err)
-				}
-				return manifest, nil
-			}
-		}
-	}
-
-	// Fallback: V1 format or plain protobuf with length prefix
 	return parseLanceManifestBytes(data)
 }
 
+// parseLanceManifestBytes parses a Lance manifest file.
+//
+// A Lance manifest is laid out as:
+//
+//  [optional bytes before manifest]
+//  [manifest_len: u32 LE][manifest protobuf]
+//  [manifest_pos: u64 LE][major: u16 LE][minor: u16 LE]["LANC"]
+//
+// The trailing 16-byte footer points back at the manifest via manifest_pos,
+// which is used instead of assuming the protobuf starts at offset 0.
 func parseLanceManifestBytes(data []byte) (*lancepb.Manifest, error) {
-	if len(data) < 4 {
+	if len(data) < lanceManifestFooterLen {
 		return nil, fmt.Errorf("manifest too short: %d bytes", len(data))
 	}
-	pbLen := binary.LittleEndian.Uint32(data[:4])
-	if uint32(len(data)) < 4+pbLen {
-		return nil, fmt.Errorf("manifest truncated: need %d bytes, got %d", 4+pbLen, len(data))
+
+	footer := data[len(data)-lanceManifestFooterLen:]
+	if string(footer[12:16]) != lanceMagic {
+		return nil, fmt.Errorf("invalid manifest magic %q", footer[12:16])
 	}
+
+	manifestPos := binary.LittleEndian.Uint64(footer[0:8])
+	if manifestPos > uint64(len(data)-lanceManifestFooterLen) {
+		return nil, fmt.Errorf("manifest position %d out of range (file size %d)", manifestPos, len(data))
+	}
+
+	pos := int(manifestPos)
+	if pos+4 > len(data)-lanceManifestFooterLen {
+		return nil, fmt.Errorf("manifest position %d leaves no room for manifest length", manifestPos)
+	}
+
+	msgLen := binary.LittleEndian.Uint32(data[pos : pos+4])
+	msgStart := pos + 4
+	available := len(data) - lanceManifestFooterLen - msgStart
+	if uint64(msgLen) > uint64(available) {
+		return nil, fmt.Errorf("manifest message truncated: length=%d available=%d", msgLen, available)
+	}
+
 	manifest := &lancepb.Manifest{}
-	if err := proto.Unmarshal(data[4:4+pbLen], manifest); err != nil {
+	if err := proto.Unmarshal(data[msgStart:msgStart+int(msgLen)], manifest); err != nil {
 		return nil, fmt.Errorf("unmarshal manifest: %w", err)
 	}
 	return manifest, nil
@@ -268,151 +276,52 @@ func isLanceDataset(p string) bool {
 	return true
 }
 
-// resolveColumnByteRanges resolves column-level byte ranges for V2 Lance data files.
-// Returns paths with byte ranges in the format: "path [start-end;...]".
-// This matches the "juicefs warmup -f" file format (bracketed path/range syntax).
-func resolveColumnByteRanges(datasetPath string, manifest *lancepb.Manifest, columns []string, includeDataPages bool) ([]string, error) {
-	var results []string
-
-	for _, frag := range manifest.Fragments {
-		for _, dataFile := range frag.Files {
-			// Only V2 format files have column metadata
-			if dataFile.FileMajorVersion < 2 {
-				continue
-			}
-
-			fullPath := path.Join(datasetPath, lanceDataDir, dataFile.Path)
-			fieldColMap := buildFieldColumnMap(manifest, dataFile)
-
-			colIndices := make([]int, 0, len(columns))
-			for _, col := range columns {
-				if idx, ok := fieldColMap[col]; ok {
-					colIndices = append(colIndices, idx)
-				}
-			}
-			if len(colIndices) == 0 {
-				continue
-			}
-
-			// Read footer + column metadata
-			f, err := os.Open(fullPath)
-			if err != nil {
-				return nil, fmt.Errorf("open %s: %w", fullPath, err)
-			}
-			fileInfo, err := f.Stat()
-			if err != nil {
-				f.Close()
-				return nil, fmt.Errorf("stat %s: %w", fullPath, err)
-			}
-			fileSize := fileInfo.Size()
-
-			if fileSize < lanceFileFooterLen {
-				f.Close()
-				continue
-			}
-
-			footer := make([]byte, lanceFileFooterLen)
-			if _, err := f.ReadAt(footer, fileSize-lanceFileFooterLen); err != nil {
-				f.Close()
-				return nil, fmt.Errorf("read footer %s: %w", fullPath, err)
-			}
-
-			// Read footer (40 bytes at end of file)
-			// V2 footer layout: [cm_pos:8][cm_len:8][rows:8][maj:4][min:4][?:4][magic:4]
-			magic := string(footer[36:40])
-			if magic != lanceMagic {
-				f.Close()
-				continue
-			}
-
-			// Column metadata position and length are relative to decoded data,
-			// not raw file offsets. For V2 encoded files, we need to decode the
-			// encoding wrapper first. This is complex and format-specific.
-			// TODO: update for Lance V2 encoding format
-			f.Close()
-			continue
-		}
-	}
-
-	return results, nil
-}
-
-func buildFieldColumnMap(manifest *lancepb.Manifest, dataFile *lancepb.DataFile) map[string]int {
-	m := make(map[string]int)
-	if dataFile == nil {
-		return m
-	}
-	for _, field := range manifest.Fields {
-		colIdx := -1
-		for i, colIdxVal := range dataFile.ColumnIndices {
-			if int(colIdxVal) == int(field.Id) {
-				colIdx = i
-				break
-			}
-		}
-		if colIdx >= 0 {
-			m[field.Name] = colIdx
-		}
-	}
-	return m
-}
-
 func main() {
-	manifestOnly := false
-	includeIndices := false
-	includeDataPages := false
-	version := ""
-	var columns []string
+	fs := flag.NewFlagSet("lance-resolver", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	manifestOnly := fs.Bool("manifest-only", false, "only output the manifest file path")
+	includeIndices := fs.Bool("include-indices", false, "also include index files under _indices/")
+	version := fs.String("version", "", "specific version to resolve (default: latest)")
+	columnsFlag := fs.String("columns", "", "comma-separated column names for column-level warmup (not implemented yet; full data files are warmed instead)")
+	fs.Usage = printUsage
 
-	// Simple flag parsing (no external deps needed)
-	args := os.Args[1:]
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--manifest-only":
-			manifestOnly = true
-		case "--include-indices":
-			includeIndices = true
-		case "--include-data-pages":
-			includeDataPages = true
-		case "--version":
-			i++
-			if i < len(args) {
-				version = args[i]
-			}
-		case "--columns":
-			i++
-			if i < len(args) {
-				columns = strings.Split(args[i], ",")
-			}
-		case "-h", "--help":
-			printUsage()
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		if err == flag.ErrHelp {
 			return
-		default:
-			if !strings.HasPrefix(args[i], "-") {
-				// Dataset path
-				datasetPath := args[i]
-				if !isLanceDataset(datasetPath) {
-					fmt.Fprintf(os.Stderr, "Error: %s is not a Lance dataset (no _versions/ directory found)\n", datasetPath)
-					os.Exit(1)
-				}
-
-				paths, err := resolveLanceDataset(datasetPath, version, manifestOnly, includeIndices, columns, includeDataPages)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-					os.Exit(1)
-				}
-
-				for _, p := range paths {
-					fmt.Println(p)
-				}
-				return
-			}
 		}
+		os.Exit(2)
+	}
+	if fs.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "Error: exactly one dataset path is required")
+		printUsage()
+		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stderr, "Error: no dataset path specified\n")
-	printUsage()
-	os.Exit(1)
+	datasetPath := fs.Arg(0)
+	if !isLanceDataset(datasetPath) {
+		fmt.Fprintf(os.Stderr, "Error: %s is not a Lance dataset (no _versions/ directory found)\n", datasetPath)
+		os.Exit(1)
+	}
+
+	var columns []string
+	if strings.TrimSpace(*columnsFlag) != "" {
+		for _, c := range strings.Split(*columnsFlag, ",") {
+			if c = strings.TrimSpace(c); c != "" {
+				columns = append(columns, c)
+			}
+		}
+		fmt.Fprintln(os.Stderr, "warning: --columns is not implemented yet; full data files will be warmed instead")
+	}
+
+	paths, err := resolveLanceDataset(datasetPath, *version, *manifestOnly, *includeIndices, columns)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	for _, p := range paths {
+		fmt.Println(p)
+	}
 }
 
 func printUsage() {
@@ -424,8 +333,7 @@ Options:
   --version VERSION       Specific version to resolve (default: latest)
   --manifest-only         Only output the manifest file path
   --include-indices       Also include index files under _indices/
-  --columns COL1,COL2     Column-level byte range resolution (V2 format only)
-  --include-data-pages    Include data page buffers in column ranges
+  --columns COL1,COL2     Column-level warmup (not implemented yet; full data files are warmed instead)
   -h, --help              Show this help message
 
 Output format (for "juicefs warmup -f"):
