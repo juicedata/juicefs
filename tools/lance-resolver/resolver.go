@@ -33,10 +33,12 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 
 	lancepb "github.com/juicedata/juicefs/tools/lance-resolver/proto/lance"
+	file2pb "github.com/juicedata/juicefs/tools/lance-resolver/proto/lance/file2"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -50,6 +52,8 @@ const (
 	lanceVersionHintFile   = "latest_version_hint.json"
 	lanceManifestExt       = ".manifest"
 	lanceManifestFooterLen = 16
+	lanceFileFooterLen     = 40
+	lanceCMOEntrySize      = 16
 )
 
 type lanceVersionHint struct {
@@ -58,7 +62,7 @@ type lanceVersionHint struct {
 
 // resolveLanceDataset resolves a Lance dataset path into individual file paths
 // with optional byte ranges, formatted for "juicefs warmup -f".
-func resolveLanceDataset(datasetPath, version string, manifestOnly bool, includeIndices bool, columns []string) ([]string, error) {
+func resolveLanceDataset(datasetPath, version string, manifestOnly bool, includeIndices bool, columns []string, includeDataPages bool) ([]string, error) {
 	// 1. Find manifest file path
 	manifestPath, err := findLanceManifestPath(datasetPath, version)
 	if err != nil {
@@ -78,15 +82,18 @@ func resolveLanceDataset(datasetPath, version string, manifestOnly bool, include
 	}
 
 	// 3. Collect all fragment data files.
-	//
-	// Column-level byte ranges are not implemented yet, so data files are
-	// always emitted in full; --columns therefore falls back to full-file
-	// warmup rather than silently producing an incomplete list.
-	_ = columns
+	colOnlyMode := len(columns) > 0
 	for _, frag := range manifest.Fragments {
 		for _, dataFile := range frag.Files {
-			fullPath := path.Join(datasetPath, lanceDataDir, dataFile.Path)
-			paths = append(paths, fullPath)
+			if colOnlyMode {
+				if p, ok, err := columnWarmupPath(datasetPath, manifest, dataFile, columns, includeDataPages); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: resolve column ranges for %s: %v; warming full file instead\n", dataFile.Path, err)
+				} else if ok {
+					paths = append(paths, p)
+					continue
+				}
+			}
+			paths = append(paths, path.Join(datasetPath, lanceDataDir, dataFile.Path))
 		}
 
 		if frag.DeletionFile != nil {
@@ -98,8 +105,15 @@ func resolveLanceDataset(datasetPath, version string, manifestOnly bool, include
 
 		for _, overlay := range frag.Overlays {
 			if overlay.DataFile != nil && overlay.DataFile.Path != "" {
-				overlayPath := path.Join(datasetPath, lanceDataDir, overlay.DataFile.Path)
-				paths = append(paths, overlayPath)
+				if colOnlyMode {
+					if p, ok, err := columnWarmupPath(datasetPath, manifest, overlay.DataFile, columns, includeDataPages); err != nil {
+						fmt.Fprintf(os.Stderr, "warning: resolve column ranges for overlay %s: %v; warming full file instead\n", overlay.DataFile.Path, err)
+					} else if ok {
+						paths = append(paths, p)
+						continue
+					}
+				}
+				paths = append(paths, path.Join(datasetPath, lanceDataDir, overlay.DataFile.Path))
 			}
 		}
 	}
@@ -276,13 +290,190 @@ func isLanceDataset(p string) bool {
 	return true
 }
 
+type byteRange struct {
+	start uint64
+	end   uint64
+}
+
+// buildFieldColumnMap maps manifest field names to physical column indices for
+// a V2 data file. DataFile.Fields and DataFile.ColumnIndices are parallel
+// arrays: Fields[i] is the field ID and ColumnIndices[i] is its column index.
+func buildFieldColumnMap(manifest *lancepb.Manifest, dataFile *lancepb.DataFile) map[string]int {
+	m := make(map[string]int)
+	if dataFile == nil {
+		return m
+	}
+
+	idToName := make(map[int32]string)
+	for _, field := range manifest.Fields {
+		idToName[field.Id] = field.Name
+	}
+
+	for i, fieldID := range dataFile.Fields {
+		if i >= len(dataFile.ColumnIndices) {
+			break
+		}
+		if name, ok := idToName[fieldID]; ok {
+			m[name] = int(dataFile.ColumnIndices[i])
+		}
+	}
+	return m
+}
+
+// columnByteRanges returns the byte ranges occupied by a column.
+//
+// Column-level metadata buffers and the ColumnMetadata protobuf itself are
+// always included. If includeDataPages is true, page data buffers are added
+// too.
+func columnByteRanges(cm *file2pb.ColumnMetadata, includeDataPages bool) []byteRange {
+	var ranges []byteRange
+	if includeDataPages {
+		for _, page := range cm.Pages {
+			for i := range page.BufferOffsets {
+				if i < len(page.BufferSizes) {
+					ranges = append(ranges, byteRange{start: page.BufferOffsets[i], end: page.BufferOffsets[i] + page.BufferSizes[i]})
+				}
+			}
+		}
+	}
+	for i := range cm.BufferOffsets {
+		if i < len(cm.BufferSizes) {
+			ranges = append(ranges, byteRange{start: cm.BufferOffsets[i], end: cm.BufferOffsets[i] + cm.BufferSizes[i]})
+		}
+	}
+	return ranges
+}
+
+// mergeByteRanges sorts and merges overlapping or adjacent byte ranges.
+func mergeByteRanges(ranges []byteRange) []byteRange {
+	if len(ranges) <= 1 {
+		return ranges
+	}
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].start < ranges[j].start })
+	merged := []byteRange{ranges[0]}
+	for _, r := range ranges[1:] {
+		last := &merged[len(merged)-1]
+		if r.start <= last.end {
+			if r.end > last.end {
+				last.end = r.end
+			}
+		} else {
+			merged = append(merged, r)
+		}
+	}
+	return merged
+}
+
+// columnWarmupPath resolves the byte ranges of the requested columns in a
+// single V2 data file. It returns a warmup target like:
+//
+///path/to/file.lance [123-456;789-1024]
+//
+// ok is false when the file is not a V2 file or contains none of the requested
+// columns, in which case callers should fall back to the full data file.
+func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *lancepb.DataFile, columns []string, includeDataPages bool) (string, bool, error) {
+	if dataFile == nil || dataFile.FileMajorVersion < 2 {
+		return "", false, nil
+	}
+
+	fullPath := path.Join(datasetPath, lanceDataDir, dataFile.Path)
+	colMap := buildFieldColumnMap(manifest, dataFile)
+	var colIndices []int
+	for _, col := range columns {
+		if idx, ok := colMap[col]; ok {
+			colIndices = append(colIndices, idx)
+		}
+	}
+	if len(colIndices) == 0 {
+		return "", false, nil
+	}
+
+	f, err := os.Open(fullPath)
+	if err != nil {
+		return "", false, fmt.Errorf("open %s: %w", fullPath, err)
+	}
+	defer f.Close()
+
+	fileInfo, err := f.Stat()
+	if err != nil {
+		return "", false, fmt.Errorf("stat %s: %w", fullPath, err)
+	}
+	fileSize := fileInfo.Size()
+	if fileSize < lanceFileFooterLen {
+		return "", false, fmt.Errorf("file %s too small for Lance V2 footer", fullPath)
+	}
+
+	footer := make([]byte, lanceFileFooterLen)
+	if _, err := f.ReadAt(footer, fileSize-lanceFileFooterLen); err != nil {
+		return "", false, fmt.Errorf("read footer %s: %w", fullPath, err)
+	}
+	if magic := string(footer[36:40]); magic != lanceMagic {
+		return "", false, fmt.Errorf("invalid Lance file magic %q in %s", magic, fullPath)
+	}
+
+	numColumns := binary.LittleEndian.Uint32(footer[28:32])
+	columnMetaOffsetsStart := binary.LittleEndian.Uint64(footer[8:16])
+
+	if columnMetaOffsetsStart > uint64(fileSize-lanceFileFooterLen) {
+		return "", false, fmt.Errorf("column metadata offset table out of range in %s", fullPath)
+	}
+
+	var ranges []byteRange
+	for _, colIdx := range colIndices {
+		if uint32(colIdx) >= numColumns {
+			fmt.Fprintf(os.Stderr, "warning: column index %d out of range in %s (num_columns=%d); warming full file instead\n", colIdx, dataFile.Path, numColumns)
+			return "", false, nil
+		}
+
+		entryOffset := columnMetaOffsetsStart + uint64(colIdx)*lanceCMOEntrySize
+		if entryOffset+lanceCMOEntrySize > uint64(fileSize-lanceFileFooterLen) {
+			fmt.Fprintf(os.Stderr, "warning: column metadata offset entry out of range in %s; warming full file instead\n", dataFile.Path)
+			return "", false, nil
+		}
+
+		entry := make([]byte, lanceCMOEntrySize)
+		if _, err := f.ReadAt(entry, int64(entryOffset)); err != nil {
+			return "", false, fmt.Errorf("read column metadata offset %d in %s: %w", colIdx, fullPath, err)
+		}
+		cmPos := binary.LittleEndian.Uint64(entry[0:8])
+		cmLen := binary.LittleEndian.Uint64(entry[8:16])
+		if cmPos+cmLen > uint64(fileSize-lanceFileFooterLen) {
+			fmt.Fprintf(os.Stderr, "warning: column metadata out of range in %s; warming full file instead\n", dataFile.Path)
+			return "", false, nil
+		}
+
+		cmData := make([]byte, int(cmLen))
+		if _, err := f.ReadAt(cmData, int64(cmPos)); err != nil {
+			return "", false, fmt.Errorf("read column metadata for column %d in %s: %w", colIdx, fullPath, err)
+		}
+		cm := &file2pb.ColumnMetadata{}
+		if err := proto.Unmarshal(cmData, cm); err != nil {
+			return "", false, fmt.Errorf("unmarshal column metadata for column %d in %s: %w", colIdx, fullPath, err)
+		}
+
+		ranges = append(ranges, byteRange{start: cmPos, end: cmPos + cmLen})
+		ranges = append(ranges, columnByteRanges(cm, includeDataPages)...)
+	}
+
+	ranges = mergeByteRanges(ranges)
+	if len(ranges) == 0 {
+		return "", false, nil
+	}
+	parts := make([]string, 0, len(ranges))
+	for _, r := range ranges {
+		parts = append(parts, fmt.Sprintf("%d-%d", r.start, r.end))
+	}
+	return fmt.Sprintf("%s [%s]", fullPath, strings.Join(parts, ";")), true, nil
+}
+
 func main() {
 	fs := flag.NewFlagSet("lance-resolver", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	manifestOnly := fs.Bool("manifest-only", false, "only output the manifest file path")
 	includeIndices := fs.Bool("include-indices", false, "also include index files under _indices/")
 	version := fs.String("version", "", "specific version to resolve (default: latest)")
-	columnsFlag := fs.String("columns", "", "comma-separated column names for column-level warmup (not implemented yet; full data files are warmed instead)")
+	columnsFlag := fs.String("columns", "", "comma-separated column names for column-level warmup")
+	includeDataPages := fs.Bool("include-data-pages", false, "also warm column page data buffers (use with --columns)")
 	fs.Usage = printUsage
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -310,10 +501,9 @@ func main() {
 				columns = append(columns, c)
 			}
 		}
-		fmt.Fprintln(os.Stderr, "warning: --columns is not implemented yet; full data files will be warmed instead")
 	}
 
-	paths, err := resolveLanceDataset(datasetPath, *version, *manifestOnly, *includeIndices, columns)
+	paths, err := resolveLanceDataset(datasetPath, *version, *manifestOnly, *includeIndices, columns, *includeDataPages)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -333,7 +523,8 @@ Options:
   --version VERSION       Specific version to resolve (default: latest)
   --manifest-only         Only output the manifest file path
   --include-indices       Also include index files under _indices/
-  --columns COL1,COL2     Column-level warmup (not implemented yet; full data files are warmed instead)
+  --columns COL1,COL2     Column-level warmup for V2 data files (metadata buffer ranges)
+  --include-data-pages    Include column page data buffer ranges (use with --columns)
   -h, --help              Show this help message
 
 Output format (for "juicefs warmup -f"):

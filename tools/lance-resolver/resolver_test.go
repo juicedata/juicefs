@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	lancepb "github.com/juicedata/juicefs/tools/lance-resolver/proto/lance"
+	file2pb "github.com/juicedata/juicefs/tools/lance-resolver/proto/lance/file2"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -191,6 +192,162 @@ func TestIsLanceDataset(t *testing.T) {
 	}
 }
 
+func TestBuildFieldColumnMap(t *testing.T) {
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "id"},
+			{Id: 1, Name: "name"},
+			{Id: 2, Name: "value"},
+		},
+	}
+	dataFile := &lancepb.DataFile{
+		Fields:        []int32{0, 1, 2},
+		ColumnIndices: []int32{0, 2, 1},
+	}
+
+	m := buildFieldColumnMap(manifest, dataFile)
+	if m["id"] != 0 {
+		t.Errorf("id = %d, want 0", m["id"])
+	}
+	if m["name"] != 2 {
+		t.Errorf("name = %d, want 2", m["name"])
+	}
+	if m["value"] != 1 {
+		t.Errorf("value = %d, want 1", m["value"])
+	}
+	if _, ok := m["nonexistent"]; ok {
+		t.Error("nonexistent field should not be in map")
+	}
+}
+
+func TestMergeByteRanges(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  []byteRange
+		expect []byteRange
+	}{
+		{"empty", nil, nil},
+		{"single", []byteRange{{0, 100}}, []byteRange{{0, 100}}},
+		{"non-overlapping", []byteRange{{0, 100}, {200, 300}}, []byteRange{{0, 100}, {200, 300}}},
+		{"overlapping", []byteRange{{0, 100}, {50, 200}}, []byteRange{{0, 200}}},
+		{"adjacent", []byteRange{{0, 100}, {100, 200}}, []byteRange{{0, 200}}},
+		{"contained", []byteRange{{0, 200}, {50, 100}}, []byteRange{{0, 200}}},
+		{"unsorted", []byteRange{{200, 300}, {0, 100}}, []byteRange{{0, 100}, {200, 300}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mergeByteRanges(tt.input)
+			if len(got) != len(tt.expect) {
+				t.Fatalf("mergeByteRanges() = %v, want %v", got, tt.expect)
+			}
+			for i := range got {
+				if got[i] != tt.expect[i] {
+					t.Fatalf("mergeByteRanges()[%d] = %v, want %v", i, got[i], tt.expect[i])
+				}
+			}
+		})
+	}
+}
+
+func TestColumnByteRanges(t *testing.T) {
+	cm := &file2pb.ColumnMetadata{
+		BufferOffsets: []uint64{1000, 3000},
+		BufferSizes:   []uint64{500, 200},
+		Pages: []*file2pb.ColumnMetadata_Page{
+			{
+				BufferOffsets: []uint64{5000, 7000},
+				BufferSizes:   []uint64{100, 100},
+			},
+		},
+	}
+
+	ranges := columnByteRanges(cm, false)
+	if len(ranges) != 2 {
+		t.Fatalf("got %d ranges, want 2", len(ranges))
+	}
+	if ranges[0] != (byteRange{1000, 1500}) {
+		t.Errorf("ranges[0] = %v, want {1000, 1500}", ranges[0])
+	}
+	if ranges[1] != (byteRange{3000, 3200}) {
+		t.Errorf("ranges[1] = %v, want {3000, 3200}", ranges[1])
+	}
+
+	ranges = columnByteRanges(cm, true)
+	if len(ranges) != 4 {
+		t.Fatalf("got %d ranges, want 4", len(ranges))
+	}
+}
+
+func TestColumnWarmupPath(t *testing.T) {
+	dir := t.TempDir()
+	dsPath := filepath.Join(dir, "ds.lance")
+	dataDir := filepath.Join(dsPath, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	cm := &file2pb.ColumnMetadata{
+		BufferOffsets: []uint64{80},
+		BufferSizes:   []uint64{8},
+	}
+	cmData, err := proto.Marshal(cm)
+	if err != nil {
+		t.Fatalf("marshal column metadata: %v", err)
+	}
+
+	fileSize := 128
+	buf := make([]byte, fileSize)
+	// Column metadata offset table at offset 16 points to (32, len(cmData)).
+	binary.LittleEndian.PutUint64(buf[16:24], 32)
+	binary.LittleEndian.PutUint64(buf[24:32], uint64(len(cmData)))
+	copy(buf[32:], cmData)
+	// Footer occupies the last 40 bytes.
+	binary.LittleEndian.PutUint64(buf[88:96], 32)  // A: column metadata start (not used here)
+	binary.LittleEndian.PutUint64(buf[96:104], 16) // B: column metadata offset table
+	binary.LittleEndian.PutUint64(buf[104:112], 0) // C: global buffer offset table
+	binary.LittleEndian.PutUint32(buf[112:116], 0) // num global buffers
+	binary.LittleEndian.PutUint32(buf[116:120], 1) // num columns
+	binary.LittleEndian.PutUint16(buf[120:122], 2) // major version
+	binary.LittleEndian.PutUint16(buf[122:124], 0) // minor version
+	copy(buf[124:128], lanceMagic)
+
+	dataFilePath := filepath.Join(dataDir, "data_0.lance")
+	if err := os.WriteFile(dataFilePath, buf, 0644); err != nil {
+		t.Fatalf("write data file: %v", err)
+	}
+
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "id"},
+			{Id: 1, Name: "name"},
+		},
+	}
+	dataFile := &lancepb.DataFile{
+		Path:             "data_0.lance",
+		FileMajorVersion: 2,
+		Fields:           []int32{0, 1},
+		ColumnIndices:    []int32{0, 1},
+	}
+
+	p, ok, err := columnWarmupPath(dsPath, manifest, dataFile, []string{"id"}, false)
+	if err != nil {
+		t.Fatalf("columnWarmupPath: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	want := filepath.Join(dsPath, "data", "data_0.lance") + fmt.Sprintf(" [32-%d;80-88]", 32+len(cmData))
+	if p != want {
+		t.Errorf("columnWarmupPath() = %q, want %q", p, want)
+	}
+
+	// Unmatched column should report ok=false so callers fall back to full file.
+	if _, ok, err := columnWarmupPath(dsPath, manifest, dataFile, []string{"missing"}, false); err != nil || ok {
+		t.Errorf("expected ok=false for missing column, got ok=%v err=%v", ok, err)
+	}
+}
+
 func TestFindLatestManifestByListing_V1(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "1.manifest"), []byte("v1"), 0644)
@@ -282,7 +439,7 @@ func TestResolveLanceDataset(t *testing.T) {
 	writeManifestFile(t, filepath.Join(versionsDir, "1.manifest"), manifest)
 	os.WriteFile(filepath.Join(versionsDir, "latest_version_hint.json"), []byte(`{"version":1}`), 0644)
 
-	paths, err := resolveLanceDataset(dsPath, "", false, false, nil)
+	paths, err := resolveLanceDataset(dsPath, "", false, false, nil, false)
 	if err != nil {
 		t.Fatalf("resolveLanceDataset: %v", err)
 	}
@@ -323,7 +480,7 @@ func TestResolveLanceDataset_ColumnsFallback(t *testing.T) {
 
 	// Until column-level ranges are implemented, --columns must not suppress
 	// full data files.
-	paths, err := resolveLanceDataset(dsPath, "", false, false, []string{"id"})
+	paths, err := resolveLanceDataset(dsPath, "", false, false, []string{"id"}, false)
 	if err != nil {
 		t.Fatalf("resolveLanceDataset: %v", err)
 	}
@@ -345,7 +502,7 @@ func TestResolveLanceDataset_ManifestOnly(t *testing.T) {
 
 	writeManifestFile(t, filepath.Join(versionsDir, "1.manifest"), &lancepb.Manifest{Version: 1})
 
-	paths, err := resolveLanceDataset(dsPath, "1", true, false, nil)
+	paths, err := resolveLanceDataset(dsPath, "1", true, false, nil, false)
 	if err != nil {
 		t.Fatalf("resolveLanceDataset: %v", err)
 	}
@@ -356,7 +513,7 @@ func TestResolveLanceDataset_ManifestOnly(t *testing.T) {
 
 func TestResolveLanceDataset_NotADataset(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := resolveLanceDataset(dir, "", false, false, nil); err == nil {
+	if _, err := resolveLanceDataset(dir, "", false, false, nil, false); err == nil {
 		t.Fatal("expected error for non-dataset path")
 	}
 }
