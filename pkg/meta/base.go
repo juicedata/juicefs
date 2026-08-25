@@ -238,6 +238,12 @@ func (symCache *symlinkCache) Store(inode Ino, path []byte) {
 	}
 }
 
+func (symCache *symlinkCache) Remove(inode Ino) {
+	if _, loaded := symCache.LoadAndDelete(inode); loaded {
+		symCache.size.Add(-1)
+	}
+}
+
 func (symCache *symlinkCache) clean(ctx Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	ticker := time.NewTicker(time.Minute)

@@ -4966,6 +4966,10 @@ func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map
 		return nil
 	}))
 	if r == 0 {
+		for ino := range mapping {
+			m.of.InvalidateChunk(ino, invalidateAllChunks)
+			m.symlinks.Remove(ino)
+		}
 		for _, e := range entry.Entries {
 			if e.Attr.Type == "link" {
 				m.newMsg(UpdateRef, e.Attr.Inode, e.Attr.Length, mapping[e.Attr.Inode])
