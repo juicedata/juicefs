@@ -275,7 +275,7 @@ type dbMeta struct {
 	spool *sync.Pool
 	snap  *dbSnap
 
-	noReadOnlyTxn bool
+	noReadOnlyTxn atomic.Bool
 	statement     map[string]string
 	tablePrefix   string
 }
@@ -289,6 +289,14 @@ type dbSnap struct {
 	xattr   map[Ino][]*xattr
 	edges   map[Ino][]*edge
 	chunk   map[string]*chunk
+}
+
+func (m *dbMeta) readOnlyTxnDisabled() bool {
+	return m.noReadOnlyTxn.Load()
+}
+
+func (m *dbMeta) setReadOnlyTxnDisabled(disabled bool) {
+	m.noReadOnlyTxn.Store(disabled)
 }
 
 func extractCustomConfig[T string | int](value *url.Values, key string, defaultV T) (T, error) {
@@ -1272,7 +1280,7 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 	s := m.db.NewSession()
 	defer s.Close()
 	var opt sql.TxOptions
-	if !m.noReadOnlyTxn {
+	if !m.readOnlyTxnDisabled() {
 		opt.ReadOnly = true
 		opt.Isolation = sql.LevelRepeatableRead
 	}
@@ -1297,7 +1305,7 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 		err := s.BeginTx(&opt)
 		if err != nil && opt.ReadOnly && (strings.Contains(err.Error(), "READ") || strings.Contains(err.Error(), "driver does not support read-only transactions")) {
 			logger.Warnf("the database does not support read-only transaction")
-			m.noReadOnlyTxn = true
+			m.setReadOnlyTxnDisabled(true)
 			opt = sql.TxOptions{} // use default level
 			err = s.BeginTx(&opt)
 		}

@@ -181,6 +181,7 @@ func testMeta(t *testing.T, m Meta) {
 	testLocks(t, m)
 	testListLocks(t, m)
 	testConcurrentWrite(t, m)
+	testRace(t, m)
 	testCompaction(t, m, false)
 	time.Sleep(time.Second)
 	testCompaction(t, m, true)
@@ -2063,6 +2064,46 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	if errno != 0 {
 		t.Fatal()
 	}
+}
+
+func testRace(t *testing.T, m Meta) {
+	t.Run("ReadOnlyTxnCapability", func(t *testing.T) {
+		testReadOnlyTxnCapabilityRace(t, m)
+	})
+}
+
+func testReadOnlyTxnCapabilityRace(t *testing.T, m Meta) {
+	capability, ok := m.(interface {
+		readOnlyTxnDisabled() bool
+		setReadOnlyTxnDisabled(bool)
+	})
+	if !ok {
+		return
+	}
+	defer capability.setReadOnlyTxnDisabled(false)
+
+	const workers = 8
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			for range 1000 {
+				_ = capability.readOnlyTxnDisabled()
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			for range 1000 {
+				capability.setReadOnlyTxnDisabled(true)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
 }
 
 func testTruncateAndDelete(t *testing.T, m Meta) {
