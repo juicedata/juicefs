@@ -32,12 +32,10 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 
 	lancepb "github.com/juicedata/juicefs/tools/lance-resolver/proto/lance"
-	file2pb "github.com/juicedata/juicefs/tools/lance-resolver/proto/lance/file2"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -51,13 +49,7 @@ const (
 	lanceVersionHintFile = "latest_version_hint.json"
 	lanceManifestExt     = ".manifest"
 	lanceFileFooterLen   = 40
-	lanceCmoEntrySize    = 16
 )
-
-type byteRange struct {
-	start uint64
-	end   uint64
-}
 
 type lanceVersionHint struct {
 	Version uint64 `json:"version"`
@@ -343,42 +335,6 @@ func resolveColumnByteRanges(datasetPath string, manifest *lancepb.Manifest, col
 	}
 
 	return results, nil
-}
-
-func columnByteRanges(cm *file2pb.ColumnMetadata, includeDataPages bool) []byteRange {
-	var ranges []byteRange
-	// Column-level buffers
-	for i := 0; i < len(cm.BufferOffsets) && i < len(cm.BufferSizes); i++ {
-		ranges = append(ranges, byteRange{start: cm.BufferOffsets[i], end: cm.BufferOffsets[i] + cm.BufferSizes[i]})
-	}
-	// Page-level buffers
-	if includeDataPages {
-		for _, page := range cm.Pages {
-			for i := 0; i < len(page.BufferOffsets) && i < len(page.BufferSizes); i++ {
-				ranges = append(ranges, byteRange{start: page.BufferOffsets[i], end: page.BufferOffsets[i] + page.BufferSizes[i]})
-			}
-		}
-	}
-	return ranges
-}
-
-func mergeByteRanges(ranges []byteRange) []byteRange {
-	if len(ranges) <= 1 {
-		return ranges
-	}
-	sort.Slice(ranges, func(i, j int) bool { return ranges[i].start < ranges[j].start })
-	merged := []byteRange{ranges[0]}
-	for _, r := range ranges[1:] {
-		last := &merged[len(merged)-1]
-		if r.start <= last.end {
-			if r.end > last.end {
-				last.end = r.end
-			}
-		} else {
-			merged = append(merged, r)
-		}
-	}
-	return merged
 }
 
 func buildFieldColumnMap(manifest *lancepb.Manifest, dataFile *lancepb.DataFile) map[string]int {

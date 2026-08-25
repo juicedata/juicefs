@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	lancepb "github.com/juicedata/juicefs/tools/lance-resolver/proto/lance"
-	file2pb "github.com/juicedata/juicefs/tools/lance-resolver/proto/lance/file2"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -134,68 +133,6 @@ func TestBuildFieldColumnMap(t *testing.T) {
 	}
 	if _, ok := m["nonexistent"]; ok {
 		t.Error("nonexistent field should not be in map")
-	}
-}
-
-func TestMergeByteRanges(t *testing.T) {
-	tests := []struct {
-		name   string
-		input  []byteRange
-		expect []byteRange
-	}{
-		{"empty", nil, nil},
-		{"single", []byteRange{{0, 100}}, []byteRange{{0, 100}}},
-		{"non-overlapping", []byteRange{{0, 100}, {200, 300}}, []byteRange{{0, 100}, {200, 300}}},
-		{"overlapping", []byteRange{{0, 100}, {50, 200}}, []byteRange{{0, 200}}},
-		{"adjacent", []byteRange{{0, 100}, {100, 200}}, []byteRange{{0, 200}}},
-		{"contained", []byteRange{{0, 200}, {50, 100}}, []byteRange{{0, 200}}},
-		{"unsorted", []byteRange{{200, 300}, {0, 100}}, []byteRange{{0, 100}, {200, 300}}},
-		{"multiple", []byteRange{{0, 100}, {50, 150}, {200, 300}, {250, 350}}, []byteRange{{0, 150}, {200, 350}}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := mergeByteRanges(tt.input)
-			if len(got) != len(tt.expect) {
-				t.Fatalf("mergeByteRanges() = %v, want %v", got, tt.expect)
-			}
-			for i := range got {
-				if got[i] != tt.expect[i] {
-					t.Fatalf("mergeByteRanges()[%d] = %v, want %v", i, got[i], tt.expect[i])
-				}
-			}
-		})
-	}
-}
-
-func TestColumnByteRanges(t *testing.T) {
-	cm := &file2pb.ColumnMetadata{
-		BufferOffsets: []uint64{1000, 3000},
-		BufferSizes:   []uint64{500, 200},
-		Pages: []*file2pb.ColumnMetadata_Page{
-			{
-				BufferOffsets: []uint64{5000, 7000},
-				BufferSizes:   []uint64{100, 100},
-			},
-		},
-	}
-
-	// Without data pages
-	ranges := columnByteRanges(cm, false)
-	if len(ranges) != 2 {
-		t.Fatalf("got %d ranges, want 2", len(ranges))
-	}
-	if ranges[0] != (byteRange{1000, 1500}) {
-		t.Errorf("ranges[0] = %v, want {1000, 1500}", ranges[0])
-	}
-	if ranges[1] != (byteRange{3000, 3200}) {
-		t.Errorf("ranges[1] = %v, want {3000, 3200}", ranges[1])
-	}
-
-	// With data pages
-	ranges = columnByteRanges(cm, true)
-	if len(ranges) != 4 {
-		t.Fatalf("got %d ranges, want 4", len(ranges))
 	}
 }
 
