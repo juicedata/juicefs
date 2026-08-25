@@ -4795,7 +4795,6 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error 
 		return err
 	}
 
-	// TODO: check lock
 	if entry.Attr.Type == "directory" {
 		snap, err := m.makeSnap0(s, inode)
 		if err != nil {
@@ -4806,6 +4805,25 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error 
 		for _, edge := range edges {
 			entry.Entries[string(edge.Name)] = m.dumpEntryFast(snap, edge.Inode, 0)
 		}
+	}
+
+	lockedInodes := []Ino{inode}
+	for _, e := range entry.Entries {
+		lockedInodes = append(lockedInodes, e.Attr.Inode)
+	}
+	for len(lockedInodes) > 0 {
+		batch := lockedInodes[:min(len(lockedInodes), 900)]
+		for _, lock := range []interface{}{&flock{}, &plock{}} {
+			locked, err := s.In("inode", batch).Exist(lock)
+			if err != nil {
+				return err
+			}
+			if locked {
+				logger.Debugf("dumpTree: inode %d has locked inode", inode)
+				return syscall.ENOTSUP
+			}
+		}
+		lockedInodes = lockedInodes[len(batch):]
 	}
 
 	var allSlices []uint64
