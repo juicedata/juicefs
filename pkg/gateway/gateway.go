@@ -526,6 +526,7 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 		p := path.Dir(path.Clean(n.path(bucket, o.ObjectName)))
 		delMap[p] = append(delMap[p], idx)
 	}
+	root := n.path(bucket)
 	var g errgroup.Group
 	g.SetLimit(runtime.NumCPU())
 	for ppath := range delMap {
@@ -544,7 +545,7 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 				}
 				return err
 			}
-			if e := n.delObj(bucket, ppath); e != nil {
+			if e := n.delObj(bucket, strings.TrimPrefix(strings.TrimPrefix(ppath, root), sep)); e != nil {
 				for _, idx := range idxs {
 					errs[idx] = e
 				}
