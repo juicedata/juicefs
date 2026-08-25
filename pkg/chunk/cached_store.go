@@ -82,18 +82,6 @@ func (s *rSlice) index(off int) int {
 	return off / s.store.conf.BlockSize
 }
 
-func (s *rSlice) keys() []string {
-	if s.length <= 0 {
-		return nil
-	}
-	lastIndx := (s.length - 1) / s.store.conf.BlockSize
-	keys := make([]string, lastIndx+1)
-	for i := 0; i <= lastIndx; i++ {
-		keys[i] = s.key(i)
-	}
-	return keys
-}
-
 func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err error) {
 	p := page.Data
 	if len(p) == 0 {

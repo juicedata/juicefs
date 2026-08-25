@@ -213,9 +213,8 @@ func TestForceUpload(t *testing.T) {
 	store := NewCachedStore(blob, config, nil)
 	cleanCache := func() {
 		rSlice := sliceForRead(1, 1024, store.(*cachedStore))
-		keys := rSlice.keys()
-		for _, k := range keys {
-			store.(*cachedStore).bcache.remove(k, true)
+		for _, i := range rSlice.blockIndexes(nil) {
+			store.(*cachedStore).bcache.remove(rSlice.key(i), true)
 		}
 	}
 	readSlice := func(id uint64, length int) error {
