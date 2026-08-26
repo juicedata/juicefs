@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	xormlog "xorm.io/xorm/log"
 )
 
 func TestSQLiteClient(t *testing.T) {
@@ -32,6 +34,94 @@ func TestSQLiteClient(t *testing.T) {
 		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
+}
+
+type commitOnSQLiteBusyLogger struct {
+	xormlog.ContextLogger
+	commit    func() error
+	committed bool
+	commitErr error
+}
+
+func (l *commitOnSQLiteBusyLogger) AfterSQL(ctx xormlog.LogContext) {
+	l.ContextLogger.AfterSQL(ctx)
+	if !l.committed && ctx.Err != nil && strings.Contains(strings.ToLower(ctx.Err.Error()), "locked") {
+		l.committed = true
+		l.commitErr = l.commit()
+	}
+}
+
+func TestSQLiteBatchUnlinkRetryDiscardsFailedAttemptDeletes(t *testing.T) {
+	metaClient, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-batch-unlink-retry.db")+"?_timeout=1", testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	m := metaClient.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+
+	ctx := Background()
+	var inode Ino
+	var attr Attr
+	if st := m.Mknod(ctx, RootInode, "victim", TypeFile, 0644, 022, 0, "", &inode, &attr); st != 0 {
+		t.Fatalf("mknod victim: %s", st)
+	}
+	m.sid = 1
+	m.of.Open(inode, &attr)
+	t.Cleanup(func() { m.of.Close(inode) })
+
+	writer := m.db.NewSession()
+	t.Cleanup(func() { _ = writer.Close() })
+	if err := writer.Begin(); err != nil {
+		t.Fatalf("begin concurrent writer: %s", err)
+	}
+	t.Cleanup(func() { _ = writer.Rollback() })
+	if _, err := writer.Insert(&edge{Parent: RootInode, Name: []byte("survivor"), Inode: inode, Type: TypeFile}); err != nil {
+		t.Fatalf("insert concurrent hardlink: %s", err)
+	}
+	if n, err := writer.Cols("nlink").Update(&node{Nlink: 2}, &node{Inode: inode}); err != nil || n != 1 {
+		t.Fatalf("update concurrent hardlink nlink: rows=%d err=%v", n, err)
+	}
+
+	retryLogger := &commitOnSQLiteBusyLogger{
+		ContextLogger: m.db.Logger(),
+		commit:        writer.Commit,
+	}
+	m.db.SetLogger(retryLogger)
+	m.db.ShowSQL(true)
+
+	delta := dirStat{}
+	entry := &Entry{Inode: inode, Name: []byte("victim"), Attr: &attr}
+	if st := m.doBatchUnlink(ctx, RootInode, []*Entry{entry}, &delta, true); st != 0 {
+		t.Fatalf("batch unlink after retry: %s", st)
+	}
+	if !retryLogger.committed {
+		t.Fatal("expected SQLite BUSY retry was not triggered")
+	}
+	if retryLogger.commitErr != nil {
+		t.Fatalf("commit concurrent hardlink: %s", retryLogger.commitErr)
+	}
+
+	var survivor Ino
+	var survivorAttr Attr
+	if st := m.Lookup(ctx, RootInode, "survivor", &survivor, &survivorAttr, false); st != 0 {
+		t.Fatalf("lookup surviving hardlink: %s", st)
+	}
+	if survivor != inode || survivorAttr.Nlink != 1 {
+		t.Fatalf("surviving hardlink: inode=%d nlink=%d, want inode=%d nlink=1", survivor, survivorAttr.Nlink, inode)
+	}
+
+	m.Lock()
+	removed := m.removedFiles[inode]
+	m.Unlock()
+	if removed {
+		t.Fatalf("live inode %d retained delete state from failed transaction attempt", inode)
+	}
 }
 
 func TestSQLiteBatchUpdateChunkRefs(t *testing.T) {
