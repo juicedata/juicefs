@@ -347,21 +347,39 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		} else {
 			return syscall.EINVAL
 		}
-		if ctx.CheckPermission() && ctx.Uid() != 0 && iflag&(FS_SECRM_FL|FS_IMMUTABLE_FL|FS_APPEND_FL) != 0 {
-			return syscall.EPERM
-		}
+		var flags uint8
 		if (iflag & FS_SECRM_FL) != 0 {
-			attr.Flags |= meta.FlagSkipTrash
+			flags |= meta.FlagSkipTrash
 		}
 		if (iflag & FS_IMMUTABLE_FL) != 0 {
-			attr.Flags |= meta.FlagImmutable
+			flags |= meta.FlagImmutable
 		}
 		if (iflag & FS_APPEND_FL) != 0 {
-			attr.Flags |= meta.FlagAppend
+			flags |= meta.FlagAppend
 		}
 		if iflag &= ^uint64(FS_SECRM_FL | FS_IMMUTABLE_FL | FS_APPEND_FL); iflag != 0 {
 			return syscall.ENOTSUP
 		}
+		// The flags this ioctl maps; the Windows attributes are left untouched.
+		const mapped = meta.FlagSkipTrash | meta.FlagImmutable | meta.FlagAppend
+		// Only these two need a privileged caller, matching CAP_LINUX_IMMUTABLE.
+		const privileged = meta.FlagImmutable | meta.FlagAppend
+		var cur = &Attr{}
+		if err = v.Meta.GetAttr(ctx, ino, cur); err != 0 {
+			return err
+		}
+		// Kernels older than 5.13, and any kernel handed FS_IOC_SETFLAGS_32, pass
+		// the request through without looking at it, so the checks the kernel runs
+		// in vfs_fileattr_set() have to be repeated here.
+		if ctx.Uid() != 0 {
+			if ctx.Uid() != cur.Uid { // inode_owner_or_capable()
+				return syscall.EPERM
+			}
+			if (cur.Flags^flags)&privileged != 0 {
+				return syscall.EPERM
+			}
+		}
+		attr.Flags = cur.Flags&^mapped | flags
 		return v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
 	} else {
 		if err = v.Meta.GetAttr(ctx, ino, attr); err != 0 {
