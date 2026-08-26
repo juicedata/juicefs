@@ -487,29 +487,48 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	return info, jfsToObjectErr(ctx, err, bucket, object)
 }
 
+// pruneEmptyDirs removes dir and its now-empty ancestor directories, going up
+// until (but not including) the bucket root. It only operates within the bucket
+// subtree and stops at the bucket root, a still non-empty or already removed
+// directory, or an explicit directory object (marked with atime==0, kept).
+func (n *jfsObjects) pruneEmptyDirs(root, dir string) error {
+	// A path-boundary prefix so a sibling that merely shares a name prefix (e.g.
+	// bucket "foobar" vs root "/foo") is not treated as inside the bucket subtree.
+	prefix := strings.TrimSuffix(root, sep) + sep
+	for dir != root && strings.HasPrefix(dir, prefix) {
+		if fi, _ := n.fs.Stat(mctx, dir); fi == nil || fi.Atime() == 0 {
+			break
+		}
+		if eno := n.fs.Rmdir(mctx, dir); eno != 0 {
+			if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) {
+				break
+			}
+			return eno
+		}
+		dir = path.Dir(dir)
+	}
+	return nil
+}
+
+// delObj removes the given object, whether it is a file or directory, and then
+// removes its empty, removable parent directories.
 func (n *jfsObjects) delObj(bucket string, object string) error {
-	p := path.Clean(n.path(bucket, object))
 	root := n.path(bucket)
+	p := path.Clean(n.path(bucket, object))
+	if p == root {
+		return nil
+	}
 	if strings.HasSuffix(object, sep) {
 		// reset atime
 		n.setFileAtime(p, time.Now().Unix())
 	}
-	var err error
-	for p != root {
-		if eno := n.fs.Delete(mctx, p); eno != 0 {
-			if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) {
-				err = nil
-			} else {
-				err = eno
-			}
-			break
+	if eno := n.fs.Delete(mctx, p); eno != 0 {
+		if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) {
+			return nil
 		}
-		p = path.Dir(p)
-		if fi, _ := n.fs.Stat(mctx, p); fi == nil || fi.Atime() == 0 {
-			break
-		}
+		return eno
 	}
-	return err
+	return n.pruneEmptyDirs(root, path.Dir(p))
 }
 
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
@@ -526,6 +545,7 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 		p := path.Dir(path.Clean(n.path(bucket, o.ObjectName)))
 		delMap[p] = append(delMap[p], idx)
 	}
+	root := n.path(bucket)
 	var g errgroup.Group
 	g.SetLimit(runtime.NumCPU())
 	for ppath := range delMap {
@@ -544,7 +564,7 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 				}
 				return err
 			}
-			if e := n.delObj(bucket, ppath); e != nil {
+			if e := n.pruneEmptyDirs(root, ppath); e != nil {
 				for _, idx := range idxs {
 					errs[idx] = e
 				}

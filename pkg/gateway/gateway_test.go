@@ -220,3 +220,90 @@ func TestGetObjectInfo(t *testing.T) {
 		assertHeadObject(t, jfsObj, bucket, "dir1/key1/", false)
 	})
 }
+
+func TestDeleteObjects(t *testing.T) {
+	t.Run("keep sibling object named as bucket", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		bucket := "jmrq"
+		if eno := jfs.Mkdir(mctx, "/"+bucket, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir bucket: %s", eno)
+		}
+		createTestFile(t, jfs, "/"+bucket+"/"+bucket) // key == bucket name -> /jmrq/jmrq
+		createTestFile(t, jfs, "/"+bucket+"/rror")
+
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "rror"}}, minio.ObjectOptions{})
+		for _, e := range errs {
+			if e != nil {
+				t.Fatalf("delete rror: %s", e)
+			}
+		}
+		assertHeadObject(t, jfsObj, bucket, bucket, true)
+		assertHeadObject(t, jfsObj, bucket, "rror", false)
+	})
+
+	t.Run("keep explicit directory object parent", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		bucket := "bkt1"
+		if eno := jfs.Mkdir(mctx, "/"+bucket, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir bucket: %s", eno)
+		}
+		if eno := jfs.MkdirAll(mctx, "/"+bucket+"/a/b", 0777, 022); eno != 0 {
+			t.Fatalf("mkdir a/b: %s", eno)
+		}
+		jfsObj.setFileAtime("/"+bucket+"/a/b", 0) // explicit directory object "a/b/"
+		createTestFile(t, jfs, "/"+bucket+"/a/b/c")
+
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "a/b/c"}}, minio.ObjectOptions{})
+		for _, e := range errs {
+			if e != nil {
+				t.Fatalf("delete a/b/c: %s", e)
+			}
+		}
+		assertHeadObject(t, jfsObj, bucket, "a/b/", true)
+		assertHeadObject(t, jfsObj, bucket, "a/b/c", false)
+	})
+
+	t.Run("prune empty implicit directories", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		bucket := "bkt2"
+		if eno := jfs.Mkdir(mctx, "/"+bucket, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir bucket: %s", eno)
+		}
+		if eno := jfs.MkdirAll(mctx, "/"+bucket+"/x/y", 0777, 022); eno != 0 {
+			t.Fatalf("mkdir x/y: %s", eno)
+		}
+		createTestFile(t, jfs, "/"+bucket+"/x/y/z")
+
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "x/y/z"}}, minio.ObjectOptions{})
+		for _, e := range errs {
+			if e != nil {
+				t.Fatalf("delete x/y/z: %s", e)
+			}
+		}
+		if fi, eno := jfs.Stat(mctx, "/"+bucket+"/x"); eno == 0 {
+			t.Fatalf("implicit dir /x should be pruned, still exists: isDir=%v", fi.IsDir())
+		}
+	})
+
+	t.Run("keep sibling bucket sharing name prefix", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		// two buckets whose names share a string prefix ("jmrq" vs "jmrqfoo")
+		if eno := jfs.Mkdir(mctx, "/jmrq", 0777, 022); eno != 0 {
+			t.Fatalf("mkdir jmrq: %s", eno)
+		}
+		if eno := jfs.Mkdir(mctx, "/jmrqfoo", 0777, 022); eno != 0 {
+			t.Fatalf("mkdir jmrqfoo: %s", eno)
+		}
+		createTestFile(t, jfs, "/jmrqfoo/x")
+
+		// a traversal key against bucket jmrq must never prune the sibling bucket dir
+		_, _ = jfsObj.DeleteObjects(context.Background(), "jmrq",
+			[]minio.ObjectToDelete{{ObjectName: "../jmrqfoo/x"}}, minio.ObjectOptions{})
+		if _, eno := jfs.Stat(mctx, "/jmrqfoo"); eno != 0 {
+			t.Fatalf("sibling bucket dir /jmrqfoo must not be pruned, got: %s", eno)
+		}
+	})
+}
