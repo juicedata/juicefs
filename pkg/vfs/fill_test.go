@@ -51,6 +51,19 @@ func TestFill(t *testing.T) {
 	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/file", "/sym2", "/sym3", "/.stats", "/not_exists"}, 2, nil)
 }
 
+func TestFillLiteralBracketPath(t *testing.T) {
+	v, _ := createTestVFS(nil, "")
+	ctx := NewLogContext(meta.Background())
+	fe, fh, _ := v.Create(ctx, 1, "file [abc]", 0644, 0, uint32(os.O_WRONLY))
+	v.Release(ctx, fe.Inode, fh)
+
+	resp := &CacheResponse{Locations: make(map[string]uint64)}
+	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/file [abc]"}, 2, resp)
+	if resp.FileCount != 1 {
+		t.Fatalf("warmed files: %d, want 1", resp.FileCount)
+	}
+}
+
 func TestParseRanges(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -97,11 +110,12 @@ func TestSplitTarget(t *testing.T) {
 		{"/data/file.lance [0-100]", "/data/file.lance", "0-100", false},
 		{"/data/my file.lance [0-100;200-300]", "/data/my file.lance", "0-100;200-300", false},
 		{"inode:42 [0-100]", "inode:42", "0-100", false},
-		// malformed range groups are rejected rather than read as part of the path
-		{"/data/file [0-100 200-300]", "", "", true},
-		{"/data/file [abc]", "", "", true},
-		{"/data/file []", "", "", true},
-		{"/data/file [0-100;]", "", "", true},
+		// Targets that do not match the range syntax are treated as paths.
+		{"/data/file [0-100 200-300]", "/data/file [0-100 200-300]", "", false},
+		{"/data/file [abc]", "/data/file [abc]", "", false},
+		{"/data/file []", "/data/file []", "", false},
+		{"/data/file [0-100;]", "/data/file [0-100;]", "", false},
+		// Syntactically valid but invalid ranges are still rejected.
 		{"/data/file [100-50]", "", "", true},
 	}
 	for _, tt := range tests {
@@ -194,7 +208,7 @@ func TestFillWithRanges(t *testing.T) {
 	// Bad cases: range beyond file size should still work (slices beyond file size won't exist)
 	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile [1000000-2000000]"}, 2, nil)
 
-	// Bad cases: malformed ranges are skipped instead of warming the whole file
+	// Bad cases: invalid ranges and nonexistent literal bracket paths are skipped
 	v.cacheFiller.Cache(meta.Background(), WarmupCache, []string{"/test/bigfile [100-50]", "/test/bigfile [abc]"}, 2, nil)
 }
 
