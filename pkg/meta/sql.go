@@ -275,7 +275,7 @@ type dbMeta struct {
 	spool *sync.Pool
 	snap  *dbSnap
 
-	noReadOnlyTxn bool
+	noReadOnlyTxn atomic.Bool
 	statement     map[string]string
 	tablePrefix   string
 }
@@ -1272,7 +1272,7 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 	s := m.db.NewSession()
 	defer s.Close()
 	var opt sql.TxOptions
-	if !m.noReadOnlyTxn {
+	if !m.noReadOnlyTxn.Load() {
 		opt.ReadOnly = true
 		opt.Isolation = sql.LevelRepeatableRead
 	}
@@ -1297,7 +1297,7 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 		err := s.BeginTx(&opt)
 		if err != nil && opt.ReadOnly && (strings.Contains(err.Error(), "READ") || strings.Contains(err.Error(), "driver does not support read-only transactions")) {
 			logger.Warnf("the database does not support read-only transaction")
-			m.noReadOnlyTxn = true
+			m.noReadOnlyTxn.Store(true)
 			opt = sql.TxOptions{} // use default level
 			err = s.BeginTx(&opt)
 		}
