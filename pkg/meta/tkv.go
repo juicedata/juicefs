@@ -3429,11 +3429,14 @@ func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 }
 
 func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
-	if len(value) == 0 && m.Name() == "tikv" {
-		return syscall.EINVAL
-	}
 	key := m.xattrKey(inode, name)
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if tx.get(m.inodeKey(inode)) == nil {
+			return syscall.ENOENT
+		}
+		if len(value) == 0 && m.Name() == "tikv" {
+			return syscall.EINVAL
+		}
 		v := tx.get(key)
 		switch flags {
 		case XattrCreate:
@@ -3450,12 +3453,15 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 		}
 		m.genLog(tx, time.Now(), "SETXATTR(%d,%s,%s,%d)", inode, logEncode2(name), logEncode(value), flags)
 		return nil
-	}))
+	}, inode))
 }
 
 func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	key := m.xattrKey(inode, name)
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if tx.get(m.inodeKey(inode)) == nil {
+			return syscall.ENOENT
+		}
 		value := tx.get(key)
 		if value == nil {
 			return ENOATTR
@@ -3463,7 +3469,7 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 		tx.delete(key)
 		m.genLog(tx, time.Now(), "REMOVEXATTR(%d,%s)", inode, logEncode2(name))
 		return nil
-	}))
+	}, inode))
 }
 
 func (m *kvMeta) getQuotaKey(qtype uint32, key uint64) ([]byte, error) {
