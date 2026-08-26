@@ -40,6 +40,7 @@ import (
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
+	"github.com/tikv/client-go/v2/util"
 	"github.com/tikv/pd/client/opt"
 	"go.uber.org/zap"
 )
@@ -86,8 +87,8 @@ func newTikvClient(addr string) (tkvClient, error) {
 			dur = time.Hour
 		}
 		interval = dur
+		logger.Infof("TiKV gc interval is set to %s", interval)
 	}
-	logger.Infof("TiKV gc interval is set to %s", interval)
 
 	client, err := txnkv.NewClient(strings.Split(tUrl.Host, ","))
 	if err != nil {
@@ -115,7 +116,7 @@ func newTikvClient(addr string) (tkvClient, error) {
 	}
 
 	prefix := strings.TrimLeft(tUrl.Path, "/")
-	return withPrefix(&tikvClient{client: client.KVStore, gcInterval: interval, changeLogShards: tiKVChangeLogShards()}, append([]byte(prefix), 0xFD)), nil
+	return withPrefix(&tikvClient{client: client.KVStore, gcInterval: interval, changeLogShards: tiKVChangeLogShards(), volume: prefix}, append([]byte(prefix), 0xFD)), nil
 }
 
 type tikvTxn struct {
@@ -310,6 +311,7 @@ type tikvClient struct {
 	client          *tikv.KVStore
 	gcInterval      time.Duration
 	changeLogShards int
+	volume          string
 }
 
 func (c *tikvClient) name() string {
@@ -337,6 +339,7 @@ func (c *tikvClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry 
 	if err != nil {
 		return errors.Wrap(err, "failed to begin transaction")
 	}
+	tx.SetRequestSourceType(c.volume)
 	defer func() {
 		if r := recover(); r != nil {
 			if e, ok := r.(error); ok {
@@ -365,6 +368,7 @@ func (c *tikvClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (
 	if err != nil {
 		return err
 	}
+	tx.SetRequestSourceType(c.volume)
 	defer func() {
 		if r := recover(); r != nil {
 			fe, ok := r.(error)
@@ -396,6 +400,7 @@ OUT:
 			return err
 		}
 		snap := c.client.GetSnapshot(ts)
+		snap.SetRequestSourceType(c.volume)
 		snap.SetScanBatchSize(10240)
 		snap.SetNotFillCache(true)
 		snap.SetPriority(txnutil.PriorityLow)
@@ -442,7 +447,9 @@ func (c *tikvClient) gc() {
 		return
 	}
 
-	safePoint, err := c.client.GC(context.Background(), oracle.GoTimeToTS(oracle.GetTimeFromTS(currentTs).Add(-c.gcInterval)))
+	// Set request source to `internal_gc` instead of the default `unknown`.
+	ctx := util.WithInternalSourceType(context.Background(), util.InternalTxnGC)
+	safePoint, err := c.client.GC(ctx, oracle.GoTimeToTS(oracle.GetTimeFromTS(currentTs).Add(-c.gcInterval)))
 	if err == nil {
 		logger.Debugf("TiKV GC returns new safe point: %d (%s)", safePoint, oracle.GetTimeFromTS(safePoint))
 	} else {
