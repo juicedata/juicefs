@@ -2793,7 +2793,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		n         *node  // n edges : 1 inode
 		trashName string // cached trash entry name when hard links go to trash
 	}
-	var entryInfos []*entryInfo
 	type dNode struct {
 		opened bool
 		length uint64
@@ -2817,11 +2816,15 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		var batchDirLength, batchDirSpace, batchDirInodes int64
 		var batchTrashLength, batchTrashSpace, batchTrashInodes int64
 		var deltas ugQuotaDeltas
+		var batchDelNodes map[Ino]*dNode
+		var invalidatedInodes map[Ino]struct{}
 		err := m.txn(func(s *xorm.Session) error {
 			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
 			batchFsSpace, batchFsInodes = 0, 0
 			batchTrashLength, batchTrashSpace, batchTrashInodes = 0, 0, 0
 			deltas = make(ugQuotaDeltas)
+			batchDelNodes = make(map[Ino]*dNode)
+			invalidatedInodes = make(map[Ino]struct{})
 			pn := node{Inode: parent}
 			ok, err := s.Get(&pn)
 			if err != nil {
@@ -2842,7 +2845,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 				return syscall.EPERM
 			}
 			now := time.Now().UnixNano()
-			entryInfos = make([]*entryInfo, 0, len(batch))
+			entryInfos := make([]*entryInfo, 0, len(batch))
 			names := make([][]byte, 0, len(batch))
 			for _, entry := range batch {
 				names = append(names, entry.Name)
@@ -2935,7 +2938,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					if m.sid > 0 {
 						opened = m.of.IsOpen(info.n.Inode)
 					}
-					delNodes[info.n.Inode] = &dNode{opened, info.n.Length}
+					batchDelNodes[info.n.Inode] = &dNode{opened, info.n.Length}
 				}
 			}
 
@@ -2982,7 +2985,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 						switch info.n.Type {
 						case TypeFile:
 							entrySpace = align4K(info.n.Length)
-							if dnode, ok := delNodes[info.n.Inode]; ok && dnode.opened {
+							if dnode, ok := batchDelNodes[info.n.Inode]; ok && dnode.opened {
 								sustainedIns = append(sustainedIns, &sustained{Sid: m.sid, Inode: info.e.Inode})
 								if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 									return err
@@ -3021,7 +3024,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 						}
 						xattrsDel = append(xattrsDel, info.e.Inode)
 					}
-					m.of.InvalidateChunk(info.e.Inode, invalidateAttrOnly)
+					invalidatedInodes[info.e.Inode] = struct{}{}
 				}
 				if info.n.Nlink > 0 && info.trash > 0 {
 					// still has links and should be moved to trash; create new trash edge
@@ -3122,6 +3125,12 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 
 		if err != nil {
 			return errno(err)
+		}
+		for inode, info := range batchDelNodes {
+			delNodes[inode] = info
+		}
+		for inode := range invalidatedInodes {
+			m.of.InvalidateChunk(inode, invalidateAttrOnly)
 		}
 
 		delta.length += batchDirLength
