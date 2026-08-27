@@ -76,3 +76,15 @@ from a pinned Lance version:
 
 Only the generated `*.pb.go` files are committed; the downloaded `.proto` files
 are not.
+
+## Future work
+
+Precise column-level warmup for nested columns (`list`, `struct`, …) is not
+implemented: such columns span multiple physical columns whose exact layout is
+only described by Lance's full encoding model, which is not part of the vendored
+protos. Reimplementing the encoding walker in pure Go would be fragile and drift
+with upstream format changes.
+
+If this becomes a requirement, the planned direction is to delegate the format
+parsing to the official Rust `lance` / `lance-file` crates (for example via a
+small sidecar binary), keeping this tool's output format unchanged.
