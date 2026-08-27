@@ -4268,6 +4268,9 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 
 func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
+		if err := m.getNodesForUpdate(s, &node{Inode: inode}); err != nil {
+			return err
+		}
 		var k = &xattr{Inode: inode, Name: name}
 		var x = xattr{Inode: inode, Name: name, Value: value}
 		ok, err := s.ForUpdate().Get(k)
@@ -4303,6 +4306,9 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 
 func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
+		if err := m.getNodesForUpdate(s, &node{Inode: inode}); err != nil {
+			return err
+		}
 		n, err := s.Delete(&xattr{Inode: inode, Name: name})
 		if err != nil {
 			return err

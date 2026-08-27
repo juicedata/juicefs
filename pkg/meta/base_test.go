@@ -182,6 +182,7 @@ func testMeta(t *testing.T, m Meta) {
 	testListLocks(t, m)
 	testConcurrentWrite(t, m)
 	testRace(t, m)
+	testXattr(t, m)
 	testCompaction(t, m, false)
 	time.Sleep(time.Second)
 	testCompaction(t, m, true)
@@ -211,6 +212,25 @@ func testMeta(t *testing.T, m Meta) {
 	testKerberosToken(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
+}
+
+func testXattr(t *testing.T, m Meta) {
+	t.Run("XattrInodeLifecycle", func(t *testing.T) {
+		ctx := Background()
+		var inode Ino
+		if st := m.Mknod(ctx, RootInode, "xattr-inode-lifecycle", TypeFile, 0644, 022, 0, "", &inode, nil); st != 0 {
+			t.Fatalf("mknod: %s", st)
+		}
+		if st := m.Unlink(ctx, RootInode, "xattr-inode-lifecycle"); st != 0 {
+			t.Fatalf("unlink: %s", st)
+		}
+		if st := m.SetXattr(ctx, inode, "user.test", []byte("orphan"), XattrCreateOrReplace); st != syscall.ENOENT {
+			t.Fatalf("setxattr after unlink: got %s, want %s", st, syscall.ENOENT)
+		}
+		if st := m.RemoveXattr(ctx, inode, "user.test"); st != syscall.ENOENT {
+			t.Fatalf("removexattr after unlink: got %s, want %s", st, syscall.ENOENT)
+		}
+	})
 }
 
 func testAccess(t *testing.T, m Meta) {

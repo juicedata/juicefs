@@ -4308,11 +4308,19 @@ func (m *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 }
 
 func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
-	key := m.xattrKey(inode)
+	inodeKey := m.inodeKey(inode)
+	xattrKey := m.xattrKey(inode)
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		exists, err := tx.Exists(ctx, inodeKey).Result()
+		if err != nil {
+			return err
+		}
+		if exists == 0 {
+			return syscall.ENOENT
+		}
 		switch flags {
 		case XattrCreate:
-			ok, err := tx.HExists(ctx, key, name).Result()
+			ok, err := tx.HExists(ctx, xattrKey, name).Result()
 			if err != nil {
 				return err
 			}
@@ -4320,7 +4328,7 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 				return syscall.EEXIST
 			}
 		case XattrReplace:
-			ok, err := tx.HExists(ctx, key, name).Result()
+			ok, err := tx.HExists(ctx, xattrKey, name).Result()
 			if err != nil {
 				return err
 			}
@@ -4328,20 +4336,29 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 				return ENOATTR
 			}
 		}
-		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(ctx, key, name, value)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(ctx, xattrKey, name, value)
 			m.genLog(ctx, pipe, time.Now(), "SETXATTR(%d,%s,%s,%d)", inode, logEncode2(name), logEncode(value), flags)
 			return nil
 		})
 		return err
-	}, key))
+	}, inodeKey, xattrKey))
 }
 
 func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
+	inodeKey := m.inodeKey(inode)
+	xattrKey := m.xattrKey(inode)
 	var n int64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
-		cmd, err := tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HDel(ctx, m.xattrKey(inode), name)
+		exists, err := tx.Exists(ctx, inodeKey).Result()
+		if err != nil {
+			return err
+		}
+		if exists == 0 {
+			return syscall.ENOENT
+		}
+		cmd, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HDel(ctx, xattrKey, name)
 			m.genLog(ctx, pipe, time.Now(), "REMOVEXATTR(%d,%s)", inode, logEncode2(name))
 			return nil
 		})
@@ -4351,7 +4368,7 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 			}
 		}
 		return err
-	}, m.xattrKey(inode))
+	}, inodeKey, xattrKey)
 	if err != nil {
 		return errno(err)
 	} else if n == 0 {
