@@ -21,6 +21,7 @@ package meta
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -992,6 +993,15 @@ func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, retur
 }
 
 func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+	checkParentLink := func(st syscall.Errno) syscall.Errno {
+		if st == syscall.ENOENT {
+			var pattr Attr
+			if r := m.doGetAttr(ctx, parent, &pattr); r == 0 && m.checkLink(parent, &pattr) {
+				return ELink
+			}
+		}
+		return st
+	}
 	var foundIno Ino
 	var foundType uint8
 	var encodedAttr []byte
@@ -1031,14 +1041,14 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 		} else if st == syscall.EAGAIN {
 			return m.doLookup(ctx, parent, name, inode, attr)
 		} else if st != syscall.ENOTSUP {
-			return st
+			return checkParentLink(st)
 		}
 	}
 	if foundIno == 0 || len(encodedAttr) == 0 {
 		var buf []byte
 		buf, err = m.rdb.HGet(ctx, entryKey, name).Bytes()
 		if err != nil {
-			return errno(err)
+			return checkParentLink(errno(err))
 		}
 		foundType, foundIno = m.parseEntry(buf)
 		encodedAttr, err = m.rdb.Get(ctx, m.inodeKey(foundIno)).Bytes()
@@ -1098,6 +1108,14 @@ func (m *redisMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno 
 		m.parseAttr(a, attr)
 	}
 	return errno(err)
+}
+
+func (m *redisMeta) checkLink(inode Ino, attr *Attr) bool {
+	if attr.Typ == TypeLink {
+		m.newMsg(ExternalLink, inode, attr.Length)
+		return true
+	}
+	return false
 }
 
 type timeoutError interface {
@@ -1233,6 +1251,9 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 			return err
 		}
 		m.parseAttr(a, &t)
+		if m.checkLink(inode, &t) {
+			return ELink
+		}
 		if t.Typ != TypeFile || t.Flags&(FlagImmutable|FlagAppend) != 0 || (flags == 0 && t.Parent > TrashInode) {
 			return syscall.EPERM
 		}
@@ -1325,6 +1346,9 @@ func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, 
 			return err
 		}
 		m.parseAttr(a, &t)
+		if m.checkLink(inode, &t) {
+			return ELink
+		}
 		if t.Typ == TypeFIFO {
 			return syscall.EPIPE
 		}
@@ -1394,6 +1418,9 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 			return err
 		}
 		m.parseAttr(a, &cur)
+		if m.checkLink(inode, &cur) {
+			return ELink
+		}
 		if oldAttr != nil {
 			*oldAttr = cur
 		}
@@ -1439,7 +1466,14 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 	if noatime {
 		target, err = m.rdb.Get(ctx, m.symKey(inode)).Bytes()
 		if err == redis.Nil {
-			err = nil
+			var attr Attr
+			if st := m.doGetAttr(ctx, inode, &attr); st != 0 {
+				err = st
+			} else if m.checkLink(inode, &attr) {
+				err = ELink
+			} else {
+				err = nil
+			}
 		}
 		return
 	}
@@ -1455,6 +1489,9 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 			return syscall.ENOENT
 		}
 		m.parseAttr([]byte(rs[0].(string)), attr)
+		if m.checkLink(inode, attr) {
+			return ELink
+		}
 		if attr.Typ != TypeSymlink {
 			return syscall.EINVAL
 		}
@@ -1505,6 +1542,9 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return err
 		}
 		m.parseAttr(a, &pattr)
+		if m.checkLink(parent, &pattr) {
+			return ELink
+		}
 		ihGid := m.inheritGid(ctx, _type, pattr.Gid, pattr.Mode)
 		if m.checkGroupQuota(ctx, uint64(ihGid), align4K(0), 1) {
 			return syscall.EDQUOT
@@ -1839,9 +1879,6 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			return err
 		}
 		_type, inode = m.parseEntry(buf)
-		if _type == TypeDirectory {
-			return syscall.EPERM
-		}
 		if err := tx.Watch(ctx, m.inodeKey(inode)).Err(); err != nil {
 			return err
 		}
@@ -1854,6 +1891,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		}
 		var pattr Attr
 		m.parseAttr([]byte(rs[0].(string)), &pattr)
+		if m.checkLink(parent, &pattr) {
+			return ELink
+		}
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -1874,6 +1914,12 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		}
 		if rs[1] != nil {
 			m.parseAttr([]byte(rs[1].(string)), attr)
+			if _type == TypeDirectory && attr.Typ == TypeDirectory {
+				return syscall.EPERM
+			}
+			if attr.Typ == TypeLink {
+				_type = TypeLink
+			}
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
@@ -1899,6 +1945,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 				attr.Parent = trash
 			}
 		} else {
+			if _type == TypeDirectory {
+				return syscall.EPERM
+			}
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 			trash = 0
 		}
@@ -1963,6 +2012,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			if _type == TypeFile && attr.Nlink == 0 {
 				m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
 			}
+			if _type == TypeLink {
+				m.newMsg(Unref, inode, attr.Length)
+			}
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, newInode)
 		} else {
@@ -2017,6 +2069,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 		var batchFsSpace, batchFsInodes int64
 		var deltas ugQuotaDeltas
 		var delNodes map[Ino]*dNode
+		var unrefs map[Ino]uint64
 		watchKeys := []string{m.inodeKey(parent), m.entryKey(parent)}
 
 		err := m.txn(ctx, func(tx *redis.Tx) error {
@@ -2025,6 +2078,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 			batchFsSpace, batchFsInodes = 0, 0
 			deltas = make(ugQuotaDeltas)
 			delNodes = make(map[Ino]*dNode)
+			unrefs = make(map[Ino]uint64)
 
 			rs, err := tx.Get(ctx, m.inodeKey(parent)).Result()
 			if err != nil {
@@ -2032,6 +2086,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 			}
 			var pattr Attr
 			m.parseAttr([]byte(rs), &pattr)
+			if m.checkLink(parent, &pattr) {
+				return ELink
+			}
 			if pattr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
 			}
@@ -2061,7 +2118,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 				}
 				buf := []byte(val.(string))
 				typ, ino := m.parseEntry(buf)
-				if entry.Inode != ino || typ == TypeDirectory || (entry.Attr != nil && entry.Attr.Typ != typ) {
+				if entry.Inode != ino || typ == TypeDirectory || (entry.Attr != nil && entry.Attr.Typ != typ && entry.Attr.Typ != TypeLink) {
 					continue
 				}
 				name := string(entry.Name)
@@ -2126,6 +2183,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 					}
 					if (attr.Flags & FlagSkipTrash) != 0 {
 						info.trash = 0
+					}
+					if attr.Typ == TypeLink {
+						info.typ = TypeLink
 					}
 					info.attr = attr
 				}
@@ -2248,6 +2308,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 							fallthrough
 						default:
 							keys = append(keys, m.inodeKey(info.inode))
+							if info.typ == TypeLink {
+								unrefs[info.inode] = info.attr.Length
+							}
 							batchFsSpace -= align4K(0)
 							batchFsInodes--
 							stats[m.usedSpaceKey()] -= align4K(0)
@@ -2354,6 +2417,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 		for inode, info := range delNodes {
 			m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 		}
+		for inode, target := range unrefs {
+			m.newMsg(Unref, inode, target)
+		}
 
 		delta.length += batchDirLength
 		delta.space += batchDirSpace
@@ -2411,6 +2477,9 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		}
 		var pattr Attr
 		m.parseAttr([]byte(rs[0].(string)), &pattr)
+		if m.checkLink(parent, &pattr) {
+			return ELink
+		}
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -2436,6 +2505,9 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		}
 		if rs[1] != nil {
 			m.parseAttr([]byte(rs[1].(string)), &attr)
+			if attr.Typ == TypeLink {
+				return syscall.ENOTSUP
+			}
 			if oldAttr != nil {
 				*oldAttr = attr
 			}
@@ -2583,6 +2655,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		}
 		var sattr, dattr, iattr Attr
 		m.parseAttr([]byte(rs[0].(string)), &sattr)
+		if m.checkLink(parentSrc, &sattr) {
+			return ELink
+		}
 		if sattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -2590,6 +2665,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return st
 		}
 		m.parseAttr([]byte(rs[1].(string)), &dattr)
+		if m.checkLink(parentDst, &dattr) {
+			return ELink
+		}
 		if dattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -2831,6 +2909,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			if dtyp == TypeFile && tattr.Nlink == 0 {
 				m.fileDeleted(opened, false, dino, tattr.Length)
 			}
+			if tattr.Typ == TypeLink {
+				m.newMsg(Unref, dino, tattr.Length)
+			}
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, tattr.Uid, tattr.Gid, newSpace, newInode)
 		}
@@ -2849,6 +2930,9 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		}
 		var pattr, iattr Attr
 		m.parseAttr([]byte(rs[0].(string)), &pattr)
+		if m.checkLink(parent, &pattr) {
+			return ELink
+		}
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -2963,6 +3047,15 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 	}
 	if err != nil {
 		return errno(err)
+	}
+	if len(*entries) == 0 {
+		var attr Attr
+		if st := m.doGetAttr(ctx, inode, &attr); st != 0 {
+			return st
+		}
+		if m.checkLink(inode, &attr) {
+			return ELink
+		}
 	}
 
 	if plus != 0 && len(*entries) != 0 {
@@ -3168,6 +3261,15 @@ func (m *redisMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, sysca
 	if err != nil {
 		return nil, errno(err)
 	}
+	if len(vals) == 0 {
+		var attr Attr
+		if st := m.doGetAttr(ctx, inode, &attr); st != 0 {
+			return nil, st
+		}
+		if m.checkLink(inode, &attr) {
+			return nil, ELink
+		}
+	}
 	return readSlices(vals), 0
 }
 
@@ -3215,6 +3317,9 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 			return err
 		}
 		m.parseAttr(a, attr)
+		if m.checkLink(inode, attr) {
+			return ELink
+		}
 		if attr.Typ != TypeFile {
 			return syscall.EPERM
 		}
@@ -3273,6 +3378,9 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		}
 		sattr = Attr{}
 		m.parseAttr([]byte(rs[0].(string)), &sattr)
+		if m.checkLink(fin, &sattr) {
+			return ELink
+		}
 		if sattr.Typ != TypeFile {
 			return syscall.EINVAL
 		}
@@ -3288,6 +3396,9 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		}
 		attr = Attr{}
 		m.parseAttr([]byte(rs[1].(string)), &attr)
+		if m.checkLink(fout, &attr) {
+			return ELink
+		}
 		if attr.Typ != TypeFile {
 			return syscall.EINVAL
 		}
@@ -4375,6 +4486,13 @@ func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte)
 	var err error
 	*vbuff, err = m.rdb.HGet(ctx, m.xattrKey(inode), name).Bytes()
 	if err == redis.Nil {
+		var attr Attr
+		if st := m.doGetAttr(ctx, inode, &attr); st != 0 {
+			return st
+		}
+		if m.checkLink(inode, &attr) {
+			return ELink
+		}
 		err = ENOATTR
 	}
 	return errno(err)
@@ -4399,6 +4517,9 @@ func (m *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 	}
 	attr := &Attr{}
 	m.parseAttr(val, attr)
+	if m.checkLink(inode, attr) {
+		return ELink
+	}
 	setXAttrACL(names, attr.AccessACL, attr.DefaultACL)
 	return 0
 }
@@ -4407,12 +4528,14 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 	inodeKey := m.inodeKey(inode)
 	xattrKey := m.xattrKey(inode)
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
-		exists, err := tx.Exists(ctx, inodeKey).Result()
+		val, err := tx.Get(ctx, inodeKey).Bytes()
 		if err != nil {
 			return err
 		}
-		if exists == 0 {
-			return syscall.ENOENT
+		var attr Attr
+		m.parseAttr(val, &attr)
+		if m.checkLink(inode, &attr) {
+			return ELink
 		}
 		switch flags {
 		case XattrCreate:
@@ -4445,12 +4568,14 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	inodeKey := m.inodeKey(inode)
 	xattrKey := m.xattrKey(inode)
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
-		exists, err := tx.Exists(ctx, inodeKey).Result()
+		val, err := tx.Get(ctx, inodeKey).Bytes()
 		if err != nil {
 			return err
 		}
-		if exists == 0 {
-			return syscall.ENOENT
+		var attr Attr
+		m.parseAttr(val, &attr)
+		if m.checkLink(inode, &attr) {
+			return ELink
 		}
 		ok, err := tx.HExists(ctx, xattrKey, name).Result()
 		if err != nil {
@@ -5062,12 +5187,490 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	return nil
 }
 
+func (m *redisMeta) dumpTree(ctx Context, tx *redis.Tx, inode Ino, entry *DumpedEntry, prewatched bool) (map[Ino]*Attr, error) {
+	var cmd redis.Cmdable = m.rdb
+	if tx != nil {
+		cmd = tx
+	}
+	if entry.Attr == nil {
+		entry.Attr = &DumpedAttr{}
+	}
+	entry.Attr.Inode = inode
+	if entry.Attr.Type == "" {
+		value, err := cmd.Get(ctx, m.inodeKey(inode)).Bytes()
+		if err != nil {
+			return nil, err
+		}
+		var attr Attr
+		m.parseAttr(value, &attr)
+		dumpAttr(&attr, entry.Attr)
+	}
+	attrs := make(map[Ino]*Attr)
+	dumpEntries := func(es ...*DumpedEntry) error {
+		run := func(tx *redis.Tx) error {
+			if !prewatched {
+				var watchKeys []string
+				for _, e := range es {
+					inode := e.Attr.Inode
+					watchKeys = append(watchKeys, m.inodeKey(inode), m.xattrKey(inode))
+					switch e.Attr.Type {
+					case "regular":
+						for indx := uint32(0); uint64(indx)*ChunkSize < e.Attr.Length; indx++ {
+							watchKeys = append(watchKeys, m.chunkKey(inode, indx))
+						}
+					case "directory":
+						watchKeys = append(watchKeys, m.entryKey(inode))
+					case "symlink":
+						watchKeys = append(watchKeys, m.symKey(inode))
+					}
+				}
+				if err := tx.Watch(ctx, watchKeys...).Err(); err != nil {
+					return err
+				}
+			}
+
+			p := tx.Pipeline()
+			ar := make([]*redis.StringCmd, len(es))
+			xr := make([]*redis.MapStringStringCmd, len(es))
+			sr := make([]*redis.StringCmd, len(es))
+			cr := make([]*redis.StringSliceCmd, len(es))
+			dr := make([]*redis.ScanCmd, len(es))
+			for i, e := range es {
+				inode := e.Attr.Inode
+				ar[i] = p.Get(ctx, m.inodeKey(inode))
+				xr[i] = p.HGetAll(ctx, m.xattrKey(inode))
+				switch e.Attr.Type {
+				case "regular":
+					cr[i] = p.LRange(ctx, m.chunkKey(inode, 0), 0, -1)
+				case "directory":
+					dr[i] = p.HScan(ctx, m.entryKey(inode), 0, "*", 1000)
+				case "symlink":
+					sr[i] = p.Get(ctx, m.symKey(inode))
+				}
+			}
+			if _, err := p.Exec(ctx); err != nil && err != redis.Nil {
+				return err
+			}
+
+			type lchunk struct {
+				inode Ino
+				indx  uint32
+				i     uint32
+			}
+			var lcs []*lchunk
+			for i, e := range es {
+				inode := e.Attr.Inode
+				typ := typeFromString(e.Attr.Type)
+				a, err := ar[i].Bytes()
+				if err != nil {
+					if err != redis.Nil {
+						return err
+					}
+					return syscall.ENOENT
+				}
+
+				var attr Attr
+				attr.Typ = typ
+				attr.Nlink = 1
+				m.parseAttr(a, &attr)
+				if attr.Typ != typ {
+					e.Attr.Type = typeToString(attr.Typ)
+					if attr.Typ != TypeLink {
+						return syscall.EAGAIN
+					}
+					typ = attr.Typ
+				}
+				attrs[inode] = &attr
+				dumpAttr(&attr, e.Attr)
+
+				keys, err := xr[i].Result()
+				if err != nil {
+					return err
+				}
+				if len(keys) > 0 {
+					xattrs := make([]*DumpedXattr, 0, len(keys))
+					for k, v := range keys {
+						xattrs = append(xattrs, &DumpedXattr{k, v})
+					}
+					sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+					e.Xattrs = xattrs
+				}
+
+				accessACL, err := m.getACL(ctx, tx, attr.AccessACL)
+				if err != nil {
+					return err
+				}
+				e.AccessACL = dumpACL(accessACL)
+				defaultACL, err := m.getACL(ctx, tx, attr.DefaultACL)
+				if err != nil {
+					return err
+				}
+				e.DefaultACL = dumpACL(defaultACL)
+
+				switch typ {
+				case TypeFile:
+					e.Chunks = e.Chunks[:0]
+					if attr.Length > 0 {
+						vals, err := cr[i].Result()
+						if err != nil {
+							return err
+						}
+						if len(vals) > 0 {
+							ss := readSlices(vals)
+							if ss == nil {
+								logger.Errorf("Corrupt value for inode %d chunk index %d", inode, 0)
+							}
+							slices := make([]*DumpedSlice, 0, len(ss))
+							for _, s := range ss {
+								slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+							}
+							e.Chunks = append(e.Chunks, &DumpedChunk{0, slices})
+						}
+					}
+					if attr.Length > ChunkSize {
+						for indx := uint32(1); uint64(indx)*ChunkSize < attr.Length; indx++ {
+							lcs = append(lcs, &lchunk{inode, indx, uint32(i)})
+						}
+					}
+				case TypeDirectory:
+					keys, cursor, err := dr[i].Result()
+					if err != nil {
+						return err
+					}
+					if cursor == 0 {
+						e.Entries = make(map[string]*DumpedEntry)
+						for i := 0; i < len(keys); i += 2 {
+							name := keys[i]
+							t, inode := m.parseEntry([]byte(keys[i+1]))
+							ce := entryPool.Get()
+							ce.Name = name
+							ce.Attr.Inode = inode
+							ce.Attr.Type = typeToString(t)
+							e.Entries[name] = ce
+						}
+					}
+				case TypeSymlink:
+					if e.Symlink, err = sr[i].Result(); err != nil {
+						if err != redis.Nil {
+							return err
+						}
+						logger.Warnf("The symlink of inode %d is not found", inode)
+					}
+				}
+			}
+
+			cr = make([]*redis.StringSliceCmd, len(es)*3)
+			for len(lcs) > 0 {
+				if len(cr) > len(lcs) {
+					cr = cr[:len(lcs)]
+				}
+				for i := range cr {
+					c := lcs[i]
+					cr[i] = p.LRange(ctx, m.chunkKey(c.inode, c.indx), 0, -1)
+				}
+				if _, err := p.Exec(ctx); err != nil {
+					return err
+				}
+				for i := range cr {
+					vals, err := cr[i].Result()
+					if err != nil {
+						return err
+					}
+					if len(vals) > 0 {
+						e := es[lcs[i].i]
+						ss := readSlices(vals)
+						if ss == nil {
+							logger.Errorf("Corrupt value for inode %d chunk index %d", e.Attr.Inode, lcs[i].indx)
+						}
+						slices := make([]*DumpedSlice, 0, len(ss))
+						for _, s := range ss {
+							slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+						}
+						e.Chunks = append(e.Chunks, &DumpedChunk{lcs[i].indx, slices})
+					}
+				}
+				lcs = lcs[len(cr):]
+			}
+			return nil
+		}
+		if tx != nil {
+			return run(tx)
+		}
+		var keys []string
+		for _, e := range es {
+			keys = append(keys, m.inodeKey(e.Attr.Inode))
+		}
+		return m.txn(ctx, run, keys...)
+	}
+	if err := dumpEntries(entry); err != nil {
+		return nil, err
+	}
+	if entry.Attr.Type == "link" {
+		m.newMsg(ExternalLink, inode, entry.Attr.Length)
+	}
+	if entry.Attr.Type == "directory" {
+		if tx != nil && !prewatched {
+			if err := tx.Watch(ctx, m.entryKey(inode)).Err(); err != nil {
+				return nil, err
+			}
+		}
+		if entry.Entries == nil {
+			entry.Entries = make(map[string]*DumpedEntry)
+			var cursor uint64
+			for {
+				values, next, err := cmd.HScan(ctx, m.entryKey(inode), cursor, "*", 10000).Result()
+				if err != nil {
+					return nil, err
+				}
+				for i := 0; i < len(values); i += 2 {
+					typ, ino := m.parseEntry([]byte(values[i+1]))
+					entry.Entries[values[i]] = &DumpedEntry{Attr: &DumpedAttr{Inode: ino, Type: typeToString(typ)}}
+				}
+				if next == 0 {
+					break
+				}
+				cursor = next
+			}
+		}
+		children := make([]*DumpedEntry, 0, len(entry.Entries))
+		for _, e := range entry.Entries {
+			children = append(children, e)
+		}
+		for len(children) > 0 {
+			batch := children[:min(len(children), 1000)]
+			if err := dumpEntries(batch...); err != nil {
+				return nil, err
+			}
+			children = children[len(batch):]
+		}
+	}
+
+	lockedKeys := make([]string, 0, len(attrs)*2)
+	for ino := range attrs {
+		lockedKeys = append(lockedKeys, m.flockKey(ino), m.plockKey(ino))
+	}
+	if tx != nil && !prewatched && len(lockedKeys) > 0 {
+		if err := tx.Watch(ctx, lockedKeys...).Err(); err != nil {
+			return nil, err
+		}
+	}
+	for len(lockedKeys) > 0 {
+		batch := lockedKeys[:min(len(lockedKeys), 1000)]
+		locked, err := cmd.Exists(ctx, batch...).Result()
+		if err != nil {
+			return nil, err
+		}
+		if locked > 0 {
+			logger.Debugf("dumpTree: inode %d has locked inode", inode)
+			return nil, syscall.ENOTSUP
+		}
+		lockedKeys = lockedKeys[len(batch):]
+	}
+
+	fields := make(map[string]struct{})
+	collectSlices := func(e *DumpedEntry) {
+		for _, c := range e.Chunks {
+			for _, s := range c.Slices {
+				if s.Id > 0 {
+					fields[m.sliceKey(s.Id, s.Size)] = struct{}{}
+				}
+			}
+		}
+	}
+	collectSlices(entry)
+	for _, e := range entry.Entries {
+		collectSlices(e)
+	}
+	refFields := make([]string, 0, len(fields))
+	for field := range fields {
+		refFields = append(refFields, field)
+	}
+	if tx != nil && !prewatched && len(refFields) > 0 {
+		if err := tx.Watch(ctx, m.sliceRefs()).Err(); err != nil {
+			return nil, err
+		}
+	}
+	for len(refFields) > 0 {
+		batch := refFields[:min(len(refFields), 1000)]
+		values, err := cmd.HMGet(ctx, m.sliceRefs(), batch...).Result()
+		if err != nil {
+			return nil, err
+		}
+		for i, value := range values {
+			if value == nil {
+				continue
+			}
+			refs, err := strconv.ParseInt(fmt.Sprint(value), 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			if refs > 0 {
+				logger.Infof("dumpTree: inode=%d, slice has extra refs=%d, key=%s", inode, refs, batch[i])
+				return nil, syscall.EPERM
+			}
+		}
+		refFields = refFields[len(batch):]
+	}
+	return attrs, nil
+}
+
+func (m *redisMeta) checkEntry(ctx Context, tx *redis.Tx, inode Ino, entry *DumpedEntry, prewatched bool) (map[Ino]*Attr, error) {
+	entry2 := &DumpedEntry{Attr: &DumpedAttr{}}
+	attrs, err := m.dumpTree(ctx, tx, inode, entry2, prewatched)
+	if err != nil {
+		return nil, err
+	}
+	d1, err := json.MarshalIndent(entry, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	d2, err := json.MarshalIndent(entry2, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(d1, d2) {
+		logger.Debugf("checkEntry: inode=%d, entry=%s, entry2=%s", inode, string(d1), string(d2))
+		return nil, syscall.EAGAIN
+	}
+	return attrs, nil
+}
+
+func (m *redisMeta) replaceKeys(entry *DumpedEntry, mapping map[Ino]uint64) ([]string, error) {
+	seen := make(map[string]struct{})
+	var keys []string
+	add := func(key string) {
+		if _, ok := seen[key]; !ok {
+			seen[key] = struct{}{}
+			keys = append(keys, key)
+		}
+	}
+	var collect func(*DumpedEntry) error
+	collect = func(e *DumpedEntry) error {
+		if e == nil || e.Attr == nil || mapping[e.Attr.Inode] == 0 {
+			return syscall.EINVAL
+		}
+		ino := e.Attr.Inode
+		add(m.inodeKey(ino))
+		add(m.xattrKey(ino))
+		add(m.flockKey(ino))
+		add(m.plockKey(ino))
+		switch e.Attr.Type {
+		case "directory":
+			add(m.entryKey(ino))
+		case "regular":
+			for index := uint32(0); uint64(index)*ChunkSize < e.Attr.Length; index++ {
+				add(m.chunkKey(ino, index))
+			}
+		case "symlink":
+			add(m.symKey(ino))
+		}
+		for _, c := range e.Chunks {
+			if len(c.Slices) > 0 {
+				add(m.sliceRefs())
+			}
+		}
+		for _, child := range e.Entries {
+			if err := collect(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := collect(entry); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
+func (m *redisMeta) replaceTree(ctx context.Context, pipe redis.Pipeliner, entry *DumpedEntry, attrs map[Ino]*Attr, mapping map[Ino]uint64, now time.Time) {
+	ino := entry.Attr.Inode
+	attr := attrs[ino]
+	if attr.Typ != TypeLink {
+		attr.Rdev = uint32(attr.Typ)
+		attr.Typ = TypeLink
+	}
+	attr.Length = mapping[ino]
+	attr.Ctime = now.Unix()
+	attr.Ctimensec = uint32(now.Nanosecond())
+	attr.AccessACL = aclAPI.None
+	attr.DefaultACL = aclAPI.None
+
+	pipe.Del(ctx, m.xattrKey(ino))
+	for _, c := range entry.Chunks {
+		pipe.Del(ctx, m.chunkKey(ino, c.Index))
+		for _, s := range c.Slices {
+			if s.Id > 0 {
+				pipe.HDel(ctx, m.sliceRefs(), m.sliceKey(s.Id, s.Size))
+			}
+		}
+	}
+	switch entry.Attr.Type {
+	case "directory":
+		pipe.Del(ctx, m.entryKey(ino))
+		field := ino.String()
+		pipe.HDel(ctx, m.dirDataLengthKey(), field)
+		pipe.HDel(ctx, m.dirUsedSpaceKey(), field)
+		pipe.HDel(ctx, m.dirUsedInodesKey(), field)
+	case "symlink":
+		pipe.Del(ctx, m.symKey(ino))
+	}
+	pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
+	for _, child := range entry.Entries {
+		m.replaceTree(ctx, pipe, child, attrs, mapping, now)
+	}
+}
+
 func (m *redisMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
-	return syscall.ENOTSUP
+	ctx := Background()
+	dumped := &DumpedEntry{Attr: &DumpedAttr{}}
+	_, err := m.dumpTree(ctx, nil, inode, dumped, false)
+	if err == nil {
+		*entry = *dumped
+	}
+	return errno(err)
 }
 
 func (m *redisMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
-	return syscall.ENOTSUP
+	keys, err := m.replaceKeys(entry, mapping)
+	if err != nil {
+		return errno(err)
+	}
+	r := errno(m.txn(ctx, func(tx *redis.Tx) error {
+		for remain := keys[1:]; len(remain) > 0; {
+			batch := remain[:min(len(remain), 1000)]
+			if err := tx.Watch(ctx, batch...).Err(); err != nil {
+				return err
+			}
+			remain = remain[len(batch):]
+		}
+		attrs, err := m.checkEntry(ctx, tx, inode, entry, true)
+		if err != nil {
+			return err
+		}
+		now := time.Now()
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			m.replaceTree(ctx, pipe, entry, attrs, mapping, now)
+			var ss []string
+			for ino, target := range mapping {
+				ss = append(ss, fmt.Sprintf("%d:%d", ino, target))
+			}
+			m.genLog(ctx, pipe, now, "REPLACE(%d,%s)", inode, strings.Join(ss, ","))
+			return nil
+		})
+		return err
+	}, keys[0]))
+	if r == 0 {
+		for ino := range mapping {
+			m.of.InvalidateChunk(ino, invalidateAllChunks)
+			m.symlinks.Remove(ino)
+		}
+		for _, e := range entry.Entries {
+			if e.Attr.Type == "link" {
+				m.newMsg(UpdateRef, e.Attr.Inode, e.Attr.Length, mapping[e.Attr.Inode])
+			}
+		}
+	}
+	return r
 }
 
 func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) (err error) {
@@ -5456,6 +6059,9 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 			return err
 		}
 		m.parseAttr(a, originAttr)
+		if m.checkLink(srcIno, originAttr) {
+			return syscall.ENOTSUP
+		}
 		attr := *originAttr
 		if eno := m.Access(ctx, srcIno, MODE_MASK_R, &attr); eno != 0 {
 			return eno
@@ -5488,6 +6094,9 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 				return err
 			} else {
 				m.parseAttr(a, &pattr)
+			}
+			if m.checkLink(parent, &pattr) {
+				return ELink
 			}
 			if pattr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
@@ -5659,6 +6268,9 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 				return err
 			}
 			m.parseAttr(pval, &pattr)
+			if m.checkLink(dstParent, &pattr) {
+				return ELink
+			}
 			if pattr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
 			}
@@ -5703,6 +6315,9 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 				}
 				var a Attr
 				m.parseAttr([]byte(v.(string)), &a)
+				if m.checkLink(srcList[i], &a) {
+					return syscall.ENOTSUP
+				}
 				if a.Typ == TypeDirectory {
 					logger.Warnf("doBatchClone: source inode %d is a directory, skipping", srcList[i])
 					continue
@@ -5995,6 +6610,9 @@ func (m *redisMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Ti
 			return err
 		}
 		m.parseAttr(a, attr)
+		if m.checkLink(inode, attr) {
+			return ELink
+		}
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
@@ -6020,6 +6638,9 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 		}
 		attr := &Attr{}
 		m.parseAttr(val, attr)
+		if m.checkLink(ino, attr) {
+			return ELink
+		}
 
 		if ctx.Uid() != 0 && ctx.Uid() != attr.Uid {
 			return syscall.EPERM
@@ -6058,6 +6679,9 @@ func (m *redisMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32,
 		}
 		attr := &Attr{}
 		m.parseAttr(val, attr)
+		if m.checkLink(ino, attr) {
+			return ELink
+		}
 		m.of.Update(ino, attr)
 
 		aclId = getAttrACLId(attr, aclType)
