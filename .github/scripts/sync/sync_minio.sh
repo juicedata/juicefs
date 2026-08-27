@@ -162,7 +162,7 @@ wait_gateway_ready(){
             echo "gateway process exited before becoming ready"
             return 1
         fi
-        if curl -fsS http://localhost:9005/minio/health/live > /dev/null 2>&1; then
+        if curl -fsS --connect-timeout 1 --max-time 2 http://localhost:9005/minio/health/cluster > /dev/null 2>&1; then
             echo "gateway is now ready on port 9005"
             return
         fi
