@@ -4276,7 +4276,7 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 			m.genLog(ctx, s, time.Now().UnixNano(), "SETXATTR(%d,%s,%s,%d)", inode, logEncode2(name), logEncode(value), flags)
 		}
 		return err
-	}, inode))
+	}))
 }
 
 func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
@@ -4293,7 +4293,7 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 			m.genLog(ctx, s, time.Now().UnixNano(), "REMOVEXATTR(%d,%s)", inode, logEncode2(name))
 			return nil
 		}
-	}, inode))
+	}))
 }
 
 func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {

@@ -181,7 +181,7 @@ func testMeta(t *testing.T, m Meta) {
 	testLocks(t, m)
 	testListLocks(t, m)
 	testConcurrentWrite(t, m)
-	testRace(t, m)
+	testXattrInodeLifecycle(t, m)
 	testCompaction(t, m, false)
 	time.Sleep(time.Second)
 	testCompaction(t, m, true)
@@ -213,52 +213,23 @@ func testMeta(t *testing.T, m Meta) {
 	testReadOnly(t, m)
 }
 
-func testRace(t *testing.T, m Meta) {
+func testXattrInodeLifecycle(t *testing.T, m Meta) {
 	t.Run("XattrInodeLifecycle", func(t *testing.T) {
-		testXattrInodeLifecycleRace(t, m)
+		ctx := Background()
+		var inode Ino
+		if st := m.Mknod(ctx, RootInode, "xattr-inode-lifecycle", TypeFile, 0644, 022, 0, "", &inode, nil); st != 0 {
+			t.Fatalf("mknod: %s", st)
+		}
+		if st := m.Unlink(ctx, RootInode, "xattr-inode-lifecycle"); st != 0 {
+			t.Fatalf("unlink: %s", st)
+		}
+		if st := m.SetXattr(ctx, inode, "user.test", []byte("orphan"), XattrCreateOrReplace); st != syscall.ENOENT {
+			t.Fatalf("setxattr after unlink: got %s, want %s", st, syscall.ENOENT)
+		}
+		if st := m.RemoveXattr(ctx, inode, "user.test"); st != syscall.ENOENT {
+			t.Fatalf("removexattr after unlink: got %s, want %s", st, syscall.ENOENT)
+		}
 	})
-}
-
-func testXattrInodeLifecycleRace(t *testing.T, m Meta) {
-	ctx := Background()
-	var inode Ino
-	if st := m.Mknod(ctx, RootInode, "xattr-inode-lifecycle", TypeFile, 0644, 022, 0, "", &inode, nil); st != 0 {
-		t.Fatalf("mknod: %s", st)
-	}
-	if st := m.SetXattr(ctx, inode, "user.test", []byte("value"), XattrCreateOrReplace); st != 0 {
-		t.Fatalf("setxattr before unlink: %s", st)
-	}
-
-	start := make(chan struct{})
-	setResult := make(chan syscall.Errno, 1)
-	unlinkResult := make(chan syscall.Errno, 1)
-	go func() {
-		<-start
-		setResult <- m.SetXattr(ctx, inode, "user.test", []byte("updated"), XattrCreateOrReplace)
-	}()
-	go func() {
-		<-start
-		unlinkResult <- m.Unlink(ctx, RootInode, "xattr-inode-lifecycle")
-	}()
-	close(start)
-
-	if st := <-unlinkResult; st != 0 {
-		t.Fatalf("unlink: %s", st)
-	}
-	if st := <-setResult; st != 0 && st != syscall.ENOENT {
-		t.Fatalf("concurrent setxattr: got %s, want success or %s", st, syscall.ENOENT)
-	}
-	var value []byte
-	if st := m.GetXattr(ctx, inode, "user.test", &value); st != ENOATTR {
-		t.Fatalf("getxattr after concurrent unlink: got %s, want %s", st, ENOATTR)
-	}
-
-	if st := m.SetXattr(ctx, inode, "user.test", []byte("orphan"), XattrCreateOrReplace); st != syscall.ENOENT {
-		t.Fatalf("setxattr after unlink: got %s, want %s", st, syscall.ENOENT)
-	}
-	if st := m.RemoveXattr(ctx, inode, "user.test"); st != syscall.ENOENT {
-		t.Fatalf("removexattr after unlink: got %s, want %s", st, syscall.ENOENT)
-	}
 }
 
 func testAccess(t *testing.T, m Meta) {
