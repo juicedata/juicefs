@@ -26,9 +26,15 @@ lance-resolver [options] <dataset-path>
 | `--version VERSION` | Resolve a specific dataset version (default: latest) |
 | `--manifest-only` | Output only the manifest file path |
 | `--include-indices` | Also include index files under `_indices/` |
-| `--columns COL1,COL2` | Column-level warmup for V2 data files (metadata buffer ranges) |
+| `--columns COL1,COL2` | Column-level warmup for V2 data files (leaf columns only; metadata buffer ranges) |
 | `--include-data-pages` | Include column page data buffer ranges (use with `--columns`) |
 | `-h, --help` | Show help |
+
+`--columns` supports only **leaf (primitive)** columns. Variable-length and
+nested columns (`list`, `struct`, …) span multiple physical columns whose exact
+layout is not described by the vendored protos, so requesting them falls back
+to warming the **full data file** (with a warning) instead of risking an
+incomplete warmup.
 
 ## Output format
 
