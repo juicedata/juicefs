@@ -35,6 +35,15 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 	ctx = ctx.WithValue(txMethodKey{}, "Flock"+strconv.Itoa(int(ltype)))
 	if ltype == F_UNLCK {
 		return errno(r.txn(ctx, func(tx *redis.Tx) error {
+			a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
+			if err != nil {
+				return err
+			}
+			var attr Attr
+			r.parseAttr(a, &attr)
+			if r.checkLink(inode, &attr) {
+				return ELink
+			}
 			lkeys, err := tx.HKeys(ctx, ikey).Result()
 			if err != nil {
 				return err
@@ -48,11 +57,20 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 				return nil
 			})
 			return err
-		}, ikey))
+		}, r.inodeKey(inode), ikey))
 	}
 	var err error
 	for {
 		err = r.txn(ctx, func(tx *redis.Tx) error {
+			a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
+			if err != nil {
+				return err
+			}
+			var attr Attr
+			r.parseAttr(a, &attr)
+			if r.checkLink(inode, &attr) {
+				return ELink
+			}
 			owners, err := tx.HGetAll(ctx, ikey).Result()
 			if err != nil {
 				return err
@@ -81,7 +99,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 				return nil
 			})
 			return err
-		}, ikey)
+		}, r.inodeKey(inode), ikey)
 
 		if !block || err != syscall.EAGAIN {
 			break
@@ -99,6 +117,15 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 }
 
 func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
+	a, err := r.rdb.Get(ctx, r.inodeKey(inode)).Bytes()
+	if err != nil {
+		return errno(err)
+	}
+	var attr Attr
+	r.parseAttr(a, &attr)
+	if r.checkLink(inode, &attr) {
+		return ELink
+	}
 	if *ltype == F_UNLCK {
 		*start = 0
 		*end = 0
@@ -144,6 +171,15 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 	lock := plockRecord{ltype, pid, start, end}
 	for {
 		err = r.txn(ctx, func(tx *redis.Tx) error {
+			a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
+			if err != nil {
+				return err
+			}
+			var attr Attr
+			r.parseAttr(a, &attr)
+			if r.checkLink(inode, &attr) {
+				return ELink
+			}
 			if ltype == F_UNLCK {
 				d, err := tx.HGet(ctx, ikey, lkey).Result()
 				if err != nil && err != redis.Nil {
@@ -202,7 +238,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 				return nil
 			})
 			return err
-		}, ikey)
+		}, r.inodeKey(inode), ikey)
 
 		if !block || err != syscall.EAGAIN {
 			break
