@@ -2340,8 +2340,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public AuthCredential buildAuthCredential(String spn) throws IOException {
-    // auth use kerberos
-    if (UserGroupInformation.getLoginUser().hasKerberosCredentials()) {
+    // auth use kerberos, only when the server principal is configured
+    if (spn != null && !spn.isEmpty() && UserGroupInformation.getLoginUser().hasKerberosCredentials()) {
       dtEnabled = true;
       byte[] cred;
       try {
