@@ -319,8 +319,8 @@ func TestColumnWarmupPath(t *testing.T) {
 
 	manifest := &lancepb.Manifest{
 		Fields: []*lancepb.Field{
-			{Id: 0, Name: "id"},
-			{Id: 1, Name: "name"},
+			{Id: 0, Name: "id", Type: lancepb.Field_LEAF},
+			{Id: 1, Name: "name", Type: lancepb.Field_LEAF},
 		},
 	}
 	dataFile := &lancepb.DataFile{
@@ -373,7 +373,7 @@ func TestColumnWarmupPath_OverflowGuard(t *testing.T) {
 	}
 
 	manifest := &lancepb.Manifest{
-		Fields: []*lancepb.Field{{Id: 0, Name: "id"}},
+		Fields: []*lancepb.Field{{Id: 0, Name: "id", Type: lancepb.Field_LEAF}},
 	}
 	dataFile := &lancepb.DataFile{
 		Path:             "data_0.lance",
@@ -389,6 +389,31 @@ func TestColumnWarmupPath_OverflowGuard(t *testing.T) {
 	}
 	if ok {
 		t.Fatal("expected ok=false for overflowing column metadata range")
+	}
+}
+
+func TestColumnWarmupPath_ListColumnFallback(t *testing.T) {
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "tags", Type: lancepb.Field_REPEATED},
+		},
+	}
+	dataFile := &lancepb.DataFile{
+		Path:             "data_0.lance",
+		FileMajorVersion: 2,
+		Fields:           []int32{0},
+		ColumnIndices:    []int32{0},
+	}
+
+	// A REPEATED (list) column spans multiple physical columns; warming it by
+	// name would only reach the outer offsets column. It must fall back to
+	// full-file warmup instead.
+	_, ok, err := columnWarmupPath("unused", manifest, dataFile, []string{"tags"}, false)
+	if err != nil {
+		t.Fatalf("columnWarmupPath: %v", err)
+	}
+	if ok {
+		t.Fatal("expected ok=false for REPEATED (list) column")
 	}
 }
 

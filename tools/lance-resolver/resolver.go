@@ -320,6 +320,15 @@ func buildFieldColumnMap(manifest *lancepb.Manifest, dataFile *lancepb.DataFile)
 	return m
 }
 
+// fieldByName returns the schema fields keyed by name.
+func fieldByName(manifest *lancepb.Manifest) map[string]*lancepb.Field {
+	m := make(map[string]*lancepb.Field)
+	for _, f := range manifest.Fields {
+		m[f.Name] = f
+	}
+	return m
+}
+
 // columnByteRanges returns the byte ranges occupied by a column.
 //
 // Column-level metadata buffers and the ColumnMetadata protobuf itself are
@@ -386,8 +395,13 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 
 	fullPath := path.Join(datasetPath, lanceDataDir, dataFile.Path)
 	colMap := buildFieldColumnMap(manifest, dataFile)
+	fields := fieldByName(manifest)
 	var colIndices []int
 	for _, col := range columns {
+		if f, ok := fields[col]; ok && f.Type != lancepb.Field_LEAF {
+			fmt.Fprintf(os.Stderr, "warning: column-level warmup is not supported for %s column %q; warming full file instead\n", f.Type, col)
+			return "", false, nil
+		}
 		if idx, ok := colMap[col]; ok {
 			colIndices = append(colIndices, idx)
 		}
