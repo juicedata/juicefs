@@ -348,6 +348,50 @@ func TestColumnWarmupPath(t *testing.T) {
 	}
 }
 
+func TestColumnWarmupPath_OverflowGuard(t *testing.T) {
+	dir := t.TempDir()
+	dsPath := filepath.Join(dir, "ds.lance")
+	dataDir := filepath.Join(dsPath, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	fileSize := 128
+	buf := make([]byte, fileSize)
+	// CMO entry whose cmPos+cmLen overflows uint64 (wraps to 0); the old
+	// bounds check would pass and make([]byte, int(cmLen)) would panic.
+	binary.LittleEndian.PutUint64(buf[16:24], 0x8000000000000000) // cmPos
+	binary.LittleEndian.PutUint64(buf[24:32], 0x8000000000000000) // cmLen
+	// Footer occupies the last 40 bytes.
+	binary.LittleEndian.PutUint64(buf[96:104], 16) // column metadata offset table
+	binary.LittleEndian.PutUint32(buf[116:120], 1) // num columns
+	copy(buf[124:128], lanceMagic)
+
+	dataFilePath := filepath.Join(dataDir, "data_0.lance")
+	if err := os.WriteFile(dataFilePath, buf, 0644); err != nil {
+		t.Fatalf("write data file: %v", err)
+	}
+
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{{Id: 0, Name: "id"}},
+	}
+	dataFile := &lancepb.DataFile{
+		Path:             "data_0.lance",
+		FileMajorVersion: 2,
+		Fields:           []int32{0},
+		ColumnIndices:    []int32{0},
+	}
+
+	// Must not panic; overflowing range should fall back to full-file warmup.
+	_, ok, err := columnWarmupPath(dsPath, manifest, dataFile, []string{"id"}, false)
+	if err != nil {
+		t.Fatalf("columnWarmupPath: %v", err)
+	}
+	if ok {
+		t.Fatal("expected ok=false for overflowing column metadata range")
+	}
+}
+
 func TestFindLatestManifestByListing_V1(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "1.manifest"), []byte("v1"), 0644)

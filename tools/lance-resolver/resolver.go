@@ -327,18 +327,26 @@ func buildFieldColumnMap(manifest *lancepb.Manifest, dataFile *lancepb.DataFile)
 // too.
 func columnByteRanges(cm *file2pb.ColumnMetadata, includeDataPages bool) []byteRange {
 	var ranges []byteRange
+	appendRange := func(offset, size uint64) {
+		// Skip empty buffers and entries whose offset+size would overflow uint64
+		// (corrupt metadata), which would otherwise yield end < start.
+		if size == 0 || offset > ^uint64(0)-size {
+			return
+		}
+		ranges = append(ranges, byteRange{start: offset, end: offset + size})
+	}
 	if includeDataPages {
 		for _, page := range cm.Pages {
 			for i := range page.BufferOffsets {
 				if i < len(page.BufferSizes) {
-					ranges = append(ranges, byteRange{start: page.BufferOffsets[i], end: page.BufferOffsets[i] + page.BufferSizes[i]})
+					appendRange(page.BufferOffsets[i], page.BufferSizes[i])
 				}
 			}
 		}
 	}
 	for i := range cm.BufferOffsets {
 		if i < len(cm.BufferSizes) {
-			ranges = append(ranges, byteRange{start: cm.BufferOffsets[i], end: cm.BufferOffsets[i] + cm.BufferSizes[i]})
+			appendRange(cm.BufferOffsets[i], cm.BufferSizes[i])
 		}
 	}
 	return ranges
@@ -437,7 +445,10 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 		}
 		cmPos := binary.LittleEndian.Uint64(entry[0:8])
 		cmLen := binary.LittleEndian.Uint64(entry[8:16])
-		if cmPos+cmLen > uint64(fileSize-lanceFileFooterLen) {
+		fileLimit := uint64(fileSize - lanceFileFooterLen)
+		// Avoid uint64 overflow in cmPos+cmLen: validate with subtraction so a
+		// corrupt CMO entry cannot wrap the sum and defeat this bounds check.
+		if cmLen > fileLimit || cmPos > fileLimit-cmLen {
 			fmt.Fprintf(os.Stderr, "warning: column metadata out of range in %s; warming full file instead\n", dataFile.Path)
 			return "", false, nil
 		}
