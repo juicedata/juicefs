@@ -47,16 +47,10 @@ type ByteRange struct {
 // targetRe matches "path [start-end;...]"
 var targetRe = regexp.MustCompile(`^(.*\S)\s+\[([0-9]+-[0-9]+(?:;[0-9]+-[0-9]+)*)\]$`)
 
-// bracketSuffixRe detects a trailing bracket group
-var bracketSuffixRe = regexp.MustCompile(`\s\[[^\[\]]*\]$`)
-
 // SplitTarget splits a warmup target into its path and byte ranges.
 func SplitTarget(target string) (path, spec string, ranges []ByteRange, err error) {
 	m := targetRe.FindStringSubmatch(target)
 	if m == nil {
-		if bracketSuffixRe.MatchString(target) {
-			return "", "", nil, fmt.Errorf("malformed byte ranges, expect %q", "path [start-end;...]")
-		}
 		return target, "", nil, nil
 	}
 	if ranges, err = parseRanges(m[2]); err != nil {
