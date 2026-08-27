@@ -182,7 +182,7 @@ func testMeta(t *testing.T, m Meta) {
 	testListLocks(t, m)
 	testConcurrentWrite(t, m)
 	testRace(t, m)
-	testXattrInodeLifecycle(t, m)
+	testXattr(t, m)
 	testCompaction(t, m, false)
 	time.Sleep(time.Second)
 	testCompaction(t, m, true)
@@ -214,7 +214,7 @@ func testMeta(t *testing.T, m Meta) {
 	testReadOnly(t, m)
 }
 
-func testXattrInodeLifecycle(t *testing.T, m Meta) {
+func testXattr(t *testing.T, m Meta) {
 	t.Run("XattrInodeLifecycle", func(t *testing.T) {
 		ctx := Background()
 		var inode Ino
