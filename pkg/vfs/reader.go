@@ -735,15 +735,18 @@ func (r *dataReader) readBufferUsed() int64 {
 func (r *dataReader) checkReadBuffer() {
 	for {
 		r.Lock()
+		fs := make([]*fileReader, 0, len(r.files))
 		for _, f := range r.files {
 			for f != nil {
-				r.Unlock()
-				f.releaseIdleBuffer()
-				r.Lock()
+				fs = append(fs, f)
 				f = f.next
 			}
 		}
 		r.Unlock()
+
+		for _, f := range fs {
+			f.releaseIdleBuffer()
+		}
 		time.Sleep(time.Second)
 	}
 }
