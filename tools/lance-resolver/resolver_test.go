@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -337,7 +338,7 @@ func TestColumnWarmupPath(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
-	want := filepath.Join(dsPath, "data", "data_0.lance") + fmt.Sprintf(" [32-%d;80-88]", 32+len(cmData))
+	want := path.Join(dsPath, "data", "data_0.lance") + fmt.Sprintf(" [32-%d;80-88]", 32+len(cmData))
 	if p != want {
 		t.Errorf("columnWarmupPath() = %q, want %q", p, want)
 	}
