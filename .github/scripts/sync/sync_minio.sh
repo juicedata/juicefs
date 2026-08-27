@@ -129,33 +129,48 @@ test_sync_list_object_symlink(){
 
 prepare_test(){
     umount_jfs /jfs $META_URL
+    stop_gateway
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs
     rm -rf /var/jfsCache/myjfs
     (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9 || true
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
-    wait_gateway_ready
+    wait_gateway_ready $!
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
 }
 
-wait_gateway_ready(){
-    timeout=30
-    for i in $(seq 1 $timeout); do
-        if [[ -z $(lsof -i :9005) ]]; then
-            echo "$i Waiting for port 9005 to be ready..."
-            sleep 1
-        else
-            echo "gateway is now ready on port 9005"
-            break
+stop_gateway(){
+    local timeout=100
+    lsof -tiTCP:9005 -sTCP:LISTEN | xargs -r kill -9 || true
+    for _ in $(seq 1 $timeout); do
+        if ! lsof -tiTCP:9005 -sTCP:LISTEN > /dev/null 2>&1; then
+            return
         fi
+        sleep 0.1
     done
-    if [[ -z $(lsof -i :9005) ]]; then
-        echo "gateway is not ready after $timeout seconds"
-        exit 1
-    fi
+    echo "gateway is still listening on port 9005"
+    return 1
+}
+
+wait_gateway_ready(){
+    local gateway_pid=$1
+    local timeout=30
+    for i in $(seq 1 $timeout); do
+        if ! kill -0 "$gateway_pid" 2>/dev/null; then
+            echo "gateway process exited before becoming ready"
+            return 1
+        fi
+        if curl -fsS --connect-timeout 1 --max-time 2 http://localhost:9005/minio/health/cluster > /dev/null 2>&1; then
+            echo "gateway is now ready on port 9005"
+            return
+        fi
+        echo "$i Waiting for gateway to be ready..."
+        sleep 1
+    done
+    echo "gateway is not ready after $timeout seconds"
+    return 1
 }
 
 create_sparse_marker_file(){
