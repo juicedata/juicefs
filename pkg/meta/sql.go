@@ -2434,6 +2434,8 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			} else if de.Inode == se.Inode {
 				return nil
+			} else if ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
+				return syscall.EACCES
 			} else if se.Type == TypeDirectory && de.Type != TypeDirectory {
 				return syscall.ENOTDIR
 			} else if de.Type == TypeDirectory {

@@ -2256,6 +2256,8 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			} else if dino == ino {
 				return nil
+			} else if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
+				return syscall.EACCES
 			} else if typ == TypeDirectory && dtyp != TypeDirectory {
 				return syscall.ENOTDIR
 			} else if typ != TypeDirectory && dtyp == TypeDirectory {
