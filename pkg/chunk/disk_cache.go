@@ -60,6 +60,7 @@ type pendingFile struct {
 	key       string
 	page      *Page
 	dropCache bool
+	id        uint64
 }
 
 type diskCache struct {
@@ -75,8 +76,9 @@ type diskCache struct {
 	hashPrefix    bool
 	scanInterval  time.Duration
 	cacheExpire   time.Duration
-	pending       chan pendingFile
-	pages         map[string]*Page
+	pending       chan *pendingFile
+	pages         map[string]*pendingFile
+	pendingID     atomic.Uint64
 	m             *cacheManagerMetrics
 
 	used      int64
@@ -124,8 +126,8 @@ func newDiskCache(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64,
 		scanInterval:        config.CacheScanInterval,
 		cacheExpire:         config.CacheExpire,
 		keys:                keyIndex,
-		pending:             make(chan pendingFile, pendingPages),
-		pages:               make(map[string]*Page),
+		pending:             make(chan *pendingFile, pendingPages),
+		pages:               make(map[string]*pendingFile),
 		uploader:            uploader,
 		opTs:                make(map[time.Duration]func() error),
 		stagedBlockCooldown: config.CacheExpire / 2,
@@ -450,21 +452,24 @@ func (cache *diskCache) cache(key string, p *Page, force, dropCache bool) {
 	if cache.keys.get(k) != nil {
 		return
 	}
+	w := &pendingFile{key: key, page: p, dropCache: dropCache, id: cache.pendingID.Add(1)}
 	p.Acquire()
-	cache.pages[key] = p
+	cache.pages[key] = w
 	atomic.AddInt64(&cache.totalPages, int64(cap(p.Data)))
 	select {
-	case cache.pending <- pendingFile{key, p, dropCache}:
+	case cache.pending <- w:
 	default:
 		if force {
 			cache.Unlock()
-			cache.pending <- pendingFile{key, p, dropCache}
+			cache.pending <- w
 			cache.Lock()
 		} else {
 			// does not have enough bandwidth to write it into disk, discard it
 			logger.Debugf("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
 			cache.m.cacheDrops.Add(1)
-			delete(cache.pages, key)
+			if cache.pages[key] == w {
+				delete(cache.pages, key)
+			}
 			atomic.AddInt64(&cache.totalPages, -int64(cap(p.Data)))
 			p.Release()
 		}
@@ -498,7 +503,7 @@ func (cache *diskCache) curFreeRatio() DiskFreeRatio {
 	return usage
 }
 
-func (cache *diskCache) flushPage(path string, data []byte, dropCache bool, tierID uint8) (err error) {
+func (cache *diskCache) writePage(path string, data []byte, dropCache bool, tierID uint8) (err error) {
 	if !cache.available() {
 		return errCacheDown
 	}
@@ -510,32 +515,31 @@ func (cache *diskCache) flushPage(path string, data []byte, dropCache bool, tier
 		cache.m.cacheWriteHist.Observe(time.Since(start).Seconds())
 	}()
 	cache.createDir(filepath.Dir(path))
-	tmp := path + ".tmp"
 
 	var f *os.File
 	err = cache.checkErr(func() error {
-		f, err = os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE, cache.mode)
+		f, err = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, cache.mode)
 		return err
 	})
 	if err != nil {
-		logger.Warnf("Can't create cache file %s: %s", tmp, err)
+		logger.Warnf("Can't create cache file %s: %s", path, err)
 		return err
 	}
 
 	defer func() {
 		if err != nil {
-			_ = cache.removeFile(tmp)
+			_ = cache.removeFile(path)
 		}
 	}()
 
 	if err = cache.writeFile(f, data); err != nil {
-		logger.Warnf("Write to cache file %s failed: %s", tmp, err)
+		logger.Warnf("Write to cache file %s failed: %s", path, err)
 		_ = f.Close()
 		return
 	}
 	if cache.checksum != CsNone {
 		if err = cache.writeFile(f, checksum(data)); err != nil {
-			logger.Warnf("Write checksum to cache file %s failed: %s", tmp, err)
+			logger.Warnf("Write checksum to cache file %s failed: %s", path, err)
 			_ = f.Close()
 			return
 		}
@@ -546,12 +550,12 @@ func (cache *diskCache) flushPage(path string, data []byte, dropCache bool, tier
 		var fData []byte
 		fData, err = (&footer).marshal(cache.checksum != CsNone)
 		if err != nil {
-			logger.Warnf("Marshal stage footer for cache file %s failed: %s", tmp, err)
+			logger.Warnf("Marshal stage footer for cache file %s failed: %s", path, err)
 			_ = f.Close()
 			return
 		}
 		if err = cache.writeFile(f, fData); err != nil {
-			logger.Warnf("Write stage footer to cache file %s failed: %s", tmp, err)
+			logger.Warnf("Write stage footer to cache file %s failed: %s", path, err)
 			_ = f.Close()
 			return
 		}
@@ -560,11 +564,20 @@ func (cache *diskCache) flushPage(path string, data []byte, dropCache bool, tier
 		dropOSCache(f)
 	}
 	if err = cache.closeFile(f); err != nil {
-		logger.Warnf("Close cache file %s failed: %s", tmp, err)
+		logger.Warnf("Close cache file %s failed: %s", path, err)
+		return
+	}
+	return
+}
+
+func (cache *diskCache) flushPage(path string, data []byte, dropCache bool, tierID uint8) (err error) {
+	tmp := path + ".tmp"
+	if err = cache.writePage(tmp, data, dropCache, tierID); err != nil {
 		return
 	}
 	if err = cache.renameFile(tmp, path); err != nil {
 		logger.Warnf("Rename cache file %s -> %s failed: %s", tmp, path, err)
+		_ = cache.removeFile(tmp)
 	}
 	return
 }
@@ -642,12 +655,14 @@ func (cache *diskCache) remove(key string, staging bool) {
 	} else if cache.scanned || !staging {
 		path = "" // not existed or staging block
 	}
-	cache.Unlock()
-
 	if path != "" {
 		if err := cache.removeFile(path); err != nil && !os.IsNotExist(err) {
 			logger.Warnf("remove %s failed: %s", path, err)
 		}
+	}
+	cache.Unlock()
+
+	if path != "" {
 		if staging {
 			if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
 				logger.Warnf("remove stage %s failed: %s", cache.stagePath(key), err)
@@ -659,8 +674,8 @@ func (cache *diskCache) remove(key string, staging bool) {
 func (cache *diskCache) load(key string) (ReadCloser, error) {
 	cache.Lock()
 	defer cache.Unlock()
-	if p, ok := cache.pages[key]; ok {
-		return NewPageReader(p), nil
+	if w, ok := cache.pages[key]; ok {
+		return NewPageReader(w.page), nil
 	}
 	k := cache.getCacheKey(key)
 	if cache.scanned && cache.keys.get(k) == nil {
@@ -727,31 +742,73 @@ func (cache *diskCache) stagePath(key string) string {
 // flush cached block into disk
 func (cache *diskCache) flush() {
 	for {
-		w := <-cache.pending
-		path := cache.cachePath(w.key)
-		if cache.enabled() && cache.flushPage(path, w.page.Data, w.dropCache, 0) == nil {
-			cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
+		cache.flushPending(<-cache.pending)
+	}
+}
+
+func (cache *diskCache) flushPending(w *pendingFile) {
+	tmp := cache.pendingPath(w)
+	prepared := cache.enabled() && cache.writePage(tmp, w.page.Data, w.dropCache, 0) == nil
+	cache.finishPending(w, tmp, prepared)
+}
+
+func (cache *diskCache) pendingPath(w *pendingFile) string {
+	return fmt.Sprintf("%s.%d.tmp", cache.cachePath(w.key), w.id)
+}
+
+func (cache *diskCache) finishPending(w *pendingFile, tmp string, prepared bool) {
+	path := cache.cachePath(w.key)
+	committed, cleanup := false, false
+	cache.Lock()
+	if cache.pages[w.key] == w {
+		if prepared {
+			if err := cache.renameFile(tmp, path); err != nil {
+				logger.Warnf("Rename cache file %s -> %s failed: %s", tmp, path, err)
+			} else {
+				committed = true
+				if cache.addLocked(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix())) {
+					cleanup = cache.full() && cache.keys.name() != EvictionNone
+				}
+			}
 		}
-		cache.Lock()
-		_, ok := cache.pages[w.key]
 		delete(cache.pages, w.key)
-		atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
-		cache.Unlock()
-		w.page.Release()
-		if !ok {
-			cache.remove(w.key, false)
+	}
+	cache.Unlock()
+	if prepared && !committed {
+		if err := cache.removeFile(tmp); err != nil && !os.IsNotExist(err) {
+			logger.Warnf("remove %s failed: %s", tmp, err)
 		}
+	}
+	atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
+	w.page.Release()
+	if cleanup {
+		cache.Lock()
+		if cache.full() && cache.keys.name() != EvictionNone {
+			logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%s)", cache.dir, cache.keys.len(), humanize.IBytes(uint64(cache.used)))
+			cache.cleanupFull()
+		}
+		cache.Unlock()
 	}
 }
 
 func (cache *diskCache) add(key string, size int32, atime uint32) {
-	if size == 0 {
-		logger.Warnf("Cache add %s with size 0, atime %d", key, atime) // should not happen
-		return
-	}
-	k := cache.getCacheKey(key)
 	cache.Lock()
 	defer cache.Unlock()
+	if !cache.addLocked(key, size, atime) {
+		return
+	}
+	if cache.full() && cache.keys.name() != EvictionNone {
+		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%s)", cache.dir, cache.keys.len(), humanize.IBytes(uint64(cache.used)))
+		cache.cleanupFull()
+	}
+}
+
+func (cache *diskCache) addLocked(key string, size int32, atime uint32) bool {
+	if size == 0 {
+		logger.Warnf("Cache add %s with size 0, atime %d", key, atime) // should not happen
+		return false
+	}
+	k := cache.getCacheKey(key)
 	iter := cache.keys.get(k)
 	if iter == nil {
 		iter = &cacheItem{size: size, atime: atime}
@@ -765,10 +822,7 @@ func (cache *diskCache) add(key string, size int32, atime uint32) {
 	if size > 0 {
 		cache.used += int64(size + 4096)
 	}
-	if cache.full() && cache.keys.name() != EvictionNone {
-		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%s)", cache.dir, cache.keys.len(), humanize.IBytes(uint64(cache.used)))
-		cache.cleanupFull()
-	}
+	return true
 }
 
 func (cache *diskCache) stage(key string, data []byte, tierID uint8) (string, error) {

@@ -404,6 +404,63 @@ func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
 	})
 }
 
+func TestPendingCacheAfterEvict(t *testing.T) {
+	conf := defaultConf
+	conf.CacheEviction = EvictionNone
+	cache := newTestCacheStore(t.TempDir(), &conf, nil)
+	defer cache.state.stop()
+	key := "chunks/0/0/1_0_4"
+
+	oldPage := NewPage([]byte("old!"))
+	defer oldPage.Release()
+	cache.cache(key, oldPage, true, false)
+	oldPending := <-cache.pending
+
+	cache.remove(key, false)
+	newPage := NewPage([]byte("new!"))
+	defer newPage.Release()
+	cache.cache(key, newPage, true, false)
+	newPending := <-cache.pending
+
+	cache.flushPending(oldPending)
+	require.Same(t, newPending, cache.pages[key])
+	_, err := os.Stat(cache.cachePath(key))
+	require.ErrorIs(t, err, os.ErrNotExist)
+
+	cache.flushPending(newPending)
+	data, err := os.ReadFile(cache.cachePath(key))
+	require.NoError(t, err)
+	require.Equal(t, []byte("new!"), data)
+	require.NotContains(t, cache.pages, key)
+	require.Zero(t, cache.usedMemory())
+	require.Equal(t, int32(1), oldPage.refs)
+	require.Equal(t, int32(1), newPage.refs)
+}
+
+func TestEvictedPreparedCacheIsNotPublished(t *testing.T) {
+	conf := defaultConf
+	conf.CacheEviction = EvictionNone
+	cache := newTestCacheStore(t.TempDir(), &conf, nil)
+	defer cache.state.stop()
+	key := "chunks/0/0/1_0_4"
+
+	page := NewPage([]byte("test"))
+	defer page.Release()
+	cache.cache(key, page, true, false)
+	w := <-cache.pending
+	tmp := cache.pendingPath(w)
+	require.NoError(t, cache.writePage(tmp, page.Data, false, 0))
+
+	cache.remove(key, false)
+	cache.finishPending(w, tmp, true)
+	_, err := os.Stat(cache.cachePath(key))
+	require.ErrorIs(t, err, os.ErrNotExist)
+	_, err = os.Stat(tmp)
+	require.ErrorIs(t, err, os.ErrNotExist)
+	require.Zero(t, cache.usedMemory())
+	require.Equal(t, int32(1), page.refs)
+}
+
 func newTestCacheStore(dir string, conf *Config, uploader func(key, path string, force bool) bool) *diskCache {
 	keyIndex, _ := NewKeyIndex(conf)
 	c := &diskCache{
@@ -411,9 +468,11 @@ func newTestCacheStore(dir string, conf *Config, uploader func(key, path string,
 		mode:      0600,
 		capacity:  1 << 30,
 		freeRatio: conf.FreeSpace,
+		checksum:  conf.CacheChecksum,
 		keys:      keyIndex,
-		pending:   make(chan pendingFile, 10),
-		pages:     make(map[string]*Page),
+		pending:   make(chan *pendingFile, 10),
+		pages:     make(map[string]*pendingFile),
+		m:         newCacheManagerMetrics(nil),
 		uploader:  uploader,
 		opTs:      make(map[time.Duration]func() error),
 		scanned:   true,
