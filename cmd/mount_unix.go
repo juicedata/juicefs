@@ -495,10 +495,6 @@ func mountFlags() []cli.Flag {
 			Name:  "disable-transparent-hugepage",
 			Usage: "disable transparent huge page to avoid latency spikes caused by kernel's memory compaction",
 		})
-		selfFlags = append(selfFlags, &cli.BoolFlag{
-			Name:  "disable-oom-protection",
-			Usage: "do not set oom_score_adj to -1000, keeping the mount process killable by the OOM killer",
-		})
 	}
 	return append(selfFlags, fuseFlags()...)
 }
@@ -981,7 +977,7 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 }
 func launchMount(c *cli.Context, mp string, conf *vfs.Config) error {
 	increaseRlimit()
-	if !c.Bool("disable-oom-protection") {
+	if os.Getenv("JFS_INSIDE_CONTAINER") != "1" {
 		utils.AdjustOOMKiller(-1000)
 	}
 	utils.SetIOFlusher()
