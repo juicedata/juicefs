@@ -28,6 +28,53 @@ import (
 	xormlog "xorm.io/xorm/log"
 )
 
+func TestNodeShareLockSQL(t *testing.T) {
+	for _, test := range []struct {
+		driver string
+		want   string
+	}{
+		{"mysql", "SELECT * FROM jfs_node WHERE inode = ? LOCK IN SHARE MODE"},
+		{"postgres", "SELECT * FROM jfs_node WHERE inode = ? FOR SHARE"},
+		{"sqlite3", "SELECT * FROM jfs_node WHERE inode = ?"},
+	} {
+		t.Run(test.driver, func(t *testing.T) {
+			if got := nodeShareLockSQL(test.driver, "jfs_"); got != test.want {
+				t.Fatalf("share lock SQL: got %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestSupportsSharedLocks(t *testing.T) {
+	for _, test := range []struct {
+		driver  string
+		version string
+		want    bool
+	}{
+		{"mysql", "5.7.44", true},
+		{"mysql", "8.0.39", true},
+		{"mysql", "8.0.39-log", true},
+		{"mysql", "10.11.8-MariaDB", true},
+		{"mysql", "5.7.25-TiDB-v8.5.7", false},
+		{"mysql", "8.0.30-Vitess", false},
+		{"mysql", "5.7.25-OceanBase_CE-v4.3.5", false},
+		{"mysql", "8.0.32-PolarDB", false},
+		{"mysql", "8.0.39-28", false},
+		{"mysql", "8.0.39-commercial", false},
+		{"mysql", "", false},
+		{"postgres", "PostgreSQL 15.4 (Debian 15.4-1.pgdg120+1) on x86_64-pc-linux-gnu", true},
+		{"postgres", "CockroachDB CCL v23.1.11 (x86_64-pc-linux-gnu)", false},
+		{"postgres", "", false},
+		{"sqlite3", "", false},
+	} {
+		t.Run(test.driver+"/"+test.version, func(t *testing.T) {
+			if got := supportsSharedLocks(test.driver, test.version); got != test.want {
+				t.Fatalf("shared lock support: got %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
 func TestSQLiteClient(t *testing.T) {
 	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), testConfig())
 	if err != nil || m.Name() != "sqlite3" {
