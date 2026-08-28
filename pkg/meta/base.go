@@ -3220,6 +3220,12 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			entries = entries[1:]
 			if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil, nil); st != 0 {
 				logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
+			} else {
+				m.Lock()
+				if m.subTrash.inode == e.Inode {
+					m.subTrash = internalNode{}
+				}
+				m.Unlock()
 			}
 		}
 	}

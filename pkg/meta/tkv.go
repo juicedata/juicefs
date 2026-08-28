@@ -1577,7 +1577,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	var inode Ino
 	var opened bool
 	var newSpace, newInode int64
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *kvTxn) error {
+		trash = requestedTrash
 		opened = false
 		*attr = Attr{}
 		newSpace, newInode = 0, 0
@@ -1597,11 +1599,19 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		keys := [][]byte{m.inodeKey(parent), m.inodeKey(inode)}
 		if trash > 0 {
-			keys = append(keys, m.entryKey(trash, m.trashEntry(parent, inode, name)))
+			keys = append(keys, m.inodeKey(trash), m.entryKey(trash, m.trashEntry(parent, inode, name)))
 		}
 		rs := tx.gets(keys...)
 		if rs[0] == nil {
 			return syscall.ENOENT
+		}
+		var trashEntry []byte
+		if trash > 0 {
+			if rs[2] == nil { // trash directory was removed, delete the file directly
+				trash = 0
+			} else {
+				trashEntry = rs[3]
+			}
 		}
 		var pattr Attr
 		m.parseAttr(rs[0], &pattr)
@@ -1627,7 +1637,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if (attr.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
-			if trash > 0 && attr.Nlink > 1 && rs[2] != nil {
+			if trash > 0 && attr.Nlink > 1 && trashEntry != nil {
 				trash = 0
 			}
 			attr.Ctime = now.Unix()
@@ -1763,7 +1773,9 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		var deltas ugQuotaDeltas
 		var delNodes map[Ino]*dNode
 
+		requestedTrash := trash
 		err := m.txn(ctx, func(tx *kvTxn) error {
+			trash = requestedTrash
 			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
 			batchTrashLength, batchTrashSpace, batchTrashInodes = 0, 0, 0
 			batchFsSpace, batchFsInodes = 0, 0
@@ -1783,6 +1795,9 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			}
 			if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if trash > 0 && tx.get(m.inodeKey(trash)) == nil {
+				trash = 0 // trash directory was removed, delete the files directly
 			}
 
 			entryInfos = make([]*entryInfo, 0, len(batch))
@@ -2035,7 +2050,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 			return st
 		}
 	}
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *kvTxn) error {
+		trash = requestedTrash
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parent, name); e != nil {
@@ -2053,9 +2070,16 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		if pinode != nil {
 			*pinode = inode
 		}
-		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode), m.dirQuotaKey(inode))
+		keys := [][]byte{m.inodeKey(parent), m.inodeKey(inode), m.dirQuotaKey(inode)}
+		if trash > 0 {
+			keys = append(keys, m.inodeKey(trash))
+		}
+		rs := tx.gets(keys...)
 		if rs[0] == nil {
 			return syscall.ENOENT
+		}
+		if trash > 0 && rs[3] == nil {
+			trash = 0 // trash directory was removed, delete the directory directly
 		}
 		var pattr Attr
 		m.parseAttr(rs[0], &pattr)
@@ -2152,7 +2176,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if !parentSrc.IsTrash() { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
 		parentLocks = append(parentLocks, parentSrc)
 	}
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *kvTxn) error {
+		trash = requestedTrash
 		opened = false
 		dino, dtyp = 0, 0
 		tattr = Attr{}
@@ -2174,9 +2200,16 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			return nil
 		}
-		rs := tx.gets(m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino), m.entryKey(parentDst, nameDst))
+		keys := [][]byte{m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino), m.entryKey(parentDst, nameDst)}
+		if trash > 0 {
+			keys = append(keys, m.inodeKey(trash))
+		}
+		rs := tx.gets(keys...)
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return syscall.ENOENT
+		}
+		if trash > 0 && rs[4] == nil {
+			trash = 0 // trash directory was removed, delete the replaced entry directly
 		}
 		var sattr, dattr, iattr Attr
 		m.parseAttr(rs[0], &sattr)
