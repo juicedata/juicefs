@@ -734,20 +734,27 @@ func (r *dataReader) readBufferUsed() int64 {
 
 func (r *dataReader) checkReadBuffer() {
 	for {
-		r.Lock()
-		fs := make([]*fileReader, 0, len(r.files))
-		for _, f := range r.files {
-			for f != nil {
-				fs = append(fs, f)
-				f = f.next
-			}
-		}
-		r.Unlock()
-
-		for _, f := range fs {
-			f.releaseIdleBuffer()
-		}
+		r.tickReadBuffer()
 		time.Sleep(time.Second)
+	}
+}
+
+// tickReadBuffer snaps the current reader linked list under the dataReader lock
+// and then releases idle buffers after releasing the lock, so that concurrent
+// mutations to r.files (e.g. from Open/Close) cannot panic the map iteration.
+func (r *dataReader) tickReadBuffer() {
+	r.Lock()
+	fs := make([]*fileReader, 0, len(r.files))
+	for _, f := range r.files {
+		for f != nil {
+			fs = append(fs, f)
+			f = f.next
+		}
+	}
+	r.Unlock()
+
+	for _, f := range fs {
+		f.releaseIdleBuffer()
 	}
 }
 
