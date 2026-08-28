@@ -86,6 +86,8 @@ type kvTxn struct {
 	retry int
 }
 
+type txDisableAsyncCommitKey struct{}
+
 func (tx *kvTxn) deleteKeys(prefix []byte) {
 	tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
 		tx.delete(k)
@@ -1191,6 +1193,13 @@ func (m *kvMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	return errno(m.client.simpleTxn(ctx, func(tx *kvTxn) error {
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil {
+			var pattr Attr
+			if value := tx.get(m.inodeKey(parent)); value != nil {
+				m.parseAttr(value, &pattr)
+				if m.checkLink(parent, &pattr) {
+					return ELink
+				}
+			}
 			return syscall.ENOENT
 		}
 		foundType, foundIno := m.parseEntry(buf)
@@ -1224,6 +1233,14 @@ func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}, 0))
 }
 
+func (m *kvMeta) checkLink(inode Ino, attr *Attr) bool {
+	if attr.Typ == TypeLink {
+		m.newMsg(ExternalLink, inode, attr.Length)
+		return true
+	}
+	return false
+}
+
 func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
 		var cur Attr
@@ -1232,6 +1249,9 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, &cur)
+		if m.checkLink(inode, &cur) {
+			return ELink
+		}
 		if oldAttr != nil {
 			*oldAttr = cur
 		}
@@ -1277,6 +1297,9 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		t := Attr{}
 		m.parseAttr(a, &t)
+		if m.checkLink(inode, &t) {
+			return ELink
+		}
 		if t.Typ != TypeFile || t.Flags&(FlagImmutable|t.Flags&FlagAppend) != 0 || (flags == 0 && t.Parent > TrashInode) {
 			return syscall.EPERM
 		}
@@ -1337,6 +1360,9 @@ func (m *kvMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		}
 		t := Attr{}
 		m.parseAttr(a, &t)
+		if m.checkLink(inode, &t) {
+			return ELink
+		}
 		if t.Typ == TypeFIFO {
 			return syscall.EPIPE
 		}
@@ -1395,6 +1421,14 @@ func (m *kvMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
 	if noatime {
 		target, err = m.get(m.symKey(inode))
+		if err == nil && target == nil {
+			var attr Attr
+			if st := m.doGetAttr(ctx, inode, &attr); st != 0 {
+				err = st
+			} else if m.checkLink(inode, &attr) {
+				err = ELink
+			}
+		}
 		return
 	}
 
@@ -1406,6 +1440,9 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 			return syscall.ENOENT
 		}
 		m.parseAttr(rs[0], attr)
+		if m.checkLink(inode, attr) {
+			return ELink
+		}
 		if attr.Typ != TypeSymlink {
 			return syscall.EINVAL
 		}
@@ -1435,6 +1472,9 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			return syscall.ENOENT
 		}
 		m.parseAttr(rs[0], &pattr)
+		if m.checkLink(parent, &pattr) {
+			return ELink
+		}
 		ihGid := m.inheritGid(ctx, _type, pattr.Gid, pattr.Mode)
 		if m.checkGroupQuota(ctx, uint64(ihGid), align4K(0), 1) {
 			return syscall.EDQUOT
@@ -1544,6 +1584,8 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		tx.set(m.entryKey(parent, name), m.packEntry(_type, *inode))
 		if updateParent {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		} else {
+			tx.set(m.inodeKey(parent), rs[0])
 		}
 		tx.set(m.inodeKey(*inode), m.marshal(attr))
 		if _type == TypeSymlink {
@@ -1591,9 +1633,6 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			return syscall.ENOENT
 		}
 		_type, inode = m.parseEntry(buf)
-		if _type == TypeDirectory {
-			return syscall.EPERM
-		}
 		keys := [][]byte{m.inodeKey(parent), m.inodeKey(inode)}
 		if trash > 0 {
 			keys = append(keys, m.entryKey(trash, m.trashEntry(parent, inode, name)))
@@ -1604,6 +1643,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		var pattr Attr
 		m.parseAttr(rs[0], &pattr)
+		if m.checkLink(parent, &pattr) {
+			return ELink
+		}
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -1617,6 +1659,12 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		now := time.Now()
 		if rs[1] != nil {
 			m.parseAttr(rs[1], attr)
+			if _type == TypeDirectory && attr.Typ == TypeDirectory {
+				return syscall.EPERM
+			}
+			if attr.Typ == TypeLink {
+				_type = TypeLink
+			}
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
@@ -1640,6 +1688,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				attr.Parent = trash
 			}
 		} else {
+			if _type == TypeDirectory {
+				return syscall.EPERM
+			}
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 			trash = 0
 		}
@@ -1704,6 +1755,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if _type == TypeFile && attr.Nlink == 0 {
 				m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
 			}
+			if _type == TypeLink {
+				m.newMsg(Unref, inode, attr.Length)
+			}
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, newInode)
 		} else {
@@ -1761,6 +1815,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		var batchFsSpace, batchFsInodes int64
 		var deltas ugQuotaDeltas
 		var delNodes map[Ino]*dNode
+		var unrefs map[Ino]uint64
 
 		err := m.txn(ctx, func(tx *kvTxn) error {
 			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
@@ -1768,12 +1823,16 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			batchFsSpace, batchFsInodes = 0, 0
 			deltas = make(ugQuotaDeltas)
 			delNodes = make(map[Ino]*dNode)
+			unrefs = make(map[Ino]uint64)
 			pbuf := tx.get(m.inodeKey(parent))
 			if pbuf == nil {
 				return syscall.ENOENT
 			}
 			var pattr Attr
 			m.parseAttr(pbuf, &pattr)
+			if m.checkLink(parent, &pattr) {
+				return ELink
+			}
 			if pattr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
 			}
@@ -1796,7 +1855,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					continue
 				}
 				typ, ino := m.parseEntry(vals[idx])
-				if ino != entry.Inode || typ == TypeDirectory || (entry.Attr != nil && typ != entry.Attr.Typ) {
+				if ino != entry.Inode || typ == TypeDirectory || (entry.Attr != nil && typ != entry.Attr.Typ && entry.Attr.Typ != TypeLink) {
 					continue
 				}
 				info := entryInfo{
@@ -1852,6 +1911,9 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					}
 					if (attr.Flags & FlagSkipTrash) != 0 {
 						info.trash = 0
+					}
+					if attr.Typ == TypeLink {
+						info.typ = TypeLink
 					}
 					info.attr = attr
 				}
@@ -1942,6 +2004,9 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 							fallthrough
 						default:
 							tx.delete(m.inodeKey(info.inode))
+							if info.typ == TypeLink {
+								unrefs[info.inode] = info.attr.Length
+							}
 							batchFsSpace -= align4K(0)
 							batchFsInodes--
 							deltas.add(&ugQuotaDelta{
@@ -2007,6 +2072,9 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		for inode, info := range delNodes {
 			m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 		}
+		for inode, target := range unrefs {
+			m.newMsg(Unref, inode, target)
+		}
 
 		delta.length += batchDirLength
 		delta.space += batchDirSpace
@@ -2054,6 +2122,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		}
 		var pattr Attr
 		m.parseAttr(rs[0], &pattr)
+		if m.checkLink(parent, &pattr) {
+			return ELink
+		}
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -2070,6 +2141,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		now := time.Now()
 		if rs[1] != nil {
 			m.parseAttr(rs[1], &attr)
+			if attr.Typ == TypeLink {
+				return syscall.ENOTSUP
+			}
 			if oldAttr != nil {
 				*oldAttr = attr
 			}
@@ -2173,6 +2247,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		var sattr, dattr, iattr Attr
 		m.parseAttr(rs[0], &sattr)
+		if m.checkLink(parentSrc, &sattr) {
+			return ELink
+		}
 		if sattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -2180,6 +2257,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return st
 		}
 		m.parseAttr(rs[1], &dattr)
+		if m.checkLink(parentDst, &dattr) {
+			return ELink
+		}
 		if dattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -2394,6 +2474,8 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		tx.set(m.entryKey(parentDst, nameDst), buf)
 		if dupdate {
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
+		} else if parentDst != parentSrc {
+			tx.set(m.inodeKey(parentDst), rs[1])
 		}
 		m.genLog(tx, now, "MOVE(%d,%s,%d,%s,%d,%d,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, ino)
 		return nil
@@ -2410,6 +2492,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if dtyp == TypeFile && tattr.Nlink == 0 {
 				m.fileDeleted(opened, false, dino, tattr.Length)
 			}
+			if tattr.Typ == TypeLink {
+				m.newMsg(Unref, dino, tattr.Length)
+			}
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, tattr.Uid, tattr.Gid, newSpace, newInode)
 		}
@@ -2425,6 +2510,9 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		}
 		var pattr, iattr Attr
 		m.parseAttr(rs[0], &pattr)
+		if m.checkLink(parent, &pattr) {
+			return ELink
+		}
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -2466,6 +2554,8 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		tx.set(m.entryKey(parent, name), m.packEntry(iattr.Typ, inode))
 		if updateParent {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		} else {
+			tx.set(m.inodeKey(parent), rs[0])
 		}
 		tx.set(m.inodeKey(inode), m.marshal(&iattr))
 		if oldParent > 0 {
@@ -2507,6 +2597,13 @@ func (m *kvMeta) fillAttr(entries []*Entry) (err error) {
 }
 
 func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
+	var attr Attr
+	if st := m.doGetAttr(ctx, inode, &attr); st != 0 {
+		return st
+	}
+	if m.checkLink(inode, &attr) {
+		return ELink
+	}
 	// TODO: handle big directory
 	vals, err := m.scanValues(ctx, m.entryKey(inode, ""), limit, nil)
 	if err != nil {
@@ -2592,11 +2689,21 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 }
 
 func (m *kvMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno) {
-	val, err := m.get(m.chunkKey(inode, indx))
-	if err != nil {
-		return nil, errno(err)
-	}
-	return readSliceBuf(val), 0
+	var slices []*slice
+	err := m.client.simpleTxn(ctx, func(tx *kvTxn) error {
+		rs := tx.gets(m.inodeKey(inode), m.chunkKey(inode, indx))
+		if rs[0] == nil {
+			return syscall.ENOENT
+		}
+		var attr Attr
+		m.parseAttr(rs[0], &attr)
+		if m.checkLink(inode, &attr) {
+			return ELink
+		}
+		slices = readSliceBuf(rs[1])
+		return nil
+	}, 0)
+	return slices, errno(err)
 }
 
 func (m *kvMeta) doList(ctx Context, inode Ino) ([]*slice, syscall.Errno) {
@@ -2626,6 +2733,9 @@ func (m *kvMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 			return syscall.ENOENT
 		}
 		m.parseAttr(rs[0], attr)
+		if m.checkLink(inode, attr) {
+			return ELink
+		}
 		if attr.Typ != TypeFile {
 			return syscall.EPERM
 		}
@@ -2681,6 +2791,10 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		}
 		sattr = Attr{}
 		m.parseAttr(rs[0], &sattr)
+		if m.checkLink(fin, &sattr) {
+			return ELink
+		}
+		tx.set(m.inodeKey(fin), rs[0])
 		if sattr.Typ != TypeFile {
 			return syscall.EINVAL
 		}
@@ -2696,6 +2810,9 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		}
 		attr = Attr{}
 		m.parseAttr(rs[1], &attr)
+		if m.checkLink(fout, &attr) {
+			return ELink
+		}
 		if attr.Typ != TypeFile {
 			return syscall.EINVAL
 		}
@@ -2791,7 +2908,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			*copied = size
 		}
 		return nil
-	}, fout)
+	}, fin, fout)
 	if err == nil {
 		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, 0)
@@ -3347,6 +3464,13 @@ func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 		return errno(err)
 	}
 	if buf == nil {
+		var attr Attr
+		if st := m.doGetAttr(ctx, inode, &attr); st != 0 {
+			return st
+		}
+		if m.checkLink(inode, &attr) {
+			return ELink
+		}
 		return ENOATTR
 	}
 	*vbuff = buf
@@ -3376,6 +3500,9 @@ func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 	}
 	attr := &Attr{}
 	m.parseAttr(val, attr)
+	if m.checkLink(inode, attr) {
+		return ELink
+	}
 	setXAttrACL(names, attr.AccessACL, attr.DefaultACL)
 	return 0
 }
@@ -3386,6 +3513,16 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 	}
 	key := m.xattrKey(inode, name)
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		rawAttr := tx.get(m.inodeKey(inode))
+		if rawAttr == nil {
+			return syscall.ENOENT
+		}
+		var attr Attr
+		m.parseAttr(rawAttr, &attr)
+		if m.checkLink(inode, &attr) {
+			return ELink
+		}
+		tx.set(m.inodeKey(inode), rawAttr)
 		v := tx.get(key)
 		switch flags {
 		case XattrCreate:
@@ -3402,20 +3539,30 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 		}
 		m.genLog(tx, time.Now(), "SETXATTR(%d,%s,%s,%d)", inode, logEncode2(name), logEncode(value), flags)
 		return nil
-	}))
+	}, inode))
 }
 
 func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	key := m.xattrKey(inode, name)
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
-		value := tx.get(key)
+		value := tx.get(m.inodeKey(inode))
+		if value == nil {
+			return syscall.ENOENT
+		}
+		var attr Attr
+		m.parseAttr(value, &attr)
+		if m.checkLink(inode, &attr) {
+			return ELink
+		}
+		tx.set(m.inodeKey(inode), value)
+		value = tx.get(key)
 		if value == nil {
 			return ENOATTR
 		}
 		tx.delete(key)
 		m.genLog(tx, time.Now(), "REMOVEXATTR(%d,%s)", inode, logEncode2(name))
 		return nil
-	}))
+	}, inode))
 }
 
 func (m *kvMeta) getQuotaKey(qtype uint32, key uint64) ([]byte, error) {
@@ -3884,12 +4031,359 @@ func (m *kvMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dep
 	return nil
 }
 
+type kvTreeEdge struct {
+	inode Ino
+	typ   uint8
+}
+
+type kvTreeSnap struct {
+	attrs       map[Ino]*Attr
+	xattrs      map[Ino][]*DumpedXattr
+	chunks      map[Ino][]*DumpedChunk
+	symlinks    map[Ino]string
+	accessACL   map[Ino]*DumpedACL
+	defaultACL  map[Ino]*DumpedACL
+	rootEntries map[string]kvTreeEdge
+}
+
+func (m *kvMeta) makeSnap0(tx *kvTxn, inode Ino) (*kvTreeSnap, error) {
+	start := time.Now()
+	snap := &kvTreeSnap{
+		attrs:       make(map[Ino]*Attr),
+		xattrs:      make(map[Ino][]*DumpedXattr),
+		chunks:      make(map[Ino][]*DumpedChunk),
+		symlinks:    make(map[Ino]string),
+		accessACL:   make(map[Ino]*DumpedACL),
+		defaultACL:  make(map[Ino]*DumpedACL),
+		rootEntries: make(map[string]kvTreeEdge),
+	}
+
+	value := tx.get(m.inodeKey(inode))
+	if value == nil {
+		return nil, syscall.ENOENT
+	}
+	rootAttr := &Attr{Nlink: 1}
+	m.parseAttr(value, rootAttr)
+	snap.attrs[inode] = rootAttr
+
+	if rootAttr.Typ == TypeDirectory {
+		prefix := m.entryKey(inode, "")
+		tx.scan(prefix, nextKey(prefix), false, func(k, value []byte) bool {
+			typ, child := m.parseEntry(value)
+			snap.rootEntries[string(k[len(prefix):])] = kvTreeEdge{child, typ}
+			return true
+		})
+	}
+
+	inodes := make([]Ino, 0, len(snap.rootEntries)+1)
+	inodes = append(inodes, inode)
+	seenInodes := map[Ino]struct{}{inode: {}}
+	childKeys := make([][]byte, 0, len(snap.rootEntries))
+	childEdges := make([]kvTreeEdge, 0, len(snap.rootEntries))
+	for _, edge := range snap.rootEntries {
+		childKeys = append(childKeys, m.inodeKey(edge.inode))
+		childEdges = append(childEdges, edge)
+	}
+	if len(childKeys) > 0 {
+		for i, value := range tx.gets(childKeys...) {
+			if value == nil {
+				return nil, syscall.ENOENT
+			}
+			edge := childEdges[i]
+			attr := &Attr{Nlink: 1}
+			m.parseAttr(value, attr)
+			if attr.Typ != edge.typ && attr.Typ != TypeLink {
+				return nil, syscall.EAGAIN
+			}
+			snap.attrs[edge.inode] = attr
+			if _, ok := seenInodes[edge.inode]; !ok {
+				seenInodes[edge.inode] = struct{}{}
+				inodes = append(inodes, edge.inode)
+			}
+		}
+	}
+
+	lockKeys := make([][]byte, 0, len(inodes)*2)
+	for _, ino := range inodes {
+		lockKeys = append(lockKeys, m.flockKey(ino), m.plockKey(ino))
+	}
+	for _, value := range tx.gets(lockKeys...) {
+		if value != nil {
+			logger.Debugf("dumpTree: inode %d has locked inode", inode)
+			return nil, syscall.ENOTSUP
+		}
+	}
+
+	aclRules := make(map[uint32]*aclAPI.Rule)
+	var aclIDs []uint32
+	var aclKeys [][]byte
+	addACL := func(id uint32) {
+		if id == aclAPI.None {
+			return
+		}
+		if _, ok := aclRules[id]; ok {
+			return
+		}
+		if rule := m.aclCache.Get(id); rule != nil {
+			aclRules[id] = rule
+			return
+		}
+		aclRules[id] = nil
+		aclIDs = append(aclIDs, id)
+		aclKeys = append(aclKeys, m.aclKey(id))
+	}
+	for _, ino := range inodes {
+		attr := snap.attrs[ino]
+		addACL(attr.AccessACL)
+		addACL(attr.DefaultACL)
+	}
+	if len(aclKeys) > 0 {
+		for i, value := range tx.gets(aclKeys...) {
+			if value == nil {
+				return nil, syscall.EIO
+			}
+			rule := &aclAPI.Rule{}
+			rule.Decode(value)
+			aclRules[aclIDs[i]] = rule
+			m.aclCache.Put(aclIDs[i], rule)
+		}
+	}
+
+	symlinkInodes := make([]Ino, 0)
+	for _, ino := range inodes {
+		attr := snap.attrs[ino]
+		prefix := m.xattrKey(ino, "")
+		var xattrs []*DumpedXattr
+		tx.scan(prefix, nextKey(prefix), false, func(k, value []byte) bool {
+			xattrs = append(xattrs, &DumpedXattr{string(k[len(prefix):]), string(value)})
+			return true
+		})
+		if len(xattrs) > 0 {
+			sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+			snap.xattrs[ino] = xattrs
+		}
+
+		snap.accessACL[ino] = dumpACL(aclRules[attr.AccessACL])
+		snap.defaultACL[ino] = dumpACL(aclRules[attr.DefaultACL])
+
+		switch attr.Typ {
+		case TypeFile:
+			if attr.Length > 0 {
+				tx.scan(m.chunkKey(ino, 0), m.chunkKey(ino, uint32(attr.Length/ChunkSize)+1), false, func(k, value []byte) bool {
+					indx := binary.BigEndian.Uint32(k[len(k)-4:])
+					ss := readSliceBuf(value)
+					if ss == nil {
+						logger.Errorf("Corrupt value for inode %d chunk index %d", ino, indx)
+					}
+					slices := make([]*DumpedSlice, 0, len(ss))
+					for _, s := range ss {
+						slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+					}
+					snap.chunks[ino] = append(snap.chunks[ino], &DumpedChunk{Index: indx, Slices: slices})
+					return true
+				})
+			}
+		case TypeSymlink:
+			symlinkInodes = append(symlinkInodes, ino)
+		}
+	}
+
+	symlinkKeys := make([][]byte, len(symlinkInodes))
+	for i, ino := range symlinkInodes {
+		symlinkKeys[i] = m.symKey(ino)
+	}
+	if len(symlinkKeys) > 0 {
+		for i, value := range tx.gets(symlinkKeys...) {
+			ino := symlinkInodes[i]
+			if value == nil {
+				logger.Warnf("no link target for inode %d", ino)
+			}
+			snap.symlinks[ino] = string(value)
+		}
+	}
+
+	var sliceKeys [][]byte
+	var sliceIDs []uint64
+	seenSlices := make(map[string]struct{})
+	for _, chunks := range snap.chunks {
+		for _, chunk := range chunks {
+			for _, slice := range chunk.Slices {
+				if slice.Id == 0 {
+					continue
+				}
+				key := m.sliceKey(slice.Id, slice.Size)
+				if _, ok := seenSlices[string(key)]; ok {
+					continue
+				}
+				seenSlices[string(key)] = struct{}{}
+				sliceKeys = append(sliceKeys, key)
+				sliceIDs = append(sliceIDs, slice.Id)
+			}
+		}
+	}
+	if len(sliceKeys) > 0 {
+		for i, value := range tx.gets(sliceKeys...) {
+			if refs := parseCounter(value); refs > 0 {
+				logger.Infof("dumpTree: inode=%d, slice has extra refs=%d, id=%d", inode, refs, sliceIDs[i])
+				return nil, syscall.EPERM
+			}
+		}
+	}
+
+	logger.Debugf("makeSnap0: inode=%d, nodes=%d, xattrs=%d, chunks=%d, symlinks=%d, took=%s", inode, len(snap.attrs), len(snap.xattrs), len(snap.chunks), len(snap.symlinks), time.Since(start))
+	return snap, nil
+}
+
+func (m *kvMeta) dumpEntryFast(snap *kvTreeSnap, inode Ino, entry *DumpedEntry) error {
+	attr := snap.attrs[inode]
+	if attr == nil {
+		return syscall.ENOENT
+	}
+	entry.Attr = &DumpedAttr{}
+	dumpAttr(attr, entry.Attr)
+	entry.Attr.Inode = inode
+	entry.Xattrs = snap.xattrs[inode]
+	entry.Chunks = snap.chunks[inode]
+	entry.Symlink = snap.symlinks[inode]
+	entry.AccessACL = snap.accessACL[inode]
+	entry.DefaultACL = snap.defaultACL[inode]
+	if attr.Typ == TypeLink {
+		m.newMsg(ExternalLink, inode, attr.Length)
+	}
+	return nil
+}
+
+func (m *kvMeta) dumpTree(tx *kvTxn, inode Ino, entry *DumpedEntry) (map[Ino]*Attr, error) {
+	snap, err := m.makeSnap0(tx, inode)
+	if err != nil {
+		return nil, err
+	}
+	if err = m.dumpEntryFast(snap, inode, entry); err != nil {
+		return nil, err
+	}
+	if snap.attrs[inode].Typ == TypeDirectory {
+		entry.Entries = make(map[string]*DumpedEntry, len(snap.rootEntries))
+		for name, edge := range snap.rootEntries {
+			child := &DumpedEntry{}
+			if err = m.dumpEntryFast(snap, edge.inode, child); err != nil {
+				return nil, err
+			}
+			entry.Entries[name] = child
+		}
+	}
+	return snap.attrs, nil
+}
+
 func (m *kvMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
-	return syscall.ENOTSUP
+	ctx := Background()
+	dumped := &DumpedEntry{Attr: &DumpedAttr{}}
+	err := m.client.txn(ctx, func(tx *kvTxn) error {
+		_, err := m.dumpTree(tx, inode, dumped)
+		return err
+	}, 0)
+	if err == nil {
+		*entry = *dumped
+	}
+	return errno(err)
+}
+
+func (m *kvMeta) checkEntry(tx *kvTxn, inode Ino, entry *DumpedEntry) (map[Ino]*Attr, error) {
+	actual := &DumpedEntry{Attr: &DumpedAttr{}}
+	attrs, err := m.dumpTree(tx, inode, actual)
+	if err != nil {
+		return nil, err
+	}
+	expectedJSON, err := json.MarshalIndent(entry, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	actualJSON, err := json.MarshalIndent(actual, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(expectedJSON, actualJSON) {
+		logger.Debugf("checkEntry: inode=%d, entry=%s, actual=%s", inode, string(expectedJSON), string(actualJSON))
+		return nil, syscall.EAGAIN
+	}
+	return attrs, nil
+}
+
+func (m *kvMeta) replaceTree(tx *kvTxn, entry *DumpedEntry, attrs map[Ino]*Attr, mapping map[Ino]uint64, now time.Time) error {
+	if entry == nil || entry.Attr == nil {
+		return syscall.EINVAL
+	}
+	ino := entry.Attr.Inode
+	target, ok := mapping[ino]
+	if !ok || target == 0 {
+		return syscall.EINVAL
+	}
+	attr := attrs[ino]
+	if attr == nil {
+		return syscall.ENOENT
+	}
+
+	for _, child := range entry.Entries {
+		if err := m.replaceTree(tx, child, attrs, mapping, now); err != nil {
+			return err
+		}
+	}
+	for _, chunk := range entry.Chunks {
+		for _, slice := range chunk.Slices {
+			if slice.Id > 0 {
+				tx.delete(m.sliceKey(slice.Id, slice.Size))
+			}
+		}
+	}
+	tx.deleteKeys(m.xattrKey(ino, ""))
+	tx.deleteKeys(m.fmtKey("A", ino, "C"))
+	tx.delete(m.symKey(ino))
+	if attr.Typ == TypeDirectory {
+		tx.deleteKeys(m.entryKey(ino, ""))
+		tx.delete(m.dirStatKey(ino))
+	}
+	if attr.Typ != TypeLink {
+		attr.Rdev = uint32(attr.Typ)
+		attr.Typ = TypeLink
+	}
+	attr.Length = target
+	attr.Ctime = now.Unix()
+	attr.Ctimensec = uint32(now.Nanosecond())
+	attr.AccessACL = aclAPI.None
+	attr.DefaultACL = aclAPI.None
+	tx.set(m.inodeKey(ino), m.marshal(attr))
+	return nil
 }
 
 func (m *kvMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
-	return syscall.ENOTSUP
+	ctx = ctx.WithValue(txDisableAsyncCommitKey{}, true)
+	r := errno(m.txn(ctx, func(tx *kvTxn) error {
+		attrs, err := m.checkEntry(tx, inode, entry)
+		if err != nil {
+			return err
+		}
+		now := time.Now()
+		if err = m.replaceTree(tx, entry, attrs, mapping, now); err != nil {
+			return err
+		}
+		pairs := make([]string, 0, len(mapping))
+		for ino, target := range mapping {
+			pairs = append(pairs, fmt.Sprintf("%d:%d", ino, target))
+		}
+		m.genLog(tx, now, "REPLACE(%d,%s)", inode, strings.Join(pairs, ","))
+		return nil
+	}, inode))
+	if r == 0 {
+		for ino := range mapping {
+			m.of.InvalidateChunk(ino, invalidateAllChunks)
+			m.symlinks.Remove(ino)
+		}
+		for _, child := range entry.Entries {
+			if child.Attr.Type == "link" {
+				m.newMsg(UpdateRef, child.Attr.Inode, child.Attr.Length, mapping[child.Attr.Inode])
+			}
+		}
+	}
+	return r
 }
 
 func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) (err error) {
@@ -4410,6 +4904,10 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, originAttr)
+		if m.checkLink(srcIno, originAttr) {
+			return syscall.ENOTSUP
+		}
+		tx.set(m.inodeKey(srcIno), a)
 		attr := *originAttr
 		if eno := m.Access(ctx, srcIno, MODE_MASK_R, &attr); eno != 0 {
 			return eno
@@ -4439,6 +4937,9 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				return syscall.ENOENT
 			}
 			m.parseAttr(a, &pattr)
+			if m.checkLink(parent, &pattr) {
+				return ELink
+			}
 			if pattr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
 			}
@@ -4582,6 +5083,10 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		}
 		var pattr Attr
 		m.parseAttr(pa, &pattr)
+		if m.checkLink(dstParent, &pattr) {
+			return ELink
+		}
+		tx.set(m.inodeKey(dstParent), pa)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -4625,6 +5130,10 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			}
 			var attr Attr
 			m.parseAttr(sv, &attr)
+			if m.checkLink(info.srcIno, &attr) {
+				return syscall.ENOTSUP
+			}
+			tx.set(m.inodeKey(info.srcIno), sv)
 			if attr.Typ == TypeDirectory {
 				return syscall.EINVAL
 			}
@@ -4775,6 +5284,9 @@ func (m *kvMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, attr)
+		if m.checkLink(inode, attr) {
+			return ELink
+		}
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
@@ -4796,6 +5308,9 @@ func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 		}
 		attr := &Attr{}
 		m.parseAttr(val, attr)
+		if m.checkLink(ino, attr) {
+			return ELink
+		}
 
 		if ctx.Uid() != 0 && ctx.Uid() != attr.Uid {
 			return syscall.EPERM
@@ -4860,6 +5375,9 @@ func (m *kvMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, ru
 			}
 			attr := &Attr{}
 			m.parseAttr(val, attr)
+			if m.checkLink(ino, attr) {
+				return ELink
+			}
 			m.of.Update(ino, attr)
 
 			aclId = getAttrACLId(attr, aclType)
