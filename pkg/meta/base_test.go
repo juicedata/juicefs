@@ -2070,6 +2070,109 @@ func testRace(t *testing.T, m Meta) {
 	t.Run("TrashSliceClaim", func(t *testing.T) {
 		testTrashSliceClaimRace(t, m)
 	})
+	t.Run("SQLExactEdgeCAS", func(t *testing.T) {
+		db, ok := m.(*dbMeta)
+		if !ok {
+			t.Skip("SQL transaction invariant")
+		}
+		testSQLExactEdgeCAS(t, db)
+	})
+}
+
+func testSQLExactEdgeCAS(t *testing.T, m *dbMeta) {
+	insert := func(e *edge) {
+		t.Helper()
+		if _, err := m.db.Insert(e); err != nil {
+			t.Fatalf("insert edge %q: %s", e.Name, err)
+		}
+		if e.Id == 0 {
+			t.Fatalf("insert edge %q returned zero id", e.Name)
+		}
+	}
+	remove := func(id int64) {
+		t.Helper()
+		if _, err := m.db.ID(id).Delete(&edge{}); err != nil {
+			t.Errorf("remove edge %d: %s", id, err)
+		}
+	}
+	get := func(id int64) edge {
+		t.Helper()
+		var e edge
+		ok, err := m.db.ID(id).Get(&e)
+		if err != nil {
+			t.Fatalf("get edge %d: %s", id, err)
+		}
+		if !ok {
+			t.Fatalf("edge %d not found", id)
+		}
+		return e
+	}
+
+	t.Run("DeleteRejectsChangedIdentity", func(t *testing.T) {
+		original := edge{Parent: RootInode, Name: []byte("sql-c05-changed"), Inode: 101, Type: TypeFile}
+		insert(&original)
+		defer remove(original.Id)
+		stale := get(original.Id)
+		if n, err := m.db.ID(original.Id).Cols("inode", "type").Update(&edge{Inode: 102, Type: TypeSymlink}); err != nil || n != 1 {
+			t.Fatalf("replace edge identity: rows=%d err=%v", n, err)
+		}
+
+		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) { return nil, deleteEdge(s, &stale) })
+		if !errors.Is(err, errEdgeChanged) {
+			t.Fatalf("delete stale edge: got %v, want %v", err, errEdgeChanged)
+		}
+		current := get(original.Id)
+		if current.Inode != 102 || current.Type != TypeSymlink {
+			t.Fatalf("replacement edge changed: inode=%d type=%d", current.Inode, current.Type)
+		}
+	})
+
+	t.Run("UpdateRejectsABAIdentity", func(t *testing.T) {
+		original := edge{Parent: RootInode, Name: []byte("sql-c05-aba"), Inode: 201, Type: TypeFile}
+		insert(&original)
+		stale := get(original.Id)
+		if n, err := m.db.ID(original.Id).Delete(&edge{}); err != nil || n != 1 {
+			t.Fatalf("delete original edge: rows=%d err=%v", n, err)
+		}
+		replacement := edge{Parent: original.Parent, Name: original.Name, Inode: original.Inode, Type: original.Type}
+		insert(&replacement)
+		defer remove(replacement.Id)
+
+		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
+			return nil, updateEdge(s, &stale, &edge{Inode: 202, Type: TypeSymlink})
+		})
+		if !errors.Is(err, errEdgeChanged) {
+			t.Fatalf("update ABA edge: got %v, want %v", err, errEdgeChanged)
+		}
+		current := get(replacement.Id)
+		if current.Inode != original.Inode || current.Type != original.Type {
+			t.Fatalf("ABA replacement changed: inode=%d type=%d", current.Inode, current.Type)
+		}
+	})
+
+	t.Run("BatchAffectedRowsRollback", func(t *testing.T) {
+		first := edge{Parent: RootInode, Name: []byte("sql-c05-batch-first"), Inode: 301, Type: TypeFile}
+		second := edge{Parent: RootInode, Name: []byte("sql-c05-batch-second"), Inode: 302, Type: TypeFile}
+		insert(&first)
+		defer remove(first.Id)
+		insert(&second)
+		defer remove(second.Id)
+		stale := []edge{get(first.Id), get(second.Id)}
+		if n, err := m.db.ID(second.Id).Cols("inode").Update(&edge{Inode: 303}); err != nil || n != 1 {
+			t.Fatalf("replace batch edge identity: rows=%d err=%v", n, err)
+		}
+
+		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) { return nil, deleteEdges(s, stale) })
+		if !errors.Is(err, errEdgeChanged) {
+			t.Fatalf("delete stale edge batch: got %v, want %v", err, errEdgeChanged)
+		}
+		if current := get(first.Id); current.Inode != first.Inode {
+			t.Fatalf("first edge deletion was not rolled back: inode=%d", current.Inode)
+		}
+		if current := get(second.Id); current.Inode != 303 {
+			t.Fatalf("second replacement changed: inode=%d", current.Inode)
+		}
+	})
 }
 
 func testTrashSliceClaimRace(t *testing.T, m Meta) {
@@ -2736,6 +2839,23 @@ func testTrash(t *testing.T, m Meta) {
 	m.getBase().doCleanupTrash(Background(), format.TrashDays, true, nil)
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
+	}
+
+	// BatchUnlink with duplicate entries: extras are ignored
+	var bu3 Ino
+	var buAttr3 Attr
+	if st := m.Mknod(ctx, 1, "batch_u3", TypeFile, 0644, 022, 0, "", &bu3, &buAttr3); st != 0 {
+		t.Fatalf("mknod batch_u3: %s", st)
+	}
+	dupEntries := []*Entry{
+		{Inode: bu3, Name: []byte("batch_u3"), Attr: &buAttr3},
+		{Inode: bu3, Name: []byte("batch_u3"), Attr: &buAttr3},
+	}
+	if st := m.getBase().BatchUnlink(ctx, RootInode, dupEntries, nil, false); st != 0 {
+		t.Fatalf("batch unlink with duplicate entries: %s", st)
+	}
+	if st := m.Lookup(ctx, RootInode, "batch_u3", &inode, attr, true); st != syscall.ENOENT {
+		t.Fatalf("lookup batch_u3 after batch unlink: %s", st)
 	}
 }
 

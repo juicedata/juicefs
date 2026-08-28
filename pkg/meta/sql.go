@@ -1195,7 +1195,15 @@ func (m *dbMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines 
 
 var errBusy error
 
+// errEdgeChanged indicates that an edge was modified by a concurrent
+// transaction between reading it and mutating it; the transaction should
+// be retried against the latest snapshot.
+var errEdgeChanged = errors.New("edge was changed by a concurrent transaction")
+
 func (m *dbMeta) shouldRetry(err error) bool {
+	if errors.Is(err, errEdgeChanged) {
+		return true
+	}
 	if m.Name() == "mysql" && err == syscall.EBUSY {
 		// Retry transaction when parent node update return 0 rows in MySQL
 		return true
@@ -1947,6 +1955,91 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}))
 }
 
+func (m *dbMeta) getEdge(ctx Context, s *xorm.Session, parent Ino, name string) (edge, bool, error) {
+	e := edge{Parent: parent, Name: []byte(name)}
+	ok, err := s.Get(&e)
+	if err != nil || ok || !m.conf.CaseInsensi {
+		return e, ok, err
+	}
+	entry := m.resolveCase(ctx, parent, name)
+	if entry == nil {
+		return e, false, nil
+	}
+	e = edge{Parent: parent, Name: entry.Name}
+	ok, err = s.Get(&e)
+	return e, ok, err
+}
+
+func edgeIdentity(s *xorm.Session, e *edge) *xorm.Session {
+	q := s.Where("parent = ? AND name = ? AND inode = ? AND type = ?", e.Parent, e.Name, e.Inode, e.Type)
+	if e.Id > 0 {
+		q = q.And("id = ?", e.Id)
+	}
+	return q
+}
+
+func deleteEdge(s *xorm.Session, e *edge) error {
+	n, err := edgeIdentity(s, e).Delete(&edge{})
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return errEdgeChanged
+	}
+	return nil
+}
+
+func deleteEdges(s *xorm.Session, edges []edge) error {
+	if len(edges) == 0 {
+		return nil
+	}
+	q := s.Table(&edge{})
+	for i := range edges {
+		e := &edges[i]
+		cond := "parent = ? AND name = ? AND inode = ? AND type = ?"
+		args := []interface{}{e.Parent, e.Name, e.Inode, e.Type}
+		if e.Id > 0 {
+			cond += " AND id = ?"
+			args = append(args, e.Id)
+		}
+		if i == 0 {
+			q = q.Where(cond, args...)
+		} else {
+			q = q.Or(cond, args...)
+		}
+	}
+	n, err := q.Delete(&edge{})
+	if err != nil {
+		return err
+	}
+	if n != int64(len(edges)) {
+		return errEdgeChanged
+	}
+	return nil
+}
+
+func updateEdge(s *xorm.Session, old, new *edge) error {
+	if old.Inode == new.Inode && old.Type == new.Type {
+		var current edge
+		ok, err := edgeIdentity(s.ForUpdate(), old).Get(&current)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errEdgeChanged
+		}
+		return nil
+	}
+	n, err := edgeIdentity(s, old).Cols("inode", "type").Update(&edge{Inode: new.Inode, Type: new.Type})
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return errEdgeChanged
+	}
+	return nil
+}
+
 func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
@@ -1979,18 +2072,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if (pn.Flags&FlagAppend) != 0 || (pn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		var e = edge{Parent: parent, Name: []byte(name)}
-		ok, err = s.Get(&e)
+		e, ok, err := m.getEdge(ctx, s, parent, name)
 		if err != nil {
 			return err
-		}
-		if !ok && m.conf.CaseInsensi {
-			if ee := m.resolveCase(ctx, parent, name); ee != nil {
-				ok = true
-				e.Name = ee.Name
-				e.Inode = ee.Inode
-				e.Type = ee.Attr.Typ
-			}
 		}
 		if !ok {
 			return syscall.ENOENT
@@ -2042,7 +2126,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			updateParent = true
 		}
 
-		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
+		if err := deleteEdge(s, &e); err != nil {
 			return err
 		}
 
@@ -2161,18 +2245,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		if pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0 {
 			return syscall.EPERM
 		}
-		var e = edge{Parent: parent, Name: []byte(name)}
-		ok, err = s.Get(&e)
+		e, ok, err := m.getEdge(ctx, s, parent, name)
 		if err != nil {
 			return err
-		}
-		if !ok && m.conf.CaseInsensi {
-			if ee := m.resolveCase(ctx, parent, name); ee != nil {
-				ok = true
-				e.Inode = ee.Inode
-				e.Name = ee.Name
-				e.Type = ee.Attr.Typ
-			}
 		}
 		if !ok {
 			return syscall.ENOENT
@@ -2218,7 +2293,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		pn.setMtime(now)
 		pn.setCtime(now)
 
-		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
+		if err := deleteEdge(s, &e); err != nil {
 			return err
 		}
 		if _, err := s.Delete(&dirStats{Inode: e.Inode}); err != nil {
@@ -2331,20 +2406,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
 			return st
 		}
-		var se = edge{Parent: parentSrc, Name: []byte(nameSrc)}
-		ok, err := s.Get(&se)
+		se, ok, err := m.getEdge(ctx, s, parentSrc, nameSrc)
 		if err != nil {
 			return err
-		}
-		if !ok && m.conf.CaseInsensi {
-			if e := m.resolveCase(ctx, parentSrc, nameSrc); e != nil {
-				if string(e.Name) != nameSrc || parentSrc != parentDst {
-					ok = true
-					se.Inode = e.Inode
-					se.Type = e.Attr.Typ
-					se.Name = e.Name
-				}
-			}
 		}
 		if !ok {
 			return syscall.ENOENT
@@ -2380,20 +2444,15 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
 			return st
 		}
-		var de = edge{Parent: parentDst, Name: []byte(nameDst)}
-		ok, err = s.Get(&de)
+		de, ok, err := m.getEdge(ctx, s, parentDst, nameDst)
 		if err != nil {
 			return err
 		}
-		if !ok && m.conf.CaseInsensi {
-			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
-				if string(e.Name) != nameSrc || parentSrc != parentDst {
-					ok = true
-					de.Inode = e.Inode
-					de.Type = e.Attr.Typ
-					de.Name = e.Name
-				}
-			}
+		if ok && parentSrc == parentDst && string(de.Name) == string(se.Name) && string(de.Name) == nameSrc && nameDst != nameSrc {
+			// case-insensitive lookup resolved the destination to the source
+			// itself; treat the destination as missing
+			ok = false
+			de = edge{Parent: parentDst, Name: []byte(nameDst)}
 		}
 		var supdate, dupdate bool
 		var srcnlink, dstnlink int32
@@ -2511,20 +2570,18 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 
 		if exchange {
-			if _, err := s.Cols("inode", "type").Update(&de, &edge{Parent: parentSrc, Name: se.Name}); err != nil {
+			if err := updateEdge(s, &se, &edge{Inode: de.Inode, Type: de.Type}); err != nil {
 				return err
 			}
-			if _, err := s.Cols("inode", "type").Update(&se, &edge{Parent: parentDst, Name: de.Name}); err != nil {
+			if err := updateEdge(s, &de, &edge{Inode: se.Inode, Type: se.Type}); err != nil {
 				return err
 			}
 			if _, err := s.Cols("ctime", "ctimensec", "parent").Update(dn, &node{Inode: dino}); err != nil {
 				return err
 			}
 		} else {
-			if n, err := s.Delete(&edge{Parent: parentSrc, Name: se.Name}); err != nil {
+			if err := deleteEdge(s, &se); err != nil {
 				return err
-			} else if n != 1 {
-				return fmt.Errorf("delete src failed")
 			}
 			if dino > 0 {
 				if trash > 0 {
@@ -2576,7 +2633,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						return err
 					}
 				}
-				if _, err := s.Delete(&edge{Parent: parentDst, Name: de.Name}); err != nil {
+				if err := deleteEdge(s, &de); err != nil {
 					return err
 				}
 				if de.Type == TypeDirectory {
@@ -2871,6 +2928,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 				if e.Inode != entry.Inode || e.Type == TypeDirectory || (entry.Attr != nil && e.Type != entry.Attr.Typ) {
 					continue
 				}
+				delete(entryMap, string(entry.Name)) // skip duplicate names in the batch
 				entryInfos = append(entryInfos, &entryInfo{e: e, trash: trash})
 				if _, exists := inodeM[entry.Inode]; !exists {
 					inodeM[entry.Inode] = struct{}{}
@@ -2965,7 +3023,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			edgesIns := make([]interface{}, 0)
 			// walk each edge to decide whether to move to trash, decrement nlink or delete inode & xattrs
 			for _, info := range entryInfos {
-				edgesDel = append(edgesDel, edge{Parent: parent, Name: info.e.Name})
+				edgesDel = append(edgesDel, *info.e)
 				if info.n.Inode != 0 {
 					if info.n.Type == TypeFile {
 						batchDirLength -= int64(info.n.Length)
@@ -3049,18 +3107,8 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 				visited[info.n.Inode] = true
 			}
 
-			if len(edgesDel) > 0 {
-				query := s.Table(&edge{})
-				for j, e := range edgesDel {
-					if j == 0 {
-						query = query.Where("parent = ? AND name = ?", e.Parent, e.Name)
-					} else {
-						query = query.Or("parent = ? AND name = ?", e.Parent, e.Name)
-					}
-				}
-				if _, err := query.Delete(&edge{}); err != nil {
-					return err
-				}
+			if err := deleteEdges(s, edgesDel); err != nil {
+				return err
 			}
 
 			// execute SQL statements in batches
