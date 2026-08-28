@@ -977,7 +977,9 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 }
 func launchMount(c *cli.Context, mp string, conf *vfs.Config) error {
 	increaseRlimit()
-	utils.AdjustOOMKiller(-1000)
+	if os.Getenv("JFS_INSIDE_CONTAINER") != "1" {
+		utils.AdjustOOMKiller(-1000)
+	}
 	utils.SetIOFlusher()
 
 	if c.Bool("disable-transparent-hugepage") {
