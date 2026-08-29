@@ -77,6 +77,30 @@ from a pinned Lance version:
 Only the generated `*.pb.go` files are committed; the downloaded `.proto` files
 are not.
 
+## Testing and fixtures
+
+Format correctness is proven by golden tests against a **real** Lance dataset
+committed under `testdata/` — written by the official `pylance` (pinned in
+`gen-fixtures.py`), never hand-crafted bytes. The expected values in
+`testdata/expected.json` are extracted from the fixture bytes by the
+independent parser `dump_fixture.py`, which also normalizes volatile values
+(random file names, manifest timestamp, per-run file content permutation) so
+the JSON is stable across regenerations.
+
+```bash
+pip install pylance==10.0.0
+python tools/lance-resolver/gen-fixtures.py                    # regenerate testdata/lance-dataset
+python tools/lance-resolver/dump_fixture.py \
+    tools/lance-resolver/testdata/lance-dataset \
+    tools/lance-resolver/testdata/expected.json               # regenerate ground truth
+go test ./tools/lance-resolver/...
+```
+
+`check-fixture-drift.sh` regenerates into a temp dir and diffs the normalized
+ground truth against the committed `expected.json` (`git diff --exit-code`),
+failing when the pinned writer's format has drifted; CI runs it on every change
+under `tools/lance-resolver/` (`.github/workflows/lance-resolver-fixture-drift.yml`).
+
 ## Future work
 
 Precise column-level warmup for nested columns (`list`, `struct`, …) is not

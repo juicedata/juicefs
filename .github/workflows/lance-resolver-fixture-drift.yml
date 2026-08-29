@@ -1,0 +1,44 @@
+name: "lance-resolver fixture drift"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - 'tools/lance-resolver/**'
+      - '**/lance-resolver-fixture-drift.yml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - 'tools/lance-resolver/**'
+      - '**/lance-resolver-fixture-drift.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fixture-drift:
+    timeout-minutes: 15
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Lance writer
+        run: pip install pylance==10.0.0
+      - name: Check fixture drift
+        run: bash tools/lance-resolver/check-fixture-drift.sh
+      - name: Golden tests
+        run: go test ./tools/lance-resolver/...
