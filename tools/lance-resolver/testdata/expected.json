@@ -1,0 +1,279 @@
+{
+  "files": [
+    {
+      "columns": [
+        {
+          "cm_len": 112,
+          "cm_pos": 5456,
+          "leaf": true,
+          "name": "id",
+          "ranges_meta": [
+            [
+              5456,
+              5568
+            ]
+          ],
+          "ranges_pages": [
+            [
+              0,
+              2
+            ],
+            [
+              64,
+              1232
+            ],
+            [
+              5456,
+              5568
+            ]
+          ]
+        },
+        {
+          "cm_len": 130,
+          "cm_pos": 5568,
+          "leaf": true,
+          "name": "name",
+          "ranges_meta": [
+            [
+              5568,
+              5698
+            ]
+          ],
+          "ranges_pages": [
+            [
+              1280,
+              1282
+            ],
+            [
+              1344,
+              2128
+            ],
+            [
+              2176,
+              2585
+            ],
+            [
+              5568,
+              5698
+            ]
+          ]
+        },
+        {
+          "cm_len": 130,
+          "cm_pos": 5698,
+          "leaf": true,
+          "name": "city",
+          "ranges_meta": [
+            [
+              5698,
+              5828
+            ]
+          ],
+          "ranges_pages": [
+            [
+              2624,
+              2626
+            ],
+            [
+              2688,
+              3216
+            ],
+            [
+              3264,
+              3387
+            ],
+            [
+              5698,
+              5828
+            ]
+          ]
+        },
+        {
+          "cm_len": 115,
+          "cm_pos": 5828,
+          "leaf": true,
+          "name": "zip",
+          "ranges_meta": [
+            [
+              5828,
+              5943
+            ]
+          ],
+          "ranges_pages": [
+            [
+              3392,
+              3394
+            ],
+            [
+              3456,
+              5264
+            ],
+            [
+              5828,
+              5943
+            ]
+          ]
+        }
+      ],
+      "file_major_version": 2,
+      "footer": {
+        "cmo_table_start": 5943,
+        "column_metadata_start": 5456,
+        "footer_version": [
+          2,
+          1
+        ],
+        "gbo_table_start": 6007,
+        "num_columns": 4,
+        "num_global_buffers": 1
+      },
+      "placeholder": "FILE0"
+    },
+    {
+      "columns": [
+        {
+          "cm_len": 112,
+          "cm_pos": 5584,
+          "leaf": true,
+          "name": "id",
+          "ranges_meta": [
+            [
+              5584,
+              5696
+            ]
+          ],
+          "ranges_pages": [
+            [
+              0,
+              2
+            ],
+            [
+              64,
+              1360
+            ],
+            [
+              5584,
+              5696
+            ]
+          ]
+        },
+        {
+          "cm_len": 130,
+          "cm_pos": 5696,
+          "leaf": true,
+          "name": "name",
+          "ranges_meta": [
+            [
+              5696,
+              5826
+            ]
+          ],
+          "ranges_pages": [
+            [
+              1408,
+              1410
+            ],
+            [
+              1472,
+              2256
+            ],
+            [
+              2304,
+              2713
+            ],
+            [
+              5696,
+              5826
+            ]
+          ]
+        },
+        {
+          "cm_len": 130,
+          "cm_pos": 5826,
+          "leaf": true,
+          "name": "city",
+          "ranges_meta": [
+            [
+              5826,
+              5956
+            ]
+          ],
+          "ranges_pages": [
+            [
+              2752,
+              2754
+            ],
+            [
+              2816,
+              3344
+            ],
+            [
+              3392,
+              3515
+            ],
+            [
+              5826,
+              5956
+            ]
+          ]
+        },
+        {
+          "cm_len": 115,
+          "cm_pos": 5956,
+          "leaf": true,
+          "name": "zip",
+          "ranges_meta": [
+            [
+              5956,
+              6071
+            ]
+          ],
+          "ranges_pages": [
+            [
+              3520,
+              3522
+            ],
+            [
+              3584,
+              5392
+            ],
+            [
+              5956,
+              6071
+            ]
+          ]
+        }
+      ],
+      "file_major_version": 2,
+      "footer": {
+        "cmo_table_start": 6071,
+        "column_metadata_start": 5584,
+        "footer_version": [
+          2,
+          1
+        ],
+        "gbo_table_start": 6135,
+        "num_columns": 4,
+        "num_global_buffers": 1
+      },
+      "placeholder": "FILE1"
+    }
+  ],
+  "format": "lance-fixture-expected/1",
+  "full_resolve": [
+    "FILE0",
+    "FILE1",
+    "MANIFEST",
+    "TXN"
+  ],
+  "generator": "lance-10.0.0",
+  "manifest": {
+    "footer_version": [
+      0,
+      2
+    ],
+    "manifest_pos": 352,
+    "transaction_file": "TXN",
+    "version": 1
+  }
+}
