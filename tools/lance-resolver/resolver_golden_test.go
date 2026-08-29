@@ -32,6 +32,7 @@ package main
 // dump_fixture.py applies when assigning FILE0/FILE1 placeholders.
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -278,6 +279,131 @@ func mapStr(in []string, f func(string) string) []string {
 		out[i] = f(s)
 	}
 	return out
+}
+
+// rawFileFooter decodes the V2 footer straight from the bytes, independent of
+// the production parser: expected.json was produced by dump_fixture.py (also
+// independent), so a third implementation agreeing here pins the layout.
+type rawFileFooter struct {
+	colMetaStart, cmoStart, gboStart uint64
+	numGlobalBuffers, numColumns     uint32
+	major, minor                     uint16
+}
+
+func unpackRawFooter(raw []byte) (rawFileFooter, bool) {
+	if len(raw) < lanceFileFooterLen {
+		return rawFileFooter{}, false
+	}
+	f := raw[len(raw)-lanceFileFooterLen:]
+	if string(f[36:40]) != lanceMagic {
+		return rawFileFooter{}, false
+	}
+	return rawFileFooter{
+		binary.LittleEndian.Uint64(f[0:8]),
+		binary.LittleEndian.Uint64(f[8:16]),
+		binary.LittleEndian.Uint64(f[16:24]),
+		binary.LittleEndian.Uint32(f[24:28]),
+		binary.LittleEndian.Uint32(f[28:32]),
+		binary.LittleEndian.Uint16(f[32:34]),
+		binary.LittleEndian.Uint16(f[34:36]),
+	}, true
+}
+
+// TestGolden_Structure asserts the layout facts exported by dump_fixture.py
+// that the range tests do not reach: the manifest footer (manifest_pos,
+// footer version, snapshot version), every data-file footer field, and each
+// column's CMO entry. All parsing here is a raw third implementation, so the
+// test fails on format drift even when the resolver itself has not been
+// adapted yet.
+func TestGolden_Structure(t *testing.T) {
+	exp := loadGolden(t)
+
+	manifestPath, err := findLanceManifestPath(goldenDatasetDir, "")
+	if err != nil {
+		t.Fatalf("findLanceManifestPath: %v", err)
+	}
+	mdata, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	if len(mdata) < lanceManifestFooterLen || string(mdata[len(mdata)-4:]) != lanceMagic {
+		t.Fatalf("manifest %s has no valid footer", manifestPath)
+	}
+	manifestPos := binary.LittleEndian.Uint64(mdata[len(mdata)-16 : len(mdata)-8])
+	if manifestPos != exp.Manifest.ManifestPos {
+		t.Errorf("manifest_pos = %d, want %d", manifestPos, exp.Manifest.ManifestPos)
+	}
+	major := int16(binary.LittleEndian.Uint16(mdata[len(mdata)-8 : len(mdata)-6]))
+	minor := int16(binary.LittleEndian.Uint16(mdata[len(mdata)-6 : len(mdata)-4]))
+	if major != exp.Manifest.FooterVersion[0] || minor != exp.Manifest.FooterVersion[1] {
+		t.Errorf("manifest footer version = %d.%d, want %d.%d",
+			major, minor, exp.Manifest.FooterVersion[0], exp.Manifest.FooterVersion[1])
+	}
+	manifest, err := readAndParseLanceManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("readAndParseLanceManifest: %v", err)
+	}
+	if manifest.GetVersion() != exp.Manifest.Version {
+		t.Errorf("manifest version = %d, want %d", manifest.GetVersion(), exp.Manifest.Version)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(goldenDatasetDir, lanceDataDir))
+	if err != nil {
+		t.Fatalf("read data dir: %v", err)
+	}
+	if len(entries) != len(exp.Files) {
+		t.Fatalf("data files = %d, expected entries = %d", len(entries), len(exp.Files))
+	}
+	matched := map[int]bool{}
+	for _, e := range entries {
+		raw, err := os.ReadFile(filepath.Join(goldenDatasetDir, lanceDataDir, e.Name()))
+		if err != nil {
+			t.Fatalf("read %s: %v", e.Name(), err)
+		}
+		footer, ok := unpackRawFooter(raw)
+		if !ok {
+			t.Fatalf("%s has no valid V2 footer", e.Name())
+		}
+
+		want := -1
+		for i, ef := range exp.Files {
+			if ef.Footer.ColumnMetadataStart == footer.colMetaStart &&
+				ef.Footer.CmoTableStart == footer.cmoStart &&
+				ef.Footer.GboTableStart == footer.gboStart &&
+				ef.Footer.NumGlobalBuffers == footer.numGlobalBuffers &&
+				ef.Footer.NumColumns == footer.numColumns &&
+				ef.Footer.FooterVersion == [2]uint16{footer.major, footer.minor} {
+				want = i
+				break
+			}
+		}
+		if want < 0 {
+			t.Fatalf("footer of %s matches no expected entry: %+v", e.Name(), footer)
+		}
+		if matched[want] {
+			t.Fatalf("two data files matched expected entry FILE%d", want)
+		}
+		matched[want] = true
+
+		ef := exp.Files[want]
+		if uint32(len(ef.Columns)) != footer.numColumns {
+			t.Fatalf("%s: expected %d columns, footer says %d", e.Name(), len(ef.Columns), footer.numColumns)
+		}
+		for i, c := range ef.Columns {
+			off := footer.cmoStart + uint64(i)*lanceCMOEntrySize
+			cmPos := binary.LittleEndian.Uint64(raw[off : off+8])
+			cmLen := binary.LittleEndian.Uint64(raw[off+8 : off+16])
+			if cmPos != c.CmPos || cmLen != c.CmLen {
+				t.Errorf("%s column %d: CMO entry = (%d,%d), want (%d,%d)",
+					e.Name(), i, cmPos, cmLen, c.CmPos, c.CmLen)
+			}
+		}
+	}
+	for i := range exp.Files {
+		if !matched[i] {
+			t.Errorf("expected entry FILE%d matched no data file", i)
+		}
+	}
 }
 
 func equalMultiset(a, b map[string]int) bool {
