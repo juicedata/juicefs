@@ -234,15 +234,16 @@ def merge_ranges(ranges):
 
 
 # Gaps up to this size between ranges are filled, mirroring the resolver:
-# readers coalesce adjacent buffer reads across alignment padding.
-RANGE_FILL_GAP = 4096
+# readers coalesce adjacent buffer reads across alignment padding, and Lance
+# aligns buffers to 64-byte boundaries (padding never exceeds 63 bytes).
+RANGE_FILL_GAP = 64
 
 
 def fill_and_merge(ranges):
     merged = merge_ranges(ranges)
     filled = [list(merged[0])]
     for start, end in merged[1:]:
-        if start - filled[-1][1] <= RANGE_FILL_GAP + 1:
+        if start - filled[-1][1] <= RANGE_FILL_GAP:
             if end > filled[-1][1]:
                 filled[-1][1] = end
         else:

@@ -55,8 +55,12 @@ const (
 	lanceFileFooterLen     = 40
 	lanceCMOEntrySize      = 16
 	// Gaps up to this size between byte ranges are filled (warmed) because
-	// readers coalesce adjacent buffer reads across alignment padding.
-	lanceRangeFillGap = 4096
+	// readers coalesce adjacent buffer reads across alignment padding. Lance
+	// aligns buffers to 64-byte boundaries, so padding gaps never exceed 63
+	// bytes (confirmed empirically: the official reader only ever needed
+	// <=62B filled). A larger threshold would bridge unrequested columns'
+	// data and degrade multi-column warmup to whole files.
+	lanceRangeFillGap = 64
 )
 
 // Known V2 data-file footer versions (major, minor). (2,0)/(2,1) are the
@@ -514,7 +518,7 @@ func fillByteRangeGaps(ranges []byteRange, maxGap uint64) []byteRange {
 	filled := []byteRange{ranges[0]}
 	for _, r := range ranges[1:] {
 		last := &filled[len(filled)-1]
-		if r.start-last.end <= maxGap+1 {
+		if r.start-last.end <= maxGap {
 			if r.end > last.end {
 				last.end = r.end
 			}

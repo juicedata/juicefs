@@ -40,6 +40,15 @@ buffers live outside the column metadata and no reference implementation
 defines how `buffer_location` resolves (the upstream v11 reader rejects such
 files), so guessing ranges would risk incomplete warmup.
 
+Emitted ranges are conservatively merged across small gaps: readers coalesce
+adjacent buffer reads over the alignment padding between buffers, and Lance
+aligns buffers to 64-byte boundaries, so gaps of at most 64 bytes are warmed
+too. Larger gaps between columns are left cold, keeping multi-column warmup
+column-scoped; note that projecting most of a dataset's columns naturally
+approaches warming the whole file. Range sufficiency is verified by
+`verify_warmup_ranges.py`, which zeroes every byte outside the emitted ranges
+and checks that the official reader still returns correct data.
+
 ## Output format
 
 Each line is either a bare path, or a path followed by a bracketed list of byte
