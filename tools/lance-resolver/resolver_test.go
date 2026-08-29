@@ -340,6 +340,7 @@ func TestColumnWarmupPath(t *testing.T) {
 	binary.LittleEndian.PutUint64(buf[16:24], 32)
 	binary.LittleEndian.PutUint64(buf[24:32], uint64(len(cmData)))
 	copy(buf[32:], cmData)
+
 	// Footer occupies the last 40 bytes.
 	binary.LittleEndian.PutUint64(buf[88:96], 32)  // A: column metadata start (not used here)
 	binary.LittleEndian.PutUint64(buf[96:104], 16) // B: column metadata offset table
@@ -349,6 +350,8 @@ func TestColumnWarmupPath(t *testing.T) {
 	binary.LittleEndian.PutUint16(buf[120:122], 2) // major version
 	binary.LittleEndian.PutUint16(buf[122:124], 0) // minor version
 	copy(buf[124:128], lanceMagic)
+	// Register a schema global buffer like every real V2 file.
+	addGBOTable(buf, 64, 48, 16)
 
 	dataFilePath := filepath.Join(dataDir, "data_0.lance")
 	if err := os.WriteFile(dataFilePath, buf, 0644); err != nil {
@@ -409,6 +412,7 @@ func TestColumnWarmupPath_OverflowGuard(t *testing.T) {
 	binary.LittleEndian.PutUint64(buf[24:32], 0x8000000000000000) // cmLen
 	// Footer occupies the last 40 bytes.
 	binary.LittleEndian.PutUint64(buf[96:104], 16) // column metadata offset table
+	addGBOTable(buf, 32, 16, 8)
 	binary.LittleEndian.PutUint32(buf[116:120], 1) // num columns
 	binary.LittleEndian.PutUint16(buf[120:122], 2) // major version (must pass the whitelist)
 	binary.LittleEndian.PutUint16(buf[122:124], 0) // minor version
@@ -464,14 +468,25 @@ func buildGBOFile(t *testing.T, size int64, gboStart uint64, entries [][2]uint64
 	return path
 }
 
-func checkGlobalBufferTail(t *testing.T, path string, size int64) globalBufferTailResult {
+func checkGlobalBufferTail(t *testing.T, path string, size int64) (uint64, []byteRange, bool) {
 	t.Helper()
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	defer f.Close()
-	return globalBufferTail(f, size)
+	tailStart, extras, corrupt := globalBufferTail(f, size)
+	return tailStart, extras, corrupt
+}
+
+// addGBOTable registers one global buffer (the file schema) in a synthetic
+// file so it passes GBO validation the way every real V2 file does.
+func addGBOTable(buf []byte, entryOffset, schemaPos, schemaLen uint64) {
+	binary.LittleEndian.PutUint64(buf[entryOffset:entryOffset+8], schemaPos)
+	binary.LittleEndian.PutUint64(buf[entryOffset+8:entryOffset+16], schemaLen)
+	footer := len(buf) - lanceFileFooterLen
+	binary.LittleEndian.PutUint64(buf[footer+16:footer+24], uint64(entryOffset))
+	binary.LittleEndian.PutUint32(buf[footer+24:footer+28], 1)
 }
 
 func TestGlobalBufferTail(t *testing.T) {
@@ -480,19 +495,22 @@ func TestGlobalBufferTail(t *testing.T) {
 		// lies before it and must become an extra; the one at 100 is inside
 		// the tail and must not be repeated.
 		path := buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {32, 16}, {100, 8}})
-		r := checkGlobalBufferTail(t, path, 160)
-		if !r.present || r.corrupt || r.tailStart != 80 {
-			t.Fatalf("got %+v, want present tailStart=80", r)
+		tailStart, extras, corrupt := checkGlobalBufferTail(t, path, 160)
+		if corrupt || tailStart != 80 {
+			t.Fatalf("tailStart=%d corrupt=%v, want tail 80 not corrupt", tailStart, corrupt)
 		}
-		if len(r.extras) != 1 || r.extras[0] != (byteRange{32, 48}) {
-			t.Fatalf("extras = %v, want [{32 48}]", r.extras)
+		if len(extras) != 1 || extras[0] != (byteRange{32, 48}) {
+			t.Fatalf("extras = %v, want [{32 48}]", extras)
 		}
 	})
 
-	t.Run("no global buffers", func(t *testing.T) {
+	t.Run("no global buffers is corrupt", func(t *testing.T) {
+		// Upstream rejects such files on open ("schema expected"); a V2 file
+		// without a schema buffer is a structural anomaly, so warmup degrades
+		// to the full file like any other corruption.
 		path := buildGBOFile(t, 160, 64, nil)
-		if r := checkGlobalBufferTail(t, path, 160); r.present || r.corrupt {
-			t.Fatalf("got %+v, want absent (upstream rejects such files on open; ranges continue without a tail)", r)
+		if _, _, corrupt := checkGlobalBufferTail(t, path, 160); !corrupt {
+			t.Fatal("expected corrupt for zero global buffers")
 		}
 	})
 
@@ -500,22 +518,22 @@ func TestGlobalBufferTail(t *testing.T) {
 		// A corrupt footer storing gbo_start near MaxUint64 used to wrap the
 		// start+tableLen sum past the bounds check.
 		path := buildGBOFile(t, 160, ^uint64(0), [][2]uint64{{80, 20}})
-		if r := checkGlobalBufferTail(t, path, 160); !r.corrupt {
-			t.Fatalf("got %+v, want corrupt for gbo_start = MaxUint64", r)
+		if _, _, corrupt := checkGlobalBufferTail(t, path, 160); !corrupt {
+			t.Fatal("expected corrupt for gbo_start = MaxUint64")
 		}
 	})
 
 	t.Run("table extends past file", func(t *testing.T) {
 		path := buildGBOFile(t, 160, 119, [][2]uint64{{80, 20}})
-		if r := checkGlobalBufferTail(t, path, 160); !r.corrupt {
-			t.Fatalf("got %+v, want corrupt when the GBO table crosses the file end", r)
+		if _, _, corrupt := checkGlobalBufferTail(t, path, 160); !corrupt {
+			t.Fatal("expected corrupt when the GBO table crosses the file end")
 		}
 	})
 
 	t.Run("schema position beyond file", func(t *testing.T) {
 		path := buildGBOFile(t, 160, 64, [][2]uint64{{500, 20}})
-		if r := checkGlobalBufferTail(t, path, 160); !r.corrupt {
-			t.Fatalf("got %+v, want corrupt for tail start beyond the file", r)
+		if _, _, corrupt := checkGlobalBufferTail(t, path, 160); !corrupt {
+			t.Fatal("expected corrupt for tail start beyond the file")
 		}
 	})
 
@@ -523,27 +541,27 @@ func TestGlobalBufferTail(t *testing.T) {
 		// pos+size must never be formed before validation: without the
 		// subtraction checks these values slip through as a garbage range.
 		path := buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {1 << 62, 1 << 62}})
-		if r := checkGlobalBufferTail(t, path, 160); !r.corrupt {
-			t.Fatalf("got %+v, want corrupt for out-of-range extra buffer", r)
+		if _, _, corrupt := checkGlobalBufferTail(t, path, 160); !corrupt {
+			t.Fatal("expected corrupt for out-of-range extra buffer")
 		}
 		path = buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {0, ^uint64(0)}})
-		if r := checkGlobalBufferTail(t, path, 160); !r.corrupt {
-			t.Fatalf("got %+v, want corrupt for extra size = MaxUint64", r)
+		if _, _, corrupt := checkGlobalBufferTail(t, path, 160); !corrupt {
+			t.Fatal("expected corrupt for extra size = MaxUint64")
 		}
 	})
 
 	t.Run("zero-sized extra is skipped", func(t *testing.T) {
 		path := buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {0, 0}, {32, 16}})
-		r := checkGlobalBufferTail(t, path, 160)
-		if !r.present || r.corrupt || r.tailStart != 80 || len(r.extras) != 1 || r.extras[0] != (byteRange{32, 48}) {
-			t.Fatalf("got %+v, want present tail 80 extras [{32 48}]", r)
+		tailStart, extras, corrupt := checkGlobalBufferTail(t, path, 160)
+		if corrupt || tailStart != 80 || len(extras) != 1 || extras[0] != (byteRange{32, 48}) {
+			t.Fatalf("tail=%d corrupt=%v extras=%v, want tail 80 extras [{32 48}]", tailStart, corrupt, extras)
 		}
 	})
 
 	t.Run("file too small for a footer", func(t *testing.T) {
 		path := buildGBOFile(t, 32, 0, nil)
-		if r := checkGlobalBufferTail(t, path, 32); !r.corrupt {
-			t.Fatalf("got %+v, want corrupt for file smaller than the footer", r)
+		if _, _, corrupt := checkGlobalBufferTail(t, path, 32); !corrupt {
+			t.Fatal("expected corrupt for file smaller than the footer")
 		}
 	})
 }
@@ -634,6 +652,7 @@ func TestColumnWarmupPath_NestedColumnExpansion(t *testing.T) {
 	binary.LittleEndian.PutUint64(buf[40:48], uint64(len(cm1Data)))
 	copy(buf[cm0Pos:], cm0Data)
 	copy(buf[cm1Pos:], cm1Data)
+	addGBOTable(buf, 64, 48, 16)
 	// Footer occupies [120,160): cmo_table_start at footer[8:16].
 	binary.LittleEndian.PutUint64(buf[128:136], 16) // CMO table start
 	binary.LittleEndian.PutUint32(buf[148:152], 2)  // num columns
@@ -710,6 +729,8 @@ func TestColumnWarmupPath_CorruptGBOFallsBackToFile(t *testing.T) {
 	binary.LittleEndian.PutUint64(buf[16:24], 32)
 	binary.LittleEndian.PutUint64(buf[24:32], uint64(len(cmData)))
 	copy(buf[32:], cmData)
+
+	addGBOTable(buf, 64, 48, 16)
 	binary.LittleEndian.PutUint64(buf[96:104], 16) // CMO table
 	// num_global_buffers = 1 but gbo_start points far out of range.
 	binary.LittleEndian.PutUint64(buf[104:112], ^uint64(0))
@@ -800,6 +821,7 @@ func TestColumnWarmupPath_IndirectEncodingFallback(t *testing.T) {
 	binary.LittleEndian.PutUint16(buf[120:122], 2)
 	binary.LittleEndian.PutUint16(buf[122:124], 1)
 	copy(buf[124:128], lanceMagic)
+	addGBOTable(buf, 64, 48, 16)
 	if err := os.WriteFile(filepath.Join(dataDir, "data_0.lance"), buf, 0644); err != nil {
 		t.Fatalf("write data file: %v", err)
 	}
