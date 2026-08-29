@@ -254,6 +254,40 @@ func TestMergeByteRanges(t *testing.T) {
 	}
 }
 
+// fillByteRangeGaps must merge exactly the alignment padding: Lance aligns
+// buffers to 64-byte boundaries, so padding gaps never exceed 63 bytes and
+// the threshold is lanceRangeFillGap = 64 (inclusive). A gap of 65 or more is
+// real unrequested data and must stay cold.
+func TestFillByteRangeGaps(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []byteRange
+		want []byteRange
+	}{
+		{"empty", nil, nil},
+		{"single", []byteRange{{0, 100}}, []byteRange{{0, 100}}},
+		{"gap of 64 merges", []byteRange{{0, 100}, {164, 200}}, []byteRange{{0, 200}}},
+		{"gap of 65 stays split", []byteRange{{0, 100}, {165, 200}}, []byteRange{{0, 100}, {165, 200}}},
+		{"adjacent stays merged", []byteRange{{0, 100}, {100, 150}}, []byteRange{{0, 150}}},
+		{"chains across 64-byte gaps", []byteRange{{0, 10}, {74, 80}, {144, 200}}, []byteRange{{0, 200}}},
+		{"far apart stays split", []byteRange{{0, 100}, {1000, 1100}}, []byteRange{{0, 100}, {1000, 1100}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fillByteRangeGaps(tt.in, lanceRangeFillGap)
+			if len(got) != len(tt.want) {
+				t.Fatalf("fillByteRangeGaps(%v) = %v, want %v", tt.in, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("fillByteRangeGaps(%v)[%d] = %v, want %v", tt.in, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestColumnByteRanges(t *testing.T) {
 	cm := &file2pb.ColumnMetadata{
 		BufferOffsets: []uint64{1000, 3000},
