@@ -74,8 +74,12 @@ from a pinned Lance version:
 ./tools/lance-resolver/gen-protos.sh
 ```
 
-Only the generated `*.pb.go` files are committed; the downloaded `.proto` files
-are not.
+Both generators are pinned for reproducible output: `protoc-gen-go` is
+installed via `go install` at a fixed version, and a matching `protoc` release
+binary is downloaded from the protobuf releases (override with
+`PROTOC_VERSION`/`PROTOC_GEN_GO_VERSION`/`LANCE_VERSION`). No protoc
+installation is required on the host. Only the generated `*.pb.go` files are
+committed; the downloaded `.proto` files are not.
 
 ## Testing and fixtures
 
