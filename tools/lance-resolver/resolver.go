@@ -56,6 +56,23 @@ const (
 	lanceCMOEntrySize      = 16
 )
 
+// Known V2 data-file footer versions (major, minor). (2,0)/(2,1) are the
+// legacy footer numbering used by current writers (pylance 10 writes (2,1));
+// the upstream v11 sources also dispatch (0,3). Anything else is rejected so
+// a future grammar is not silently misread.
+var knownLanceFileFooterVersions = map[[2]uint16]bool{
+	{2, 0}: true,
+	{2, 1}: true,
+	{0, 3}: true,
+}
+
+// Known manifest footer versions (major, minor); pylance 10 writes (0,2).
+// The semantics are not documented well enough to reject unknown ones, so an
+// unknown version only produces a warning.
+var knownLanceManifestFooterVersions = map[[2]int16]bool{
+	{0, 2}: true,
+}
+
 type lanceVersionHint struct {
 	Version uint64 `json:"version"`
 }
@@ -222,7 +239,24 @@ func readAndParseLanceManifest(manifestPath string) (*lancepb.Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read manifest %s: %w", manifestPath, err)
 	}
-	return parseLanceManifestBytes(data)
+	manifest, err := parseLanceManifestBytes(data)
+	if err != nil {
+		return nil, err
+	}
+	if v := manifestFooterVersion(data); !knownLanceManifestFooterVersions[v] {
+		fmt.Fprintf(os.Stderr, "warning: untested Lance manifest footer version %d.%d in %s\n", v[0], v[1], manifestPath)
+	}
+	return manifest, nil
+}
+
+// manifestFooterVersion returns the (major, minor) footer version of an
+// already-validated manifest file.
+func manifestFooterVersion(data []byte) [2]int16 {
+	off := len(data) - lanceManifestFooterLen
+	return [2]int16{
+		int16(binary.LittleEndian.Uint16(data[off+8 : off+10])),
+		int16(binary.LittleEndian.Uint16(data[off+10 : off+12])),
+	}
 }
 
 // parseLanceManifestBytes parses a Lance manifest file.
@@ -456,6 +490,13 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 	}
 	if magic := string(footer[36:40]); magic != lanceMagic {
 		return "", false, fmt.Errorf("invalid Lance file magic %q in %s", magic, fullPath)
+	}
+	footerVersion := [2]uint16{
+		binary.LittleEndian.Uint16(footer[32:34]),
+		binary.LittleEndian.Uint16(footer[34:36]),
+	}
+	if !knownLanceFileFooterVersions[footerVersion] {
+		return "", false, fmt.Errorf("unsupported Lance V2 footer version %d.%d in %s", footerVersion[0], footerVersion[1], fullPath)
 	}
 
 	numColumns := binary.LittleEndian.Uint32(footer[28:32])

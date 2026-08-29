@@ -31,6 +31,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	lancepb "github.com/juicedata/juicefs/tools/lance-resolver/proto/lance"
@@ -378,6 +379,8 @@ func TestColumnWarmupPath_OverflowGuard(t *testing.T) {
 	// Footer occupies the last 40 bytes.
 	binary.LittleEndian.PutUint64(buf[96:104], 16) // column metadata offset table
 	binary.LittleEndian.PutUint32(buf[116:120], 1) // num columns
+	binary.LittleEndian.PutUint16(buf[120:122], 2) // major version (must pass the whitelist)
+	binary.LittleEndian.PutUint16(buf[122:124], 0) // minor version
 	copy(buf[124:128], lanceMagic)
 
 	dataFilePath := filepath.Join(dataDir, "data_0.lance")
@@ -451,6 +454,47 @@ func TestColumnWarmupPath_NonLeafFallback(t *testing.T) {
 				t.Fatalf("expected ok=false for non-leaf column %q", tt.column)
 			}
 		})
+	}
+}
+
+func TestColumnWarmupPath_UnknownFileVersion(t *testing.T) {
+	dir := t.TempDir()
+	dsPath := filepath.Join(dir, "ds.lance")
+	dataDir := filepath.Join(dsPath, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	fileSize := 128
+	buf := make([]byte, fileSize)
+	binary.LittleEndian.PutUint64(buf[96:104], 16) // column metadata offset table
+	binary.LittleEndian.PutUint32(buf[116:120], 1) // num columns
+	binary.LittleEndian.PutUint16(buf[120:122], 9) // major version: unknown grammar
+	binary.LittleEndian.PutUint16(buf[122:124], 9) // minor version
+	copy(buf[124:128], lanceMagic)
+
+	if err := os.WriteFile(filepath.Join(dataDir, "data_0.lance"), buf, 0644); err != nil {
+		t.Fatalf("write data file: %v", err)
+	}
+
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{{Id: 0, Name: "id", ParentId: -1}},
+	}
+	dataFile := &lancepb.DataFile{
+		Path:             "data_0.lance",
+		FileMajorVersion: 2,
+		Fields:           []int32{0},
+		ColumnIndices:    []int32{0},
+	}
+
+	// A future file grammar must fail loudly instead of being misread; the
+	// caller turns the error into a full-file warmup fallback with a warning.
+	_, ok, err := columnWarmupPath(dsPath, manifest, dataFile, []string{"id"}, false)
+	if err == nil || ok {
+		t.Fatalf("expected error for unknown footer version, got ok=%v err=%v", ok, err)
+	}
+	if !strings.Contains(err.Error(), "9.9") {
+		t.Errorf("error should mention the version pair, got: %v", err)
 	}
 }
 
