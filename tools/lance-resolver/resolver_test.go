@@ -319,9 +319,12 @@ func TestColumnWarmupPath(t *testing.T) {
 	}
 
 	manifest := &lancepb.Manifest{
+		// Real manifests never carry the leaf/repeated type enum on the wire
+		// (it always decodes to PARENT) and store parent_id = -1 explicitly
+		// for top-level fields; these fields mirror that shape.
 		Fields: []*lancepb.Field{
-			{Id: 0, Name: "id", Type: lancepb.Field_LEAF},
-			{Id: 1, Name: "name", Type: lancepb.Field_LEAF},
+			{Id: 0, Name: "id", ParentId: -1},
+			{Id: 1, Name: "name", ParentId: -1},
 		},
 	}
 	dataFile := &lancepb.DataFile{
@@ -374,7 +377,7 @@ func TestColumnWarmupPath_OverflowGuard(t *testing.T) {
 	}
 
 	manifest := &lancepb.Manifest{
-		Fields: []*lancepb.Field{{Id: 0, Name: "id", Type: lancepb.Field_LEAF}},
+		Fields: []*lancepb.Field{{Id: 0, Name: "id"}},
 	}
 	dataFile := &lancepb.DataFile{
 		Path:             "data_0.lance",
@@ -393,10 +396,32 @@ func TestColumnWarmupPath_OverflowGuard(t *testing.T) {
 	}
 }
 
-func TestColumnWarmupPath_ListColumnFallback(t *testing.T) {
-	manifest := &lancepb.Manifest{
-		Fields: []*lancepb.Field{
-			{Id: 0, Name: "tags", Type: lancepb.Field_REPEATED},
+func TestColumnWarmupPath_NonLeafFallback(t *testing.T) {
+	tests := []struct {
+		name     string
+		fields   []*lancepb.Field
+		column   string
+	}{
+		{
+			// A list column: the inner item field references the outer field
+			// as parent, so the outer column spans multiple physical columns.
+			name: "list column",
+			fields: []*lancepb.Field{
+				{Id: 0, Name: "tags", ParentId: -1},
+				{Id: 1, Name: "tags.item", ParentId: 0},
+			},
+			column: "tags",
+		},
+		{
+			// A struct column: child fields make the parent non-leaf; warming
+			// it by name would miss the children's physical columns.
+			name: "struct column",
+			fields: []*lancepb.Field{
+				{Id: 0, Name: "addr", ParentId: -1},
+				{Id: 1, Name: "addr.city", ParentId: 0},
+				{Id: 2, Name: "addr.zip", ParentId: 0},
+			},
+			column: "addr",
 		},
 	}
 	dataFile := &lancepb.DataFile{
@@ -406,15 +431,68 @@ func TestColumnWarmupPath_ListColumnFallback(t *testing.T) {
 		ColumnIndices:    []int32{0},
 	}
 
-	// A REPEATED (list) column spans multiple physical columns; warming it by
-	// name would only reach the outer offsets column. It must fall back to
-	// full-file warmup instead.
-	_, ok, err := columnWarmupPath("unused", manifest, dataFile, []string{"tags"}, false)
-	if err != nil {
-		t.Fatalf("columnWarmupPath: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := &lancepb.Manifest{Fields: tt.fields}
+			_, ok, err := columnWarmupPath("unused", manifest, dataFile, []string{tt.column}, false)
+			if err != nil {
+				t.Fatalf("columnWarmupPath: %v", err)
+			}
+			if ok {
+				t.Fatalf("expected ok=false for non-leaf column %q", tt.column)
+			}
+		})
 	}
-	if ok {
-		t.Fatal("expected ok=false for REPEATED (list) column")
+}
+
+func TestParentFieldIDs(t *testing.T) {
+	// Flat schema: no parents, every field is a leaf.
+	flat := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "id", ParentId: -1},
+			{Id: 1, Name: "name", ParentId: -1},
+		},
+	}
+	if parents := parentFieldIDs(flat); len(parents) != 0 {
+		t.Errorf("flat schema: parents = %v, want none", parents)
+	}
+
+	// A single field whose parent_id is left unset (decodes to 0) must not
+	// mark itself as a parent via the self-reference guard.
+	unset := &lancepb.Manifest{
+		Fields: []*lancepb.Field{{Id: 0, Name: "id"}},
+	}
+	if parents := parentFieldIDs(unset); len(parents) != 0 {
+		t.Errorf("unset parent: parents = %v, want none", parents)
+	}
+
+	// parent_id = 0 is a real reference to field 0 (upstream passes it
+	// through verbatim; writers store -1 for top-level fields), so here the
+	// sibling genuinely becomes a child of field 0.
+	refZero := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "addr", ParentId: -1},
+			{Id: 1, Name: "addr.city", ParentId: 0},
+		},
+	}
+	if parents := parentFieldIDs(refZero); !parents[0] || len(parents) != 1 {
+		t.Errorf("parent_id=0 reference: parents = %v, want only field 0", parents)
+	}
+
+	// Nested schema: only the struct field is a parent; its leaves are not.
+	nested := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "addr", ParentId: -1},
+			{Id: 1, Name: "addr.city", ParentId: 0},
+			{Id: 2, Name: "addr.zip", ParentId: 0},
+		},
+	}
+	parents := parentFieldIDs(nested)
+	if !parents[0] {
+		t.Error("field 0 (struct) should be a parent")
+	}
+	if parents[1] || parents[2] {
+		t.Errorf("leaf fields should not be parents, got %v", parents)
 	}
 }
 
@@ -548,8 +626,9 @@ func TestResolveLanceDataset_ColumnsFallback(t *testing.T) {
 	writeManifestFile(t, filepath.Join(versionsDir, "1.manifest"), manifest)
 	os.WriteFile(filepath.Join(versionsDir, "latest_version_hint.json"), []byte(`{"version":1}`), 0644)
 
-	// Until column-level ranges are implemented, --columns must not suppress
-	// full data files.
+	// The manifest carries no schema fields, so the requested column cannot
+	// be resolved to a physical column index; --columns must not suppress the
+	// full data file in that case.
 	paths, err := resolveLanceDataset(dsPath, "", false, false, []string{"id"}, false)
 	if err != nil {
 		t.Fatalf("resolveLanceDataset: %v", err)

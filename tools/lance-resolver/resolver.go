@@ -329,6 +329,30 @@ func fieldByName(manifest *lancepb.Manifest) map[string]*lancepb.Field {
 	return m
 }
 
+// parentFieldIDs returns the set of field IDs that have at least one child
+// field. Lance manifests store the schema as a flat field list where each
+// field names its parent via parent_id; upstream writers never populate the
+// type enum on the wire (it always decodes to PARENT), so leaf-ness must be
+// derived structurally: a field is a leaf iff no other field references it
+// as parent.
+func parentFieldIDs(manifest *lancepb.Manifest) map[int32]bool {
+	ids := make(map[int32]bool, len(manifest.Fields))
+	for _, f := range manifest.Fields {
+		ids[f.Id] = true
+	}
+	parents := make(map[int32]bool)
+	for _, f := range manifest.Fields {
+		// Upstream writers store -1 for top-level fields; a non-negative
+		// parent_id is a real reference (verified against upstream readers,
+		// which pass it through verbatim). The self-reference guard only
+		// covers a lone field whose parent_id is unset (decodes to 0).
+		if f.ParentId != f.Id && ids[f.ParentId] {
+			parents[f.ParentId] = true
+		}
+	}
+	return parents
+}
+
 // columnByteRanges returns the byte ranges occupied by a column.
 //
 // Column-level metadata buffers and the ColumnMetadata protobuf itself are
@@ -396,10 +420,11 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 	fullPath := path.Join(datasetPath, lanceDataDir, dataFile.Path)
 	colMap := buildFieldColumnMap(manifest, dataFile)
 	fields := fieldByName(manifest)
+	parents := parentFieldIDs(manifest)
 	var colIndices []int
 	for _, col := range columns {
-		if f, ok := fields[col]; ok && f.Type != lancepb.Field_LEAF {
-			fmt.Fprintf(os.Stderr, "warning: column-level warmup is not supported for %s column %q; warming full file instead\n", f.Type, col)
+		if f, ok := fields[col]; ok && parents[f.Id] {
+			fmt.Fprintf(os.Stderr, "warning: column-level warmup is not supported for non-leaf column %q; warming full file instead\n", col)
 			return "", false, nil
 		}
 		if idx, ok := colMap[col]; ok {
