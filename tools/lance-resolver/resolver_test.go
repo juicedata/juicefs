@@ -346,7 +346,9 @@ func TestColumnWarmupPath(t *testing.T) {
 	}
 	// Ranges: CMO entry [16,32) merges with the column metadata [32,32+len);
 	// the metadata buffer [80,88) merges with the file footer [88,128).
-	want := path.Join(dsPath, "data", "data_0.lance") + fmt.Sprintf(" [16-%d;80-128]", 32+len(cmData))
+	// Gap fill (readers coalesce adjacent buffer reads) merges the whole
+	// tail into a single range on this compact file.
+	want := path.Join(dsPath, "data", "data_0.lance") + " [16-128]"
 	if p != want {
 		t.Errorf("columnWarmupPath() = %q, want %q", p, want)
 	}
@@ -460,9 +462,10 @@ func TestColumnWarmupPath_NestedColumnExpansion(t *testing.T) {
 		ColumnIndices:    []int32{0, 1},
 	}
 
-	// Requesting the struct must resolve to the union of both leaf columns:
-	// CMO entries [16,48) + both ColumnMetadata sections [48, 48+len0+len1),
-	// both metadata buffers, and the file footer [120,160).
+	// Requesting the struct resolves to the union of both leaf columns; the
+	// sub-4KiB gaps between the merged ranges are filled (readers coalesce
+	// adjacent buffer reads), so on this compact file everything from the CMO
+	// table through the footer becomes one range.
 	p, ok, err := columnWarmupPath(dsPath, manifest, dataFile, []string{"addr"}, false)
 	if err != nil {
 		t.Fatalf("columnWarmupPath: %v", err)
@@ -470,14 +473,13 @@ func TestColumnWarmupPath_NestedColumnExpansion(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true for struct column")
 	}
-	want := path.Join(dsPath, "data", "data_0.lance") +
-		fmt.Sprintf(" [16-%d;80-88;96-104;120-160]", 48+len(cm0Data)+len(cm1Data))
+	want := path.Join(dsPath, "data", "data_0.lance") + " [16-160]"
 	if p != want {
 		t.Errorf("columnWarmupPath() = %q, want %q", p, want)
 	}
 
-	// Requesting a single leaf child resolves to just that column: its CMO
-	// entry [32,48) and metadata [54,60) stay separate (cm0 belongs to city).
+	// Requesting a single leaf child resolves to just that column (city's
+	// metadata section is excluded), with small gaps filled as above.
 	p, ok, err = columnWarmupPath(dsPath, manifest, dataFile, []string{"zip"}, false)
 	if err != nil {
 		t.Fatalf("columnWarmupPath: %v", err)
@@ -485,8 +487,7 @@ func TestColumnWarmupPath_NestedColumnExpansion(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true for leaf column")
 	}
-	want = path.Join(dsPath, "data", "data_0.lance") +
-		fmt.Sprintf(" [32-48;%d-%d;96-104;120-160]", cm1Pos, cm1Pos+len(cm1Data))
+	want = path.Join(dsPath, "data", "data_0.lance") + " [32-160]"
 	if p != want {
 		t.Errorf("columnWarmupPath() = %q, want %q", p, want)
 	}

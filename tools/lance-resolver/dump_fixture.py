@@ -187,6 +187,10 @@ def parse_data_file(path):
     col_meta_start, cmo_start, gbo_start = struct.unpack("<QQQ", footer[0:24])
     num_global_buffers, num_columns = struct.unpack("<II", footer[24:32])
     major, minor = struct.unpack("<HH", footer[32:36])
+    global_buffers = []
+    for i in range(num_global_buffers):
+        off = gbo_start + CMO_ENTRY_SIZE * i
+        global_buffers.append(struct.unpack("<QQ", data[off : off + CMO_ENTRY_SIZE]))
 
     columns = []
     for idx in range(num_columns):
@@ -205,6 +209,7 @@ def parse_data_file(path):
         )
     return {
         "file_size": len(data),
+        "global_buffers": global_buffers,
         "footer": {
             "column_metadata_start": col_meta_start,
             "cmo_table_start": cmo_start,
@@ -228,6 +233,38 @@ def merge_ranges(ranges):
     return merged
 
 
+# Gaps up to this size between ranges are filled, mirroring the resolver:
+# readers coalesce adjacent buffer reads across alignment padding.
+RANGE_FILL_GAP = 4096
+
+
+def fill_and_merge(ranges):
+    merged = merge_ranges(ranges)
+    filled = [list(merged[0])]
+    for start, end in merged[1:]:
+        if start - filled[-1][1] <= RANGE_FILL_GAP + 1:
+            if end > filled[-1][1]:
+                filled[-1][1] = end
+        else:
+            filled.append([start, end])
+    return filled
+
+
+def tail_ranges(parsed):
+    """The reader's optimistic tail read [first global buffer, EOF) plus any
+    global buffers positioned before it; mirrors globalBufferTail in
+    resolver.go."""
+    gbs = parsed["global_buffers"]
+    if not gbs:
+        return []
+    size = parsed["file_size"]
+    out = [[gbs[0][0], size]]
+    for pos, length in gbs[1:]:
+        if length and pos + length > gbs[0][0] and pos + length <= size:
+            out.append([pos, pos + length])
+    return out
+
+
 def column_buffer_ranges(col, include_pages):
     """Buffer ranges of one column (metadata + optional page buffers),
     excluding the shared file footer and the column's CMO entry."""
@@ -245,17 +282,20 @@ def column_buffer_ranges(col, include_pages):
     return ranges
 
 
-def column_ranges(col, file_size, cmo_start, idx, include_pages):
+def column_ranges(col, parsed, idx, include_pages):
     # A projection read needs the file footer and the column's CMO entry to
     # locate the metadata at all, plus the ColumnMetadata protobuf itself.
     # Keep in sync with columnWarmupPath in resolver.go.
+    file_size = parsed["file_size"]
+    cmo_start = parsed["footer"]["cmo_table_start"]
     ranges = [
         [file_size - FILE_FOOTER_LEN, file_size],
         [cmo_start + CMO_ENTRY_SIZE * idx, cmo_start + CMO_ENTRY_SIZE * (idx + 1)],
         [col["cm_pos"], col["cm_pos"] + col["cm_len"]],
     ]
     ranges.extend(column_buffer_ranges(col, include_pages))
-    return merge_ranges(ranges)
+    ranges.extend(tail_ranges(parsed))
+    return fill_and_merge(ranges)
 
 
 def leaf_parent_ids(fields):
@@ -337,12 +377,8 @@ def main() -> int:
                     "leaf": fid is not None and fid not in parents,
                     "cm_pos": col["cm_pos"],
                     "cm_len": col["cm_len"],
-                    "ranges_meta": column_ranges(
-                        col, parsed["file_size"], cmo_start, idx, False
-                    ),
-                    "ranges_pages": column_ranges(
-                        col, parsed["file_size"], cmo_start, idx, True
-                    ),
+                    "ranges_meta": column_ranges(col, parsed, idx, False),
+                    "ranges_pages": column_ranges(col, parsed, idx, True),
                 }
             )
 
@@ -359,8 +395,9 @@ def main() -> int:
             if not subtree_cols:
                 continue
             entry = warmup.setdefault(f["name"], {})
+            tail = tail_ranges(parsed)
             for include_pages, key in ((False, "ranges_meta"), (True, "ranges_pages")):
-                ranges = [list(footer_range)]
+                ranges = [list(footer_range)] + [list(t) for t in tail]
                 for idx in subtree_cols:
                     col = parsed["columns"][idx]
                     ranges.append(
@@ -368,7 +405,7 @@ def main() -> int:
                     )
                     ranges.append([col["cm_pos"], col["cm_pos"] + col["cm_len"]])
                     ranges.extend(column_buffer_ranges(col, include_pages))
-                entry[key] = merge_ranges(ranges)
+                entry[key] = fill_and_merge(ranges)
 
         files.append(
             {

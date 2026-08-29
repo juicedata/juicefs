@@ -54,6 +54,9 @@ const (
 	lanceManifestFooterLen = 16
 	lanceFileFooterLen     = 40
 	lanceCMOEntrySize      = 16
+	// Gaps up to this size between byte ranges are filled (warmed) because
+	// readers coalesce adjacent buffer reads across alignment padding.
+	lanceRangeFillGap = 4096
 )
 
 // Known V2 data-file footer versions (major, minor). (2,0)/(2,1) are the
@@ -498,6 +501,30 @@ func mergeByteRanges(ranges []byteRange) []byteRange {
 	return merged
 }
 
+// fillByteRangeGaps merges ranges separated by at most maxGap bytes. Readers
+// coalesce adjacent buffer reads into one span that includes the alignment
+// padding between buffers (verified empirically against the official
+// reader), so leaving those tiny gaps cold would still cause cache misses.
+// Sub-block gaps are effectively free to warm on block-granular caches like
+// JuiceFS's.
+func fillByteRangeGaps(ranges []byteRange, maxGap uint64) []byteRange {
+	if len(ranges) <= 1 {
+		return ranges
+	}
+	filled := []byteRange{ranges[0]}
+	for _, r := range ranges[1:] {
+		last := &filled[len(filled)-1]
+		if r.start-last.end <= maxGap+1 {
+			if r.end > last.end {
+				last.end = r.end
+			}
+		} else {
+			filled = append(filled, r)
+		}
+	}
+	return filled
+}
+
 // hasIndirectEncoding reports whether the column or any of its pages stores
 // its encoding outside the metadata via Encoding.indirect (deferred
 // encoding, used to share encodings across columns). The upstream v11
@@ -522,6 +549,46 @@ func hasIndirectEncoding(cm *file2pb.ColumnMetadata) bool {
 		}
 	}
 	return false
+}
+
+// globalBufferTail reads the global-buffer-offset (GBO) table and returns the
+// start of the reader's optimistic tail read (the first global buffer, which
+// holds the file schema) plus the ranges of any global buffers positioned
+// before that start. ok is false when the file carries no global buffers.
+func globalBufferTail(f *os.File, fileSize int64) (uint64, []byteRange, bool) {
+	footer := make([]byte, lanceFileFooterLen)
+	if _, err := f.ReadAt(footer, fileSize-lanceFileFooterLen); err != nil {
+		return 0, nil, false
+	}
+	gboStart := binary.LittleEndian.Uint64(footer[16:24])
+	numGlobalBuffers := binary.LittleEndian.Uint32(footer[24:28])
+	if numGlobalBuffers == 0 || gboStart+uint64(numGlobalBuffers)*lanceCMOEntrySize > uint64(fileSize-lanceFileFooterLen) {
+		return 0, nil, false
+	}
+
+	entry := make([]byte, lanceCMOEntrySize)
+	if _, err := f.ReadAt(entry, int64(gboStart)); err != nil {
+		return 0, nil, false
+	}
+	tailStart := binary.LittleEndian.Uint64(entry[0:8])
+	fileLimit := uint64(fileSize)
+	if tailStart >= fileLimit {
+		return 0, nil, false
+	}
+
+	var extras []byteRange
+	for i := uint32(1); i < numGlobalBuffers; i++ {
+		if _, err := f.ReadAt(entry, int64(gboStart+uint64(i)*lanceCMOEntrySize)); err != nil {
+			return 0, nil, false
+		}
+		pos := binary.LittleEndian.Uint64(entry[0:8])
+		size := binary.LittleEndian.Uint64(entry[8:16])
+		if size == 0 || pos > fileLimit-size || pos+size <= tailStart {
+			continue // empty, corrupt, or already inside the tail range
+		}
+		extras = append(extras, byteRange{start: pos, end: pos + size})
+	}
+	return tailStart, extras, true
 }
 
 // columnWarmupPath resolves the byte ranges of the requested columns in a
@@ -598,11 +665,17 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 	}
 
 	var ranges []byteRange
-	// Any column projection starts by reading the file footer and the CMO
-	// table entries of the projected columns; without them the warmed
-	// metadata cannot even be located, so they belong in every column-level
-	// warmup output.
+	// The official reader opens the file with one optimistic tail read from
+	// the first global buffer (the file schema) to EOF and parses ALL column
+	// metadata out of it, regardless of the projection (upstream v11
+	// reader.rs: optimistic_tail_read + read_all_column_metadata). Every
+	// column-level warmup must therefore cover that whole tail, plus any
+	// global buffer positioned before it.
 	ranges = append(ranges, byteRange{start: uint64(fileSize - lanceFileFooterLen), end: uint64(fileSize)})
+	if tailStart, extras, ok := globalBufferTail(f, fileSize); ok {
+		ranges = append(ranges, byteRange{start: tailStart, end: uint64(fileSize)})
+		ranges = append(ranges, extras...)
+	}
 	for _, colIdx := range colIndices {
 		if uint32(colIdx) >= numColumns {
 			fmt.Fprintf(os.Stderr, "warning: column index %d out of range in %s (num_columns=%d); warming full file instead\n", colIdx, dataFile.Path, numColumns)
@@ -647,7 +720,7 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 		ranges = append(ranges, columnByteRanges(cm, includeDataPages)...)
 	}
 
-	ranges = mergeByteRanges(ranges)
+	ranges = fillByteRangeGaps(mergeByteRanges(ranges), lanceRangeFillGap)
 	if len(ranges) == 0 {
 		return "", false, nil
 	}
