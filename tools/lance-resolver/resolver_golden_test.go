@@ -79,12 +79,19 @@ type goldenManifest struct {
 	TransactionFile *string  `json:"transaction_file"`
 }
 
+type goldenExternalFile struct {
+	Placeholder string `json:"placeholder"`
+	Offset      uint64 `json:"offset"`
+	Size        uint64 `json:"size"`
+}
+
 type goldenExpected struct {
-	Format      string         `json:"format"`
-	Generator   string         `json:"generator"`
-	Manifest    goldenManifest `json:"manifest"`
-	Files       []goldenFile   `json:"files"`
-	FullResolve []string       `json:"full_resolve"`
+	Format        string               `json:"format"`
+	Generator     string               `json:"generator"`
+	Manifest      goldenManifest       `json:"manifest"`
+	Files         []goldenFile         `json:"files"`
+	ExternalFiles []goldenExternalFile `json:"external_files"`
+	FullResolve   []string             `json:"full_resolve"`
 }
 
 func loadGolden(t *testing.T) *goldenExpected {
@@ -113,7 +120,9 @@ func rangesBracket(ranges []goldenRange) string {
 }
 
 // lineKind classifies a resolved path line into a stable token, erasing the
-// volatile random file names.
+// volatile random file names. Anything that is not a manifest, transaction or
+// data file counts as an external sequence file; unexpected lines therefore
+// surface as an EXTFILE count mismatch.
 func lineKind(line string) string {
 	switch {
 	case strings.HasSuffix(line, lanceManifestExt):
@@ -123,7 +132,7 @@ func lineKind(line string) string {
 	case strings.Contains(filepath.ToSlash(line), "/"+lanceDataDir+"/"):
 		return "DATAFILE"
 	default:
-		return "OTHER:" + line
+		return "EXTFILE"
 	}
 }
 
@@ -154,6 +163,9 @@ func TestGolden_FullResolve(t *testing.T) {
 
 	got := countMultiset(mapStr(paths, lineKind))
 	want := map[string]int{"MANIFEST": 1, "DATAFILE": len(exp.Files)}
+	if len(exp.ExternalFiles) > 0 {
+		want["EXTFILE"] = len(exp.ExternalFiles)
+	}
 	if exp.Manifest.TransactionFile != nil {
 		want["TXN"] = 1
 	}

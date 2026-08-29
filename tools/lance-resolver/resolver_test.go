@@ -551,6 +551,67 @@ func TestParentFieldIDs(t *testing.T) {
 	}
 }
 
+func TestResolveLanceDataset_ExternalFiles(t *testing.T) {
+	dir := t.TempDir()
+	dsPath := filepath.Join(dir, "test.lance")
+	versionsDir := filepath.Join(dsPath, "_versions")
+	if err := os.MkdirAll(versionsDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// External sequence files are only emitted once their payload exceeds the
+	// inline threshold, far beyond fixture size; this synthetic case covers
+	// the resolution itself (format proof still comes from the golden tests).
+	manifest := &lancepb.Manifest{
+		Version: 1,
+		Fragments: []*lancepb.DataFragment{
+			{
+				Id: 7,
+				Files: []*lancepb.DataFile{
+					{Path: "data_0.lance"},
+				},
+				RowIdSequence: &lancepb.DataFragment_ExternalRowIds{
+					ExternalRowIds: &lancepb.ExternalFile{
+						Path:   "_row_ids/7-0.seq",
+						Offset: 64,
+						Size:   128,
+					},
+				},
+				CreatedAtVersionSequence: &lancepb.DataFragment_ExternalCreatedAtVersions{
+					ExternalCreatedAtVersions: &lancepb.ExternalFile{
+						Path: "_created/7-0.seq", // Size 0: whole file, no range.
+					},
+				},
+			},
+		},
+	}
+	writeManifestFile(t, filepath.Join(versionsDir, "1.manifest"), manifest)
+	os.WriteFile(filepath.Join(versionsDir, "latest_version_hint.json"), []byte(`{"version":1}`), 0644)
+
+	paths, err := resolveLanceDataset(dsPath, "", false, false, nil, false)
+	if err != nil {
+		t.Fatalf("resolveLanceDataset: %v", err)
+	}
+	var extLines []string
+	for _, p := range paths {
+		s := filepath.ToSlash(p)
+		if strings.Contains(s, "/_row_ids/") || strings.Contains(s, "/_created/") {
+			extLines = append(extLines, p)
+		}
+	}
+	if len(extLines) != 2 {
+		t.Fatalf("got %d external lines, want 2: %v", len(extLines), paths)
+	}
+	wantRange := path.Join(dsPath, "_row_ids/7-0.seq") + " [64-192]"
+	if extLines[0] != wantRange {
+		t.Errorf("row-id line = %q, want %q", extLines[0], wantRange)
+	}
+	wantWhole := path.Join(dsPath, "_created/7-0.seq")
+	if extLines[1] != wantWhole {
+		t.Errorf("created-at line = %q, want %q", extLines[1], wantWhole)
+	}
+}
+
 func TestFindLatestManifestByListing_V1(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "1.manifest"), []byte("v1"), 0644)

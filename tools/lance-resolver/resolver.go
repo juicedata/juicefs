@@ -120,6 +120,21 @@ func resolveLanceDataset(datasetPath, version string, manifestOnly bool, include
 			}
 		}
 
+		// External row-id / row-version sequence files: datasets with stable
+		// row IDs or row tracking store these sequences in dedicated files
+		// (path relative to the dataset root, payload at [offset, offset+size))
+		// once they exceed the inline threshold (~200KB); reads need them, so
+		// they are always resolved, with or without --columns.
+		for _, ext := range []*lancepb.ExternalFile{
+			frag.GetExternalRowIds(),
+			frag.GetExternalLastUpdatedAtVersions(),
+			frag.GetExternalCreatedAtVersions(),
+		} {
+			if p, ok := externalFilePath(datasetPath, ext); ok {
+				paths = append(paths, p)
+			}
+		}
+
 		for _, overlay := range frag.Overlays {
 			if overlay.DataFile != nil && overlay.DataFile.Path != "" {
 				if colOnlyMode {
@@ -313,6 +328,20 @@ func relativeDeletionFilePath(fragmentID uint64, delFile *lancepb.DeletionFile) 
 	}
 	return path.Join(lanceDeletionsDir,
 		fmt.Sprintf("%d-%d-%d.%s", fragmentID, delFile.ReadVersion, delFile.Id, suffix))
+}
+
+// externalFilePath renders an ExternalFile reference as a warmup target: the
+// path (relative to the dataset root) plus its [offset, offset+size) byte
+// range when the payload is a sub-range of the file.
+func externalFilePath(datasetPath string, ext *lancepb.ExternalFile) (string, bool) {
+	if ext == nil || ext.Path == "" {
+		return "", false
+	}
+	p := path.Join(datasetPath, ext.Path)
+	if ext.Size > 0 {
+		p += fmt.Sprintf(" [%d-%d]", ext.Offset, ext.Offset+ext.Size)
+	}
+	return p, true
 }
 
 func isLanceDataset(p string) bool {

@@ -149,7 +149,18 @@ def parse_manifest(path):
                     "file_major_version": df.one_varint(4),
                 }
             )
-        fragments.append({"id": fr.one_varint(1), "files": files})
+        # External row-id / row-version sequence files (fields 6/8/10), each
+        # an ExternalFile{path, offset, size}.
+        external = [
+            {
+                "path": m.one_string(1),
+                "offset": m.one_varint(2),
+                "size": m.one_varint(3),
+            }
+            for fn in (6, 8, 10)
+            for m in fr.messages(fn)
+        ]
+        fragments.append({"id": fr.one_varint(1), "files": files, "external": external})
 
     writer = msg.messages(13)
     generator = (
@@ -315,6 +326,20 @@ def main() -> int:
     if manifest["transaction_file"]:
         full_resolve.append("TXN")
 
+    # External sequence files across all fragments, ordered by content for
+    # the same regen-stability reasons as the data files.
+    external_files = sorted(
+        (
+            {"path": e["path"], "offset": e["offset"], "size": e["size"]}
+            for frag in manifest["fragments"]
+            for e in frag["external"]
+        ),
+        key=lambda e: (e["path"], e["offset"], e["size"]),
+    )
+    for i, e in enumerate(external_files):
+        e["placeholder"] = f"EXT{i}"
+        full_resolve.append(e["placeholder"])
+
     expected = {
         "format": "lance-fixture-expected/1",
         "generator": manifest["generator"],
@@ -325,6 +350,7 @@ def main() -> int:
             "transaction_file": "TXN" if manifest["transaction_file"] else None,
         },
         "files": files,
+        "external_files": external_files,
         "full_resolve": sorted(full_resolve),
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
