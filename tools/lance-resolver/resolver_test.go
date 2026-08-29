@@ -430,7 +430,7 @@ func buildGBOFile(t *testing.T, size int64, gboStart uint64, entries [][2]uint64
 	return path
 }
 
-func checkGlobalBufferTail(t *testing.T, path string, size int64) (uint64, []byteRange, bool) {
+func checkGlobalBufferTail(t *testing.T, path string, size int64) globalBufferTailResult {
 	t.Helper()
 	f, err := os.Open(path)
 	if err != nil {
@@ -446,19 +446,19 @@ func TestGlobalBufferTail(t *testing.T) {
 		// lies before it and must become an extra; the one at 100 is inside
 		// the tail and must not be repeated.
 		path := buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {32, 16}, {100, 8}})
-		tailStart, extras, ok := checkGlobalBufferTail(t, path, 160)
-		if !ok || tailStart != 80 {
-			t.Fatalf("ok=%v tailStart=%d, want ok=true tailStart=80", ok, tailStart)
+		r := checkGlobalBufferTail(t, path, 160)
+		if !r.present || r.corrupt || r.tailStart != 80 {
+			t.Fatalf("got %+v, want present tailStart=80", r)
 		}
-		if len(extras) != 1 || extras[0] != (byteRange{32, 48}) {
-			t.Fatalf("extras = %v, want [{32 48}]", extras)
+		if len(r.extras) != 1 || r.extras[0] != (byteRange{32, 48}) {
+			t.Fatalf("extras = %v, want [{32 48}]", r.extras)
 		}
 	})
 
 	t.Run("no global buffers", func(t *testing.T) {
 		path := buildGBOFile(t, 160, 64, nil)
-		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
-			t.Fatal("expected ok=false for zero global buffers")
+		if r := checkGlobalBufferTail(t, path, 160); r.present || r.corrupt {
+			t.Fatalf("got %+v, want absent (upstream rejects such files on open; ranges continue without a tail)", r)
 		}
 	})
 
@@ -466,22 +466,22 @@ func TestGlobalBufferTail(t *testing.T) {
 		// A corrupt footer storing gbo_start near MaxUint64 used to wrap the
 		// start+tableLen sum past the bounds check.
 		path := buildGBOFile(t, 160, ^uint64(0), [][2]uint64{{80, 20}})
-		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
-			t.Fatal("expected ok=false for gbo_start = MaxUint64")
+		if r := checkGlobalBufferTail(t, path, 160); !r.corrupt {
+			t.Fatalf("got %+v, want corrupt for gbo_start = MaxUint64", r)
 		}
 	})
 
 	t.Run("table extends past file", func(t *testing.T) {
 		path := buildGBOFile(t, 160, 119, [][2]uint64{{80, 20}})
-		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
-			t.Fatal("expected ok=false when the GBO table crosses the file end")
+		if r := checkGlobalBufferTail(t, path, 160); !r.corrupt {
+			t.Fatalf("got %+v, want corrupt when the GBO table crosses the file end", r)
 		}
 	})
 
 	t.Run("schema position beyond file", func(t *testing.T) {
 		path := buildGBOFile(t, 160, 64, [][2]uint64{{500, 20}})
-		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
-			t.Fatal("expected ok=false for tail start beyond the file")
+		if r := checkGlobalBufferTail(t, path, 160); !r.corrupt {
+			t.Fatalf("got %+v, want corrupt for tail start beyond the file", r)
 		}
 	})
 
@@ -489,27 +489,27 @@ func TestGlobalBufferTail(t *testing.T) {
 		// pos+size must never be formed before validation: without the
 		// subtraction checks these values slip through as a garbage range.
 		path := buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {1 << 62, 1 << 62}})
-		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
-			t.Fatal("expected ok=false for out-of-range extra buffer")
+		if r := checkGlobalBufferTail(t, path, 160); !r.corrupt {
+			t.Fatalf("got %+v, want corrupt for out-of-range extra buffer", r)
 		}
 		path = buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {0, ^uint64(0)}})
-		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
-			t.Fatal("expected ok=false for extra size = MaxUint64")
+		if r := checkGlobalBufferTail(t, path, 160); !r.corrupt {
+			t.Fatalf("got %+v, want corrupt for extra size = MaxUint64", r)
 		}
 	})
 
 	t.Run("zero-sized extra is skipped", func(t *testing.T) {
 		path := buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {0, 0}, {32, 16}})
-		tailStart, extras, ok := checkGlobalBufferTail(t, path, 160)
-		if !ok || tailStart != 80 || len(extras) != 1 || extras[0] != (byteRange{32, 48}) {
-			t.Fatalf("ok=%v tailStart=%d extras=%v, want tail 80 extras [{32 48}]", ok, tailStart, extras)
+		r := checkGlobalBufferTail(t, path, 160)
+		if !r.present || r.corrupt || r.tailStart != 80 || len(r.extras) != 1 || r.extras[0] != (byteRange{32, 48}) {
+			t.Fatalf("got %+v, want present tail 80 extras [{32 48}]", r)
 		}
 	})
 
 	t.Run("file too small for a footer", func(t *testing.T) {
 		path := buildGBOFile(t, 32, 0, nil)
-		if _, _, ok := checkGlobalBufferTail(t, path, 32); ok {
-			t.Fatal("expected ok=false for file smaller than the footer")
+		if r := checkGlobalBufferTail(t, path, 32); !r.corrupt {
+			t.Fatalf("got %+v, want corrupt for file smaller than the footer", r)
 		}
 	})
 }
@@ -653,6 +653,57 @@ func TestColumnWarmupPath_NestedColumnExpansion(t *testing.T) {
 	want = path.Join(dsPath, "data", "data_0.lance") + " [32-160]"
 	if p != want {
 		t.Errorf("columnWarmupPath() = %q, want %q", p, want)
+	}
+}
+
+// A corrupt GBO table must degrade to full-file warmup exactly like a
+// corrupt CMO entry, not silently omit the tail range from partial ranges.
+func TestColumnWarmupPath_CorruptGBOFallsBackToFile(t *testing.T) {
+	dir := t.TempDir()
+	dsPath := filepath.Join(dir, "ds.lance")
+	dataDir := filepath.Join(dsPath, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	cm := &file2pb.ColumnMetadata{BufferOffsets: []uint64{80}, BufferSizes: []uint64{8}}
+	cmData, err := proto.Marshal(cm)
+	if err != nil {
+		t.Fatalf("marshal column metadata: %v", err)
+	}
+
+	buf := make([]byte, 128)
+	binary.LittleEndian.PutUint64(buf[16:24], 32)
+	binary.LittleEndian.PutUint64(buf[24:32], uint64(len(cmData)))
+	copy(buf[32:], cmData)
+	binary.LittleEndian.PutUint64(buf[96:104], 16) // CMO table
+	// num_global_buffers = 1 but gbo_start points far out of range.
+	binary.LittleEndian.PutUint64(buf[104:112], ^uint64(0))
+	binary.LittleEndian.PutUint32(buf[112:116], 1)
+	binary.LittleEndian.PutUint32(buf[116:120], 1)
+	binary.LittleEndian.PutUint16(buf[120:122], 2)
+	binary.LittleEndian.PutUint16(buf[122:124], 1)
+	copy(buf[124:128], lanceMagic)
+
+	if err := os.WriteFile(filepath.Join(dataDir, "data_0.lance"), buf, 0644); err != nil {
+		t.Fatalf("write data file: %v", err)
+	}
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{{Id: 0, Name: "id", ParentId: -1}},
+	}
+	dataFile := &lancepb.DataFile{
+		Path:             "data_0.lance",
+		FileMajorVersion: 2,
+		Fields:           []int32{0},
+		ColumnIndices:    []int32{0},
+	}
+
+	_, ok, err := columnWarmupPath(dsPath, manifest, dataFile, []string{"id"}, false)
+	if err != nil {
+		t.Fatalf("columnWarmupPath: %v", err)
+	}
+	if ok {
+		t.Fatal("expected ok=false (full-file fallback) for corrupt GBO table")
 	}
 }
 

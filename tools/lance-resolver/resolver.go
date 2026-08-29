@@ -567,18 +567,32 @@ func hasIndirectEncoding(cm *file2pb.ColumnMetadata) bool {
 // start of the reader's optimistic tail read (the first global buffer, which
 // holds the file schema) plus the ranges of any global buffers positioned
 // before that start. ok is false when the file carries no global buffers.
-func globalBufferTail(f *os.File, fileSize int64) (uint64, []byteRange, bool) {
+// globalBufferTailResult distinguishes why no tail range is available:
+// a file legitimately declaring zero global buffers (unreadable upstream,
+// but not our problem to reject) from a GBO table that fails validation,
+// which must degrade column warmup to the full file exactly like a corrupt
+// CMO entry would.
+type globalBufferTailResult struct {
+	present   bool
+	corrupt   bool
+	tailStart uint64
+	extras    []byteRange
+}
+
+func globalBufferTail(f *os.File, fileSize int64) globalBufferTailResult {
 	footer := make([]byte, lanceFileFooterLen)
 	if fileSize < lanceFileFooterLen {
-		return 0, nil, false
+		return globalBufferTailResult{corrupt: true}
 	}
 	if _, err := f.ReadAt(footer, fileSize-lanceFileFooterLen); err != nil {
-		return 0, nil, false
+		return globalBufferTailResult{corrupt: true}
 	}
 	gboStart := binary.LittleEndian.Uint64(footer[16:24])
 	numGlobalBuffers := binary.LittleEndian.Uint32(footer[24:28])
 	if numGlobalBuffers == 0 {
-		return 0, nil, false
+		// Zero global buffers is not a table corruption; upstream rejects
+		// such files on open, warmup simply has no tail to cover.
+		return globalBufferTailResult{}
 	}
 	// Validate with subtraction so a corrupt gbo_start near MaxUint64 cannot
 	// wrap the sum past the bounds check (same style as the CMO guards in
@@ -586,23 +600,23 @@ func globalBufferTail(f *os.File, fileSize int64) (uint64, []byteRange, bool) {
 	tableLen := uint64(numGlobalBuffers) * lanceCMOEntrySize
 	fileLimit := uint64(fileSize - lanceFileFooterLen)
 	if gboStart > fileLimit || tableLen > fileLimit-gboStart {
-		return 0, nil, false
+		return globalBufferTailResult{corrupt: true}
 	}
 
 	entry := make([]byte, lanceCMOEntrySize)
 	if _, err := f.ReadAt(entry, int64(gboStart)); err != nil {
-		return 0, nil, false
+		return globalBufferTailResult{corrupt: true}
 	}
 	tailStart := binary.LittleEndian.Uint64(entry[0:8])
 	wholeFile := uint64(fileSize)
 	if tailStart >= wholeFile {
-		return 0, nil, false
+		return globalBufferTailResult{corrupt: true}
 	}
 
 	var extras []byteRange
 	for i := uint32(1); i < numGlobalBuffers; i++ {
 		if _, err := f.ReadAt(entry, int64(gboStart+uint64(i)*lanceCMOEntrySize)); err != nil {
-			return 0, nil, false
+			return globalBufferTailResult{corrupt: true}
 		}
 		pos := binary.LittleEndian.Uint64(entry[0:8])
 		size := binary.LittleEndian.Uint64(entry[8:16])
@@ -613,7 +627,7 @@ func globalBufferTail(f *os.File, fileSize int64) (uint64, []byteRange, bool) {
 			continue
 		}
 		if pos > wholeFile || size > wholeFile-pos {
-			return 0, nil, false
+			return globalBufferTailResult{corrupt: true}
 		}
 		// The reader's tail read covers [tailStart, EOF); a buffer starting
 		// at or after tailStart is already inside it, everything before it
@@ -623,7 +637,7 @@ func globalBufferTail(f *os.File, fileSize int64) (uint64, []byteRange, bool) {
 		}
 		extras = append(extras, byteRange{start: pos, end: pos + size})
 	}
-	return tailStart, extras, true
+	return globalBufferTailResult{present: true, tailStart: tailStart, extras: extras}
 }
 
 // columnWarmupPath resolves the byte ranges of the requested columns in a
@@ -707,9 +721,14 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 	// column-level warmup must therefore cover that whole tail, plus any
 	// global buffer positioned before it.
 	ranges = append(ranges, byteRange{start: uint64(fileSize - lanceFileFooterLen), end: uint64(fileSize)})
-	if tailStart, extras, ok := globalBufferTail(f, fileSize); ok {
-		ranges = append(ranges, byteRange{start: tailStart, end: uint64(fileSize)})
-		ranges = append(ranges, extras...)
+	gbo := globalBufferTail(f, fileSize)
+	if gbo.corrupt {
+		fmt.Fprintf(os.Stderr, "warning: global buffer offset table corrupt in %s; warming full file instead\n", dataFile.Path)
+		return "", false, nil
+	}
+	if gbo.present {
+		ranges = append(ranges, byteRange{start: gbo.tailStart, end: uint64(fileSize)})
+		ranges = append(ranges, gbo.extras...)
 	}
 	for _, colIdx := range colIndices {
 		if uint32(colIdx) >= numColumns {
