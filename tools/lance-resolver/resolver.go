@@ -468,6 +468,32 @@ func mergeByteRanges(ranges []byteRange) []byteRange {
 	return merged
 }
 
+// hasIndirectEncoding reports whether the column or any of its pages stores
+// its encoding outside the metadata via Encoding.indirect (deferred
+// encoding, used to share encodings across columns). The upstream v11
+// reader rejects these outright ("Indirect file encodings are not
+// supported"), so no reference implementation defines how buffer_location
+// resolves; rather than guess byte ranges, callers must fall back to
+// full-file warmup.
+func hasIndirectEncoding(cm *file2pb.ColumnMetadata) bool {
+	isIndirect := func(e *file2pb.Encoding) bool {
+		if e == nil {
+			return false
+		}
+		_, indirect := e.Location.(*file2pb.Encoding_Indirect)
+		return indirect
+	}
+	if isIndirect(cm.GetEncoding()) {
+		return true
+	}
+	for _, page := range cm.Pages {
+		if isIndirect(page.GetEncoding()) {
+			return true
+		}
+	}
+	return false
+}
+
 // columnWarmupPath resolves the byte ranges of the requested columns in a
 // single V2 data file. It returns a warmup target like:
 //
@@ -574,6 +600,10 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 		cm := &file2pb.ColumnMetadata{}
 		if err := proto.Unmarshal(cmData, cm); err != nil {
 			return "", false, fmt.Errorf("unmarshal column metadata for column %d in %s: %w", colIdx, fullPath, err)
+		}
+		if hasIndirectEncoding(cm) {
+			fmt.Fprintf(os.Stderr, "warning: column %d in %s uses an indirect (deferred) encoding whose buffer location cannot be resolved; warming full file instead\n", colIdx, dataFile.Path)
+			return "", false, nil
 		}
 
 		ranges = append(ranges, byteRange{start: entryOffset, end: entryOffset + lanceCMOEntrySize})

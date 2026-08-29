@@ -459,6 +459,62 @@ func TestColumnWarmupPath_NonLeafFallback(t *testing.T) {
 	}
 }
 
+func TestColumnWarmupPath_IndirectEncodingFallback(t *testing.T) {
+	dir := t.TempDir()
+	dsPath := filepath.Join(dir, "ds.lance")
+	dataDir := filepath.Join(dsPath, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Deferred (indirect) encodings store the encoding buffer elsewhere via
+	// buffer_location, whose semantics have no reference implementation (the
+	// upstream v11 reader rejects them). Range resolution must fall back to
+	// the full file instead of guessing.
+	cm := &file2pb.ColumnMetadata{
+		Encoding: &file2pb.Encoding{
+			Location: &file2pb.Encoding_Indirect{
+				Indirect: &file2pb.DeferredEncoding{BufferLocation: 4096, BufferLength: 64},
+			},
+		},
+	}
+	cmData, err := proto.Marshal(cm)
+	if err != nil {
+		t.Fatalf("marshal column metadata: %v", err)
+	}
+
+	buf := make([]byte, 128)
+	binary.LittleEndian.PutUint64(buf[16:24], 32)
+	binary.LittleEndian.PutUint64(buf[24:32], uint64(len(cmData)))
+	copy(buf[32:], cmData)
+	binary.LittleEndian.PutUint64(buf[96:104], 16)
+	binary.LittleEndian.PutUint32(buf[116:120], 1)
+	binary.LittleEndian.PutUint16(buf[120:122], 2)
+	binary.LittleEndian.PutUint16(buf[122:124], 1)
+	copy(buf[124:128], lanceMagic)
+	if err := os.WriteFile(filepath.Join(dataDir, "data_0.lance"), buf, 0644); err != nil {
+		t.Fatalf("write data file: %v", err)
+	}
+
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{{Id: 0, Name: "id", ParentId: -1}},
+	}
+	dataFile := &lancepb.DataFile{
+		Path:             "data_0.lance",
+		FileMajorVersion: 2,
+		Fields:           []int32{0},
+		ColumnIndices:    []int32{0},
+	}
+
+	_, ok, err := columnWarmupPath(dsPath, manifest, dataFile, []string{"id"}, false)
+	if err != nil {
+		t.Fatalf("columnWarmupPath: %v", err)
+	}
+	if ok {
+		t.Fatal("expected ok=false (full-file fallback) for indirect encoding")
+	}
+}
+
 func TestColumnWarmupPath_UnknownFileVersion(t *testing.T) {
 	dir := t.TempDir()
 	dsPath := filepath.Join(dir, "ds.lance")

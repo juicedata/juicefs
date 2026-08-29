@@ -34,7 +34,11 @@ lance-resolver [options] <dataset-path>
 nested columns (`list`, `struct`, …) span multiple physical columns whose exact
 layout is not described by the vendored protos, so requesting them falls back
 to warming the **full data file** (with a warning) instead of risking an
-incomplete warmup.
+incomplete warmup. The same fallback applies to columns using *deferred
+(indirect) encodings*: their encoding buffers live outside the column
+metadata, and no reference implementation defines how `buffer_location`
+resolves (the upstream v11 reader rejects such files), so guessing ranges
+would risk incomplete warmup.
 
 ## Output format
 
