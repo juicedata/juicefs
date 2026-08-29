@@ -514,6 +514,60 @@ func TestGlobalBufferTail(t *testing.T) {
 	})
 }
 
+// TestFieldChildren_ParentIdZeroSemantics documents — and pins — the
+// interpretation of parent_id = 0. The wire format cannot distinguish
+// "unset" from an explicit 0, and the reference implementation resolves
+// this as a REAL reference to field 0 (TryFrom<&Fields> for Schema: only
+// -1 marks a root). A writer that omits parent_id on top-level fields
+// would thus produce a manifest the official reader itself misreads;
+// mirroring upstream here is deliberate, and treating 0 as "root" would
+// instead break legitimate schemas whose field 0 is a struct parent.
+func TestFieldChildren_ParentIdZeroSemantics(t *testing.T) {
+	// Legitimate: field 0 is a struct parent, children reference it via
+	// parent_id = 0 — including a child whose parent_id is merely unset
+	// (indistinguishable from a deliberate 0).
+	legit := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "addr", ParentId: -1},
+			{Id: 1, Name: "city", ParentId: 0},
+			{Id: 2, Name: "zip", ParentId: 0},
+			{Id: 3, Name: "note", ParentId: 0}, // could equally be an unset field
+		},
+	}
+	children := fieldChildren(legit)
+	if len(children[0]) != 3 {
+		t.Errorf("children of field 0 = %v, want ids [1 2 3]", children[0])
+	}
+
+	// Pathological but consistent with upstream: a writer omitting
+	// parent_id on top-level fields while field 0 exists makes them all
+	// children of field 0. Upstream's reader builds the same (broken) tree,
+	// so this resolver must not invent a friendlier interpretation.
+	omitted := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "id", ParentId: -1},
+			{Id: 1, Name: "name"}, // parent_id unset -> 0
+			{Id: 2, Name: "tags"}, // parent_id unset -> 0
+		},
+	}
+	children = fieldChildren(omitted)
+	if len(children[0]) != 2 {
+		t.Errorf("children of field 0 = %v, want ids [1 2]", children[0])
+	}
+
+	// Unknown parent references are tolerated (no edge, field stays a
+	// standalone node) instead of failing the whole run.
+	unknown := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "id", ParentId: -1},
+			{Id: 1, Name: "name", ParentId: 42},
+		},
+	}
+	if children := fieldChildren(unknown); len(children) != 0 {
+		t.Errorf("unknown parent should add no edge, got %v", children)
+	}
+}
+
 func TestColumnWarmupPath_NestedColumnExpansion(t *testing.T) {
 	dir := t.TempDir()
 	dsPath := filepath.Join(dir, "ds.lance")

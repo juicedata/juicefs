@@ -420,10 +420,18 @@ func fieldByName(manifest *lancepb.Manifest) map[string]*lancepb.Field {
 // fieldChildren maps field IDs to their direct children, derived from the
 // flat field list's parent_id references. Upstream writers never populate
 // the type enum on the wire (it always decodes to PARENT), so the schema
-// tree must be derived structurally: a non-negative parent_id is a real
-// reference (upstream readers pass it through verbatim), while writers
-// store -1 for top-level fields. The self-reference guard only covers a
-// lone field whose parent_id is unset (decodes to 0).
+// tree must be derived structurally. parent_id semantics mirror the
+// reference implementation (lance-file datatypes, TryFrom<&Fields> for
+// Schema): -1 marks a root, every other value — including 0, which proto3
+// cannot distinguish from unset — is a REAL parent reference, and a missing
+// parent is a schema error there. A writer that omits parent_id on
+// top-level fields therefore produces manifests the official reader itself
+// misreads (those fields become children of field 0); treating 0 as "root"
+// here would diverge from upstream and break legitimate schemas where
+// field 0 is a struct parent. Unknown parent references are tolerated
+// (no edge) instead of erroring: warmup should degrade, not fail.
+// The self-reference guard only covers a lone field whose parent_id is
+// unset (decodes to 0) and whose own id happens to be 0.
 func fieldChildren(manifest *lancepb.Manifest) map[int32][]int32 {
 	ids := make(map[int32]bool, len(manifest.Fields))
 	for _, f := range manifest.Fields {
