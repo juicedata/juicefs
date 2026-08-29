@@ -507,6 +507,11 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 	}
 
 	var ranges []byteRange
+	// Any column projection starts by reading the file footer and the CMO
+	// table entries of the projected columns; without them the warmed
+	// metadata cannot even be located, so they belong in every column-level
+	// warmup output.
+	ranges = append(ranges, byteRange{start: uint64(fileSize - lanceFileFooterLen), end: uint64(fileSize)})
 	for _, colIdx := range colIndices {
 		if uint32(colIdx) >= numColumns {
 			fmt.Fprintf(os.Stderr, "warning: column index %d out of range in %s (num_columns=%d); warming full file instead\n", colIdx, dataFile.Path, numColumns)
@@ -542,6 +547,7 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 			return "", false, fmt.Errorf("unmarshal column metadata for column %d in %s: %w", colIdx, fullPath, err)
 		}
 
+		ranges = append(ranges, byteRange{start: entryOffset, end: entryOffset + lanceCMOEntrySize})
 		ranges = append(ranges, byteRange{start: cmPos, end: cmPos + cmLen})
 		ranges = append(ranges, columnByteRanges(cm, includeDataPages)...)
 	}

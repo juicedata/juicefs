@@ -351,7 +351,9 @@ func TestColumnWarmupPath(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
-	want := path.Join(dsPath, "data", "data_0.lance") + fmt.Sprintf(" [32-%d;80-88]", 32+len(cmData))
+	// Ranges: CMO entry [16,32) merges with the column metadata [32,32+len);
+	// the metadata buffer [80,88) merges with the file footer [88,128).
+	want := path.Join(dsPath, "data", "data_0.lance") + fmt.Sprintf(" [16-%d;80-128]", 32+len(cmData))
 	if p != want {
 		t.Errorf("columnWarmupPath() = %q, want %q", p, want)
 	}

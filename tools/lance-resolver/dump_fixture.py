@@ -193,6 +193,7 @@ def parse_data_file(path):
             }
         )
     return {
+        "file_size": len(data),
         "footer": {
             "column_metadata_start": col_meta_start,
             "cmo_table_start": cmo_start,
@@ -216,8 +217,15 @@ def merge_ranges(ranges):
     return merged
 
 
-def column_ranges(col, include_pages):
-    ranges = [[col["cm_pos"], col["cm_pos"] + col["cm_len"]]]
+def column_ranges(col, file_size, cmo_start, idx, include_pages):
+    # A projection read needs the file footer and the column's CMO entry to
+    # locate the metadata at all, plus the ColumnMetadata protobuf itself.
+    # Keep in sync with columnWarmupPath in resolver.go.
+    ranges = [
+        [file_size - FILE_FOOTER_LEN, file_size],
+        [cmo_start + CMO_ENTRY_SIZE * idx, cmo_start + CMO_ENTRY_SIZE * (idx + 1)],
+        [col["cm_pos"], col["cm_pos"] + col["cm_len"]],
+    ]
 
     def add(offsets, sizes):
         for o, s in zip(offsets, sizes):
@@ -281,8 +289,12 @@ def main() -> int:
                     "leaf": fid is not None and fid not in parents,
                     "cm_pos": col["cm_pos"],
                     "cm_len": col["cm_len"],
-                    "ranges_meta": column_ranges(col, False),
-                    "ranges_pages": column_ranges(col, True),
+                    "ranges_meta": column_ranges(
+                        col, parsed["file_size"], parsed["footer"]["cmo_table_start"], idx, False
+                    ),
+                    "ranges_pages": column_ranges(
+                        col, parsed["file_size"], parsed["footer"]["cmo_table_start"], idx, True
+                    ),
                 }
             )
         files.append(
