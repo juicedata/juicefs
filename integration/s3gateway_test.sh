@@ -2220,6 +2220,37 @@ function test_put_object_if_none_match() {
         fi
     fi
 
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-b --bucket ${bucket_name} --key conditional-implicit/child"
+        out=$(${AWS} s3api put-object --body "${MINT_DATA_DIR}/datafile-1-b" --bucket "${bucket_name}" --key conditional-implicit/child 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --bucket ${bucket_name} --key conditional-implicit/ --if-none-match '*'"
+        out=$(${AWS} s3api put-object --bucket "${bucket_name}" --key conditional-implicit/ --if-none-match '*' 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"NotImplemented"* ]]; then
+            rv=1
+            out="expected NotImplemented for conditional implicit directory promotion, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key conditional-implicit/child ${download_path}"
+        out=$(${AWS} s3api get-object --bucket "${bucket_name}" --key conditional-implicit/child "${download_path}" 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            get_md5 "${MINT_DATA_DIR}/datafile-1-b"
+            expected_hash=$md5rt
+            get_md5 "${download_path}"
+            if [ "$md5rt" != "$expected_hash" ]; then
+                rv=1
+                out="failed conditional directory PUT changed the implicit directory child"
+            fi
+        fi
+    fi
+
     rm -f "${download_path}"
     if [ $rv -eq 0 ]; then
         out=$(delete_bucket "${bucket_name}")
@@ -2297,6 +2328,43 @@ function test_copy_object_if_none_match() {
             if [ "$md5rt" != "$expected_hash" ]; then
                 rv=1
                 out="failed conditional copy changed the existing destination"
+            fi
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --bucket ${bucket_name} --key copy-empty-source"
+        out=$(${AWS} s3api put-object --bucket "${bucket_name}" --key copy-empty-source 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-b --bucket ${bucket_name} --key copy-implicit/child"
+        out=$(${AWS} s3api put-object --body "${MINT_DATA_DIR}/datafile-1-b" --bucket "${bucket_name}" --key copy-implicit/child 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --key copy-implicit/ --copy-source ${bucket_name}/copy-empty-source --if-none-match '*'"
+        out=$(${AWS} s3api copy-object --bucket "${bucket_name}" --key copy-implicit/ --copy-source "${bucket_name}/copy-empty-source" --if-none-match '*' 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"NotImplemented"* ]]; then
+            rv=1
+            out="expected NotImplemented for conditional copy to an implicit directory, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key copy-implicit/child ${download_path}"
+        out=$(${AWS} s3api get-object --bucket "${bucket_name}" --key copy-implicit/child "${download_path}" 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            get_md5 "${MINT_DATA_DIR}/datafile-1-b"
+            expected_hash=$md5rt
+            get_md5 "${download_path}"
+            if [ "$md5rt" != "$expected_hash" ]; then
+                rv=1
+                out="failed conditional directory copy changed the implicit directory child"
             fi
         fi
     fi

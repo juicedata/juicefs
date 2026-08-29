@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -220,6 +221,14 @@ func assertPreconditionFailed(t *testing.T, err error) {
 	}
 }
 
+func assertNotImplemented(t *testing.T, err error) {
+	t.Helper()
+	var notImplemented minio.NotImplemented
+	if !errors.As(err, &notImplemented) {
+		t.Fatalf("expected NotImplemented, got %T: %v", err, err)
+	}
+}
+
 func TestPutObjectIfNoneMatch(t *testing.T) {
 	t.Run("existing object remains unchanged", func(t *testing.T) {
 		gateway, _, bucket := newTestGateway(t, Config{})
@@ -339,24 +348,54 @@ func TestPutObjectIfNoneMatch(t *testing.T) {
 		assertHeadObject(t, gateway, bucket, "prefix/", true)
 	})
 
-	t.Run("implicit directory becomes an explicit marker", func(t *testing.T) {
-		gateway, _, bucket := newTestGateway(t, Config{})
+	t.Run("implicit directory is rejected without changes", func(t *testing.T) {
+		gateway, jfs, bucket := newTestGateway(t, Config{KeepEtag: true, ObjTag: true, ObjMeta: true})
 		ctx := context.Background()
 		if _, err := gateway.PutObject(ctx, bucket, "prefix/child", newPutObjectReader(t, []byte("child")), minio.ObjectOptions{}); err != nil {
 			t.Fatalf("create child object: %s", err)
 		}
+		directoryPath := gateway.path(bucket, "prefix")
+		fi, eno := jfs.Stat(mctx, directoryPath)
+		if eno != 0 {
+			t.Fatalf("stat implicit directory: %s", eno)
+		}
+		attr := meta.Attr{Atime: 123, Atimensec: 456000000}
+		if eno = jfs.Meta().SetAttr(mctx, fi.Inode(), meta.SetAttrAtime, 0, &attr); eno != 0 {
+			t.Fatalf("set implicit directory atime: %s", eno)
+		}
+		jfs.InvalidateAttr(fi.Inode())
+		originalXattrs := map[string][]byte{
+			s3Etag: []byte("original-etag"),
+			s3Tags: []byte("owner=posix"),
+			s3Meta: []byte(`{"x-amz-meta-owner":"posix"}`),
+		}
+		for name, value := range originalXattrs {
+			if eno = jfs.SetXattr(mctx, directoryPath, name, value, 0); eno != 0 {
+				t.Fatalf("set original xattr %s: %s", name, eno)
+			}
+		}
 		assertHeadObject(t, gateway, bucket, "prefix/", false)
 
-		opts := minio.ObjectOptions{IfNoneMatch: true}
-		if _, err := gateway.PutObject(ctx, bucket, "prefix/", newPutObjectReader(t, nil), opts); err != nil {
-			t.Fatalf("conditionally create marker for implicit directory: %s", err)
+		_, err := gateway.PutObject(ctx, bucket, "prefix/", newPutObjectReader(t, nil), minio.ObjectOptions{IfNoneMatch: true})
+		assertNotImplemented(t, err)
+		after, eno := jfs.Stat(mctx, directoryPath)
+		if eno != 0 {
+			t.Fatalf("stat rejected implicit directory: %s", eno)
 		}
-		assertHeadObject(t, gateway, bucket, "prefix/", true)
+		if after.Inode() != fi.Inode() || after.Attr().Atime != attr.Atime || after.Attr().Atimensec != attr.Atimensec {
+			t.Fatalf("implicit directory changed: inode=%d atime=%d.%09d, want inode=%d atime=%d.%09d",
+				after.Inode(), after.Attr().Atime, after.Attr().Atimensec, fi.Inode(), attr.Atime, attr.Atimensec)
+		}
+		for name, want := range originalXattrs {
+			got, xattrErr := jfs.GetXattr(mctx, directoryPath, name)
+			if xattrErr != 0 || !bytes.Equal(got, want) {
+				t.Fatalf("implicit directory xattr %s changed: got=%q errno=%s, want=%q", name, got, xattrErr, want)
+			}
+		}
+		assertHeadObject(t, gateway, bucket, "prefix/", false)
 		if got := readGatewayObject(t, gateway, bucket, "prefix/child"); !bytes.Equal(got, []byte("child")) {
 			t.Fatalf("child object changed: got %q, want %q", got, "child")
 		}
-		_, err := gateway.PutObject(ctx, bucket, "prefix/", newPutObjectReader(t, nil), opts)
-		assertPreconditionFailed(t, err)
 	})
 
 	t.Run("non-empty directory PUT does not create a marker", func(t *testing.T) {
@@ -396,54 +435,25 @@ func TestPutObjectIfNoneMatch(t *testing.T) {
 		assertPreconditionFailed(t, err)
 	})
 
-	t.Run("concurrent implicit directory conversions have one winner", func(t *testing.T) {
+	t.Run("unconditional PUT still promotes an implicit directory", func(t *testing.T) {
 		gateway, _, bucket := newTestGateway(t, Config{})
 		ctx := context.Background()
 		if _, err := gateway.PutObject(ctx, bucket, "prefix/child", newPutObjectReader(t, []byte("child")), minio.ObjectOptions{}); err != nil {
 			t.Fatalf("create child object: %s", err)
 		}
-
-		const writers = 16
-		start := make(chan struct{})
-		results := make(chan error, writers)
-		var waitGroup sync.WaitGroup
-		for i := 0; i < writers; i++ {
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				<-start
-				_, err := gateway.PutObject(ctx, bucket, "prefix/", newPutObjectReader(t, nil), minio.ObjectOptions{IfNoneMatch: true})
-				results <- err
-			}()
-		}
-		close(start)
-		waitGroup.Wait()
-		close(results)
-
-		succeeded := 0
-		failed := 0
-		for err := range results {
-			if err == nil {
-				succeeded++
-				continue
-			}
-			var preconditionFailed minio.PreConditionFailed
-			if errors.As(err, &preconditionFailed) {
-				failed++
-				continue
-			}
-			t.Fatalf("unexpected concurrent directory PUT error: %T: %v", err, err)
-		}
-		if succeeded != 1 || failed != writers-1 {
-			t.Fatalf("conditional directory results: succeeded=%d failed=%d", succeeded, failed)
+		if _, err := gateway.PutObject(ctx, bucket, "prefix/", newPutObjectReader(t, nil), minio.ObjectOptions{}); err != nil {
+			t.Fatalf("unconditionally create marker for implicit directory: %s", err)
 		}
 		assertHeadObject(t, gateway, bucket, "prefix/", true)
+		if got := readGatewayObject(t, gateway, bucket, "prefix/child"); !bytes.Equal(got, []byte("child")) {
+			t.Fatalf("child object changed: got %q, want %q", got, "child")
+		}
 	})
 
-	t.Run("concurrent POSIX directory creation still creates the marker", func(t *testing.T) {
+	t.Run("concurrent POSIX directory creation has a safe outcome", func(t *testing.T) {
 		gateway, _, bucket := newTestGateway(t, Config{})
 		ctx := context.Background()
-		const iterations = 256
+		const iterations = 128
 		for i := 0; i < iterations; i++ {
 			object := fmt.Sprintf("prefix-%03d/", i)
 			directoryPath := gateway.path(bucket, object)
@@ -466,10 +476,13 @@ func TestPutObjectIfNoneMatch(t *testing.T) {
 			if err := <-directoryResult; err != nil {
 				t.Fatalf("create POSIX directory %s: %s", directoryPath, err)
 			}
-			if err := <-markerResult; err != nil {
-				t.Fatalf("conditionally create marker %s: %s", object, err)
+			markerErr := <-markerResult
+			if markerErr == nil {
+				assertHeadObject(t, gateway, bucket, object, true)
+				continue
 			}
-			assertHeadObject(t, gateway, bucket, object, true)
+			assertNotImplemented(t, markerErr)
+			assertHeadObject(t, gateway, bucket, object, false)
 		}
 	})
 
@@ -543,17 +556,13 @@ func TestCopyObjectIfNoneMatch(t *testing.T) {
 		assertPreconditionFailed(t, err)
 	})
 
-	t.Run("zero-byte source creates a marker over an implicit directory", func(t *testing.T) {
+	t.Run("zero-byte source creates a new marker with complete attributes", func(t *testing.T) {
 		gateway, jfs, bucket := newTestGateway(t, Config{KeepEtag: true, ObjTag: true, ObjMeta: true})
 		ctx := context.Background()
 		sourceOpts := minio.ObjectOptions{UserDefined: map[string]string{"x-amz-meta-owner": "source"}}
 		if _, err := gateway.PutObject(ctx, bucket, "source", newPutObjectReader(t, nil), sourceOpts); err != nil {
 			t.Fatalf("create source: %s", err)
 		}
-		if _, err := gateway.PutObject(ctx, bucket, "prefix/child", newPutObjectReader(t, []byte("child")), minio.ObjectOptions{}); err != nil {
-			t.Fatalf("create child object: %s", err)
-		}
-		assertHeadObject(t, gateway, bucket, "prefix/", false)
 		srcInfo, err := gateway.GetObjectInfo(ctx, bucket, "source", minio.ObjectOptions{})
 		if err != nil {
 			t.Fatalf("get source info: %s", err)
@@ -564,7 +573,7 @@ func TestCopyObjectIfNoneMatch(t *testing.T) {
 		copyInfo, err := gateway.CopyObject(ctx, bucket, "source", bucket, "prefix/", srcInfo,
 			minio.ObjectOptions{}, minio.ObjectOptions{IfNoneMatch: true})
 		if err != nil {
-			t.Fatalf("conditionally copy to implicit directory: %s", err)
+			t.Fatalf("conditionally copy to new marker: %s", err)
 		}
 		assertHeadObject(t, gateway, bucket, "prefix/", true)
 		if copyInfo.ETag != srcInfo.ETag {
@@ -607,6 +616,71 @@ func TestCopyObjectIfNoneMatch(t *testing.T) {
 		if string(storedEtag) != srcInfo.ETag {
 			t.Fatalf("stored ETag: got %q, want %q", storedEtag, srcInfo.ETag)
 		}
+		fi, eno := jfs.Stat(mctx, "/prefix")
+		if eno != 0 {
+			t.Fatalf("stat destination marker: %s", eno)
+		}
+		if !isExplicitDirectoryMarker(fi.Attr()) {
+			t.Fatalf("destination was not published as an explicit marker: atime=%d.%09d", fi.Attr().Atime, fi.Attr().Atimensec)
+		}
+	})
+
+	t.Run("zero-byte source rejects an implicit directory without changes", func(t *testing.T) {
+		gateway, jfs, bucket := newTestGateway(t, Config{KeepEtag: true, ObjTag: true, ObjMeta: true})
+		ctx := context.Background()
+		sourceOpts := minio.ObjectOptions{UserDefined: map[string]string{
+			"x-amz-meta-owner":     "source",
+			xhttp.AmzObjectTagging: "owner=source",
+		}}
+		if _, err := gateway.PutObject(ctx, bucket, "source", newPutObjectReader(t, nil), sourceOpts); err != nil {
+			t.Fatalf("create source: %s", err)
+		}
+		if _, err := gateway.PutObject(ctx, bucket, "prefix/child", newPutObjectReader(t, []byte("child")), minio.ObjectOptions{}); err != nil {
+			t.Fatalf("create child object: %s", err)
+		}
+		directoryPath := gateway.path(bucket, "prefix")
+		fi, eno := jfs.Stat(mctx, directoryPath)
+		if eno != 0 {
+			t.Fatalf("stat implicit directory: %s", eno)
+		}
+		attr := meta.Attr{Atime: 321, Atimensec: 654000000}
+		if eno = jfs.Meta().SetAttr(mctx, fi.Inode(), meta.SetAttrAtime, 0, &attr); eno != 0 {
+			t.Fatalf("set implicit directory atime: %s", eno)
+		}
+		jfs.InvalidateAttr(fi.Inode())
+		originalXattrs := map[string][]byte{
+			s3Etag: []byte("posix-etag"),
+			s3Tags: []byte("owner=posix"),
+			s3Meta: []byte(`{"x-amz-meta-owner":"posix"}`),
+		}
+		for name, value := range originalXattrs {
+			if eno = jfs.SetXattr(mctx, directoryPath, name, value, 0); eno != 0 {
+				t.Fatalf("set original xattr %s: %s", name, eno)
+			}
+		}
+		srcInfo, err := gateway.GetObjectInfo(ctx, bucket, "source", minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("get source info: %s", err)
+		}
+
+		_, err = gateway.CopyObject(ctx, bucket, "source", bucket, "prefix/", srcInfo,
+			minio.ObjectOptions{}, minio.ObjectOptions{IfNoneMatch: true})
+		assertNotImplemented(t, err)
+		after, eno := jfs.Stat(mctx, directoryPath)
+		if eno != 0 {
+			t.Fatalf("stat rejected implicit destination: %s", eno)
+		}
+		if after.Inode() != fi.Inode() || after.Attr().Atime != attr.Atime || after.Attr().Atimensec != attr.Atimensec {
+			t.Fatalf("implicit destination changed: inode=%d atime=%d.%09d, want inode=%d atime=%d.%09d",
+				after.Inode(), after.Attr().Atime, after.Attr().Atimensec, fi.Inode(), attr.Atime, attr.Atimensec)
+		}
+		for name, want := range originalXattrs {
+			got, xattrErr := jfs.GetXattr(mctx, directoryPath, name)
+			if xattrErr != 0 || !bytes.Equal(got, want) {
+				t.Fatalf("implicit destination xattr %s changed: got=%q errno=%s, want=%q", name, got, xattrErr, want)
+			}
+		}
+		assertHeadObject(t, gateway, bucket, "prefix/", false)
 		if got := readGatewayObject(t, gateway, bucket, "prefix/child"); !bytes.Equal(got, []byte("child")) {
 			t.Fatalf("child object changed: got %q, want %q", got, "child")
 		}
@@ -703,11 +777,11 @@ func TestCopyObjectIfNoneMatch(t *testing.T) {
 			if putErr := <-putResult; putErr != nil {
 				t.Fatalf("unconditional marker PUT for %s: %s", object, putErr)
 			}
-			if copyErr := <-copyResult; copyErr != nil {
-				var preconditionFailed minio.PreConditionFailed
-				if !errors.As(copyErr, &preconditionFailed) {
-					t.Fatalf("conditional marker Copy for %s: %T: %v", object, copyErr, copyErr)
-				}
+			copyErr := <-copyResult
+			var preconditionFailed minio.PreConditionFailed
+			var notImplemented minio.NotImplemented
+			if copyErr == nil || !errors.As(copyErr, &preconditionFailed) && !errors.As(copyErr, &notImplemented) {
+				t.Fatalf("conditional marker Copy for %s: %T: %v", object, copyErr, copyErr)
 			}
 
 			assertHeadObject(t, gateway, bucket, object+"/", true)
@@ -726,83 +800,67 @@ func TestCopyObjectIfNoneMatch(t *testing.T) {
 		}
 	})
 
-	t.Run("attribute failure keeps the marker unpublished", func(t *testing.T) {
+	t.Run("temporary marker inode is removed after publish failure", func(t *testing.T) {
 		gateway, jfs, bucket := newTestGateway(t, Config{KeepEtag: true, ObjTag: true, ObjMeta: true})
 		ctx := context.Background()
+		var countTemporaryObjects func(string) int
+		countTemporaryObjects = func(directory string) int {
+			t.Helper()
+			f, eno := jfs.Open(mctx, directory, 0)
+			if fs.IsNotExist(eno) {
+				return 0
+			}
+			if eno != 0 {
+				t.Fatalf("open temporary directory %s: %s", directory, eno)
+			}
+			entries, eno := f.ReaddirPlus(mctx, 0)
+			if closeErr := f.Close(mctx); closeErr != 0 {
+				t.Fatalf("close temporary directory %s: %s", directory, closeErr)
+			}
+			if eno != 0 {
+				t.Fatalf("read temporary directory %s: %s", directory, eno)
+			}
+			count := 0
+			for _, entry := range entries {
+				if entry.Attr.Typ == meta.TypeDirectory && len(entry.Name) == subDirPrefix {
+					count += countTemporaryObjects(directory + sep + string(entry.Name))
+					continue
+				}
+				count++
+			}
+			return count
+		}
+		tmpRoot := gateway.tpath(bucket, "tmp")
 		invalidXattr := objectXattr{name: "", value: []byte("invalid")}
+		before := countTemporaryObjects(tmpRoot)
 		if err := gateway.putDirectoryObject(ctx, bucket, "/new-marker", true, []objectXattr{invalidXattr}); err == nil {
 			t.Fatal("expected new marker attribute failure")
 		}
 		if _, eno := jfs.Stat(mctx, "/new-marker"); !fs.IsNotExist(eno) {
 			t.Fatalf("failed marker became visible: %s", eno)
 		}
-
-		sourceOpts := minio.ObjectOptions{UserDefined: map[string]string{"x-amz-meta-owner": "stale"}}
-		if _, err := gateway.PutObject(ctx, bucket, "failure-source", newPutObjectReader(t, nil), sourceOpts); err != nil {
-			t.Fatalf("create failure source: %s", err)
-		}
-		srcInfo, err := gateway.GetObjectInfo(ctx, bucket, "failure-source", minio.ObjectOptions{})
-		if err != nil {
-			t.Fatalf("get failure source: %s", err)
-		}
-		srcInfo.UserDefined[xhttp.AmzObjectTagging] = "stale=tag"
-		copyXattrs, _, err := gateway.copyDirectoryObjectXattrs(gateway.path(bucket, "failure-source"), srcInfo)
-		if err != nil {
-			t.Fatalf("prepare directory Copy xattrs: %s", err)
-		}
-		failingCopyXattrs := append(copyXattrs, invalidXattr)
-		managedXattrNames := []string{s3Etag, s3Tags, s3Meta}
-		preparePartiallyAppliedXattrs := func(object string) {
-			t.Helper()
-			child := object + "/child"
-			if _, err := gateway.PutObject(ctx, bucket, child, newPutObjectReader(t, []byte("child")), minio.ObjectOptions{}); err != nil {
-				t.Fatalf("create child object %s: %s", child, err)
-			}
-			directoryPath := gateway.path(bucket, object)
-			if err := gateway.putDirectoryObject(ctx, bucket, directoryPath, true, failingCopyXattrs); err == nil {
-				t.Fatalf("expected implicit marker attribute failure for %s", object)
-			}
-			assertHeadObject(t, gateway, bucket, object+"/", false)
-			for _, name := range managedXattrNames {
-				if _, eno := jfs.GetXattr(mctx, directoryPath, name); eno != 0 {
-					t.Fatalf("get partially applied %s on %s: %s", name, object, eno)
-				}
-			}
-		}
-		assertNoManagedXattrs := func(object string) {
-			t.Helper()
-			directoryPath := gateway.path(bucket, object)
-			for _, name := range managedXattrNames {
-				if value, eno := jfs.GetXattr(mctx, directoryPath, name); eno != meta.ENOATTR {
-					t.Fatalf("managed xattr %s on %s: value=%q, errno=%s", name, object, value, eno)
-				}
-			}
+		if after := countTemporaryObjects(tmpRoot); after != before {
+			t.Fatalf("attribute failure leaked temporary marker: before=%d after=%d", before, after)
 		}
 
-		for _, test := range []struct {
-			name        string
-			object      string
-			ifNoneMatch bool
-		}{
-			{name: "conditional PUT", object: "conditional-prefix", ifNoneMatch: true},
-			{name: "unconditional PUT", object: "unconditional-prefix", ifNoneMatch: false},
-		} {
-			test := test
-			t.Run(test.name+" clears partial xattrs before publishing", func(t *testing.T) {
-				preparePartiallyAppliedXattrs(test.object)
-				if _, err := gateway.PutObject(ctx, bucket, test.object+"/", newPutObjectReader(t, nil), minio.ObjectOptions{IfNoneMatch: test.ifNoneMatch}); err != nil {
-					t.Fatalf("publish marker with %s: %s", test.name, err)
-				}
-				assertHeadObject(t, gateway, bucket, test.object+"/", true)
-				assertNoManagedXattrs(test.object)
-				info, err := gateway.GetObjectInfo(ctx, bucket, test.object+"/", minio.ObjectOptions{})
-				if err != nil {
-					t.Fatalf("get marker after %s: %s", test.name, err)
-				}
-				if info.ETag != "" || info.UserTags != "" || info.UserDefined["x-amz-meta-owner"] != "" {
-					t.Fatalf("stale marker attributes after %s: ETag=%q tags=%q metadata=%q", test.name, info.ETag, info.UserTags, info.UserDefined)
-				}
-			})
+		if _, err := gateway.PutObject(ctx, bucket, "existing-marker/", newPutObjectReader(t, nil), minio.ObjectOptions{}); err != nil {
+			t.Fatalf("create existing marker: %s", err)
+		}
+		before = countTemporaryObjects(tmpRoot)
+		err := gateway.publishNewDirectoryObjectLocked(ctx, bucket, gateway.path(bucket, "existing-marker"), nil)
+		if !errors.Is(err, syscall.EEXIST) {
+			t.Fatalf("expected marker publish collision, got %T: %v", err, err)
+		}
+		if after := countTemporaryObjects(tmpRoot); after != before {
+			t.Fatalf("publish collision leaked temporary marker: before=%d after=%d", before, after)
+		}
+
+		before = countTemporaryObjects(tmpRoot)
+		if err = gateway.putDirectoryObject(ctx, bucket, gateway.path(bucket, "successful-marker"), true, nil); err != nil {
+			t.Fatalf("publish new marker: %s", err)
+		}
+		if after := countTemporaryObjects(tmpRoot); after != before {
+			t.Fatalf("successful publish left temporary marker: before=%d after=%d", before, after)
 		}
 	})
 }

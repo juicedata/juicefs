@@ -966,14 +966,18 @@ func (n *jfsObjects) applyObjectXattrs(ctx meta.Context, inode meta.Ino, xattrs 
 func (n *jfsObjects) publishNewDirectoryObjectLocked(ctx context.Context, bucket, directoryPath string, xattrs []objectXattr) error {
 	uuid := minio.MustGetUUID()
 	tmp := n.tpath(bucket, "tmp", uuid[:subDirPrefix], uuid)
-	// Leave failed temporary directories to the existing cleanup routine. Deleting
-	// by name here could remove a different inode installed by a concurrent writer.
 	if err := n.mkdirAll(ctx, path.Dir(tmp)); err != nil {
 		return err
 	}
 	if eno := n.fs.Mkdir(mctx, tmp, 0777, n.gConf.Umask); eno != 0 {
 		return eno
 	}
+	published := false
+	defer func() {
+		if !published {
+			_ = n.fs.Delete(mctx, tmp)
+		}
+	}()
 	fi, eno := n.fs.Stat(mctx, tmp)
 	if eno != 0 {
 		return eno
@@ -986,7 +990,12 @@ func (n *jfsObjects) publishNewDirectoryObjectLocked(ctx context.Context, bucket
 		return eno
 	}
 	n.fs.InvalidateAttr(fi.Inode())
-	return n.fs.Rename(mctx, tmp, directoryPath, meta.RenameNoReplace)
+	eno = n.fs.Rename(mctx, tmp, directoryPath, meta.RenameNoReplace)
+	if eno != 0 {
+		return eno
+	}
+	published = true
+	return nil
 }
 
 func (n *jfsObjects) putDirectoryObject(ctx context.Context, bucket, directoryPath string, ifNoneMatch bool, xattrs []objectXattr) error {
@@ -1037,12 +1046,13 @@ func (n *jfsObjects) putDirectoryObject(ctx context.Context, bucket, directoryPa
 		return fmt.Errorf("%s is not directory", directoryPath)
 	}
 	isExplicitMarker := isExplicitDirectoryMarker(&attr)
-	if ifNoneMatch && (isExplicitMarker || n.gConf.HeadDir) {
-		return minio.PreConditionFailed{}
+	if ifNoneMatch {
+		if isExplicitMarker || n.gConf.HeadDir {
+			return minio.PreConditionFailed{}
+		}
+		return minio.NotImplemented{Message: "atomic conditional promotion of an implicit directory is not supported"}
 	}
 
-	// Apply managed xattrs before publishing an implicit directory. Avoid rollback
-	// on failure because it could overwrite concurrent POSIX updates.
 	if err := n.applyObjectXattrs(lockCtx, inode, xattrs); err != nil {
 		return err
 	}
@@ -1053,9 +1063,6 @@ func (n *jfsObjects) putDirectoryObject(ctx context.Context, bucket, directoryPa
 	}
 	if currentInode != inode || currentAttr.Typ != meta.TypeDirectory {
 		return syscall.EAGAIN
-	}
-	if ifNoneMatch && isExplicitDirectoryMarker(&currentAttr) {
-		return minio.PreConditionFailed{}
 	}
 	attr = meta.Attr{Atime: 0, Atimensec: 0}
 	if eno = n.fs.Meta().SetAttr(lockCtx, inode, meta.SetAttrAtime, 0, &attr); eno != 0 {
