@@ -26,7 +26,7 @@ lance-resolver [options] <dataset-path>
 | `--version VERSION` | Resolve a specific dataset version (default: latest) |
 | `--manifest-only` | Output only the manifest file path |
 | `--include-indices` | Also include index files under `_indices/` |
-| `--columns COL1,COL2` | Column-level warmup for V2 data files (leaf columns only; metadata buffer ranges) |
+| `--columns COL1,COL2` | Column-level warmup for V2 data files (leaf, `struct` and `list` columns; see below) |
 | `--include-data-pages` | Include column page data buffer ranges (use with `--columns`) |
 | `-h, --help` | Show help |
 
