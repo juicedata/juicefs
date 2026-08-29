@@ -203,31 +203,24 @@ func TestIsLanceDataset(t *testing.T) {
 	}
 }
 
-func TestBuildFieldColumnMap(t *testing.T) {
-	manifest := &lancepb.Manifest{
-		Fields: []*lancepb.Field{
-			{Id: 0, Name: "id"},
-			{Id: 1, Name: "name"},
-			{Id: 2, Name: "value"},
-		},
-	}
+func TestDataFileColumnIndices(t *testing.T) {
 	dataFile := &lancepb.DataFile{
 		Fields:        []int32{0, 1, 2},
 		ColumnIndices: []int32{0, 2, 1},
 	}
 
-	m := buildFieldColumnMap(manifest, dataFile)
-	if m["id"] != 0 {
-		t.Errorf("id = %d, want 0", m["id"])
+	m := dataFileColumnIndices(dataFile)
+	if m[0] != 0 {
+		t.Errorf("field 0 = %d, want 0", m[0])
 	}
-	if m["name"] != 2 {
-		t.Errorf("name = %d, want 2", m["name"])
+	if m[1] != 2 {
+		t.Errorf("field 1 = %d, want 2", m[1])
 	}
-	if m["value"] != 1 {
-		t.Errorf("value = %d, want 1", m["value"])
+	if m[2] != 1 {
+		t.Errorf("field 2 = %d, want 1", m[2])
 	}
-	if _, ok := m["nonexistent"]; ok {
-		t.Error("nonexistent field should not be in map")
+	if _, ok := m[99]; ok {
+		t.Error("absent field should not be in map")
 	}
 }
 
@@ -410,52 +403,118 @@ func TestColumnWarmupPath_OverflowGuard(t *testing.T) {
 	}
 }
 
-func TestColumnWarmupPath_NonLeafFallback(t *testing.T) {
-	tests := []struct {
-		name   string
-		fields []*lancepb.Field
-		column string
-	}{
-		{
-			// A list column: the inner item field references the outer field
-			// as parent, so the outer column spans multiple physical columns.
-			name: "list column",
-			fields: []*lancepb.Field{
-				{Id: 0, Name: "tags", ParentId: -1},
-				{Id: 1, Name: "tags.item", ParentId: 0},
-			},
-			column: "tags",
-		},
-		{
-			// A struct column: child fields make the parent non-leaf; warming
-			// it by name would miss the children's physical columns.
-			name: "struct column",
-			fields: []*lancepb.Field{
-				{Id: 0, Name: "addr", ParentId: -1},
-				{Id: 1, Name: "addr.city", ParentId: 0},
-				{Id: 2, Name: "addr.zip", ParentId: 0},
-			},
-			column: "addr",
+func TestColumnWarmupPath_NestedColumnExpansion(t *testing.T) {
+	dir := t.TempDir()
+	dsPath := filepath.Join(dir, "ds.lance")
+	dataDir := filepath.Join(dsPath, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Two physical columns backing a struct column (addr -> city, zip).
+	// Nested parents have no physical column of their own; their data,
+	// including list offsets, lives in the descendant leaf columns.
+	cm0 := &file2pb.ColumnMetadata{BufferOffsets: []uint64{80}, BufferSizes: []uint64{8}}
+	cm1 := &file2pb.ColumnMetadata{BufferOffsets: []uint64{96}, BufferSizes: []uint64{8}}
+	cm0Data, err := proto.Marshal(cm0)
+	if err != nil {
+		t.Fatalf("marshal column metadata: %v", err)
+	}
+	cm1Data, err := proto.Marshal(cm1)
+	if err != nil {
+		t.Fatalf("marshal column metadata: %v", err)
+	}
+
+	fileSize := 160
+	buf := make([]byte, fileSize)
+	cm0Pos, cm1Pos := 48, 48+len(cm0Data)
+	// CMO table at 16 with two entries.
+	binary.LittleEndian.PutUint64(buf[16:24], uint64(cm0Pos))
+	binary.LittleEndian.PutUint64(buf[24:32], uint64(len(cm0Data)))
+	binary.LittleEndian.PutUint64(buf[32:40], uint64(cm1Pos))
+	binary.LittleEndian.PutUint64(buf[40:48], uint64(len(cm1Data)))
+	copy(buf[cm0Pos:], cm0Data)
+	copy(buf[cm1Pos:], cm1Data)
+	// Footer occupies [120,160): cmo_table_start at footer[8:16].
+	binary.LittleEndian.PutUint64(buf[128:136], 16) // CMO table start
+	binary.LittleEndian.PutUint32(buf[148:152], 2)  // num columns
+	binary.LittleEndian.PutUint16(buf[152:154], 2)  // major version
+	binary.LittleEndian.PutUint16(buf[154:156], 1)  // minor version
+	copy(buf[156:160], lanceMagic)
+
+	if err := os.WriteFile(filepath.Join(dataDir, "data_0.lance"), buf, 0644); err != nil {
+		t.Fatalf("write data file: %v", err)
+	}
+
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "addr", ParentId: -1},
+			{Id: 1, Name: "city", ParentId: 0},
+			{Id: 2, Name: "zip", ParentId: 0},
 		},
 	}
 	dataFile := &lancepb.DataFile{
 		Path:             "data_0.lance",
 		FileMajorVersion: 2,
-		Fields:           []int32{0},
+		Fields:           []int32{1, 2},
+		ColumnIndices:    []int32{0, 1},
+	}
+
+	// Requesting the struct must resolve to the union of both leaf columns:
+	// CMO entries [16,48) + both ColumnMetadata sections [48, 48+len0+len1),
+	// both metadata buffers, and the file footer [120,160).
+	p, ok, err := columnWarmupPath(dsPath, manifest, dataFile, []string{"addr"}, false)
+	if err != nil {
+		t.Fatalf("columnWarmupPath: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true for struct column")
+	}
+	want := path.Join(dsPath, "data", "data_0.lance") +
+		fmt.Sprintf(" [16-%d;80-88;96-104;120-160]", 48+len(cm0Data)+len(cm1Data))
+	if p != want {
+		t.Errorf("columnWarmupPath() = %q, want %q", p, want)
+	}
+
+	// Requesting a single leaf child resolves to just that column: its CMO
+	// entry [32,48) and metadata [54,60) stay separate (cm0 belongs to city).
+	p, ok, err = columnWarmupPath(dsPath, manifest, dataFile, []string{"zip"}, false)
+	if err != nil {
+		t.Fatalf("columnWarmupPath: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true for leaf column")
+	}
+	want = path.Join(dsPath, "data", "data_0.lance") +
+		fmt.Sprintf(" [32-48;%d-%d;96-104;120-160]", cm1Pos, cm1Pos+len(cm1Data))
+	if p != want {
+		t.Errorf("columnWarmupPath() = %q, want %q", p, want)
+	}
+}
+
+func TestColumnWarmupPath_NoColumnsFallback(t *testing.T) {
+	// A struct whose children have no physical columns in this file (e.g.
+	// written by a projection that dropped them): nothing to warm, so the
+	// resolver must fall back to the full file.
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{
+			{Id: 0, Name: "addr", ParentId: -1},
+			{Id: 1, Name: "city", ParentId: 0},
+		},
+	}
+	dataFile := &lancepb.DataFile{
+		Path:             "data_0.lance",
+		FileMajorVersion: 2,
+		Fields:           []int32{99},
 		ColumnIndices:    []int32{0},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			manifest := &lancepb.Manifest{Fields: tt.fields}
-			_, ok, err := columnWarmupPath("unused", manifest, dataFile, []string{tt.column}, false)
-			if err != nil {
-				t.Fatalf("columnWarmupPath: %v", err)
-			}
-			if ok {
-				t.Fatalf("expected ok=false for non-leaf column %q", tt.column)
-			}
-		})
+	_, ok, err := columnWarmupPath("unused", manifest, dataFile, []string{"addr"}, false)
+	if err != nil {
+		t.Fatalf("columnWarmupPath: %v", err)
+	}
+	if ok {
+		t.Fatal("expected ok=false when no physical columns match")
 	}
 }
 
@@ -556,54 +615,54 @@ func TestColumnWarmupPath_UnknownFileVersion(t *testing.T) {
 	}
 }
 
-func TestParentFieldIDs(t *testing.T) {
-	// Flat schema: no parents, every field is a leaf.
-	flat := &lancepb.Manifest{
-		Fields: []*lancepb.Field{
-			{Id: 0, Name: "id", ParentId: -1},
-			{Id: 1, Name: "name", ParentId: -1},
-		},
-	}
-	if parents := parentFieldIDs(flat); len(parents) != 0 {
-		t.Errorf("flat schema: parents = %v, want none", parents)
-	}
-
-	// A single field whose parent_id is left unset (decodes to 0) must not
-	// mark itself as a parent via the self-reference guard.
-	unset := &lancepb.Manifest{
-		Fields: []*lancepb.Field{{Id: 0, Name: "id"}},
-	}
-	if parents := parentFieldIDs(unset); len(parents) != 0 {
-		t.Errorf("unset parent: parents = %v, want none", parents)
-	}
-
-	// parent_id = 0 is a real reference to field 0 (upstream passes it
-	// through verbatim; writers store -1 for top-level fields), so here the
-	// sibling genuinely becomes a child of field 0.
-	refZero := &lancepb.Manifest{
-		Fields: []*lancepb.Field{
-			{Id: 0, Name: "addr", ParentId: -1},
-			{Id: 1, Name: "addr.city", ParentId: 0},
-		},
-	}
-	if parents := parentFieldIDs(refZero); !parents[0] || len(parents) != 1 {
-		t.Errorf("parent_id=0 reference: parents = %v, want only field 0", parents)
-	}
-
-	// Nested schema: only the struct field is a parent; its leaves are not.
+func TestFieldChildrenAndExpansion(t *testing.T) {
 	nested := &lancepb.Manifest{
 		Fields: []*lancepb.Field{
-			{Id: 0, Name: "addr", ParentId: -1},
-			{Id: 1, Name: "addr.city", ParentId: 0},
-			{Id: 2, Name: "addr.zip", ParentId: 0},
+			{Id: 0, Name: "id", ParentId: -1},
+			{Id: 1, Name: "tags", ParentId: -1},
+			{Id: 2, Name: "item", ParentId: 1},
+			{Id: 3, Name: "addr", ParentId: -1},
+			{Id: 4, Name: "city", ParentId: 3},
+			{Id: 5, Name: "zip", ParentId: 3},
+			// A lone field whose parent_id is unset (decodes to 0) must not
+			// become a child of itself.
+			{Id: 9, Name: "solo"},
 		},
 	}
-	parents := parentFieldIDs(nested)
-	if !parents[0] {
-		t.Error("field 0 (struct) should be a parent")
+	children := fieldChildren(nested)
+	if len(children[3]) != 2 || children[3][0] != 4 || children[3][1] != 5 {
+		t.Errorf("children of addr = %v, want [4 5]", children[3])
 	}
-	if parents[1] || parents[2] {
-		t.Errorf("leaf fields should not be parents, got %v", parents)
+	// Field 9's parent_id is unset (decodes to 0), which is a real reference
+	// to field 0 (upstream passes parent_id through verbatim; writers store
+	// -1 for top-level fields) — so it becomes a child of field 0.
+	if len(children[9]) != 0 {
+		t.Errorf("field 9 should have no children, got %v", children[9])
+	}
+	if len(children[0]) != 1 || children[0][0] != 9 {
+		t.Errorf("children of field 0 = %v, want [9]", children[0])
+	}
+
+	got := expandFieldIDs(children, 3)
+	want := map[int32]bool{3: true, 4: true, 5: true}
+	if len(got) != len(want) {
+		t.Fatalf("expand(addr) = %v, want %v", got, want)
+	}
+	for _, id := range got {
+		if !want[id] {
+			t.Fatalf("expand(addr) = %v, unexpected id %d", got, id)
+		}
+	}
+
+	leaf := expandFieldIDs(children, 2)
+	if len(leaf) != 1 || leaf[0] != 2 {
+		t.Errorf("expand(leaf) = %v, want [2]", leaf)
+	}
+
+	// A corrupt cycle (a -> b -> a) must not loop forever.
+	cyclic := map[int32][]int32{1: {2}, 2: {1}}
+	if got := expandFieldIDs(cyclic, 1); len(got) != 2 {
+		t.Errorf("expand(cyclic) = %v, want 2 ids", got)
 	}
 }
 

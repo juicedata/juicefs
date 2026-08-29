@@ -30,15 +30,15 @@ lance-resolver [options] <dataset-path>
 | `--include-data-pages` | Include column page data buffer ranges (use with `--columns`) |
 | `-h, --help` | Show help |
 
-`--columns` supports only **leaf (primitive)** columns. Variable-length and
-nested columns (`list`, `struct`, …) span multiple physical columns whose exact
-layout is not described by the vendored protos, so requesting them falls back
-to warming the **full data file** (with a warning) instead of risking an
-incomplete warmup. The same fallback applies to columns using *deferred
-(indirect) encodings*: their encoding buffers live outside the column
-metadata, and no reference implementation defines how `buffer_location`
-resolves (the upstream v11 reader rejects such files), so guessing ranges
-would risk incomplete warmup.
+`--columns` supports leaf (primitive) columns as well as **nested `struct` and
+`list` columns**: nested parents have no physical column of their own (their
+data, including list offsets, lives inside the descendant leaf columns), so a
+nested request expands to the byte ranges of every column in its subtree —
+verified against real fixtures. Columns using *deferred (indirect) encodings*
+still fall back to the **full data file** (with a warning): their encoding
+buffers live outside the column metadata and no reference implementation
+defines how `buffer_location` resolves (the upstream v11 reader rejects such
+files), so guessing ranges would risk incomplete warmup.
 
 ## Output format
 
@@ -118,12 +118,11 @@ under `tools/lance-resolver/` (`.github/workflows/lance-resolver-fixture-drift.y
 
 ## Future work
 
-Precise column-level warmup for nested columns (`list`, `struct`, …) is not
-implemented: such columns span multiple physical columns whose exact layout is
-only described by Lance's full encoding model, which is not part of the vendored
-protos. Reimplementing the encoding walker in pure Go would be fragile and drift
-with upstream format changes.
+Deferred (indirect) column encodings are detected but not range-resolved (see
+the note above): if a reference implementation for `buffer_location` lands
+upstream, the detection can turn into proper ranges.
 
-If this becomes a requirement, the planned direction is to delegate the format
-parsing to the official Rust `lance` / `lance-file` crates (for example via a
-small sidecar binary), keeping this tool's output format unchanged.
+If deeper format introspection is ever needed (encodings, statistics, …),
+the planned direction is to delegate the format parsing to the official Rust
+`lance` / `lance-file` crates (for example via a small sidecar binary),
+keeping this tool's output format unchanged.

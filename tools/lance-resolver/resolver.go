@@ -381,27 +381,22 @@ type byteRange struct {
 	end   uint64
 }
 
-// buildFieldColumnMap maps manifest field names to physical column indices for
+// dataFileColumnIndices maps schema field IDs to physical column indices for
 // a V2 data file. DataFile.Fields and DataFile.ColumnIndices are parallel
-// arrays: Fields[i] is the field ID and ColumnIndices[i] is its column index.
-func buildFieldColumnMap(manifest *lancepb.Manifest, dataFile *lancepb.DataFile) map[string]int {
-	m := make(map[string]int)
+// arrays: Fields[i] is the field ID and ColumnIndices[i] its column index.
+// Only the terminal leaf fields of nested columns have entries: list/struct
+// parents are virtual, their data (including list offsets) lives inside the
+// descendant leaf columns.
+func dataFileColumnIndices(dataFile *lancepb.DataFile) map[int32]int32 {
+	m := make(map[int32]int32)
 	if dataFile == nil {
 		return m
 	}
-
-	idToName := make(map[int32]string)
-	for _, field := range manifest.Fields {
-		idToName[field.Id] = field.Name
-	}
-
 	for i, fieldID := range dataFile.Fields {
 		if i >= len(dataFile.ColumnIndices) {
 			break
 		}
-		if name, ok := idToName[fieldID]; ok {
-			m[name] = int(dataFile.ColumnIndices[i])
-		}
+		m[fieldID] = dataFile.ColumnIndices[i]
 	}
 	return m
 }
@@ -415,28 +410,40 @@ func fieldByName(manifest *lancepb.Manifest) map[string]*lancepb.Field {
 	return m
 }
 
-// parentFieldIDs returns the set of field IDs that have at least one child
-// field. Lance manifests store the schema as a flat field list where each
-// field names its parent via parent_id; upstream writers never populate the
-// type enum on the wire (it always decodes to PARENT), so leaf-ness must be
-// derived structurally: a field is a leaf iff no other field references it
-// as parent.
-func parentFieldIDs(manifest *lancepb.Manifest) map[int32]bool {
+// fieldChildren maps field IDs to their direct children, derived from the
+// flat field list's parent_id references. Upstream writers never populate
+// the type enum on the wire (it always decodes to PARENT), so the schema
+// tree must be derived structurally: a non-negative parent_id is a real
+// reference (upstream readers pass it through verbatim), while writers
+// store -1 for top-level fields. The self-reference guard only covers a
+// lone field whose parent_id is unset (decodes to 0).
+func fieldChildren(manifest *lancepb.Manifest) map[int32][]int32 {
 	ids := make(map[int32]bool, len(manifest.Fields))
 	for _, f := range manifest.Fields {
 		ids[f.Id] = true
 	}
-	parents := make(map[int32]bool)
+	children := make(map[int32][]int32)
 	for _, f := range manifest.Fields {
-		// Upstream writers store -1 for top-level fields; a non-negative
-		// parent_id is a real reference (verified against upstream readers,
-		// which pass it through verbatim). The self-reference guard only
-		// covers a lone field whose parent_id is unset (decodes to 0).
 		if f.ParentId != f.Id && ids[f.ParentId] {
-			parents[f.ParentId] = true
+			children[f.ParentId] = append(children[f.ParentId], f.Id)
 		}
 	}
-	return parents
+	return children
+}
+
+// expandFieldIDs returns the field itself plus all transitive descendants.
+func expandFieldIDs(children map[int32][]int32, id int32) []int32 {
+	seen := map[int32]bool{id: true}
+	out := []int32{id}
+	for i := 0; i < len(out); i++ {
+		for _, c := range children[out[i]] {
+			if !seen[c] {
+				seen[c] = true
+				out = append(out, c)
+			}
+		}
+	}
+	return out
 }
 
 // columnByteRanges returns the byte ranges occupied by a column.
@@ -530,20 +537,26 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 	}
 
 	fullPath := path.Join(dataFileDir(datasetPath, manifest, dataFile.BaseId), dataFile.Path)
-	colMap := buildFieldColumnMap(manifest, dataFile)
 	fields := fieldByName(manifest)
-	parents := parentFieldIDs(manifest)
+	children := fieldChildren(manifest)
+	fieldColumns := dataFileColumnIndices(dataFile)
 	var colIndices []int
 	for _, col := range columns {
-		if f, ok := fields[col]; ok && parents[f.Id] {
-			fmt.Fprintf(os.Stderr, "warning: column-level warmup is not supported for non-leaf column %q; warming full file instead\n", col)
-			return "", false, nil
+		// Nested (list/struct) columns have no physical column of their own:
+		// their data, including list offsets, lives in the descendant leaf
+		// columns, so a request expands to the whole subtree.
+		f, ok := fields[col]
+		if !ok {
+			continue
 		}
-		if idx, ok := colMap[col]; ok {
-			colIndices = append(colIndices, idx)
+		for _, fid := range expandFieldIDs(children, f.Id) {
+			if idx, ok := fieldColumns[fid]; ok {
+				colIndices = append(colIndices, int(idx))
+			}
 		}
 	}
 	if len(colIndices) == 0 {
+		fmt.Fprintf(os.Stderr, "warning: no physical columns found for columns %v in %s; warming full file instead\n", columns, dataFile.Path)
 		return "", false, nil
 	}
 

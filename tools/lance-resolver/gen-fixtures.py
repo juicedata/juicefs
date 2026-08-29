@@ -58,12 +58,17 @@ def main() -> int:
     names = pa.array([f"name-{i % 37}" for i in range(ROWS)], type=pa.string())
     cities = pa.array([f"city-{i % 11}" for i in range(ROWS)], type=pa.string())
     zips = pa.array([10000 + i % 97 for i in range(ROWS)], type=pa.int64())
+    tags = pa.array(
+        [[f"tag-{i % 5}"] * (i % 3) for i in range(ROWS)], type=pa.list_(pa.string())
+    )
     table = pa.table(
         {
             "id": ids,
             "name": names,
-            # A struct column: non-leaf, --columns must fall back to full file.
+            # A struct column: nested, resolves to the union of child columns.
             "addr": pa.StructArray.from_arrays([cities, zips], names=["city", "zip"]),
+            # A list column: nested, resolves to the item column.
+            "tags": tags,
         }
     )
     ds = lance.write_dataset(table, str(out), max_rows_per_file=ROWS_PER_FILE)

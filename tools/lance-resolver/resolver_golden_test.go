@@ -66,10 +66,19 @@ type goldenFooter struct {
 }
 
 type goldenFile struct {
-	Placeholder      string         `json:"placeholder"`
-	FileMajorVersion uint32         `json:"file_major_version"`
-	Footer           goldenFooter   `json:"footer"`
-	Columns          []goldenColumn `json:"columns"`
+	Placeholder      string                  `json:"placeholder"`
+	FileMajorVersion uint32                  `json:"file_major_version"`
+	Footer           goldenFooter            `json:"footer"`
+	Columns          []goldenColumn          `json:"columns"`
+	Warmup           map[string]goldenWarmup `json:"warmup"`
+}
+
+// goldenWarmup holds the expected byte ranges for one requestable column
+// name, including nested (list/struct) columns resolved via subtree
+// expansion.
+type goldenWarmup struct {
+	RangesMeta  []goldenRange `json:"ranges_meta"`
+	RangesPages []goldenRange `json:"ranges_pages"`
 }
 
 type goldenManifest struct {
@@ -182,29 +191,35 @@ func TestGolden_FullResolve(t *testing.T) {
 func TestGolden_ColumnRanges(t *testing.T) {
 	exp := loadGolden(t)
 
-	// Every data file in this fixture carries the same schema; the leaf
-	// names collected here are what --columns must resolve per file.
-	leafNames := map[string]bool{}
-	for _, c := range exp.Files[0].Columns {
-		if c.Leaf && c.Name != "" {
-			leafNames[c.Name] = true
-		}
+	// Every data file in this fixture carries the same schema; the warmup
+	// map keys are exactly the requestable column names, nested (list/struct)
+	// columns included via subtree expansion.
+	names := map[string]bool{}
+	for name := range exp.Files[0].Warmup {
+		names[name] = true
 	}
-	if len(leafNames) < 2 {
-		t.Fatalf("fixture too small: leaf columns = %v", leafNames)
+	if len(names) < 4 {
+		t.Fatalf("fixture too small: warmup columns = %v", names)
+	}
+	// The fixture must cover nested warmup with REAL bytes: a struct column
+	// and a list column, not just leaves.
+	for _, nested := range []string{"addr", "tags"} {
+		if !names[nested] {
+			t.Fatalf("fixture warmup map lacks nested column %q: %v", nested, names)
+		}
 	}
 
 	modes := []struct {
 		name   string
 		pages  bool
-		ranges func(goldenColumn) []goldenRange
+		ranges func(goldenWarmup) []goldenRange
 	}{
-		{"metadata", false, func(c goldenColumn) []goldenRange { return c.RangesMeta }},
-		{"pages", true, func(c goldenColumn) []goldenRange { return c.RangesPages }},
+		{"metadata", false, func(w goldenWarmup) []goldenRange { return w.RangesMeta }},
+		{"pages", true, func(w goldenWarmup) []goldenRange { return w.RangesPages }},
 	}
 
 	for _, mode := range modes {
-		for col := range leafNames {
+		for col := range names {
 			t.Run(mode.name+"/"+col, func(t *testing.T) {
 				paths, err := resolveLanceDataset(goldenDatasetDir, "", false, false, []string{col}, mode.pages)
 				if err != nil {
@@ -225,10 +240,8 @@ func TestGolden_ColumnRanges(t *testing.T) {
 
 				want := []string{}
 				for _, f := range exp.Files {
-					for _, c := range f.Columns {
-						if c.Name == col && c.Leaf {
-							want = append(want, rangesBracket(mode.ranges(c)))
-						}
+					if w, ok := f.Warmup[col]; ok {
+						want = append(want, rangesBracket(mode.ranges(w)))
 					}
 				}
 				if len(got) != len(want) {
@@ -239,30 +252,6 @@ func TestGolden_ColumnRanges(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-func TestGolden_StructColumnFallsBackToFile(t *testing.T) {
-	exp := loadGolden(t)
-
-	// "addr" is the struct parent of "city"/"zip": every data file must be
-	// listed WITHOUT ranges (full-file warmup fallback).
-	paths, err := resolveLanceDataset(goldenDatasetDir, "", false, false, []string{"addr"}, false)
-	if err != nil {
-		t.Fatalf("resolveLanceDataset: %v", err)
-	}
-	dataLines := 0
-	for _, p := range paths {
-		if lineKind(p) != "DATAFILE" {
-			continue
-		}
-		dataLines++
-		if bracketOf(p) != "" {
-			t.Fatalf("struct column should fall back to full file, got ranges: %s", p)
-		}
-	}
-	if dataLines != len(exp.Files) {
-		t.Fatalf("got %d data lines, want %d", dataLines, len(exp.Files))
 	}
 }
 

@@ -228,15 +228,10 @@ def merge_ranges(ranges):
     return merged
 
 
-def column_ranges(col, file_size, cmo_start, idx, include_pages):
-    # A projection read needs the file footer and the column's CMO entry to
-    # locate the metadata at all, plus the ColumnMetadata protobuf itself.
-    # Keep in sync with columnWarmupPath in resolver.go.
-    ranges = [
-        [file_size - FILE_FOOTER_LEN, file_size],
-        [cmo_start + CMO_ENTRY_SIZE * idx, cmo_start + CMO_ENTRY_SIZE * (idx + 1)],
-        [col["cm_pos"], col["cm_pos"] + col["cm_len"]],
-    ]
+def column_buffer_ranges(col, include_pages):
+    """Buffer ranges of one column (metadata + optional page buffers),
+    excluding the shared file footer and the column's CMO entry."""
+    ranges = []
 
     def add(offsets, sizes):
         for o, s in zip(offsets, sizes):
@@ -247,6 +242,19 @@ def column_ranges(col, file_size, cmo_start, idx, include_pages):
         for offs, sizes in col["pages"]:
             add(offs, sizes)
     add(col["buffer_offsets"], col["buffer_sizes"])
+    return ranges
+
+
+def column_ranges(col, file_size, cmo_start, idx, include_pages):
+    # A projection read needs the file footer and the column's CMO entry to
+    # locate the metadata at all, plus the ColumnMetadata protobuf itself.
+    # Keep in sync with columnWarmupPath in resolver.go.
+    ranges = [
+        [file_size - FILE_FOOTER_LEN, file_size],
+        [cmo_start + CMO_ENTRY_SIZE * idx, cmo_start + CMO_ENTRY_SIZE * (idx + 1)],
+        [col["cm_pos"], col["cm_pos"] + col["cm_len"]],
+    ]
+    ranges.extend(column_buffer_ranges(col, include_pages))
     return merge_ranges(ranges)
 
 
@@ -258,6 +266,28 @@ def leaf_parent_ids(fields):
         if pid != f["id"] and pid in ids:
             parents.add(pid)
     return parents
+
+
+def field_children_map(fields):
+    """Parent field id -> direct children, mirroring the resolver's rules."""
+    ids = {f["id"] for f in fields}
+    children = {}
+    for f in fields:
+        if f["parent_id"] != f["id"] and f["parent_id"] in ids:
+            children.setdefault(f["parent_id"], []).append(f["id"])
+    return children
+
+
+def expand_field(children, fid):
+    """The field itself plus all transitive descendants (cycle-safe)."""
+    out = [fid]
+    i = 0
+    while i < len(out):
+        for c in children.get(out[i], []):
+            if c not in out:
+                out.append(c)
+        i += 1
+    return out
 
 
 def main() -> int:
@@ -276,13 +306,16 @@ def main() -> int:
     data_files = sorted(p.name for p in (ds / "data").glob("*.lance"))
 
     parents = leaf_parent_ids(manifest["fields"])
+    children = field_children_map(manifest["fields"])
     id_to_name = {f["id"]: f["name"] for f in manifest["fields"]}
 
     files = []
     for name in data_files:
         parsed = parse_data_file(ds / "data" / name)
-        # Map column index -> schema field via this file's DataFile entry.
+        # Map column index -> schema field (and back) via this file's DataFile
+        # entry.
         col_to_field = {}
+        field_to_col = {}
         file_major = None
         for frag in manifest["fragments"]:
             for df in frag["files"]:
@@ -290,6 +323,10 @@ def main() -> int:
                     file_major = df["file_major_version"]
                     for fid, cidx in zip(df["field_ids"], df["column_indices"]):
                         col_to_field[cidx] = fid
+                        field_to_col[fid] = cidx
+
+        cmo_start = parsed["footer"]["cmo_table_start"]
+        footer_range = [parsed["file_size"] - FILE_FOOTER_LEN, parsed["file_size"]]
 
         columns = []
         for idx, col in enumerate(parsed["columns"]):
@@ -301,18 +338,44 @@ def main() -> int:
                     "cm_pos": col["cm_pos"],
                     "cm_len": col["cm_len"],
                     "ranges_meta": column_ranges(
-                        col, parsed["file_size"], parsed["footer"]["cmo_table_start"], idx, False
+                        col, parsed["file_size"], cmo_start, idx, False
                     ),
                     "ranges_pages": column_ranges(
-                        col, parsed["file_size"], parsed["footer"]["cmo_table_start"], idx, True
+                        col, parsed["file_size"], cmo_start, idx, True
                     ),
                 }
             )
+
+        # Per-column warmup expectations mirroring the resolver's subtree
+        # expansion: a nested (list/struct) field resolves to the union of
+        # its descendant leaf columns, plus the shared footer/CMO entries.
+        warmup = {}
+        for f in manifest["fields"]:
+            subtree_cols = [
+                field_to_col[x]
+                for x in expand_field(children, f["id"])
+                if x in field_to_col
+            ]
+            if not subtree_cols:
+                continue
+            entry = warmup.setdefault(f["name"], {})
+            for include_pages, key in ((False, "ranges_meta"), (True, "ranges_pages")):
+                ranges = [list(footer_range)]
+                for idx in subtree_cols:
+                    col = parsed["columns"][idx]
+                    ranges.append(
+                        [cmo_start + CMO_ENTRY_SIZE * idx, cmo_start + CMO_ENTRY_SIZE * (idx + 1)]
+                    )
+                    ranges.append([col["cm_pos"], col["cm_pos"] + col["cm_len"]])
+                    ranges.extend(column_buffer_ranges(col, include_pages))
+                entry[key] = merge_ranges(ranges)
+
         files.append(
             {
                 "file_major_version": file_major,
                 "footer": parsed["footer"],
                 "columns": columns,
+                "warmup": warmup,
             }
         )
 
