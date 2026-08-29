@@ -987,12 +987,15 @@ func TestResolveLanceDataset_BasePaths(t *testing.T) {
 	// base_paths/base_id semantics follow upstream data_file_dir_for_base;
 	// pylance cannot yet produce such manifests locally, so this is a
 	// synthetic check of the resolution rules (labeled accordingly).
-	base5, base6, missing := uint32(5), uint32(6), uint32(9)
+	base5, base6, base7, missing := uint32(5), uint32(6), uint32(7), uint32(9)
 	manifest := &lancepb.Manifest{
 		Version: 1,
 		BasePaths: []*lancepb.BasePath{
 			{Id: 5, Path: "/mnt/other/ds", IsDatasetRoot: true},
 			{Id: 6, Path: "/mnt/import/dir", IsDatasetRoot: false},
+			// pylance registers local bases as file:// URIs; they must be
+			// emitted as plain openable local paths.
+			{Id: 7, Path: "file:///C:/imported", IsDatasetRoot: false},
 		},
 		Fragments: []*lancepb.DataFragment{
 			{
@@ -1001,6 +1004,7 @@ func TestResolveLanceDataset_BasePaths(t *testing.T) {
 					{Path: "own.lance"},
 					{Path: "cloned.lance", BaseId: &base5},
 					{Path: "imported.lance", BaseId: &base6},
+					{Path: "uri-imported.lance", BaseId: &base7},
 					{Path: "unknown-base.lance", BaseId: &missing},
 				},
 				DeletionFile: &lancepb.DeletionFile{
@@ -1028,6 +1032,7 @@ func TestResolveLanceDataset_BasePaths(t *testing.T) {
 		filepath.ToSlash(path.Join(dsPath, "data", "own.lance")),
 		"/mnt/other/ds/data/cloned.lance",
 		"/mnt/import/dir/imported.lance",
+		"C:/imported/uri-imported.lance",
 		filepath.ToSlash(path.Join(dsPath, "data", "unknown-base.lance")), // missing base: warn + dataset root
 		// Deletion files always resolve against the dataset root, even with
 		// a base_id (upstream deletion_file_path ignores it).

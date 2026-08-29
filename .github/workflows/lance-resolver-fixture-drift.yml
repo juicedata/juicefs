@@ -46,5 +46,6 @@ jobs:
           python tools/lance-resolver/verify_warmup_ranges.py tools/lance-resolver/testdata/lance-dataset tags
           python tools/lance-resolver/verify_warmup_ranges.py tools/lance-resolver/testdata/lance-dataset addr
           python tools/lance-resolver/verify_warmup_ranges.py tools/lance-resolver/testdata/lance-dataset id,name,addr,tags
+          python tools/lance-resolver/verify_warmup_ranges.py --multi-base
       - name: Golden tests
         run: go test ./tools/lance-resolver/...

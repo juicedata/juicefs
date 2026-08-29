@@ -47,7 +47,15 @@ too. Larger gaps between columns are left cold, keeping multi-column warmup
 column-scoped; note that projecting most of a dataset's columns naturally
 approaches warming the whole file. Range sufficiency is verified by
 `verify_warmup_ranges.py`, which zeroes every byte outside the emitted ranges
-and checks that the official reader still returns correct data.
+and checks that the official reader still returns correct data — including a
+`--multi-base` mode for datasets that keep files in imported base paths
+(`file://` bases are emitted as plain local paths; other schemes pass
+through, since those bases are not warmable through a local mount).
+Metadata-only ranges, external row-id sequence files and indirect encodings
+stay covered by synthetic tests only: the public pylance API cannot isolate
+those reads (it touches page data even for filters matching no rows, and the
+row-id inline threshold exceeds fixture scale), and the official reader
+rejects indirect encodings outright.
 
 ## Output format
 

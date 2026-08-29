@@ -84,6 +84,32 @@ type lanceVersionHint struct {
 	Version uint64 `json:"version"`
 }
 
+// fileURIToLocalPath converts a file:// base path URI to a plain local path
+// so emitted warmup targets are openable ("juicefs warmup -f" consumes plain
+// paths, and column warmup must os.Open the file). Writers register local
+// bases as file:///... URIs; other schemes (s3://, gs://, …) pass through
+// unchanged — those bases are not warmable through a local mount anyway.
+func fileURIToLocalPath(p string) string {
+	const prefix = "file://"
+	if !strings.HasPrefix(p, prefix) {
+		return p
+	}
+	rest := p[len(prefix):]
+	// file:///C:/x -> C:/x (leading slash before a Windows drive letter);
+	// file:///x -> /x (POSIX absolute path).
+	if len(rest) >= 3 && rest[0] == '/' && isDriveLetter(rest[1]) && rest[2] == ':' {
+		return rest[1:]
+	}
+	if rest != "" && rest[0] != '/' {
+		return "/" + rest // file://host/... — keep at least an absolute path
+	}
+	return rest
+}
+
+func isDriveLetter(c byte) bool {
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+}
+
 // dataFileDir resolves the directory a fragment data file lives in,
 // mirroring upstream data_file_dir_for_base: no base_id means the dataset's
 // own data/ dir; a base_id refers to an entry in manifest base_paths, where
@@ -98,9 +124,9 @@ func dataFileDir(datasetPath string, manifest *lancepb.Manifest, baseID *uint32)
 	for _, bp := range manifest.BasePaths {
 		if bp != nil && bp.Id == *baseID && bp.Path != "" {
 			if bp.IsDatasetRoot {
-				return path.Join(bp.Path, lanceDataDir)
+				return path.Join(fileURIToLocalPath(bp.Path), lanceDataDir)
 			}
-			return bp.Path
+			return fileURIToLocalPath(bp.Path)
 		}
 	}
 	fmt.Fprintf(os.Stderr, "warning: base path id %d not found in manifest; assuming dataset root\n", *baseID)
