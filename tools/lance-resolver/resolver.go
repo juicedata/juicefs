@@ -19,8 +19,8 @@
 // It reads a Lance dataset directory and outputs file paths with optional byte ranges
 // in a format that "juicefs warmup -f" can consume:
 //
-//  /path/to/file.lance
-//  /path/to/file.lance [205600064-205823840;206605482-206633082]
+//	/path/to/file.lance
+//	/path/to/file.lance [205600064-205823840;206605482-206633082]
 //
 // This is the "external resolver" approach: JuiceFS stays format-agnostic,
 // and this tool handles all Lance-specific format parsing.
@@ -229,9 +229,9 @@ func readAndParseLanceManifest(manifestPath string) (*lancepb.Manifest, error) {
 //
 // A Lance manifest is laid out as:
 //
-//  [optional bytes before manifest]
-//  [manifest_len: u32 LE][manifest protobuf]
-//  [manifest_pos: u64 LE][major: u16 LE][minor: u16 LE]["LANC"]
+//	[optional bytes before manifest]
+//	[manifest_len: u32 LE][manifest protobuf]
+//	[manifest_pos: u64 LE][major: u16 LE][minor: u16 LE]["LANC"]
 //
 // The trailing 16-byte footer points back at the manifest via manifest_pos,
 // which is used instead of assuming the protobuf starts at offset 0.
@@ -408,7 +408,7 @@ func mergeByteRanges(ranges []byteRange) []byteRange {
 // columnWarmupPath resolves the byte ranges of the requested columns in a
 // single V2 data file. It returns a warmup target like:
 //
-///path/to/file.lance [123-456;789-1024]
+// /path/to/file.lance [123-456;789-1024]
 //
 // ok is false when the file is not a V2 file or contains none of the requested
 // columns, in which case callers should fall back to the full data file.
