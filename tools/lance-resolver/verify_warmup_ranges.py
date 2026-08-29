@@ -21,7 +21,7 @@ Notes:
   - pylance's to_table(columns=[...]) only accepts top-level names; nested
     sub-fields (e.g. "city" inside struct "addr") cannot be projected by
     the high-level API, so warm them via their parent.
-  - Requires the resolver binary: go build -o lance-resolver.exe .
+  - Requires Go (the resolver binary is built into a temp dir).
 
 Usage: python verify_warmup_ranges.py <dataset-dir> <col1,col2,...>
 """
@@ -41,7 +41,8 @@ TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 def resolver_ranges(dataset, columns):
     # Build into a temp dir so the binary never lands in the source tree
     # (a stray .exe here has been committed by mistake once already).
-    binary = os.path.join(tempfile.mkdtemp(prefix="lance_oracle_bin_"), "lance-resolver.exe")
+    exe = ".exe" if os.name == "nt" else ""
+    binary = os.path.join(tempfile.mkdtemp(prefix="lance_oracle_bin_"), "lance-resolver" + exe)
     subprocess.run(
         ["go", "build", "-o", binary, "."], cwd=TOOL_DIR, check=True,
     )

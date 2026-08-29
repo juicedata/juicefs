@@ -40,5 +40,11 @@ jobs:
         run: pip install pylance==10.0.0
       - name: Check fixture drift
         run: bash tools/lance-resolver/check-fixture-drift.sh
+      - name: Verify warmup range sufficiency (adversarial)
+        run: |
+          python tools/lance-resolver/verify_warmup_ranges.py tools/lance-resolver/testdata/lance-dataset id
+          python tools/lance-resolver/verify_warmup_ranges.py tools/lance-resolver/testdata/lance-dataset tags
+          python tools/lance-resolver/verify_warmup_ranges.py tools/lance-resolver/testdata/lance-dataset addr
+          python tools/lance-resolver/verify_warmup_ranges.py tools/lance-resolver/testdata/lance-dataset id,name,addr,tags
       - name: Golden tests
         run: go test ./tools/lance-resolver/...

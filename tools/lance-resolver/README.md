@@ -123,7 +123,9 @@ go test ./tools/lance-resolver/...
 `check-fixture-drift.sh` regenerates into a temp dir and diffs the normalized
 ground truth against the committed `expected.json` (`git diff --exit-code`),
 failing when the pinned writer's format has drifted; CI runs it on every change
-under `tools/lance-resolver/` (`.github/workflows/lance-resolver-fixture-drift.yml`).
+under `tools/lance-resolver/` (`.github/workflows/lance-resolver-fixture-drift.yml`)
+together with the golden tests and the adversarial range verification
+(`verify_warmup_ranges.py`) for leaf, nested and multi-column projections.
 
 ## Future work
 
