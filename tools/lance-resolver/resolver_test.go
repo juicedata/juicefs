@@ -405,6 +405,115 @@ func TestColumnWarmupPath_OverflowGuard(t *testing.T) {
 	}
 }
 
+// buildGBOFile writes a minimal V2-shaped file whose footer GBO fields point
+// at the given table; entries beyond the file are simply not written.
+func buildGBOFile(t *testing.T, size int64, gboStart uint64, entries [][2]uint64) string {
+	t.Helper()
+	buf := make([]byte, size)
+	footer := size - lanceFileFooterLen
+	binary.LittleEndian.PutUint64(buf[footer+16:footer+24], gboStart)
+	binary.LittleEndian.PutUint32(buf[footer+24:footer+28], uint32(len(entries)))
+	copy(buf[footer+36:footer+40], lanceMagic)
+	// Only lay out the table when it actually fits (corrupt-footer cases
+	// pass an out-of-range gboStart on purpose).
+	if gboStart <= uint64(footer) && uint64(len(entries))*lanceCMOEntrySize <= uint64(footer)-gboStart {
+		for i, e := range entries {
+			off := gboStart + uint64(i)*lanceCMOEntrySize
+			binary.LittleEndian.PutUint64(buf[off:off+8], e[0])
+			binary.LittleEndian.PutUint64(buf[off+8:off+16], e[1])
+		}
+	}
+	path := filepath.Join(t.TempDir(), "data_0.lance")
+	if err := os.WriteFile(path, buf, 0644); err != nil {
+		t.Fatalf("write data file: %v", err)
+	}
+	return path
+}
+
+func checkGlobalBufferTail(t *testing.T, path string, size int64) (uint64, []byteRange, bool) {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer f.Close()
+	return globalBufferTail(f, size)
+}
+
+func TestGlobalBufferTail(t *testing.T) {
+	t.Run("happy path with extras", func(t *testing.T) {
+		// Schema buffer at 80 starts the tail [80,160); the buffer at 32
+		// lies before it and must become an extra; the one at 100 is inside
+		// the tail and must not be repeated.
+		path := buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {32, 16}, {100, 8}})
+		tailStart, extras, ok := checkGlobalBufferTail(t, path, 160)
+		if !ok || tailStart != 80 {
+			t.Fatalf("ok=%v tailStart=%d, want ok=true tailStart=80", ok, tailStart)
+		}
+		if len(extras) != 1 || extras[0] != (byteRange{32, 48}) {
+			t.Fatalf("extras = %v, want [{32 48}]", extras)
+		}
+	})
+
+	t.Run("no global buffers", func(t *testing.T) {
+		path := buildGBOFile(t, 160, 64, nil)
+		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
+			t.Fatal("expected ok=false for zero global buffers")
+		}
+	})
+
+	t.Run("gbo start wraps the table bound", func(t *testing.T) {
+		// A corrupt footer storing gbo_start near MaxUint64 used to wrap the
+		// start+tableLen sum past the bounds check.
+		path := buildGBOFile(t, 160, ^uint64(0), [][2]uint64{{80, 20}})
+		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
+			t.Fatal("expected ok=false for gbo_start = MaxUint64")
+		}
+	})
+
+	t.Run("table extends past file", func(t *testing.T) {
+		path := buildGBOFile(t, 160, 119, [][2]uint64{{80, 20}})
+		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
+			t.Fatal("expected ok=false when the GBO table crosses the file end")
+		}
+	})
+
+	t.Run("schema position beyond file", func(t *testing.T) {
+		path := buildGBOFile(t, 160, 64, [][2]uint64{{500, 20}})
+		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
+			t.Fatal("expected ok=false for tail start beyond the file")
+		}
+	})
+
+	t.Run("corrupt extra position and size", func(t *testing.T) {
+		// pos+size must never be formed before validation: without the
+		// subtraction checks these values slip through as a garbage range.
+		path := buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {1 << 62, 1 << 62}})
+		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
+			t.Fatal("expected ok=false for out-of-range extra buffer")
+		}
+		path = buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {0, ^uint64(0)}})
+		if _, _, ok := checkGlobalBufferTail(t, path, 160); ok {
+			t.Fatal("expected ok=false for extra size = MaxUint64")
+		}
+	})
+
+	t.Run("zero-sized extra is skipped", func(t *testing.T) {
+		path := buildGBOFile(t, 160, 64, [][2]uint64{{80, 20}, {0, 0}, {32, 16}})
+		tailStart, extras, ok := checkGlobalBufferTail(t, path, 160)
+		if !ok || tailStart != 80 || len(extras) != 1 || extras[0] != (byteRange{32, 48}) {
+			t.Fatalf("ok=%v tailStart=%d extras=%v, want tail 80 extras [{32 48}]", ok, tailStart, extras)
+		}
+	})
+
+	t.Run("file too small for a footer", func(t *testing.T) {
+		path := buildGBOFile(t, 32, 0, nil)
+		if _, _, ok := checkGlobalBufferTail(t, path, 32); ok {
+			t.Fatal("expected ok=false for file smaller than the footer")
+		}
+	})
+}
+
 func TestColumnWarmupPath_NestedColumnExpansion(t *testing.T) {
 	dir := t.TempDir()
 	dsPath := filepath.Join(dir, "ds.lance")

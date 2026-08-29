@@ -561,12 +561,23 @@ func hasIndirectEncoding(cm *file2pb.ColumnMetadata) bool {
 // before that start. ok is false when the file carries no global buffers.
 func globalBufferTail(f *os.File, fileSize int64) (uint64, []byteRange, bool) {
 	footer := make([]byte, lanceFileFooterLen)
+	if fileSize < lanceFileFooterLen {
+		return 0, nil, false
+	}
 	if _, err := f.ReadAt(footer, fileSize-lanceFileFooterLen); err != nil {
 		return 0, nil, false
 	}
 	gboStart := binary.LittleEndian.Uint64(footer[16:24])
 	numGlobalBuffers := binary.LittleEndian.Uint32(footer[24:28])
-	if numGlobalBuffers == 0 || gboStart+uint64(numGlobalBuffers)*lanceCMOEntrySize > uint64(fileSize-lanceFileFooterLen) {
+	if numGlobalBuffers == 0 {
+		return 0, nil, false
+	}
+	// Validate with subtraction so a corrupt gbo_start near MaxUint64 cannot
+	// wrap the sum past the bounds check (same style as the CMO guards in
+	// columnWarmupPath). numGlobalBuffers*16 cannot overflow: < 2^36.
+	tableLen := uint64(numGlobalBuffers) * lanceCMOEntrySize
+	fileLimit := uint64(fileSize - lanceFileFooterLen)
+	if gboStart > fileLimit || tableLen > fileLimit-gboStart {
 		return 0, nil, false
 	}
 
@@ -575,8 +586,8 @@ func globalBufferTail(f *os.File, fileSize int64) (uint64, []byteRange, bool) {
 		return 0, nil, false
 	}
 	tailStart := binary.LittleEndian.Uint64(entry[0:8])
-	fileLimit := uint64(fileSize)
-	if tailStart >= fileLimit {
+	wholeFile := uint64(fileSize)
+	if tailStart >= wholeFile {
 		return 0, nil, false
 	}
 
@@ -587,8 +598,20 @@ func globalBufferTail(f *os.File, fileSize int64) (uint64, []byteRange, bool) {
 		}
 		pos := binary.LittleEndian.Uint64(entry[0:8])
 		size := binary.LittleEndian.Uint64(entry[8:16])
-		if size == 0 || pos > fileLimit-size || pos+size <= tailStart {
-			continue // empty, corrupt, or already inside the tail range
+		// Zero-sized buffers are harmless; anything else out of bounds means
+		// a corrupt table, and pos+size must not be formed before the
+		// subtraction check (a wrapped sum would emit a garbage range).
+		if size == 0 {
+			continue
+		}
+		if pos > wholeFile || size > wholeFile-pos {
+			return 0, nil, false
+		}
+		// The reader's tail read covers [tailStart, EOF); a buffer starting
+		// at or after tailStart is already inside it, everything before it
+		// must be warmed separately (a straddling buffer keeps its full span).
+		if pos >= tailStart {
+			continue
 		}
 		extras = append(extras, byteRange{start: pos, end: pos + size})
 	}

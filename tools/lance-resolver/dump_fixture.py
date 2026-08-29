@@ -259,9 +259,12 @@ def tail_ranges(parsed):
     if not gbs:
         return []
     size = parsed["file_size"]
-    out = [[gbs[0][0], size]]
+    tail_start = gbs[0][0]
+    out = [[tail_start, size]]
     for pos, length in gbs[1:]:
-        if length and pos + length > gbs[0][0] and pos + length <= size:
+        # Only buffers starting before the tail read span need a separate
+        # range; anything at or after tail_start is already inside it.
+        if length and pos < tail_start and pos + length <= size:
             out.append([pos, pos + length])
     return out
 
