@@ -54,6 +54,13 @@ ranges:
 `start` is inclusive and `end` is exclusive; ranges are `;`-separated. This
 matches the `juicefs warmup -f` byte-range syntax.
 
+Data files are resolved through the manifest's `base_paths` when they carry a
+`base_id` (shallow clones and imported files may live outside the dataset
+directory): dataset-root bases keep files under `data/`, direct-file bases use
+the base path as-is, and the base paths must point into the JuiceFS mount for
+warmup to reach them. Deletion files always resolve against the dataset root,
+mirroring upstream.
+
 ## Examples
 
 ```bash

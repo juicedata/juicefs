@@ -668,6 +668,77 @@ func TestResolveLanceDataset_ExternalFiles(t *testing.T) {
 	}
 }
 
+func TestResolveLanceDataset_BasePaths(t *testing.T) {
+	dir := t.TempDir()
+	dsPath := filepath.Join(dir, "test.lance")
+	versionsDir := filepath.Join(dsPath, "_versions")
+	if err := os.MkdirAll(versionsDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// base_paths/base_id semantics follow upstream data_file_dir_for_base;
+	// pylance cannot yet produce such manifests locally, so this is a
+	// synthetic check of the resolution rules (labeled accordingly).
+	base5, base6, missing := uint32(5), uint32(6), uint32(9)
+	manifest := &lancepb.Manifest{
+		Version: 1,
+		BasePaths: []*lancepb.BasePath{
+			{Id: 5, Path: "/mnt/other/ds", IsDatasetRoot: true},
+			{Id: 6, Path: "/mnt/import/dir", IsDatasetRoot: false},
+		},
+		Fragments: []*lancepb.DataFragment{
+			{
+				Id: 1,
+				Files: []*lancepb.DataFile{
+					{Path: "own.lance"},
+					{Path: "cloned.lance", BaseId: &base5},
+					{Path: "imported.lance", BaseId: &base6},
+					{Path: "unknown-base.lance", BaseId: &missing},
+				},
+				DeletionFile: &lancepb.DeletionFile{
+					FileType:    lancepb.DeletionFile_ARROW_ARRAY,
+					ReadVersion: 2,
+					Id:          3,
+					BaseId:      &base5,
+				},
+			},
+		},
+	}
+	writeManifestFile(t, filepath.Join(versionsDir, "1.manifest"), manifest)
+	os.WriteFile(filepath.Join(versionsDir, "latest_version_hint.json"), []byte(`{"version":1}`), 0644)
+
+	paths, err := resolveLanceDataset(dsPath, "", false, false, nil, false)
+	if err != nil {
+		t.Fatalf("resolveLanceDataset: %v", err)
+	}
+	got := make([]string, 0, len(paths))
+	for _, p := range paths {
+		got = append(got, filepath.ToSlash(p))
+	}
+	want := []string{
+		filepath.ToSlash(path.Join(versionsDir, "1.manifest")),
+		filepath.ToSlash(path.Join(dsPath, "data", "own.lance")),
+		"/mnt/other/ds/data/cloned.lance",
+		"/mnt/import/dir/imported.lance",
+		filepath.ToSlash(path.Join(dsPath, "data", "unknown-base.lance")), // missing base: warn + dataset root
+		// Deletion files always resolve against the dataset root, even with
+		// a base_id (upstream deletion_file_path ignores it).
+		filepath.ToSlash(path.Join(dsPath, "_deletions", "1-2-3.arrow")),
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d paths, want %d: %v", len(got), len(want), got)
+	}
+	for i := range want {
+		if !strings.HasSuffix(got[i], filepath.ToSlash(want[i])) && got[i] != filepath.ToSlash(want[i]) {
+			// Manifest path is found via listing and may differ in prefix.
+			if i == 0 {
+				continue
+			}
+			t.Errorf("paths[%d] = %q, want suffix %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestFindLatestManifestByListing_V1(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "1.manifest"), []byte("v1"), 0644)

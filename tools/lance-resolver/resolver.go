@@ -77,6 +77,29 @@ type lanceVersionHint struct {
 	Version uint64 `json:"version"`
 }
 
+// dataFileDir resolves the directory a fragment data file lives in,
+// mirroring upstream data_file_dir_for_base: no base_id means the dataset's
+// own data/ dir; a base_id refers to an entry in manifest base_paths, where
+// dataset-root bases also keep files under data/ and imported-file bases use
+// the base path directly (shallow clones, multi-tier storage). Deletion
+// files, by contrast, are always resolved against the dataset root —
+// upstream deletion_file_path ignores their base_id.
+func dataFileDir(datasetPath string, manifest *lancepb.Manifest, baseID *uint32) string {
+	if baseID == nil {
+		return path.Join(datasetPath, lanceDataDir)
+	}
+	for _, bp := range manifest.BasePaths {
+		if bp != nil && bp.Id == *baseID && bp.Path != "" {
+			if bp.IsDatasetRoot {
+				return path.Join(bp.Path, lanceDataDir)
+			}
+			return bp.Path
+		}
+	}
+	fmt.Fprintf(os.Stderr, "warning: base path id %d not found in manifest; assuming dataset root\n", *baseID)
+	return path.Join(datasetPath, lanceDataDir)
+}
+
 // resolveLanceDataset resolves a Lance dataset path into individual file paths
 // with optional byte ranges, formatted for "juicefs warmup -f".
 func resolveLanceDataset(datasetPath, version string, manifestOnly bool, includeIndices bool, columns []string, includeDataPages bool) ([]string, error) {
@@ -110,7 +133,7 @@ func resolveLanceDataset(datasetPath, version string, manifestOnly bool, include
 					continue
 				}
 			}
-			paths = append(paths, path.Join(datasetPath, lanceDataDir, dataFile.Path))
+			paths = append(paths, path.Join(dataFileDir(datasetPath, manifest, dataFile.BaseId), dataFile.Path))
 		}
 
 		if frag.DeletionFile != nil {
@@ -145,7 +168,7 @@ func resolveLanceDataset(datasetPath, version string, manifestOnly bool, include
 						continue
 					}
 				}
-				paths = append(paths, path.Join(datasetPath, lanceDataDir, overlay.DataFile.Path))
+				paths = append(paths, path.Join(dataFileDir(datasetPath, manifest, overlay.DataFile.BaseId), overlay.DataFile.Path))
 			}
 		}
 	}
@@ -506,7 +529,7 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 		return "", false, nil
 	}
 
-	fullPath := path.Join(datasetPath, lanceDataDir, dataFile.Path)
+	fullPath := path.Join(dataFileDir(datasetPath, manifest, dataFile.BaseId), dataFile.Path)
 	colMap := buildFieldColumnMap(manifest, dataFile)
 	fields := fieldByName(manifest)
 	parents := parentFieldIDs(manifest)
