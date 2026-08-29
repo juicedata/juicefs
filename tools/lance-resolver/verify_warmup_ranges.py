@@ -27,7 +27,8 @@ Notes:
     directories cannot collide). Ranges resolved to paths OUTSIDE the
     dataset (imported base paths) are reported and left untouched — the
     copy does not contain them. Use --multi-base to cover that case.
-  - Requires Go (the resolver binary is built into a temp dir).
+  - Requires Go unless LANCE_RESOLVER_BIN points at a prebuilt binary
+    (built into a temp dir otherwise).
 
 Coverage boundary (deliberate, synthetic tests cover these paths):
   - metadata-only ranges (--columns without --include-data-pages): pylance
@@ -109,6 +110,14 @@ def zero_outside(file_path, ranges):
 
 
 def build_binary(tmp):
+    """Return the resolver binary path. Set LANCE_RESOLVER_BIN to a prebuilt
+    binary to skip the build (CI builds once and reuses it across cases;
+    each case still runs in its own process)."""
+    prebuilt = os.environ.get("LANCE_RESOLVER_BIN")
+    if prebuilt:
+        if not os.path.isfile(prebuilt):
+            raise SystemExit(f"LANCE_RESOLVER_BIN={prebuilt} does not exist")
+        return prebuilt
     exe = ".exe" if os.name == "nt" else ""
     binary = os.path.join(tmp, "bin", "lance-resolver" + exe)
     subprocess.run(["go", "build", "-o", binary, "."], cwd=TOOL_DIR, check=True)
