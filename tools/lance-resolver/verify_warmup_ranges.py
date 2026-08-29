@@ -12,8 +12,9 @@ dataset, the official reader touched only warmed bytes — i.e. a JuiceFS
 cache populated from the resolver output would have served the read
 entirely.
 
-This breaks self-confirmation: the verdict comes from the official reader's behavior, not from lance-resolver or dump_fixture.py
-(which share their layout knowledge with the Go implementation).
+This breaks self-confirmation: the verdict comes from the official
+reader's behavior, not from lance-resolver or dump_fixture.py (which share
+their layout knowledge with the Go implementation).
 
 Notes:
   - Each case runs in its own process: a failing case panics a Rust
@@ -21,6 +22,11 @@ Notes:
   - pylance's to_table(columns=[...]) only accepts top-level names; nested
     sub-fields (e.g. "city" inside struct "addr") cannot be projected by
     the high-level API, so warm them via their parent.
+  - Files are matched against the resolver output by their path relative
+    to the dataset root (not by basename, so same-named files in different
+    directories cannot collide). Ranges resolved to paths OUTSIDE the
+    dataset (imported base paths) are reported and left untouched — the
+    copy does not contain them.
   - Requires Go (the resolver binary is built into a temp dir).
 
 Usage: python verify_warmup_ranges.py <dataset-dir> <col1,col2,...>
@@ -38,28 +44,17 @@ import lance
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def resolver_ranges(dataset, columns):
-    # Build into a temp dir so the binary never lands in the source tree
-    # (a stray .exe here has been committed by mistake once already).
-    exe = ".exe" if os.name == "nt" else ""
-    binary = os.path.join(tempfile.mkdtemp(prefix="lance_oracle_bin_"), "lance-resolver" + exe)
-    subprocess.run(
-        ["go", "build", "-o", binary, "."], cwd=TOOL_DIR, check=True,
-    )
-    out = subprocess.run(
-        [binary, "--columns", columns, "--include-data-pages", dataset],
-        cwd=TOOL_DIR, capture_output=True, text=True, check=True,
-    )
-    ranges = {}
-    for line in out.stdout.splitlines():
-        m = re.match(r"(.+) \[([\d;-]+)\]", line.strip())
-        if m:
-            ranges[os.path.basename(m.group(1))] = [
-                tuple(map(int, r.split("-"))) for r in m.group(2).split(";")
-            ]
-    if not ranges:
-        raise SystemExit("resolver emitted no ranges (full-file fallback)")
-    return ranges
+def rel_key(path, dataset_abs):
+    """Dataset-relative slash-normalized key for a resolver output path, or
+    None when the path lives outside the dataset."""
+    try:
+        rel = os.path.relpath(os.path.abspath(path), dataset_abs)
+    except ValueError:
+        return None  # different drive (Windows)
+    rel = rel.replace(os.sep, "/")
+    if rel == ".." or rel.startswith("../"):
+        return None
+    return rel
 
 
 def main() -> int:
@@ -69,35 +64,61 @@ def main() -> int:
     dataset = os.path.abspath(sys.argv[1])
     columns = sys.argv[2]
 
-    ranges = resolver_ranges(dataset, columns)
-    dst = os.path.join(tempfile.mkdtemp(prefix="lance_oracle_"), "copy")
-    shutil.copytree(dataset, dst)
+    with tempfile.TemporaryDirectory(prefix="lance_oracle_") as tmp:
+        # Build into the temp dir so the binary never lands in the source
+        # tree (a stray .exe here has been committed by mistake once already)
+        # and gets cleaned up with everything else, even on failure.
+        exe = ".exe" if os.name == "nt" else ""
+        binary = os.path.join(tmp, "bin", "lance-resolver" + exe)
+        subprocess.run(["go", "build", "-o", binary, "."], cwd=TOOL_DIR, check=True)
+        out = subprocess.run(
+            [binary, "--columns", columns, "--include-data-pages", dataset],
+            cwd=TOOL_DIR, capture_output=True, text=True, check=True,
+        )
+        ranges = {}
+        for line in out.stdout.splitlines():
+            m = re.match(r"(.+) \[([\d;-]+)\]", line.strip())
+            if m:
+                key = rel_key(m.group(1), dataset)
+                if key is None:
+                    print(f"note: {m.group(1)} resolves outside the dataset; "
+                          "its ranges are not verified by this run")
+                    continue
+                ranges[key] = [
+                    tuple(map(int, r.split("-"))) for r in m.group(2).split(";")
+                ]
+        if not ranges:
+            print("resolver emitted no usable ranges (full-file fallback?)")
+            return 1
 
-    zeroed = 0
-    for root, _, files in os.walk(dst):
-        for f in files:
-            if f not in ranges:
-                continue
-            fp = os.path.join(root, f)
-            data = bytearray(open(fp, "rb").read())
-            covered = bytearray(len(data))
-            for a, b in ranges[f]:
-                for i in range(a, min(b, len(data))):
-                    covered[i] = 1
-            for i in range(len(data)):
-                if not covered[i]:
-                    data[i] = 0
-                    zeroed += 1
-            open(fp, "wb").write(bytes(data))
+        dst = os.path.join(tmp, "copy")
+        shutil.copytree(dataset, dst)
 
-    want = lance.dataset(dataset).to_table(columns=columns.split(",")).to_pydict()
-    got = lance.dataset(dst).to_table(columns=columns.split(",")).to_pydict()
-    if want != got:
-        print(f"FAIL: data mismatch after zeroing {zeroed} bytes outside ranges")
-        return 1
-    print(f"PASS: official reader served --columns {columns} with "
-          f"{zeroed} bytes outside the emitted ranges zeroed")
-    shutil.rmtree(dst, ignore_errors=True)
+        zeroed = 0
+        for root, _, files in os.walk(dst):
+            for f in files:
+                fp = os.path.join(root, f)
+                key = os.path.relpath(fp, dst).replace(os.sep, "/")
+                if key not in ranges:
+                    continue
+                data = bytearray(open(fp, "rb").read())
+                covered = bytearray(len(data))
+                for a, b in ranges[key]:
+                    for i in range(a, min(b, len(data))):
+                        covered[i] = 1
+                for i in range(len(data)):
+                    if not covered[i]:
+                        data[i] = 0
+                        zeroed += 1
+                open(fp, "wb").write(bytes(data))
+
+        want = lance.dataset(dataset).to_table(columns=columns.split(",")).to_pydict()
+        got = lance.dataset(dst).to_table(columns=columns.split(",")).to_pydict()
+        if want != got:
+            print(f"FAIL: data mismatch after zeroing {zeroed} bytes outside ranges")
+            return 1
+        print(f"PASS: official reader served --columns {columns} with "
+              f"{zeroed} bytes outside the emitted ranges zeroed")
     return 0
 
 
