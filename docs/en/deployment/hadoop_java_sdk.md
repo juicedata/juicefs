@@ -218,13 +218,13 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.skip-dir-mtime`              | 100ms         | Minimal duration to modify parent dir mtime.                                                                                                                                |
 | `juicefs.subdir`        |               | Allow access only to the subpaths of this directory. Multiple paths can be specified, separated by commas. All other paths, including the root or sibling directories, will be denied access.                                     |
 
-`juicefs.guid-mask` only affects UID/GID values generated for users and groups without an explicit mapping. It accepts any non-zero unsigned 32-bit integer and detects its notation automatically: decimal by default, binary with `0b`, octal with `0` or `0o`, and hexadecimal with `0x`. Prefixes and digits are case-insensitive, and underscores may separate digits. For metadata migration, `0x7fffffff` limits generated IDs to the non-negative range of a signed 32-bit integer, while `0xffffffff` retains the full unsigned 32-bit value. If this option is not set, the Hadoop SDK preserves its existing behavior: SQL metadata engines use `0x7fffffff`, while Redis and KV metadata engines retain the full unsigned 32-bit value. Before using a value greater than `0x7fffffff` with a MySQL or PostgreSQL metadata engine, change the `uid` and `gid` columns in the `node` table to `BIGINT`.
+`juicefs.guid-mask` only affects the UID/GID values generated for users and groups without an explicit mapping. It accepts any non-zero unsigned 32-bit integer and automatically detects the number format: decimal by default, binary with `0b`, octal with `0` or `0o`, and hexadecimal with `0x`. Prefixes and letters are case-insensitive, and underscores can be used to separate digits. For metadata migration, `0x7fffffff` limits generated IDs to the non-negative range of a signed 32-bit integer, while `0xffffffff` retains the full unsigned 32-bit value. If this option is not set, the Hadoop SDK preserves its existing behavior: SQL metadata engines use `0x7fffffff`, while Redis and KV metadata engines retain the full unsigned 32-bit value. Before using a value greater than `0x7fffffff` with a MySQL or PostgreSQL metadata engine, change the `uid` and `gid` columns in the `node` table to `BIGINT`.
 
 For metadata migration, use the mask that matches the source volume. All Hadoop SDK clients accessing the same volume must use the same mask. Before enabling this option, upgrade every Hadoop SDK client to a version that supports `juicefs.guid-mask`. Older clients do not recognize this option and continue selecting the mask from the current metadata engine. Do not mix old and new clients on the migrated volume.
 
 ##### Configure `guid-mask` when changing metadata engines
 
-The mask must follow the UID/GID format used by the source volume, rather than the type of the target metadata engine. If the source volume already has an explicit `guid-mask`, continue using the same value on the target. For volumes that did not previously configure this option, configure the migration as follows:
+The mask must follow the UID/GID format used by the source volume, rather than being determined by the type of the target metadata engine. If the source volume already has an explicit `guid-mask`, use the same value on the target. For volumes that did not previously have this option configured, use the following settings for the migration:
 
 | Migration direction | Mask used by the source volume | Configuration for the target volume | Prerequisite |
 |---------------------|--------------------------------|-------------------------------------|--------------|
@@ -233,7 +233,7 @@ The mask must follow the UID/GID format used by the source volume, rather than t
 
 ###### Redis/KV to MySQL
 
-When migrating a volume named `myjfs` from Redis/KV to MySQL, configure every Hadoop SDK client with:
+When migrating the `myjfs` volume from Redis/KV to MySQL, configure the following property on every Hadoop SDK client:
 
 ```xml
 <property>
@@ -244,7 +244,7 @@ When migrating a volume named `myjfs` from Redis/KV to MySQL, configure every Ha
 
 This option only controls how the Hadoop SDK generates UID/GID values; it does not change the MySQL schema. Before importing any inode data, the `node.uid` and `node.gid` columns in the target MySQL database must be able to store the full unsigned 32-bit range and therefore must use `BIGINT`.
 
-The standard `juicefs load` command currently requires an empty target database, creates the tables itself, and then immediately imports the data. Consequently, pre-creating the `node` table and running `ALTER TABLE` is not a supported way to satisfy this prerequisite. If the backup may contain UID/GID values greater than `2147483647`, the current version does not support a standard Redis/KV-to-MySQL load with the default schema. A migration path that creates these two columns as `BIGINT` during schema initialization is required first. Changing the columns after inode import has started is too late to prevent an out-of-range failure.
+The standard `juicefs load` command currently requires an empty target database. It creates the tables itself and immediately starts importing the data, so pre-creating the `node` table and running `ALTER TABLE` is not a supported way to satisfy this prerequisite. If the backup may contain UID/GID values greater than `2147483647`, the current version does not support a standard Redis/KV-to-MySQL `juicefs load` with the default schema. A migration method that creates these two columns as `BIGINT` during schema initialization must be provided first. Changing the columns after inode data import has started is too late to prevent out-of-range errors during the import.
 
 ###### MySQL to Redis/KV
 
@@ -257,7 +257,7 @@ When migrating `myjfs` from MySQL to Redis/KV, use the same property name with t
 </property>
 ```
 
-This direction does not require a database schema change. For either migration direction, stop all clients before the migration and restart them with the corresponding `guid-mask` configuration only after the migration completes.
+This migration direction does not require a database schema change. For either migration direction, stop all clients before starting the migration and restart them with the corresponding `guid-mask` configuration only after the migration is complete.
 
 #### Multiple file systems configuration
 
