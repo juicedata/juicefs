@@ -1,0 +1,508 @@
+{
+  "external_files": [],
+  "files": [
+    {
+      "columns": [
+        {
+          "cm_len": 112,
+          "cm_pos": 6407,
+          "leaf": true,
+          "name": "id",
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              0,
+              1232
+            ],
+            [
+              6208,
+              7177
+            ]
+          ]
+        },
+        {
+          "cm_len": 130,
+          "cm_pos": 6519,
+          "leaf": true,
+          "name": "name",
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              1280,
+              2585
+            ],
+            [
+              6208,
+              7177
+            ]
+          ]
+        },
+        {
+          "cm_len": 130,
+          "cm_pos": 6649,
+          "leaf": true,
+          "name": "city",
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              2624,
+              3387
+            ],
+            [
+              6208,
+              7177
+            ]
+          ]
+        },
+        {
+          "cm_len": 115,
+          "cm_pos": 6779,
+          "leaf": true,
+          "name": "zip",
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              3392,
+              5264
+            ],
+            [
+              6208,
+              7177
+            ]
+          ]
+        },
+        {
+          "cm_len": 147,
+          "cm_pos": 6894,
+          "leaf": true,
+          "name": "item",
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              5312,
+              7177
+            ]
+          ]
+        }
+      ],
+      "file_major_version": 2,
+      "footer": {
+        "cmo_table_start": 7041,
+        "column_metadata_start": 6407,
+        "footer_version": [
+          2,
+          1
+        ],
+        "gbo_table_start": 7121,
+        "num_columns": 5,
+        "num_global_buffers": 1
+      },
+      "placeholder": "FILE0",
+      "warmup": {
+        "addr": {
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              2624,
+              5264
+            ],
+            [
+              6208,
+              7177
+            ]
+          ]
+        },
+        "city": {
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              2624,
+              3387
+            ],
+            [
+              6208,
+              7177
+            ]
+          ]
+        },
+        "id": {
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              0,
+              1232
+            ],
+            [
+              6208,
+              7177
+            ]
+          ]
+        },
+        "item": {
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              5312,
+              7177
+            ]
+          ]
+        },
+        "name": {
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              1280,
+              2585
+            ],
+            [
+              6208,
+              7177
+            ]
+          ]
+        },
+        "tags": {
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              5312,
+              7177
+            ]
+          ]
+        },
+        "zip": {
+          "ranges_meta": [
+            [
+              6208,
+              7177
+            ]
+          ],
+          "ranges_pages": [
+            [
+              3392,
+              5264
+            ],
+            [
+              6208,
+              7177
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "columns": [
+        {
+          "cm_len": 112,
+          "cm_pos": 6535,
+          "leaf": true,
+          "name": "id",
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              0,
+              1360
+            ],
+            [
+              6336,
+              7305
+            ]
+          ]
+        },
+        {
+          "cm_len": 130,
+          "cm_pos": 6647,
+          "leaf": true,
+          "name": "name",
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              1408,
+              2713
+            ],
+            [
+              6336,
+              7305
+            ]
+          ]
+        },
+        {
+          "cm_len": 130,
+          "cm_pos": 6777,
+          "leaf": true,
+          "name": "city",
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              2752,
+              3515
+            ],
+            [
+              6336,
+              7305
+            ]
+          ]
+        },
+        {
+          "cm_len": 115,
+          "cm_pos": 6907,
+          "leaf": true,
+          "name": "zip",
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              3520,
+              5392
+            ],
+            [
+              6336,
+              7305
+            ]
+          ]
+        },
+        {
+          "cm_len": 147,
+          "cm_pos": 7022,
+          "leaf": true,
+          "name": "item",
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              5440,
+              7305
+            ]
+          ]
+        }
+      ],
+      "file_major_version": 2,
+      "footer": {
+        "cmo_table_start": 7169,
+        "column_metadata_start": 6535,
+        "footer_version": [
+          2,
+          1
+        ],
+        "gbo_table_start": 7249,
+        "num_columns": 5,
+        "num_global_buffers": 1
+      },
+      "placeholder": "FILE1",
+      "warmup": {
+        "addr": {
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              2752,
+              5392
+            ],
+            [
+              6336,
+              7305
+            ]
+          ]
+        },
+        "city": {
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              2752,
+              3515
+            ],
+            [
+              6336,
+              7305
+            ]
+          ]
+        },
+        "id": {
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              0,
+              1360
+            ],
+            [
+              6336,
+              7305
+            ]
+          ]
+        },
+        "item": {
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              5440,
+              7305
+            ]
+          ]
+        },
+        "name": {
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              1408,
+              2713
+            ],
+            [
+              6336,
+              7305
+            ]
+          ]
+        },
+        "tags": {
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              5440,
+              7305
+            ]
+          ]
+        },
+        "zip": {
+          "ranges_meta": [
+            [
+              6336,
+              7305
+            ]
+          ],
+          "ranges_pages": [
+            [
+              3520,
+              5392
+            ],
+            [
+              6336,
+              7305
+            ]
+          ]
+        }
+      }
+    }
+  ],
+  "format": "lance-fixture-expected/1",
+  "full_resolve": [
+    "FILE0",
+    "FILE1",
+    "MANIFEST",
+    "TXN"
+  ],
+  "generator": "lance-10.0.0",
+  "manifest": {
+    "footer_version": [
+      0,
+      2
+    ],
+    "manifest_pos": 411,
+    "transaction_file": "TXN",
+    "version": 1
+  }
+}
