@@ -1970,12 +1970,21 @@ func (m *dbMeta) getEdge(ctx Context, s *xorm.Session, parent Ino, name string) 
 	return e, ok, err
 }
 
-func edgeIdentity(s *xorm.Session, e *edge) *xorm.Session {
-	q := s.Where("parent = ? AND name = ? AND inode = ? AND type = ?", e.Parent, e.Name, e.Inode, e.Type)
+// edgeIdentityCond returns the SQL condition matching the exact identity
+// of a previously-read edge row.
+func edgeIdentityCond(e *edge) (string, []interface{}) {
+	cond := "parent = ? AND name = ? AND inode = ? AND type = ?"
+	args := []interface{}{e.Parent, e.Name, e.Inode, e.Type}
 	if e.Id > 0 {
-		q = q.And("id = ?", e.Id)
+		cond += " AND id = ?"
+		args = append(args, e.Id)
 	}
-	return q
+	return cond, args
+}
+
+func edgeIdentity(s *xorm.Session, e *edge) *xorm.Session {
+	cond, args := edgeIdentityCond(e)
+	return s.Where(cond, args...)
 }
 
 func deleteEdge(s *xorm.Session, e *edge) error {
@@ -1995,13 +2004,7 @@ func deleteEdges(s *xorm.Session, edges []edge) error {
 	}
 	q := s.Table(&edge{})
 	for i := range edges {
-		e := &edges[i]
-		cond := "parent = ? AND name = ? AND inode = ? AND type = ?"
-		args := []interface{}{e.Parent, e.Name, e.Inode, e.Type}
-		if e.Id > 0 {
-			cond += " AND id = ?"
-			args = append(args, e.Id)
-		}
+		cond, args := edgeIdentityCond(&edges[i])
 		if i == 0 {
 			q = q.Where(cond, args...)
 		} else {
@@ -2020,6 +2023,12 @@ func deleteEdges(s *xorm.Session, edges []edge) error {
 
 func updateEdge(s *xorm.Session, old, new *edge) error {
 	if old.Inode == new.Inode && old.Type == new.Type {
+		// Values are unchanged, e.g. doRename with RENAME_EXCHANGE swapping
+		// two hardlinks of the same inode. A real UPDATE would report 0
+		// affected rows on MySQL (which counts changed rows, not matched
+		// rows) and falsely signal errEdgeChanged, livelocking the retry
+		// loop. Verify identity with a locking read instead so a concurrent
+		// change still restarts the txn.
 		var current edge
 		ok, err := edgeIdentity(s.ForUpdate(), old).Get(&current)
 		if err != nil {
