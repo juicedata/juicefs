@@ -13,7 +13,8 @@ PROTOC_GEN_GO_VERSION="v1.36.11"
 # the matching release binary is downloaded instead of trusting PATH.
 PROTOC_VERSION="${PROTOC_VERSION:-36.0}"
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "${TOOL_DIR}/../.." && pwd)"
 OUT_DIR="${REPO_ROOT}/tools/lance-resolver/proto/lance"
 FILE2_OUT_DIR="${OUT_DIR}/file2"
 TMP_DIR="$(mktemp -d)"

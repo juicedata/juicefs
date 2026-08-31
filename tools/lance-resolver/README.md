@@ -46,9 +46,9 @@ aligns buffers to 64-byte boundaries, so gaps of at most 64 bytes are warmed
 too. Larger gaps between columns are left cold, keeping multi-column warmup
 column-scoped; note that projecting most of a dataset's columns naturally
 approaches warming the whole file. Range sufficiency is verified by
-`verify_warmup_ranges.py`, which zeroes every byte outside the emitted ranges
-and checks that the official reader still returns correct data — including a
-`--multi-base` mode for datasets that keep files in imported base paths
+`scripts/verify_warmup_ranges.py`, which zeroes every byte outside the emitted
+ranges and checks that the official reader still returns correct data —
+including a `--multi-base` mode for datasets that keep files in imported base paths
 (`file://` bases are emitted as plain local paths; other schemes pass
 through, since those bases are not warmable through a local mount).
 Metadata-only ranges, external row-id sequence files and indirect encodings
@@ -75,8 +75,9 @@ Data files are resolved through the manifest's `base_paths` when they carry a
 `base_id` (shallow clones and imported files may live outside the dataset
 directory): dataset-root bases keep files under `data/`, direct-file bases use
 the base path as-is, and the base paths must point into the JuiceFS mount for
-warmup to reach them. Deletion files always resolve against the dataset root,
-mirroring upstream.
+warmup to reach them. A deletion file with a `base_id` resolves against that
+base's dataset root and fails resolution if the base is missing or is not a
+dataset-root base.
 
 ## Examples
 
@@ -93,13 +94,25 @@ lance-resolver --columns id,name /mnt/jfs/dataset.lance > /tmp/list.txt
 juicefs warmup -f /tmp/list.txt
 ```
 
+## Maintenance scripts
+
+All maintenance and verification scripts live under `scripts/`:
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/gen-protos.sh` | Downloads the pinned Lance protobuf sources and pinned `protoc` toolchain, then regenerates the committed Go protobuf files. |
+| `scripts/gen-fixtures.py` | Generates the real golden Lance dataset with the pinned official `pylance` writer. |
+| `scripts/dump_fixture.py` | Independently parses fixture bytes and writes the normalized `testdata/expected.json` ground truth. |
+| `scripts/check-fixture-drift.sh` | Regenerates a temporary fixture and fails if its normalized ground truth differs from the committed expectation. |
+| `scripts/verify_warmup_ranges.py` | Zeroes bytes outside emitted ranges and verifies projected reads with the official Lance reader, including imported-base coverage. |
+
 ## Regenerating protobufs
 
 The Lance protobuf definitions are vendored under `proto/`. To regenerate them
 from a pinned Lance version:
 
 ```bash
-./tools/lance-resolver/gen-protos.sh
+./tools/lance-resolver/scripts/gen-protos.sh
 ```
 
 Both generators are pinned for reproducible output: `protoc-gen-go` is
@@ -113,27 +126,37 @@ committed; the downloaded `.proto` files are not.
 
 Format correctness is proven by golden tests against a **real** Lance dataset
 committed under `testdata/` — written by the official `pylance` (pinned in
-`gen-fixtures.py`), never hand-crafted bytes. The expected values in
+`scripts/gen-fixtures.py`), never hand-crafted bytes. The expected values in
 `testdata/expected.json` are extracted from the fixture bytes by the
-independent parser `dump_fixture.py`, which also normalizes volatile values
-(random file names, manifest timestamp, per-run file content permutation) so
-the JSON is stable across regenerations.
+independent parser `scripts/dump_fixture.py`, which also normalizes volatile
+values (random file names, manifest timestamp, per-run file content
+permutation) so the JSON is stable across regenerations.
 
 ```bash
 pip install pylance==10.0.0
-python tools/lance-resolver/gen-fixtures.py                    # regenerate testdata/lance-dataset
-python tools/lance-resolver/dump_fixture.py \
+python tools/lance-resolver/scripts/gen-fixtures.py                    # regenerate testdata/lance-dataset
+python tools/lance-resolver/scripts/dump_fixture.py \
     tools/lance-resolver/testdata/lance-dataset \
     tools/lance-resolver/testdata/expected.json               # regenerate ground truth
 go test ./tools/lance-resolver/...
 ```
 
-`check-fixture-drift.sh` regenerates into a temp dir and diffs the normalized
-ground truth against the committed `expected.json` (`git diff --exit-code`),
-failing when the pinned writer's format has drifted; CI runs it on every change
-under `tools/lance-resolver/` (`.github/workflows/lance-resolver-fixture-drift.yml`)
-together with the golden tests and the adversarial range verification
-(`verify_warmup_ranges.py`) for leaf, nested and multi-column projections.
+`scripts/check-fixture-drift.sh` regenerates into a temp dir and diffs the
+normalized ground truth against the committed `expected.json` (`git diff
+--exit-code`), failing when the pinned writer's format has drifted; CI runs it
+on every change under `tools/lance-resolver/`
+(`.github/workflows/lance-resolver-fixture-drift.yml`) together with the golden
+tests and the adversarial range verification
+(`scripts/verify_warmup_ranges.py`) for leaf, nested and multi-column
+projections.
+
+## TODO
+
+- Resolve `--include-indices` from the selected manifest's `IndexSection`,
+  including `IndexMetadata.base_id`, instead of scanning only the current
+  dataset root's `_indices/` directory.
+- Validate column-range parsing against official V2.2 and V2.3 writer fixtures,
+  then add footer versions `(2,2)` and `(2,3)` to the supported whitelist.
 
 ## Future work
 

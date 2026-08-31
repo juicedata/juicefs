@@ -13,8 +13,8 @@ cache populated from the resolver output would have served the read
 entirely.
 
 This breaks self-confirmation: the verdict comes from the official
-reader's behavior, not from lance-resolver or dump_fixture.py (which share
-their layout knowledge with the Go implementation).
+reader's behavior, not from lance-resolver or scripts/dump_fixture.py (which
+shares its layout knowledge with the Go implementation).
 
 Notes:
   - Each case runs in its own process: a failing case panics a Rust
@@ -42,10 +42,9 @@ Coverage boundary (deliberate, synthetic tests cover these paths):
     outright at this pin, so no readable real file can carry them.
 
 Usage:
-  python verify_warmup_ranges.py <dataset-dir> <col1,col2,...>
-  python verify_warmup_ranges.py --multi-base    # generates a temp dataset
-                                                # with an imported base and
-                                                # verifies root + base files
+  python scripts/verify_warmup_ranges.py <dataset-dir> <col1,col2,...>
+  python scripts/verify_warmup_ranges.py --multi-base
+      # generates a temp dataset with an imported base and verifies root + base files
 """
 
 import os
@@ -57,7 +56,7 @@ import tempfile
 
 import lance
 
-TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
+TOOL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def rel_key(path, dataset_abs):

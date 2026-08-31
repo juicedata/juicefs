@@ -4,19 +4,19 @@
 The fixture is a REAL dataset written by the official Python Lance library
 (pylance) -- never hand-crafted bytes. Usage:
 
-    python gen-fixtures.py [output-dir]
+    python scripts/gen-fixtures.py [output-dir]
 
-Default output-dir is testdata/lance-dataset next to this script. After
+Default output-dir is testdata/lance-dataset under the tool directory. After
 regenerating the dataset, always regenerate the expectations too:
 
-    python dump_fixture.py <output-dir> testdata/expected.json
+    python scripts/dump_fixture.py <output-dir> testdata/expected.json
 
-Version pin: gen-protos.sh pins upstream Lance sources at v11.0.0-rc.1,
+Version pin: scripts/gen-protos.sh pins upstream Lance sources at v11.0.0-rc.1,
 which is not published to crates.io or PyPI. pylance 10.0.0 is the closest
 official writer available; the footer/CMO physical layout is shared across
 Lance V2 file versions (verified against the v11 sources), so this fixture
 is representative for the resolver. Data file names, transaction file names
-and manifest timestamps are random/volatile by design; dump_fixture.py
+and manifest timestamps are random/volatile by design; scripts/dump_fixture.py
 normalizes them so expected.json stays stable across regenerations.
 
 Do not bump the pinned versions casually: byte offsets in expected.json
@@ -50,7 +50,8 @@ def main() -> int:
         )
         return 1
 
-    out = pathlib.Path(args.output) if args.output else pathlib.Path(__file__).parent / "testdata" / "lance-dataset"
+    tool_dir = pathlib.Path(__file__).resolve().parent.parent
+    out = pathlib.Path(args.output) if args.output else tool_dir / "testdata" / "lance-dataset"
     if out.exists():
         shutil.rmtree(out)
 

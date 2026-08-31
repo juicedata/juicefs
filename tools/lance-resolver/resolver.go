@@ -114,9 +114,7 @@ func isDriveLetter(c byte) bool {
 // mirroring upstream data_file_dir_for_base: no base_id means the dataset's
 // own data/ dir; a base_id refers to an entry in manifest base_paths, where
 // dataset-root bases also keep files under data/ and imported-file bases use
-// the base path directly (shallow clones, multi-tier storage). Deletion
-// files, by contrast, are always resolved against the dataset root —
-// upstream deletion_file_path ignores their base_id.
+// the base path directly (shallow clones, multi-tier storage).
 func dataFileDir(datasetPath string, manifest *lancepb.Manifest, baseID *uint32) string {
 	if baseID == nil {
 		return path.Join(datasetPath, lanceDataDir)
@@ -131,6 +129,28 @@ func dataFileDir(datasetPath string, manifest *lancepb.Manifest, baseID *uint32)
 	}
 	fmt.Fprintf(os.Stderr, "warning: base path id %d not found in manifest; assuming dataset root\n", *baseID)
 	return path.Join(datasetPath, lanceDataDir)
+}
+
+// deletionFileRoot resolves the dataset root containing a deletion file.
+// Unlike data files, deletion files may only use base paths that point to a
+// dataset root because their relative path always starts with _deletions/.
+func deletionFileRoot(datasetPath string, manifest *lancepb.Manifest, baseID *uint32) (string, error) {
+	if baseID == nil {
+		return datasetPath, nil
+	}
+	for _, bp := range manifest.BasePaths {
+		if bp == nil || bp.Id != *baseID {
+			continue
+		}
+		if bp.Path == "" {
+			return "", fmt.Errorf("base path id %d has an empty path", *baseID)
+		}
+		if !bp.IsDatasetRoot {
+			return "", fmt.Errorf("base path id %d is not a dataset root", *baseID)
+		}
+		return fileURIToLocalPath(bp.Path), nil
+	}
+	return "", fmt.Errorf("base path id %d not found in manifest", *baseID)
 }
 
 // resolveLanceDataset resolves a Lance dataset path into individual file paths
@@ -172,7 +192,11 @@ func resolveLanceDataset(datasetPath, version string, manifestOnly bool, include
 		if frag.DeletionFile != nil {
 			delPath := relativeDeletionFilePath(frag.GetId(), frag.DeletionFile)
 			if delPath != "" {
-				paths = append(paths, path.Join(datasetPath, delPath))
+				root, err := deletionFileRoot(datasetPath, manifest, frag.DeletionFile.BaseId)
+				if err != nil {
+					return nil, fmt.Errorf("resolve deletion file for fragment %d: %w", frag.GetId(), err)
+				}
+				paths = append(paths, path.Join(root, delPath))
 			}
 		}
 

@@ -18,9 +18,9 @@ package main
 
 // Golden-file tests against the REAL Lance fixture in testdata/lance-dataset.
 //
-// The fixture is written by the official pylance library (gen-fixtures.py,
+// The fixture is written by the official pylance library (scripts/gen-fixtures.py,
 // pinned version) and the expected values in testdata/expected.json are
-// extracted from its bytes by an independent parser (dump_fixture.py). These
+// extracted from its bytes by an independent parser (scripts/dump_fixture.py). These
 // tests are the only proof that the resolver agrees with the actual Lance
 // format; the synthetic-byte tests in resolver_test.go only cover error and
 // edge cases (see the note at the top of that file).
@@ -29,7 +29,7 @@ package main
 // regenerations, so file identity is not stable. All assertions therefore
 // compare MULTISETS of per-file values (range strings, resolved targets),
 // which is invariant under that permutation — the same normalization
-// dump_fixture.py applies when assigning FILE0/FILE1 placeholders.
+// scripts/dump_fixture.py applies when assigning FILE0/FILE1 placeholders.
 
 import (
 	"encoding/binary"
@@ -108,7 +108,7 @@ func loadGolden(t *testing.T) *goldenExpected {
 	t.Helper()
 	data, err := os.ReadFile(goldenExpectedDoc)
 	if err != nil {
-		t.Fatalf("read %s (fixtures are committed; regenerate with gen-fixtures.py + dump_fixture.py if missing): %v", goldenExpectedDoc, err)
+		t.Fatalf("read %s (fixtures are committed; regenerate with scripts/gen-fixtures.py + scripts/dump_fixture.py if missing): %v", goldenExpectedDoc, err)
 	}
 	var exp goldenExpected
 	if err := json.Unmarshal(data, &exp); err != nil {
@@ -282,7 +282,7 @@ func mapStr(in []string, f func(string) string) []string {
 }
 
 // rawFileFooter decodes the V2 footer straight from the bytes, independent of
-// the production parser: expected.json was produced by dump_fixture.py (also
+// the production parser: expected.json was produced by scripts/dump_fixture.py (also
 // independent), so a third implementation agreeing here pins the layout.
 type rawFileFooter struct {
 	colMetaStart, cmoStart, gboStart uint64
@@ -309,7 +309,7 @@ func unpackRawFooter(raw []byte) (rawFileFooter, bool) {
 	}, true
 }
 
-// TestGolden_Structure asserts the layout facts exported by dump_fixture.py
+// TestGolden_Structure asserts the layout facts exported by scripts/dump_fixture.py
 // that the range tests do not reach: the manifest footer (manifest_pos,
 // footer version, snapshot version), every data-file footer field, and each
 // column's CMO entry. All parsing here is a raw third implementation, so the
