@@ -200,6 +200,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.supergroup`    | `supergroup`  | The super user group                                                                                                                                                        |
 | `juicefs.users`         | `null`        | The path of username and UID list file, e.g. `jfs://name/etc/users`. The file format is `<username>:<UID>`, one user per line.                                              |
 | `juicefs.groups`        | `null`        | The path of group name, GID and group members list file, e.g. `jfs://name/etc/groups`. The file format is `<group-name>:<GID>:<username1>,<username2>`, one group per line. |
+| `juicefs.guid-mask`     |               | Bit mask applied to generated UID/GID values. Accepts a non-zero unsigned 32-bit integer. An empty value keeps the existing engine-dependent behavior.                        |
 | `juicefs.umask`         | `null`        | The umask used when creating files and directories (e.g. `0022`), default value is `fs.permissions.umask-mode`.                                                             |
 | `juicefs.push-gateway`  |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                                     |
 | `juicefs.push-auth`     |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                       |
@@ -216,6 +217,47 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.heartbeat`     | 12            | Heartbeat interval (in seconds) between client and metadata engine. It's recommended that all clients use the same value.                                                   |
 | `juicefs.skip-dir-mtime`              | 100ms         | Minimal duration to modify parent dir mtime.                                                                                                                                |
 | `juicefs.subdir`        |               | Allow access only to the subpaths of this directory. Multiple paths can be specified, separated by commas. All other paths, including the root or sibling directories, will be denied access.                                     |
+
+`juicefs.guid-mask` only affects the UID/GID values generated for users and groups without an explicit mapping. It accepts any non-zero unsigned 32-bit integer and automatically detects the number format: decimal by default, binary with `0b`, octal with `0` or `0o`, and hexadecimal with `0x`. Prefixes and letters are case-insensitive, and underscores can be used to separate digits. For metadata migration, `0x7fffffff` limits generated IDs to the non-negative range of a signed 32-bit integer, while `0xffffffff` retains the full unsigned 32-bit value. If this option is not set, the Hadoop SDK preserves its existing behavior: SQL metadata engines use `0x7fffffff`, while Redis and KV metadata engines retain the full unsigned 32-bit value. Before using a value greater than `0x7fffffff` with a MySQL or PostgreSQL metadata engine, change the `uid` and `gid` columns in the `node` table to `BIGINT`.
+
+For metadata migration, use the mask that matches the source volume. All Hadoop SDK clients accessing the same volume must use the same mask. Before enabling this option, upgrade every Hadoop SDK client to a version that supports `juicefs.guid-mask`. Older clients do not recognize this option and continue to select the mask based on the current metadata engine. Do not allow old and new client versions to access the migrated volume at the same time.
+
+##### Configure `guid-mask` when changing metadata engines
+
+The mask must follow the UID/GID format used by the source volume, rather than being determined by the type of the target metadata engine. If the source volume already has an explicit `guid-mask`, use the same value on the target. For volumes that did not previously have this option configured, use the following settings for the migration:
+
+| Migration direction | Mask used by the source volume | Configuration for the target volume | Prerequisite |
+|---------------------|--------------------------------|-------------------------------------|--------------|
+| Redis/KV to MySQL | `0xffffffff` | `juicefs.guid-mask=0xffffffff` | The MySQL `node.uid` and `node.gid` columns must be `BIGINT` before migrated inode data is written. |
+| MySQL to Redis/KV | `0x7fffffff` | `juicefs.guid-mask=0x7fffffff` | None. The explicit mask prevents Redis/KV clients from switching to full unsigned 32-bit IDs. |
+
+###### Redis/KV to MySQL
+
+When migrating the `myjfs` volume from Redis/KV to MySQL, configure the following property on every Hadoop SDK client:
+
+```xml
+<property>
+  <name>juicefs.myjfs.guid-mask</name>
+  <value>0xffffffff</value>
+</property>
+```
+
+This option only controls how the Hadoop SDK generates UID/GID values; it does not change the MySQL schema. Before importing any inode data, the `node.uid` and `node.gid` columns in the target MySQL database must be able to store the full unsigned 32-bit range and therefore must use `BIGINT`.
+
+The standard `juicefs load` command currently requires an empty target database. It creates the tables itself and immediately starts importing the data, so pre-creating the `node` table and running `ALTER TABLE` is not a supported way to satisfy this prerequisite. If the backup may contain UID/GID values greater than `2147483647`, the current version does not support a standard Redis/KV-to-MySQL `juicefs load` with the default schema. A migration method that creates these two columns as `BIGINT` during schema initialization must be provided first. Changing the columns after inode data import has started is too late to prevent out-of-range errors during the import.
+
+###### MySQL to Redis/KV
+
+When migrating `myjfs` from MySQL to Redis/KV, use the same property name with the following value:
+
+```xml
+<property>
+  <name>juicefs.myjfs.guid-mask</name>
+  <value>0x7fffffff</value>
+</property>
+```
+
+This migration direction does not require a database schema change. For either migration direction, stop all clients before starting the migration and restart them with the corresponding `guid-mask` configuration only after the migration is complete.
 
 #### Multiple file systems configuration
 

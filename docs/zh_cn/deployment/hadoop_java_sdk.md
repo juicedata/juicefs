@@ -200,6 +200,7 @@ make win
 | `juicefs.supergroup`      | `supergroup` | 超级用户组                                                                                                       |
 | `juicefs.users`           | `null`       | 用户名以及 UID 列表文件的地址，比如 `jfs://name/etc/users`。文件格式为 `<username>:<UID>`，一行一个用户。                                |
 | `juicefs.groups`          | `null`       | 用户组、GID 以及组成员列表文件的地址，比如 `jfs://name/etc/groups`。文件格式为 `<group-name>:<GID>:<username1>,<username2>`，一行一个用户组。 |
+| `juicefs.guid-mask`       |              | 应用于自动生成 UID/GID 的位掩码，支持非零 uint32 整数。留空时保持现有的按元数据引擎选择掩码的行为。                              |
 | `juicefs.umask`           | `null`       | 创建文件和目录的 umask 值（如 `0022`），如果没有此配置，默认值是 `fs.permissions.umask-mode`。                                        |
 | `juicefs.push-gateway`    |              | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 地址，格式为 `<host>:<port>`。                 |
 | `juicefs.push-auth`       |              | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。              |
@@ -216,6 +217,47 @@ make win
 | `juicefs.heartbeat`       | 12           | 客户端和元数据引擎之间的心跳间隔（单位：秒），建议所有客户端都设置一样                                                                         |
 | `juicefs.skip-dir-mtime`  | 100ms        | 修改父目录 mtime 间隔。                                                                                             |
 | `juicefs.subdir`          |              | 仅允许访问此目录的子路径。可以指定多个路径，使用逗号分隔。所有其他路径，包括根目录或同级目录，都将被拒绝访问。                                           |
+
+`juicefs.guid-mask` 只影响没有显式映射的用户和用户组所生成的 UID/GID，支持任意非零 uint32 整数并自动识别进制：默认为十进制，`0b` 表示二进制，`0` 或 `0o` 表示八进制，`0x` 表示十六进制。前缀和字母不区分大小写，数字之间可以使用下划线分隔。元数据迁移场景建议使用 `0x7fffffff` 或 `0xffffffff`：前者将生成的 ID 限制在有符号 32 位整数的非负范围内，后者保留完整的无符号 32 位值。未配置该参数时，Hadoop SDK 保持原有行为：SQL 元数据引擎使用 `0x7fffffff`，Redis 和 KV 元数据引擎保留完整的无符号 32 位值。在 MySQL 或 PostgreSQL 元数据引擎上使用大于 `0x7fffffff` 的值前，需要先将 `node` 表的 `uid` 和 `gid` 字段修改为 `BIGINT`。
+
+迁移时应选择与源卷匹配的掩码。访问同一个卷的所有 Hadoop SDK 客户端必须使用相同的掩码。启用该参数前，需要将所有 Hadoop SDK 客户端升级到支持 `juicefs.guid-mask` 的版本；旧版本不会识别该参数，仍会根据当前元数据引擎选择掩码。不要让新旧版本客户端混合访问迁移后的卷。
+
+##### 更换元数据引擎时配置 `guid-mask`
+
+掩码必须跟随源卷已经使用的 UID/GID 格式，而不是根据目标元数据引擎的类型选择。如果源卷已经显式配置了 `guid-mask`，目标端应继续使用相同的值。对于此前未配置该参数的卷，按下表配置迁移：
+
+| 迁移方向 | 源卷使用的掩码 | 目标卷配置 | 前置条件 |
+|---------|--------------|-----------|---------|
+| Redis/KV 转 MySQL | `0xffffffff` | `juicefs.guid-mask=0xffffffff` | 写入迁移的 inode 数据前，MySQL `node.uid` 和 `node.gid` 字段必须已经是 `BIGINT`。 |
+| MySQL 转 Redis/KV | `0x7fffffff` | `juicefs.guid-mask=0x7fffffff` | 无。显式配置该掩码可以防止 Redis/KV 客户端改用完整的无符号 32 位 ID。 |
+
+###### Redis/KV 转 MySQL
+
+将名为 `myjfs` 的卷从 Redis/KV 迁移到 MySQL 时，所有 Hadoop SDK 客户端都需要配置：
+
+```xml
+<property>
+  <name>juicefs.myjfs.guid-mask</name>
+  <value>0xffffffff</value>
+</property>
+```
+
+这个参数只控制 Hadoop SDK 生成 UID/GID 的方式，不会修改 MySQL 表结构。在导入任何 inode 数据前，目标 MySQL 的 `node.uid` 和 `node.gid` 字段必须能够保存完整的无符号 32 位值，因此需要使用 `BIGINT`。
+
+目前标准的 `juicefs load` 要求目标数据库为空，并会自行创建表后立即导入数据，因此不能通过“预先创建 `node` 表并执行 `ALTER TABLE`”来满足上述条件。如果备份中可能包含大于 `2147483647` 的 UID/GID，当前版本不支持使用默认表结构执行 Redis/KV 到 MySQL 的标准 `juicefs load`；必须先提供一种能在建表阶段将这两个字段创建为 `BIGINT` 的迁移方式。等 inode 数据开始导入后再修改字段，已经无法避免导入过程中的数值越界错误。
+
+###### MySQL 转 Redis/KV
+
+将 `myjfs` 从 MySQL 迁移到 Redis/KV 时，配置相同的参数名，并将值设置为：
+
+```xml
+<property>
+  <name>juicefs.myjfs.guid-mask</name>
+  <value>0x7fffffff</value>
+</property>
+```
+
+这个方向不需要修改数据库字段。无论迁移方向，迁移前都需要停止所有客户端，迁移完成后再使用对应的 `guid-mask` 配置重启客户端。
 
 #### 多文件系统配置
 

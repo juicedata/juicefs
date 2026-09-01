@@ -390,6 +390,7 @@ type javaConf struct {
 	PushGraphite        string `json:"pushGraphite"`
 	PushRemoteWrite     string `json:"pushRemoteWrite"`
 	PushRemoteWriteAuth string `json:"pushRemoteWriteAuth"`
+	GuidMask            string `json:"guidMask"`
 	Caller              int    `json:"caller"`
 	Subdir              string `json:"subdir"`
 
@@ -422,9 +423,11 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 		if jfs == nil {
 			return 0
 		}
-		switch jfs.Meta().Name() {
-		case "mysql", "postgres", "sqlite3":
-			m.mask = 0x7FFFFFFF // limit generated uid to int32
+		var err error
+		m.mask, err = guidMask(conf.GuidMask, jfs.Meta().Name())
+		if err != nil {
+			logger.Errorf("invalid configuration: %s", err)
+			return 0
 		}
 		logger.Infof("JuiceFileSystem created for user:%s groups:%s", user, groups)
 	}
@@ -566,6 +569,10 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 		} else {
 			logger.Fatalf("invalid json")
 		}
+	}
+	if _, err = guidMask(jConf.GuidMask, ""); err != nil {
+		logger.Errorf("invalid configuration: %s", err)
+		return 0
 	}
 	return getOrCreate(name, user, C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf, func() *fs.FileSystem {
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {

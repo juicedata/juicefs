@@ -504,6 +504,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("pushGraphite", getConf(conf, "push-graphite", ""));
     obj.put("pushRemoteWrite", getConf(conf, "push-remote-write", ""));
     obj.put("pushRemoteWriteAuth", getConf(conf, "push-remote-write-auth", ""));
+    obj.put("guidMask", getConf(conf, "guid-mask", ""));
     obj.put("fastResolve", Boolean.valueOf(getConf(conf, "fast-resolve", "true")));
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
     obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
