@@ -48,7 +48,6 @@ import (
 func init() {
 	Register("tikv", newKVMeta)
 	drivers["tikv"] = newTikvClient
-
 }
 
 func newTikvClient(addr string) (tkvClient, error) {
