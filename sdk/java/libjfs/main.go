@@ -1226,7 +1226,9 @@ func jfs_listXattr(pid int64, h int64, path *C.char, buf uintptr, bufsize int32)
 }
 
 //export jfs_listXattr2
-func jfs_listXattr2(pid int64, h int64, path *C.char, value **C.char, size *int) int32 {
+func jfs_listXattr2(pid int64, h int64, path *C.char, value **C.char, size *int64) int32 {
+	*value = nil
+	*size = 0
 	w := F(h)
 	if w == nil {
 		return EINVAL
@@ -1234,7 +1236,7 @@ func jfs_listXattr2(pid int64, h int64, path *C.char, value **C.char, size *int)
 	t, err := w.ListXattr(w.withPid(pid), C.GoString(path))
 	if err == 0 {
 		*value = C.CString(string(t))
-		*size = len(t)
+		*size = int64(len(t))
 	}
 	return errno(err)
 }
@@ -1697,6 +1699,8 @@ func jfs_listdir(pid int64, h int64, cpath *C.char, offset int64, buf uintptr, b
 func jfs_listdir2(pid int64, h int64, cpath *C.char, plus bool, buf **byte, size *int64) int32 {
 	var ctx meta.Context
 	var f *fs.File
+	*buf = nil
+	*size = 0
 	w := F(h)
 	if w == nil {
 		return EINVAL
@@ -1712,7 +1716,6 @@ func jfs_listdir2(pid int64, h int64, cpath *C.char, plus bool, buf **byte, size
 		return ENOTDIR
 	}
 
-	*size = 0
 	if plus {
 		es, err := f.ReaddirPlus(ctx, 0)
 		if err != 0 {

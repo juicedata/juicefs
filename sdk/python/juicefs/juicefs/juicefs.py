@@ -278,11 +278,10 @@ class Client(object):
     def listdir(self, path, detail=False):
         """Return a list containing the names of the entries in the directory given by path."""
         buf = c_void_p()
-        size = c_int()
-        # func jfs_listdir(pid int, h int64, cpath *C.char, offset int, buf uintptr, bufsize int) int {
+        size = c_int64()
 
         self.lib.jfs_listdir2(c_int64(_tid()), c_int64(self.h), _bin(path), bool(detail), byref(buf), byref(size))
-        data = string_at(buf, size)
+        data = string_at(buf, size.value)
         infos = []
         pos = 0
         while pos < len(data):
@@ -356,9 +355,9 @@ class Client(object):
     def listxattr(self, path):
         """List extended attributes on a file."""
         buf = c_void_p()
-        size = c_int()
+        size = c_int64()
         self.lib.jfs_listXattr2(c_int64(_tid()), c_int64(self.h), _bin(path), byref(buf), byref(size))
-        data = string_at(buf, size).decode()
+        data = string_at(buf, size.value).decode()
         self.lib.free(buf)
         if not data:
             return []
@@ -420,7 +419,7 @@ class Client(object):
         """Get the summary of a directory."""
         buf = c_void_p()
 
-        n = self.lib.jfs_gettreesummary(_tid(), self.h, _bin(path), c_uint8(depth), c_uint32(entries), byref(buf))
+        n = self.lib.jfs_gettreesummary(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint8(depth), c_uint8(entries), byref(buf))
         data = string_at(buf, n)
         res = json.loads(str(data, encoding='utf-8'))
 
