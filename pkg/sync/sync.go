@@ -1815,6 +1815,11 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 			break
 		}
 	}
+	// Some backends (e.g. TOS buckets with hierarchical namespace) return
+	// entries in their own order, and per-page sorting in the backend does not
+	// order entries across pages. produce() merges src and dst by key, so the
+	// whole listing of this level must be sorted.
+	sort.Slice(total, func(i, j int) bool { return total[i].Key() < total[j].Key() })
 	srckeys := make(chan object.Object, 1000)
 	go func() {
 		defer close(srckeys)
@@ -2321,20 +2326,20 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		return nil
 	}
 
-	if !config.Dry {
-		failed = progress.AddCountSpinner("Failed objects")
-		if config.MaxFailure > 0 {
-			go func() {
-				for {
-					if failed.Current() >= config.MaxFailure {
-						logger.Infof("the maximum error limit of %d was reached, stop now", config.MaxFailure)
-						_ = syncExitFunc()
-						os.Exit(1)
-					}
-					time.Sleep(time.Millisecond * 100)
+	// Listing can fail in dry-run mode too, and those paths call failed.Increment(),
+	// so the counter must exist regardless of config.Dry.
+	failed = progress.AddCountSpinner("Failed objects")
+	if config.MaxFailure > 0 {
+		go func() {
+			for {
+				if failed.Current() >= config.MaxFailure {
+					logger.Infof("the maximum error limit of %d was reached, stop now", config.MaxFailure)
+					_ = syncExitFunc()
+					os.Exit(1)
 				}
-			}()
-		}
+				time.Sleep(time.Millisecond * 100)
+			}
+		}()
 	}
 
 	if config.Manager == "" && config.FilesFrom != "" {
