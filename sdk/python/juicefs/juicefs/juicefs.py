@@ -281,7 +281,7 @@ class Client(object):
         size = c_int64()
 
         self.lib.jfs_listdir2(c_int64(_tid()), c_int64(self.h), _bin(path), bool(detail), byref(buf), byref(size))
-        data = string_at(buf, size)
+        data = string_at(buf, size.value)
         infos = []
         pos = 0
         while pos < len(data):
@@ -355,9 +355,9 @@ class Client(object):
     def listxattr(self, path):
         """List extended attributes on a file."""
         buf = c_void_p()
-        size = c_int()
+        size = c_int64()
         self.lib.jfs_listXattr2(c_int64(_tid()), c_int64(self.h), _bin(path), byref(buf), byref(size))
-        data = string_at(buf, size).decode()
+        data = string_at(buf, size.value).decode()
         self.lib.free(buf)
         if not data:
             return []

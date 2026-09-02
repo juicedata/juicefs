@@ -3,6 +3,7 @@ import fractions
 import unittest
 import os
 import pwd
+import stat
 from os.path import dirname
 import sys
 import time
@@ -231,6 +232,44 @@ class NonLocalSymlinkTests(FileTests):
         src = os.path.join(TESTFN, 'some_link')
         self.v.symlink('/some_dir', src)
         assert self.v.readlink(src) == '../some_dir'
+
+
+class ListdirTests(FileTests):
+    def test_listdir_empty(self):
+        d = os.path.join(TESTFN, 'empty_dir')
+        self.v.mkdir(d)
+        self.assertEqual(self.v.listdir(d), [])
+        self.assertEqual(self.v.listdir(d, detail=True), [])
+
+    def test_listdir_names(self):
+        d = os.path.join(TESTFN, 'names_dir')
+        self.v.mkdir(d)
+        names = ['a', 'b' * 200, 'with space', '中文名字']
+        for n in names:
+            self.create_file(os.path.join(d, n))
+        self.v.mkdir(os.path.join(d, 'subdir'))
+        self.assertEqual(sorted(self.v.listdir(d)), sorted(names + ['subdir']))
+
+    def test_listdir_detail(self):
+        d = os.path.join(TESTFN, 'detail_dir')
+        self.v.mkdir(d)
+        self.create_file(os.path.join(d, 'f'), b'0123456789')
+        self.v.mkdir(os.path.join(d, 'sub'))
+        infos = dict(self.v.listdir(d, detail=True))
+        self.assertEqual(sorted(infos), ['f', 'sub'])
+        self.assertTrue(stat.S_ISREG(infos['f'].st_mode))
+        self.assertEqual(infos['f'].st_size, 10)
+        self.assertTrue(stat.S_ISDIR(infos['sub'].st_mode))
+
+    def test_listdir_many(self):
+        d = os.path.join(TESTFN, 'many_dir')
+        self.v.mkdir(d)
+        names = ['file_%03d' % i for i in range(200)]
+        for n in names:
+            self.create_file(os.path.join(d, n))
+        self.assertEqual(sorted(self.v.listdir(d)), sorted(names))
+        infos = self.v.listdir(d, detail=True)
+        self.assertEqual(sorted(n for n, _ in infos), sorted(names))
 
 
 class ExtendedAttributeTests(FileTests):
