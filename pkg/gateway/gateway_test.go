@@ -147,6 +147,31 @@ func newTestGateway(t *testing.T, conf Config) (*jfsObjects, *fs.FileSystem, str
 	return jfsObj, jfs, format.Name
 }
 
+func TestMkdirAllInBucket(t *testing.T) {
+	jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+	ctx := context.Background()
+	const bucket = "bucket"
+
+	if eno := jfs.Mkdir(mctx, jfsObj.path(bucket), 0777, 022); eno != 0 {
+		t.Fatalf("mkdir bucket: %s", eno)
+	}
+	if err := jfsObj.mkdirAllInBucket(ctx, bucket, jfsObj.path(bucket, "dir", "subdir")); err != nil {
+		t.Fatalf("mkdir within bucket: %s", err)
+	}
+	if _, eno := jfs.Stat(mctx, jfsObj.path(bucket, "dir", "subdir")); eno != 0 {
+		t.Fatalf("stat directory: %s", eno)
+	}
+
+	const missingBucket = "missing-bucket"
+	err := jfsObj.mkdirAllInBucket(ctx, missingBucket, jfsObj.path(missingBucket, "dir", "subdir"))
+	if err == nil || !fs.IsNotExist(err) {
+		t.Fatalf("mkdir under missing bucket should fail with ENOENT, got %v", err)
+	}
+	if _, eno := jfs.Stat(mctx, jfsObj.path(missingBucket)); !fs.IsNotExist(eno) {
+		t.Fatalf("missing bucket was recreated: %s", eno)
+	}
+}
+
 func createTestFile(t *testing.T, jfs *fs.FileSystem, name string) {
 	t.Helper()
 	f, eno := jfs.Create(mctx, name, 0666, 022)
