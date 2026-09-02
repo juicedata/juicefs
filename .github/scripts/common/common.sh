@@ -54,6 +54,42 @@ prepare_test() {
     esac
 }
 
+is_mounted() {
+    local mp=$1
+    case "$PLATFORM" in
+        mac)    mount | grep -qF " on ${mp} " ;;
+        linux)  awk -v mp="$mp" '$2 == mp { found = 1 } END { exit !found }' /proc/self/mounts ;;
+        *)      return 1 ;;
+    esac
+}
+
+# `timeout` is GNU coreutils and is absent from a stock macOS runner; fall back
+# to gtimeout, then to a watchdog. perl's alarm+exec trick is deliberately not
+# used: the Go runtime installs its own SIGALRM handler and silently ignores the
+# signal, so it would never interrupt ./juicefs.
+run_with_timeout() {
+    local secs=$1
+    shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$secs" "$@"
+        return $?
+    fi
+    if command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "$secs" "$@"
+        return $?
+    fi
+    "$@" &
+    local cmd_pid=$!
+    # stdout is redirected so the watchdog never holds the caller's pipe open.
+    ( sleep "$secs"; kill -TERM "$cmd_pid" && sleep 2 && kill -KILL "$cmd_pid"; ) >/dev/null 2>&1 &
+    local watchdog_pid=$!
+    local rc=0
+    wait "$cmd_pid" 2>/dev/null || rc=$?
+    kill "$watchdog_pid" 2>/dev/null
+    wait "$watchdog_pid" 2>/dev/null
+    return $rc
+}
+
 umount_jfs() {
     local mp=$1
     local meta_url=$2
@@ -61,27 +97,45 @@ umount_jfs() {
     [[ -z "$meta_url" ]] && echo "meta url is empty" && exit 1
     
     echo "umount_jfs $mp $meta_url"
-    [[ ! -f "$mp/.config" ]] && return
+    # Probe the mount table rather than a file inside the mount: when the mount
+    # process is gone but its FUSE connection is still alive, any syscall
+    # against $mp blocks forever and hangs the whole job (see #7458).
+    is_mounted "$mp" || return 0
     
-    ls -l "$mp/.config"
     local status_log="status.log"
-    ./juicefs status --log-level error "$meta_url" 2>/dev/null | grep -v '^\[xorm\]' | tee "$status_log"
+    local status_json=""
+    if ! status_json=$(run_with_timeout 60 ./juicefs status --log-level error "$meta_url" 2>/dev/null); then
+        echo "cannot get status from $meta_url, umount $mp anyway"
+    fi
+    printf '%s\n' "$status_json" | grep -v '^\[xorm\]' > "$status_log" || true
+    cat "$status_log"
     
     local pids
-    pids=$(jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID' "$status_log")
-    [[ -z "$pids" ]] && cat "$status_log" && echo "pid is empty" && return
+    pids=$(jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID' "$status_log" 2>/dev/null) || pids=""
+    if [[ -z "$pids" ]]; then
+        # $meta_url does not know this mount: it may have been mounted from
+        # another volume (/jfs2 is used for both $META_URL2 and test2.db) or the
+        # metadata may already be gone. Fall back to the process table, which,
+        # unlike the mount point itself, can never block.
+        pids=$(ps -eo pid=,args= 2>/dev/null | awk -v mp="$mp" \
+            '/juicefs/ { ismount = 0; hasmp = 0
+                 for (i = 2; i <= NF; i++) { if ($i == "mount") ismount = 1; if ($i == mp) hasmp = 1 }
+                 if (ismount && hasmp) print $1 }')
+    fi
     
-    echo "umount is $mp, pids are $pids"
+    echo "umount is $mp, pids are ${pids:-<none>}"
     
-    for pid in $pids; do
+    # There may be multiple mounts stacked on the same path (for example, ACL
+    # tests remount after changing the volume configuration). Unmount once per
+    # session, or at least once when session discovery failed.
+    local pid
+    for pid in ${pids:-0}; do
         case "$PLATFORM" in
             mac)
-                if mount | grep -q "$mp"; then
-                    diskutil unmount "$mp" || umount "$mp"
-                fi
+                diskutil unmount "$mp" || diskutil unmount force "$mp" || umount -f "$mp" || true
                 ;;
             linux)
-                umount -l "$mp"
+                umount -l "$mp" || true
                 ;;
         esac
     done
@@ -175,5 +229,5 @@ ensure_directory() {
 init_platform
 
 # Make functions available to subprocesses
-export -f cleanup_test_mounts prepare_test umount_jfs wait_mount_process_killed compare_md5sum wait_command_success ensure_directory
+export -f cleanup_test_mounts prepare_test is_mounted run_with_timeout umount_jfs wait_mount_process_killed compare_md5sum wait_command_success ensure_directory
 export PLATFORM META_URL
