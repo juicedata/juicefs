@@ -41,7 +41,6 @@ func TestWarmup(t *testing.T) {
 	}
 	uuid := format.UUID
 	var cacheDir = "/var/jfsCache"
-	var filePath string
 	switch runtime.GOOS {
 	case "linux":
 		if os.Getuid() == 0 {
@@ -58,27 +57,44 @@ func TestWarmup(t *testing.T) {
 
 	defer os.RemoveAll(fmt.Sprintf("%s/%s", cacheDir, uuid))
 
+	filePath := fmt.Sprintf("%s/%s/raw/chunks/0/0/1_0_4", cacheDir, uuid)
+	// The cached block may carry a checksum footer, so only compare the block data.
+	cached := func() bool {
+		content, err := os.ReadFile(filePath)
+		return err == nil && len(content) >= 4 && string(content[:4]) == "test"
+	}
+	// The block is cached asynchronously while being uploaded. Wait until it has
+	// been flushed into the disk cache, otherwise evicting it only cancels the
+	// pending flush and the following warmup races with it. See #7464.
+	if !waitFor(cached) {
+		t.Fatalf("block was not cached after write")
+	}
+
 	if err = Main([]string{"", "warmup", "--evict", testMountPoint}); err != nil {
 		t.Fatalf("evict: %s", err)
+	}
+	if !waitFor(func() bool { _, err := os.Stat(filePath); return os.IsNotExist(err) }) {
+		t.Fatalf("evict: cache block still exists")
 	}
 
 	if err = Main([]string{"", "warmup", testMountPoint}); err != nil {
 		t.Fatalf("warmup: %s", err)
 	}
 
-	filePath = fmt.Sprintf("%s/%s/raw/chunks/0/0/1_0_4", cacheDir, uuid)
-	deadline := time.Now().Add(10 * time.Second)
-	var content []byte
-	for {
-		content, err = os.ReadFile(filePath)
-		if err == nil && len(content) >= 4 && string(content[:4]) == "test" {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("warmup: %s; got content %s", err, content)
+	if !waitFor(cached) {
+		content, err := os.ReadFile(filePath)
+		t.Fatalf("warmup: %s; got content %s", err, content)
+	}
+}
+
+func waitFor(cond func() bool) bool {
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+		if cond() {
+			return true
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	return false
 }
 
 func TestWarmupWithRangeFile(t *testing.T) {
