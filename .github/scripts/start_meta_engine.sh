@@ -22,18 +22,55 @@ retry() {
     done
 }
 
+# Tell whether a pid belongs to a tiup playground: either its executable lives
+# under the tiup home, or its name matches a known playground component. Used to
+# keep kill_tiup_playground from signalling unrelated processes.
+is_tiup_component() {
+    local pid=$1 tiup_home=$2 exe comm
+    exe=$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)
+    if [ -n "$exe" ] && [ -n "$tiup_home" ]; then
+        case "$exe" in
+            "$tiup_home"/*) return 0 ;;
+        esac
+    fi
+    # /proc/<pid>/exe is unavailable on macOS and may be unreadable for a
+    # foreign owner; fall back to the process name, which ps truncates to 15
+    # characters, hence the prefix patterns.
+    comm=$(ps -p "$pid" -o comm= 2>/dev/null | tr -d '[:space:]')
+    comm=${comm##*/}
+    case "$comm" in
+        tiup*|playground|pd-server|tikv-server|tidb-server|tiflash*|tiproxy*|prometheus*|grafana*|ng-monitoring*) return 0 ;;
+    esac
+    return 1
+}
+
 # Reap a tiup playground and every process it spawned. Killing only the tiup
 # parent orphans its pd-server/tikv-server/tidb-server children, which keep
 # holding the cluster ports and poison the next retry attempt with
 # "mismatch cluster id" / "connection refused" errors. Clean up the data dir
 # and kill whoever still holds the given ports (by their actual PIDs).
+#
+# Two filters keep this from hitting innocent bystanders:
+#   * -sTCP:LISTEN, because `lsof -i tcp:<port>` also reports *clients* of that
+#     port. A running JuiceFS mount keeps connections to TiDB on 4000, so an
+#     unfiltered kill takes the mount down together with the server, leaving a
+#     wedged mount point behind (see #7458).
+#   * is_tiup_component, so that even a listener is only killed when it really
+#     belongs to the playground.
 kill_tiup_playground() {
     local tiup_bin=$1
     shift
-    local port pids
+    local tiup_home
+    tiup_home=$(dirname "$(dirname "$tiup_bin")")
+    local port pid
     for port in "$@"; do
-        pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
-        [ -n "$pids" ] && kill -9 $pids 2>/dev/null || true
+        for pid in $(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null || true); do
+            if is_tiup_component "$pid" "$tiup_home"; then
+                kill -9 "$pid" 2>/dev/null || true
+            else
+                echo "kill_tiup_playground: keep pid $pid ($(ps -p "$pid" -o comm= 2>/dev/null | tr -d '[:space:]')) listening on $port, not a tiup component"
+            fi
+        done
     done
     "$tiup_bin" clean --all >/dev/null 2>&1 || true
     return 0
@@ -121,6 +158,13 @@ install_tikv(){
 }
 
 install_tidb(){
+    # Reuse a healthy playground instead of rebuilding it: tearing the cluster
+    # down on every workflow step wipes the metadata of volumes that earlier
+    # steps left mounted (see #7458). install_tikv has the same guard.
+    if lsof -i:4000 -sTCP:LISTEN && pgrep pd-server && timeout 10 mysql -h127.0.0.1 -P4000 -uroot -e "select version();"; then
+        echo "TiDB is already running and healthy"
+        return 0
+    fi
     user=$(whoami)
     echo user is $user
     if [[ "$user" == "root" ]]; then
