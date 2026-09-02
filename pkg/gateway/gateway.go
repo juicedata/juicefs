@@ -675,7 +675,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 
 	eno = n.fs.Rename(mctx, tmp, dst, 0)
 	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(dst)); err != nil {
+		if err = n.mkdirAllInBucket(ctx, dstBucket, path.Dir(dst)); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(dst), err)
 			err = jfsToObjectErr(ctx, err, dstBucket, dstObject)
 			return
@@ -781,6 +781,22 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 }
 
 func (n *jfsObjects) mkdirAll(ctx context.Context, p string) error {
+	return n.mkdirAllUntil(ctx, path.Clean(p), sep)
+}
+
+func (n *jfsObjects) mkdirAllInBucket(ctx context.Context, bucket, p string) error {
+	root := path.Clean(n.path(bucket))
+	p = path.Clean(p)
+	if p != root && !strings.HasPrefix(p, strings.TrimSuffix(root, sep)+sep) {
+		return syscall.EINVAL
+	}
+	return n.mkdirAllUntil(ctx, p, root)
+}
+
+func (n *jfsObjects) mkdirAllUntil(ctx context.Context, p, root string) error {
+	if p == root {
+		return nil
+	}
 	if fi, eno := n.fs.Stat(mctx, p); eno == 0 {
 		if !fi.IsDir() {
 			return fmt.Errorf("%s is not directory", p)
@@ -789,7 +805,7 @@ func (n *jfsObjects) mkdirAll(ctx context.Context, p string) error {
 	}
 	eno := n.fs.Mkdir(mctx, p, 0777, n.gConf.Umask)
 	if eno != 0 && fs.IsNotExist(eno) {
-		if err := n.mkdirAll(ctx, path.Dir(p)); err != nil {
+		if err := n.mkdirAllUntil(ctx, path.Dir(p), root); err != nil {
 			return err
 		}
 		eno = n.fs.Mkdir(mctx, p, 0777, n.gConf.Umask)
@@ -854,7 +870,11 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 
 	eno = n.fs.Rename(mctx, tmpname, object, 0)
 	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(object)); err != nil {
+		if strings.HasPrefix(object, sep+metaBucket+sep) {
+			err = jfsToObjectErr(ctx, eno, bucket, object, path.Base(path.Dir(object)))
+			return
+		}
+		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(object)); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(object), err)
 			err = jfsToObjectErr(ctx, err, bucket, object)
 			return
@@ -875,7 +895,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	var etag string
 	p := n.path(bucket, object)
 	if strings.HasSuffix(object, sep) {
-		if err = n.mkdirAll(ctx, p); err != nil {
+		if err = n.mkdirAllInBucket(ctx, bucket, p); err != nil {
 			err = jfsToObjectErr(ctx, err, bucket, object)
 			return
 		}
@@ -1308,7 +1328,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	name := n.path(bucket, object)
 	eno = n.fs.Rename(mctx, tmp, name, 0)
 	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(name)); err != nil {
+		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(name)); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(name), err)
 			_ = n.fs.Delete(mctx, tmp)
 			err = jfsToObjectErr(ctx, err, bucket, object, uploadID)
