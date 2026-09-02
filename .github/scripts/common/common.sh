@@ -125,14 +125,20 @@ umount_jfs() {
     
     echo "umount is $mp, pids are ${pids:-<none>}"
     
-    case "$PLATFORM" in
-        mac)
-            diskutil unmount "$mp" || diskutil unmount force "$mp" || umount -f "$mp" || true
-            ;;
-        linux)
-            umount -l "$mp" || true
-            ;;
-    esac
+    # There may be multiple mounts stacked on the same path (for example, ACL
+    # tests remount after changing the volume configuration). Unmount once per
+    # session, or at least once when session discovery failed.
+    local pid
+    for pid in ${pids:-0}; do
+        case "$PLATFORM" in
+            mac)
+                diskutil unmount "$mp" || diskutil unmount force "$mp" || umount -f "$mp" || true
+                ;;
+            linux)
+                umount -l "$mp" || true
+                ;;
+        esac
+    done
     
     for pid in $pids; do
         wait_mount_process_killed "$pid" 60
