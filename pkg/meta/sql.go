@@ -3130,12 +3130,8 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 				edgeDelete := s.Table(&edge{})
 				for i := range edgesDel {
 					e := &edgesDel[i]
-					cond := "parent = ? AND name = ? AND inode = ?"
-					args := []interface{}{e.Parent, e.Name, e.Inode}
-					if e.Id > 0 {
-						cond += " AND id = ?"
-						args = append(args, e.Id)
-					}
+					cond := "parent = ? AND name = ? AND inode = ? AND id = ?"
+					args := []interface{}{e.Parent, e.Name, e.Inode, e.Id}
 					if i == 0 {
 						edgeDelete = edgeDelete.Where(cond, args...)
 					} else {
