@@ -3622,20 +3622,18 @@ func (m *kvMeta) cleanUgUsage(ctx Context, qtype uint32) error {
 		prefix = "QG"
 	}
 
-	keys, err := m.scanKeys(ctx, m.fmtKey(prefix))
-	if err != nil {
-		return fmt.Errorf("failed to scan %s quotas: %w", prefix, err)
-	}
+	begin := m.fmtKey(prefix)
 	return m.txn(ctx, func(tx *kvTxn) error {
-		for i, value := range tx.gets(keys...) {
+		tx.scan(begin, nextKey(begin), false, func(key, value []byte) bool {
 			if len(value) != 32 {
-				continue
+				return true
 			}
 			quota := m.parseQuota(value)
 			quota.UsedSpace = 0
 			quota.UsedInodes = 0
-			tx.set(keys[i], m.packQuota(quota))
-		}
+			tx.set(key, m.packQuota(quota))
+			return true
+		})
 		return nil
 	})
 }
