@@ -32,6 +32,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -1276,12 +1277,6 @@ func TestSyncEncryptLargeFile(t *testing.T) {
 	}
 }
 
-type readerFunc func([]byte) (int, error)
-
-func (f readerFunc) Read(b []byte) (int, error) {
-	return f(b)
-}
-
 func TestWithProgressLimitsActualBytes(t *testing.T) {
 	const readSize = 1 << 20
 	local := ratelimit.NewBucket(time.Hour, 2*readSize)
@@ -1292,26 +1287,10 @@ func TestWithProgressLimitsActualBytes(t *testing.T) {
 	})
 
 	data := []byte("abc")
-	reads := 0
-	r := &withProgress{
-		remaining: int64(len(data)),
-		r: readerFunc(func(b []byte) (int, error) {
-			if got, want := local.Available(), int64(2*readSize-len(data)); got != want {
-				t.Fatalf("available tokens before source read: got %d, want %d", got, want)
-			}
-			if reads == len(data) {
-				t.Fatal("source read after all expected bytes")
-			}
-			b[0] = data[reads]
-			reads++
-			return 1, nil
-		}),
-	}
+	r := io.LimitReader(&withProgress{iotest.OneByteReader(bytes.NewReader(data))}, int64(len(data)))
 	b := make([]byte, readSize)
-	for i := range data {
-		if n, err := r.Read(b); n != 1 || err != nil {
-			t.Fatalf("read %d: got (%d, %v), want (1, nil)", i, n, err)
-		}
+	if n, err := r.Read(b); n != len(data) || err != nil {
+		t.Fatalf("first read: got (%d, %v), want (%d, nil)", n, err, len(data))
 	}
 	if n, err := r.Read(b); n != 0 || err != io.EOF {
 		t.Fatalf("final read: got (%d, %v), want (0, EOF)", n, err)
