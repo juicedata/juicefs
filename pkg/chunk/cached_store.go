@@ -691,6 +691,12 @@ func logRequest(typeStr, key, param, reqID string, err error, used time.Duration
 
 var errTryFullRead = errors.New("try full read")
 
+type getResult struct {
+	n     int
+	reqID string
+	sc    string
+}
+
 func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page, off int) (n int, err error) {
 	p := page.Data
 	fullPage, err := store.group.TryPiggyback(key)
@@ -710,11 +716,7 @@ func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page,
 
 	start := time.Now()
 	// see load(): the closure may outlive this call, so it shares nothing with us
-	var fetched struct {
-		n     int
-		reqID string
-		sc    string
-	}
+	var fetched getResult
 	page.Acquire()
 	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
 		defer page.Release()
@@ -786,11 +788,7 @@ func (store *cachedStore) load(ctx context.Context, key string, page *Page, cach
 	// WithTimeout leaves the closure running after a timeout, so it must not write any
 	// variable of ours (a late write could turn a failure into a success, and hand out a
 	// page it never filled); it publishes into fetched, only readable once it finished.
-	var fetched struct {
-		n     int
-		reqID string
-		sc    string
-	}
+	var fetched getResult
 	p.Acquire()
 	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
 		defer p.Release()
