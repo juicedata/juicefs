@@ -883,6 +883,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 				config.CacheSize = 100 << 20
 				config.CacheDir = "memory"
 				store.bcache = newMemStore(&config, store.bcache.getMetrics())
+				return
 			}
 			time.Sleep(time.Second)
 		}
