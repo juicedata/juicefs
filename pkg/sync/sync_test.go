@@ -1276,6 +1276,28 @@ func TestSyncEncryptLargeFile(t *testing.T) {
 	}
 }
 
+func TestWithProgressLimitsActualBytes(t *testing.T) {
+	const readSize = 1 << 20
+	local := ratelimit.NewBucket(time.Hour, 2*readSize)
+	oldLimiter, oldCopiedBytes := limiter, copiedBytes
+	limiter, copiedBytes = &mixedLimiter{local: local}, nil
+	t.Cleanup(func() {
+		limiter, copiedBytes = oldLimiter, oldCopiedBytes
+	})
+
+	r := &withProgress{bytes.NewReader([]byte{'x'})}
+	b := make([]byte, readSize)
+	if n, err := r.Read(b); n != 1 || err != nil {
+		t.Fatalf("first read: got (%d, %v), want (1, nil)", n, err)
+	}
+	if n, err := r.Read(b); n != 0 || err != io.EOF {
+		t.Fatalf("second read: got (%d, %v), want (0, EOF)", n, err)
+	}
+	if got, want := local.Available(), int64(2*readSize-1); got != want {
+		t.Fatalf("available tokens: got %d, want %d", got, want)
+	}
+}
+
 // TestMixedLimiterFailover verifies that the global traffic control takes
 // precedence, falls back to the local bwlimit when the global service is
 // unavailable, and switches back to the global limit once it recovers.

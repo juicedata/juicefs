@@ -758,10 +758,10 @@ type withProgress struct {
 }
 
 func (w *withProgress) Read(b []byte) (int, error) {
-	if limiter != nil {
-		limiter.Wait(int64(len(b)))
-	}
 	n, err := w.r.Read(b)
+	if limiter != nil && n > 0 {
+		limiter.Wait(int64(n))
+	}
 	if copiedBytes != nil {
 		copiedBytes.IncrInt64(int64(n))
 	}
