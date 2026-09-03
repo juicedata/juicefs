@@ -697,13 +697,13 @@ type getResult struct {
 	sc    string
 }
 
-func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page, off int) (n int, err error) {
+func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page, off int) (int, error) {
 	p := page.Data
 	fullPage, err := store.group.TryPiggyback(key)
 	if fullPage != nil {
 		defer fullPage.Release()
 		if err == nil { // piggybacked a full read
-			n = copy(p, fullPage.Data[off:])
+			n := copy(p, fullPage.Data[off:])
 			return n, nil
 		}
 	}
@@ -714,45 +714,33 @@ func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page,
 		store.downLimit.Wait(int64(len(p)))
 	}
 
+	tmp := getResult{sc: object.DefaultStorageClass}
 	start := time.Now()
-	// see load(): the closure may outlive this call, so it shares nothing with us
-	var fetched getResult
 	page.Acquire()
 	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
 		defer page.Release()
-		var (
-			nn    int
-			reqID string
-			sc    = object.DefaultStorageClass
-		)
-		in, err := store.storage.Get(cCtx, key, int64(off), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
-		if err == nil {
-			nn, err = io.ReadFull(in, p)
+		in, getErr := store.storage.Get(cCtx, key, int64(off), int64(len(p)), object.WithRequestID(&tmp.reqID), object.WithStorageClass(&tmp.sc))
+		if getErr == nil {
+			tmp.n, getErr = io.ReadFull(in, p)
 			_ = in.Close()
 		}
-		if err == nil {
-			fetched.n, fetched.reqID, fetched.sc = nn, reqID, sc
-		}
-		return err
+		return getErr
 	}, store.conf.GetTimeout)
 
 	used := time.Since(start)
-	var (
-		reqID string
-		sc    = object.DefaultStorageClass
-	)
+	res := getResult{sc: object.DefaultStorageClass}
 	if err == nil {
-		n, reqID, sc = fetched.n, fetched.reqID, fetched.sc
+		res = tmp
 	}
-	logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", off, len(p)), reqID, err, used)
+	logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", off, len(p)), res.reqID, err, used)
 	if errors.Is(err, context.Canceled) {
 		return 0, err
 	}
-	store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
-	store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
+	store.objectDataBytes.WithLabelValues("GET", res.sc).Add(float64(res.n))
+	store.objectReqsHistogram.WithLabelValues("GET", res.sc).Observe(used.Seconds())
 	if err == nil {
 		store.fetcher.fetch(key)
-		return n, nil
+		return res.n, nil
 	}
 	store.objectReqErrors.Add(1)
 	// fall back to full read
@@ -785,59 +773,44 @@ func (store *cachedStore) load(ctx context.Context, key string, page *Page, cach
 	} else {
 		p = page
 	}
-	// WithTimeout leaves the closure running after a timeout, so it must not write any
-	// variable of ours (a late write could turn a failure into a success, and hand out a
-	// page it never filled); it publishes into fetched, only readable once it finished.
-	var fetched getResult
+	tmp := getResult{sc: object.DefaultStorageClass}
 	p.Acquire()
 	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
 		defer p.Release()
-		var (
-			n     int
-			reqID string
-			sc    = object.DefaultStorageClass
-		)
 		// it will be retried in the upper layer.
-		in, err := store.storage.Get(cCtx, key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
-		if err == nil {
-			n, err = io.ReadFull(in, p.Data)
+		in, getErr := store.storage.Get(cCtx, key, 0, -1, object.WithRequestID(&tmp.reqID), object.WithStorageClass(&tmp.sc))
+		if getErr == nil {
+			tmp.n, getErr = io.ReadFull(in, p.Data)
 			_ = in.Close()
 		}
-		if compressed && err == io.ErrUnexpectedEOF {
-			err = nil
+		if compressed && getErr == io.ErrUnexpectedEOF {
+			getErr = nil
 		}
-		if err == nil {
-			fetched.n, fetched.reqID, fetched.sc = n, reqID, sc
-		}
-		return err
+		return getErr
 	}, store.conf.GetTimeout)
 	if errors.Is(err, context.Canceled) {
 		return err
 	}
 	used := time.Since(start)
-	var (
-		n     int
-		reqID string
-		sc    = object.DefaultStorageClass
-	)
+	res := getResult{sc: object.DefaultStorageClass}
 	if err == nil {
-		n, reqID, sc = fetched.n, fetched.reqID, fetched.sc
+		res = tmp
 	}
-	logRequest("GET", key, "", reqID, err, used)
+	logRequest("GET", key, "", res.reqID, err, used)
 	if store.downLimit != nil && compressed {
-		store.downLimit.Wait(int64(n))
+		store.downLimit.Wait(int64(res.n))
 	}
-	store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
-	store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
+	store.objectDataBytes.WithLabelValues("GET", res.sc).Add(float64(res.n))
+	store.objectReqsHistogram.WithLabelValues("GET", res.sc).Observe(used.Seconds())
 	if err != nil {
 		store.objectReqErrors.Add(1)
 		return fmt.Errorf("get %s: %s", key, err)
 	}
 	if compressed {
-		n, err = store.compressor.Decompress(page.Data, p.Data[:n])
+		res.n, err = store.compressor.Decompress(page.Data, p.Data[:res.n])
 	}
-	if err != nil || n < len(page.Data) {
-		return fmt.Errorf("read %s fully: %v (%d < %d) after %s", key, err, n, len(page.Data), used)
+	if err != nil || res.n < len(page.Data) {
+		return fmt.Errorf("read %s fully: %v (%d < %d) after %s", key, err, res.n, len(page.Data), used)
 	}
 	if cache {
 		store.bcache.cache(key, page, forceCache, !store.conf.OSCache)
