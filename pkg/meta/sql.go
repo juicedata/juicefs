@@ -1955,84 +1955,6 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}))
 }
 
-// FIXME: Case-insensitive lookups do not populate edge IDs, so they cannot
-// detect an ABA replacement with the same inode and type.
-func edgeIdentity(s *xorm.Session, e *edge) *xorm.Session {
-	q := s.Where("parent = ? AND name = ? AND inode = ? AND type = ?", e.Parent, e.Name, e.Inode, e.Type)
-	if e.Id > 0 {
-		q = q.And("id = ?", e.Id)
-	}
-	return q
-}
-
-func deleteEdge(s *xorm.Session, e *edge) error {
-	n, err := edgeIdentity(s, e).Delete(&edge{})
-	if err != nil {
-		return err
-	}
-	if n != 1 {
-		return errEdgeChanged
-	}
-	return nil
-}
-
-func deleteEdges(s *xorm.Session, edges []edge) error {
-	if len(edges) == 0 {
-		return nil
-	}
-	q := s.Table(&edge{})
-	for i := range edges {
-		e := &edges[i]
-		cond := "parent = ? AND name = ? AND inode = ? AND type = ?"
-		args := []interface{}{e.Parent, e.Name, e.Inode, e.Type}
-		if e.Id > 0 {
-			cond += " AND id = ?"
-			args = append(args, e.Id)
-		}
-		if i == 0 {
-			q = q.Where(cond, args...)
-		} else {
-			q = q.Or(cond, args...)
-		}
-	}
-	n, err := q.Delete(&edge{})
-	if err != nil {
-		return err
-	}
-	if n != int64(len(edges)) {
-		return errEdgeChanged
-	}
-	return nil
-}
-
-func updateEdge(s *xorm.Session, old, new *edge) error {
-	if old.Inode == new.Inode && old.Type == new.Type {
-		// Values are unchanged, e.g. doRename with RENAME_EXCHANGE swapping
-		// two hardlinks of the same inode. A real UPDATE would report 0
-		// affected rows on MySQL (which counts changed rows, not matched
-		// rows) and falsely signal errEdgeChanged, livelocking the retry
-		// loop. Verify identity with a locking read instead so a concurrent
-		// change still restarts the txn.
-		var current edge
-		ok, err := edgeIdentity(s.ForUpdate(), old).Get(&current)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return errEdgeChanged
-		}
-		return nil
-	}
-	n, err := edgeIdentity(s, old).Cols("inode", "type").Update(&edge{Inode: new.Inode, Type: new.Type})
-	if err != nil {
-		return err
-	}
-	if n != 1 {
-		return errEdgeChanged
-	}
-	return nil
-}
-
 func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
@@ -2071,6 +1993,8 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			return err
 		}
 		if !ok && m.conf.CaseInsensi {
+			// FIXME: Case-insensitive lookups do not populate edge IDs, so they cannot
+			// detect an ABA replacement with the same inode.
 			if ee := m.resolveCase(ctx, parent, name); ee != nil {
 				ok = true
 				e.Name = ee.Name
@@ -2128,8 +2052,16 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			updateParent = true
 		}
 
-		if err := deleteEdge(s, &e); err != nil {
+		edgeDelete := s.Where("parent = ? AND name = ? AND inode = ?", e.Parent, e.Name, e.Inode)
+		if e.Id > 0 {
+			edgeDelete = edgeDelete.And("id = ?", e.Id)
+		}
+		deleted, err := edgeDelete.Delete(&edge{})
+		if err != nil {
 			return err
+		}
+		if deleted != 1 {
+			return errEdgeChanged
 		}
 
 		if n.Nlink > 0 {
@@ -2304,8 +2236,16 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		pn.setMtime(now)
 		pn.setCtime(now)
 
-		if err := deleteEdge(s, &e); err != nil {
+		edgeDelete := s.Where("parent = ? AND name = ? AND inode = ?", e.Parent, e.Name, e.Inode)
+		if e.Id > 0 {
+			edgeDelete = edgeDelete.And("id = ?", e.Id)
+		}
+		deleted, err := edgeDelete.Delete(&edge{})
+		if err != nil {
 			return err
+		}
+		if deleted != 1 {
+			return errEdgeChanged
 		}
 		if _, err := s.Delete(&dirStats{Inode: e.Inode}); err != nil {
 			logger.Warnf("remove dir usage of ino(%d): %s", e.Inode, err)
@@ -2597,18 +2537,62 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 
 		if exchange {
-			if err := updateEdge(s, &se, &edge{Inode: de.Inode, Type: de.Type}); err != nil {
-				return err
-			}
-			if err := updateEdge(s, &de, &edge{Inode: se.Inode, Type: se.Type}); err != nil {
-				return err
+			if se.Inode == de.Inode {
+				// MySQL reports zero affected rows for an UPDATE that does not change
+				// values, so verify both edge identities with locking reads instead.
+				for _, e := range []*edge{&se, &de} {
+					var current edge
+					edgeRead := s.ForUpdate().Where("parent = ? AND name = ? AND inode = ?", e.Parent, e.Name, e.Inode)
+					if e.Id > 0 {
+						edgeRead = edgeRead.And("id = ?", e.Id)
+					}
+					matched, err := edgeRead.Get(&current)
+					if err != nil {
+						return err
+					}
+					if !matched {
+						return errEdgeChanged
+					}
+				}
+			} else {
+				sourceEdge := s.Where("parent = ? AND name = ? AND inode = ?", se.Parent, se.Name, se.Inode)
+				if se.Id > 0 {
+					sourceEdge = sourceEdge.And("id = ?", se.Id)
+				}
+				updatedSrc, err := sourceEdge.Cols("inode", "type").Update(&edge{Inode: de.Inode, Type: de.Type})
+				if err != nil {
+					return err
+				}
+				if updatedSrc != 1 {
+					return errEdgeChanged
+				}
+
+				destinationEdge := s.Where("parent = ? AND name = ? AND inode = ?", de.Parent, de.Name, de.Inode)
+				if de.Id > 0 {
+					destinationEdge = destinationEdge.And("id = ?", de.Id)
+				}
+				updatedDst, err := destinationEdge.Cols("inode", "type").Update(&edge{Inode: se.Inode, Type: se.Type})
+				if err != nil {
+					return err
+				}
+				if updatedDst != 1 {
+					return errEdgeChanged
+				}
 			}
 			if _, err := s.Cols("ctime", "ctimensec", "parent").Update(dn, &node{Inode: dino}); err != nil {
 				return err
 			}
 		} else {
-			if err := deleteEdge(s, &se); err != nil {
+			sourceEdge := s.Where("parent = ? AND name = ? AND inode = ?", se.Parent, se.Name, se.Inode)
+			if se.Id > 0 {
+				sourceEdge = sourceEdge.And("id = ?", se.Id)
+			}
+			deletedSrc, err := sourceEdge.Delete(&edge{})
+			if err != nil {
 				return err
+			}
+			if deletedSrc != 1 {
+				return errEdgeChanged
 			}
 			if dino > 0 {
 				if trash > 0 {
@@ -2660,8 +2644,16 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						return err
 					}
 				}
-				if err := deleteEdge(s, &de); err != nil {
+				destinationEdge := s.Where("parent = ? AND name = ? AND inode = ?", de.Parent, de.Name, de.Inode)
+				if de.Id > 0 {
+					destinationEdge = destinationEdge.And("id = ?", de.Id)
+				}
+				deletedDst, err := destinationEdge.Delete(&edge{})
+				if err != nil {
 					return err
+				}
+				if deletedDst != 1 {
+					return errEdgeChanged
 				}
 				if de.Type == TypeDirectory {
 					if _, err = s.Delete(&dirQuota{Inode: dino}); err != nil {
@@ -3134,8 +3126,29 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 				visited[info.n.Inode] = true
 			}
 
-			if err := deleteEdges(s, edgesDel); err != nil {
-				return err
+			if len(edgesDel) > 0 {
+				edgeDelete := s.Table(&edge{})
+				for i := range edgesDel {
+					e := &edgesDel[i]
+					cond := "parent = ? AND name = ? AND inode = ?"
+					args := []interface{}{e.Parent, e.Name, e.Inode}
+					if e.Id > 0 {
+						cond += " AND id = ?"
+						args = append(args, e.Id)
+					}
+					if i == 0 {
+						edgeDelete = edgeDelete.Where(cond, args...)
+					} else {
+						edgeDelete = edgeDelete.Or(cond, args...)
+					}
+				}
+				deleted, err := edgeDelete.Delete(&edge{})
+				if err != nil {
+					return err
+				}
+				if deleted != int64(len(edgesDel)) {
+					return errEdgeChanged
+				}
 			}
 
 			// execute SQL statements in batches

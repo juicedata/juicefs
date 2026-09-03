@@ -2113,16 +2113,23 @@ func testSQLExactEdgeCAS(t *testing.T, m *dbMeta) {
 		insert(&original)
 		defer remove(original.Id)
 		stale := get(original.Id)
-		if n, err := m.db.ID(original.Id).Cols("inode", "type").Update(&edge{Inode: 102, Type: TypeSymlink}); err != nil || n != 1 {
+		if n, err := m.db.ID(original.Id).Cols("inode").Update(&edge{Inode: 102}); err != nil || n != 1 {
 			t.Fatalf("replace edge identity: rows=%d err=%v", n, err)
 		}
 
-		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) { return nil, deleteEdge(s, &stale) })
+		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
+			deleted, err := s.Where("parent = ? AND name = ? AND inode = ? AND id = ?",
+				stale.Parent, stale.Name, stale.Inode, stale.Id).Delete(&edge{})
+			if err == nil && deleted != 1 {
+				err = errEdgeChanged
+			}
+			return nil, err
+		})
 		if !errors.Is(err, errEdgeChanged) {
 			t.Fatalf("delete stale edge: got %v, want %v", err, errEdgeChanged)
 		}
 		current := get(original.Id)
-		if current.Inode != 102 || current.Type != TypeSymlink {
+		if current.Inode != 102 || current.Type != TypeFile {
 			t.Fatalf("replacement edge changed: inode=%d type=%d", current.Inode, current.Type)
 		}
 	})
@@ -2139,13 +2146,25 @@ func testSQLExactEdgeCAS(t *testing.T, m *dbMeta) {
 		defer remove(replacement.Id)
 
 		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
-			return nil, updateEdge(s, &stale, &edge{Inode: 202, Type: TypeSymlink})
+			updated, err := s.Where("parent = ? AND name = ? AND inode = ? AND id = ?",
+				stale.Parent, stale.Name, stale.Inode, stale.Id).
+				Cols("inode", "type").Update(&edge{Inode: 202, Type: TypeSymlink})
+			if err == nil && updated != 1 {
+				err = errEdgeChanged
+			}
+			return nil, err
 		})
 		if !errors.Is(err, errEdgeChanged) {
 			t.Fatalf("update ABA edge: got %v, want %v", err, errEdgeChanged)
 		}
 		_, err = m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
-			return nil, updateEdge(s, &stale, &edge{Inode: stale.Inode, Type: stale.Type})
+			var current edge
+			ok, err := s.ForUpdate().Where("parent = ? AND name = ? AND inode = ? AND id = ?",
+				stale.Parent, stale.Name, stale.Inode, stale.Id).Get(&current)
+			if err == nil && !ok {
+				err = errEdgeChanged
+			}
+			return nil, err
 		})
 		if !errors.Is(err, errEdgeChanged) {
 			t.Fatalf("verify no-op ABA edge: got %v, want %v", err, errEdgeChanged)
@@ -2168,7 +2187,18 @@ func testSQLExactEdgeCAS(t *testing.T, m *dbMeta) {
 			t.Fatalf("replace batch edge identity: rows=%d err=%v", n, err)
 		}
 
-		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) { return nil, deleteEdges(s, stale) })
+		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
+			deleted, err := s.Table(&edge{}).
+				Where("parent = ? AND name = ? AND inode = ? AND id = ?",
+					stale[0].Parent, stale[0].Name, stale[0].Inode, stale[0].Id).
+				Or("parent = ? AND name = ? AND inode = ? AND id = ?",
+					stale[1].Parent, stale[1].Name, stale[1].Inode, stale[1].Id).
+				Delete(&edge{})
+			if err == nil && deleted != int64(len(stale)) {
+				err = errEdgeChanged
+			}
+			return nil, err
+		})
 		if !errors.Is(err, errEdgeChanged) {
 			t.Fatalf("delete stale edge batch: got %v, want %v", err, errEdgeChanged)
 		}
