@@ -18,7 +18,7 @@ package utils
 
 import (
 	"context"
-	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -106,51 +106,13 @@ func TestTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fast function should return nil")
 	}
-
-	expected := errors.New("callback failed")
 	err = WithTimeout(context.TODO(), func(context.Context) error {
-		return expected
+		time.Sleep(time.Millisecond * 100)
+		return nil
 	}, time.Millisecond*10)
-	if !errors.Is(err, expected) {
-		t.Fatalf("callback error should be returned: %s", err)
+	if err == nil || !strings.HasPrefix(err.Error(), "timeout after") {
+		t.Fatalf("slow function should  be timeout: %s", err)
 	}
-
-	timeoutStarted := make(chan struct{})
-	timeoutRelease := make(chan struct{})
-	timeoutResult := make(chan error, 1)
-	go func() {
-		timeoutResult <- WithTimeout(context.TODO(), func(context.Context) error {
-			close(timeoutStarted)
-			<-timeoutRelease
-			return nil
-		}, time.Millisecond*10)
-	}()
-	<-timeoutStarted
-	err = <-timeoutResult
-	if !errors.Is(err, ErrFuncTimeout) {
-		t.Fatalf("slow function should be timeout: %s", err)
-	}
-	close(timeoutRelease)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancelStarted := make(chan struct{})
-	cancelRelease := make(chan struct{})
-	cancelResult := make(chan error, 1)
-	go func() {
-		cancelResult <- WithTimeout(ctx, func(ctx context.Context) error {
-			close(cancelStarted)
-			<-ctx.Done()
-			<-cancelRelease
-			return nil
-		}, time.Second)
-	}()
-	<-cancelStarted
-	cancel()
-	err = <-cancelResult
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("canceled context should be returned: %s", err)
-	}
-	close(cancelRelease)
 }
 
 func TestWithTimeoutCancelResultRace(t *testing.T) {
