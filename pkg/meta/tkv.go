@@ -3559,17 +3559,13 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 	}
 
 	if qtype == UserQuotaType || qtype == GroupQuotaType {
-		quota := &Quota{}
-		val, err := m.get(quotaKey)
-		if err != nil {
-			return err
-		}
-		if len(val) > 0 {
-			quota = m.parseQuota(val)
-		}
-		quota.MaxSpace = -1
-		quota.MaxInodes = -1
 		return m.txn(ctx, func(tx *kvTxn) error {
+			quota := &Quota{}
+			if val := tx.get(quotaKey); len(val) > 0 {
+				quota = m.parseQuota(val)
+			}
+			quota.MaxSpace = -1
+			quota.MaxInodes = -1
 			tx.set(quotaKey, m.packQuota(quota))
 			m.genLog(tx, time.Now(), "DELQUOTA(%d,%d)", qtype, key)
 			return nil
@@ -3626,20 +3622,18 @@ func (m *kvMeta) cleanUgUsage(ctx Context, qtype uint32) error {
 		prefix = "QG"
 	}
 
-	pairs, err := m.scanValues(ctx, m.fmtKey(prefix), -1, nil)
-	if err != nil {
-		return fmt.Errorf("failed to scan %s quotas: %w", prefix, err)
-	}
+	begin := m.fmtKey(prefix)
 	return m.txn(ctx, func(tx *kvTxn) error {
-		for k, v := range pairs {
-			if len(v) != 32 {
-				continue
+		tx.scan(begin, nextKey(begin), false, func(key, value []byte) bool {
+			if len(value) != 32 {
+				return true
 			}
-			quota := m.parseQuota(v)
+			quota := m.parseQuota(value)
 			quota.UsedSpace = 0
 			quota.UsedInodes = 0
-			tx.set([]byte(k), m.packQuota(quota))
-		}
+			tx.set(key, m.packQuota(quota))
+			return true
+		})
 		return nil
 	})
 }
