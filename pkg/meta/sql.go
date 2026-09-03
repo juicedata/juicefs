@@ -1955,36 +1955,14 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}))
 }
 
-func (m *dbMeta) getEdge(ctx Context, s *xorm.Session, parent Ino, name string) (edge, bool, error) {
-	e := edge{Parent: parent, Name: []byte(name)}
-	ok, err := s.Get(&e)
-	if err != nil || ok || !m.conf.CaseInsensi {
-		return e, ok, err
-	}
-	entry := m.resolveCase(ctx, parent, name)
-	if entry == nil {
-		return e, false, nil
-	}
-	e = edge{Parent: parent, Name: entry.Name}
-	ok, err = s.Get(&e)
-	return e, ok, err
-}
-
-// edgeIdentityCond returns the SQL condition matching the exact identity
-// of a previously-read edge row.
-func edgeIdentityCond(e *edge) (string, []interface{}) {
-	cond := "parent = ? AND name = ? AND inode = ? AND type = ?"
-	args := []interface{}{e.Parent, e.Name, e.Inode, e.Type}
-	if e.Id > 0 {
-		cond += " AND id = ?"
-		args = append(args, e.Id)
-	}
-	return cond, args
-}
-
+// FIXME: Case-insensitive lookups do not populate edge IDs, so they cannot
+// detect an ABA replacement with the same inode and type.
 func edgeIdentity(s *xorm.Session, e *edge) *xorm.Session {
-	cond, args := edgeIdentityCond(e)
-	return s.Where(cond, args...)
+	q := s.Where("parent = ? AND name = ? AND inode = ? AND type = ?", e.Parent, e.Name, e.Inode, e.Type)
+	if e.Id > 0 {
+		q = q.And("id = ?", e.Id)
+	}
+	return q
 }
 
 func deleteEdge(s *xorm.Session, e *edge) error {
@@ -2004,7 +1982,13 @@ func deleteEdges(s *xorm.Session, edges []edge) error {
 	}
 	q := s.Table(&edge{})
 	for i := range edges {
-		cond, args := edgeIdentityCond(&edges[i])
+		e := &edges[i]
+		cond := "parent = ? AND name = ? AND inode = ? AND type = ?"
+		args := []interface{}{e.Parent, e.Name, e.Inode, e.Type}
+		if e.Id > 0 {
+			cond += " AND id = ?"
+			args = append(args, e.Id)
+		}
 		if i == 0 {
 			q = q.Where(cond, args...)
 		} else {
@@ -2081,9 +2065,18 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if (pn.Flags&FlagAppend) != 0 || (pn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		e, ok, err := m.getEdge(ctx, s, parent, name)
+		var e = edge{Parent: parent, Name: []byte(name)}
+		ok, err = s.Get(&e)
 		if err != nil {
 			return err
+		}
+		if !ok && m.conf.CaseInsensi {
+			if ee := m.resolveCase(ctx, parent, name); ee != nil {
+				ok = true
+				e.Name = ee.Name
+				e.Inode = ee.Inode
+				e.Type = ee.Attr.Typ
+			}
 		}
 		if !ok {
 			return syscall.ENOENT
@@ -2254,9 +2247,18 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		if pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0 {
 			return syscall.EPERM
 		}
-		e, ok, err := m.getEdge(ctx, s, parent, name)
+		var e = edge{Parent: parent, Name: []byte(name)}
+		ok, err = s.Get(&e)
 		if err != nil {
 			return err
+		}
+		if !ok && m.conf.CaseInsensi {
+			if ee := m.resolveCase(ctx, parent, name); ee != nil {
+				ok = true
+				e.Inode = ee.Inode
+				e.Name = ee.Name
+				e.Type = ee.Attr.Typ
+			}
 		}
 		if !ok {
 			return syscall.ENOENT
@@ -2415,9 +2417,20 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
 			return st
 		}
-		se, ok, err := m.getEdge(ctx, s, parentSrc, nameSrc)
+		var se = edge{Parent: parentSrc, Name: []byte(nameSrc)}
+		ok, err := s.Get(&se)
 		if err != nil {
 			return err
+		}
+		if !ok && m.conf.CaseInsensi {
+			if e := m.resolveCase(ctx, parentSrc, nameSrc); e != nil {
+				if string(e.Name) != nameSrc || parentSrc != parentDst {
+					ok = true
+					se.Inode = e.Inode
+					se.Type = e.Attr.Typ
+					se.Name = e.Name
+				}
+			}
 		}
 		if !ok {
 			return syscall.ENOENT
@@ -2453,15 +2466,20 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
 			return st
 		}
-		de, ok, err := m.getEdge(ctx, s, parentDst, nameDst)
+		var de = edge{Parent: parentDst, Name: []byte(nameDst)}
+		ok, err = s.Get(&de)
 		if err != nil {
 			return err
 		}
-		if ok && parentSrc == parentDst && string(de.Name) == string(se.Name) && string(de.Name) == nameSrc && nameDst != nameSrc {
-			// case-insensitive lookup resolved the destination to the source
-			// itself; treat the destination as missing
-			ok = false
-			de = edge{Parent: parentDst, Name: []byte(nameDst)}
+		if !ok && m.conf.CaseInsensi {
+			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
+				if string(e.Name) != nameSrc || parentSrc != parentDst {
+					ok = true
+					de.Inode = e.Inode
+					de.Type = e.Attr.Typ
+					de.Name = e.Name
+				}
+			}
 		}
 		var supdate, dupdate bool
 		var srcnlink, dstnlink int32

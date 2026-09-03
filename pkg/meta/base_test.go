@@ -2144,6 +2144,12 @@ func testSQLExactEdgeCAS(t *testing.T, m *dbMeta) {
 		if !errors.Is(err, errEdgeChanged) {
 			t.Fatalf("update ABA edge: got %v, want %v", err, errEdgeChanged)
 		}
+		_, err = m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
+			return nil, updateEdge(s, &stale, &edge{Inode: stale.Inode, Type: stale.Type})
+		})
+		if !errors.Is(err, errEdgeChanged) {
+			t.Fatalf("verify no-op ABA edge: got %v, want %v", err, errEdgeChanged)
+		}
 		current := get(replacement.Id)
 		if current.Inode != original.Inode || current.Type != original.Type {
 			t.Fatalf("ABA replacement changed: inode=%d type=%d", current.Inode, current.Type)
