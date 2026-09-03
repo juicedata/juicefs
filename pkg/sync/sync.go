@@ -1789,12 +1789,20 @@ func matchLeveledPath(rules []rule, key string) bool {
 	return true
 }
 
+// listCommonPrefix lists one level of prefix with delimiter and returns the
+// non-directory entries sorted by key; directories are sent to cp.
+//
+// startAfter (the last key handled before a checkpoint) is applied on the
+// client side after sorting instead of being passed as StartAfter to the
+// server: backends that do not list in lexicographic order (e.g. TOS buckets
+// with hierarchical namespace) interpret StartAfter in their own order and
+// would skip entries that were never handled.
 func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.Object, followLink bool, startAfter string, onChildPrefix func(string)) (chan object.Object, error) {
 	var total []object.Object
 	var objs []object.Object
 	var err error
 	var nextToken string
-	marker := startAfter
+	var marker string
 	var hasMore bool
 	var thisListMaxResults int64 = maxResults
 	if strings.HasPrefix(store.String(), "file://") || strings.HasPrefix(store.String(), "nfs://") ||
@@ -1820,6 +1828,10 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 	// order entries across pages. produce() merges src and dst by key, so the
 	// whole listing of this level must be sorted.
 	sort.Slice(total, func(i, j int) bool { return total[i].Key() < total[j].Key() })
+	if startAfter != "" {
+		skip := sort.Search(len(total), func(i int) bool { return total[i].Key() > startAfter })
+		total = total[skip:]
+	}
 	srckeys := make(chan object.Object, 1000)
 	go func() {
 		defer close(srckeys)
