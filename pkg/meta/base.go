@@ -630,7 +630,7 @@ func (m *baseMeta) getTxnId() uint64 {
 func logEncode(name []byte) string {
 	var escname = make([]byte, 0)
 	for _, c := range name {
-		if c < 32 || c >= 127 || c == ',' || c == '%' || c == '(' || c == ')' || c == '"' || c == '\\' {
+		if c < 32 || c >= 127 || c == ',' || c == '%' || c == '(' || c == ')' || c == '"' || c == '\\' || c == '|' {
 			escname = append(escname, '%')
 			escname = append(escname, CHARS[(c>>4)&0xF])
 			escname = append(escname, CHARS[c&0xF])
@@ -639,6 +639,45 @@ func logEncode(name []byte) string {
 		}
 	}
 	return string(escname)
+}
+
+func unhex(c byte) (byte, bool) {
+	switch {
+	case c >= '0' && c <= '9':
+		return c - '0', true
+	case c >= 'A' && c <= 'F':
+		return c - 'A' + 10, true
+	case c >= 'a' && c <= 'f':
+		return c - 'a' + 10, true
+	}
+	return 0, false
+}
+
+func logDecode(s string) ([]byte, error) {
+	if !strings.ContainsRune(s, '%') {
+		return []byte(s), nil
+	}
+	buf := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] != '%' {
+			buf = append(buf, s[i])
+			continue
+		}
+		if i+2 >= len(s) {
+			return nil, fmt.Errorf("truncated escape sequence at %d in %q", i, s)
+		}
+		hi, ok := unhex(s[i+1])
+		if !ok {
+			return nil, fmt.Errorf("invalid escape sequence at %d in %q", i, s)
+		}
+		lo, ok := unhex(s[i+2])
+		if !ok {
+			return nil, fmt.Errorf("invalid escape sequence at %d in %q", i, s)
+		}
+		buf = append(buf, hi<<4|lo)
+		i += 2
+	}
+	return buf, nil
 }
 
 func logEncode2(name string) string {
@@ -1629,9 +1668,12 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
 		return err
 	}
-	ino, err := m.nextInode()
-	if err != nil {
-		return errno(err)
+	ino, _ := ctx.Value(applyInodeKey{}).(Ino)
+	if ino == 0 {
+		var err error
+		if ino, err = m.nextInode(); err != nil {
+			return errno(err)
+		}
 	}
 	if inode == nil {
 		inode = &ino
@@ -2137,7 +2179,7 @@ func (m *baseMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (s
 
 	*slices = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *slices)
-	if !m.conf.ReadOnly && (len(ss) >= 5 || len(*slices) >= 5) {
+	if !m.conf.ReadOnly && !isApplyMode(ctx) && (len(ss) >= 5 || len(*slices) >= 5) {
 		tierID := -1
 		if f != nil {
 			tierID = int(f.attr.Tier)
@@ -2193,7 +2235,7 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 	if st == 0 {
 		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
-		if numSlices%100 == 99 || numSlices > 350 {
+		if !isApplyMode(ctx) && (numSlices%100 == 99 || numSlices > 350) {
 			if numSlices < maxSlices {
 				go m.compactChunk(inode, indx, false, false, int(attr.Tier))
 			} else {

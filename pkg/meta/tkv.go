@@ -954,19 +954,25 @@ func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
 	return scanRange(0, ^uint64(0))
 }
 
-func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
-	if last == 0 {
+func (m *kvMeta) ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error {
+	last := opt.From
+	var target uint64
+	if last == 0 || !opt.Follow {
 		_ = m.client.txn(ctx, func(kt *kvTxn) error {
-			last = int64(m.findLastLogKey(kt))
+			target = m.findLastLogKey(kt)
 			return nil
 		}, 0)
-		logger.Infof("last version is %d", last)
+		if last == 0 {
+			last = int64(target)
+			logger.Infof("last version is %d", last)
+		}
 	}
 	saw := make(map[uint64]uint32)
 	for {
 		if ctx.Canceled() {
 			return context.Canceled
 		}
+		var found bool
 		err := m.client.simpleTxn(context.Background(), func(kt *kvTxn) error {
 			var err error
 			beginID := m.client.rewind(uint64(last), 1)
@@ -975,8 +981,11 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 				if saw[id] == 0 {
 					saw[id] = now
 					last = int64(id)
+					found = true
 					if e := handler(int64(id), string(v)); e != nil {
-						logger.Errorf("Handle changelog %d: %s", id, e)
+						if !errors.Is(e, ErrChangelogStop) {
+							logger.Errorf("Handle changelog %d: %s", id, e)
+						}
 						err = e
 						return false
 					}
@@ -986,8 +995,14 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 			return err
 		}, 0)
 		if err != nil {
+			if errors.Is(err, ErrChangelogStop) {
+				return nil
+			}
 			logger.Errorf("Scan changelog: %s", err)
 			return err
+		}
+		if !opt.Follow && (!found || uint64(last) >= target) {
+			return nil
 		}
 		now := uint32(time.Now().Unix())
 		for k, t := range saw {
