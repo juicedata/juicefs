@@ -1087,7 +1087,8 @@ func (m *dbMeta) genLog(ctx Context, s *xorm.Session, ns int64, op string, args 
 	}
 }
 
-func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
+func (m *dbMeta) ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error {
+	last := opt.From
 	if last == 0 {
 		var maxLog changeLog
 		if ok, err := m.db.Desc("id").Limit(1).Get(&maxLog); err != nil {
@@ -1111,11 +1112,17 @@ func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 		}
 		for _, log := range logs {
 			if err := handler(log.Id, log.Entry); err != nil {
+				if errors.Is(err, ErrChangelogStop) {
+					return nil
+				}
 				return err
 			}
 			last = log.Id
 		}
 		if len(logs) == 0 {
+			if !opt.Follow {
+				return nil
+			}
 			time.Sleep(time.Millisecond * 100)
 		}
 	}
