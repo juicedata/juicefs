@@ -62,7 +62,7 @@ func (s *sqlStore) String() string {
 func (s *sqlStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	var b = blob{Key: []byte(key)}
 	// TODO: range
-	ok, err := s.db.Get(&b)
+	ok, err := s.db.Context(ctx).Get(&b)
 	if err != nil {
 		return nil, err
 	}

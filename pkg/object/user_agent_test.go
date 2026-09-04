@@ -123,7 +123,7 @@ func TestQiniuPrivateDownloadSendsUserAgent(t *testing.T) {
 
 	userAgent := captureUserAgent(t, http.StatusOK, func() {
 		store := &qiniu{cred: auth.New("access-key", "secret-key")}
-		body, err := store.download("key", 0, -1)
+		body, err := store.download(context.Background(), "key", 0, -1)
 		require.NoError(t, err)
 		require.NoError(t, body.Close())
 	})
