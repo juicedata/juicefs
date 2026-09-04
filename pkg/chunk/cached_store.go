@@ -978,7 +978,7 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "blockcache_blocks",
-			Help: "number of cached blocks",
+			Help: "number of cached blocks, staging blocks excluded",
 		},
 		func() float64 {
 			cnt, _ := store.bcache.stats()
@@ -987,7 +987,7 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "blockcache_bytes",
-			Help: "number of cached bytes",
+			Help: "number of cached bytes, staging blocks excluded",
 		},
 		func() float64 {
 			_, used := store.bcache.stats()
