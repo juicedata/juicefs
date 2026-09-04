@@ -749,7 +749,7 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 	}
 	r := &chksumReader{in, 0, calChksum}
 	defer in.Close()
-	err = dst.Put(ctx, key, &withProgress{r})
+	err = dst.Put(ctx, key, io.LimitReader(&withProgress{r}, size))
 	return r.chksum, err
 }
 
@@ -761,7 +761,7 @@ func (w *withProgress) Read(b []byte) (int, error) {
 	if limiter != nil {
 		limiter.Wait(int64(len(b)))
 	}
-	n, err := w.r.Read(b)
+	n, err := io.ReadFull(w.r, b)
 	if copiedBytes != nil {
 		copiedBytes.IncrInt64(int64(n))
 	}
@@ -809,7 +809,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		defer in.Close()
 		r := &chksumReader{in, 0, calChksum}
-		pr := &withProgress{r}
+		pr := io.LimitReader(&withProgress{r}, size)
 		err = utils.ErrNotSUP
 		if obj, ok := dst.(object.SupportUploadPartStream); ok {
 			part, err = obj.UploadPartStream(key, uploadID, num+1, pr)
