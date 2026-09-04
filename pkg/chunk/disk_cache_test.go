@@ -238,6 +238,7 @@ func TestUnknownInodeStatsShouldNotMarkCacheAsRawFull(t *testing.T) {
 		m := new(cacheManagerMetrics)
 		m.initMetrics()
 		s := newDiskCache(m, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+		defer shutdownStore(s)
 
 		require.Never(t, func() bool {
 			s.Lock()
@@ -381,16 +382,19 @@ func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
 	conf := defaultConf
 	conf.CacheExpire = time.Hour
 	conf.CacheEviction = EvictionNone
-	conf.CacheScanInterval = -1
 	m := new(cacheManagerMetrics)
 	m.initMetrics()
-	cache := newDiskCache(m, dir, 1<<30, 1000, 1, &conf, nil)
-	cache.scanned = true
 	key := "0_0_4"
 
 	PatchConvey("mock time.Now to avoid drift", t, func() {
 		fixedTime := time.Date(2025, 1, 28, 12, 0, 0, 0, time.UTC)
 		Mock(time.Now).Return(fixedTime).Build()
+		cache := newTestCacheStore(dir, &conf, nil)
+		cache.m = m
+		cache.checksum = conf.CacheChecksum
+		cache.stagedBlockCooldown = conf.CacheExpire / 2
+		defer shutdownStore(cache)
+
 		path, err := cache.stage(key, []byte("test"), 0)
 		require.NoError(t, err)
 		require.NotEmpty(t, path)
