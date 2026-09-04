@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -441,4 +442,91 @@ func TestBlockIndexes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// lateBody blocks on the first Read, so io.ReadFull stays pending past get-timeout.
+type lateBody struct {
+	data    []byte
+	off     int
+	blocked bool
+}
+
+func (b *lateBody) Read(p []byte) (int, error) {
+	if !b.blocked {
+		b.blocked = true
+		time.Sleep(50 * time.Millisecond)
+	}
+	if b.off >= len(b.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, b.data[b.off:])
+	b.off += n
+	return n, nil
+}
+
+func (b *lateBody) Close() error { return nil }
+
+// lateStore completes a GET just after the caller gave up: it ignores cancellation and
+// returns success a hair after get-timeout, with a body that has no bytes ready yet.
+type lateStore struct {
+	object.ObjectStorage
+	data  []byte
+	delay time.Duration
+	seq   atomic.Int64
+}
+
+func (s *lateStore) Get(ctx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	time.Sleep(s.delay + time.Duration(s.seq.Add(1)%400)*time.Microsecond)
+	return &lateBody{data: s.data}, nil
+}
+
+// Regression: a fetch abandoned by WithTimeout used to assign load's named return err,
+// so a late `err = nil` could turn the timeout into a success and hand out a pooled page
+// this read never filled - the block that previously occupied it. The page is pre-filled
+// to stand in for that residue: a successful ReadAt must hold the requested block.
+func TestReadAtNeverReportsSuccessWithUnfilledBuffer(t *testing.T) {
+	const (
+		bs          = 64 << 10
+		iterations  = 400
+		concurrency = 16
+	)
+	want := bytes.Repeat([]byte{'b'}, bs)
+	residue := bytes.Repeat([]byte{'a'}, bs) // another block's bytes, left in a pooled page
+
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
+	conf := defaultConf
+	conf.BlockSize = bs
+	conf.CacheDir = t.TempDir()
+	conf.GetTimeout = 5 * time.Millisecond
+	conf.MaxRetries = 1
+	slow := &lateStore{ObjectStorage: mem, data: want, delay: conf.GetTimeout}
+	store := NewCachedStore(slow, conf, nil)
+
+	var bad, ok, failed atomic.Int64
+	var wg sync.WaitGroup
+	for g := 0; g < concurrency; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				sliceID := uint64(g*iterations + i + 1) // distinct key => one load per read
+				page := NewOffPage(bs)
+				copy(page.Data, residue)
+				n, err := store.NewReader(sliceID, bs).ReadAt(context.Background(), page, 0)
+				switch {
+				case err != nil:
+					failed.Add(1)
+				case !bytes.Equal(page.Data[:n], want[:n]):
+					bad.Add(1)
+				default:
+					ok.Add(1)
+				}
+				page.Release()
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	t.Logf("reads: ok=%d failed=%d CORRUPT=%d", ok.Load(), failed.Load(), bad.Load())
+	require.Zero(t, bad.Load(), "ReadAt reported success but delivered another block's bytes")
 }
