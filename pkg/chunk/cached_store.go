@@ -410,19 +410,26 @@ func (s *wSlice) upload(indx int) {
 		}
 		ctx := context.WithValue(context.Background(), object.TierKey{}, s.tierID)
 		if s.writeback && blen < s.store.conf.WritebackThresholdSize {
+			const (
+				stagePending int32 = iota
+				stageSucceeded
+				stageAbandoned
+			)
 			stagingPath := "unknown"
-			stageFailed := false
+			var stageState atomic.Int32
 			block.Acquire()
 			err := utils.WithTimeout(context.TODO(), func(context.Context) (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
 				defer block.Release()
 				stagingPath, err = s.store.bcache.stage(key, block.Data, s.tierID)
-				if err == nil && stageFailed { // upload thread already marked me as failed because of timeout
+				if err == nil && !stageState.CompareAndSwap(stagePending, stageSucceeded) {
 					_ = s.store.bcache.removeStage(key)
 				}
 				return err
 			}, s.store.conf.PutTimeout)
 			if err != nil {
-				stageFailed = true
+				if !stageState.CompareAndSwap(stagePending, stageAbandoned) {
+					_ = s.store.bcache.removeStage(key)
+				}
 				if !errors.Is(err, errStageConcurrency) {
 					s.store.stageBlockErrors.Add(1)
 					logger.Warnf("write %s to disk: %s, upload it directly", key, err)

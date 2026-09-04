@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -179,6 +180,77 @@ func TestStoreSmallBuffer(t *testing.T) {
 	conf.BufferSize = 1 << 20
 	store := NewCachedStore(mem, conf, nil)
 	testStore(t, store)
+}
+
+type blockingStageCache struct {
+	CacheManager
+	started chan struct{}
+	release chan struct{}
+	removed chan string
+}
+
+func (c *blockingStageCache) cache(string, *Page, bool, bool) {}
+
+func (c *blockingStageCache) stage(string, []byte, uint8) (string, error) {
+	close(c.started)
+	<-c.release
+	return "late-stage", nil
+}
+
+func (c *blockingStageCache) removeStage(key string) error {
+	c.removed <- key
+	return nil
+}
+
+func TestWritebackStageTimeoutRemovesLateStage(t *testing.T) {
+	mem, err := object.CreateStorage("mem", "", "", "", "")
+	require.NoError(t, err)
+	cache := &blockingStageCache{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		removed: make(chan string, 1),
+	}
+	conf := defaultConf
+	conf.Compress = "lz4"
+	conf.PutTimeout = 20 * time.Millisecond
+	conf.Writeback = true
+	conf.WritebackThresholdSize = conf.BlockSize + 1
+	store := &cachedStore{
+		storage:       mem,
+		conf:          conf,
+		bcache:        cache,
+		currentUpload: make(chan struct{}, 1),
+		compressor:    compress.NewCompressor(conf.Compress),
+	}
+	store.initMetrics()
+
+	writer := store.NewWriter(123, 0)
+	data := []byte("late")
+	_, err = writer.WriteAt(data, 0)
+	require.NoError(t, err)
+	done := make(chan error, 1)
+	go func() { done <- writer.Finish(len(data)) }()
+
+	select {
+	case <-cache.started:
+	case <-time.After(time.Second):
+		t.Fatal("stage did not start")
+	}
+	timer := time.AfterFunc(5*conf.PutTimeout, func() { close(cache.release) })
+	defer timer.Stop()
+
+	select {
+	case err = <-done:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("direct upload did not finish after stage timeout")
+	}
+	select {
+	case key := <-cache.removed:
+		require.Equal(t, "chunks/0/0/123_0_4", key)
+	case <-time.After(time.Second):
+		t.Fatal("late stage was not removed")
+	}
 }
 
 func TestStoreAsync(t *testing.T) {
