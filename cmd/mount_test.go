@@ -129,6 +129,33 @@ func resetTestMeta() *redis.Client { // using Redis
 
 var mountLock sync.Mutex
 
+func TestWithTimeoutResultDoesNotPublishLateResult(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	returned := make(chan struct{})
+
+	result, err := withTimeoutResult(context.Background(), func(context.Context) (string, error) {
+		close(started)
+		<-release
+		close(returned)
+		return "late result", nil
+	}, 10*time.Millisecond)
+	<-started
+	if !errors.Is(err, utils.ErrFuncTimeout) {
+		t.Fatalf("expected timeout, got %v", err)
+	}
+	if result != "" {
+		t.Fatalf("timeout published %q", result)
+	}
+
+	close(release)
+	<-returned
+	time.Sleep(10 * time.Millisecond)
+	if result != "" {
+		t.Fatalf("late callback changed returned result to %q", result)
+	}
+}
+
 func mountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMountOpts []string) {
 	// wait for last mount exit
 	for !mountLock.TryLock() {
