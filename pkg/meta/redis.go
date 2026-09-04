@@ -1745,6 +1745,16 @@ func (m *redisMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLin
 	return nil
 }
 
+// trashNodeExists watches the trash directory and reports whether it still
+// exists, so a concurrent removal of it restarts the transaction.
+func (m *redisMeta) trashNodeExists(ctx Context, tx *redis.Tx, trash Ino) (bool, error) {
+	if err := tx.Watch(ctx, m.inodeKey(trash)).Err(); err != nil {
+		return false, err
+	}
+	n, err := tx.Exists(ctx, m.inodeKey(trash)).Result()
+	return n > 0, err
+}
+
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash, inode Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
@@ -1761,7 +1771,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 	var _type uint8
 	var opened bool
 	var newSpace, newInode int64
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		trash = requestedTrash
 		opened = false
 		*attr = Attr{}
 		newSpace, newInode = 0, 0
@@ -1782,6 +1794,16 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		}
 		if err := tx.Watch(ctx, m.inodeKey(inode)).Err(); err != nil {
 			return err
+		}
+		if trash > 0 {
+			ok, err := m.trashNodeExists(ctx, tx, trash)
+			if err != nil {
+				return err
+			}
+			if !ok { // trash directory was removed, delete the file directly
+				trash = 0
+				defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
+			}
 		}
 		rs, err := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
 		if err != nil {
@@ -1954,7 +1976,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 		var delNodes map[Ino]*dNode
 		watchKeys := []string{m.inodeKey(parent), m.entryKey(parent)}
 
+		requestedTrash := trash
 		err := m.txn(ctx, func(tx *redis.Tx) error {
+			trash = requestedTrash
 			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
 			batchTrashLength, batchTrashSpace, batchTrashInodes = 0, 0, 0
 			batchFsSpace, batchFsInodes = 0, 0
@@ -1975,6 +1999,15 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 			}
 			if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if trash > 0 {
+				ok, err := m.trashNodeExists(ctx, tx, trash)
+				if err != nil {
+					return err
+				}
+				if !ok { // trash directory was removed, delete the files directly
+					trash = 0
+				}
 			}
 
 			entryKey := m.entryKey(parent)
@@ -2301,7 +2334,9 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		}
 	}
 	var attr Attr
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		trash = requestedTrash
 		buf, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parent, name); e != nil {
@@ -2322,6 +2357,15 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		}
 		if err = tx.Watch(ctx, m.inodeKey(inode), m.entryKey(inode)).Err(); err != nil {
 			return err
+		}
+		if trash > 0 {
+			ok, err := m.trashNodeExists(ctx, tx, trash)
+			if err != nil {
+				return err
+			}
+			if !ok { // trash directory was removed, delete the directory directly
+				trash = 0
+			}
 		}
 
 		rs, err := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
@@ -2432,7 +2476,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return st
 		}
 	}
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		trash = requestedTrash
 		opened = false
 		dino, dtyp = 0, 0
 		tattr = Attr{}
@@ -2487,6 +2533,15 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		}
 		if err := tx.Watch(ctx, keys...).Err(); err != nil {
 			return err
+		}
+		if trash > 0 {
+			ok, err := m.trashNodeExists(ctx, tx, trash)
+			if err != nil {
+				return err
+			}
+			if !ok { // trash directory was removed, delete the replaced entry directly
+				trash = 0
+			}
 		}
 		if dino > 0 && ino == dino {
 			return errno(nil)
