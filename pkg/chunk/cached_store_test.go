@@ -396,6 +396,54 @@ type dStore struct {
 	cnt int32
 }
 
+type retryEncryptor struct {
+	calls atomic.Int32
+}
+
+func (e *retryEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
+	e.calls.Add(1)
+	return append([]byte("encrypted:"), plaintext...), nil
+}
+
+func (e *retryEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
+	return bytes.TrimPrefix(ciphertext, []byte("encrypted:")), nil
+}
+
+type retryOnceStore struct {
+	object.ObjectStorage
+	puts atomic.Int32
+}
+
+func (s *retryOnceStore) Put(_ context.Context, _ string, in io.Reader, _ ...object.AttrGetter) error {
+	if _, err := io.Copy(io.Discard, in); err != nil {
+		return err
+	}
+	if s.puts.Add(1) == 1 {
+		return errors.New("temporary put failure")
+	}
+	return nil
+}
+
+type storageWrapper struct {
+	object.ObjectStorage
+}
+
+func TestUploadEncryptedRetry(t *testing.T) {
+	base, err := object.CreateStorage("mem", "", "", "", "")
+	require.NoError(t, err)
+	backend := &retryOnceStore{ObjectStorage: base}
+	enc := &retryEncryptor{}
+	storage := &storageWrapper{ObjectStorage: object.NewEncrypted(backend, enc)}
+	conf := defaultConf
+	conf.CacheDir = "memory"
+	store := NewCachedStore(storage, conf, nil).(*cachedStore)
+
+	block := NewPage([]byte("block data"))
+	require.NoError(t, store.upload(context.Background(), "key", block, nil))
+	require.Equal(t, int32(2), backend.puts.Load())
+	require.Equal(t, int32(1), enc.calls.Load())
+}
+
 func (s *dStore) Get(ctx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
 	atomic.AddInt32(&s.cnt, 1)
 	return nil, errors.New("not found")
