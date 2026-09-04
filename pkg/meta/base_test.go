@@ -207,6 +207,7 @@ func testMeta(t *testing.T, m Meta) {
 	testRenameDirStat(t, m)
 	testRenameDirStatWithTrash(t, m)
 	testClone(t, m)
+	testCleanupDetachedNodes(t, m)
 	testBatchClone(t, m)
 	testACL(t, m)
 	testKerberosToken(t, m)
@@ -4257,6 +4258,81 @@ func testClone(t *testing.T, m Meta) {
 	}
 	if eno := m.Clone(Background(), TrashInode+1, 1000, cloneDir, "xxx", 0, 022, 4, &count, &total); !errors.Is(eno, syscall.EPERM) {
 		t.Fatalf("cloning files in the trash is not supported")
+	}
+}
+
+func testCleanupDetachedNodes(t *testing.T, m Meta) {
+	ctx := Background()
+	var srcDir, srcSub, srcFile Ino
+	if eno := m.Mkdir(ctx, RootInode, "detachedSrc", 0777, 022, 0, &srcDir, nil); eno != 0 {
+		t.Fatalf("mkdir detachedSrc: %s", eno)
+	}
+	if eno := m.Mkdir(ctx, srcDir, "sub", 0777, 022, 0, &srcSub, nil); eno != 0 {
+		t.Fatalf("mkdir sub: %s", eno)
+	}
+	if eno := m.Mknod(ctx, srcSub, "immutable", TypeFile, 0777, 022, 0, "", &srcFile, nil); eno != 0 {
+		t.Fatalf("mknod immutable: %s", eno)
+	}
+	if eno := m.SetAttr(ctx, srcFile, SetAttrFlag, 0, &Attr{Flags: FlagImmutable}); eno != 0 {
+		t.Fatalf("setattr immutable: %s", eno)
+	}
+	if eno := m.SetAttr(ctx, srcSub, SetAttrFlag, 0, &Attr{Flags: FlagAppend}); eno != 0 {
+		t.Fatalf("setattr sub: %s", eno)
+	}
+
+	// an interrupted clone leaves a detached tree behind: the entries are copied,
+	// but the top directory is never attached to its parent
+	var dstIno Ino
+	var count uint64
+	if eno := m.getBase().cloneEntry(ctx, srcDir, RootInode, "detachedDst", &dstIno, CLONE_MODE_PRESERVE_ATTR, 022, &count, true, make(chan struct{}, 4)); eno != 0 {
+		t.Fatalf("clone entry: %s", eno)
+	}
+	var dstSub, dstFile Ino
+	var dstAttr Attr
+	if eno := m.Lookup(ctx, dstIno, "sub", &dstSub, &dstAttr, false); eno != 0 {
+		t.Fatalf("lookup sub: %s", eno)
+	}
+	if eno := m.Lookup(ctx, dstSub, "immutable", &dstFile, &dstAttr, false); eno != 0 {
+		t.Fatalf("lookup immutable: %s", eno)
+	}
+	if dstAttr.Flags&FlagImmutable == 0 {
+		t.Fatalf("clone should copy attr flags, or the detached tree is reapable anyway")
+	}
+
+	edge := time.Now().Add(time.Minute)
+	detached := func() bool {
+		for _, ino := range m.(engine).doFindDetachedNodes(edge) {
+			if ino == dstIno {
+				return true
+			}
+		}
+		return false
+	}
+	if !detached() {
+		t.Fatalf("detached node %d not found", dstIno)
+	}
+	m.CleanupDetachedNodesBefore(ctx, edge, nil)
+	if detached() {
+		t.Fatalf("detached tree %d should be cleaned up", dstIno)
+	}
+	for _, ino := range []Ino{dstIno, dstSub, dstFile} {
+		if eno := m.GetAttr(ctx, ino, &dstAttr); eno != syscall.ENOENT {
+			t.Fatalf("inode %d of the detached tree should be removed: %s", ino, eno)
+		}
+	}
+
+	// removing a reachable immutable file is still not allowed
+	if eno := m.Remove(ctx, RootInode, "detachedSrc", false, RmrDefaultThreads, nil); eno != syscall.EPERM {
+		t.Fatalf("remove immutable file: %s", eno)
+	}
+	if eno := m.SetAttr(ctx, srcFile, SetAttrFlag, 0, &Attr{}); eno != 0 {
+		t.Fatalf("setattr immutable: %s", eno)
+	}
+	if eno := m.SetAttr(ctx, srcSub, SetAttrFlag, 0, &Attr{}); eno != 0 {
+		t.Fatalf("setattr sub: %s", eno)
+	}
+	if eno := m.Remove(ctx, RootInode, "detachedSrc", false, RmrDefaultThreads, nil); eno != 0 {
+		t.Fatalf("remove detachedSrc: %s", eno)
 	}
 }
 

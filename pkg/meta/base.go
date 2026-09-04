@@ -3141,6 +3141,21 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 	}
 }
 
+type ignoreAttrFlagsKey struct{}
+
+// A detached tree is unreachable, so it can only be removed by the cleanup of
+// detached nodes; immutable/append flags on the entries it contains (copied
+// from the source by clone) must not block that, or the tree would pin its
+// slices forever.
+func withIgnoredAttrFlags(ctx Context) Context {
+	return ctx.WithValue(ignoreAttrFlagsKey{}, true)
+}
+
+func ignoreAttrFlags(ctx Context) bool {
+	ignored, _ := ctx.Value(ignoreAttrFlagsKey{}).(bool)
+	return ignored
+}
+
 func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
 	for _, inode := range m.en.doFindDetachedNodes(edge) {
 		if eno := m.en.doCleanupDetachedNode(Background(), inode); eno != 0 {

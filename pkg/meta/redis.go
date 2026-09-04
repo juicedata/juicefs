@@ -1930,6 +1930,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 		opened bool
 		length uint64
 	}
+	skipFlags := ignoreAttrFlags(ctx)
 
 	// Each entry averages ~4 tx operations, so batch size should be 1000/4
 	batchSize := 1000 / 4
@@ -1973,7 +1974,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 				return st
 			}
-			if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			if !skipFlags && ((pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0) {
 				return syscall.EPERM
 			}
 
@@ -2050,7 +2051,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 					if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 						return syscall.EACCES
 					}
-					if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
+					if !skipFlags && ((attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0) {
 						return syscall.EPERM
 					}
 					if (attr.Flags & FlagSkipTrash) != 0 {
@@ -2339,7 +2340,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
-		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+		if !ignoreAttrFlags(ctx) && ((pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0) {
 			return syscall.EPERM
 		}
 		now := time.Now()
@@ -5776,7 +5777,7 @@ func (m *redisMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		return errno(err)
 	}
 	rmConcurrent := make(chan int, backgroundDeleteThreads)
-	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
+	if eno := m.emptyDir(withIgnoredAttrFlags(ctx), ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}
 	m.updateStats(-align4K(0), -1)
