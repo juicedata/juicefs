@@ -17,9 +17,16 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
+	"io"
 	"os"
+	"path/filepath"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -29,7 +36,32 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	minio "github.com/minio/minio/cmd"
+	miniohash "github.com/minio/minio/pkg/hash"
 )
+
+type lockResult struct {
+	lk  *jfsFLock
+	err error
+}
+
+type renameGateMeta struct {
+	meta.Meta
+	dstName string
+	renamed chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (m *renameGateMeta) Rename(ctx meta.Context, parentSrc meta.Ino, nameSrc string, parentDst meta.Ino, nameDst string, flags uint32, inode *meta.Ino, attr *meta.Attr) syscall.Errno {
+	errno := m.Meta.Rename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, attr)
+	if errno == 0 && nameDst == m.dstName {
+		m.once.Do(func() {
+			close(m.renamed)
+			<-m.release
+		})
+	}
+	return errno
+}
 
 func TestGatewayLock(t *testing.T) {
 	m := meta.NewClient("memkv://", nil)
@@ -101,6 +133,507 @@ func TestGatewayLock(t *testing.T) {
 
 }
 
+func TestBucketLifecycleLockCancellation(t *testing.T) {
+	jfsObj, _, _ := newTestGateway(t, Config{MultiBucket: true})
+	if err := jfsObj.MakeBucketWithLocation(context.Background(), minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
+		t.Fatalf("create metadata bucket: %s", err)
+	}
+
+	lk, err := jfsObj.lockBucket(context.Background())
+	if err != nil {
+		t.Fatalf("lock bucket: %s", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan lockResult, 1)
+	go func() {
+		lk, err := jfsObj.lockBucket(ctx)
+		result <- lockResult{lk, err}
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case r := <-result:
+		if r.lk != nil {
+			r.lk.Unlock()
+		}
+		if !errors.Is(r.err, context.Canceled) {
+			lk.Unlock()
+			t.Fatalf("lock should stop after context cancellation, got %v", r.err)
+		}
+	case <-time.After(2 * time.Second):
+		lk.Unlock()
+		t.Fatal("lock did not stop after context cancellation")
+	}
+	lk.Unlock()
+
+	next, err := jfsObj.lockBucket(context.Background())
+	if err != nil {
+		t.Fatalf("lock after canceled waiter: %s", err)
+	}
+	next.Unlock()
+}
+
+func TestBucketLifecycleLockAcrossGateways(t *testing.T) {
+	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "gateway-lock.db")
+	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
+	m1 := meta.NewClient(metaURL, nil)
+	if err := m1.Init(format, true); err != nil {
+		t.Fatalf("init metadata: %s", err)
+	}
+	if err := m1.NewSession(true); err != nil {
+		t.Fatalf("create first metadata session: %s", err)
+	}
+	defer m1.CloseSession()
+	m2 := meta.NewClient(metaURL, nil)
+	if _, err := m2.Load(true); err != nil {
+		t.Fatalf("load metadata: %s", err)
+	}
+	if err := m2.NewSession(true); err != nil {
+		t.Fatalf("create second metadata session: %s", err)
+	}
+	defer m2.CloseSession()
+
+	g1, _ := newTestGatewayWithMeta(t, m1, format, Config{MultiBucket: true})
+	g2, _ := newTestGatewayWithMeta(t, m2, format, Config{MultiBucket: true})
+	if err := g1.MakeBucketWithLocation(context.Background(), minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
+		t.Fatalf("create metadata bucket: %s", err)
+	}
+
+	lk, err := g1.lockBucket(context.Background())
+	if err != nil {
+		t.Fatalf("lock bucket from first gateway: %s", err)
+	}
+	result := make(chan lockResult, 1)
+	go func() {
+		lk, err := g2.lockBucket(context.Background())
+		result <- lockResult{lk, err}
+	}()
+	select {
+	case r := <-result:
+		if r.err == nil {
+			r.lk.Unlock()
+		}
+		lk.Unlock()
+		t.Fatalf("lock from second gateway should block, got %v", r.err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	lk.Unlock()
+	select {
+	case r := <-result:
+		if r.err != nil {
+			t.Fatalf("second gateway should acquire lock after unlock: %s", r.err)
+		}
+		r.lk.Unlock()
+	case <-time.After(2 * time.Second):
+		t.Fatal("second gateway did not acquire lock after unlock")
+	}
+}
+
+func TestObjectCommitAfterBucketDeleted(t *testing.T) {
+	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
+	m := meta.NewClient("memkv://", nil)
+	if err := m.Init(format, true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+	g1, _ := newTestGatewayWithMeta(t, m, format, Config{MultiBucket: true})
+	g2, _ := newTestGatewayWithMeta(t, m, format, Config{MultiBucket: true})
+	ctx := context.Background()
+	const bucket = "gone-bucket"
+	if err := g1.MakeBucketWithLocation(ctx, minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
+		t.Fatalf("create metadata bucket: %s", err)
+	}
+	if err := g1.MakeBucketWithLocation(ctx, "src-bucket", minio.BucketOptions{}); err != nil {
+		t.Fatalf("create src bucket: %s", err)
+	}
+	if err := g1.MakeBucketWithLocation(ctx, bucket, minio.BucketOptions{}); err != nil {
+		t.Fatalf("create bucket: %s", err)
+	}
+	srcData := []byte("src")
+	if _, err := g1.PutObject(ctx, "src-bucket", "src-obj", newTestPutObjReader(t, bytes.NewReader(srcData), srcData), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("put src object: %s", err)
+	}
+	uploadID, err := g1.NewMultipartUpload(ctx, bucket, "obj", minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("create multipart upload: %s", err)
+	}
+	partData := []byte("part")
+	part, err := g1.PutObjectPart(ctx, bucket, "obj", uploadID, 1, newTestPutObjReader(t, bytes.NewReader(partData), partData), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("put part: %s", err)
+	}
+	// warm g1's dentry cache so checkBucket may still see the bucket
+	if _, err := g1.GetBucketInfo(ctx, bucket); err != nil {
+		t.Fatalf("get bucket info: %s", err)
+	}
+	// the second gateway deletes the bucket; g1's cache is not invalidated
+	if err := g2.DeleteBucket(ctx, bucket, false); err != nil {
+		t.Fatalf("delete bucket: %s", err)
+	}
+
+	for _, object := range []string{"obj", "dir/obj", "dir/"} {
+		data := []byte("data")
+		if _, err := g1.PutObject(ctx, bucket, object, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); !errors.As(err, &minio.BucketNotFound{}) {
+			t.Fatalf("PutObject %s after bucket deleted should return BucketNotFound, got %v", object, err)
+		}
+	}
+	if _, err := g1.CopyObject(ctx, "src-bucket", "src-obj", bucket, "copy-obj", minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{}); !errors.As(err, &minio.BucketNotFound{}) {
+		t.Fatalf("CopyObject after bucket deleted should return BucketNotFound, got %v", err)
+	}
+	if _, err := g1.CompleteMultipartUpload(ctx, bucket, "obj", uploadID, []minio.CompletePart{{PartNumber: 1, ETag: part.ETag}}, minio.ObjectOptions{}); !errors.As(err, &minio.BucketNotFound{}) {
+		t.Fatalf("CompleteMultipartUpload after bucket deleted should return BucketNotFound, got %v", err)
+	}
+	// exercise the commit path deterministically, bypassing checkBucket
+	data := []byte("data")
+	if _, err := g1.putObject(ctx, bucket, g1.path(bucket, "obj"),
+		newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}, func(string) {}); !errors.As(err, &minio.BucketNotFound{}) {
+		t.Fatalf("putObject after bucket deleted should return BucketNotFound, got %v", err)
+	}
+	if _, errno := g2.fs.Stat(mctx, g2.path(bucket)); !fs.IsNotExist(errno) {
+		t.Fatalf("deleted bucket was recreated: %s", errno)
+	}
+}
+
+func TestObjectCommitErrBucketAlive(t *testing.T) {
+	jfsObj, _, _ := newTestGateway(t, Config{MultiBucket: true})
+	ctx := context.Background()
+	if err := jfsObj.MakeBucketWithLocation(ctx, minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
+		t.Fatalf("create metadata bucket: %s", err)
+	}
+	if err := jfsObj.MakeBucketWithLocation(ctx, "alive-bucket", minio.BucketOptions{}); err != nil {
+		t.Fatalf("create bucket: %s", err)
+	}
+	// a pruned parent or a removed temporary source surfaces as ENOENT while
+	// the bucket still exists: the object/uploadID mapping must be kept
+	if err := jfsObj.objectCommitErr(ctx, syscall.ENOENT, "alive-bucket", "obj"); !errors.As(err, &minio.ObjectNotFound{}) {
+		t.Fatalf("commit ENOENT with alive bucket should return ObjectNotFound, got %v", err)
+	}
+	if err := jfsObj.objectCommitErr(ctx, syscall.ENOENT, "alive-bucket", "obj", "upload-id"); !errors.As(err, &minio.InvalidUploadID{}) {
+		t.Fatalf("commit ENOENT with alive bucket and uploadID should return InvalidUploadID, got %v", err)
+	}
+	if err := jfsObj.DeleteBucket(ctx, "alive-bucket", false); err != nil {
+		t.Fatalf("delete bucket: %s", err)
+	}
+	if err := jfsObj.objectCommitErr(ctx, syscall.ENOENT, "alive-bucket", "obj"); !errors.As(err, &minio.BucketNotFound{}) {
+		t.Fatalf("commit ENOENT after bucket deleted should return BucketNotFound, got %v", err)
+	}
+}
+
+type lookupErrMeta struct {
+	meta.Meta
+	name string
+}
+
+func (m *lookupErrMeta) Lookup(ctx meta.Context, parent meta.Ino, name string, inode *meta.Ino, attr *meta.Attr, checkPerm bool) syscall.Errno {
+	if name == m.name {
+		return syscall.EIO
+	}
+	return m.Meta.Lookup(ctx, parent, name, inode, attr, checkPerm)
+}
+
+func TestObjectCommitErrLookupFailure(t *testing.T) {
+	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
+	m := meta.NewClient("memkv://", nil)
+	if err := m.Init(format, true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+	jfsObj, _ := newTestGatewayWithMeta(t, &lookupErrMeta{Meta: m, name: "err-bucket"}, format, Config{MultiBucket: true})
+	// a metadata failure while verifying the bucket root must be surfaced,
+	// not masked as ObjectNotFound
+	if err := jfsObj.objectCommitErr(context.Background(), syscall.ENOENT, "err-bucket", "obj"); !errors.Is(err, syscall.EIO) {
+		t.Fatalf("commit ENOENT with failing metadata lookup should return EIO, got %v", err)
+	}
+}
+
+func TestBucketLifecycleConsistency(t *testing.T) {
+	jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+	ctx := context.Background()
+	if err := jfsObj.MakeBucketWithLocation(ctx, minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
+		t.Fatalf("create metadata bucket: %s", err)
+	}
+
+	t.Run("make and delete use lifecycle lock", func(t *testing.T) {
+		lk, err := jfsObj.lockBucket(ctx)
+		if err != nil {
+			t.Fatalf("lock bucket: %s", err)
+		}
+		made := make(chan error, 1)
+		go func() {
+			made <- jfsObj.MakeBucketWithLocation(ctx, "locked-bucket", minio.BucketOptions{})
+		}()
+		select {
+		case err := <-made:
+			lk.Unlock()
+			t.Fatalf("MakeBucket should wait for lifecycle lock, got %v", err)
+		case <-time.After(100 * time.Millisecond):
+		}
+		lk.Unlock()
+		select {
+		case err := <-made:
+			if err != nil {
+				t.Fatalf("MakeBucket after unlock: %s", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("MakeBucket did not continue after unlock")
+		}
+
+		lk, err = jfsObj.lockBucket(ctx)
+		if err != nil {
+			t.Fatalf("lock bucket before delete: %s", err)
+		}
+		deleted := make(chan error, 1)
+		go func() {
+			deleted <- jfsObj.DeleteBucket(ctx, "locked-bucket", false)
+		}()
+		select {
+		case err := <-deleted:
+			lk.Unlock()
+			t.Fatalf("DeleteBucket should wait for lifecycle lock, got %v", err)
+		case <-time.After(100 * time.Millisecond):
+		}
+		lk.Unlock()
+		select {
+		case err := <-deleted:
+			if err != nil {
+				t.Fatalf("DeleteBucket after unlock: %s", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("DeleteBucket did not continue after unlock")
+		}
+	})
+
+	t.Run("failed delete keeps metadata", func(t *testing.T) {
+		const bucket = "nonempty-bucket"
+		if err := jfsObj.MakeBucketWithLocation(ctx, bucket, minio.BucketOptions{}); err != nil {
+			t.Fatalf("create bucket: %s", err)
+		}
+		createTestFile(t, jfs, jfsObj.path(bucket, "object"))
+		if err := jfsObj.DeleteBucket(ctx, bucket, false); !errors.As(err, &minio.BucketNotEmpty{}) {
+			t.Fatalf("delete non-empty bucket should fail with BucketNotEmpty, got %v", err)
+		}
+		metadataPath := jfsObj.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)
+		if _, errno := jfs.Stat(mctx, metadataPath); errno != 0 {
+			t.Fatalf("bucket metadata should remain after failed delete: %s", errno)
+		}
+	})
+
+	t.Run("delete removes temporary files", func(t *testing.T) {
+		const bucket = "temporary-files-bucket"
+		if err := jfsObj.MakeBucketWithLocation(ctx, bucket, minio.BucketOptions{}); err != nil {
+			t.Fatalf("create bucket: %s", err)
+		}
+		data := []byte("object")
+		if _, err := jfsObj.PutObject(ctx, bucket, "object", newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); err != nil {
+			t.Fatalf("put object: %s", err)
+		}
+		if _, err := jfsObj.DeleteObject(ctx, bucket, "object", minio.ObjectOptions{}); err != nil {
+			t.Fatalf("delete object: %s", err)
+		}
+		uploadID, err := jfsObj.NewMultipartUpload(ctx, bucket, "multipart", minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("create multipart upload: %s", err)
+		}
+		partData := []byte("part")
+		if _, err := jfsObj.PutObjectPart(ctx, bucket, "multipart", uploadID, 1, newTestPutObjReader(t, bytes.NewReader(partData), partData), minio.ObjectOptions{}); err != nil {
+			t.Fatalf("put object part: %s", err)
+		}
+		if err := jfsObj.DeleteBucket(ctx, bucket, false); err != nil {
+			t.Fatalf("delete bucket: %s", err)
+		}
+		if _, errno := jfs.Stat(mctx, jfsObj.tpath(bucket)); !fs.IsNotExist(errno) {
+			t.Fatalf("bucket temporary files should be removed, got %s", errno)
+		}
+	})
+
+	t.Run("missing bucket cleans stale metadata", func(t *testing.T) {
+		const bucket = "stale-metadata-bucket"
+		if err := jfsObj.MakeBucketWithLocation(ctx, bucket, minio.BucketOptions{}); err != nil {
+			t.Fatalf("create bucket: %s", err)
+		}
+		if errno := jfs.Delete(mctx, jfsObj.path(bucket)); errno != 0 {
+			t.Fatalf("remove bucket directory: %s", errno)
+		}
+		if err := jfsObj.DeleteBucket(ctx, bucket, false); !errors.As(err, &minio.BucketNotFound{}) {
+			t.Fatalf("delete missing bucket should return BucketNotFound, got %v", err)
+		}
+		metadataPath := jfsObj.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)
+		if _, errno := jfs.Stat(mctx, metadataPath); !errors.Is(errno, os.ErrNotExist) {
+			t.Fatalf("stale bucket metadata should be removed, got %s", errno)
+		}
+	})
+
+	t.Run("metadata failure rolls back bucket", func(t *testing.T) {
+		const bucket = "rollback-bucket"
+		metadataDir := jfsObj.path(minio.MinioMetaBucket, minio.BucketMetaPrefix)
+		if errno := jfs.MkdirAll(mctx, metadataDir, 0777, 022); errno != 0 {
+			t.Fatalf("create metadata directory: %s", errno)
+		}
+		createTestFile(t, jfs, jfsObj.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket))
+		if err := jfsObj.MakeBucketWithLocation(ctx, bucket, minio.BucketOptions{}); err == nil {
+			t.Fatal("MakeBucket should fail when metadata cannot be saved")
+		}
+		if _, errno := jfs.Stat(mctx, jfsObj.path(bucket)); !errors.Is(errno, os.ErrNotExist) {
+			t.Fatalf("bucket should be removed after metadata failure, got %s", errno)
+		}
+	})
+}
+
+func TestPutObjectDoesNotRecreateDeletedBucket(t *testing.T) {
+	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
+	m := meta.NewClient("memkv://", nil)
+	if err := m.Init(format, true); err != nil {
+		t.Fatalf("init metadata: %s", err)
+	}
+	g1, _ := newTestGatewayWithMeta(t, m, format, Config{MultiBucket: true})
+	g2, _ := newTestGatewayWithMeta(t, m, format, Config{MultiBucket: true})
+	ctx := context.Background()
+	const bucket = "deleted-bucket"
+	if err := g1.MakeBucketWithLocation(ctx, minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
+		t.Fatalf("create metadata bucket: %s", err)
+	}
+	if err := g1.MakeBucketWithLocation(ctx, bucket, minio.BucketOptions{}); err != nil {
+		t.Fatalf("create bucket: %s", err)
+	}
+
+	data := []byte("object data")
+	reader := &gatedReader{reader: bytes.NewReader(data), started: make(chan struct{}), release: make(chan struct{})}
+	putReader := newTestPutObjReader(t, reader, data)
+	putDone := make(chan error, 1)
+	go func() {
+		_, err := g1.PutObject(ctx, bucket, "dir/object", putReader, minio.ObjectOptions{})
+		putDone <- err
+	}()
+	select {
+	case <-reader.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("PutObject did not start reading")
+	}
+
+	if err := g2.DeleteBucket(ctx, bucket, false); err != nil {
+		close(reader.release)
+		t.Fatalf("delete bucket: %s", err)
+	}
+	// Simulate the first gateway observing the deletion after its dentry cache
+	// expires. The object commit must still not create the bucket root.
+	g1.fs.InvalidateEntry(meta.RootInode, bucket)
+	close(reader.release)
+	select {
+	case err := <-putDone:
+		if !errors.As(err, &minio.BucketNotFound{}) {
+			t.Fatalf("PutObject after bucket deleted should return BucketNotFound, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("PutObject did not finish")
+	}
+
+	if _, errno := g2.fs.Stat(mctx, g2.path(bucket)); !fs.IsNotExist(errno) {
+		t.Fatalf("deleted bucket was recreated: %s", errno)
+	}
+	metadataPath := g2.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)
+	if _, errno := g2.fs.Stat(mctx, metadataPath); !fs.IsNotExist(errno) {
+		t.Fatalf("deleted bucket metadata was recreated: %s", errno)
+	}
+}
+
+func TestCompleteMultipartUploadConcurrentOverwriteInfo(t *testing.T) {
+	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
+	baseMeta := meta.NewClient("memkv://", nil)
+	if err := baseMeta.Init(format, true); err != nil {
+		t.Fatalf("init metadata: %s", err)
+	}
+	gate := &renameGateMeta{
+		Meta:    baseMeta,
+		dstName: "object",
+		renamed: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	g1, _ := newTestGatewayWithMeta(t, gate, format, Config{})
+	g2, _ := newTestGatewayWithMeta(t, baseMeta, format, Config{})
+	ctx := context.Background()
+	const object = "object"
+
+	uploadID, err := g1.NewMultipartUpload(ctx, format.Name, object, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("create multipart upload: %s", err)
+	}
+	partData := []byte("multipart result")
+	part, err := g1.PutObjectPart(ctx, format.Name, object, uploadID, 1, newTestPutObjReader(t, bytes.NewReader(partData), partData), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("put part: %s", err)
+	}
+
+	type completeResult struct {
+		info minio.ObjectInfo
+		err  error
+	}
+	completeDone := make(chan completeResult, 1)
+	go func() {
+		info, err := g1.CompleteMultipartUpload(ctx, format.Name, object, uploadID, []minio.CompletePart{{PartNumber: 1, ETag: part.ETag}}, minio.ObjectOptions{})
+		completeDone <- completeResult{info: info, err: err}
+	}()
+	released := false
+	release := func() {
+		if !released {
+			close(gate.release)
+			released = true
+		}
+	}
+	defer release()
+	select {
+	case <-gate.renamed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("complete multipart upload did not rename the destination")
+	}
+
+	replacement := []byte("new")
+	if _, err = g2.PutObject(ctx, format.Name, object, newTestPutObjReader(t, bytes.NewReader(replacement), replacement), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("overwrite object from second gateway: %s", err)
+	}
+	release()
+
+	select {
+	case result := <-completeDone:
+		if result.err != nil {
+			t.Fatalf("complete multipart upload: %s", result.err)
+		}
+		if result.info.Size != int64(len(partData)) {
+			t.Fatalf("completed object info size = %d, want %d", result.info.Size, len(partData))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("complete multipart upload did not finish")
+	}
+	fi, eno := g2.fs.Stat(mctx, g2.path(format.Name, object))
+	if eno != 0 {
+		t.Fatalf("stat overwritten object: %s", eno)
+	}
+	if fi.Size() != int64(len(replacement)) {
+		t.Fatalf("final object size = %d, want %d", fi.Size(), len(replacement))
+	}
+}
+
+type gatedReader struct {
+	reader  io.Reader
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (r *gatedReader) Read(p []byte) (int, error) {
+	r.once.Do(func() { close(r.started) })
+	<-r.release
+	return r.reader.Read(p)
+}
+
+func newTestPutObjReader(t *testing.T, r io.Reader, data []byte) *minio.PutObjReader {
+	t.Helper()
+	sum := md5.Sum(data)
+	hashReader, err := miniohash.NewReader(r, int64(len(data)), hex.EncodeToString(sum[:]), "", int64(len(data)))
+	if err != nil {
+		t.Fatalf("create put object reader: %s", err)
+	}
+	return minio.NewPutObjReader(hashReader)
+}
+
 func newTestGateway(t *testing.T, conf Config) (*jfsObjects, *fs.FileSystem, string) {
 	t.Helper()
 
@@ -114,7 +647,13 @@ func newTestGateway(t *testing.T, conf Config) (*jfsObjects, *fs.FileSystem, str
 	if err := m.Init(format, true); err != nil {
 		t.Fatalf("init meta: %s", err)
 	}
-	vfsConf := vfs.Config{
+	jfsObj, jfs := newTestGatewayWithMeta(t, m, format, conf)
+	return jfsObj, jfs, format.Name
+}
+
+func newTestGatewayWithMeta(t *testing.T, m meta.Meta, format *meta.Format, conf Config) (*jfsObjects, *fs.FileSystem) {
+	t.Helper()
+	vfsConf := &vfs.Config{
 		Meta: meta.DefaultConf(),
 		Chunk: &chunk.Config{
 			BlockSize:   format.BlockSize << 10,
@@ -128,7 +667,7 @@ func newTestGateway(t *testing.T, conf Config) (*jfsObjects, *fs.FileSystem, str
 	}
 	objStore, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(objStore, *vfsConf.Chunk, nil)
-	jfs, err := fs.NewFileSystem(&vfsConf, m, store, nil)
+	jfs, err := fs.NewFileSystem(vfsConf, m, store, nil)
 	if err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
@@ -138,13 +677,13 @@ func newTestGateway(t *testing.T, conf Config) (*jfsObjects, *fs.FileSystem, str
 	}
 	jfsObj := &jfsObjects{
 		fs:       jfs,
-		conf:     &vfsConf,
+		conf:     vfsConf,
 		listPool: minio.NewTreeWalkPool(time.Minute * 30),
 		gConf:    &conf,
 		nsMutex:  minio.NewNSLock(false),
 	}
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	return jfsObj, jfs, format.Name
+	return jfsObj, jfs
 }
 
 func TestMkdirAllInBucket(t *testing.T) {
