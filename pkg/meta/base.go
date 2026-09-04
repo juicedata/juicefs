@@ -2024,9 +2024,7 @@ func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
 
 	if attr == nil {
 		attr = new(Attr)
-		if of := m.of.find(inode); of != nil {
-			*attr = of.attr
-		}
+		m.of.ReadAttr(inode, attr)
 	}
 	now := time.Now()
 	if attr.Full && !m.atimeNeedsUpdate(attr, now) {
@@ -2105,9 +2103,10 @@ func (m *baseMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (s
 		}
 	}()
 
-	f := m.of.find(inode)
+	f := m.of.acquire(inode)
 	if f != nil {
 		f.RLock()
+		defer m.of.releasePin(inode)
 		defer f.RUnlock()
 	}
 	if ss, ok := m.of.ReadChunk(inode, indx); ok {
@@ -2139,8 +2138,8 @@ func (m *baseMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (s
 	m.of.CacheChunk(inode, indx, *slices)
 	if !m.conf.ReadOnly && (len(ss) >= 5 || len(*slices) >= 5) {
 		tierID := -1
-		if f != nil {
-			tierID = int(f.attr.Tier)
+		if tier, ok := m.of.Tier(inode); ok {
+			tierID = int(tier)
 		}
 		go m.compactChunk(inode, indx, false, false, tierID)
 	}
@@ -2180,9 +2179,10 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 
 func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
 	defer m.timeit("Write", time.Now())
-	f := m.of.find(inode)
+	f := m.of.acquire(inode)
 	if f != nil {
 		f.Lock()
+		defer m.of.releasePin(inode)
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
@@ -2206,9 +2206,10 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 
 func (m *baseMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
 	defer m.timeit("Truncate", time.Now())
-	f := m.of.find(inode)
+	f := m.of.acquire(inode)
 	if f != nil {
 		f.Lock()
+		defer m.of.releasePin(inode)
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
@@ -2241,9 +2242,10 @@ func (m *baseMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		return syscall.EINVAL
 	}
 	defer m.timeit("Fallocate", time.Now())
-	f := m.of.find(inode)
+	f := m.of.acquire(inode)
 	if f != nil {
 		f.Lock()
+		defer m.of.releasePin(inode)
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()

@@ -2702,9 +2702,10 @@ func (m *kvMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
 	defer m.timeit("CopyFileRange", time.Now())
 	var newLength, newSpace int64
-	f := m.of.find(fout)
+	f := m.of.acquire(fout)
 	if f != nil {
 		f.Lock()
+		defer m.of.releasePin(fout)
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()

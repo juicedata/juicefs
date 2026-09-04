@@ -3160,9 +3160,10 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 
 func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
 	defer m.timeit("CopyFileRange", time.Now())
-	f := m.of.find(fout)
+	f := m.of.acquire(fout)
 	if f != nil {
 		f.Lock()
+		defer m.of.releasePin(fout)
 		defer f.Unlock()
 	}
 	var newLength, newSpace int64
