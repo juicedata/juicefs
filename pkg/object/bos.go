@@ -95,14 +95,17 @@ func (q *bosclient) Get(ctx context.Context, key string, off, limit int64, gette
 	var r *api.GetObjectResult
 	var needCheck bool
 	if limit > 0 {
-		r, err = q.c.GetObject(q.bucket, key, nil, off, off+limit-1)
+		r, err = q.c.GetObjectWithContext(ctx, q.bucket, key, nil, off, off+limit-1)
 	} else if off > 0 {
-		r, err = q.c.GetObject(q.bucket, key, nil, off)
+		r, err = q.c.GetObjectWithContext(ctx, q.bucket, key, nil, off)
 	} else {
-		r, err = q.c.GetObject(q.bucket, key, nil)
+		r, err = q.c.GetObjectWithContext(ctx, q.bucket, key, nil)
 		needCheck = true
 	}
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			err = ctxErr
+		}
 		return
 	}
 	if needCheck {

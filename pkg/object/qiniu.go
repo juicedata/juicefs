@@ -66,10 +66,10 @@ func (q *qiniu) Limits() Limits {
 	return Limits{}
 }
 
-func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
+func (q *qiniu) download(ctx context.Context, key string, off, limit int64) (io.ReadCloser, error) {
 	deadline := time.Now().Add(time.Second * 3600).Unix()
 	url := storage.MakePrivateURL(q.cred, os.Getenv("QINIU_DOMAIN"), key, deadline)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
 
 func (q *qiniu) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if strings.HasPrefix(key, "/") && os.Getenv("QINIU_DOMAIN") != "" {
-		return q.download(key, off, limit)
+		return q.download(ctx, key, off, limit)
 	}
 	return q.s3client.Get(ctx, key, off, limit, getters...)
 }
