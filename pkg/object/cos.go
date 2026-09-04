@@ -351,6 +351,7 @@ func newCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 			SessionToken: token,
 			Transport:    httpClient.Transport,
 		},
+		Timeout: httpClient.Timeout,
 	})
 	client.UserAgent = UserAgent
 	disableChecksum := strings.EqualFold(uri.Query().Get("disable-checksum"), "true")
