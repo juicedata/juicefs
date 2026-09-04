@@ -112,6 +112,19 @@ type Format struct {
 	KerbConf string `json:",omitempty"`
 }
 
+// Clone returns a deep copy: the published format is read by other goroutines,
+// so a copy still sharing Tiers would let a patch write into the live map.
+func (f *Format) Clone() *Format {
+	c := *f
+	if f.Tiers != nil {
+		c.Tiers = make(object.Tiers, len(f.Tiers))
+		for id, t := range f.Tiers {
+			c.Tiers[id] = t
+		}
+	}
+	return &c
+}
+
 func (f *Format) update(old *Format, force bool) error {
 	if force {
 		logger.Warnf("Existing volume will be overwrited: %s", old)

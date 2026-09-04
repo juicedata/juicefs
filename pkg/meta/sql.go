@@ -670,7 +670,6 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.setFormat(format)
 	n := &node{
 		Type:   TypeDirectory,
 		Nlink:  2,
