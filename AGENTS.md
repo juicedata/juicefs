@@ -80,7 +80,7 @@ make test.fdb                # FoundationDB tests (-tags fdb)
 
 - Follow [Effective Go](https://go.dev/doc/effective_go) and
   [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments).
-- Keep comments minimal; add only when necessary.
+- Prefer self-explanatory code over redundant comments; keep necessary comments concise.
 - Every new `.go` file MUST start with the Apache 2.0 header (see `main.go` for the canonical template).
 
 ## Version compatibility
@@ -108,7 +108,9 @@ make test.fdb                # FoundationDB tests (-tags fdb)
 - Metadata-engine parity: a semantic change in `pkg/meta/` must behave identically
   across all three families (Redis, SQL/DB, KV) and be covered by their shared tests.
 - Behavior changes need matching unit tests; user-facing changes update the docs.
-- Keep diffs minimal and scoped; avoid unrelated refactors or formatting-only churn.
+- Keep issues concise: state the problem clearly and avoid lengthy exposition.
+- Keep PRs minimal and focused on the current task; avoid unrelated features,
+  refactors, or formatting-only churn.
 - Do not hand-edit generated code or vendored dependencies.
 - Match existing conventions in the file you are editing.
 - Confirm before destructive or hard-to-reverse actions (deleting files, force pushes,
