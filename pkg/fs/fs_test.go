@@ -17,10 +17,15 @@
 package fs
 
 import (
+	"bytes"
+	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -380,10 +385,17 @@ func TestResolveRelativeSymlinkAfterRedirection(t *testing.T) {
 }
 
 func createTestFS(t testing.TB) *FileSystem {
+	objStore, _ := object.CreateStorage("mem", "", "", "", "")
+	return createTestFSWithStorage(t, objStore, 4096)
+}
+
+// createTestFSWithStorage builds a FileSystem on the given object storage with
+// no block cache, so every read goes to the storage. blockSize is in KiB.
+func createTestFSWithStorage(t testing.TB, objStore object.ObjectStorage, blockSize int) *FileSystem {
 	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
 		Name:      "test",
-		BlockSize: 4096,
+		BlockSize: blockSize,
 		Capacity:  1 << 30,
 		DirStats:  true,
 	}
@@ -401,7 +413,6 @@ func createTestFS(t testing.TB) *FileSystem {
 		AttrTimeout:     time.Millisecond * 100,
 		AccessLog:       filepath.Join(t.TempDir(), "juicefs.access.log"),
 	}
-	objStore, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
 	jfs, err := NewFileSystem(&conf, m, store, nil)
 	if err != nil {
@@ -411,4 +422,182 @@ func createTestFS(t testing.TB) *FileSystem {
 	jfs.rotateAccessLog = 500
 	t.Cleanup(func() { _ = jfs.Close() })
 	return jfs
+}
+
+// gatedStorage counts how many Get calls are in flight at the same time. Each Get
+// waits until `want` calls have arrived or `timeout` passes, so callers that are
+// serialized upstream show up as maxInflight == 1 instead of a flaky timing gap.
+type gatedStorage struct {
+	object.ObjectStorage
+	want        int32
+	timeout     time.Duration
+	arrived     int32
+	inflight    int32
+	maxInflight int32
+	release     chan struct{}
+	once        sync.Once
+}
+
+func newGatedStorage(base object.ObjectStorage, want int, timeout time.Duration) *gatedStorage {
+	return &gatedStorage{ObjectStorage: base, want: int32(want), timeout: timeout, release: make(chan struct{})}
+}
+
+func (g *gatedStorage) Get(ctx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	cur := atomic.AddInt32(&g.inflight, 1)
+	defer atomic.AddInt32(&g.inflight, -1)
+	for {
+		old := atomic.LoadInt32(&g.maxInflight)
+		if cur <= old || atomic.CompareAndSwapInt32(&g.maxInflight, old, cur) {
+			break
+		}
+	}
+	if atomic.AddInt32(&g.arrived, 1) >= g.want {
+		g.once.Do(func() { close(g.release) })
+	}
+	select {
+	case <-g.release:
+	case <-time.After(g.timeout):
+	}
+	return g.ObjectStorage.Get(ctx, key, off, limit, getters...)
+}
+
+// Positioned reads on one File must not wait for each other: HBase issues many
+// preads on a single open HFile from different handler threads, and each read of
+// an uncached block costs one round trip to the object storage.
+func TestFileConcurrentPread(t *testing.T) {
+	const (
+		blockSize = 64 << 10
+		readers   = 4
+		readLen   = 4096
+	)
+	base, _ := object.CreateStorage("mem", "", "", "", "")
+	gated := newGatedStorage(base, readers, 2*time.Second)
+	fs := createTestFSWithStorage(t, gated, blockSize>>10)
+	ctx := meta.NewContext(1, 1, []uint32{2})
+
+	// 6 blocks; the reads below stay away from block 0 and from the last 32 KiB,
+	// which are the two places the reader starts readahead on its own.
+	data := make([]byte, 6*blockSize)
+	for i := range data {
+		data[i] = byte(i * 7)
+	}
+	f, err := fs.Create(ctx, "/pread", 0644, 022)
+	if err != 0 {
+		t.Fatalf("create: %s", err)
+	}
+	if _, err := f.Write(ctx, data); err != 0 {
+		t.Fatalf("write: %s", err)
+	}
+	if err := f.Close(ctx); err != 0 {
+		t.Fatalf("close: %s", err)
+	}
+
+	f, err = fs.Open(ctx, "/pread", vfs.MODE_MASK_R)
+	if err != 0 {
+		t.Fatalf("open: %s", err)
+	}
+	defer f.Close(ctx)
+
+	var wg sync.WaitGroup
+	errs := make(chan error, readers)
+	for i := 0; i < readers; i++ {
+		off := int64((i + 1) * blockSize)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			buf := make([]byte, readLen)
+			n, err := f.Pread(ctx, buf, off)
+			if err != nil || n != readLen {
+				errs <- fmt.Errorf("pread at %d: (%d,%v)", off, n, err)
+				return
+			}
+			if !bytes.Equal(buf, data[off:off+readLen]) {
+				errs <- fmt.Errorf("pread at %d: data mismatch", off)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+	if got := atomic.LoadInt32(&gated.arrived); got != readers {
+		t.Fatalf("expected %d storage reads (one per uncached block), got %d", readers, got)
+	}
+	if got := atomic.LoadInt32(&gated.maxInflight); got != readers {
+		t.Fatalf("expected %d concurrent storage reads from one file, got %d", readers, got)
+	}
+}
+
+// Close must wait for positioned reads that are already in flight, the way the
+// FUSE path drains readers with handle.Wlock: otherwise a slow read observes the
+// closed reader and returns EOF instead of data.
+func TestFileCloseWaitsForPread(t *testing.T) {
+	const (
+		blockSize = 64 << 10
+		readLen   = 4096
+	)
+	base, _ := object.CreateStorage("mem", "", "", "", "")
+	// want=2 never arrives, so the single read below sits in Get for 2s.
+	gated := newGatedStorage(base, 2, 2*time.Second)
+	fs := createTestFSWithStorage(t, gated, blockSize>>10)
+	ctx := meta.NewContext(1, 1, []uint32{2})
+
+	data := make([]byte, 4*blockSize)
+	for i := range data {
+		data[i] = byte(i * 13)
+	}
+	f, err := fs.Create(ctx, "/pread-close", 0644, 022)
+	if err != 0 {
+		t.Fatalf("create: %s", err)
+	}
+	if _, err := f.Write(ctx, data); err != 0 {
+		t.Fatalf("write: %s", err)
+	}
+	if err := f.Close(ctx); err != 0 {
+		t.Fatalf("close: %s", err)
+	}
+
+	f, err = fs.Open(ctx, "/pread-close", vfs.MODE_MASK_R)
+	if err != 0 {
+		t.Fatalf("open: %s", err)
+	}
+	type result struct {
+		n   int
+		err error
+	}
+	got := make(chan result, 1)
+	off := int64(blockSize)
+	buf := make([]byte, readLen)
+	go func() {
+		n, err := f.Pread(ctx, buf, off)
+		got <- result{n, err}
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for atomic.LoadInt32(&gated.arrived) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("pread never reached the storage")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	if err := f.Close(ctx); err != 0 {
+		t.Fatalf("close: %s", err)
+	}
+	// A drained read has already returned; one still stuck in Get needs ~2s.
+	var r result
+	select {
+	case r = <-got:
+	case <-time.After(time.Second):
+		t.Fatal("Close returned while a positioned read was still in flight")
+	}
+	if r.err != nil || r.n != readLen {
+		t.Fatalf("pread during close: (%d,%v), want (%d,<nil>)", r.n, r.err, readLen)
+	}
+	if !bytes.Equal(buf, data[off:off+readLen]) {
+		t.Fatal("pread during close returned wrong data")
+	}
+	if _, err := f.Pread(ctx, buf, off); err != syscall.EBADF {
+		t.Fatalf("pread after close: %v, want EBADF", err)
+	}
 }
