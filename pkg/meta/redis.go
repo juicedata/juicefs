@@ -2558,6 +2558,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			if (tattr.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
+			if !exchange && trash > 0 && tattr.Nlink > 1 && tx.HExists(ctx, m.entryKey(trash), m.trashEntry(parentDst, dino, nameDst)).Val() {
+				trash = 0
+			}
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {

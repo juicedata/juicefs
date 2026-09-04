@@ -174,6 +174,7 @@ func testMeta(t *testing.T, m Meta) {
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)
+	testRenameOverRelinkedHardlink(t, m)
 	testParents(t, m)
 	testRemove(t, m)
 	testResolve(t, m)
@@ -2756,6 +2757,61 @@ func testTrash(t *testing.T, m Meta) {
 	m.getBase().doCleanupTrash(Background(), format.TrashDays, true, nil)
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
+	}
+}
+
+func testRenameOverRelinkedHardlink(t *testing.T, m Meta) {
+	format := testFormat()
+	format.TrashDays = 1
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	defer func() {
+		if err := m.Init(testFormat(), false); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+	}()
+	ctx := Background()
+	var file1, file2, ino Ino
+	var attr Attr
+	if st := m.Create(ctx, RootInode, "rl_file1", 0644, 022, 0, &file1, &attr); st != 0 {
+		t.Fatalf("create rl_file1: %s", st)
+	}
+	if st := m.Link(ctx, file1, RootInode, "rl_link", &attr); st != 0 {
+		t.Fatalf("link rl_file1 -> rl_link: %s", st)
+	}
+	if st := m.Unlink(ctx, RootInode, "rl_link"); st != 0 {
+		t.Fatalf("unlink rl_link: %s", st)
+	}
+	if st := m.Create(ctx, RootInode, "rl_file2", 0644, 022, 0, &file2, &attr); st != 0 {
+		t.Fatalf("create rl_file2: %s", st)
+	}
+	if st := m.Link(ctx, file1, RootInode, "rl_link", &attr); st != 0 {
+		t.Fatalf("relink rl_file1 -> rl_link: %s", st)
+	}
+	if st := m.Rename(ctx, RootInode, "rl_file2", RootInode, "rl_link", 0, &ino, &attr); st != 0 {
+		t.Fatalf("rename rl_file2 -> rl_link: %s", st)
+	}
+	if st := m.Lookup(ctx, RootInode, "rl_link", &ino, &attr, true); st != 0 {
+		t.Fatalf("lookup rl_link: %s", st)
+	}
+	if ino != file2 {
+		t.Fatalf("rl_link inode: expect %d, got %d", file2, ino)
+	}
+	if st := m.Lookup(ctx, RootInode, "rl_file1", &ino, &attr, true); st != 0 {
+		t.Fatalf("lookup rl_file1: %s", st)
+	}
+	if ino != file1 {
+		t.Fatalf("rl_file1 inode: expect %d, got %d", file1, ino)
+	}
+	if attr.Nlink != 2 {
+		t.Fatalf("rl_file1 nlink: expect 2 (original + trash), got %d", attr.Nlink)
+	}
+	if st := m.Unlink(ctx, RootInode, "rl_file1"); st != 0 {
+		t.Fatalf("unlink rl_file1: %s", st)
+	}
+	if st := m.Unlink(ctx, RootInode, "rl_link"); st != 0 {
+		t.Fatalf("unlink rl_link: %s", st)
 	}
 }
 

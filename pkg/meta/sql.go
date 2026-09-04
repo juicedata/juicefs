@@ -2418,6 +2418,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if (dn.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
+			if !exchange && trash > 0 && dn.Nlink > 1 {
+				if o, e := s.Get(&edge{Parent: trash, Name: []byte(m.trashEntry(parentDst, dino, string(de.Name))), Inode: dino, Type: de.Type}); e == nil && o {
+					trash = 0
+				}
+			}
 			dn.setCtime(now)
 			if exchange {
 				if parentSrc != parentDst {
