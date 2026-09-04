@@ -17,6 +17,7 @@
 package vfs
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -151,6 +152,7 @@ type Config struct {
 	StatePath string       `json:",omitempty"`
 	FuseOpts  *FuseOptions `json:",omitempty"`
 
+	Fusemac bool `json:",omitempty"`
 	// the mount point for current volume (to follow symlink)
 	Mountpoint string
 }
@@ -180,6 +182,13 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 		n := getInternalNodeByName(name)
 		if n != nil {
 			entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
+			// .stats size must be re-announced for the FSKit/NFS bridge.
+			if v.Conf.Fusemac && n.inode == StatsInode {
+				v.refreshStats()
+				attr := *n.attr
+				attr.Length = v.statsLen
+				entry.Attr = &attr
+			}
 			return
 		}
 	}
@@ -203,10 +212,33 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 	return
 }
 
+func (v *VFS) configContent() []byte {
+	v.Conf.Format = v.Meta.GetFormat()
+	if v.UpdateFormat != nil {
+		v.UpdateFormat(&v.Conf.Format)
+	}
+	v.Conf.Format.RemoveSecret()
+	data, _ := json.MarshalIndent(v.Conf, "", " ")
+	return data
+}
+
 func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, err syscall.Errno) {
 	if IsSpecialNode(ino) && getInternalNode(ino) != nil {
 		n := getInternalNode(ino)
 		entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
+		// Re-announce live special-file sizes for the FSKit/NFS bridge.
+		if v.Conf.Fusemac {
+			if ino == StatsInode {
+				v.refreshStats()
+				attr := *n.attr
+				attr.Length = v.statsLen
+				entry.Attr = &attr
+			} else if ino == ConfigInode {
+				attr := *n.attr
+				attr.Length = uint64(len(v.configContent()))
+				entry.Attr = &attr
+			}
+		}
 		return
 	}
 	defer func() { logit(ctx, "getattr", err, "(%d):%s", ino, (*Entry)(entry)) }()
@@ -571,14 +603,12 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		case logInode:
 			openAccessLog(fh)
 		case StatsInode:
-			h.data = CollectMetrics(v.registry)
-		case ConfigInode:
-			v.Conf.Format = v.Meta.GetFormat()
-			if v.UpdateFormat != nil {
-				v.UpdateFormat(&v.Conf.Format)
+			h.data = v.statsContent()
+			if v.Conf.Fusemac {
+				entry.Attr.Length = v.statsLen
 			}
-			v.Conf.Format.RemoveSecret()
-			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
+		case ConfigInode:
+			h.data = v.configContent()
 			entry.Attr.Length = uint64(len(h.data))
 		}
 		return
@@ -704,14 +734,9 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		if len(h.data) == 0 {
 			switch ino {
 			case StatsInode:
-				h.data = CollectMetrics(v.registry)
+				h.data = v.statsContent()
 			case ConfigInode:
-				v.Conf.Format = v.Meta.GetFormat()
-				if v.UpdateFormat != nil {
-					v.UpdateFormat(&v.Conf.Format)
-				}
-				v.Conf.Format.RemoveSecret()
-				h.data, _ = json.MarshalIndent(v.Conf, "", " ")
+				h.data = v.configContent()
 			}
 		}
 
@@ -1240,6 +1265,36 @@ type VFS struct {
 	modifiedAt map[Ino]time.Time
 
 	registry *prometheus.Registry
+
+	statsMu  sync.Mutex
+	statsLen uint64
+}
+
+// statsSlack keeps the announced .stats size ahead of the growing metrics.
+const statsSlack = 64 << 10
+
+// refreshStats records the announced .stats size (fusemac only).
+func (v *VFS) refreshStats() {
+	if !v.Conf.Fusemac {
+		return
+	}
+	v.statsMu.Lock()
+	defer v.statsMu.Unlock()
+	v.statsLen = uint64(len(CollectMetrics(v.registry))) + statsSlack
+}
+
+// statsContent returns .stats content, padded to the announced size on fusemac.
+func (v *VFS) statsContent() []byte {
+	data := CollectMetrics(v.registry)
+	if !v.Conf.Fusemac {
+		return data
+	}
+	v.statsMu.Lock()
+	defer v.statsMu.Unlock()
+	if v.statsLen < uint64(len(data)) {
+		v.statsLen = uint64(len(data)) + statsSlack
+	}
+	return append(data, bytes.Repeat([]byte{'\n'}, int(v.statsLen)-len(data))...)
 }
 
 func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer prometheus.Registerer, registry *prometheus.Registry) *VFS {
