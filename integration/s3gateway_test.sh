@@ -2230,9 +2230,9 @@ function test_put_object_if_none_match() {
         function="${AWS} s3api put-object --bucket ${bucket_name} --key conditional-implicit/ --if-none-match '*'"
         out=$(${AWS} s3api put-object --bucket "${bucket_name}" --key conditional-implicit/ --if-none-match '*' 2>&1)
         status=$?
-        if [ $status -eq 0 ] || [[ "$out" != *"NotImplemented"* ]]; then
+        if [ $status -ne 0 ]; then
             rv=1
-            out="expected NotImplemented for conditional implicit directory promotion, got: ${out}"
+            out="expected successful conditional implicit directory promotion, got: ${out}"
         fi
     fi
 
@@ -2246,7 +2246,7 @@ function test_put_object_if_none_match() {
             get_md5 "${download_path}"
             if [ "$md5rt" != "$expected_hash" ]; then
                 rv=1
-                out="failed conditional directory PUT changed the implicit directory child"
+                out="conditional directory PUT changed the child"
             fi
         fi
     fi
@@ -2348,9 +2348,9 @@ function test_copy_object_if_none_match() {
         function="${AWS} s3api copy-object --bucket ${bucket_name} --key copy-implicit/ --copy-source ${bucket_name}/copy-empty-source --if-none-match '*'"
         out=$(${AWS} s3api copy-object --bucket "${bucket_name}" --key copy-implicit/ --copy-source "${bucket_name}/copy-empty-source" --if-none-match '*' 2>&1)
         status=$?
-        if [ $status -eq 0 ] || [[ "$out" != *"NotImplemented"* ]]; then
+        if [ $status -ne 0 ]; then
             rv=1
-            out="expected NotImplemented for conditional copy to an implicit directory, got: ${out}"
+            out="expected successful conditional copy to an implicit directory, got: ${out}"
         fi
     fi
 
@@ -2364,7 +2364,7 @@ function test_copy_object_if_none_match() {
             get_md5 "${download_path}"
             if [ "$md5rt" != "$expected_hash" ]; then
                 rv=1
-                out="failed conditional directory copy changed the implicit directory child"
+                out="conditional directory copy changed the child"
             fi
         fi
     fi

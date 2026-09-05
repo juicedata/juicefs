@@ -1269,6 +1269,47 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 	}, inode))
 }
 
+func (m *kvMeta) doSetDirMarker(ctx Context, parent Ino, name string, inode Ino, exclusive bool, xattrs map[string][]byte, attr *Attr) syscall.Errno {
+	for _, value := range xattrs {
+		if value != nil && len(value) == 0 && m.Name() == "tikv" {
+			return syscall.EINVAL
+		}
+	}
+
+	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		entry := tx.get(m.entryKey(parent, name))
+		if entry == nil {
+			return syscall.ENOENT
+		}
+		_, currentInode := m.parseEntry(entry)
+		if currentInode != inode {
+			return syscall.EAGAIN
+		}
+		values := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
+		if values[0] == nil || values[1] == nil {
+			return syscall.ENOENT
+		}
+		var parentAttr, current Attr
+		m.parseAttr(values[0], &parentAttr)
+		m.parseAttr(values[1], &current)
+		now := time.Now()
+		if st := m.prepareDirMarker(ctx, parent, inode, &parentAttr, &current, exclusive, now); st != 0 {
+			return st
+		}
+		for key, value := range xattrs {
+			if value == nil {
+				tx.delete(m.xattrKey(inode, key))
+			} else {
+				tx.set(m.xattrKey(inode, key), value)
+			}
+		}
+		tx.set(m.inodeKey(inode), m.marshal(&current))
+		m.genLog(tx, now, "%s", dirMarkerLog(inode, &current, xattrs))
+		*attr = current
+		return nil
+	}, parent, inode))
+}
+
 func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, delta *dirStat, attr *Attr, skipPermCheck bool) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
 		*delta = dirStat{}

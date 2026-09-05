@@ -93,6 +93,8 @@ Example:
 103: 1716440760.000000000|UNLINK(1,report.txt,0,false,true):1024|(3,90)
 ```
 
+Directory object updates made by the S3 Gateway use a single `SETDIRMARKER(inode,ctime,ctimensec,xattrs)` record. The operation sets the directory's atime and atimensec to zero and applies all listed extended attributes together. The `xattrs` argument is percent-escaped JSON: values are base64-encoded bytes, `null` removes an attribute, and omitted names remain unchanged. External consumers must handle this operation before processing changelogs from gateways that use atomic directory marker updates. The stored inode and xattr formats are unchanged.
+
 ## Notes and limitations {#notes}
 
 - The changelog is not a metadata backup. Use [metadata backup](metadata_dump_load.md) for backup and restore.
