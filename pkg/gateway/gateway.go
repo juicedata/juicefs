@@ -30,7 +30,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -59,7 +58,6 @@ const (
 
 var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
-var directoryMarkerLockOwner uint64
 
 func isExplicitDirectoryMarker(attr *meta.Attr) bool {
 	return attr.Atime*1000+int64(attr.Atimensec/1e6) == 0
@@ -963,7 +961,7 @@ func (n *jfsObjects) applyObjectXattrs(ctx meta.Context, inode meta.Ino, xattrs 
 	return nil
 }
 
-func (n *jfsObjects) publishNewDirectoryObjectLocked(ctx context.Context, bucket, directoryPath string, xattrs []objectXattr) error {
+func (n *jfsObjects) publishNewDirectoryObject(ctx context.Context, bucket, directoryPath string, xattrs []objectXattr) error {
 	uuid := minio.MustGetUUID()
 	tmp := n.tpath(bucket, "tmp", uuid[:subDirPrefix], uuid)
 	if err := n.mkdirAll(ctx, path.Dir(tmp)); err != nil {
@@ -990,6 +988,8 @@ func (n *jfsObjects) publishNewDirectoryObjectLocked(ctx context.Context, bucket
 		return eno
 	}
 	n.fs.InvalidateAttr(fi.Inode())
+	// Publish the marker with its attributes already set, leaving any existing
+	// destination untouched.
 	eno = n.fs.Rename(mctx, tmp, directoryPath, meta.RenameNoReplace)
 	if eno != 0 {
 		return eno
@@ -1009,29 +1009,20 @@ func (n *jfsObjects) putDirectoryObject(ctx context.Context, bucket, directoryPa
 	if eno != 0 {
 		return eno
 	}
-	owner := atomic.AddUint64(&directoryMarkerLockOwner, 1)
-	lockCtx := meta.WrapWithCancel(ctx, mctx.Pid(), mctx.Uid(), mctx.Gids())
-	defer lockCtx.Cancel()
-	if eno = n.fs.Meta().Flock(lockCtx, parent.Inode(), owner, meta.F_WRLCK, true); eno != 0 {
-		return eno
-	}
-	defer func() {
-		if unlockErr := n.fs.Meta().Flock(mctx, parent.Inode(), owner, meta.F_UNLCK, false); unlockErr != 0 {
-			logger.Errorf("failed to unlock parent inode %d: %s", parent.Inode(), unlockErr)
-		}
-	}()
 
+	requestCtx := meta.WrapWithCancel(ctx, mctx.Pid(), mctx.Uid(), mctx.Gids())
+	defer requestCtx.Cancel()
 	name := path.Base(directoryPath)
 	var inode meta.Ino
 	var attr meta.Attr
-	eno = n.fs.Meta().Lookup(lockCtx, parent.Inode(), name, &inode, &attr, true)
+	eno = n.fs.Meta().Lookup(requestCtx, parent.Inode(), name, &inode, &attr, true)
 	if eno == syscall.ENOENT {
-		publishErr := n.publishNewDirectoryObjectLocked(ctx, bucket, directoryPath, xattrs)
+		publishErr := n.publishNewDirectoryObject(ctx, bucket, directoryPath, xattrs)
 		if publishErr == nil {
 			return nil
 		}
 		if errors.Is(publishErr, syscall.EEXIST) {
-			eno = n.fs.Meta().Lookup(lockCtx, parent.Inode(), name, &inode, &attr, true)
+			eno = n.fs.Meta().Lookup(requestCtx, parent.Inode(), name, &inode, &attr, true)
 		} else {
 			return publishErr
 		}
@@ -1053,19 +1044,19 @@ func (n *jfsObjects) putDirectoryObject(ctx context.Context, bucket, directoryPa
 		return minio.NotImplemented{Message: "atomic conditional promotion of an implicit directory is not supported"}
 	}
 
-	if err := n.applyObjectXattrs(lockCtx, inode, xattrs); err != nil {
+	if err := n.applyObjectXattrs(requestCtx, inode, xattrs); err != nil {
 		return err
 	}
 	var currentInode meta.Ino
 	var currentAttr meta.Attr
-	if eno = n.fs.Meta().Lookup(lockCtx, parent.Inode(), name, &currentInode, &currentAttr, true); eno != 0 {
+	if eno = n.fs.Meta().Lookup(requestCtx, parent.Inode(), name, &currentInode, &currentAttr, true); eno != 0 {
 		return eno
 	}
 	if currentInode != inode || currentAttr.Typ != meta.TypeDirectory {
 		return syscall.EAGAIN
 	}
 	attr = meta.Attr{Atime: 0, Atimensec: 0}
-	if eno = n.fs.Meta().SetAttr(lockCtx, inode, meta.SetAttrAtime, 0, &attr); eno != 0 {
+	if eno = n.fs.Meta().SetAttr(requestCtx, inode, meta.SetAttrAtime, 0, &attr); eno != 0 {
 		return eno
 	}
 	n.fs.InvalidateAttr(inode)

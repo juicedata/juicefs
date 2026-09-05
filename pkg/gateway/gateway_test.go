@@ -307,6 +307,32 @@ func TestPutObjectIfNoneMatch(t *testing.T) {
 		assertPreconditionFailed(t, err)
 	})
 
+	t.Run("directory marker writes can proceed while the parent is locked", func(t *testing.T) {
+		gateway, jfs, bucket := newTestGateway(t, Config{})
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		parent, eno := jfs.Stat(mctx, gateway.path(bucket, ""))
+		if eno != 0 {
+			t.Fatalf("stat parent directory: %s", eno)
+		}
+		const owner = ^uint64(0)
+		if eno = jfs.Meta().Flock(mctx, parent.Inode(), owner, meta.F_WRLCK, false); eno != 0 {
+			t.Fatalf("lock parent directory: %s", eno)
+		}
+		defer func() {
+			if eno := jfs.Meta().Flock(mctx, parent.Inode(), owner, meta.F_UNLCK, false); eno != 0 {
+				t.Errorf("unlock parent directory: %s", eno)
+			}
+		}()
+
+		for _, conditional := range []bool{true, false} {
+			if _, err := gateway.PutObject(ctx, bucket, "prefix/", newPutObjectReader(t, nil), minio.ObjectOptions{IfNoneMatch: conditional}); err != nil {
+				t.Fatalf("write marker with IfNoneMatch=%t while parent is locked: %s", conditional, err)
+			}
+		}
+		assertHeadObject(t, gateway, bucket, "prefix/", true)
+	})
+
 	t.Run("head dir concurrent marker creates have one winner", func(t *testing.T) {
 		gateway, _, bucket := newTestGateway(t, Config{HeadDir: true})
 		ctx := context.Background()
@@ -735,7 +761,7 @@ func TestCopyObjectIfNoneMatch(t *testing.T) {
 		}
 	})
 
-	t.Run("unconditional PUT serializes with conditional directory copy", func(t *testing.T) {
+	t.Run("unconditional PUT and conditional directory copy preserve attributes", func(t *testing.T) {
 		gateway, jfs, bucket := newTestGateway(t, Config{KeepEtag: true, ObjTag: true, ObjMeta: true})
 		ctx := context.Background()
 		sourceOpts := minio.ObjectOptions{UserDefined: map[string]string{
@@ -753,8 +779,11 @@ func TestCopyObjectIfNoneMatch(t *testing.T) {
 		const iterations = 128
 		for i := 0; i < iterations; i++ {
 			object := fmt.Sprintf("concurrent-prefix-%03d", i)
-			if _, err = gateway.PutObject(ctx, bucket, object+"/child", newPutObjectReader(t, []byte("child")), minio.ObjectOptions{}); err != nil {
-				t.Fatalf("create child for %s: %s", object, err)
+			implicitDirectory := i%2 == 0
+			if implicitDirectory {
+				if _, err = gateway.PutObject(ctx, bucket, object+"/child", newPutObjectReader(t, []byte("child")), minio.ObjectOptions{}); err != nil {
+					t.Fatalf("create child for %s: %s", object, err)
+				}
 			}
 
 			start := make(chan struct{})
@@ -780,7 +809,10 @@ func TestCopyObjectIfNoneMatch(t *testing.T) {
 			copyErr := <-copyResult
 			var preconditionFailed minio.PreConditionFailed
 			var notImplemented minio.NotImplemented
-			if copyErr == nil || !errors.As(copyErr, &preconditionFailed) && !errors.As(copyErr, &notImplemented) {
+			if implicitDirectory && copyErr == nil {
+				t.Fatalf("conditional copy unexpectedly promoted implicit directory %s", object)
+			}
+			if copyErr != nil && !errors.As(copyErr, &preconditionFailed) && !(implicitDirectory && errors.As(copyErr, &notImplemented)) {
 				t.Fatalf("conditional marker Copy for %s: %T: %v", object, copyErr, copyErr)
 			}
 
@@ -847,7 +879,7 @@ func TestCopyObjectIfNoneMatch(t *testing.T) {
 			t.Fatalf("create existing marker: %s", err)
 		}
 		before = countTemporaryObjects(tmpRoot)
-		err := gateway.publishNewDirectoryObjectLocked(ctx, bucket, gateway.path(bucket, "existing-marker"), nil)
+		err := gateway.publishNewDirectoryObject(ctx, bucket, gateway.path(bucket, "existing-marker"), nil)
 		if !errors.Is(err, syscall.EEXIST) {
 			t.Fatalf("expected marker publish collision, got %T: %v", err, err)
 		}
