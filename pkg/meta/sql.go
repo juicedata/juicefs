@@ -1216,6 +1216,12 @@ func (m *dbMeta) shouldRetry(err error) bool {
 			strings.Contains(msg, "duplicate entry") || strings.Contains(msg, "error 1020 (hy000)") ||
 			strings.Contains(msg, "invalid connection") || strings.Contains(msg, "bad connection") || errors.Is(err, io.EOF) || strings.Contains(msg, "serialize access") // could not send data to client: No buffer space available
 	case "postgres":
+		// PostgreSQL-compatible servers can use different error messages for
+		// serialization failures and deadlocks. Both require a new transaction.
+		var sqlErr interface{ SQLState() string }
+		if errors.As(err, &sqlErr) && (sqlErr.SQLState() == "40001" || sqlErr.SQLState() == "40P01") {
+			return true
+		}
 		if e, ok := err.(interface{ SafeToRetry() bool }); ok {
 			return e.SafeToRetry()
 		}
@@ -1548,6 +1554,51 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		}
 		return err
 	}, inode))
+}
+
+func (m *dbMeta) doSetDirMarker(ctx Context, parent Ino, name string, inode Ino, exclusive bool, xattrs map[string][]byte, attr *Attr) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		parentNode, currentNode := node{Inode: parent}, node{Inode: inode}
+		if err := m.getNodesForUpdate(s, &parentNode, &currentNode); err != nil {
+			return err
+		}
+		entry := edge{Parent: parent, Name: []byte(name)}
+		ok, err := s.ForUpdate().Get(&entry)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		if entry.Inode != inode {
+			return syscall.EAGAIN
+		}
+		var parentAttr, current Attr
+		m.parseAttr(&parentNode, &parentAttr)
+		m.parseAttr(&currentNode, &current)
+		now := time.Now()
+		if st := m.prepareDirMarker(ctx, parent, inode, &parentAttr, &current, exclusive, now); st != 0 {
+			return st
+		}
+		for key, value := range xattrs {
+			filter := &xattr{Inode: inode, Name: key}
+			if _, err = s.Delete(filter); err != nil {
+				return err
+			}
+			if value != nil {
+				if err = mustInsert(s, &xattr{Inode: inode, Name: key, Value: value}); err != nil {
+					return err
+				}
+			}
+		}
+		m.parseNode(&current, &currentNode)
+		if _, err = s.Cols("atime", "atimensec", "ctime", "ctimensec").Update(&currentNode, &node{Inode: inode}); err != nil {
+			return err
+		}
+		m.genLog(ctx, s, now.UnixNano(), "%s", dirMarkerLog(inode, &current, xattrs))
+		*attr = current
+		return nil
+	}, parent, inode))
 }
 
 func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte) error {

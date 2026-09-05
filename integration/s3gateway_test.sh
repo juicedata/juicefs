@@ -510,8 +510,8 @@ function test_list_objects() {
           test_function=${function}
           out=$($function)
           rv=$?
-          output=$(echo "$out")
-          if [ $rv -eq 0 ] && [ "$output" != "" ]; then
+          entry_count=$(echo "$out" | jq '((.Contents // []) | length) + ((.CommonPrefixes // []) | length)')
+          if [ $rv -eq 0 ] && [ "$entry_count" != "0" ]; then
               rv=1
               # since rv is 0, command passed, but didn't return expected value. In this case set the output
               out="list-objects with prefix is dir failed"
@@ -2163,6 +2163,409 @@ function test_object_tagging(){
     fi
     return $rv
 }
+
+function test_put_object_if_none_match() {
+    start_time=$(get_time)
+    test_function="put-object If-None-Match wildcard"
+    download_path="/tmp/juicefs-if-none-match-put-$$"
+
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+    if [ $rv -ne 0 ]; then
+        out="${bucket_name}"
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key conditional-put --if-none-match '*'"
+        out=$(${AWS} s3api put-object --body "${MINT_DATA_DIR}/datafile-1-kB" --bucket "${bucket_name}" --key conditional-put --if-none-match '*' 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-b --bucket ${bucket_name} --key conditional-put --if-none-match '*'"
+        out=$(${AWS} s3api put-object --body "${MINT_DATA_DIR}/datafile-1-b" --bucket "${bucket_name}" --key conditional-put --if-none-match '*' 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for existing object, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key conditional-put ${download_path}"
+        out=$(${AWS} s3api get-object --bucket "${bucket_name}" --key conditional-put "${download_path}" 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            get_md5 "${download_path}"
+            if [ "$md5rt" != "$HASH_1_KB" ]; then
+                rv=1
+                out="failed conditional PUT changed the existing object"
+            fi
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --bucket ${bucket_name} --key conditional-dir/ --if-none-match '*'"
+        out=$(${AWS} s3api put-object --bucket "${bucket_name}" --key conditional-dir/ --if-none-match '*' 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api put-object --bucket "${bucket_name}" --key conditional-dir/ --if-none-match '*' 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for existing directory marker, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-b --bucket ${bucket_name} --key conditional-implicit/child"
+        out=$(${AWS} s3api put-object --body "${MINT_DATA_DIR}/datafile-1-b" --bucket "${bucket_name}" --key conditional-implicit/child 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --bucket ${bucket_name} --key conditional-implicit/ --if-none-match '*'"
+        out=$(${AWS} s3api put-object --bucket "${bucket_name}" --key conditional-implicit/ --if-none-match '*' 2>&1)
+        status=$?
+        if [ $status -ne 0 ]; then
+            rv=1
+            out="expected successful conditional implicit directory promotion, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key conditional-implicit/child ${download_path}"
+        out=$(${AWS} s3api get-object --bucket "${bucket_name}" --key conditional-implicit/child "${download_path}" 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            get_md5 "${MINT_DATA_DIR}/datafile-1-b"
+            expected_hash=$md5rt
+            get_md5 "${download_path}"
+            if [ "$md5rt" != "$expected_hash" ]; then
+                rv=1
+                out="conditional directory PUT changed the child"
+            fi
+        fi
+    fi
+
+    rm -f "${download_path}"
+    if [ $rv -eq 0 ]; then
+        out=$(delete_bucket "${bucket_name}")
+        rv=$?
+    else
+        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+    fi
+
+    if [ $rv -eq 0 ]; then
+        log_success "$(get_duration "$start_time")" "${test_function}"
+    else
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+    fi
+    return $rv
+}
+
+function test_copy_object_if_none_match() {
+    start_time=$(get_time)
+    test_function="copy-object If-None-Match wildcard"
+    download_path="/tmp/juicefs-if-none-match-copy-$$"
+
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+    if [ $rv -ne 0 ]; then
+        out="${bucket_name}"
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key copy-source"
+        out=$(${AWS} s3api put-object --body "${MINT_DATA_DIR}/datafile-1-kB" --bucket "${bucket_name}" --key copy-source 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --key copy-new --copy-source ${bucket_name}/copy-source --if-none-match '*'"
+        out=$(${AWS} s3api copy-object --bucket "${bucket_name}" --key copy-new --copy-source "${bucket_name}/copy-source" --if-none-match '*' 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api get-object --bucket "${bucket_name}" --key copy-new "${download_path}" 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            get_md5 "${download_path}"
+            if [ "$md5rt" != "$HASH_1_KB" ]; then
+                rv=1
+                out="conditional copy produced unexpected data"
+            fi
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api put-object --body "${MINT_DATA_DIR}/datafile-1-b" --bucket "${bucket_name}" --key copy-existing 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --key copy-existing --copy-source ${bucket_name}/copy-source --if-none-match '*'"
+        out=$(${AWS} s3api copy-object --bucket "${bucket_name}" --key copy-existing --copy-source "${bucket_name}/copy-source" --if-none-match '*' 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for existing copy destination, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api get-object --bucket "${bucket_name}" --key copy-existing "${download_path}" 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            get_md5 "${MINT_DATA_DIR}/datafile-1-b"
+            expected_hash=$md5rt
+            get_md5 "${download_path}"
+            if [ "$md5rt" != "$expected_hash" ]; then
+                rv=1
+                out="failed conditional copy changed the existing destination"
+            fi
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --bucket ${bucket_name} --key copy-empty-source"
+        out=$(${AWS} s3api put-object --bucket "${bucket_name}" --key copy-empty-source 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-b --bucket ${bucket_name} --key copy-implicit/child"
+        out=$(${AWS} s3api put-object --body "${MINT_DATA_DIR}/datafile-1-b" --bucket "${bucket_name}" --key copy-implicit/child 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --key copy-implicit/ --copy-source ${bucket_name}/copy-empty-source --if-none-match '*'"
+        out=$(${AWS} s3api copy-object --bucket "${bucket_name}" --key copy-implicit/ --copy-source "${bucket_name}/copy-empty-source" --if-none-match '*' 2>&1)
+        status=$?
+        if [ $status -ne 0 ]; then
+            rv=1
+            out="expected successful conditional copy to an implicit directory, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key copy-implicit/child ${download_path}"
+        out=$(${AWS} s3api get-object --bucket "${bucket_name}" --key copy-implicit/child "${download_path}" 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            get_md5 "${MINT_DATA_DIR}/datafile-1-b"
+            expected_hash=$md5rt
+            get_md5 "${download_path}"
+            if [ "$md5rt" != "$expected_hash" ]; then
+                rv=1
+                out="conditional directory copy changed the child"
+            fi
+        fi
+    fi
+
+    rm -f "${download_path}"
+    if [ $rv -eq 0 ]; then
+        out=$(delete_bucket "${bucket_name}")
+        rv=$?
+    else
+        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+    fi
+
+    if [ $rv -eq 0 ]; then
+        log_success "$(get_duration "$start_time")" "${test_function}"
+    else
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+    fi
+    return $rv
+}
+
+function test_complete_multipart_upload_if_none_match() {
+    start_time=$(get_time)
+    test_function="complete-multipart-upload If-None-Match wildcard"
+    download_path="/tmp/juicefs-if-none-match-multipart-$$"
+    multipart_file="/tmp/juicefs-if-none-match-multipart-$$.json"
+    upload_id=""
+
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+    if [ $rv -ne 0 ]; then
+        out="${bucket_name}"
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api put-object --body "${MINT_DATA_DIR}/datafile-1-kB" --bucket "${bucket_name}" --key multipart-target 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api create-multipart-upload --bucket "${bucket_name}" --key multipart-target 2>&1)
+        rv=$?
+        upload_id=$(echo "$out" | jq -r .UploadId)
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api upload-part --bucket "${bucket_name}" --key multipart-target --body "${MINT_DATA_DIR}/datafile-5-MB" --upload-id "${upload_id}" --part-number 1 2>&1)
+        rv=$?
+        part_etag=$(echo "$out" | jq -r .ETag)
+        echo "{\"Parts\":[{\"ETag\":${part_etag},\"PartNumber\":1}]}" > "${multipart_file}"
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api complete-multipart-upload --multipart-upload file://${multipart_file} --bucket ${bucket_name} --key multipart-target --upload-id ${upload_id} --if-none-match '*'"
+        out=$(${AWS} s3api complete-multipart-upload --multipart-upload "file://${multipart_file}" --bucket "${bucket_name}" --key multipart-target --upload-id "${upload_id}" --if-none-match '*' 2>&1)
+        status=$?
+        if [ $status -eq 0 ] || [[ "$out" != *"PreconditionFailed"* ]]; then
+            rv=1
+            out="expected PreconditionFailed for existing multipart destination, got: ${out}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api get-object --bucket "${bucket_name}" --key multipart-target "${download_path}" 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            get_md5 "${download_path}"
+            if [ "$md5rt" != "$HASH_1_KB" ]; then
+                rv=1
+                out="failed conditional multipart completion changed the existing object"
+            fi
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api delete-object --bucket "${bucket_name}" --key multipart-target 2>&1)
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api complete-multipart-upload --multipart-upload "file://${multipart_file}" --bucket "${bucket_name}" --key multipart-target --upload-id "${upload_id}" --if-none-match '*' 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            upload_id=""
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api get-object --bucket "${bucket_name}" --key multipart-target "${download_path}" 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            get_md5 "${MINT_DATA_DIR}/datafile-5-MB"
+            expected_hash=$md5rt
+            get_md5 "${download_path}"
+            if [ "$md5rt" != "$expected_hash" ]; then
+                rv=1
+                out="retried conditional multipart completion produced unexpected data"
+            fi
+        fi
+    fi
+
+    rm -f "${download_path}" "${multipart_file}"
+    if [ $rv -ne 0 ] && [ -n "$upload_id" ]; then
+        ${AWS} s3api abort-multipart-upload --bucket "${bucket_name}" --key multipart-target --upload-id "${upload_id}" > /dev/null 2>&1
+    fi
+    if [ $rv -eq 0 ]; then
+        out=$(delete_bucket "${bucket_name}")
+        rv=$?
+    else
+        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+    fi
+
+    if [ $rv -eq 0 ]; then
+        log_success "$(get_duration "$start_time")" "${test_function}"
+    else
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+    fi
+    return $rv
+}
+
+function test_concurrent_put_object_if_none_match() {
+    start_time=$(get_time)
+    test_function="concurrent put-object If-None-Match wildcard"
+    result_dir="/tmp/juicefs-if-none-match-concurrent-$$"
+    download_path="/tmp/juicefs-if-none-match-concurrent-object-$$"
+
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+    if [ $rv -ne 0 ]; then
+        out="${bucket_name}"
+    fi
+
+    if [ $rv -eq 0 ]; then
+        mkdir -p "${result_dir}"
+        for index in $(seq 1 8); do
+            if [ $((index % 2)) -eq 0 ]; then
+                body="${MINT_DATA_DIR}/datafile-1-kB"
+            else
+                body="${MINT_DATA_DIR}/datafile-1-b"
+            fi
+            echo "${body}" > "${result_dir}/${index}.body"
+            (
+                ${AWS} s3api put-object --body "${body}" --bucket "${bucket_name}" --key concurrent-put --if-none-match '*' > "${result_dir}/${index}.out" 2>&1
+                echo "$?" > "${result_dir}/${index}.status"
+            ) &
+        done
+        wait
+
+        success_count=0
+        winner_body=""
+        for index in $(seq 1 8); do
+            status=$(cat "${result_dir}/${index}.status")
+            response=$(cat "${result_dir}/${index}.out")
+            if [ "$status" -eq 0 ]; then
+                success_count=$((success_count + 1))
+                winner_body=$(cat "${result_dir}/${index}.body")
+            elif [[ "$response" != *"PreconditionFailed"* && "$response" != *"ConditionalRequestConflict"* ]]; then
+                rv=1
+                out="unexpected concurrent conditional PUT failure: ${response}"
+                break
+            fi
+        done
+
+        if [ $rv -eq 0 ] && [ "$success_count" -ne 1 ]; then
+            rv=1
+            out="expected exactly one successful concurrent conditional PUT, got ${success_count}"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        out=$(${AWS} s3api get-object --bucket "${bucket_name}" --key concurrent-put "${download_path}" 2>&1)
+        rv=$?
+        if [ $rv -eq 0 ]; then
+            get_md5 "${winner_body}"
+            expected_hash=$md5rt
+            get_md5 "${download_path}"
+            if [ "$md5rt" != "$expected_hash" ]; then
+                rv=1
+                out="stored object does not belong to the successful conditional writer"
+            fi
+        fi
+    fi
+
+    rm -rf "${result_dir}"
+    rm -f "${download_path}"
+    if [ $rv -eq 0 ]; then
+        out=$(delete_bucket "${bucket_name}")
+        rv=$?
+    else
+        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+    fi
+
+    if [ $rv -eq 0 ]; then
+        log_success "$(get_duration "$start_time")" "${test_function}"
+    else
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+    fi
+    return $rv
+}
+
 # main handler for all the tests.
 main() {
     # Success tests
@@ -2194,6 +2597,10 @@ main() {
     # test_worm_bucket && \
     # test_legal_hold
     test_get_object_error &&  \
+    test_put_object_if_none_match && \
+    test_copy_object_if_none_match && \
+    test_complete_multipart_upload_if_none_match && \
+    test_concurrent_put_object_if_none_match && \
     test_object_tagging
     return $?
 }

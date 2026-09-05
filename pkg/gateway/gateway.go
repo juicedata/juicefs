@@ -59,6 +59,20 @@ const (
 var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
 
+func isExplicitDirectoryMarker(attr *meta.Attr) bool {
+	return attr.Atime*1000+int64(attr.Atimensec/1e6) == 0
+}
+
+func shouldLoadObjectETag(isDir bool, attr *meta.Attr) bool {
+	return !isDir || attr != nil && isExplicitDirectoryMarker(attr)
+}
+
+type objectXattr struct {
+	name   string
+	value  []byte
+	remove bool
+}
+
 type Config struct {
 	MultiBucket bool
 	Bucket      string
@@ -320,7 +334,7 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 		}
 		defer f.Close(mctx)
 		if !n.gConf.HideDir {
-			if fi, _ := f.Stat(); fi.(*fs.FileStat).Atime() == 0 && prefixEntry == "" {
+			if fi, _ := f.Stat(); isExplicitDirectoryMarker(fi.(*fs.FileStat).Attr()) && prefixEntry == "" {
 				entries = append(entries, &minio.Entry{Name: ""})
 			}
 		}
@@ -378,20 +392,20 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	getObjectInfo := func(ctx context.Context, bucket, object string, fi_ any) (obj minio.ObjectInfo, err error) {
 		var eno syscall.Errno
 		var info *minio.ObjectInfo
+		var fileStat *fs.FileStat
 		if fi_ == nil {
-			var fi *fs.FileStat
-			fi, eno = n.fs.Stat(mctx, n.path(bucket, object))
+			fileStat, eno = n.fs.Stat(mctx, n.path(bucket, object))
 			if eno == 0 {
-				size := fi.Size()
-				if fi.IsDir() {
+				size := fileStat.Size()
+				if fileStat.IsDir() {
 					size = 0
 				}
 				info = &minio.ObjectInfo{
 					Bucket:   bucket,
-					ModTime:  fi.ModTime(),
+					ModTime:  fileStat.ModTime(),
 					Size:     size,
-					IsDir:    fi.IsDir(),
-					AccTime:  fi.ModTime(),
+					IsDir:    fileStat.IsDir(),
+					AccTime:  fileStat.ModTime(),
 					IsLatest: true,
 				}
 			}
@@ -410,17 +424,17 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 				eno = 0
 			}
 		} else {
-			fi := fi_.(*fs.FileStat)
+			fileStat = fi_.(*fs.FileStat)
 			info = &minio.ObjectInfo{
 				Bucket:   bucket,
-				Name:     fi.Name(),
-				ModTime:  fi.ModTime(),
-				Size:     fi.Size(),
-				IsDir:    fi.IsDir(),
-				AccTime:  fi.ModTime(),
+				Name:     fileStat.Name(),
+				ModTime:  fileStat.ModTime(),
+				Size:     fileStat.Size(),
+				IsDir:    fileStat.IsDir(),
+				AccTime:  fileStat.ModTime(),
 				IsLatest: true,
 			}
-			if fi.IsDir() {
+			if fileStat.IsDir() {
 				info.Size = 0
 			}
 		}
@@ -429,7 +443,11 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 			return obj, jfsToObjectErr(ctx, eno, bucket, object)
 		}
 		info.Name = object
-		if n.gConf.KeepEtag && !strings.HasSuffix(object, sep) {
+		var attr *meta.Attr
+		if fileStat != nil {
+			attr = fileStat.Attr()
+		}
+		if n.gConf.KeepEtag && shouldLoadObjectETag(info.IsDir, attr) {
 			etag, _ := n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
 			info.ETag = string(etag)
 		}
@@ -616,7 +634,31 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	dst := n.path(dstBucket, dstObject)
 	src := n.path(srcBucket, srcObject)
 
+	if dstOpts.IfNoneMatch && strings.HasSuffix(dstObject, sep) {
+		if srcInfo.Size > 0 {
+			return info, minio.ObjectExistsAsDirectory{
+				Bucket: dstBucket,
+				Object: dstObject,
+				Err:    syscall.EEXIST,
+			}
+		}
+		var etag []byte
+		var xattrs []objectXattr
+		if xattrs, etag, err = n.copyDirectoryObjectXattrs(src, srcInfo); err != nil {
+			return info, err
+		}
+		if err = n.putDirectoryObject(ctx, dstBucket, dst, dstOpts.IfNoneMatch, xattrs); err != nil {
+			return info, jfsToObjectErr(ctx, err, dstBucket, dstObject)
+		}
+		info, err = n.GetObjectInfo(ctx, dstBucket, dstObject, minio.ObjectOptions{})
+		info.ETag = string(etag)
+		return info, err
+	}
+
 	if minio.IsStringEqual(src, dst) {
+		if dstOpts.IfNoneMatch {
+			return info, minio.PreConditionFailed{}
+		}
 		// if we copy the same object for set metadata
 		err = n.setObjMeta(dst, srcInfo.UserDefined)
 		if err != nil {
@@ -673,17 +715,24 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		logger.Errorf("set object metadata error, path: %s error %s", dst, err)
 	}
 
-	eno = n.fs.Rename(mctx, tmp, dst, 0)
+	renameFlags := uint32(0)
+	if dstOpts.IfNoneMatch {
+		renameFlags = meta.RenameNoReplace
+	}
+	eno = n.fs.Rename(mctx, tmp, dst, renameFlags)
 	if eno == syscall.ENOENT {
 		if err = n.mkdirAllInBucket(ctx, dstBucket, path.Dir(dst)); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(dst), err)
 			err = jfsToObjectErr(ctx, err, dstBucket, dstObject)
 			return
 		}
-		eno = n.fs.Rename(mctx, tmp, dst, 0)
+		eno = n.fs.Rename(mctx, tmp, dst, renameFlags)
+	}
+	if dstOpts.IfNoneMatch && eno == syscall.EEXIST {
+		return info, minio.PreConditionFailed{}
 	}
 	if eno != 0 {
-		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
+		err = jfsToObjectErr(ctx, eno, dstBucket, dstObject)
 		logger.Errorf("rename %s to %s: %s", tmp, dst, err)
 		return
 	}
@@ -726,7 +775,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	// put /dir1/key1; head /dir1 return 404; head /dir1/ return 404; head /dir1/key1 return 200
 	// put /dir1/key1/; head /dir1/key1 return 404; head /dir1/key1/ return 200
 	var isObject bool
-	if strings.HasSuffix(object, sep) && fi.IsDir() && fi.Atime() == 0 {
+	if strings.HasSuffix(object, sep) && fi.IsDir() && isExplicitDirectoryMarker(fi.Attr()) {
 		isObject = true
 	} else if !strings.HasSuffix(object, sep) && !fi.IsDir() {
 		isObject = true
@@ -736,7 +785,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		return
 	}
 	var etag []byte
-	if n.gConf.KeepEtag && !fi.IsDir() {
+	if n.gConf.KeepEtag && shouldLoadObjectETag(fi.IsDir(), fi.Attr()) {
 		etag, _ = n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
 	}
 	size := fi.Size()
@@ -868,7 +917,11 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 
 	applyObjTaggingFunc(tmpname)
 
-	eno = n.fs.Rename(mctx, tmpname, object, 0)
+	renameFlags := uint32(0)
+	if opts.IfNoneMatch {
+		renameFlags = meta.RenameNoReplace
+	}
+	eno = n.fs.Rename(mctx, tmpname, object, renameFlags)
 	if eno == syscall.ENOENT {
 		if strings.HasPrefix(object, sep+metaBucket+sep) {
 			err = jfsToObjectErr(ctx, eno, bucket, object, path.Base(path.Dir(object)))
@@ -879,12 +932,144 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 			err = jfsToObjectErr(ctx, err, bucket, object)
 			return
 		}
-		eno = n.fs.Rename(mctx, tmpname, object, 0)
+		eno = n.fs.Rename(mctx, tmpname, object, renameFlags)
+	}
+	if opts.IfNoneMatch && eno == syscall.EEXIST {
+		return minio.PreConditionFailed{}
 	}
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket, object)
 	}
 	return
+}
+
+func (n *jfsObjects) applyObjectXattrs(ctx meta.Context, inode meta.Ino, xattrs []objectXattr) error {
+	for _, xattr := range xattrs {
+		var eno syscall.Errno
+		if xattr.remove {
+			eno = n.fs.Meta().RemoveXattr(ctx, inode, xattr.name)
+			if eno == meta.ENOATTR {
+				eno = 0
+			}
+		} else {
+			eno = n.fs.Meta().SetXattr(ctx, inode, xattr.name, xattr.value, 0)
+		}
+		if eno != 0 {
+			return eno
+		}
+	}
+	return nil
+}
+
+func (n *jfsObjects) publishNewDirectoryObject(ctx context.Context, bucket, directoryPath string, xattrs []objectXattr) error {
+	uuid := minio.MustGetUUID()
+	tmp := n.tpath(bucket, "tmp", uuid[:subDirPrefix], uuid)
+	if err := n.mkdirAll(ctx, path.Dir(tmp)); err != nil {
+		return err
+	}
+	if eno := n.fs.Mkdir(mctx, tmp, 0777, n.gConf.Umask); eno != 0 {
+		return eno
+	}
+	published := false
+	defer func() {
+		if !published {
+			_ = n.fs.Delete(mctx, tmp)
+		}
+	}()
+	fi, eno := n.fs.Stat(mctx, tmp)
+	if eno != 0 {
+		return eno
+	}
+	if err := n.applyObjectXattrs(mctx, fi.Inode(), xattrs); err != nil {
+		return err
+	}
+	attr := meta.Attr{Atime: 0, Atimensec: 0}
+	if eno = n.fs.Meta().SetAttr(mctx, fi.Inode(), meta.SetAttrAtime, 0, &attr); eno != 0 {
+		return eno
+	}
+	n.fs.InvalidateAttr(fi.Inode())
+	// Publish the marker with its attributes already set, leaving any existing
+	// destination untouched.
+	eno = n.fs.Rename(mctx, tmp, directoryPath, meta.RenameNoReplace)
+	if eno != 0 {
+		return eno
+	}
+	published = true
+	return nil
+}
+
+func (n *jfsObjects) putDirectoryObject(ctx context.Context, bucket, directoryPath string, ifNoneMatch bool, xattrs []objectXattr) error {
+	directoryPath = strings.TrimSuffix(directoryPath, sep)
+	parentPath := path.Dir(directoryPath)
+	if err := n.mkdirAllInBucket(ctx, bucket, parentPath); err != nil {
+		return err
+	}
+
+	parent, eno := n.fs.Stat(mctx, parentPath)
+	if eno != 0 {
+		return eno
+	}
+
+	requestCtx := meta.WrapWithCancel(ctx, mctx.Pid(), mctx.Uid(), mctx.Gids())
+	defer requestCtx.Cancel()
+	name := path.Base(directoryPath)
+	var inode meta.Ino
+	var attr meta.Attr
+	eno = n.fs.Meta().Lookup(requestCtx, parent.Inode(), name, &inode, &attr, true)
+	if eno == syscall.ENOENT {
+		publishErr := n.publishNewDirectoryObject(ctx, bucket, directoryPath, xattrs)
+		if publishErr == nil {
+			return nil
+		}
+		if errors.Is(publishErr, syscall.EEXIST) {
+			eno = n.fs.Meta().Lookup(requestCtx, parent.Inode(), name, &inode, &attr, true)
+		} else {
+			return publishErr
+		}
+	}
+	if eno != 0 {
+		return eno
+	}
+	if attr.Typ != meta.TypeDirectory {
+		if ifNoneMatch {
+			return minio.PreConditionFailed{}
+		}
+		return fmt.Errorf("%s is not directory", directoryPath)
+	}
+	if ifNoneMatch && (isExplicitDirectoryMarker(&attr) || n.gConf.HeadDir) {
+		return minio.PreConditionFailed{}
+	}
+	values := make(map[string][]byte, len(xattrs))
+	for _, xattr := range xattrs {
+		if xattr.remove {
+			values[xattr.name] = nil
+		} else {
+			values[xattr.name] = xattr.value
+		}
+	}
+	eno = n.fs.Meta().SetDirMarker(requestCtx, parent.Inode(), name, inode, ifNoneMatch, values, &attr)
+	if ifNoneMatch && eno == syscall.EEXIST {
+		return minio.PreConditionFailed{}
+	}
+	if eno != 0 {
+		return eno
+	}
+	n.fs.InvalidateAttr(inode)
+	return nil
+}
+
+func (n *jfsObjects) emptyDirectoryObjectXattrs() []objectXattr {
+	var xattrs []objectXattr
+	if n.gConf.KeepEtag {
+		xattrs = append(xattrs, objectXattr{name: s3Etag, remove: true})
+	}
+	if n.gConf.ObjTag {
+		xattrs = append(xattrs, objectXattr{name: s3Tags, remove: true})
+	}
+	if n.gConf.ObjMeta {
+		xattrs = append(xattrs, objectXattr{name: s3Meta, remove: true})
+	}
+	return xattrs
 }
 
 func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
@@ -895,10 +1080,6 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	var etag string
 	p := n.path(bucket, object)
 	if strings.HasSuffix(object, sep) {
-		if err = n.mkdirAllInBucket(ctx, bucket, p); err != nil {
-			err = jfsToObjectErr(ctx, err, bucket, object)
-			return
-		}
 		if r.Size() > 0 {
 			err = minio.ObjectExistsAsDirectory{
 				Bucket: bucket,
@@ -907,8 +1088,10 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 			}
 			return
 		}
-		// if the put object is a directory, set its atime to 0
-		n.setFileAtime(p, 0)
+		if err = n.putDirectoryObject(ctx, bucket, p, opts.IfNoneMatch, n.emptyDirectoryObjectXattrs()); err != nil {
+			err = jfsToObjectErr(ctx, err, bucket, object)
+			return
+		}
 	} else {
 		if err = n.putObject(ctx, bucket, p, r, opts, func(tmpName string) {
 			etag = r.MD5CurrentHexString()
@@ -995,6 +1178,46 @@ var s3UserControlledSystemMeta = []string{
 	"content-type",
 }
 
+func objectMetadataValue(metadata map[string]string) ([]byte, error) {
+	objectMetadata := make(map[string]string)
+	for k, v := range metadata {
+		k = strings.ToLower(k)
+		if strings.HasPrefix(k, amzMeta) {
+			objectMetadata[k] = v
+		} else {
+			for _, systemMetaKey := range s3UserControlledSystemMeta {
+				if k == systemMetaKey {
+					objectMetadata[k] = v
+					break
+				}
+			}
+		}
+	}
+	if len(objectMetadata) == 0 {
+		return nil, nil
+	}
+	return json.Marshal(objectMetadata)
+}
+
+func (n *jfsObjects) copyDirectoryObjectXattrs(src string, srcInfo minio.ObjectInfo) (xattrs []objectXattr, etag []byte, err error) {
+	if n.gConf.KeepEtag {
+		etag, _ = n.fs.GetXattr(mctx, src, s3Etag)
+		xattrs = append(xattrs, objectXattr{name: s3Etag, value: etag, remove: len(etag) == 0})
+	}
+	if n.gConf.ObjTag {
+		tagStr := srcInfo.UserDefined[xhttp.AmzObjectTagging]
+		xattrs = append(xattrs, objectXattr{name: s3Tags, value: []byte(tagStr), remove: tagStr == ""})
+	}
+	if n.gConf.ObjMeta {
+		var metadataValue []byte
+		if metadataValue, err = objectMetadataValue(srcInfo.UserDefined); err != nil {
+			return nil, nil, err
+		}
+		xattrs = append(xattrs, objectXattr{name: s3Meta, value: metadataValue, remove: len(metadataValue) == 0})
+	}
+	return xattrs, etag, nil
+}
+
 func (n *jfsObjects) getObjMeta(p string) (objMeta map[string]string, err error) {
 	if n.gConf.ObjMeta {
 		var errno syscall.Errno
@@ -1014,25 +1237,11 @@ func (n *jfsObjects) getObjMeta(p string) (objMeta map[string]string, err error)
 
 func (n *jfsObjects) setObjMeta(p string, metadata map[string]string) error {
 	if n.gConf.ObjMeta && metadata != nil {
-		meta := make(map[string]string)
-		for k, v := range metadata {
-			k = strings.ToLower(k)
-			if strings.HasPrefix(k, amzMeta) {
-				meta[k] = v
-			} else {
-				for _, systemMetaKey := range s3UserControlledSystemMeta {
-					if k == systemMetaKey {
-						meta[k] = v
-						break
-					}
-				}
-			}
+		s3MetadataValue, err := objectMetadataValue(metadata)
+		if err != nil {
+			return err
 		}
-		if len(meta) > 0 {
-			s3MetadataValue, err := json.Marshal(meta)
-			if err != nil {
-				return err
-			}
+		if len(s3MetadataValue) > 0 {
 			if eno := n.fs.SetXattr(mctx, p, s3Meta, s3MetadataValue, 0); eno != 0 {
 				logger.Errorf("set object metadata error, path: %s,value: %s error: %s", p, string(s3Meta), eno)
 			}
@@ -1326,7 +1535,11 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	}
 
 	name := n.path(bucket, object)
-	eno = n.fs.Rename(mctx, tmp, name, 0)
+	renameFlags := uint32(0)
+	if opts.IfNoneMatch {
+		renameFlags = meta.RenameNoReplace
+	}
+	eno = n.fs.Rename(mctx, tmp, name, renameFlags)
 	if eno == syscall.ENOENT {
 		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(name)); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(name), err)
@@ -1334,7 +1547,11 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 			err = jfsToObjectErr(ctx, err, bucket, object, uploadID)
 			return
 		}
-		eno = n.fs.Rename(mctx, tmp, name, 0)
+		eno = n.fs.Rename(mctx, tmp, name, renameFlags)
+	}
+	if opts.IfNoneMatch && eno == syscall.EEXIST {
+		_ = n.fs.Delete(mctx, tmp)
+		return objInfo, minio.PreConditionFailed{}
 	}
 	if eno != 0 {
 		_ = n.fs.Delete(mctx, tmp)
