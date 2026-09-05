@@ -93,6 +93,8 @@ VERSION: UNIX_SECONDS.NANOSECONDS|OPERATION(arguments)[:result]|(SESSION_ID,TXN_
 103: 1716440760.000000000|UNLINK(1,report.txt,0,false,true):1024|(3,90)
 ```
 
+S3 网关更新目录对象时使用单条 `SETDIRMARKER(inode,ctime,ctimensec,xattrs)` 记录。该操作将目录的 atime 和 atimensec 设为零，并一并更新列出的扩展属性。`xattrs` 参数为经过百分号转义的 JSON，属性值使用 base64 编码，`null` 表示删除，未列出的属性保持不变。外部消费者在处理使用原子目录标记更新的网关所产生的日志前，需要支持该操作。inode 和扩展属性的存储格式不变。
+
 ## 使用建议和限制 {#notes}
 
 - changelog 不是元数据备份。备份和恢复应使用[元数据备份](metadata_dump_load.md)。

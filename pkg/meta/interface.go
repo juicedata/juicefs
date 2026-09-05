@@ -431,6 +431,11 @@ type Meta interface {
 	GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	// SetAttr updates the attributes for given node.
 	SetAttr(ctx Context, inode Ino, set uint16, sggidclearmode uint8, attr *Attr) syscall.Errno
+	// SetDirMarker atomically marks an existing directory as an object (atime zero)
+	// and updates its xattrs. Nil values remove xattrs; absent names are unchanged.
+	// The parent/name entry must still refer to inode. If exclusive is true, an
+	// existing marker returns EEXIST without changes. A replaced entry returns EAGAIN.
+	SetDirMarker(ctx Context, parent Ino, name string, inode Ino, exclusive bool, xattrs map[string][]byte, attr *Attr) syscall.Errno
 	// Check setting attr is allowed or not
 	CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) syscall.Errno
 	// Truncate changes the length for given file.

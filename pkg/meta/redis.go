@@ -1404,6 +1404,54 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 	}, m.inodeKey(inode)))
 }
 
+func (m *redisMeta) doSetDirMarker(ctx Context, parent Ino, name string, inode Ino, exclusive bool, xattrs map[string][]byte, attr *Attr) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		entry, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
+		if err != nil {
+			return err
+		}
+		_, currentInode := m.parseEntry(entry)
+		if currentInode != inode {
+			return syscall.EAGAIN
+		}
+		values, err := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		if err != nil {
+			return err
+		}
+		if values[0] == nil || values[1] == nil {
+			return syscall.ENOENT
+		}
+		var parentAttr, current Attr
+		m.parseAttr([]byte(values[0].(string)), &parentAttr)
+		m.parseAttr([]byte(values[1].(string)), &current)
+		now := time.Now()
+		if st := m.prepareDirMarker(ctx, parent, inode, &parentAttr, &current, exclusive, now); st != 0 {
+			return st
+		}
+		// Validate the hash type before MULTI: Redis cannot roll back a command
+		// error inside EXEC. Reading also keeps corrupt xattrs from publishing a marker.
+		if _, err = tx.HLen(ctx, m.xattrKey(inode)).Result(); err != nil {
+			return err
+		}
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			for key, value := range xattrs {
+				if value == nil {
+					pipe.HDel(ctx, m.xattrKey(inode), key)
+				} else {
+					pipe.HSet(ctx, m.xattrKey(inode), key, value)
+				}
+			}
+			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&current), 0)
+			m.genLog(ctx, pipe, now, "%s", dirMarkerLog(inode, &current, xattrs))
+			return nil
+		})
+		if err == nil {
+			*attr = current
+		}
+		return err
+	}, m.inodeKey(inode), m.inodeKey(parent), m.entryKey(parent), m.xattrKey(inode)))
+}
+
 func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
 	if noatime {
 		target, err = m.rdb.Get(ctx, m.symKey(inode)).Bytes()

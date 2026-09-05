@@ -21,6 +21,14 @@ Common application scenarios for JuiceFS S3 Gateway include:
 - **Managing files in JuiceFS:** JuiceFS S3 Gateway provides a web-based file manager to manage files in JuiceFS directly from a browser.
 - **Cluster replication:** In scenarios requiring cross-cluster data replication, JuiceFS S3 Gateway serves as a unified data export for clusters. This avoids cross-region metadata access and enhances data transfer performance. For details, see [Sync across regions using JuiceFS S3 Gateway](../guide/sync.md#sync-across-region).
 
+## Conditional directory objects
+
+A zero-byte object whose key ends in `/` is represented by a directory with an explicit object marker. Uploading `prefix/child.txt` creates the parent directory, but does not create the S3 object `prefix/`.
+
+With the default `--head-dir=false`, a `PUT prefix/` or a zero-byte copy to `prefix/` with `If-None-Match: *` can create the marker on this existing directory. The gateway preserves the directory inode and children, and commits the marker and its managed extended attributes in one metadata transaction. Concurrent conditional creators have one winner; subsequent requests return `412 Precondition Failed` without changing the object.
+
+When `--head-dir` is enabled, implicit directories are exposed as existing objects, so the same conditional request returns `412`. Without the conditional header, an existing directory object can still be overwritten. Directory objects must have an empty body.
+
 ## Quick start
 
 JuiceFS S3 Gateway enables access to an existing JuiceFS volume. If you do not have one, follow the steps in this [guide](../getting-started/standalone.md) to create a JuiceFS file system.

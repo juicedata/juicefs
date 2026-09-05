@@ -116,6 +116,7 @@ type engine interface {
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno
+	doSetDirMarker(ctx Context, parent Ino, name string, inode Ino, exclusive bool, xattrs map[string][]byte, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
@@ -1519,6 +1520,75 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		}
 	}
 	return err
+}
+
+func (m *baseMeta) SetDirMarker(ctx Context, parent Ino, name string, inode Ino, exclusive bool, xattrs map[string][]byte, attr *Attr) syscall.Errno {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\x00") || attr == nil {
+		return syscall.EINVAL
+	}
+	if len(name) > MaxName {
+		return syscall.ENAMETOOLONG
+	}
+	for key := range xattrs {
+		if key == "" || strings.ContainsRune(key, 0) {
+			return syscall.EINVAL
+		}
+	}
+	if ctx.Canceled() {
+		return syscall.EINTR
+	}
+	defer m.timeit("SetDirMarker", time.Now())
+	parent, inode = m.checkRoot(parent), m.checkRoot(inode)
+	if m.conf.CaseInsensi {
+		if entry := m.resolveCase(ctx, parent, name); entry != nil {
+			name = string(entry.Name)
+		}
+	}
+	st := m.en.doSetDirMarker(ctx, parent, name, inode, exclusive, xattrs, attr)
+	if st == 0 {
+		m.of.InvalidateChunk(inode, invalidateAttrOnly)
+		m.of.Update(inode, attr)
+	}
+	return st
+}
+
+// prepareDirMarker checks and prepares the attribute update inside the backend
+// transaction, before any xattrs are modified.
+func (m *baseMeta) prepareDirMarker(ctx Context, parent, inode Ino, parentAttr, attr *Attr, exclusive bool, now time.Time) syscall.Errno {
+	if parentAttr.Typ != TypeDirectory || attr.Typ != TypeDirectory {
+		return syscall.ENOTDIR
+	}
+	if parent.IsTrash() || attr.Parent > TrashInode || attr.Flags&(FlagImmutable|FlagAppend) != 0 {
+		return syscall.EPERM
+	}
+	if st := m.Access(ctx, parent, MODE_MASK_X, parentAttr); st != 0 {
+		return st
+	}
+	if exclusive && attr.Atime*1000+int64(attr.Atimensec/1e6) == 0 {
+		return syscall.EEXIST
+	}
+	if st := m.Access(ctx, inode, MODE_MASK_W, attr); st != 0 {
+		return st
+	}
+	updated, st := m.mergeAttr(ctx, inode, SetAttrAtime, attr, &Attr{}, now, nil)
+	if st != 0 {
+		return st
+	}
+	if updated != nil {
+		*attr = *updated
+	}
+	attr.Ctime, attr.Ctimensec = now.Unix(), uint32(now.Nanosecond())
+	return 0
+}
+
+// One log record preserves the transaction boundary, including on KV backends
+// whose log key is the transaction timestamp. JSON null means remove an xattr.
+func dirMarkerLog(inode Ino, attr *Attr, xattrs map[string][]byte) string {
+	values, _ := json.Marshal(xattrs) // map[string][]byte is always encodable
+	return fmt.Sprintf("SETDIRMARKER(%d,%d,%d,%s)", inode, attr.Ctime, attr.Ctimensec, logEncode(values))
 }
 
 func (m *baseMeta) nextInode() (Ino, error) {

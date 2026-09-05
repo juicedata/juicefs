@@ -1036,27 +1036,22 @@ func (n *jfsObjects) putDirectoryObject(ctx context.Context, bucket, directoryPa
 		}
 		return fmt.Errorf("%s is not directory", directoryPath)
 	}
-	isExplicitMarker := isExplicitDirectoryMarker(&attr)
-	if ifNoneMatch {
-		if isExplicitMarker || n.gConf.HeadDir {
-			return minio.PreConditionFailed{}
+	if ifNoneMatch && (isExplicitDirectoryMarker(&attr) || n.gConf.HeadDir) {
+		return minio.PreConditionFailed{}
+	}
+	values := make(map[string][]byte, len(xattrs))
+	for _, xattr := range xattrs {
+		if xattr.remove {
+			values[xattr.name] = nil
+		} else {
+			values[xattr.name] = xattr.value
 		}
-		return minio.NotImplemented{Message: "atomic conditional promotion of an implicit directory is not supported"}
 	}
-
-	if err := n.applyObjectXattrs(requestCtx, inode, xattrs); err != nil {
-		return err
+	eno = n.fs.Meta().SetDirMarker(requestCtx, parent.Inode(), name, inode, ifNoneMatch, values, &attr)
+	if ifNoneMatch && eno == syscall.EEXIST {
+		return minio.PreConditionFailed{}
 	}
-	var currentInode meta.Ino
-	var currentAttr meta.Attr
-	if eno = n.fs.Meta().Lookup(requestCtx, parent.Inode(), name, &currentInode, &currentAttr, true); eno != 0 {
-		return eno
-	}
-	if currentInode != inode || currentAttr.Typ != meta.TypeDirectory {
-		return syscall.EAGAIN
-	}
-	attr = meta.Attr{Atime: 0, Atimensec: 0}
-	if eno = n.fs.Meta().SetAttr(requestCtx, inode, meta.SetAttrAtime, 0, &attr); eno != 0 {
+	if eno != 0 {
 		return eno
 	}
 	n.fs.InvalidateAttr(inode)
