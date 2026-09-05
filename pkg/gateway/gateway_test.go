@@ -177,6 +177,19 @@ func TestMkdirAllInBucket(t *testing.T) {
 	if _, eno := jfs.Stat(mctx, jfsObj.path(missingBucket)); !fs.IsNotExist(eno) {
 		t.Fatalf("missing bucket was recreated: %s", eno)
 	}
+
+	// A bucket can disappear after PutObject checks it, before the marker is committed.
+	for _, ifNoneMatch := range []bool{false, true} {
+		for _, object := range []string{"marker/", "dir/marker/"} {
+			err := jfsObj.putDirectoryObject(ctx, missingBucket, jfsObj.path(missingBucket, object), ifNoneMatch, nil)
+			if err == nil || !fs.IsNotExist(err) {
+				t.Fatalf("directory write under missing bucket (conditional=%t, object=%s): expected ENOENT, got %v", ifNoneMatch, object, err)
+			}
+			if _, eno := jfs.Stat(mctx, jfsObj.path(missingBucket)); !fs.IsNotExist(eno) {
+				t.Fatalf("directory write recreated missing bucket: %s", eno)
+			}
+		}
+	}
 }
 
 func createTestFile(t *testing.T, jfs *fs.FileSystem, name string) {
