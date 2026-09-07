@@ -146,6 +146,73 @@ func TestStoreMemCache(t *testing.T) {
 		t.Fatalf("cache cnt %d used %d, expect both 0", cnt, used)
 	}
 }
+func TestReadCachedAt(t *testing.T) {
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
+	conf := defaultConf
+	conf.CacheDir = "memory"
+	conf.CacheFullBlock = true
+	store := NewCachedStore(mem, conf, nil)
+	size := conf.BlockSize + 100 // two blocks
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(i * 3)
+	}
+	w := store.NewWriter(1, 0)
+	if _, err := w.WriteAt(data, 0); err != nil {
+		t.Fatalf("write: %s", err)
+	}
+	if err := w.Finish(size); err != nil {
+		t.Fatalf("finish: %s", err)
+	}
+	r := store.NewReader(1, size)
+	cr := r.(CachedReader)
+
+	// nothing cached yet
+	buf := make([]byte, 100)
+	if _, ok := cr.ReadCachedAt(buf, 0); ok {
+		t.Fatalf("read of uncached block should fail")
+	}
+	// populate the cache through the regular path
+	p := NewOffPage(size)
+	if n, err := r.ReadAt(ctx, p, 0); err != nil || n != size {
+		t.Fatalf("read: (%d,%s)", n, err)
+	}
+	p.Release()
+
+	// across the block boundary
+	off := conf.BlockSize - 50
+	if n, ok := cr.ReadCachedAt(buf, off); !ok || n != len(buf) {
+		t.Fatalf("cached read at %d: (%d,%v)", off, n, ok)
+	}
+	if !bytes.Equal(buf, data[off:off+len(buf)]) {
+		t.Fatalf("cached read at %d: data mismatch", off)
+	}
+	// beyond the slice
+	if _, ok := cr.ReadCachedAt(buf, size-50); ok {
+		t.Fatalf("read beyond the slice should fail")
+	}
+	// evicting one block fails only the reads that need it
+	if err := store.EvictCache(1, uint32(size), []Range{{0, 1}}); err != nil {
+		t.Fatalf("evict: %s", err)
+	}
+	if _, ok := cr.ReadCachedAt(buf, off); ok {
+		t.Fatalf("read of evicted block should fail")
+	}
+	if n, ok := cr.ReadCachedAt(buf, conf.BlockSize); !ok || n != len(buf) {
+		t.Fatalf("cached read at %d: (%d,%v)", conf.BlockSize, n, ok)
+	}
+	if !bytes.Equal(buf, data[conf.BlockSize:conf.BlockSize+len(buf)]) {
+		t.Fatalf("cached read at %d: data mismatch", conf.BlockSize)
+	}
+
+	// cache disabled
+	conf.CacheSize = 0
+	store = NewCachedStore(mem, conf, nil)
+	if _, ok := store.NewReader(1, size).(CachedReader).ReadCachedAt(buf, conf.BlockSize); ok {
+		t.Fatalf("read with cache disabled should fail")
+	}
+}
+
 func TestStoreCompressed(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf

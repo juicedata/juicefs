@@ -167,6 +167,44 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 	return len(p), nil
 }
 
+// ReadCachedAt reads only from the local cache; see CachedReader.
+func (s *rSlice) ReadCachedAt(p []byte, off int) (int, bool) {
+	if !s.store.conf.CacheEnabled() || off < 0 || off+len(p) > s.length {
+		return 0, false
+	}
+	got := 0
+	for got < len(p) {
+		indx := s.index(off)
+		boff := off % s.store.conf.BlockSize
+		l := min(len(p)-got, s.blockSize(indx)-boff)
+		key := s.key(indx)
+		start := time.Now()
+		r, err := s.store.bcache.load(key)
+		if err != nil {
+			return got, false
+		}
+		n, err := r.ReadAt(p[got:got+l], int64(boff))
+		if !s.store.conf.OSCache {
+			dropOSCache(r)
+		}
+		_ = r.Close()
+		if err != nil {
+			logger.Warnf("remove partial cached block %s: %d %s", key, n, err)
+			s.store.bcache.remove(key, false)
+			return got, false
+		}
+		s.store.cacheHits.Add(1)
+		s.store.cacheHitBytes.Add(float64(n))
+		s.store.cacheReadHist.Observe(time.Since(start).Seconds())
+		if n != l {
+			return got + n, false
+		}
+		got += n
+		off += n
+	}
+	return got, true
+}
+
 func (s *rSlice) delete(indx int) error {
 	key := s.key(indx)
 	return s.store.delete(key)

@@ -623,7 +623,66 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 	return n, 0
 }
 
+// readCached serves a random read from the local cache on the calling
+// goroutine. It returns false when the range is not fully cached, belongs to a
+// sequential session (readahead is left to the slice readers), or the reader is
+// stopping; the caller then takes the regular path. Skipping the slice reader
+// saves a goroutine hand-off per read, which is what makes cache hits expensive
+// when the caller is an OS thread pinned by a cgo call (Hadoop SDK).
+func (f *fileReader) readCached(ctx meta.Context, offset uint64, buf []byte) (int, bool) {
+	size := uint64(len(buf))
+	if size == 0 || offset == 0 || offset/meta.ChunkSize != (offset+size-1)/meta.ChunkSize {
+		return 0, false
+	}
+	f.Lock()
+	if f.shouldStop() || offset+size > f.length {
+		f.Unlock()
+		return 0, false
+	}
+	block := &frange{offset, size}
+	if f.need(block) {
+		f.Unlock()
+		return 0, false
+	}
+	// keep session tracking as checkReadahead would, minus the readahead
+	f.sessions[f.guessSession(block)].lastOffset = block.end()
+	f.Unlock()
+
+	var slices []meta.Slice
+	if st := f.r.m.Read(ctx, f.inode, uint32(offset/meta.ChunkSize), &slices); st != 0 {
+		return 0, false
+	}
+	coff := uint32(offset % meta.ChunkSize)
+	var read, pos uint32
+	for i := range slices {
+		s := &slices[i]
+		if uint64(read) < size && coff < pos+s.Len {
+			toread := min(uint32(size)-read, pos+s.Len-coff)
+			if s.Id == 0 {
+				clear(buf[read : read+toread])
+			} else {
+				r, ok := f.r.store.NewReader(s.Id, int(s.Size)).(chunk.CachedReader)
+				if !ok {
+					return 0, false
+				}
+				n, ok := r.ReadCachedAt(buf[read:read+toread], int(coff-pos)+int(s.Off))
+				if !ok || uint32(n) != toread {
+					return 0, false
+				}
+			}
+			read += toread
+			coff += toread
+		}
+		pos += s.Len
+	}
+	clear(buf[read:size]) // hole after the last slice
+	return int(size), true
+}
+
 func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, syscall.Errno) {
+	if n, ok := f.readCached(ctx, offset, buf); ok {
+		return n, 0
+	}
 	if f.r.readBufferUsed() > f.r.bufferSize {
 		time.Sleep(time.Millisecond * 10)             // slow down
 		for f.r.readBufferUsed() > f.r.bufferSize*2 { // readahead uses 80% of buffer, stop here to avoid OOM
