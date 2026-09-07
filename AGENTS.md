@@ -108,7 +108,7 @@ make test.fdb                # FoundationDB tests (-tags fdb)
 - Metadata-engine parity: a semantic change in `pkg/meta/` must behave identically
   across all three families (Redis, SQL/DB, KV) and be covered by their shared tests.
 - Behavior changes need matching unit tests; user-facing changes update the docs.
-- Keep issues concise: state the problem clearly and avoid lengthy exposition.
+- Keep issues and pr comments concise: state the problem clearly and avoid lengthy exposition.
 - Keep PRs minimal and focused on the current task; avoid unrelated features,
   refactors, or formatting-only churn.
 - Do not hand-edit generated code or vendored dependencies.
