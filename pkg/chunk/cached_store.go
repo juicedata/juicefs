@@ -410,6 +410,7 @@ func (s *wSlice) upload(indx int) {
 		}
 		ctx := context.WithValue(context.Background(), object.TierKey{}, s.tierID)
 		if s.writeback && blen < s.store.conf.WritebackThresholdSize {
+			block.Acquire()
 			const (
 				stagePending int32 = iota
 				stageSucceeded
@@ -417,14 +418,15 @@ func (s *wSlice) upload(indx int) {
 			)
 			stagingPath := "unknown"
 			var stageState atomic.Int32
-			block.Acquire()
+			stageState.Store(stagePending)
 			err := utils.WithTimeout(context.TODO(), func(context.Context) (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
 				defer block.Release()
-				stagingPath, err = s.store.bcache.stage(key, block.Data, s.tierID)
-				if err == nil && !stageState.CompareAndSwap(stagePending, stageSucceeded) {
+				var stageErr error
+				stagingPath, stageErr = s.store.bcache.stage(key, block.Data, s.tierID)
+				if stageErr == nil && !stageState.CompareAndSwap(stagePending, stageSucceeded) {
 					_ = s.store.bcache.removeStage(key)
 				}
-				return err
+				return stageErr
 			}, s.store.conf.PutTimeout)
 			if err != nil {
 				if !stageState.CompareAndSwap(stagePending, stageAbandoned) {
