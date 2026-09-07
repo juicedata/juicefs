@@ -1179,22 +1179,20 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	used, inodes := atomic.LoadInt64(&m.usedSpace), atomic.LoadInt64(&m.usedInodes)
 	if !m.conf.FastStatfs || used == unknownUsage || inodes == unknownUsage {
-		var remoteUsed int64 // using an additional variable here to ensure the assignment inside `utils.WithTimeout` does not change the `used` variable again after a timeout.
-		err := utils.WithTimeout(ctx, func(context.Context) error {
+		var remoteUsed int64 // avoid race
+		if err := utils.WithTimeout(ctx, func(context.Context) error {
 			var getErr error
 			remoteUsed, getErr = m.en.getCounter(usedSpace)
 			return getErr
-		}, time.Millisecond*150)
-		if err == nil {
+		}, time.Millisecond*150); err == nil {
 			used = remoteUsed
 		}
 		var remoteInodes int64
-		err = utils.WithTimeout(ctx, func(context.Context) error {
+		if err := utils.WithTimeout(ctx, func(context.Context) error {
 			var getErr error
 			remoteInodes, getErr = m.en.getCounter(totalInodes)
 			return getErr
-		}, time.Millisecond*150)
-		if err == nil {
+		}, time.Millisecond*150); err == nil {
 			inodes = remoteInodes
 		}
 	}
