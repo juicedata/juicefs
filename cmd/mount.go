@@ -544,20 +544,6 @@ func getDefaultLogDir() string {
 	return defaultLogDir
 }
 
-func withTimeoutResult[T any](ctx context.Context, f func(context.Context) (T, error), timeout time.Duration) (T, error) {
-	var result T
-	err := utils.WithTimeout(ctx, func(ctx context.Context) error {
-		var err error
-		result, err = f(ctx)
-		return err
-	}, timeout)
-	if err != nil {
-		var zero T
-		return zero, err
-	}
-	return result, nil
-}
-
 func mount(c *cli.Context) error {
 	setup(c, 2)
 	addr := c.Args().Get(0)
@@ -575,14 +561,14 @@ func mount(c *cli.Context) error {
 
 	var err error
 	if stage == 0 || supervisor == "test" {
-		var absMp string
-		absMp, err = withTimeoutResult(context.TODO(), func(context.Context) (string, error) {
-			return filepath.Abs(mp)
+		err = utils.WithTimeout(context.TODO(), func(context.Context) error {
+			var pathErr error
+			mp, pathErr = filepath.Abs(mp)
+			return pathErr
 		}, time.Second*3)
 		if err != nil {
 			logger.Fatalf("abs %q: %s", mp, err)
 		}
-		mp = absMp
 		if mp == "/" {
 			logger.Fatalf("should not mount on the root directory")
 		}
