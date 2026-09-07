@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -32,7 +33,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"testing/iotest"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -1277,25 +1277,67 @@ func TestSyncEncryptLargeFile(t *testing.T) {
 	}
 }
 
+type progressReaderFunc func([]byte) (int, error)
+
+func (f progressReaderFunc) Read(b []byte) (int, error) { return f(b) }
+
 func TestWithProgressLimitsActualBytes(t *testing.T) {
 	const readSize = 1 << 20
 	local := ratelimit.NewBucket(time.Hour, 2*readSize)
 	oldLimiter, oldCopiedBytes := limiter, copiedBytes
 	limiter, copiedBytes = &mixedLimiter{local: local}, nil
-	t.Cleanup(func() {
-		limiter, copiedBytes = oldLimiter, oldCopiedBytes
-	})
+	t.Cleanup(func() { limiter, copiedBytes = oldLimiter, oldCopiedBytes })
 
 	data := []byte("abc")
-	r := io.LimitReader(&withProgress{iotest.OneByteReader(bytes.NewReader(data))}, int64(len(data)))
+	source := bytes.NewReader(data)
+	readErr := errors.New("source read failed")
+	wantTokens := int64(2*readSize - len(data))
+	r := io.LimitReader(&withProgress{r: progressReaderFunc(func(b []byte) (int, error) {
+		if got := local.Available(); got != wantTokens {
+			t.Fatalf("tokens before source read: got %d, want %d", got, wantTokens)
+		}
+		n, err := source.Read(b[:1])
+		if source.Len() == 0 && n > 0 {
+			err = readErr
+		}
+		return n, err
+	})}, int64(len(data)))
 	b := make([]byte, readSize)
-	if n, err := r.Read(b); n != len(data) || err != nil {
-		t.Fatalf("first read: got (%d, %v), want (%d, nil)", n, err, len(data))
+	for _, wantErr := range []error{nil, nil, readErr} {
+		if n, err := r.Read(b); n != 1 || err != wantErr {
+			t.Fatalf("read: got (%d, %v), want (1, %v)", n, err, wantErr)
+		}
 	}
 	if n, err := r.Read(b); n != 0 || err != io.EOF {
 		t.Fatalf("final read: got (%d, %v), want (0, EOF)", n, err)
 	}
-	if got, want := local.Available(), int64(2*readSize-len(data)); got != want {
+	if got := local.Available(); got != wantTokens {
+		t.Fatalf("tokens after EOF: got %d, want %d", got, wantTokens)
+	}
+}
+
+func TestCopyLimitsSmallObject(t *testing.T) {
+	const readSize = 1 << 20
+	local := ratelimit.NewBucket(time.Hour, 2*readSize)
+	oldLimiter, oldCopiedBytes := limiter, copiedBytes
+	limiter, copiedBytes = &mixedLimiter{local: local}, nil
+	t.Cleanup(func() { limiter, copiedBytes = oldLimiter, oldCopiedBytes })
+
+	src, err := object.CreateStorage("mem", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst, err := object.CreateStorage("file", t.TempDir()+"/", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := src.Put(ctx, "key", bytes.NewReader([]byte("x"))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := doCopySingle0(src, dst, "key", 1, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := local.Available(), int64(2*readSize-1); got != want {
 		t.Fatalf("available tokens: got %d, want %d", got, want)
 	}
 }

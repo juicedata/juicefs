@@ -749,19 +749,24 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 	}
 	r := &chksumReader{in, 0, calChksum}
 	defer in.Close()
-	err = dst.Put(ctx, key, io.LimitReader(&withProgress{r}, size))
+	err = dst.Put(ctx, key, io.LimitReader(&withProgress{r: r}, size))
 	return r.chksum, err
 }
 
 type withProgress struct {
-	r io.Reader
+	r        io.Reader
+	reserved int64 // bytes allowed but not yet consumed by a source read
 }
 
 func (w *withProgress) Read(b []byte) (int, error) {
-	if limiter != nil {
-		limiter.Wait(int64(len(b)))
+	if need := int64(len(b)) - w.reserved; need > 0 {
+		if limiter != nil {
+			limiter.Wait(need)
+		}
+		w.reserved += need
 	}
-	n, err := io.ReadFull(w.r, b)
+	n, err := w.r.Read(b)
+	w.reserved -= int64(n)
 	if copiedBytes != nil {
 		copiedBytes.IncrInt64(int64(n))
 	}
@@ -809,7 +814,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		defer in.Close()
 		r := &chksumReader{in, 0, calChksum}
-		pr := io.LimitReader(&withProgress{r}, size)
+		pr := io.LimitReader(&withProgress{r: r}, size)
 		err = utils.ErrNotSUP
 		if obj, ok := dst.(object.SupportUploadPartStream); ok {
 			part, err = obj.UploadPartStream(key, uploadID, num+1, pr)
