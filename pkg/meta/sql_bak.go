@@ -517,7 +517,14 @@ func (m *dbMeta) dumpChangeLog(ctx Context, opt *DumpOption, ch chan<- *dumpedRe
 	}
 	var logs []changeLog
 	if err := m.execTxn(ctx, func(s *xorm.Session) error {
-		return s.Desc("id").Limit(sqlChangelogRewind()).Find(&logs)
+		var maxLog changeLog
+		if ok, err := s.Desc("id").Limit(1).Get(&maxLog); err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
+		start := max(int64(0), maxLog.Id-int64(sqlChangelogRewind()))
+		return s.Where("id > ? AND id <= ?", start, maxLog.Id).Asc("id").Find(&logs)
 	}); err != nil {
 		return err
 	}
@@ -525,10 +532,10 @@ func (m *dbMeta) dumpChangeLog(ctx Context, opt *DumpOption, ch chan<- *dumpedRe
 		return nil
 	}
 	changelogs := make([]*pb.ChangeLog, 0, len(logs))
-	for i := len(logs) - 1; i >= 0; i-- {
+	for _, log := range logs {
 		changelogs = append(changelogs, &pb.ChangeLog{
-			Version: logs[i].Id,
-			Entry:   []byte(logs[i].Entry),
+			Version: log.Id,
+			Entry:   []byte(log.Entry),
 		})
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Changelogs: changelogs}})

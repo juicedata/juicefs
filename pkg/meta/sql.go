@@ -1112,21 +1112,15 @@ func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 		}
 		logger.Infof("last version is %d", last)
 	}
-	var start changeLog
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		_, err := s.Where("id <= ?", last).Desc("id").Limit(1, rewind).Get(&start)
-		return err
-	}); err != nil {
-		return err
-	}
 	seen := make(map[int64]struct{})
 	for {
 		if ctx.Canceled() {
 			return context.Canceled
 		}
+		start := max(int64(0), last-int64(rewind))
 		var logs []changeLog
 		err := m.roTxn(ctx, func(s *xorm.Session) error {
-			return s.Where("id > ?", start.Id).Asc("id").Limit(rewind + batchSize).Find(&logs)
+			return s.Where("id > ?", start).Asc("id").Limit(rewind + batchSize).Find(&logs)
 		})
 		if err != nil {
 			logger.Errorf("scan changelog: %s", err)
@@ -1141,12 +1135,10 @@ func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 				return err
 			}
 			seen[log.Id] = struct{}{}
-		}
-		if len(logs) > rewind {
-			start = logs[len(logs)-rewind-1]
+			last = max(last, log.Id)
 		}
 		for id := range seen {
-			if id <= start.Id {
+			if id <= last-int64(rewind) {
 				delete(seen, id)
 			}
 		}
@@ -4969,17 +4961,21 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		var lastChangelog int64
 		var changeLogs []*DumpedChangeLog
 		if m.getFormat().ChangeLog {
+			var maxLog changeLog
+			if ok, err := s.Desc("id").Limit(1).Get(&maxLog); err != nil {
+				return err
+			} else if ok {
+				lastChangelog = maxLog.Id
+			}
+			start := max(int64(0), lastChangelog-int64(sqlChangelogRewind()))
 			var logs []changeLog
-			if err := s.Desc("id").Limit(sqlChangelogRewind()).Find(&logs); err != nil {
+			if err := s.Where("id > ? AND id <= ?", start, lastChangelog).Asc("id").Find(&logs); err != nil {
 				return err
 			}
-			if len(logs) > 0 {
-				lastChangelog = logs[0].Id
-			}
-			for i := len(logs) - 1; i >= 0; i-- {
+			for _, log := range logs {
 				changeLogs = append(changeLogs, &DumpedChangeLog{
-					Version: logs[i].Id,
-					Entry:   logs[i].Entry,
+					Version: log.Id,
+					Entry:   log.Entry,
 				})
 			}
 		}
