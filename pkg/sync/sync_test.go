@@ -1292,7 +1292,7 @@ func TestWithProgressLimitsActualBytes(t *testing.T) {
 	source := bytes.NewReader(data)
 	readErr := errors.New("source read failed")
 	wantTokens := int64(2*readSize - len(data))
-	r := io.LimitReader(&withProgress{r: progressReaderFunc(func(b []byte) (int, error) {
+	r := newProgressReader(progressReaderFunc(func(b []byte) (int, error) {
 		if got := local.Available(); got != wantTokens {
 			t.Fatalf("tokens before source read: got %d, want %d", got, wantTokens)
 		}
@@ -1301,7 +1301,7 @@ func TestWithProgressLimitsActualBytes(t *testing.T) {
 			err = readErr
 		}
 		return n, err
-	})}, int64(len(data)))
+	}), int64(len(data)))
 	b := make([]byte, readSize)
 	for _, wantErr := range []error{nil, nil, readErr} {
 		if n, err := r.Read(b); n != 1 || err != wantErr {
@@ -1318,27 +1318,58 @@ func TestWithProgressLimitsActualBytes(t *testing.T) {
 
 func TestCopyLimitsSmallObject(t *testing.T) {
 	const readSize = 1 << 20
-	local := ratelimit.NewBucket(time.Hour, 2*readSize)
-	oldLimiter, oldCopiedBytes := limiter, copiedBytes
-	limiter, copiedBytes = &mixedLimiter{local: local}, nil
-	t.Cleanup(func() { limiter, copiedBytes = oldLimiter, oldCopiedBytes })
+	cases := []struct {
+		name string
+		body string
+		size int64
+		// wantTokens is the exact reservation expected, or -1 when the size is
+		// unknown and only the copied content matters.
+		wantTokens int64
+	}{
+		{"empty", "", 0, 0},
+		{"tiny", "x", 1, 1},
+		{"unknownSize", "hello", -1, -1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			local := ratelimit.NewBucket(time.Hour, 2*readSize)
+			oldLimiter, oldCopiedBytes := limiter, copiedBytes
+			limiter, copiedBytes = &mixedLimiter{local: local}, nil
+			t.Cleanup(func() { limiter, copiedBytes = oldLimiter, oldCopiedBytes })
 
-	src, err := object.CreateStorage("mem", "", "", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dst, err := object.CreateStorage("file", t.TempDir()+"/", "", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := src.Put(ctx, "key", bytes.NewReader([]byte("x"))); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := doCopySingle0(src, dst, "key", 1, false); err != nil {
-		t.Fatal(err)
-	}
-	if got, want := local.Available(), int64(2*readSize-1); got != want {
-		t.Fatalf("available tokens: got %d, want %d", got, want)
+			src, err := object.CreateStorage("mem", "", "", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			dst, err := object.CreateStorage("file", t.TempDir()+"/", "", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := src.Put(ctx, "key", strings.NewReader(c.body)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := doCopySingle0(src, dst, "key", c.size, false); err != nil {
+				t.Fatal(err)
+			}
+
+			in, err := dst.Get(ctx, "key", 0, -1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer in.Close()
+			got, err := io.ReadAll(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != c.body {
+				t.Fatalf("copied content: got %q, want %q", got, c.body)
+			}
+			if c.wantTokens >= 0 {
+				if used := int64(2*readSize) - local.Available(); used != c.wantTokens {
+					t.Fatalf("reserved tokens: got %d, want %d", used, c.wantTokens)
+				}
+			}
+		})
 	}
 }
 
