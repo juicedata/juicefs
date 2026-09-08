@@ -41,9 +41,10 @@ func (s *countingStorage) Get(ctx context.Context, key string, off, limit int64,
 	return s.ObjectStorage.Get(ctx, key, off, limit, getters...)
 }
 
-// createCachedTestReader writes data as one slice of a new file and returns a
-// data reader backed by a memory block cache that keeps full blocks.
-func createCachedTestReader(t *testing.T, blockSize int, data []byte) (*dataReader, *countingStorage, Ino) {
+// createCachedTestReader writes data as one slice at sliceOff of a new file
+// and returns a data reader backed by a memory block cache that keeps full
+// blocks.
+func createCachedTestReader(t *testing.T, blockSize int, sliceOff uint32, data []byte) (*dataReader, *countingStorage, Ino) {
 	t.Helper()
 	metaConf := meta.DefaultConf()
 	metaConf.MountPoint = "/jfs"
@@ -95,7 +96,7 @@ func createCachedTestReader(t *testing.T, blockSize int, data []byte) (*dataRead
 	if err := w.Finish(len(data)); err != nil {
 		t.Fatalf("finish slice: %s", err)
 	}
-	if st := m.Write(ctx, inode, 0, 0, meta.Slice{Id: sliceID, Size: uint32(len(data)), Len: uint32(len(data))}, time.Now()); st != 0 {
+	if st := m.Write(ctx, inode, 0, sliceOff, meta.Slice{Id: sliceID, Size: uint32(len(data)), Len: uint32(len(data))}, time.Now()); st != 0 {
 		t.Fatalf("write meta: %s", st)
 	}
 	if st := m.Open(ctx, inode, syscall.O_RDONLY, &attr); st != 0 {
@@ -119,7 +120,7 @@ func TestReadCached(t *testing.T) {
 	for i := range data {
 		data[i] = byte(i * 7)
 	}
-	dr, blob, inode := createCachedTestReader(t, blockSize, data)
+	dr, blob, inode := createCachedTestReader(t, blockSize, 0, data)
 	ctx := meta.Background()
 	check := func(fr FileReader, off uint64, size int) {
 		t.Helper()
@@ -162,5 +163,83 @@ func TestReadCached(t *testing.T) {
 	}
 	if got := blob.gets.Load(); got == gets {
 		t.Fatalf("partly cached read should fetch the missing block")
+	}
+}
+
+func TestReadCachedHole(t *testing.T) {
+	const blockSize = 64 << 10
+	// blocks 0-1 are a hole, blocks 2-3 hold data
+	data := make([]byte, 2*blockSize)
+	for i := range data {
+		data[i] = byte(i*7 + 1)
+	}
+	dr, blob, inode := createCachedTestReader(t, blockSize, 2*blockSize, data)
+	ctx := meta.Background()
+	fr := dr.Open(inode, 4*blockSize)
+	defer fr.Close(ctx)
+
+	// inside the hole: zeros, nothing to fetch, no slice reader
+	buf := make([]byte, 4096)
+	buf[0] = 1
+	if n, st := fr.Read(ctx, blockSize, buf); st != 0 || n != len(buf) {
+		t.Fatalf("read in hole: (%d,%s)", n, st)
+	}
+	if !bytes.Equal(buf, make([]byte, len(buf))) {
+		t.Fatalf("read in hole should return zeros")
+	}
+	if hasSlices(fr) || blob.gets.Load() != 0 {
+		t.Fatalf("read in hole should not need a slice reader or the object storage")
+	}
+
+	// hole plus uncached data: regular path
+	off := uint64(2*blockSize - 2048)
+	if n, st := fr.Read(ctx, off, buf); st != 0 || n != len(buf) {
+		t.Fatalf("read across hole: (%d,%s)", n, st)
+	}
+	if !bytes.Equal(buf[:2048], make([]byte, 2048)) || !bytes.Equal(buf[2048:], data[:2048]) {
+		t.Fatalf("read across hole: data mismatch")
+	}
+	if !hasSlices(fr) {
+		t.Fatalf("read of uncached data should go through a slice reader")
+	}
+}
+
+func TestReadCachedFallbacks(t *testing.T) {
+	const blockSize = 64 << 10
+	data := make([]byte, 6*blockSize)
+	dr, _, inode := createCachedTestReader(t, blockSize, 0, data)
+	ctx := meta.Background()
+	buf := make([]byte, 4096)
+
+	fr := dr.Open(inode, uint64(len(data))).(*fileReader)
+	if _, ok := fr.readCached(ctx, uint64(len(data))-2048, buf); ok {
+		t.Fatalf("read past the end should not take the fast path")
+	}
+	if _, ok := fr.readCached(ctx, 0, buf); ok {
+		t.Fatalf("read at offset 0 should not take the fast path")
+	}
+	fr.Close(ctx)
+	if _, ok := fr.readCached(ctx, blockSize, buf); ok {
+		t.Fatalf("read on a closed reader should not take the fast path")
+	}
+
+	// the inode does not exist: meta lookup fails
+	fr = dr.Open(inode+1000, uint64(len(data))).(*fileReader)
+	defer fr.Close(ctx)
+	if _, ok := fr.readCached(ctx, blockSize, buf); ok {
+		t.Fatalf("read of an unknown inode should not take the fast path")
+	}
+
+	// the chunk store cannot read from the cache alone
+	store := &blockingChunkStore{reader: &blockingChunkReader{
+		started:  make(chan struct{}),
+		canceled: make(chan struct{}),
+		release:  make(chan struct{}),
+	}}
+	bdr, binode := createCancellationTestReader(t, store)
+	bfr := bdr.Open(binode, 4).(*fileReader)
+	defer bfr.Close(ctx)
+	if _, ok := bfr.readCached(ctx, 1, buf[:3]); ok {
+		t.Fatalf("store without CachedReader should not take the fast path")
 	}
 }
