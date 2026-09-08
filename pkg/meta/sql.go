@@ -2864,7 +2864,8 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			inodes := make([]Ino, 0, len(batch))
 			inodeM := make(map[Ino]struct{}) // filter hardlinks
 			for _, entry := range batch {
-				e, ok := entryMap[string(entry.Name)]
+				name := string(entry.Name)
+				e, ok := entryMap[name]
 				if !ok {
 					continue
 				}
@@ -2872,6 +2873,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					continue
 				}
 				entryInfos = append(entryInfos, &entryInfo{e: e, trash: trash})
+				delete(entryMap, name)
 				if _, exists := inodeM[entry.Inode]; !exists {
 					inodeM[entry.Inode] = struct{}{}
 					inodes = append(inodes, entry.Inode)

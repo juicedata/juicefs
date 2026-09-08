@@ -3410,6 +3410,85 @@ func testDirStat(t *testing.T, m Meta) {
 	}); err != nil {
 		t.Fatalf("test dir usage rmdir: %v", err)
 	}
+
+	// test BatchUnlink with duplicate hardlink names
+	dupFileName := "batch-dup-file"
+	dupLinkName := "batch-dup-link"
+	dupFileLength := uint64(4097)
+	var dupInode Ino
+	if st := m.Create(Background(), testInode, dupFileName, 0640, 022, 0, &dupInode, nil); st != 0 {
+		t.Fatalf("create duplicate batch file: %s", st)
+	}
+	if st := m.Fallocate(Background(), dupInode, 0, 0, dupFileLength, nil); st != 0 {
+		t.Fatalf("fallocate duplicate batch file: %s", st)
+	}
+	if st := m.Link(Background(), dupInode, testInode, dupLinkName, nil); st != 0 {
+		t.Fatalf("link duplicate batch file: %s", st)
+	}
+	if err := waitCheckResult(m, dirStat{2 * int64(dupFileLength), 2 * align4K(dupFileLength), 2}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage duplicate batch link: %v", err)
+	}
+
+	var dupLinkInode Ino
+	var dupLinkAttr Attr
+	if st := m.Lookup(Background(), testInode, dupLinkName, &dupLinkInode, &dupLinkAttr, false); st != 0 {
+		t.Fatalf("lookup duplicate batch link: %s", st)
+	}
+	if dupLinkInode != dupInode || dupLinkAttr.Nlink != 2 {
+		t.Fatalf("duplicate batch link attr: inode %d attr %+v", dupLinkInode, dupLinkAttr)
+	}
+	dupEntries := []*Entry{
+		{Inode: dupInode, Name: []byte(dupLinkName), Attr: &dupLinkAttr},
+		{Inode: dupInode, Name: []byte(dupLinkName), Attr: &dupLinkAttr},
+	}
+	var dupCount uint64
+	if st := m.getBase().BatchUnlink(Background(), testInode, dupEntries, &dupCount, true); st != 0 {
+		t.Fatalf("batch unlink duplicate hardlink: %s", st)
+	}
+	if dupCount != uint64(len(dupEntries)) {
+		t.Fatalf("batch unlink duplicate count: expect %d, got %d", len(dupEntries), dupCount)
+	}
+	if err := waitCheckResult(m, dirStat{int64(dupFileLength), align4K(dupFileLength), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage duplicate batch unlink: %v", err)
+	}
+
+	var remainingInode Ino
+	var remainingAttr Attr
+	if st := m.Lookup(Background(), testInode, dupFileName, &remainingInode, &remainingAttr, false); st != 0 {
+		t.Fatalf("lookup remaining hardlink after duplicate batch unlink: %s", st)
+	}
+	if remainingInode != dupInode || remainingAttr.Nlink != 1 {
+		t.Fatalf("remaining hardlink attr: inode %d attr %+v", remainingInode, remainingAttr)
+	}
+	var removedInode Ino
+	var removedAttr Attr
+	if st := m.Lookup(Background(), testInode, dupLinkName, &removedInode, &removedAttr, false); st != syscall.ENOENT {
+		t.Fatalf("lookup removed duplicate hardlink: %s", st)
+	}
+	deleted := false
+	if err := m.ScanDeletedObject(Background(), nil, nil, nil, func(ino Ino, size uint64, ts int64) (bool, error) {
+		if ino == dupInode {
+			deleted = true
+		}
+		return false, nil
+	}); err != nil {
+		t.Fatalf("scan pending deleted files: %s", err)
+	}
+	if deleted {
+		t.Fatalf("inode %d was queued for deletion after duplicate batch unlink", dupInode)
+	}
+	if st := m.Unlink(Background(), testInode, dupFileName); st != 0 {
+		t.Fatalf("unlink duplicate batch file: %s", st)
+	}
+	if err := waitCheckResult(m, dirStat{0, 0, 0}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage duplicate batch cleanup: %v", err)
+	}
 }
 
 func testRenameDirStat(t *testing.T, m Meta) {

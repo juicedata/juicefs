@@ -1988,6 +1988,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 			if err != nil {
 				return err
 			}
+			seenNames := make(map[string]struct{}, len(batch))
 			for idx, entry := range batch {
 				val := vals[idx]
 				if val == nil {
@@ -1998,8 +1999,13 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 				if entry.Inode != ino || typ == TypeDirectory || (entry.Attr != nil && entry.Attr.Typ != typ) {
 					continue
 				}
+				name := string(entry.Name)
+				if _, ok := seenNames[name]; ok {
+					continue
+				}
+				seenNames[name] = struct{}{}
 				entryInfos = append(entryInfos, &entryInfo{
-					name:  string(entry.Name),
+					name:  name,
 					inode: ino,
 					typ:   typ,
 					trash: trash,
