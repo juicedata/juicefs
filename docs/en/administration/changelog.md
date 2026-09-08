@@ -93,14 +93,6 @@ Example:
 103: 1716440760.000000000|UNLINK(1,report.txt,0,false,true):1024|(3,90)
 ```
 
-Batch cloning records `CLONEBATCH` entries in the same transaction as the cloned metadata:
-
-```text
-CLONEBATCH(destination_parent,mode,umask,source_inode,name,...):destination_inode,...
-```
-
-Each source inode and encoded name pair corresponds to a destination inode in the result, in the same order. Only entries actually cloned are included. Redis and TKV record one entry per batch transaction; SQL splits the log into groups of at most 64 clones to fit MySQL's `TEXT` column limit, all within the same transaction. Consumers must support `CLONEBATCH`; upgrade all source clients to a version that records batch clones before relying on these entries.
-
 ## Notes and limitations {#notes}
 
 - The changelog is not a metadata backup. Use [metadata backup](metadata_dump_load.md) for backup and restore.
