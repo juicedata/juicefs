@@ -205,6 +205,20 @@ func TestReadCachedAt(t *testing.T) {
 		t.Fatalf("cached read at %d: data mismatch", conf.BlockSize)
 	}
 
+	// a cached block shorter than the data it claims is dropped
+	key := sliceForRead(1, size, store.(*cachedStore)).key(1)
+	bcache := store.(*cachedStore).bcache
+	bcache.remove(key, false)
+	short := NewOffPage(10)
+	bcache.cache(key, short, true, false)
+	short.Release()
+	if _, ok := cr.ReadCachedAt(buf, conf.BlockSize); ok {
+		t.Fatalf("read of a partial cached block should fail")
+	}
+	if _, ok := bcache.exist(key); ok {
+		t.Fatalf("partial cached block should be removed")
+	}
+
 	// cache disabled
 	conf.CacheSize = 0
 	store = NewCachedStore(mem, conf, nil)

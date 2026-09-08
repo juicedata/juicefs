@@ -196,9 +196,6 @@ func (s *rSlice) ReadCachedAt(p []byte, off int) (int, bool) {
 		s.store.cacheHits.Add(1)
 		s.store.cacheHitBytes.Add(float64(n))
 		s.store.cacheReadHist.Observe(time.Since(start).Seconds())
-		if n != l {
-			return got + n, false
-		}
 		got += n
 		off += n
 	}
