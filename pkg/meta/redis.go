@@ -5757,7 +5757,7 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 						args = append(args, strconv.FormatUint(uint64(info.srcIno), 10), logEncode2(string(info.entry.Name)))
 						inodes = append(inodes, strconv.FormatUint(uint64(info.dstIno), 10))
 					}
-					m.genLog(ctx, p, now, "CLONEBATCH(%d,%d,%d,%s):%s", dstParent, cmode, cumask, strings.Join(args, ","), strings.Join(inodes, ","))
+					m.genLog(ctx, p, now, "CLONEBATCH(%d,%d,%d,%d,%s,%s):%s", dstParent, cmode, cumask, ctx.Uid(), logGids(ctx), strings.Join(args, ","), strings.Join(inodes, ","))
 				}
 				return nil
 			})

@@ -645,6 +645,14 @@ func logEncode2(name string) string {
 	return logEncode([]byte(name))
 }
 
+func logGids(ctx Context) string {
+	gids := make([]string, len(ctx.Gids()))
+	for i, gid := range ctx.Gids() {
+		gids[i] = strconv.FormatUint(uint64(gid), 10)
+	}
+	return strings.Join(gids, ":")
+}
+
 func (m *baseMeta) checkRoot(inode Ino) Ino {
 	switch inode {
 	case 0:
