@@ -5701,6 +5701,20 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		if err := m.batchUpdateChunkRefs(s, chunkRefCounts); err != nil {
 			return err
 		}
+		if m.getFormat().ChangeLog {
+			// Keep encoded names and inode IDs within MySQL's 64 KiB TEXT limit.
+			const logBatchSize = 64
+			for start := 0; start < len(cloneInfos); start += logBatchSize {
+				batch := cloneInfos[start:min(start+logBatchSize, len(cloneInfos))]
+				args := make([]string, 0, 2*len(batch))
+				inodes := make([]string, 0, len(batch))
+				for _, info := range batch {
+					args = append(args, strconv.FormatUint(uint64(info.srcIno), 10), logEncode2(string(info.name)))
+					inodes = append(inodes, strconv.FormatUint(uint64(info.dstIno), 10))
+				}
+				m.genLog(ctx, s, nowNano, "CLONEBATCH(%d,%d,%d,%s):%s", dstParent, cmode, cumask, strings.Join(args, ","), strings.Join(inodes, ","))
+			}
+		}
 
 		return nil
 	})

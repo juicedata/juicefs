@@ -5750,6 +5750,15 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 						p.HIncrBy(ctx, m.sliceRefs(), field, delta)
 					}
 				}
+				if m.getFormat().ChangeLog && len(validInfos) > 0 {
+					args := make([]string, 0, 2*len(validInfos))
+					inodes := make([]string, 0, len(validInfos))
+					for _, info := range validInfos {
+						args = append(args, strconv.FormatUint(uint64(info.srcIno), 10), logEncode2(string(info.entry.Name)))
+						inodes = append(inodes, strconv.FormatUint(uint64(info.dstIno), 10))
+					}
+					m.genLog(ctx, p, now, "CLONEBATCH(%d,%d,%d,%s):%s", dstParent, cmode, cumask, strings.Join(args, ","), strings.Join(inodes, ","))
+				}
 				return nil
 			})
 			return err

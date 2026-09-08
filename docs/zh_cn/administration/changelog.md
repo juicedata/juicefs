@@ -93,6 +93,14 @@ VERSION: UNIX_SECONDS.NANOSECONDS|OPERATION(arguments)[:result]|(SESSION_ID,TXN_
 103: 1716440760.000000000|UNLINK(1,report.txt,0,false,true):1024|(3,90)
 ```
 
+批量克隆在写入克隆元数据的同一事务中记录 `CLONEBATCH` 日志：
+
+```text
+CLONEBATCH(destination_parent,mode,umask,source_inode,name,...):destination_inode,...
+```
+
+每组源 inode 和编码后的名称，按顺序对应结果中的一个目的 inode，只包含实际克隆的条目。Redis 和 TKV 每个批量事务记录一条；SQL 为适应 MySQL 的 `TEXT` 列长度限制，每条最多记录 64 个克隆结果，所有日志仍在同一事务内提交。消费程序需要支持 `CLONEBATCH`；依赖这些日志前，应将所有源端客户端升级到会记录批量克隆日志的版本。
+
 ## 使用建议和限制 {#notes}
 
 - changelog 不是元数据备份。备份和恢复应使用[元数据备份](metadata_dump_load.md)。

@@ -4750,6 +4750,15 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			}
 			tx.set(m.symKey(sc.dstIno), target)
 		}
+		if m.getFormat().ChangeLog {
+			args := make([]string, 0, 2*len(cloneInfos))
+			inodes := make([]string, 0, len(cloneInfos))
+			for _, info := range cloneInfos {
+				args = append(args, strconv.FormatUint(uint64(info.srcIno), 10), logEncode2(info.name))
+				inodes = append(inodes, strconv.FormatUint(uint64(info.dstIno), 10))
+			}
+			m.genLog(tx, now, "CLONEBATCH(%d,%d,%d,%s):%s", dstParent, cmode, cumask, strings.Join(args, ","), strings.Join(inodes, ","))
+		}
 
 		return nil
 	}, dstParent))
