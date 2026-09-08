@@ -4435,14 +4435,14 @@ func (m *dbMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 
 	return m.txn(func(s *xorm.Session) error {
 		if qtype == DirQuotaType {
-			_, e := s.Delete(&dirQuota{Inode: Ino(key)})
-			if e == nil {
+			n, e := s.Delete(&dirQuota{Inode: Ino(key)})
+			if e == nil && n > 0 {
 				m.genLog(ctx, s, time.Now().UnixNano(), "DELQUOTA(%d,%d)", qtype, key)
 			}
 			return e
 		} else {
-			_, e := s.Cols("max_space", "max_inodes").Where("qtype = ? AND qkey = ?", qtype, key).Update(&userGroupQuota{MaxSpace: -1, MaxInodes: -1})
-			if e == nil {
+			n, e := s.Cols("max_space", "max_inodes").Where("qtype = ? AND qkey = ?", qtype, key).Update(&userGroupQuota{MaxSpace: -1, MaxInodes: -1})
+			if e == nil && n > 0 {
 				m.genLog(ctx, s, time.Now().UnixNano(), "DELQUOTA(%d,%d)", qtype, key)
 			}
 			return e
