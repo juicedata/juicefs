@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"runtime"
 	"runtime/debug"
 	"slices"
@@ -1087,7 +1088,21 @@ func (m *dbMeta) genLog(ctx Context, s *xorm.Session, ns int64, op string, args 
 	}
 }
 
+func sqlChangelogRewind() int {
+	// mdtest benchmark reports ~1.3k MySQL / ~4.7k PostgreSQL file creates/s:
+	// https://juicefs.com/docs/community/metadata_engines_benchmark/
+	rewind := 3000
+	if s := os.Getenv("JFS_SQL_REWIND"); s != "" {
+		if parsed, err := strconv.Atoi(s); err == nil && parsed > 0 {
+			rewind = parsed
+		}
+	}
+	return rewind
+}
+
 func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
+	const batchSize = 1000
+	rewind := sqlChangelogRewind()
 	if last == 0 {
 		var maxLog changeLog
 		if ok, err := m.db.Desc("id").Limit(1).Get(&maxLog); err != nil {
@@ -1097,25 +1112,45 @@ func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 		}
 		logger.Infof("last version is %d", last)
 	}
+	var start changeLog
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+		_, err := s.Where("id <= ?", last).Desc("id").Limit(1, rewind).Get(&start)
+		return err
+	}); err != nil {
+		return err
+	}
+	seen := make(map[int64]struct{})
 	for {
 		if ctx.Canceled() {
 			return context.Canceled
 		}
 		var logs []changeLog
 		err := m.roTxn(ctx, func(s *xorm.Session) error {
-			return s.Where("id > ?", last).Asc("id").Limit(1000).Find(&logs)
+			return s.Where("id > ?", start.Id).Asc("id").Limit(rewind + batchSize).Find(&logs)
 		})
 		if err != nil {
 			logger.Errorf("scan changelog: %s", err)
 			time.Sleep(time.Second)
+			continue
 		}
 		for _, log := range logs {
+			if _, ok := seen[log.Id]; ok {
+				continue
+			}
 			if err := handler(log.Id, log.Entry); err != nil {
 				return err
 			}
-			last = log.Id
+			seen[log.Id] = struct{}{}
 		}
-		if len(logs) == 0 {
+		if len(logs) > rewind {
+			start = logs[len(logs)-rewind-1]
+		}
+		for id := range seen {
+			if id <= start.Id {
+				delete(seen, id)
+			}
+		}
+		if len(logs) < rewind+batchSize {
 			time.Sleep(time.Millisecond * 100)
 		}
 	}
@@ -4932,10 +4967,20 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	root = m.checkRoot(root)
 	return m.roTxn(Background(), func(s *xorm.Session) error {
 		var lastChangelog int64
+		var changeLogs []*DumpedChangeLog
 		if m.getFormat().ChangeLog {
-			var maxLog changeLog
-			if ok, _ := s.Desc("id").Limit(1).Get(&maxLog); ok {
-				lastChangelog = maxLog.Id
+			var logs []changeLog
+			if err := s.Desc("id").Limit(sqlChangelogRewind()).Find(&logs); err != nil {
+				return err
+			}
+			if len(logs) > 0 {
+				lastChangelog = logs[0].Id
+			}
+			for i := len(logs) - 1; i >= 0; i-- {
+				changeLogs = append(changeLogs, &DumpedChangeLog{
+					Version: logs[i].Id,
+					Entry:   logs[i].Entry,
+				})
 			}
 		}
 		if root == RootInode && fast {
@@ -5069,6 +5114,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			Counters:    counters,
 			Sustained:   sessions,
 			DelFiles:    dels,
+			ChangeLog:   changeLogs,
 			Quotas:      dirQuotas,
 			UserQuotas:  userQuotas,
 			GroupQuotas: groupQuotas,
