@@ -563,7 +563,6 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.setFormat(format)
 	ts := time.Now().Unix()
 	attr := &Attr{
 		Typ:    TypeDirectory,

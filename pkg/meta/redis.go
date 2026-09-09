@@ -395,7 +395,6 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 	if err = m.rdb.Set(ctx, m.setting(), data, 0).Err(); err != nil {
 		return err
 	}
-	m.setFormat(format)
 	if body != nil {
 		return nil
 	}
