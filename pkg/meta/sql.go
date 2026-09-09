@@ -1088,7 +1088,10 @@ func (m *dbMeta) genLog(ctx Context, s *xorm.Session, ns int64, op string, args 
 	}
 }
 
-func sqlChangelogRewind() int {
+func (m *dbMeta) sqlChangelogRewind() int {
+	if m.Name() == "sqlite3" {
+		return 0
+	}
 	// mdtest benchmark reports ~1.3k MySQL / ~4.7k PostgreSQL file creates/s:
 	// https://juicefs.com/docs/community/metadata_engines_benchmark/
 	rewind := 3000
@@ -1102,7 +1105,7 @@ func sqlChangelogRewind() int {
 
 func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
 	const batchSize = 1000
-	rewind := sqlChangelogRewind()
+	rewind := m.sqlChangelogRewind()
 	if last == 0 {
 		var maxLog changeLog
 		if ok, err := m.db.Desc("id").Limit(1).Get(&maxLog); err != nil {
@@ -4967,7 +4970,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			} else if ok {
 				lastChangelog = maxLog.Id
 			}
-			start := max(int64(0), lastChangelog-int64(sqlChangelogRewind()))
+			start := max(int64(0), lastChangelog-int64(m.sqlChangelogRewind()))
 			var logs []changeLog
 			if err := s.Where("id > ? AND id <= ?", start, lastChangelog).Asc("id").Find(&logs); err != nil {
 				return err

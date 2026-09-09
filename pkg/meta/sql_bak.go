@@ -523,7 +523,7 @@ func (m *dbMeta) dumpChangeLog(ctx Context, opt *DumpOption, ch chan<- *dumpedRe
 		} else if !ok {
 			return nil
 		}
-		start := max(int64(0), maxLog.Id-int64(sqlChangelogRewind()))
+		start := max(int64(0), maxLog.Id-int64(m.sqlChangelogRewind()))
 		return s.Where("id > ? AND id <= ?", start, maxLog.Id).Asc("id").Find(&logs)
 	}); err != nil {
 		return err
