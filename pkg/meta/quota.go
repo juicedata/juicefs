@@ -277,6 +277,73 @@ func (m *baseMeta) syncVolumeStat(ctx Context, used, inodes int64) error {
 	return m.en.doSyncVolumeStat(ctx, used, inodes)
 }
 
+// RebuildVolumeStats recalculates usage while the destination has no concurrent writers.
+func RebuildVolumeStats(ctx Context, dst Meta) error {
+	m := dst.getBase()
+	seen := make(map[Ino]bool)
+	var used, inodes int64
+	var scanErr error
+	recordStat := func(_ Context, ino Ino, _ string, attr *Attr) {
+		if ino == RootInode || ino == TrashInode {
+			return
+		}
+		if !attr.Full {
+			scanErr = fmt.Errorf("missing attributes for inode %d", ino)
+			return
+		}
+		if attr.Typ != TypeDirectory && attr.Nlink > 1 {
+			if seen[ino] {
+				return
+			}
+			seen[ino] = true
+		}
+		if attr.Typ == TypeDirectory {
+			used += align4K(0)
+		} else {
+			used += align4K(attr.Length)
+		}
+		inodes++
+	}
+	for _, root := range []Ino{RootInode, TrashInode} {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var attr Attr
+		if st := m.en.doGetAttr(ctx, root, &attr); st != 0 {
+			if root == TrashInode && st == syscall.ENOENT {
+				continue
+			}
+			return fmt.Errorf("getattr inode %d: %w", root, st)
+		}
+		if st := m.walk(ctx, root, "", &attr, recordStat); st != 0 {
+			return fmt.Errorf("scan inode %d: %w", root, st)
+		}
+		if scanErr != nil {
+			return scanErr
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := m.syncVolumeStat(ctx, used, inodes); err != nil {
+		return err
+	}
+	used, err := m.en.getCounter(usedSpace)
+	if err != nil {
+		return err
+	}
+	inodes, err = m.en.getCounter(totalInodes)
+	if err != nil {
+		return err
+	}
+	atomic.StoreInt64(&m.usedSpace, used)
+	atomic.StoreInt64(&m.usedInodes, inodes)
+	atomic.StoreInt64(&m.newSpace, 0)
+	atomic.StoreInt64(&m.newInodes, 0)
+	logger.Infof("Rebuilt volume stats: usedSpace=%d totalInodes=%d", used, inodes)
+	return nil
+}
+
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, uid, gid uint32, parents ...Ino) syscall.Errno {
 	if space <= 0 && inodes <= 0 {
 		return 0
