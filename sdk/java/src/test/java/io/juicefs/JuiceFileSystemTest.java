@@ -37,11 +37,14 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.security.PrivilegedExceptionAction;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_CHECKPOINT_INTERVAL_KEY;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
@@ -1333,5 +1336,118 @@ public class JuiceFileSystemTest extends TestCase {
 
     // Cleanup
     newFS.close();
+  }
+
+  private byte[] writeRandomFile(Path p, int size, long seed) throws IOException {
+    byte[] data = new byte[size];
+    new Random(seed).nextBytes(data);
+    try (FSDataOutputStream out = fs.create(p, true)) {
+      out.write(data);
+    }
+    return data;
+  }
+
+  private static void preadFully(FSDataInputStream in, long pos, byte[] buf, int len) throws IOException {
+    int got = 0;
+    while (got < len) {
+      int n = in.read(pos + got, buf, got, len - got);
+      assertTrue("unexpected EOF at " + (pos + got), n > 0);
+      got += n;
+    }
+  }
+
+  // HBase issues positioned reads on one shared HFile stream from many handler
+  // threads. A pread must therefore not take the stream's monitor, otherwise
+  // every read of an uncached block waits for the previous one to finish.
+  public void testPositionedReadDoesNotHoldStreamLock() throws Exception {
+    Path p = new Path("/pread-lock");
+    byte[] data = writeRandomFile(p, 1 << 20, 0);
+    try (FSDataInputStream in = fs.open(p)) {
+      Object monitor = in.getWrappedStream();
+      byte[] buf = new byte[4096];
+      long pos = 512 * 1024;
+      CountDownLatch done = new CountDownLatch(1);
+      AtomicReference<Throwable> failure = new AtomicReference<>();
+      Thread reader = new Thread(() -> {
+        try {
+          preadFully(in, pos, buf, buf.length);
+        } catch (Throwable t) {
+          failure.set(t);
+        } finally {
+          done.countDown();
+        }
+      });
+      synchronized (monitor) {
+        reader.start();
+        assertTrue("positioned read blocked while another thread held the stream monitor",
+                done.await(5, TimeUnit.SECONDS));
+      }
+      reader.join();
+      assertNull(failure.get());
+      assertArrayEquals(Arrays.copyOfRange(data, (int) pos, (int) pos + buf.length), buf);
+    }
+  }
+
+  public void testConcurrentPositionedReads() throws Exception {
+    Path p = new Path("/pread-concurrent");
+    byte[] data = writeRandomFile(p, 4 << 20, 1);
+    int threads = 8;
+    int rounds = 200;
+    ExecutorService pool = Executors.newFixedThreadPool(threads);
+    try (FSDataInputStream in = fs.open(p)) {
+      List<Future<?>> futures = new ArrayList<>();
+      for (int t = 0; t < threads; t++) {
+        long seed = t;
+        futures.add(pool.submit(() -> {
+          Random rnd = new Random(seed);
+          byte[] buf = new byte[8192];
+          for (int i = 0; i < rounds; i++) {
+            int len = 1 + rnd.nextInt(buf.length);
+            int pos = rnd.nextInt(data.length - len);
+            preadFully(in, pos, buf, len);
+            assertArrayEquals(Arrays.copyOfRange(data, pos, pos + len), Arrays.copyOf(buf, len));
+          }
+          return null;
+        }));
+      }
+      for (Future<?> f : futures) {
+        f.get(60, TimeUnit.SECONDS);
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  // close() racing with an in-flight pread must end in IOException("stream was
+  // closed") or a normal read; never a crash, a hang, or wrong bytes.
+  public void testCloseDuringPositionedRead() throws Exception {
+    Path p = new Path("/pread-close");
+    byte[] data = writeRandomFile(p, 1 << 20, 2);
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+      for (int round = 0; round < 20; round++) {
+        FSDataInputStream in = fs.open(p);
+        CountDownLatch started = new CountDownLatch(1);
+        Future<?> reader = pool.submit(() -> {
+          byte[] buf = new byte[4096];
+          started.countDown();
+          try {
+            for (int i = 0; i < 1000; i++) {
+              int pos = i * 512;
+              preadFully(in, pos, buf, buf.length);
+              assertArrayEquals(Arrays.copyOfRange(data, pos, pos + buf.length), buf);
+            }
+          } catch (IOException e) {
+            assertEquals("stream was closed", e.getMessage());
+          }
+          return null;
+        });
+        started.await();
+        in.close();
+        reader.get(30, TimeUnit.SECONDS);
+      }
+    } finally {
+      pool.shutdownNow();
+    }
   }
 }
