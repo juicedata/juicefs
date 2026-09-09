@@ -17,6 +17,7 @@
 package fuse
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -38,15 +39,17 @@ var logger = utils.GetLogger("juicefs")
 
 type fileSystem struct {
 	fuse.RawFileSystem
-	conf *vfs.Config
-	v    *vfs.VFS
+	conf        *vfs.Config
+	v           *vfs.VFS
+	enableIoctl bool
 }
 
-func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
+func newFileSystem(conf *vfs.Config, v *vfs.VFS, enableIoctl bool) *fileSystem {
 	return &fileSystem{
 		RawFileSystem: fuse.NewDefaultRawFileSystem(),
 		conf:          conf,
 		v:             v,
+		enableIoctl:   enableIoctl,
 	}
 }
 
@@ -447,7 +450,10 @@ func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fus
 	return 0
 }
 
-func (fs *fileSystem) Ioctl(cancel <-chan struct{}, in *fuse.IoctlIn, out *fuse.IoctlOut, bufIn, bufOut []byte) (status fuse.Status) {
+func (fs *fileSystem) Ioctl(cancel <-chan struct{}, in *fuse.IoctlIn, bufIn []byte, out *fuse.IoctlOut, bufOut []byte) (status fuse.Status) {
+	if !fs.enableIoctl {
+		return fuse.ENOSYS
+	}
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := fs.v.Ioctl(ctx, Ino(in.NodeId), in.Cmd, in.Arg, bufIn, bufOut)
@@ -466,7 +472,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	ensureFuseDev()
 
 	conf := v.Conf
-	imp := newFileSystem(conf, v)
+	imp := newFileSystem(conf, v, ioctl)
 
 	var opt fuse.MountOptions
 	opt.FsName = "JuiceFS:" + conf.Format.Name
@@ -476,15 +482,20 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.EnableLocks = true
 	opt.EnableSymlinkCaching = conf.FuseOpts.EnableSymlinkCaching
 	opt.EnableAcl = conf.Format.EnableACL
-	opt.DontUmask = conf.Format.EnableACL
 	opt.DisableXAttrs = !xattrs
-	opt.EnableIoctl = ioctl
 	opt.MaxWrite = conf.FuseOpts.MaxWrite
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.AllowOther = os.Getuid() == 0
-	opt.Timeout = conf.FuseOpts.Timeout
-	opt.EnableReadDirPlusAuto = conf.FuseOpts.EnableReadDirPlusAuto
+	opt.FdCommSocket = conf.CommPath
+	opt.CleanRestart = v.CleanRestart()
+	opt.ExtraCapabilities = uint64(conf.FuseOpts.OtherCaps) | fuse.CAP_EXPORT_SUPPORT
+	if conf.Format.EnableACL {
+		opt.ExtraCapabilities |= fuse.CAP_DONT_MASK
+	}
+	if conf.FuseOpts.EnableReadDirPlusAuto {
+		opt.ExtraCapabilities |= fuse.CAP_READDIRPLUS_AUTO
+	}
 
 	if opt.EnableAcl && conf.NonDefaultPermission {
 		logger.Warnf("it is recommended to turn on 'default-permissions' when enable acl")
@@ -503,9 +514,9 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		} else if n == "debug" {
 			opt.Debug = true
 		} else if n == "writeback_cache" {
-			opt.EnableWriteback = true
+			opt.ExtraCapabilities |= fuse.CAP_WRITEBACK_CACHE
 		} else if n == "async_dio" {
-			opt.OtherCaps |= fuse.CAP_ASYNC_DIO
+			opt.ExtraCapabilities |= fuse.CAP_ASYNC_DIO
 		} else if strings.TrimSpace(n) != "" {
 			opt.Options = append(opt.Options, strings.TrimSpace(n))
 		}
@@ -546,8 +557,8 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	return nil
 }
 
-func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, maxWrite int) fuse.MountOptions {
-	var opt fuse.MountOptions
+func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, maxWrite int) vfs.FuseOptions {
+	var opt vfs.FuseOptions
 	opt.FsName = "JuiceFS:" + conf.Format.Name
 	opt.Name = "juicefs"
 	opt.SingleThreaded = mt == 0
@@ -588,9 +599,15 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, m
 
 var fsserv *fuse.Server
 
-func Shutdown() bool {
-	if fsserv != nil {
-		return fsserv.Shutdown()
+func Shutdown(ctx context.Context) error {
+	if fsserv == nil {
+		return fmt.Errorf("FUSE server is not running")
 	}
-	return false
+	return fsserv.Shutdown(ctx)
+}
+
+func Resume() {
+	if fsserv != nil {
+		fsserv.Resume()
+	}
 }

@@ -498,6 +498,8 @@ github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db h1:esc0bVXk
 github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=
 github.com/juicedata/go-fuse/v2 v2.1.1-0.20260819084346-22b3157c2d7f h1:1Vq83sAjxVNlujRESzEkAjRiO/OWTHUdonZ2MYwzC4Q=
 github.com/juicedata/go-fuse/v2 v2.1.1-0.20260819084346-22b3157c2d7f/go.mod h1:xKwi1cF7nXAOBCXujD5ie0ZKsxc8GGSA1rlMJc+8IJs=
+github.com/juicedata/go-fuse/v2 v2.9.1-0.20260902052056-153e4582ae20 h1:RiuNP8IQrzgyj5TgxgLrq6A6sv6M4ebYdFfIAPWtiAo=
+github.com/juicedata/go-fuse/v2 v2.9.1-0.20260902052056-153e4582ae20/go.mod h1:aU7NkGYZUmuJrZapoI3mEcNve7PZTySUOLBuch/vR6U=
 github.com/juicedata/go-nfs-client v0.0.0-20250220101412-d3a8c1ca64a1 h1:GgH2ZG9inMYSme7zZb79z3QeOW70YusbJIVYjvqd508=
 github.com/juicedata/go-nfs-client v0.0.0-20250220101412-d3a8c1ca64a1/go.mod h1:xOMqi3lOrcGe9uZLnSzgaq94Vc3oz6VPCNDLJUnXpKs=
 github.com/juicedata/go-smb2 v0.0.0-20260310064141-58f27d06634e h1:M4iUt9qotJuRbZgD1TLMzy4BkVGidsOXh4YvHDNKhdY=

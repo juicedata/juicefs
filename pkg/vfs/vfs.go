@@ -1236,8 +1236,9 @@ type VFS struct {
 	hanleM    sync.Mutex
 	nextfh    uint64
 
-	modM       sync.Mutex
-	modifiedAt map[Ino]time.Time
+	modM         sync.Mutex
+	modifiedAt   map[Ino]time.Time
+	cleanRestart bool
 
 	registry *prometheus.Registry
 }
@@ -1275,17 +1276,27 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	}
 
 	statePath := os.Getenv("_FUSE_STATE_PATH")
+	restarting := statePath != ""
 	if statePath == "" {
 		statePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
-	if err := v.loadAllHandles(statePath); err != nil && !os.IsNotExist(err) {
-		logger.Errorf("load state from %s: %s", statePath, err)
+	if err := v.loadAllHandles(statePath); err != nil {
+		if !os.IsNotExist(err) {
+			logger.Errorf("load state from %s: %s", statePath, err)
+		}
+	} else {
+		v.cleanRestart = restarting
 	}
 	_ = os.Rename(statePath, statePath+".bak")
 
 	go v.cleanupModified()
 	initVFSMetrics(v, writer, reader, registerer)
 	return v
+}
+
+// CleanRestart reports whether state from the previous process was restored.
+func (v *VFS) CleanRestart() bool {
+	return v.cleanRestart
 }
 
 func (v *VFS) invalidateAttr(ino Ino) {

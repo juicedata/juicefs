@@ -558,7 +558,7 @@ func getFuserMountVersion() string {
 
 func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
 	rawOpts, mt, noxattr, noacl, maxWrite := genFuseOptExt(c, format)
-	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite))
+	options := fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite)
 	vfsConf.FuseOpts = &options
 }
 
@@ -945,23 +945,28 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 			logger.Infof("Received signal %s, exiting...", sig.String())
 			if sig == syscall.SIGHUP {
 				path := fmt.Sprintf("/tmp/state%d.json", os.Getppid())
-				if err := v.FlushAll(""); err == nil {
-					if !fuse.Shutdown() {
-						logger.Warnf("FUSE session is busy, don't restart")
-						continue
-					}
-					err = v.FlushAll(path)
-					if err != nil {
-						logger.Fatalf("flush buffered data failed: %s", err)
-					}
-					m.FlushSession()
-					object.Shutdown(blob)
-					logger.Warnf("exit with code 1")
-					os.Exit(1)
-				} else {
+				if err := v.FlushAll(""); err != nil {
 					logger.Warnf("flush buffered data failed: %s, don't restart", err)
 					continue
 				}
+
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				err := fuse.Shutdown(ctx)
+				cancel()
+				if err != nil {
+					fuse.Resume()
+					logger.Warnf("shutdown FUSE session failed: %s, don't restart", err)
+					continue
+				}
+				if err = v.FlushAll(path); err != nil {
+					fuse.Resume()
+					logger.Warnf("flush buffered data failed: %s, don't restart", err)
+					continue
+				}
+				m.FlushSession()
+				object.Shutdown(blob)
+				logger.Warnf("exit with code 1")
+				os.Exit(1)
 			}
 			go func() {
 				time.Sleep(time.Second * 30)
