@@ -1962,15 +1962,6 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		opened = false
 		newSpace, newInode = 0, 0
 		trash = requestedTrash
-		if trash > 0 {
-			tn := node{Inode: trash}
-			if ok, err := s.Get(&tn); err != nil {
-				return err
-			} else if !ok {
-				// the trash subdir was removed by a concurrent cleanup; delete directly
-				trash = 0
-			}
-		}
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
 		if err != nil {
@@ -2155,15 +2146,6 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 	requestedTrash := trash
 	err := m.txn(func(s *xorm.Session) error {
 		trash = requestedTrash
-		if trash > 0 {
-			tn := node{Inode: trash}
-			if ok, err := s.Get(&tn); err != nil {
-				return err
-			} else if !ok {
-				// the trash subdir was removed by a concurrent cleanup; delete directly
-				trash = 0
-			}
-		}
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
 		if err != nil {
@@ -2331,15 +2313,6 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		dino = 0
 		newSpace, newInode = 0, 0
 		trash = requestedTrash
-		if trash > 0 {
-			tn := node{Inode: trash}
-			if ok, err := s.Get(&tn); err != nil {
-				return err
-			} else if !ok {
-				// the trash subdir was removed by a concurrent cleanup; delete directly
-				trash = 0
-			}
-		}
 		var spn = node{Inode: parentSrc}
 		var dpn = node{Inode: parentDst}
 		err := m.getNodes(s, &spn, &dpn)
@@ -2853,7 +2826,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		var deltas ugQuotaDeltas
 		var batchDelNodes map[Ino]*dNode
 		var invalidatedInodes map[Ino]struct{}
-		requestedTrash := trash
 		err := m.txn(func(s *xorm.Session) error {
 			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
 			batchFsSpace, batchFsInodes = 0, 0
@@ -2861,16 +2833,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			deltas = make(ugQuotaDeltas)
 			batchDelNodes = make(map[Ino]*dNode)
 			invalidatedInodes = make(map[Ino]struct{})
-			trash = requestedTrash
-			if trash > 0 {
-				tn := node{Inode: trash}
-				if ok, err := s.Get(&tn); err != nil {
-					return err
-				} else if !ok {
-					// the trash subdir was removed by a concurrent cleanup; delete directly
-					trash = 0
-				}
-			}
 			pn := node{Inode: parent}
 			ok, err := s.Get(&pn)
 			if err != nil {
