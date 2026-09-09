@@ -19,7 +19,8 @@ var ofPool = sync.Pool{
 type openFile struct {
 	sync.RWMutex
 	attr      Attr
-	refs      int
+	openRefs  int
+	pins      int
 	lastCheck int64
 	first     []Slice
 	chunks    map[uint32][]Slice
@@ -34,7 +35,8 @@ func (o *openFile) invalidateChunk() {
 
 func (o *openFile) release() {
 	o.attr = Attr{}
-	o.refs = 0
+	o.openRefs = 0
+	o.pins = 0
 	o.lastCheck = 0
 	o.first = nil
 	o.chunks = nil
@@ -82,7 +84,7 @@ func (o *openfiles) cleanup() {
 			if cnt > 1e3 || todel > 0 && deleted >= todel {
 				break
 			}
-			if of.refs <= 0 {
+			if of.openRefs <= 0 && of.pins == 0 {
 				if now-of.lastCheck > 3600*12 {
 					of.release()
 					delete(o.files, ino)
@@ -124,7 +126,7 @@ func (o *openfiles) OpenCheck(ino Ino, attr *Attr) bool {
 		if attr != nil {
 			*attr = of.attr
 		}
-		of.refs++
+		of.openRefs++
 		return true
 	}
 	return false
@@ -147,7 +149,7 @@ func (o *openfiles) Open(ino Ino, attr *Attr) {
 	}
 	// next open can keep cache if not modified
 	of.attr.KeepCache = true
-	of.refs++
+	of.openRefs++
 	of.lastCheck = time.Now().Unix()
 }
 
@@ -156,8 +158,8 @@ func (o *openfiles) Close(ino Ino) bool {
 	defer o.Unlock()
 	of, ok := o.files[ino]
 	if ok {
-		of.refs--
-		return of.refs <= 0
+		of.openRefs--
+		return of.openRefs <= 0
 	}
 	return true
 }
@@ -200,7 +202,7 @@ func (o *openfiles) IsOpen(ino Ino) bool {
 	o.Lock()
 	defer o.Unlock()
 	of, ok := o.files[ino]
-	return ok && of.refs > 0
+	return ok && of.openRefs > 0
 }
 
 func (o *openfiles) ReadChunk(ino Ino, indx uint32) ([]Slice, bool) {
@@ -251,8 +253,43 @@ func (o *openfiles) InvalidateChunk(ino Ino, indx uint32) {
 	}
 }
 
-func (o *openfiles) find(ino Ino) *openFile {
+func (o *openfiles) ReadAttr(ino Ino, attr *Attr) bool {
+	if attr == nil {
+		return false
+	}
 	o.Lock()
 	defer o.Unlock()
-	return o.files[ino]
+	of, ok := o.files[ino]
+	if ok {
+		*attr = of.attr
+	}
+	return ok
+}
+
+func (o *openfiles) Tier(ino Ino) (uint8, bool) {
+	o.Lock()
+	defer o.Unlock()
+	of, ok := o.files[ino]
+	if ok {
+		return of.attr.Tier, true
+	}
+	return 0, false
+}
+
+func (o *openfiles) acquire(ino Ino) *openFile {
+	o.Lock()
+	defer o.Unlock()
+	of := o.files[ino]
+	if of != nil {
+		of.pins++
+	}
+	return of
+}
+
+func (o *openfiles) releasePin(ino Ino) {
+	o.Lock()
+	defer o.Unlock()
+	if of := o.files[ino]; of != nil && of.pins > 0 {
+		of.pins--
+	}
 }
