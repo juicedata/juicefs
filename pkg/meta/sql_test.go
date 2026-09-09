@@ -124,6 +124,81 @@ func TestSQLiteBatchUnlinkRetryDiscardsFailedAttemptDeletes(t *testing.T) {
 	}
 }
 
+func TestSQLiteUnlinkRetryResetsTrash(t *testing.T) {
+	metaClient, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unlink-trash-retry.db")+"?_timeout=1", testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	m := metaClient.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	format := testFormat()
+	format.TrashDays = 1
+	if err := m.Init(format, true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+
+	ctx := Background()
+	var trash Ino
+	if st := m.checkTrash(RootInode, &trash); st != 0 {
+		t.Fatalf("check trash: %s", st)
+	}
+
+	var inode Ino
+	var attr Attr
+	if st := m.Mknod(ctx, RootInode, "victim", TypeFile, 0644, 022, 0, "", &inode, &attr); st != 0 {
+		t.Fatalf("mknod victim: %s", st)
+	}
+	saved := node{Inode: inode}
+	if ok, err := m.db.Get(&saved); err != nil || !ok {
+		t.Fatalf("get victim node: ok=%t err=%v", ok, err)
+	}
+	if n, err := m.db.Delete(&node{Inode: inode}); err != nil || n != 1 {
+		t.Fatalf("delete victim node: rows=%d err=%v", n, err)
+	}
+
+	// The first unlink attempt sees the missing node and disables trash, then
+	// hits SQLITE_BUSY. Its retry sees the node restored by this transaction.
+	writer := m.db.NewSession()
+	t.Cleanup(func() { _ = writer.Close() })
+	if err := writer.Begin(); err != nil {
+		t.Fatalf("begin concurrent writer: %s", err)
+	}
+	t.Cleanup(func() { _ = writer.Rollback() })
+	if _, err := writer.Insert(&saved); err != nil {
+		t.Fatalf("restore victim node: %s", err)
+	}
+
+	retryLogger := &commitOnSQLiteBusyLogger{
+		ContextLogger: m.db.Logger(),
+		commit:        writer.Commit,
+	}
+	m.db.SetLogger(retryLogger)
+	m.db.ShowSQL(true)
+
+	if st := m.Unlink(ctx, RootInode, "victim"); st != 0 {
+		t.Fatalf("unlink after retry: %s", st)
+	}
+	if !retryLogger.committed {
+		t.Fatal("expected SQLite BUSY retry was not triggered")
+	}
+	if retryLogger.commitErr != nil {
+		t.Fatalf("commit concurrent node restore: %s", retryLogger.commitErr)
+	}
+
+	var got Ino
+	var gotAttr Attr
+	trashName := m.trashEntry(RootInode, inode, "victim")
+	if st := m.Lookup(ctx, trash, trashName, &got, &gotAttr, false); st != 0 {
+		t.Fatalf("lookup victim in trash: %s", st)
+	}
+	if got != inode {
+		t.Fatalf("victim in trash: inode=%d, want %d", got, inode)
+	}
+}
+
 func TestSQLiteBatchUpdateChunkRefs(t *testing.T) {
 	metaClient, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-batch-chunk-refs.db"), testConfig())
 	if err != nil {

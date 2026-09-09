@@ -2077,9 +2077,11 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	var n node
 	var opened bool
 	var newSpace, newInode int64
+	requestedTrash := trash
 	err := m.txn(func(s *xorm.Session) error {
 		opened = false
 		newSpace, newInode = 0, 0
+		trash = requestedTrash
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
 		if err != nil {
@@ -2252,7 +2254,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		}
 	}
 	var n node
+	requestedTrash := trash
 	err := m.txn(func(s *xorm.Session) error {
+		trash = requestedTrash
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
 		if err != nil {
@@ -2405,10 +2409,12 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if !parentSrc.IsTrash() { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
 		parentLocks = append(parentLocks, parentSrc)
 	}
+	requestedTrash := trash
 	err := m.txn(func(s *xorm.Session) error {
 		opened = false
 		dino = 0
 		newSpace, newInode = 0, 0
+		trash = requestedTrash
 		var spn = node{Inode: parentSrc}
 		var dpn = node{Inode: parentDst}
 		err := m.getNodes(s, &spn, &dpn)
