@@ -738,7 +738,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 	if keys, err := m.scanKeys(ctx, m.fmtKey("SS", sid)); err == nil {
 		for _, key := range keys {
 			inode := m.decodeInode(key[10:]) // "SS" + sid
-			if err = m.doDeleteSustainedInode(sid, inode); err != nil {
+			if err = m.doDeleteSustainedInode(ctx, sid, inode); err != nil {
 				logger.Warnf("Delete sustained inode %d of sid %d: %s", inode, sid, err)
 				fail = true
 			}
@@ -954,31 +954,49 @@ func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
 	return scanRange(0, ^uint64(0))
 }
 
-func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
-	if last == 0 {
+func (m *kvMeta) ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error {
+	last := opt.From
+	var target uint64
+	if last == 0 || !opt.Follow {
 		_ = m.client.txn(ctx, func(kt *kvTxn) error {
-			last = int64(m.findLastLogKey(kt))
+			target = m.findLastLogKey(kt)
 			return nil
 		}, 0)
-		logger.Infof("last version is %d", last)
+		if last == 0 {
+			last = int64(target)
+			logger.Infof("last version is %d", last)
+		}
 	}
-	saw := make(map[uint64]uint32)
+	saw := make(map[uint64]struct{}, len(opt.Seen))
+	for id := range opt.Seen {
+		saw[id] = struct{}{}
+	}
+	if opt.Seen != nil && opt.From > 0 {
+		if _, ok := saw[uint64(opt.From)]; !ok {
+			return fmt.Errorf("backup is missing the KV rewind changelogs at version %d", opt.From)
+		}
+	}
 	for {
 		if ctx.Canceled() {
 			return context.Canceled
 		}
-		err := m.client.simpleTxn(context.Background(), func(kt *kvTxn) error {
+		var found bool
+		beginID := m.client.rewind(uint64(last), 1)
+		err := m.client.txn(ctx, func(kt *kvTxn) error {
 			var err error
-			beginID := m.client.rewind(uint64(last), 1)
-			now := uint32(time.Now().Unix())
 			m.scanLogRange(kt, beginID, ^uint64(0), false, func(id uint64, k, v []byte) bool {
-				if saw[id] == 0 {
-					saw[id] = now
-					last = int64(id)
+				if _, ok := saw[id]; !ok {
+					found = true
 					if e := handler(int64(id), string(v)); e != nil {
-						logger.Errorf("Handle changelog %d: %s", id, e)
+						if !errors.Is(e, context.Canceled) {
+							logger.Errorf("Handle changelog %d: %s", id, e)
+						}
 						err = e
 						return false
+					}
+					saw[id] = struct{}{}
+					if int64(id) > last {
+						last = int64(id)
 					}
 				}
 				return true
@@ -986,12 +1004,16 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 			return err
 		}, 0)
 		if err != nil {
-			logger.Errorf("Scan changelog: %s", err)
+			if !errors.Is(err, context.Canceled) {
+				logger.Errorf("Scan changelog: %s", err)
+			}
 			return err
 		}
-		now := uint32(time.Now().Unix())
-		for k, t := range saw {
-			if t+60 < now {
+		if !opt.Follow && (!found || uint64(last) >= target) {
+			return nil
+		}
+		for k := range saw {
+			if k < beginID {
 				delete(saw, k)
 			}
 		}
@@ -1239,7 +1261,7 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		if cur.Parent > TrashInode {
 			return syscall.EPERM
 		}
-		now := time.Now()
+		now := operationTime(ctx)
 
 		rule, err := m.getACL(tx, cur.AccessACL)
 		if err != nil {
@@ -1317,7 +1339,7 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		oldLength := t.Length
 		t.Length = length
-		now := time.Now()
+		now := operationTime(ctx)
 		t.Mtime = now.Unix()
 		t.Mtimensec = uint32(now.Nanosecond())
 		t.Ctime = now.Unix()
@@ -1364,7 +1386,7 @@ func (m *kvMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 			return err
 		}
 		t.Length = length
-		now := time.Now()
+		now := operationTime(ctx)
 		t.Mtime = now.Unix()
 		t.Mtimensec = uint32(now.Nanosecond())
 		t.Ctime = now.Unix()
@@ -1479,8 +1501,14 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			return syscall.EEXIST
 		} else if parent == TrashInode { // user's inode is allocated by prefetch, trash inode is allocated on demand
 			key := m.counterKey("nextTrash")
-			next := tx.incrBy(key, 1)
-			*inode = TrashInode + Ino(next)
+			if isApplyMode(ctx) {
+				if next := int64(*inode - TrashInode); parseCounter(tx.get(key)) < next {
+					tx.set(key, packCounter(next))
+				}
+			} else {
+				next := tx.incrBy(key, 1)
+				*inode = TrashInode + Ino(next)
+			}
 		}
 		mode &= 07777
 		if pattr.DefaultACL != aclAPI.None && _type != TypeSymlink {
@@ -1515,7 +1543,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		attr.Tier = pattr.Tier
 
 		var updateParent bool
-		now := time.Now()
+		now := operationTime(ctx)
 		if parent != TrashInode {
 			if _type == TypeDirectory {
 				pattr.Nlink++
@@ -1525,7 +1553,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 					logger.Warnf("Skip updating nlink of directory %d to reduce conflict", parent)
 				}
 			}
-			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
+			if updateParent = applyParent(ctx, parent, updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1)); updateParent {
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -1565,7 +1593,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
-		if st := m.checkTrash(parent, &trash); st != 0 {
+		if st := m.checkTrash(ctx, parent, &trash); st != 0 {
 			return st
 		}
 	}
@@ -1615,7 +1643,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			return syscall.EPERM
 		}
 		opened = false
-		now := time.Now()
+		now := operationTime(ctx)
 		if rs[1] != nil {
 			m.parseAttr(rs[1], attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
@@ -1634,8 +1662,8 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			attr.Ctimensec = uint32(now.Nanosecond())
 			if trash == 0 {
 				attr.Nlink--
-				if _type == TypeFile && attr.Nlink == 0 && m.sid > 0 {
-					opened = m.of.IsOpen(inode)
+				if _type == TypeFile && attr.Nlink == 0 && m.sessionID(ctx) > 0 {
+					opened = m.isOpen(ctx, inode)
 				}
 			} else if attr.Parent > 0 {
 				attr.Parent = trash
@@ -1647,7 +1675,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 		var updateParent bool
-		if !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
+		if updateParent = applyParent(ctx, parent, !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1)); updateParent {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1679,7 +1707,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			case TypeFile:
 				if opened {
 					tx.set(m.inodeKey(inode), m.marshal(attr))
-					tx.set(m.sustainedKey(m.sid, inode), []byte{1})
+					tx.set(m.sustainedKey(m.sessionID(ctx), inode), []byte{1})
 				} else {
 					tx.set(m.delfileKey(inode, attr.Length), m.packInt64(now.Unix()))
 					tx.delete(m.inodeKey(inode))
@@ -1751,7 +1779,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		entries = entries[batchSize:]
 		var trash Ino
 		if len(skipCheckTrash) == 0 || !skipCheckTrash[0] {
-			if st := m.checkTrash(parent, &trash); st != 0 {
+			if st := m.checkTrash(ctx, parent, &trash); st != 0 {
 				return st
 			}
 		}
@@ -1786,7 +1814,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			}
 
 			entryInfos = make([]*entryInfo, 0, len(batch))
-			now := time.Now()
+			now := operationTime(ctx)
 			keys := make([][]byte, 0, len(batch))
 			for _, entry := range batch {
 				keys = append(keys, m.entryKey(parent, string(entry.Name)))
@@ -1891,15 +1919,15 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			for _, info := range entryInfos {
 				if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
 					opened := false
-					if m.sid > 0 {
-						opened = m.of.IsOpen(info.inode)
+					if m.sessionID(ctx) > 0 {
+						opened = m.isOpen(ctx, info.inode)
 					}
 					delNodes[info.inode] = &dNode{opened, info.attr.Length}
 				}
 			}
 
 			var updateParent bool
-			if !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
+			if updateParent = applyParent(ctx, parent, !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1)); updateParent {
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -1931,7 +1959,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 						case TypeFile:
 							if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
 								tx.set(m.inodeKey(info.inode), m.marshal(info.attr))
-								tx.set(m.sustainedKey(m.sid, info.inode), []byte{1})
+								tx.set(m.sustainedKey(m.sessionID(ctx), info.inode), []byte{1})
 							} else {
 								tx.set(m.delfileKey(info.inode, info.attr.Length), m.packInt64(nowUnix))
 								tx.delete(m.inodeKey(info.inode))
@@ -2037,7 +2065,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		parentLocks = nil // trash parent attributes are not updated, so sibling removals are independent.
 	}
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
-		if st := m.checkTrash(parent, &trash); st != 0 {
+		if st := m.checkTrash(ctx, parent, &trash); st != 0 {
 			return st
 		}
 	}
@@ -2078,7 +2106,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 			return syscall.ENOTEMPTY
 		}
 
-		now := time.Now()
+		now := operationTime(ctx)
 		if rs[1] != nil {
 			m.parseAttr(rs[1], &attr)
 			if oldAttr != nil {
@@ -2145,7 +2173,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 
 func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
 	var trash Ino
-	if st := m.checkTrash(parentDst, &trash); st != 0 {
+	if st := m.checkTrash(ctx, parentDst, &trash); st != 0 {
 		return st
 	}
 	exchange := flags == RenameExchange
@@ -2225,7 +2253,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 		}
 		var supdate, dupdate bool
-		now := time.Now()
+		now := operationTime(ctx)
 		if dbuf != nil {
 			if flags&RenameNoReplace != 0 {
 				return syscall.EEXIST
@@ -2281,8 +2309,8 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				} else {
 					if trash == 0 {
 						tattr.Nlink--
-						if dtyp == TypeFile && tattr.Nlink == 0 && m.sid > 0 {
-							opened = m.of.IsOpen(dino)
+						if dtyp == TypeFile && tattr.Nlink == 0 && m.sessionID(ctx) > 0 {
+							opened = m.isOpen(ctx, dino)
 						}
 					} else if tattr.Parent > 0 {
 						tattr.Parent = trash
@@ -2373,7 +2401,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if dtyp == TypeFile {
 						if opened {
 							tx.set(m.inodeKey(dino), m.marshal(&tattr))
-							tx.set(m.sustainedKey(m.sid, dino), []byte{1})
+							tx.set(m.sustainedKey(m.sessionID(ctx), dino), []byte{1})
 						} else {
 							tx.set(m.delfileKey(dino, tattr.Length), m.packInt64(now.Unix()))
 							tx.delete(m.inodeKey(dino))
@@ -2467,8 +2495,8 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		}
 
 		var updateParent bool
-		now := time.Now()
-		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
+		now := operationTime(ctx)
+		if updateParent = applyParent(ctx, parent, now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1)); updateParent {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -2608,10 +2636,10 @@ func (m *kvMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, len
 	return nil
 }
 
-func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
+func (m *kvMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) error {
 	var attr Attr
 	var newSpace int64
-	err := m.txn(Background(), func(tx *kvTxn) error {
+	err := m.txn(ctx, func(tx *kvTxn) error {
 		newSpace = 0
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -2619,16 +2647,16 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		}
 		m.parseAttr(a, &attr)
 		newSpace = -align4K(attr.Length)
-		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(time.Now().Unix()))
+		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(operationTime(ctx).Unix()))
 		tx.delete(m.inodeKey(inode))
 		tx.delete(m.sustainedKey(sid, inode))
-		m.genLog(tx, time.Now(), "DELSUSTAINED(%d,%d)", sid, inode)
+		m.genLog(tx, operationTime(ctx), "DELSUSTAINED(%d,%d)", sid, inode)
 		return nil
 	}, inode)
 	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
-		m.updateUserGroupStat(Background(), attr.Uid, attr.Gid, newSpace, -1)
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, -1)
 	}
 	return err
 }
@@ -2684,7 +2712,7 @@ func (m *kvMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 		if err := m.checkQuota(ctx, delta.space, 0, attr.Uid, attr.Gid, m.getParents(tx, inode, attr.Parent)...); err != 0 {
 			return err
 		}
-		now := time.Now()
+		now := operationTime(ctx)
 		attr.Mtime = mtime.Unix()
 		attr.Mtimensec = uint32(mtime.Nanosecond())
 		attr.Ctime = now.Unix()
@@ -2754,7 +2782,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		if err := m.checkQuota(ctx, newSpace, 0, attr.Uid, attr.Gid, m.getParents(tx, fout, attr.Parent)...); err != 0 {
 			return err
 		}
-		now := time.Now()
+		now := operationTime(ctx)
 		attr.Mtime = now.Unix()
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
@@ -4813,7 +4841,7 @@ func (m *kvMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, attr)
-		if !m.atimeNeedsUpdate(attr, now) {
+		if !isApplyMode(ctx) && !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()
@@ -4879,7 +4907,7 @@ func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 
 		// update attr
 		if oriACL != getAttrACLId(attr, aclType) || oriMode != attr.Mode {
-			now := time.Now()
+			now := operationTime(ctx)
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			tx.set(m.inodeKey(ino), m.marshal(attr))

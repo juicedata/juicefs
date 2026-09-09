@@ -561,7 +561,7 @@ type Meta interface {
 	DeleteTokens(ctx Context, ids []uint32) syscall.Errno
 	ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 
-	ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error
+	ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error
 }
 
 type ScanSlicesOption struct {
