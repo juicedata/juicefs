@@ -354,7 +354,7 @@ replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/golang-jwt
 
 replace github.com/vbauerster/mpb/v7 v7.0.3 => github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b
 
-replace xorm.io/xorm v1.0.7 => github.com/juicedata/xorm v1.4.2-0.20260817063922-12cef0de1677
+replace xorm.io/xorm v1.0.7 => github.com/juicedata/xorm v1.4.2-0.20260909084754-f6c8d2b84ec2
 
 replace github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible => github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c091+incompatible
 

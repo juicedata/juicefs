@@ -507,8 +507,8 @@ github.com/juicedata/minio v0.0.0-20260515071949-69a6cfc9da65 h1:u+3ehBnL0r3uQlo
 github.com/juicedata/minio v0.0.0-20260515071949-69a6cfc9da65/go.mod h1:1/4WHQKDOsWA1dd3ADrq9IE/jtFec9MHLy656kIXjNg=
 github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b h1:0/6suPNZnrOlRlBaU/Bnitu8HiKkkLSzQhHbwQ9AysM=
 github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b/go.mod h1:NXGsfPGx6G2JssqvEcULtDqUrxuuYs4llpv8W6ZUpzk=
-github.com/juicedata/xorm v1.4.2-0.20260817063922-12cef0de1677 h1:rZPpH3LLHS9CcOjvd+CY+PjhN2bV1Dk8KQNpVjpYTSE=
-github.com/juicedata/xorm v1.4.2-0.20260817063922-12cef0de1677/go.mod h1:cs0ePc8O4a0jD78cNvD+0VFwhqotTvLQZv372QsDw7Q=
+github.com/juicedata/xorm v1.4.2-0.20260909084754-f6c8d2b84ec2 h1:j1Ngfz6mtEA8YUhhN3ULLz9UNprl5HLv0SKxsN5cvEY=
+github.com/juicedata/xorm v1.4.2-0.20260909084754-f6c8d2b84ec2/go.mod h1:cs0ePc8O4a0jD78cNvD+0VFwhqotTvLQZv372QsDw7Q=
 github.com/juju/ratelimit v1.0.2 h1:sRxmtRiajbvrcLQT7S+JbqU0ntsb9W2yhSdNN8tWfaI=
 github.com/juju/ratelimit v1.0.2/go.mod h1:qapgC/Gy+xNh9UxzV13HGGl/6UXNN+ct+vwSgWNm/qk=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
