@@ -178,7 +178,7 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	}
 }
 
-func checkMountpoint(name, mp, logPath string, background bool) {}
+func checkMountpoint(name, mp, logPath string, background bool, fusemac bool) {}
 
 func prepareMp(mp string) {}
 
