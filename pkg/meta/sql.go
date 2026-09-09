@@ -161,7 +161,7 @@ type delegationToken struct {
 }
 
 type namedNode struct {
-	node `xorm:"extends"`
+	Node node   `xorm:"extends"` // XORM only expands exported fields.
 	Name []byte `xorm:"varbinary(255)"`
 }
 
@@ -1496,7 +1496,7 @@ func (m *dbMeta) doFlushStats() {
 func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.simpleTxn(ctx, func(s *xorm.Session) error {
 		s = s.Table(&edge{})
-		nn := namedNode{node: node{Parent: parent}, Name: []byte(name)}
+		nn := namedNode{Node: node{Parent: parent}, Name: []byte(name)}
 		var exist bool
 		var err error
 		if attr != nil {
@@ -1511,9 +1511,9 @@ func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		if !exist {
 			return syscall.ENOENT
 		}
-		*inode = nn.Inode
-		m.parseAttr(&nn.node, attr)
-		m.of.Update(nn.Inode, attr)
+		*inode = nn.Node.Inode
+		m.parseAttr(&nn.Node, attr)
+		m.of.Update(nn.Node.Inode, attr)
 		return nil
 	}))
 }
@@ -2848,19 +2848,19 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		}
 		for _, n := range nodes {
 			if len(n.Name) == 0 {
-				logger.Errorf("Corrupt entry with empty name: inode %d parent %d", n.Inode, inode)
+				logger.Errorf("Corrupt entry with empty name: inode %d parent %d", n.Node.Inode, inode)
 				continue
 			}
 			entry := &Entry{
-				Inode: n.Inode,
+				Inode: n.Node.Inode,
 				Name:  n.Name,
 				Attr:  &Attr{},
 			}
 			if plus != 0 {
-				m.parseAttr(&n.node, entry.Attr)
+				m.parseAttr(&n.Node, entry.Attr)
 				m.of.Update(entry.Inode, entry.Attr)
 			} else {
-				entry.Attr.Typ = n.Type
+				entry.Attr.Typ = n.Node.Type
 			}
 			*entries = append(*entries, entry)
 		}
@@ -2932,7 +2932,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			}
 			now := time.Now().UnixNano()
 			entryInfos := make([]*entryInfo, 0, len(batch))
-			names := make([][]byte, 0, len(batch))
+			names := make([]interface{}, 0, len(batch))
 			for _, entry := range batch {
 				names = append(names, entry.Name)
 			}
@@ -6259,19 +6259,19 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 
 			for _, n := range nodes {
 				if len(n.Name) == 0 {
-					logger.Errorf("Corrupt entry with empty name: inode %d parent %d", n.Inode, inode)
+					logger.Errorf("Corrupt entry with empty name: inode %d parent %d", n.Node.Inode, inode)
 					continue
 				}
 				entry := &Entry{
-					Inode: n.Inode,
+					Inode: n.Node.Inode,
 					Name:  n.Name,
 					Attr:  &Attr{},
 				}
 				if plus {
-					m.parseAttr(&n.node, entry.Attr)
-					m.of.Update(n.Inode, entry.Attr)
+					m.parseAttr(&n.Node, entry.Attr)
+					m.of.Update(n.Node.Inode, entry.Attr)
 				} else {
-					entry.Attr.Typ = n.Type
+					entry.Attr.Typ = n.Node.Type
 				}
 				entries = append(entries, entry)
 			}
