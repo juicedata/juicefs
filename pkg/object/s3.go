@@ -263,7 +263,11 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", rawKey)
 		}
-		if !strings.HasPrefix(oKey, prefix) || oKey < start {
+		// A continuation token is the server's own cursor and StartAfter is
+		// ignored on continued requests. Some backends (e.g. TOS buckets with
+		// hierarchical namespace) also return keys in a non-lexicographic
+		// order, so only validate against StartAfter on the first page.
+		if !strings.HasPrefix(oKey, prefix) || (token == "" && oKey < start) {
 			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, start)
 		}
 		objs[i] = &obj{

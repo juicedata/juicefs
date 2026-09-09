@@ -368,7 +368,23 @@ func (m *CheckpointManager) ValidateConfig(current *Config) bool {
 		return false
 	}
 
+	// PrefixState stores the list depth of every pending prefix, so the prefixes
+	// restored from the checkpoint would keep the old listing mode.
+	if effectiveListDepth(old) != effectiveListDepth(current) {
+		logger.Warnf("Checkpoint config mismatch: list-threads/list-depth, old: %d/%d, current: %d/%d", old.ListThreads, old.ListDepth, current.ListThreads, current.ListDepth)
+		return false
+	}
+
 	return true
+}
+
+// effectiveListDepth returns the depth down to which directories are listed
+// with delimiter; see startProducer.
+func effectiveListDepth(c *Config) int {
+	if c.ListThreads <= 1 || c.ListDepth <= 0 {
+		return 0
+	}
+	return c.ListDepth
 }
 
 // GetOrCreatePrefixState gets or creates a prefix state
