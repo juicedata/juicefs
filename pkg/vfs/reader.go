@@ -74,6 +74,10 @@ type FileReader interface {
 
 type DataReader interface {
 	Open(inode Ino, length uint64) FileReader
+	// OpenReadOnly returns a FileReader backed by a shared per-inode cache.
+	// Multiple callers opening the same inode read-only share one fileReader,
+	// mirroring the kernel page-cache behaviour observable under FUSE mounts.
+	OpenReadOnly(inode Ino, length uint64) FileReader
 	Truncate(inode Ino, length uint64)
 	Invalidate(inode Ino, off, length uint64)
 }
@@ -292,7 +296,8 @@ type fileReader struct {
 	last     **sliceReader
 
 	sync.Mutex
-	closing bool
+	closing  bool
+	readOnly bool // true if this fileReader is shared among read-only openers
 
 	// protected by r
 	refs uint16
@@ -683,6 +688,19 @@ func (f *fileReader) visit(fn func(s *sliceReader) bool) {
 }
 
 func (f *fileReader) Close(ctx meta.Context) {
+	if f.readOnly {
+		f.r.Lock()
+		f.refs--
+		remaining := f.refs
+		if remaining == 0 {
+			delete(f.r.roFiles, f.inode)
+		}
+		f.r.Unlock()
+		if remaining > 0 {
+			// Other openers are still using this shared reader; keep it alive.
+			return
+		}
+	}
 	f.Lock()
 	f.closing = true
 	f.visit(func(s *sliceReader) bool {
@@ -698,6 +716,7 @@ type dataReader struct {
 	m              meta.Meta
 	store          chunk.ChunkStore
 	files          map[Ino]*fileReader
+	roFiles        map[Ino]*fileReader // shared read-only fileReader per inode
 	blockSize      uint64
 	bufferSize     int64
 	readAheadMax   uint64
@@ -716,6 +735,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 		m:              m,
 		store:          store,
 		files:          make(map[Ino]*fileReader),
+		roFiles:        make(map[Ino]*fileReader),
 		blockSize:      uint64(conf.Chunk.BlockSize),
 		bufferSize:     int64(conf.Chunk.BufferSize),
 		readAheadTotal: uint64(readAheadTotal),
@@ -743,6 +763,12 @@ func (r *dataReader) checkReadBuffer() {
 				f = f.next
 			}
 		}
+		// Also release idle buffers held by shared read-only readers.
+		for _, f := range r.roFiles {
+			r.Unlock()
+			f.releaseIdleBuffer()
+			r.Lock()
+		}
 		r.Unlock()
 		time.Sleep(time.Second)
 	}
@@ -764,6 +790,36 @@ func (r *dataReader) Open(inode Ino, length uint64) FileReader {
 	return f
 }
 
+// OpenReadOnly returns a shared FileReader for read-only access.  All callers
+// opening the same inode read-only share a single fileReader so their page
+// cache (slices) is reused across concurrent requests, avoiding redundant
+// object-storage I/O and excess memory usage.
+func (r *dataReader) OpenReadOnly(inode Ino, length uint64) FileReader {
+	r.Lock()
+	defer r.Unlock()
+	if f, ok := r.roFiles[inode]; ok {
+		// Reuse the existing shared reader; bump the ref so Close knows when
+		// the last opener has finished.
+		f.Lock()
+		if length > f.length {
+			f.length = length
+		}
+		f.Unlock()
+		f.refs++
+		return f
+	}
+	f := &fileReader{
+		r:        r,
+		inode:    inode,
+		length:   length,
+		readOnly: true,
+	}
+	f.last = &(f.slices)
+	f.refs = 1
+	r.roFiles[inode] = f
+	return f
+}
+
 func (r *dataReader) visit(inode Ino, fn func(*fileReader)) {
 	// r could be hold inside f, so Unlock r first to avoid deadlock
 	r.Lock()
@@ -772,6 +828,11 @@ func (r *dataReader) visit(inode Ino, fn func(*fileReader)) {
 	for f != nil {
 		fs = append(fs, f)
 		f = f.next
+	}
+	// Also visit the shared read-only reader so that Truncate/Invalidate
+	// correctly expire its cached slices.
+	if ro, ok := r.roFiles[inode]; ok {
+		fs = append(fs, ro)
 	}
 	r.Unlock()
 	for _, f := range fs {
