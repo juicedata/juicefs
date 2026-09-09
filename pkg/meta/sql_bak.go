@@ -43,6 +43,7 @@ func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 	var dumps = []func(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error{
 		m.dumpFormat,
 		m.dumpCounters,
+		m.dumpChangeLog,
 		m.dumpNodes,
 		m.dumpChunks,
 		m.dumpEdges,
@@ -508,6 +509,36 @@ func (m *dbMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResu
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: dirStats}})
+}
+
+func (m *dbMeta) dumpChangeLog(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
+	if !m.getFormat().ChangeLog {
+		return nil
+	}
+	var logs []changeLog
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
+		var maxLog changeLog
+		if ok, err := s.Desc("id").Limit(1).Get(&maxLog); err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
+		start := max(int64(0), maxLog.Id-int64(m.sqlChangelogRewind()))
+		return s.Where("id > ? AND id <= ?", start, maxLog.Id).Asc("id").Find(&logs)
+	}); err != nil {
+		return err
+	}
+	if len(logs) == 0 {
+		return nil
+	}
+	changelogs := make([]*pb.ChangeLog, 0, len(logs))
+	for _, log := range logs {
+		changelogs = append(changelogs, &pb.ChangeLog{
+			Version: log.Id,
+			Entry:   []byte(log.Entry),
+		})
+	}
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Changelogs: changelogs}})
 }
 
 func (m *dbMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) error {
