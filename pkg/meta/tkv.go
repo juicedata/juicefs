@@ -1792,6 +1792,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 				keys = append(keys, m.entryKey(parent, string(entry.Name)))
 			}
 			vals := tx.gets(keys...)
+			seenNames := make(map[string]struct{}, len(batch))
 			for idx, entry := range batch {
 				if vals[idx] == nil {
 					continue
@@ -1800,8 +1801,13 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 				if ino != entry.Inode || typ == TypeDirectory || (entry.Attr != nil && typ != entry.Attr.Typ) {
 					continue
 				}
+				name := string(entry.Name)
+				if _, ok := seenNames[name]; ok {
+					continue
+				}
+				seenNames[name] = struct{}{}
 				info := entryInfo{
-					name:  string(entry.Name),
+					name:  name,
 					inode: ino,
 					typ:   typ,
 					trash: trash,
