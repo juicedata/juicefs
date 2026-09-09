@@ -91,7 +91,7 @@ type engine interface {
 	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
-	doDeleteSustainedInode(sid uint64, inode Ino) error
+	doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices(ctx Context, count *uint64) error
@@ -1614,7 +1614,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if _type < TypeFile || _type > TypeSocket {
 		return syscall.EINVAL
 	}
-	if parent.IsTrash() {
+	if parent.IsTrash() && !isApplyMode(ctx) {
 		return syscall.EPERM
 	}
 	if parent == RootInode && name == TrashName {
@@ -1634,12 +1634,20 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
 	// check group quota in transaction
-	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
-		return err
+	if !isApplyMode(ctx) {
+		if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
+			return err
+		}
 	}
-	ino, err := m.nextInode()
-	if err != nil {
-		return errno(err)
+	var ino Ino
+	if state := getApplyState(ctx); state != nil {
+		ino = state.Inode
+	}
+	if ino == 0 {
+		var err error
+		if ino, err = m.nextInode(); err != nil {
+			return errno(err)
+		}
 	}
 	if inode == nil {
 		inode = &ino
@@ -2180,7 +2188,7 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		}
 		m.Unlock()
 		if removed {
-			_ = m.en.doDeleteSustainedInode(m.sid, inode)
+			_ = m.en.doDeleteSustainedInode(Background(), m.sid, inode)
 		}
 	}
 	return 0
@@ -2201,7 +2209,7 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 	if st == 0 {
 		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
-		if numSlices%100 == 99 || numSlices > 350 {
+		if !isApplyMode(ctx) && (numSlices%100 == 99 || numSlices > 350) {
 			if numSlices < maxSlices {
 				go m.compactChunk(inode, indx, false, false, int(attr.Tier))
 			} else {
@@ -3046,7 +3054,11 @@ func (m *baseMeta) toTrash(parent Ino) bool {
 	return m.getFormat().TrashDays > 0
 }
 
-func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
+func (m *baseMeta) checkTrash(ctx Context, parent Ino, trash *Ino) syscall.Errno {
+	if state := getApplyState(ctx); state != nil {
+		*trash = state.Trash
+		return 0
+	}
 	if !m.toTrash(parent) {
 		return 0
 	}
