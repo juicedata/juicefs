@@ -512,3 +512,53 @@ func TestSpaceToFreeNoAction(t *testing.T) {
 		require.Equal(t, 0, uploadCount, "should not upload when disk has enough free space and inodes")
 	})
 }
+
+// A staging block is linked into the cache dir but excluded from used, so the
+// block count has to exclude it too: otherwise blockcache_blocks and
+// blockcache_bytes report different sets of blocks.
+func TestStagingBlocksExcludedFromStats(t *testing.T) {
+	conf := testConf()
+	conf.Writeback = true
+	conf.FreeSpace = 0.00001
+	defer os.RemoveAll(conf.CacheDir)
+	s := newDiskCache(newCacheManagerMetrics(nil), conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+
+	key := "chunks/0/0/1_0_1024"
+	_, err := s.stage(key, make([]byte, 1024), 0)
+	require.NoError(t, err)
+
+	cnt, used := s.stats()
+	require.EqualValues(t, 0, cnt, "staging block must not count as a cached block")
+	require.EqualValues(t, 0, used)
+
+	s.uploaded(key, 1024)
+	require.NoError(t, s.removeStage(key))
+
+	cnt, used = s.stats()
+	require.EqualValues(t, 1, cnt)
+	require.EqualValues(t, 1024+4096, used)
+}
+
+// Staged blocks cannot be evicted, so counting them against --cache-items makes
+// cleanupFull chase a target it can never reach and drop read cache blocks
+// instead. The byte limit already excludes them through used.
+func TestStagingBlocksExcludedFromItemLimit(t *testing.T) {
+	conf := testConf()
+	conf.Writeback = true
+	conf.FreeSpace = 0.00001
+	conf.CacheScanInterval = -1
+	conf.CacheItems = 10
+	defer os.RemoveAll(conf.CacheDir)
+	s := newDiskCache(newCacheManagerMetrics(nil), conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+
+	for i := 0; i < 20; i++ { // twice the item limit, none of them evictable
+		_, err := s.stage(fmt.Sprintf("chunks/0/0/%d_0_1024", i), make([]byte, 1024), 0)
+		require.NoError(t, err)
+	}
+	for i := 100; i < 105; i++ { // read cache blocks arriving afterwards
+		s.add(fmt.Sprintf("chunks/0/0/%d_0_1024", i), 1024, uint32(time.Now().Unix()))
+	}
+
+	cnt, _ := s.stats()
+	require.EqualValues(t, 5, cnt, "read cache must survive when staged blocks exceed cache-items")
+}
