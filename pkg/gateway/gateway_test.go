@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -283,7 +284,7 @@ func TestObjectCommitAfterBucketDeleted(t *testing.T) {
 	// exercise the commit path deterministically, bypassing checkBucket
 	data := []byte("data")
 	if _, err := g1.putObject(ctx, bucket, g1.path(bucket, "obj"),
-		newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}, func(string) {}); !errors.As(err, &minio.BucketNotFound{}) {
+		newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}, func(string) {}, false); !errors.As(err, &minio.BucketNotFound{}) {
 		t.Fatalf("putObject after bucket deleted should return BucketNotFound, got %v", err)
 	}
 	if _, errno := g2.fs.Stat(mctx, g2.path(bucket)); !fs.IsNotExist(errno) {
@@ -841,5 +842,218 @@ func TestDeleteObjects(t *testing.T) {
 		if _, eno := jfs.Stat(mctx, "/jmrqfoo"); eno != 0 {
 			t.Fatalf("sibling bucket dir /jmrqfoo must not be pruned, got: %s", eno)
 		}
+	})
+}
+
+func setupMetadataInheritanceTarget(t *testing.T, jfs *fs.FileSystem, defaultRule *acl.Rule) (string, *acl.Rule) {
+	t.Helper()
+	format := jfs.Meta().GetFormat()
+	format.EnableACL = true
+	if err := jfs.Meta().Init(&format, false); err != nil {
+		t.Fatalf("enable ACL support: %s", err)
+	}
+
+	const target = "/acl-target"
+	if eno := jfs.Mkdir(mctx, target, 0777, 0); eno != 0 {
+		t.Fatalf("mkdir target: %s", eno)
+	}
+
+	// Configure the target through the metadata API with an explicit root
+	// context.  The test must also run as an unprivileged local macOS process;
+	// going through vfs.File.Chown would depend on the host's OS permissions.
+	rootCtx := meta.Background()
+	var targetIno meta.Ino
+	eno := jfs.Meta().Lookup(rootCtx, meta.RootInode, "acl-target", &targetIno, new(meta.Attr), false)
+	if eno != 0 {
+		t.Fatalf("lookup target: %s", eno)
+	}
+	if eno = jfs.Meta().SetAttr(rootCtx, targetIno, meta.SetAttrGID, 0, &meta.Attr{Gid: 2468}); eno != 0 {
+		t.Fatalf("set target gid: %s", eno)
+	}
+	// Chown may clear setgid, so set it afterwards.
+	if eno = jfs.Meta().SetAttr(rootCtx, targetIno, meta.SetAttrMode, 0, &meta.Attr{Mode: 02770}); eno != 0 {
+		t.Fatalf("set target mode: %s", eno)
+	}
+
+	if defaultRule == nil {
+		// Keep the resulting mode at 0600 while making the ACL extended, so the
+		// test checks both the mode derived from the default ACL and ACL storage.
+		defaultRule = &acl.Rule{
+			Owner: 6,
+			Group: 0,
+			Mask:  0,
+			Other: 0,
+			NamedUsers: []acl.Entry{{
+				Id:   1001,
+				Perm: 0,
+			}},
+		}
+	}
+	if eno = jfs.Meta().SetFacl(rootCtx, targetIno, acl.TypeDefault, defaultRule); eno != 0 {
+		t.Fatalf("set default ACL: %s", eno)
+	}
+
+	return target, defaultRule
+}
+
+func setupNestedMetadataInheritanceTarget(t *testing.T, jfs *fs.FileSystem) (string, *acl.Rule) {
+	// Nested directory creation needs execute permission.  Keep this setup
+	// separate from the regular file case, whose ACL intentionally produces 0600.
+	nestedRule := &acl.Rule{
+		Owner: 7,
+		Group: 0,
+		Mask:  7,
+		Other: 0,
+		NamedUsers: []acl.Entry{{
+			Id:   1001,
+			Perm: 0,
+		}},
+	}
+	target, _ := setupMetadataInheritanceTarget(t, jfs, nestedRule)
+	return target, nestedRule
+}
+
+func assertInheritedMetadata(t *testing.T, jfs *fs.FileSystem, name string, wantACL *acl.Rule) {
+	t.Helper()
+	fi, eno := jfs.Stat(mctx, name)
+	if eno != 0 {
+		t.Fatalf("stat %s: %s", name, eno)
+	}
+	gotACL := &acl.Rule{}
+	aclErr := jfs.GetFacl(mctx, name, acl.TypeAccess, gotACL)
+	t.Logf("%s: mode=%#o gid=%d access_acl_err=%v access_acl=%s", name, uint32(fi.Mode().Perm()), fi.Gid(), aclErr, gotACL)
+
+	if fi.Gid() != 2468 || uint32(fi.Mode().Perm()) != uint32(wantACL.GetMode()) || aclErr != 0 || !gotACL.IsEqual(wantACL) {
+		t.Errorf("metadata mismatch for %s: got mode=%#o gid=%d acl_err=%v acl=%s, want mode=%#o gid=%d acl=%s",
+			name, uint32(fi.Mode().Perm()), fi.Gid(), aclErr, gotACL, uint32(wantACL.GetMode()), 2468, wantACL)
+	}
+}
+
+// TestGatewayObjectOperationsInheritDestinationMetadata verifies that every
+// Gateway upload completion path applies the destination directory's POSIX
+// GID and default ACL to the final object inode.
+func TestGatewayObjectOperationsInheritDestinationMetadata(t *testing.T) {
+	// A regular PUT creates a staged inode first and commits it with rename.
+	t.Run("PUT", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		target, defaultRule := setupMetadataInheritanceTarget(t, jfs, nil)
+		wantACL := defaultRule.ChildAccessACL(0666)
+		data := []byte("metadata-inheritance")
+
+		if _, err := jfsObj.PutObject(context.Background(), bucket, "acl-target/put",
+			newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); err != nil {
+			t.Fatalf("put object: %s", err)
+		}
+		assertInheritedMetadata(t, jfs, target+"/put", wantACL)
+	})
+
+	// A nested object path exercises the ENOENT retry: the first rename sees
+	// missing parent directories, mkdirAllInBucket creates them, and the second
+	// rename commits the staged file with inherited metadata.
+	t.Run("PUT with missing parent directories", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		target, nestedRule := setupNestedMetadataInheritanceTarget(t, jfs)
+		wantACL := nestedRule.ChildAccessACL(0666)
+		data := []byte("metadata-inheritance")
+		object := "acl-target/nested/deep/put"
+
+		if _, err := jfsObj.PutObject(context.Background(), bucket, object,
+			newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); err != nil {
+			t.Fatalf("put nested object: %s", err)
+		}
+		assertInheritedMetadata(t, jfs, target+"/nested/deep/put", wantACL)
+	})
+
+	// COPY follows the same staged-file commit path as PUT and must preserve the
+	// destination directory's inherited metadata.
+	t.Run("COPY", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		target, defaultRule := setupMetadataInheritanceTarget(t, jfs, nil)
+		wantACL := defaultRule.ChildAccessACL(0666)
+		data := []byte("metadata-inheritance")
+		if _, err := jfsObj.PutObject(context.Background(), bucket, "source",
+			newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); err != nil {
+			t.Fatalf("put source object: %s", err)
+		}
+		srcInfo, err := jfsObj.GetObjectInfo(context.Background(), bucket, "source", minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("get source object info: %s", err)
+		}
+		if _, err = jfsObj.CopyObject(context.Background(), bucket, "source", bucket,
+			"acl-target/copy", srcInfo, minio.ObjectOptions{}, minio.ObjectOptions{}); err != nil {
+			t.Fatalf("copy object: %s", err)
+		}
+		assertInheritedMetadata(t, jfs, target+"/copy", wantACL)
+	})
+
+	// COPY must also retry after the destination's missing parent directories
+	// are created, then apply the destination directory's inherited metadata.
+	t.Run("COPY with missing parent directories", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		target, nestedRule := setupNestedMetadataInheritanceTarget(t, jfs)
+		wantACL := nestedRule.ChildAccessACL(0666)
+		data := []byte("metadata-inheritance")
+		if _, err := jfsObj.PutObject(context.Background(), bucket, "source",
+			newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); err != nil {
+			t.Fatalf("put source object: %s", err)
+		}
+		srcInfo, err := jfsObj.GetObjectInfo(context.Background(), bucket, "source", minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("get source object info: %s", err)
+		}
+		object := "acl-target/nested/deep/copy"
+		if _, err = jfsObj.CopyObject(context.Background(), bucket, "source", bucket,
+			object, srcInfo, minio.ObjectOptions{}, minio.ObjectOptions{}); err != nil {
+			t.Fatalf("copy nested object: %s", err)
+		}
+		assertInheritedMetadata(t, jfs, target+"/nested/deep/copy", wantACL)
+	})
+
+	// Completing a multipart upload commits a previously staged inode and must
+	// apply inheritance at completion time, not only when the upload starts.
+	t.Run("multipart completion", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		target, defaultRule := setupMetadataInheritanceTarget(t, jfs, nil)
+		wantACL := defaultRule.ChildAccessACL(0666)
+		data := []byte("metadata-inheritance")
+		object := "acl-target/multipart"
+		uploadID, err := jfsObj.NewMultipartUpload(context.Background(), bucket, object, minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("new multipart upload: %s", err)
+		}
+		part, err := jfsObj.PutObjectPart(context.Background(), bucket, object, uploadID, 1,
+			newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("put multipart part: %s", err)
+		}
+		if _, err = jfsObj.CompleteMultipartUpload(context.Background(), bucket, object, uploadID,
+			[]minio.CompletePart{{PartNumber: 1, ETag: part.ETag}}, minio.ObjectOptions{}); err != nil {
+			t.Fatalf("complete multipart upload: %s", err)
+		}
+		assertInheritedMetadata(t, jfs, target+"/multipart", wantACL)
+	})
+
+	// Multipart completion must create missing destination parents before the
+	// retrying rename and preserve the inherited metadata on the final object.
+	t.Run("multipart completion with missing parent directories", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		target, nestedRule := setupNestedMetadataInheritanceTarget(t, jfs)
+		wantACL := nestedRule.ChildAccessACL(0666)
+		data := []byte("metadata-inheritance")
+		object := "acl-target/nested/deep/multipart"
+		uploadID, err := jfsObj.NewMultipartUpload(context.Background(), bucket, object, minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("new nested multipart upload: %s", err)
+		}
+		part, err := jfsObj.PutObjectPart(context.Background(), bucket, object, uploadID, 1,
+			newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("put nested multipart part: %s", err)
+		}
+		if _, err = jfsObj.CompleteMultipartUpload(context.Background(), bucket, object, uploadID,
+			[]minio.CompletePart{{PartNumber: 1, ETag: part.ETag}}, minio.ObjectOptions{}); err != nil {
+			t.Fatalf("complete nested multipart upload: %s", err)
+		}
+		assertInheritedMetadata(t, jfs, target+"/nested/deep/multipart", wantACL)
 	})
 }

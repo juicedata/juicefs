@@ -124,7 +124,7 @@ type engine interface {
 	doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta *dirStat, skipCheckTrash ...bool) syscall.Errno
 	doReadlink(ctx Context, inode Ino, noatime bool) (int64, []byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
-	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
+	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inheritMetadata bool, mode uint16, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -1593,6 +1593,37 @@ func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parent
 	return ctx.Gid()
 }
 
+// inheritFileAttr applies the same GID and ACL rules used by Mknod when a
+// regular file is created directly in parentAttr. The ACL callbacks are bound
+// to the caller's backend transaction, so ACL lookup and insertion remain
+// atomic with the inode update and rename.
+func (m *baseMeta) inheritFileAttr(ctx Context, parentAttr, attr *Attr, mode uint16,
+	getACL func(uint32) (*aclAPI.Rule, error), insertACL func(*aclAPI.Rule) (uint32, error)) error {
+	attr.Gid = m.inheritGid(ctx, TypeFile, parentAttr.Gid, parentAttr.Mode)
+	mode &= 07777
+	if parentAttr.DefaultACL == aclAPI.None {
+		return nil
+	}
+
+	rule, err := getACL(parentAttr.DefaultACL)
+	if err != nil {
+		return err
+	}
+	if rule.IsMinimal() {
+		attr.Mode = mode & (0xFE00 | rule.GetMode())
+		return nil
+	}
+
+	cRule := rule.ChildAccessACL(mode)
+	id, err := insertACL(cRule)
+	if err != nil {
+		return err
+	}
+	attr.AccessACL = id
+	attr.Mode = (mode & 0xFE00) | cRule.GetMode()
+	return nil
+}
+
 func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, parentMode, childMode uint16) uint16 {
 	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
 		return childMode
@@ -1900,7 +1931,29 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	return st
 }
 
+// renameMetadataConcurrencyHookKey is used by package tests to force
+// interleavings between RenameWithInheritedMetadata transactions.
+const renameMetadataConcurrencyHookKey CtxKey = "rename-metadata-concurrency-hook"
+
+func (m *baseMeta) runRenameMetadataConcurrencyHook(ctx Context) {
+	if hook, ok := ctx.Value(renameMetadataConcurrencyHookKey).(func()); ok && hook != nil {
+		hook()
+	}
+}
+
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	return m.rename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, 0, false, inode, attr)
+}
+
+// RenameWithInheritedMetadata moves a staged regular file into its destination
+// while applying the destination directory's file-creation inheritance rules.
+// The backend performs the parent/child metadata reads and all metadata writes
+// in the same transaction as the rename.
+func (m *baseMeta) RenameWithInheritedMetadata(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, mode uint16, inode *Ino, attr *Attr) syscall.Errno {
+	return m.rename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, mode, true, inode, attr)
+}
+
+func (m *baseMeta) rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, mode uint16, inheritMetadata bool, inode *Ino, attr *Attr) syscall.Errno {
 	if parentSrc == RootInode && nameSrc == TrashName || parentDst == RootInode && nameDst == TrashName {
 		return syscall.EPERM
 	}
@@ -1970,8 +2023,14 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	tinode := new(Ino)
 	tattr := new(Attr)
-	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, tinode, attr, tattr)
+	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inheritMetadata, mode, inode, tinode, attr, tattr)
 	if st == 0 {
+		if inheritMetadata {
+			// The staged inode may still have an open-file cache entry from the
+			// upload. Refresh it after the transactional metadata update.
+			m.of.InvalidateChunk(*inode, invalidateAttrOnly)
+			m.of.Update(*inode, attr)
+		}
 		var diffLength uint64
 		if attr.Typ == TypeDirectory {
 			m.parentMu.Lock()
