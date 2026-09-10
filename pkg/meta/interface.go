@@ -456,6 +456,10 @@ type Meta interface {
 	// The targeted entry will be overwrited if it's a file or empty directory.
 	// For Hadoop, the target should not be overwritten.
 	Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
+	// RenameWithInheritedMetadata moves a staged regular file and applies the
+	// destination directory's file-creation GID and default ACL rules atomically.
+	// mode is the mode requested for the final file before default ACL handling.
+	RenameWithInheritedMetadata(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, mode uint16, inode *Ino, attr *Attr) syscall.Errno
 	// Link creates an entry for node.
 	Link(ctx Context, inodeSrc, parent Ino, name string, attr *Attr) syscall.Errno
 	// Readdir returns all entries for given directory, which include attributes if plus is true.

@@ -648,6 +648,17 @@ func trimDotsForRename(paths []string) (res []string) {
 }
 
 func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, flags uint32) (err syscall.Errno) {
+	return fs.rename(ctx, oldpath, newpath, flags, 0, false)
+}
+
+// RenameWithInheritedMetadata commits a staged regular file using the
+// destination directory's GID and default ACL inheritance rules. The metadata
+// service performs the inheritance and rename in one backend transaction.
+func (fs *FileSystem) RenameWithInheritedMetadata(ctx meta.Context, oldpath string, newpath string, flags uint32, mode uint16) (err syscall.Errno) {
+	return fs.rename(ctx, oldpath, newpath, flags, mode, true)
+}
+
+func (fs *FileSystem) rename(ctx meta.Context, oldpath string, newpath string, flags uint32, mode uint16, inheritMetadata bool) (err syscall.Errno) {
 	oss := trimDotsForRename(strings.Split(oldpath, "/"))
 	nss := trimDotsForRename(strings.Split(newpath, "/"))
 	var err0 syscall.Errno
@@ -681,7 +692,11 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 	if err0 != 0 {
 		return err0
 	}
-	err = fs.m.Rename(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), flags, nil, nil)
+	if inheritMetadata {
+		err = fs.m.RenameWithInheritedMetadata(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), flags, mode, nil, nil)
+	} else {
+		err = fs.m.Rename(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), flags, nil, nil)
+	}
 	fs.InvalidateEntry(oldfi.inode, path.Base(oldpath))
 	fs.InvalidateEntry(newfi.inode, path.Base(newpath))
 	return
