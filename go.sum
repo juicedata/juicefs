@@ -449,8 +449,6 @@ github.com/hashicorp/serf v0.10.1/go.mod h1:yL2t6BqATOLGc5HF7qbFkTfXoPIY0WZdWHfE
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099 h1:heHZCso/ytvpYr+hp2cDxlZfA/jTw46aHSvT9kZnJ7o=
 github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099/go.mod h1:h44tqw4M3GN0Woo9KBStxJxm8huNi+9+tOHoeqSvhaY=
-github.com/ilcm96/minio v0.0.0-20260905105503-2f8120900795 h1:UgpGFI4joEVMX58RME+g7P34meZDPvG7h9qG0LftGE0=
-github.com/ilcm96/minio v0.0.0-20260905105503-2f8120900795/go.mod h1:1/4WHQKDOsWA1dd3ADrq9IE/jtFec9MHLy656kIXjNg=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=
 github.com/jackc/pgpassfile v1.0.0/go.mod h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=
@@ -507,6 +505,8 @@ github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c0
 github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c091+incompatible/go.mod h1:Ukwa8ffRQLV6QRwpqGioPjn2Wnf7TBDA4DbennDOqHE=
 github.com/juicedata/minio v0.0.0-20260515071949-69a6cfc9da65 h1:u+3ehBnL0r3uQloSRQ6QlY2vffBptFSSN6EeCJqgirE=
 github.com/juicedata/minio v0.0.0-20260515071949-69a6cfc9da65/go.mod h1:1/4WHQKDOsWA1dd3ADrq9IE/jtFec9MHLy656kIXjNg=
+github.com/juicedata/minio v0.0.0-20260910033240-f2266df40f17 h1:PZFzmLxyPGwk/IKgLqr0SuO0P2MI9lq2dlmH0lIX2rQ=
+github.com/juicedata/minio v0.0.0-20260910033240-f2266df40f17/go.mod h1:1/4WHQKDOsWA1dd3ADrq9IE/jtFec9MHLy656kIXjNg=
 github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b h1:0/6suPNZnrOlRlBaU/Bnitu8HiKkkLSzQhHbwQ9AysM=
 github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b/go.mod h1:NXGsfPGx6G2JssqvEcULtDqUrxuuYs4llpv8W6ZUpzk=
 github.com/juicedata/xorm v1.4.2-0.20260909084754-f6c8d2b84ec2 h1:j1Ngfz6mtEA8YUhhN3ULLz9UNprl5HLv0SKxsN5cvEY=
