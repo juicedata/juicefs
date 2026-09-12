@@ -689,7 +689,11 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	tmp := n.tpath(dstBucket, "tmp", uuid[:subDirPrefix], uuid)
 	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
 	if eno == syscall.ENOENT {
-		_ = n.mkdirAll(ctx, path.Dir(tmp))
+		if err = n.mkdirAll(ctx, path.Dir(tmp)); err != nil {
+			logger.Errorf("mkdirAll %s: %s", path.Dir(tmp), err)
+			err = n.objectCommitErr(ctx, err, dstBucket, dstObject)
+			return
+		}
 		f, eno = n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
 	}
 	if eno != 0 {
@@ -871,7 +875,7 @@ func (n *jfsObjects) mkdirAllUntil(ctx context.Context, p, root string) error {
 		}
 		eno = n.fs.Mkdir(mctx, p, 0777, n.gConf.Umask)
 	}
-	if eno != 0 && fs.IsExist(eno) {
+	if errors.Is(eno, syscall.EEXIST) {
 		eno = 0
 	}
 	if eno == 0 {
@@ -885,7 +889,10 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 	tmpname := n.tpath(bucket, "tmp", uuid[:subDirPrefix], uuid)
 	f, eno := n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
 	if eno == syscall.ENOENT {
-		_ = n.mkdirAll(ctx, path.Dir(tmpname))
+		if err = n.mkdirAll(ctx, path.Dir(tmpname)); err != nil {
+			logger.Errorf("mkdirAll %s: %s", path.Dir(tmpname), err)
+			return
+		}
 		f, eno = n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
 	}
 	if eno != 0 {
