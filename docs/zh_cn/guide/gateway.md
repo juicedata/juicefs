@@ -115,7 +115,7 @@ $ aws --endpoint-url http://localhost:9000 s3 ls s3://<bucket>
 
 ### 使用 MinIO 客户端
 
-为避免兼容性问题，我们推荐采用的 mc 的版本为 RELEASE.2021-04-22T17-40-00Z，你可以在这个[地址](https://dl.min.io/client/mc/release)找到历史版本和不同架构的 mc，比如这是 amd64 架构 RELEASE.2021-04-22T17-40-00Z 版本的 mc 的[下载地址](https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z)
+为避免兼容性问题，我们推荐采用的 mc 的版本为 RELEASE.2021-04-22T17-40-00Z，你可以在 [GitHub Releases](https://github.com/minio/mc/releases/tag/RELEASE.2021-04-22T17-40-00Z) 找到历史版本和不同架构的 mc，比如这是 amd64 架构 RELEASE.2021-04-22T17-40-00Z 版本的 mc 的[下载地址](https://github.com/minio/mc/releases/download/RELEASE.2021-04-22T17-40-00Z/mc.linux-amd64.RELEASE.2021-04-22T17-40-00Z)
 
 下载安装完成 mc 后添加一个新的 alias：
 

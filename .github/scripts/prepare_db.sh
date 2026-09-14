@@ -62,7 +62,7 @@ install_keydb() {
 
 install_minio() {
     docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
-    go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc alias set local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
+    sudo env MC_VERSION=RELEASE.2022-01-07T06-01-38Z bash .github/scripts/install_pinned_mc.sh /usr/local/bin/mc && mc alias set local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
 }
 
 install_fdb() {

@@ -5,8 +5,7 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
-wget https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O mc
-chmod +x mc
+bash .github/scripts/install_pinned_mc.sh ./mc
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=admin123
 export MINIO_REFRESH_IAM_INTERVAL=3s

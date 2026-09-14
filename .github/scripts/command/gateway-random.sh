@@ -6,11 +6,11 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
-[[ ! -x /usr/local/bin/mc ]] && wget -q https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O /usr/local/bin/mc && sudo chmod +x /usr/local/bin/mc
+[[ ! -x /usr/local/bin/mc ]] && sudo bash .github/scripts/install_pinned_mc.sh /usr/local/bin/mc
 # docker ps -aq --filter "status=exited" --filter "name=minio_old" | xargs -r docker rm -v
 if ! docker ps --filter "name=minio_old$" | grep minio_old; then
     echo start minio_old
-    docker run -d -p 9000:9000 --name minio_old -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /tmp/minio_old
+    docker run -d -p 9000:9000 --name minio_old -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" quay.io/minio/minio server /tmp/minio_old
     while ! curl -s http://localhost:9000/minio/health/live > /dev/null; do
         echo "Waiting for MinIO to be ready..."
         sleep 1

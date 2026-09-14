@@ -100,9 +100,7 @@ jobs:
           
       - name: Install tools
         run: | 
-          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
-          chmod +x mc
-          sudo mv mc /usr/local/bin
+          sudo bash .github/scripts/install_pinned_mc.sh /usr/local/bin/mc
           sudo .github/scripts/apt_install.sh redis-tools
           sudo pip install hypothesis
           sudo pip install minio

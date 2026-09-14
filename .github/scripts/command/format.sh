@@ -86,24 +86,7 @@ ensure_mc_binary()
     if [[ -x ./mc ]]; then
         return
     fi
-    local os_arch
-    local cpu_arch
-    cpu_arch=$(uname -m)
-    if [[ "$(uname)" == "Darwin" ]]; then
-        if [[ "$cpu_arch" == "arm64" ]]; then
-            os_arch="darwin-arm64"
-        else
-            os_arch="darwin-amd64"
-        fi
-    else
-        if [[ "$cpu_arch" == "aarch64" || "$cpu_arch" == "arm64" ]]; then
-            os_arch="linux-arm64"
-        else
-            os_arch="linux-amd64"
-        fi
-    fi
-    wget -q "https://dl.min.io/client/mc/release/${os_arch}/mc" -O ./mc
-    chmod +x ./mc
+    bash .github/scripts/install_pinned_mc.sh ./mc
 }
 
 generate_sha_manifest()
