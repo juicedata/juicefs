@@ -919,7 +919,7 @@ $ sudo docker run -d --name minio \
     -e "MINIO_ROOT_PASSWORD=minioadmin" \
     -v $PWD/minio-data:/data \
     --restart unless-stopped \
-    minio/minio server /data --console-address ":9900"
+    quay.io/minio/minio server /data --console-address ":9900"
 ```
 
 容器创建成功以后使用以下地址访问：
