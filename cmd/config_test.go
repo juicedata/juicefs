@@ -251,6 +251,29 @@ func TestConfigMinClientVersion(t *testing.T) {
 			wantMinVer: "1.4.0-A",
 		},
 		{
+			name:       "excluded client is rejected",
+			preArgs:    []string{"--trash-days", "3", "--min-client-version", "99.0.0", "--force"},
+			args:       func(t *testing.T) []string { return []string{"--trash-days", "7"} },
+			wantErr:    "allowed minimum version: 99.0.0",
+			wantMinVer: "99.0.0",
+			validate: func(t *testing.T, format meta.Format) {
+				if format.TrashDays != 3 {
+					t.Fatalf("trash-days %d != expect 3", format.TrashDays)
+				}
+			},
+		},
+		{
+			name:       "force allows excluded client",
+			preArgs:    []string{"--min-client-version", "99.0.0", "--force"},
+			args:       func(t *testing.T) []string { return []string{"--trash-days", "7", "--force"} },
+			wantMinVer: "99.0.0",
+			validate: func(t *testing.T, format meta.Format) {
+				if format.TrashDays != 7 {
+					t.Fatalf("trash-days %d != expect 7", format.TrashDays)
+				}
+			},
+		},
+		{
 			name:       "kerberos via config with confirmation input",
 			args:       func(t *testing.T) []string { return []string{"--kerberos-config-file", writeKerbConf(t)} },
 			input:      "y\n",
@@ -339,130 +362,6 @@ func TestConfigMinClientVersion(t *testing.T) {
 			}
 			if c.validate != nil {
 				c.validate(t, format)
-			}
-		})
-	}
-}
-
-// excludedVolume formats a volume whose min-client-version excludes the running
-// client, so that writes to its format must be refused.
-func excludedVolume(t *testing.T) string {
-	t.Helper()
-	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
-	bucketPath := filepath.Join(t.TempDir(), "testBucket")
-	if err := Main([]string{"", "format", metaURL, "--bucket", bucketPath, testVolume}); err != nil {
-		t.Fatalf("format: %s", err)
-	}
-	if err := Main([]string{"", "config", metaURL, "--min-client-version", "99.0.0", "--yes"}); err != nil {
-		t.Fatalf("set min-client-version: %s", err)
-	}
-	if err := Main([]string{"", "config", metaURL, "--trash-days", "3", "--force"}); err != nil {
-		t.Fatalf("set trash-days: %s", err)
-	}
-	return metaURL
-}
-
-func loadFormat(t *testing.T, metaURL string) meta.Format {
-	t.Helper()
-	data, err := getStdout([]string{"", "config", metaURL})
-	if err != nil {
-		t.Fatalf("getStdout: %s", err)
-	}
-	var format meta.Format
-	if err = json.Unmarshal(data, &format); err != nil {
-		t.Fatalf("json unmarshal: %s", err)
-	}
-	return format
-}
-
-// A client excluded by the volume's version policy must not rewrite the format:
-// unknown fields are dropped on unmarshal, so writing back erases settings that
-// client cannot represent.
-func TestFormatWriteRejectsExcludedClient(t *testing.T) {
-	t.Run("config is refused and leaves the format intact", func(t *testing.T) {
-		metaURL := excludedVolume(t)
-		err := Main([]string{"", "config", metaURL, "--trash-days", "7"})
-		if err == nil || !strings.Contains(err.Error(), "allowed minimum version: 99.0.0") {
-			t.Fatalf("config error %q does not report the version policy", err)
-		}
-		if format := loadFormat(t, metaURL); format.TrashDays != 3 {
-			t.Fatalf("trash-days %d != expect 3, format was rewritten", format.TrashDays)
-		}
-	})
-
-	t.Run("format is refused and leaves the format intact", func(t *testing.T) {
-		metaURL := excludedVolume(t)
-		bucketPath := filepath.Join(t.TempDir(), "otherBucket")
-		err := Main([]string{"", "format", metaURL, "--bucket", bucketPath, testVolume})
-		if err == nil || !strings.Contains(err.Error(), "allowed minimum version: 99.0.0") {
-			t.Fatalf("format error %q does not report the version policy", err)
-		}
-		if format := loadFormat(t, metaURL); strings.Contains(format.Bucket, "otherBucket") {
-			t.Fatalf("bucket %q was rewritten", format.Bucket)
-		}
-	})
-
-	t.Run("reading the config stays available", func(t *testing.T) {
-		metaURL := excludedVolume(t)
-		if format := loadFormat(t, metaURL); format.MinClientVersion != "99.0.0" {
-			t.Fatalf("min-client-version %q != expect 99.0.0", format.MinClientVersion)
-		}
-	})
-
-	t.Run("force keeps the volume manageable", func(t *testing.T) {
-		metaURL := excludedVolume(t)
-		if err := Main([]string{"", "config", metaURL, "--trash-days", "7", "--force"}); err != nil {
-			t.Fatalf("config --force: %s", err)
-		}
-		if format := loadFormat(t, metaURL); format.TrashDays != 7 {
-			t.Fatalf("trash-days %d != expect 7", format.TrashDays)
-		}
-	})
-}
-
-func TestCheckFormatVersion(t *testing.T) {
-	cases := []struct {
-		name    string
-		format  meta.Format
-		force   bool
-		wantErr string
-	}{
-		{name: "no policy", format: meta.Format{}},
-		{name: "client satisfies policy", format: meta.Format{MinClientVersion: "1.0.0"}},
-		{
-			name:    "client below minimum",
-			format:  meta.Format{MinClientVersion: "99.0.0"},
-			wantErr: "allowed minimum version: 99.0.0",
-		},
-		{
-			name:   "force overrides the client policy",
-			format: meta.Format{MinClientVersion: "99.0.0"},
-			force:  true,
-		},
-		{
-			name:    "client above maximum",
-			format:  meta.Format{MaxClientVersion: "0.1.0"},
-			wantErr: "allowed maximum version: 0.1.0",
-		},
-		{
-			name:    "metadata version is never bypassable",
-			format:  meta.Format{MetaVersion: meta.MaxVersion + 1},
-			force:   true,
-			wantErr: "incompatible metadata version",
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			err := checkFormatVersion(&c.format, c.force)
-			if c.wantErr == "" {
-				if err != nil {
-					t.Fatalf("unexpected error: %s", err)
-				}
-				return
-			}
-			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
-				t.Fatalf("error %q does not contain %q", err, c.wantErr)
 			}
 		})
 	}

@@ -433,26 +433,18 @@ func maxVersion(v1, v2 string) string {
 	return v2
 }
 
-// checkFormatVersion rejects clients excluded by the volume's version policy before
-// they rewrite the format. Unknown fields are dropped when the format JSON is
-// unmarshalled, so letting an excluded client write it back silently erases the
-// settings that client does not understand.
-//
-// An incompatible metadata version is never bypassable. force only relaxes the client
-// version policy, which may otherwise be narrowed to a value that no available client
-// satisfies, leaving the volume permanently unmanageable.
 func checkFormatVersion(format *meta.Format, force bool) error {
-	err := format.CheckVersion()
-	if err == nil {
-		return nil
-	}
 	if format.MetaVersion > meta.MaxVersion {
-		return err
+		return fmt.Errorf("incompatible metadata version: %d; please upgrade the client", format.MetaVersion)
 	}
-	if !force {
-		return fmt.Errorf("%s, or rerun with --force", err)
+
+	ver := version.GetVersion()
+	if err := format.CheckCliVersion(&ver); err != nil {
+		if !force {
+			return fmt.Errorf("%s, or rerun with --force", err)
+		}
+		warn("%s. Continuing because --force is set.", err)
 	}
-	warn("%s. Continuing because --force is set.", err)
 	return nil
 }
 

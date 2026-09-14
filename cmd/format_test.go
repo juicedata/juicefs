@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -142,5 +143,38 @@ func TestFormat(t *testing.T) {
 	}
 	if f.Capacity != 1<<30 || f.Inodes != 1000 {
 		t.Fatalf("unexpected volume: %+v", f)
+	}
+}
+
+func TestFormatVersion(t *testing.T) {
+	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
+	bucket := filepath.Join(t.TempDir(), "testBucket")
+	if err := Main([]string{"", "format", metaURL, "--bucket", bucket, testVolume}); err != nil {
+		t.Fatalf("format: %s", err)
+	}
+	if err := Main([]string{"", "config", metaURL, "--min-client-version", "99.0.0", "--yes"}); err != nil {
+		t.Fatalf("config: %s", err)
+	}
+
+	err := Main([]string{"", "format", metaURL, "--bucket", t.TempDir(), testVolume})
+	if err == nil || !strings.Contains(err.Error(), "allowed minimum version: 99.0.0") {
+		t.Fatalf("format error %q does not report the version policy", err)
+	}
+
+	data, err := getStdout([]string{"", "config", metaURL})
+	if err != nil {
+		t.Fatalf("get config: %s", err)
+	}
+	var format meta.Format
+	if err = json.Unmarshal(data, &format); err != nil {
+		t.Fatalf("json unmarshal: %s", err)
+	}
+	if format.Bucket != bucket+"/" {
+		t.Fatalf("bucket %q != expect %q", format.Bucket, bucket+"/")
+	}
+
+	format.MetaVersion = meta.MaxVersion + 1
+	if err = checkFormatVersion(&format, true); err == nil {
+		t.Fatal("force bypassed incompatible metadata version")
 	}
 }
