@@ -101,7 +101,7 @@ jobs:
 
       - name: Install tools
         run: | 
-          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          .github/scripts/download_mc.sh linux-amd64 ./mc
           chmod +x mc 
         shell: bash
         
