@@ -1035,6 +1035,107 @@ func TestPutObjectIfNoneMatch(t *testing.T) {
 	})
 }
 
+func TestCopyObjectDirectoryMarker(t *testing.T) {
+	for _, destination := range []string{"new", "implicit", "explicit", "self"} {
+		t.Run(destination, func(t *testing.T) {
+			gateway, jfs, bucket := newTestGateway(t, Config{KeepEtag: true, ObjTag: true, ObjMeta: true})
+			ctx := context.Background()
+			if _, err := gateway.PutObject(ctx, bucket, "source", newPutObjectReader(t, nil), minio.ObjectOptions{}); err != nil {
+				t.Fatalf("create source: %s", err)
+			}
+			srcInfo, err := gateway.GetObjectInfo(ctx, bucket, "source", minio.ObjectOptions{})
+			if err != nil {
+				t.Fatalf("get source info: %s", err)
+			}
+			var inode meta.Ino
+			if destination != "new" {
+				if _, err = gateway.PutObject(ctx, bucket, "prefix/child", newPutObjectReader(t, []byte("child")), minio.ObjectOptions{}); err != nil {
+					t.Fatalf("create child: %s", err)
+				}
+				if destination != "implicit" {
+					if _, err = gateway.PutObject(ctx, bucket, "prefix/", newPutObjectReader(t, nil), minio.ObjectOptions{}); err != nil {
+						t.Fatalf("create marker: %s", err)
+					}
+				}
+				fi, eno := jfs.Stat(mctx, gateway.path(bucket, "prefix/"))
+				if eno != 0 {
+					t.Fatalf("stat directory: %s", eno)
+				}
+				inode = fi.Inode()
+			}
+
+			for _, owner := range []string{"first", "replacement", ""} {
+				source := "source"
+				if destination == "self" {
+					source = "prefix/"
+					srcInfo, err = gateway.GetObjectInfo(ctx, bucket, source, minio.ObjectOptions{})
+					if err != nil {
+						t.Fatalf("get self-copy source: %s", err)
+					}
+				}
+				tags := ""
+				srcInfo.UserDefined = map[string]string{}
+				if owner != "" {
+					tags = "owner=" + owner
+					srcInfo.UserDefined["x-amz-meta-owner"] = owner
+					srcInfo.UserDefined[xhttp.AmzObjectTagging] = tags
+				}
+
+				copyInfo, err := gateway.CopyObject(ctx, bucket, source, bucket, "prefix/", srcInfo,
+					minio.ObjectOptions{}, minio.ObjectOptions{})
+				if err != nil {
+					t.Fatalf("copy marker with owner %q: %s", owner, err)
+				}
+
+				info, err := gateway.GetObjectInfo(ctx, bucket, "prefix/", minio.ObjectOptions{})
+				if err != nil {
+					t.Fatalf("get copied marker: %s", err)
+				}
+				if !info.IsDir || info.Size != 0 || info.ETag != srcInfo.ETag || copyInfo.ETag != info.ETag ||
+					info.UserDefined["x-amz-meta-owner"] != owner || info.UserTags != tags {
+					t.Fatalf("unexpected copied marker with owner %q: %+v", owner, info)
+				}
+				fi, eno := jfs.Stat(mctx, gateway.path(bucket, "prefix/"))
+				if eno != 0 {
+					t.Fatalf("stat copied marker: %s", eno)
+				}
+				if !isExplicitDirectoryMarker(fi.Attr()) || inode != 0 && fi.Inode() != inode {
+					t.Fatalf("copy did not preserve directory inode and publish marker: %+v", fi)
+				}
+				inode = fi.Inode()
+				if destination != "new" {
+					if got := readGatewayObject(t, gateway, bucket, "prefix/child"); !bytes.Equal(got, []byte("child")) {
+						t.Fatalf("child changed: %q", got)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestCopyObjectRejectsNonEmptyDirectoryMarker(t *testing.T) {
+	gateway, jfs, bucket := newTestGateway(t, Config{})
+	ctx := context.Background()
+	if _, err := gateway.PutObject(ctx, bucket, "source", newPutObjectReader(t, []byte("source")), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("create source: %s", err)
+	}
+	srcInfo, err := gateway.GetObjectInfo(ctx, bucket, "source", minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("get source info: %s", err)
+	}
+
+	_, err = gateway.CopyObject(ctx, bucket, "source", bucket, "prefix/", srcInfo,
+		minio.ObjectOptions{}, minio.ObjectOptions{})
+
+	var existsAsDirectory minio.ObjectExistsAsDirectory
+	if !errors.As(err, &existsAsDirectory) {
+		t.Fatalf("expected ObjectExistsAsDirectory, got %T: %v", err, err)
+	}
+	if _, eno := jfs.Stat(mctx, gateway.path(bucket, "prefix/")); !fs.IsNotExist(eno) {
+		t.Fatalf("rejected copy created a destination: %s", eno)
+	}
+}
+
 func TestCopyObjectIfNoneMatch(t *testing.T) {
 	t.Run("existing destination remains unchanged", func(t *testing.T) {
 		gateway, _, bucket := newTestGateway(t, Config{})

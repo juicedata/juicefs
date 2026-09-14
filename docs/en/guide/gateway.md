@@ -27,7 +27,7 @@ A zero-byte object whose key ends in `/` is represented by a directory with an e
 
 With the default `--head-dir=false`, a `PUT prefix/` or a zero-byte copy to `prefix/` with `If-None-Match: *` can create the marker on this existing directory. The gateway preserves the directory inode and children, and commits the marker and its managed extended attributes in one metadata transaction. Concurrent conditional creators have one winner; subsequent requests return `412 Precondition Failed` without changing the object.
 
-When `--head-dir` is enabled, implicit directories are exposed as existing objects, so the same conditional request returns `412`. Without the conditional header, an existing directory object can still be overwritten. Directory objects must have an empty body.
+When `--head-dir` is enabled, implicit directories are exposed as existing objects, so the same conditional request returns `412`. Without the conditional header, a zero-byte copy to `prefix/` creates or overwrites the directory object while preserving existing children. Directory objects must have an empty body.
 
 ## Quick start
 

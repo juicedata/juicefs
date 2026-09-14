@@ -695,7 +695,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	dst := n.path(dstBucket, dstObject)
 	src := n.path(srcBucket, srcObject)
 
-	if dstOpts.IfNoneMatch && strings.HasSuffix(dstObject, sep) {
+	if strings.HasSuffix(dstObject, sep) {
 		if srcInfo.Size > 0 {
 			return info, minio.ObjectExistsAsDirectory{
 				Bucket: dstBucket,
