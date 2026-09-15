@@ -740,14 +740,14 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		return
 	}
 
-	eno = n.fs.Rename(mctx, tmp, dst, 0)
+	eno = n.fs.RenameWithInheritedMetadata(mctx, tmp, dst, 0, 0666)
 	if eno == syscall.ENOENT {
 		if err = n.mkdirAllInBucket(ctx, dstBucket, path.Dir(dst)); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(dst), err)
 			err = n.objectCommitErr(ctx, err, dstBucket, dstObject)
 			return
 		}
-		eno = n.fs.Rename(mctx, tmp, dst, 0)
+		eno = n.fs.RenameWithInheritedMetadata(mctx, tmp, dst, 0, 0666)
 	}
 	if eno != 0 {
 		err = n.objectCommitErr(ctx, eno, dstBucket, dstObject)
@@ -880,7 +880,7 @@ func (n *jfsObjects) mkdirAllUntil(ctx context.Context, p, root string) error {
 	return eno
 }
 
-func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions, applyObjTaggingFunc func(tmpName string)) (fi os.FileInfo, err error) {
+func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions, applyObjTaggingFunc func(tmpName string), inheritMetadata bool) (fi os.FileInfo, err error) {
 	uuid := minio.MustGetUUID()
 	tmpname := n.tpath(bucket, "tmp", uuid[:subDirPrefix], uuid)
 	f, eno := n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
@@ -937,7 +937,13 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 		return
 	}
 
-	eno = n.fs.Rename(mctx, tmpname, object, 0)
+	rename := n.fs.Rename
+	if inheritMetadata {
+		rename = func(ctx meta.Context, oldpath, newpath string, flags uint32) syscall.Errno {
+			return n.fs.RenameWithInheritedMetadata(ctx, oldpath, newpath, flags, 0666)
+		}
+	}
+	eno = rename(mctx, tmpname, object, 0)
 	if eno == syscall.ENOENT {
 		if strings.HasPrefix(object, sep+metaBucket+sep) {
 			err = n.objectCommitErr(ctx, eno, bucket, object, path.Base(path.Dir(object)))
@@ -948,7 +954,7 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 			err = n.objectCommitErr(ctx, err, bucket, object)
 			return
 		}
-		eno = n.fs.Rename(mctx, tmpname, object, 0)
+		eno = rename(mctx, tmpname, object, 0)
 	}
 	if eno != 0 {
 		err = n.objectCommitErr(ctx, eno, bucket, object)
@@ -1004,7 +1010,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 			if err != nil {
 				logger.Errorf("set object metadata error, path: %s error %s", p, err)
 			}
-		}); err != nil {
+		}, true); err != nil {
 			return
 		}
 	}
@@ -1294,7 +1300,7 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		if n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0) != 0 {
 			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmpName, s3Etag, etag, 0)
 		}
-	}); err != nil {
+	}, false); err != nil {
 		err = jfsToObjectErr(ctx, err, bucket, object)
 		return
 	}
@@ -1406,7 +1412,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	}
 
 	name := n.path(bucket, object)
-	eno = n.fs.Rename(mctx, tmp, name, 0)
+	eno = n.fs.RenameWithInheritedMetadata(mctx, tmp, name, 0, 0666)
 	if eno == syscall.ENOENT {
 		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(name)); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(name), err)
@@ -1414,7 +1420,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 			err = n.objectCommitErr(ctx, err, bucket, object, uploadID)
 			return
 		}
-		eno = n.fs.Rename(mctx, tmp, name, 0)
+		eno = n.fs.RenameWithInheritedMetadata(mctx, tmp, name, 0, 0666)
 	}
 	if eno != 0 {
 		_ = n.fs.Delete(mctx, tmp)
