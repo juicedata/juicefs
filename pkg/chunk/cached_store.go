@@ -879,17 +879,19 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		}
 	})
 
-	go func() {
-		for {
-			if store.bcache.isEmpty() {
-				logger.Warn("cache store is empty, use memory cache")
-				config.CacheSize = 100 << 20
-				config.CacheDir = "memory"
-				store.bcache = newMemStore(&config, store.bcache.getMetrics())
+	if mgr, ok := store.bcache.(*cacheManager); ok {
+		fallbackConfig := config
+		fallbackConfig.CacheSize = 100 << 20
+		fallbackConfig.CacheDir = "memory"
+
+		go func() {
+			for !mgr.isEmpty() {
+				time.Sleep(time.Second)
 			}
-			time.Sleep(time.Second)
-		}
-	}()
+			logger.Warn("cache store is empty, use memory cache")
+			store.bcache = newMemStore(&fallbackConfig, mgr.getMetrics())
+		}()
+	}
 
 	if !config.CacheEnabled() {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
