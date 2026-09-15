@@ -497,6 +497,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("memorySize", getConf(conf, "memory-size", "300"));
     obj.put("prefetch", Integer.valueOf(getConf(conf, "prefetch", "1")));
     obj.put("readahead", getConf(conf, "max-readahead", "0"));
+    obj.put("initialReadahead", getConf(conf, "initial-readahead", "0"));
     obj.put("pushGateway", getConf(conf, "push-gateway", ""));
     obj.put("pushInterval", getConf(conf, "push-interval", "10"));
     obj.put("pushAuth", getConf(conf, "push-auth", ""));
