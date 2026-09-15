@@ -251,6 +251,29 @@ func TestConfigMinClientVersion(t *testing.T) {
 			wantMinVer: "1.4.0-A",
 		},
 		{
+			name:       "excluded client is rejected",
+			preArgs:    []string{"--trash-days", "3", "--min-client-version", "99.0.0", "--force"},
+			args:       func(t *testing.T) []string { return []string{"--trash-days", "7"} },
+			wantErr:    "allowed minimum version: 99.0.0",
+			wantMinVer: "99.0.0",
+			validate: func(t *testing.T, format meta.Format) {
+				if format.TrashDays != 3 {
+					t.Fatalf("trash-days %d != expect 3", format.TrashDays)
+				}
+			},
+		},
+		{
+			name:       "force allows excluded client",
+			preArgs:    []string{"--min-client-version", "99.0.0", "--force"},
+			args:       func(t *testing.T) []string { return []string{"--trash-days", "7", "--force"} },
+			wantMinVer: "99.0.0",
+			validate: func(t *testing.T, format meta.Format) {
+				if format.TrashDays != 7 {
+					t.Fatalf("trash-days %d != expect 7", format.TrashDays)
+				}
+			},
+		},
+		{
 			name:       "kerberos via config with confirmation input",
 			args:       func(t *testing.T) []string { return []string{"--kerberos-config-file", writeKerbConf(t)} },
 			input:      "y\n",

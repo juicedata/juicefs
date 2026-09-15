@@ -433,6 +433,21 @@ func maxVersion(v1, v2 string) string {
 	return v2
 }
 
+func checkFormatVersion(format *meta.Format, force bool) error {
+	if format.MetaVersion > meta.MaxVersion {
+		return fmt.Errorf("incompatible metadata version: %d; please upgrade the client", format.MetaVersion)
+	}
+
+	ver := version.GetVersion()
+	if err := format.CheckCliVersion(&ver); err != nil {
+		if !force {
+			return fmt.Errorf("%s, or rerun with --force", err)
+		}
+		warn("%s. Continuing because --force is set.", err)
+	}
+	return nil
+}
+
 func format(c *cli.Context) error {
 	setup(c, 2)
 	removePassword(c.Args().Get(0))
@@ -457,6 +472,9 @@ func format(c *cli.Context) error {
 	if err == nil {
 		if c.Bool("no-update") {
 			return nil
+		}
+		if err := checkFormatVersion(format, c.Bool("force")); err != nil {
+			return err
 		}
 		format.Name = name
 		for _, flag := range c.LocalFlagNames() {

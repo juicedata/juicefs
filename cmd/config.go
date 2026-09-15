@@ -173,6 +173,10 @@ func config(ctx *cli.Context) error {
 		return nil
 	}
 
+	if err := checkFormatVersion(format, ctx.Bool("force")); err != nil {
+		return err
+	}
+
 	originDirStats := format.DirStats
 	originUGQuota := format.UserGroupQuota
 	var quota, storage, trash, clientVer, tier bool
