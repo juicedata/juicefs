@@ -183,6 +183,7 @@ func testMeta(t *testing.T, m Meta) {
 	testConcurrentWrite(t, m)
 	testRace(t, m)
 	testXattr(t, m)
+	t.Run("DirMarker", func(t *testing.T) { testDirMarker(t, m) })
 	testCompaction(t, m, false)
 	time.Sleep(time.Second)
 	testCompaction(t, m, true)

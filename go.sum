@@ -505,6 +505,8 @@ github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c0
 github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c091+incompatible/go.mod h1:Ukwa8ffRQLV6QRwpqGioPjn2Wnf7TBDA4DbennDOqHE=
 github.com/juicedata/minio v0.0.0-20260515071949-69a6cfc9da65 h1:u+3ehBnL0r3uQloSRQ6QlY2vffBptFSSN6EeCJqgirE=
 github.com/juicedata/minio v0.0.0-20260515071949-69a6cfc9da65/go.mod h1:1/4WHQKDOsWA1dd3ADrq9IE/jtFec9MHLy656kIXjNg=
+github.com/juicedata/minio v0.0.0-20260910033240-f2266df40f17 h1:PZFzmLxyPGwk/IKgLqr0SuO0P2MI9lq2dlmH0lIX2rQ=
+github.com/juicedata/minio v0.0.0-20260910033240-f2266df40f17/go.mod h1:1/4WHQKDOsWA1dd3ADrq9IE/jtFec9MHLy656kIXjNg=
 github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b h1:0/6suPNZnrOlRlBaU/Bnitu8HiKkkLSzQhHbwQ9AysM=
 github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b/go.mod h1:NXGsfPGx6G2JssqvEcULtDqUrxuuYs4llpv8W6ZUpzk=
 github.com/juicedata/xorm v1.4.2-0.20260909084754-f6c8d2b84ec2 h1:j1Ngfz6mtEA8YUhhN3ULLz9UNprl5HLv0SKxsN5cvEY=
