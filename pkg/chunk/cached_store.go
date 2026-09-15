@@ -742,7 +742,7 @@ func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page,
 		res = tmp
 	}
 	logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", off, len(p)), res.reqID, err, used)
-	if errors.Is(err, context.Canceled) || errors.Is(err, utils.ErrFuncTimeout) {
+	if errors.Is(err, context.Canceled) {
 		return 0, err
 	}
 	store.objectDataBytes.WithLabelValues("GET", res.sc).Add(float64(res.n))
@@ -752,6 +752,9 @@ func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page,
 		return res.n, nil
 	}
 	store.objectReqErrors.Add(1)
+	if errors.Is(err, utils.ErrFuncTimeout) {
+		return 0, err
+	}
 	// fall back to full read
 	return 0, errTryFullRead
 }
