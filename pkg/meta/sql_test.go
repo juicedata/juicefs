@@ -36,6 +36,17 @@ func TestSQLiteClient(t *testing.T) {
 	testMeta(t, m)
 }
 
+func TestSQLiteRenameOverRelinkedHardlink(t *testing.T) {
+	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-rename-relink.db"), testConfig())
+	if err != nil || m.Name() != "sqlite3" {
+		t.Fatalf("create meta: %s", err)
+	}
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	testRenameOverRelinkedHardlink(t, m)
+}
+
 type commitOnSQLiteBusyLogger struct {
 	xormlog.ContextLogger
 	commit    func() error
