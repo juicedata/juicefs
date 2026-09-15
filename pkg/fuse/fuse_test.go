@@ -22,19 +22,23 @@ package fuse
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/gofrs/flock"
 	"github.com/google/uuid"
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/hanwen/go-fuse/v2/posixtest"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -42,6 +46,106 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/pkg/xattr"
 )
+
+type mockAttrMeta struct {
+	meta.Meta
+	attr meta.Attr
+}
+
+func (m *mockAttrMeta) GetAttr(ctx meta.Context, inode meta.Ino, attr *meta.Attr) syscall.Errno {
+	*attr = m.attr
+	return 0
+}
+
+// mockAttrDataWriter only needs GetLength; the rest just satisfies DataWriter.
+type mockAttrDataWriter struct {
+	length uint64
+}
+
+func (w *mockAttrDataWriter) Open(inode vfs.Ino, fleng uint64, tierID uint8) vfs.FileWriter {
+	return nil
+}
+func (w *mockAttrDataWriter) Flush(ctx meta.Context, inode vfs.Ino) syscall.Errno { return 0 }
+func (w *mockAttrDataWriter) GetLength(inode vfs.Ino) uint64                      { return w.length }
+func (w *mockAttrDataWriter) Truncate(inode vfs.Ino, length uint64)               {}
+func (w *mockAttrDataWriter) UpdateMtime(inode vfs.Ino, mtime time.Time)          {}
+func (w *mockAttrDataWriter) FlushAll() error                                     { return nil }
+
+// mockAttrDataReader records Truncate calls; the rest just satisfies DataReader.
+type mockAttrDataReader struct {
+	truncated []uint64
+}
+
+func (r *mockAttrDataReader) Open(inode vfs.Ino, length uint64) vfs.FileReader { return nil }
+func (r *mockAttrDataReader) Truncate(inode vfs.Ino, length uint64) {
+	r.truncated = append(r.truncated, length)
+}
+func (r *mockAttrDataReader) Invalidate(inode vfs.Ino, off, length uint64) {}
+
+func setVFSField(t *testing.T, v *vfs.VFS, name string, value interface{}) {
+	t.Helper()
+	field := reflect.ValueOf(v).Elem().FieldByName(name)
+	if !field.IsValid() {
+		t.Fatalf("VFS.%s does not exist", name)
+	}
+	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(value))
+}
+
+func newReplyAttrMockFS(t *testing.T, ino meta.Ino, start time.Time, metaLength, writerLength uint64) (*fileSystem, *mockAttrDataReader) {
+	t.Helper()
+	reader := &mockAttrDataReader{}
+	v := &vfs.VFS{Meta: &mockAttrMeta{attr: meta.Attr{Full: true, Typ: meta.TypeFile, Nlink: 1, Length: metaLength}}}
+	setVFSField(t, v, "reader", reader)
+	setVFSField(t, v, "writer", &mockAttrDataWriter{length: writerLength})
+	setVFSField(t, v, "modifiedAt", map[vfs.Ino]time.Time{ino: start.Add(time.Millisecond)})
+	return newFileSystem(&vfs.Config{AttrTimeout: time.Second}, v), reader
+}
+
+func TestReplyAttrSkipsCacheForConcurrentModification(t *testing.T) {
+	ino := meta.Ino(2)
+	start := time.Now()
+	fs, _ := newReplyAttrMockFS(t, ino, start, 0, 0)
+	entry := &meta.Entry{Inode: ino, Attr: &meta.Attr{Full: true, Typ: meta.TypeFile, Nlink: 1, Length: 0}}
+	ctx := &fuseContext{Context: context.Background(), start: start, header: &fuse.InHeader{}}
+	var attr fuse.Attr
+	timeoutSet := false
+
+	fs.replyAttr(ctx, entry, &attr, func(time.Duration) { timeoutSet = true })
+
+	if timeoutSet {
+		t.Fatalf("replyAttr cached an attr that was modified after request start")
+	}
+}
+
+func TestReplyAttrDoesNotTruncateReaderWithStaleLength(t *testing.T) {
+	ino := meta.Ino(2)
+	start := time.Now()
+	fs, reader := newReplyAttrMockFS(t, ino, start, 0, 0)
+	entry := &meta.Entry{Inode: ino, Attr: &meta.Attr{Full: true, Typ: meta.TypeFile, Nlink: 1, Length: 0}}
+	ctx := &fuseContext{Context: context.Background(), start: start, header: &fuse.InHeader{}}
+	var attr fuse.Attr
+
+	fs.replyAttr(ctx, entry, &attr, func(time.Duration) {})
+
+	if len(reader.truncated) != 0 {
+		t.Fatalf("replyAttr truncated reader with stale attr length: %v", reader.truncated)
+	}
+}
+
+func TestReplyAttrMergesWriterLengthWhenModified(t *testing.T) {
+	ino := meta.Ino(2)
+	start := time.Now()
+	fs, _ := newReplyAttrMockFS(t, ino, start, 0, 100)
+	entry := &meta.Entry{Inode: ino, Attr: &meta.Attr{Full: true, Typ: meta.TypeFile, Nlink: 1, Length: 0}}
+	ctx := &fuseContext{Context: context.Background(), start: start, header: &fuse.InHeader{}}
+	var attr fuse.Attr
+
+	fs.replyAttr(ctx, entry, &attr, func(time.Duration) {})
+
+	if entry.Attr.Length != 100 {
+		t.Fatalf("replyAttr dropped buffered writer length: got %d, want 100", entry.Attr.Length)
+	}
+}
 
 func format(url string) {
 	m := meta.NewClient(url, nil)
