@@ -421,12 +421,86 @@ func dumpResult(ctx context.Context, ch chan<- *dumpedResult, res *dumpedResult)
 type LoadOption struct {
 	Threads  int
 	Progress func(name string, cnt int)
+
+	// set by prepareLoad, redis doesn't rebuild counters for now
+	rebuildCounters bool
 }
 
 func (opt *LoadOption) check() {
 	if opt.Threads < 1 {
 		opt.Threads = 10
 	}
+}
+
+func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counter) {
+	recordInode := func(inode uint64) {
+		if Ino(inode) < TrashInode {
+			c.NextInode = max(c.NextInode, int64(inode)+1)
+		} else {
+			c.NextTrash = max(c.NextTrash, int64(Ino(inode)-TrashInode))
+		}
+	}
+	switch seg.typ {
+	case segTypeCounter:
+		for _, counter := range seg.val.(*pb.Batch).Counters {
+			switch counter.Key {
+			case "nextInode":
+				c.NextInode = max(c.NextInode, counter.Value)
+			case "nextChunk":
+				c.NextChunk = max(c.NextChunk, counter.Value)
+			case "nextSession":
+				c.NextSession = max(c.NextSession, counter.Value)
+			case "nextTrash":
+				c.NextTrash = max(c.NextTrash, counter.Value)
+			case usedSpace, totalInodes:
+			default:
+				*others = append(*others, counter)
+			}
+		}
+	case segTypeNode:
+		var attr Attr
+		for _, node := range seg.val.(*pb.Batch).Nodes {
+			recordInode(node.Inode)
+			if Ino(node.Inode) != RootInode && Ino(node.Inode) != TrashInode {
+				attr.Unmarshal(node.Data)
+				c.UsedSpace += align4K(attr.Length)
+				c.UsedInodes++
+			}
+		}
+	case segTypeChunk:
+		for _, chunk := range seg.val.(*pb.Batch).Chunks {
+			recordInode(chunk.Inode)
+			for _, s := range readSliceBuf(chunk.Slices) {
+				c.NextChunk = max(c.NextChunk, int64(s.id)+1)
+			}
+		}
+	case segTypeSliceRef:
+		for _, ref := range seg.val.(*pb.Batch).SliceRefs {
+			c.NextChunk = max(c.NextChunk, int64(ref.Id)+1)
+		}
+	case segTypeSustained:
+		for _, sustained := range seg.val.(*pb.Batch).Sustained {
+			c.NextSession = max(c.NextSession, int64(sustained.Sid))
+			for _, inode := range sustained.Inodes {
+				recordInode(inode)
+			}
+		}
+	case segTypeDelFile:
+		for _, file := range seg.val.(*pb.Batch).Delfiles {
+			recordInode(file.Inode)
+		}
+	}
+}
+
+func (c *DumpedCounters) toBatch(others []*pb.Counter) *pb.Batch {
+	return &pb.Batch{Counters: append(others,
+		&pb.Counter{Key: usedSpace, Value: c.UsedSpace},
+		&pb.Counter{Key: totalInodes, Value: c.UsedInodes},
+		&pb.Counter{Key: "nextInode", Value: c.NextInode},
+		&pb.Counter{Key: "nextChunk", Value: c.NextChunk},
+		&pb.Counter{Key: "nextSession", Value: c.NextSession},
+		&pb.Counter{Key: "nextTrash", Value: c.NextTrash},
+	)}
 }
 
 // transaction

@@ -37,6 +37,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
@@ -4082,17 +4083,35 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		go workerFunc(ctx, taskCh)
 	}
 
+	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
+	var counters []*pb.Counter
 	bak := &BakFormat{}
 	for {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
+				if opt.rebuildCounters {
+					select {
+					case <-ctx.Done():
+					case taskCh <- &task{segTypeCounter, loaded.toBatch(counters)}:
+					}
+				}
 				close(taskCh)
 				break
 			}
 			ctx.Cancel()
 			wg.Wait()
 			return err
+		}
+
+		if opt.rebuildCounters {
+			loaded.updateFromSegment(seg, &counters)
+			if seg.typ == segTypeCounter {
+				if opt.Progress != nil {
+					opt.Progress(seg.Name(), int(seg.num()))
+				}
+				continue
+			}
 		}
 
 		select {
@@ -4106,5 +4125,5 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		}
 	}
 	wg.Wait()
-	return nil
+	return ctx.Err()
 }

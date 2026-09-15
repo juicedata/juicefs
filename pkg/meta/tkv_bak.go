@@ -706,6 +706,8 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			if task == nil {
 				if err := m.insertKVs(ctx, pairs, opt.Threads); err != nil {
 					logger.Errorf("insert kvs failed: %v", err)
+					ctx.Cancel()
+					return
 				}
 
 				if maxAclId != 0 {
@@ -714,6 +716,8 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 						return nil
 					}); err != nil {
 						logger.Errorf("update maxAclId failed: %v", err)
+						ctx.Cancel()
+						return
 					}
 				}
 				break
@@ -762,17 +766,31 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	wg.Add(1)
 	go workerFunc(ctx, taskCh)
 
+	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
+	var counters []*pb.Counter
 	bak := &BakFormat{}
 	for {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
+				select {
+				case <-ctx.Done():
+				case taskCh <- &task{segTypeCounter, loaded.toBatch(counters)}:
+				}
 				close(taskCh)
 				break
 			}
 			ctx.Cancel()
 			wg.Wait()
 			return err
+		}
+
+		loaded.updateFromSegment(seg, &counters)
+		if seg.typ == segTypeCounter {
+			if opt.Progress != nil {
+				opt.Progress(seg.Name(), int(seg.num()))
+			}
+			continue
 		}
 
 		select {
@@ -786,5 +804,5 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		}
 	}
 	wg.Wait()
-	return nil
+	return ctx.Err()
 }

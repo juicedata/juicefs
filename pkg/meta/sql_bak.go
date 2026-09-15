@@ -904,6 +904,7 @@ func (m *dbMeta) insertRows(beans []interface{}) error {
 
 func (m *dbMeta) prepareLoad(ctx Context, opt *LoadOption) error {
 	opt.check()
+	opt.rebuildCounters = true
 	if err := m.checkAddr(); err != nil {
 		return err
 	}
