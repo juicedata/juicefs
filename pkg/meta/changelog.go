@@ -53,11 +53,14 @@ const (
 	OpDirStat              = "DIRSTAT"
 	OpRepairDir            = "REPAIRDIR"
 	OpClone                = "CLONE"
+	OpCloneBatch           = "CLONEBATCH"
 	OpAttach               = "ATTACH"
 	OpCleanup              = "CLEANUP"
 	OpNewSession           = "NEWSESSION"
 	OpCleanSession         = "CLEANSESSION"
 	OpDelSustained         = "DELSUSTAINED"
+	OpFlock                = "FLOCK"
+	OpSetlk                = "SETLK"
 	OpSet                  = "SET"
 	OpIncrCounter          = "INCR_COUNTER"
 	OpInitDirStats         = "INIT_ENABLE_DIRSTATS"
@@ -102,11 +105,14 @@ var changelogOps = map[string]changelogOpSpec{
 	OpDirStat:              {4, 0},
 	OpRepairDir:            {1, 0},
 	OpClone:                {7, 1},
+	OpCloneBatch:           {variadic, variadic},
 	OpAttach:               {3, 0},
 	OpCleanup:              {1, 0},
 	OpNewSession:           {3, 0},
 	OpCleanSession:         {1, 0},
 	OpDelSustained:         {2, 0},
+	OpFlock:                {3, 0},
+	OpSetlk:                {6, 0},
 	OpSet:                  {2, 0},
 	OpIncrCounter:          {2, 0},
 	OpInitDirStats:         {0, 0},
@@ -209,6 +215,16 @@ func (e *ChangeEntry) Validate() error {
 		}
 		if names := len(e.Args) - 3; names != len(e.Result) {
 			return fmt.Errorf("%s: %d names but %d inodes", e.Op, names, len(e.Result))
+		}
+		return nil
+	}
+	if e.Op == OpCloneBatch {
+		// parent, mode, umask, uid, gids, (srcInode, name)... : dstInode...
+		if len(e.Args) < 7 || (len(e.Args)-5)%2 != 0 {
+			return fmt.Errorf("%s: expect 5 fixed arguments and one or more (inode, name) pairs, got %d", e.Op, len(e.Args))
+		}
+		if entries := (len(e.Args) - 5) / 2; entries != len(e.Result) {
+			return fmt.Errorf("%s: %d entries but %d inodes", e.Op, entries, len(e.Result))
 		}
 		return nil
 	}
