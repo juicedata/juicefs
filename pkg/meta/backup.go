@@ -419,11 +419,9 @@ func dumpResult(ctx context.Context, ch chan<- *dumpedResult, res *dumpedResult)
 }
 
 type LoadOption struct {
-	Threads  int
-	Progress func(name string, cnt int)
-
-	// set by prepareLoad, redis doesn't rebuild counters for now
-	rebuildCounters bool
+	Threads         int
+	Progress        func(name string, cnt int)
+	rebuildCounters bool // set by prepareLoad, redis doesn't rebuild counters for now
 }
 
 func (opt *LoadOption) check() {

@@ -769,14 +769,25 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
 	var counters []*pb.Counter
 	bak := &BakFormat{}
+
+	sendTask := func(t *task, name string, num int) bool {
+		select {
+		case <-ctx.Done():
+			return false
+		case taskCh <- t:
+			if opt.Progress != nil {
+				opt.Progress(name, num)
+			}
+			return true
+		}
+	}
+
 	for {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
-				select {
-				case <-ctx.Done():
-				case taskCh <- &task{segTypeCounter, loaded.toBatch(counters)}:
-				}
+				batch := loaded.toBatch(counters)
+				sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
 				close(taskCh)
 				break
 			}
@@ -784,23 +795,11 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			wg.Wait()
 			return err
 		}
-
 		loaded.updateFromSegment(seg, &counters)
-		if seg.typ == segTypeCounter {
-			if opt.Progress != nil {
-				opt.Progress(seg.Name(), int(seg.num()))
-			}
-			continue
-		}
 
-		select {
-		case <-ctx.Done():
+		if !sendTask(&task{int(seg.typ), seg.val}, seg.Name(), int(seg.num())) {
 			wg.Wait()
 			return ctx.Err()
-		case taskCh <- &task{int(seg.typ), seg.val}:
-			if opt.Progress != nil {
-				opt.Progress(seg.Name(), int(seg.num()))
-			}
 		}
 	}
 	wg.Wait()
