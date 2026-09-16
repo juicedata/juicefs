@@ -1634,7 +1634,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
 	// check group quota in transaction
-	if !isApplyMode(ctx) {
+	if !(isApplyMode(ctx) && parent == TrashInode && _type == TypeDirectory) {
 		if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
 			return err
 		}

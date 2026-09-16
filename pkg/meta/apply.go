@@ -23,10 +23,10 @@ type applyStateKey struct{}
 type applyState struct {
 	Time    time.Time
 	Inode   Ino
-	Trash   Ino
-	Sid     uint64
-	Parents map[Ino]bool
-	Opened  map[Ino]bool
+	Trash   Ino          // Source trash directory; zero skips trash.
+	Sid     uint64       // Source session ID for sustained inodes.
+	Parents map[Ino]bool // Whether the source updated each parent directory.
+	Opened  map[Ino]bool // Whether each inode was open on the source when removed.
 }
 
 func getApplyState(ctx Context) *applyState {
