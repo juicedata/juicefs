@@ -17,7 +17,6 @@
 package meta
 
 import (
-	"context"
 	"runtime"
 	"testing"
 	"time"
@@ -34,35 +33,15 @@ func BenchmarkApplyContext(b *testing.B) {
 		runtime.KeepAlive(now)
 	})
 
-	ctx := Background()
-	defer ctx.Cancel()
-	for _, tc := range []struct {
-		name string
-		ctx  Context
-	}{
-		{"WithoutCancel", WrapWithoutCancel(context.Background(), 0, 0, nil)},
-		{"Background", ctx},
-		{"WithApplyState", ctx.WithValue(applyStateKey{}, &applyState{Time: time.Now()})},
-	} {
-		b.Run(tc.name, func(b *testing.B) {
-			b.Run("GetApplyState", func(b *testing.B) {
-				var state *applyState
-				b.ReportAllocs()
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
-					state = getApplyState(tc.ctx)
-				}
-				runtime.KeepAlive(state)
-			})
-			b.Run("OperationTime", func(b *testing.B) {
-				var now time.Time
-				b.ReportAllocs()
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
-					now = operationTime(tc.ctx)
-				}
-				runtime.KeepAlive(now)
-			})
-		})
-	}
+	b.Run("WithApplyState", func(b *testing.B) {
+		var state *applyState
+		ctx := Background().WithValue(applyStateKey{}, &applyState{Time: time.Now()})
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			state = getApplyState(ctx)
+			_ = state.Time
+		}
+		runtime.KeepAlive(state)
+	})
 }
