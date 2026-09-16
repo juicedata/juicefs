@@ -430,7 +430,7 @@ func (opt *LoadOption) check() {
 	}
 }
 
-func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counter) {
+func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counter) bool {
 	recordInode := func(inode uint64) {
 		if Ino(inode) < TrashInode {
 			c.NextInode = max(c.NextInode, int64(inode)+1)
@@ -455,6 +455,7 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counte
 				*others = append(*others, counter)
 			}
 		}
+		return true
 	case segTypeNode:
 		var attr Attr
 		for _, node := range seg.val.(*pb.Batch).Nodes {
@@ -488,6 +489,7 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counte
 			recordInode(file.Inode)
 		}
 	}
+	return false
 }
 
 func (c *DumpedCounters) toBatch(others []*pb.Counter) *pb.Batch {

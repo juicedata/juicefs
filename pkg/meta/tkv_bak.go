@@ -795,7 +795,9 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			wg.Wait()
 			return err
 		}
-		loaded.updateFromSegment(seg, &counters)
+		if loaded.updateFromSegment(seg, &counters) {
+			continue
+		}
 
 		if !sendTask(&task{int(seg.typ), seg.val}, seg.Name(), int(seg.num())) {
 			wg.Wait()

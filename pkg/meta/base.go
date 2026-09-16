@@ -4115,8 +4115,8 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			return err
 		}
 
-		if opt.rebuildCounters {
-			loaded.updateFromSegment(seg, &counters)
+		if opt.rebuildCounters && loaded.updateFromSegment(seg, &counters) {
+			continue
 		}
 
 		if !sendTask(&task{int(seg.typ), seg.val}, seg.Name(), int(seg.num())) {
