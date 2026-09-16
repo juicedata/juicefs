@@ -173,6 +173,77 @@ func (f *BakFormat) ReadFooter(r io.ReadSeeker) (*BakFooter, error) { // nolint:
 	return footer, nil
 }
 
+// LoadBackup initializes the scan position and rewind deduplication from a binary backup.
+func (opt *ChangelogScanOption) LoadBackup(r io.ReadSeeker) (*Format, error) {
+	end, err := r.Seek(-8, io.SeekEnd)
+	if err != nil {
+		return nil, err
+	}
+	var footerLen uint64
+	if err := binary.Read(r, binary.BigEndian, &footerLen); err != nil {
+		return nil, err
+	}
+	if footerLen == 0 || footerLen > uint64(end) {
+		return nil, fmt.Errorf("invalid binary backup footer length %d", footerLen)
+	}
+	bak := &BakFormat{}
+	footer, err := bak.ReadFooter(r)
+	if err != nil {
+		return nil, err
+	}
+	if footer.Msg.Version != BakVersion {
+		return nil, fmt.Errorf("unsupported backup version %d", footer.Msg.Version)
+	}
+	var format Format
+	var from int64
+	seen := make(map[uint64]struct{})
+	for _, name := range []string{"format", "counter", "changeLog"} {
+		info := footer.Msg.Infos[name]
+		if info == nil {
+			continue
+		}
+		for _, offset := range info.Offset {
+			if _, err := r.Seek(int64(offset), io.SeekStart); err != nil {
+				return nil, err
+			}
+			seg, err := bak.ReadSegment(r)
+			if err != nil {
+				return nil, err
+			}
+			if seg.Name() != name {
+				return nil, fmt.Errorf("expected backup segment %s, got %s", name, seg.Name())
+			}
+			switch seg.typ {
+			case segTypeFormat:
+				if err := json.Unmarshal(seg.val.(*pb.Format).Data, &format); err != nil {
+					return nil, err
+				}
+			case segTypeCounter:
+				for _, counter := range seg.val.(*pb.Batch).Counters {
+					if counter.Key == "lastChangelog" {
+						from = counter.Value
+					}
+				}
+			case segTypeChangeLog:
+				for _, log := range seg.val.(*pb.Batch).Changelogs {
+					if log.Version <= 0 || log.Version > from {
+						return nil, fmt.Errorf("backup changelog %d is outside the baseline ending at %d", log.Version, from)
+					}
+					seen[uint64(log.Version)] = struct{}{}
+				}
+			}
+		}
+	}
+	if format.UUID == "" {
+		return nil, fmt.Errorf("backup does not contain a volume UUID")
+	}
+	if from <= 0 {
+		return nil, fmt.Errorf("backup does not contain a positive lastChangelog")
+	}
+	opt.From, opt.Seen = from, seen
+	return &format, nil
+}
+
 type BakFooter struct {
 	Msg *pb.Footer
 	Len uint64
