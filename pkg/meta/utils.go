@@ -609,7 +609,10 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 	return 0
 }
 
-func (m *baseMeta) atimeNeedsUpdate(attr *Attr, now time.Time) bool {
+func (m *baseMeta) atimeNeedsUpdate(ctx Context, attr *Attr, now time.Time) bool {
+	if isApplyMode(ctx) {
+		return true
+	}
 	return m.conf.AtimeMode != NoAtime && relatimeNeedUpdate(attr, now) ||
 		// update atime only for > 1 second accesses
 		m.conf.AtimeMode == StrictAtime && now.Sub(time.Unix(attr.Atime, int64(attr.Atimensec))) > time.Second
