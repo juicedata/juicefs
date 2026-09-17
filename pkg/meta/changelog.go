@@ -125,6 +125,15 @@ var changelogOps = map[string]changelogOpSpec{
 // ErrUnknownChangelogOp indicates an operation unknown to Validate.
 var ErrUnknownChangelogOp = errors.New("unknown changelog operation")
 
+type ChangelogScanOption struct {
+	// From is the resume version; 0 starts from the latest version.
+	From int64
+	// Follow waits for new entries after catching up.
+	Follow bool
+	// Seen contains changelogs already included in the baseline backup.
+	Seen map[uint64]struct{}
+}
+
 // ChangeEntry holds a parsed entry with decoded Args and Result.
 type ChangeEntry struct {
 	Ver    int64

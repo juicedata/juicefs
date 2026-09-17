@@ -44,6 +44,11 @@ $ juicefs changelog redis://localhost --from 100`,
 				Name:  "from",
 				Usage: "show changelog from this version (0 means from the latest)",
 			},
+			&cli.BoolFlag{
+				Name:  "follow",
+				Value: true,
+				Usage: "keep waiting for new entries after catching up",
+			},
 		},
 	}
 }
@@ -60,8 +65,8 @@ func changelog(ctx *cli.Context) error {
 		return fmt.Errorf("changelog is not enabled, use `juicefs config %s --changelog` to enable it", metaUri)
 	}
 
-	last := ctx.Int64("from")
-	return m.ScanChangelog(meta.Background(), last, func(ver int64, entry string) error {
+	opt := &meta.ChangelogScanOption{From: ctx.Int64("from"), Follow: ctx.Bool("follow")}
+	return m.ScanChangelog(meta.WrapContext(ctx.Context), opt, func(ver int64, entry string) error {
 		fmt.Printf("%d: %s\n", ver, entry)
 		return nil
 	})
