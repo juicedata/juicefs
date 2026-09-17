@@ -956,16 +956,12 @@ func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
 
 func (m *kvMeta) ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error {
 	last := opt.From
-	var target uint64
-	if last == 0 || !opt.Follow {
+	if last == 0 {
 		_ = m.client.txn(ctx, func(kt *kvTxn) error {
-			target = m.findLastLogKey(kt)
+			last = int64(m.findLastLogKey(kt))
 			return nil
 		}, 0)
-		if last == 0 {
-			last = int64(target)
-			logger.Infof("last version is %d", last)
-		}
+		logger.Infof("last version is %d", last)
 	}
 	saw := make(map[uint64]struct{}, len(opt.Seen))
 	for id := range opt.Seen {
@@ -1009,7 +1005,7 @@ func (m *kvMeta) ScanChangelog(ctx Context, opt *ChangelogScanOption, handler fu
 			}
 			return err
 		}
-		if !opt.Follow && (!found || uint64(last) >= target) {
+		if !opt.Follow && !found {
 			return nil
 		}
 		for k := range saw {
