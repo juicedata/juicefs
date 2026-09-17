@@ -1841,7 +1841,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == RootInode && name == TrashName || parent == TrashInode || parent.IsTrash() && ctx.Uid() != 0 {
+	if parent == RootInode && name == TrashName || parent == TrashInode && !isApplyMode(ctx) || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -1853,7 +1853,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	var inode Ino
 	var oldAttr Attr
 	st := m.en.doRmdir(ctx, parent, name, &inode, &oldAttr, skipCheckTrash...)
-	if st == 0 {
+	if st == 0 && parent != TrashInode {
 		if !parent.IsTrash() {
 			m.parentMu.Lock()
 			delete(m.dirParents, inode)
