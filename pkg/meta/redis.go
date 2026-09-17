@@ -1613,9 +1613,10 @@ func (m *redisMeta) genLog(ctx Context, pipe redis.Pipeliner, ts time.Time, op s
 	pipe.Incr(ctx, m.txnLastLog())
 }
 
-func (m *redisMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
+func (m *redisMeta) ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error {
 	var firstV int64
 	var cursor int64
+	last := opt.From
 	if last == 0 {
 		err := m.rdb.Get(ctx, m.txnLastLog()).Scan(&last)
 		if err != nil && err != redis.Nil {
@@ -1681,6 +1682,9 @@ func (m *redisMeta) ScanChangelog(ctx Context, last int64, handler func(ver int6
 		}
 		cursor += int64(len(logs))
 		if len(logs) == 0 {
+			if !opt.Follow {
+				return nil
+			}
 			time.Sleep(time.Millisecond * 100)
 		}
 	}

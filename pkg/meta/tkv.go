@@ -954,7 +954,8 @@ func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
 	return scanRange(0, ^uint64(0))
 }
 
-func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
+func (m *kvMeta) ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error {
+	last := opt.From
 	if last == 0 {
 		_ = m.client.txn(ctx, func(kt *kvTxn) error {
 			last = int64(m.findLastLogKey(kt))
@@ -962,23 +963,36 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 		}, 0)
 		logger.Infof("last version is %d", last)
 	}
-	saw := make(map[uint64]uint32)
+	saw := make(map[uint64]struct{}, len(opt.Seen))
+	for id := range opt.Seen {
+		saw[id] = struct{}{}
+	}
+	if opt.Seen != nil && opt.From > 0 {
+		if _, ok := saw[uint64(opt.From)]; !ok {
+			return fmt.Errorf("backup is missing the KV rewind changelogs at version %d", opt.From)
+		}
+	}
 	for {
 		if ctx.Canceled() {
 			return context.Canceled
 		}
-		err := m.client.simpleTxn(context.Background(), func(kt *kvTxn) error {
+		var found bool
+		beginID := m.client.rewind(uint64(last), 1)
+		err := m.client.txn(ctx, func(kt *kvTxn) error {
 			var err error
-			beginID := m.client.rewind(uint64(last), 1)
-			now := uint32(time.Now().Unix())
 			m.scanLogRange(kt, beginID, ^uint64(0), false, func(id uint64, k, v []byte) bool {
-				if saw[id] == 0 {
-					saw[id] = now
-					last = int64(id)
+				if _, ok := saw[id]; !ok {
+					found = true
 					if e := handler(int64(id), string(v)); e != nil {
-						logger.Errorf("Handle changelog %d: %s", id, e)
+						if !errors.Is(e, context.Canceled) {
+							logger.Errorf("Handle changelog %d: %s", id, e)
+						}
 						err = e
 						return false
+					}
+					saw[id] = struct{}{}
+					if int64(id) > last {
+						last = int64(id)
 					}
 				}
 				return true
@@ -986,12 +1000,16 @@ func (m *kvMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 			return err
 		}, 0)
 		if err != nil {
-			logger.Errorf("Scan changelog: %s", err)
+			if !errors.Is(err, context.Canceled) {
+				logger.Errorf("Scan changelog: %s", err)
+			}
 			return err
 		}
-		now := uint32(time.Now().Unix())
-		for k, t := range saw {
-			if t+60 < now {
+		if !opt.Follow && !found {
+			return nil
+		}
+		for k := range saw {
+			if k < beginID {
 				delete(saw, k)
 			}
 		}
