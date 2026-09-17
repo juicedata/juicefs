@@ -285,7 +285,7 @@ func TestSQLiteUnlinkRetryResetsTrash(t *testing.T) {
 
 	ctx := Background()
 	var trash Ino
-	if st := m.checkTrash(RootInode, &trash); st != 0 {
+	if st := m.checkTrash(ctx, RootInode, &trash); st != 0 {
 		t.Fatalf("check trash: %s", st)
 	}
 

@@ -92,7 +92,7 @@ type engine interface {
 	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
-	doDeleteSustainedInode(sid uint64, inode Ino) error
+	doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices(ctx Context, count *uint64) error
@@ -1531,7 +1531,10 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 	return err
 }
 
-func (m *baseMeta) nextInode() (Ino, error) {
+func (m *baseMeta) nextInode(ctx Context) (Ino, error) {
+	if state := getChangelogApplyState(ctx); state != nil && state.Inode != 0 {
+		return state.Inode, nil
+	}
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeInodes.next >= m.freeInodes.maxid {
@@ -1616,7 +1619,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if _type < TypeFile || _type > TypeSocket {
 		return syscall.EINVAL
 	}
-	if parent.IsTrash() {
+	if parent.IsTrash() && !isApplyMode(ctx) {
 		return syscall.EPERM
 	}
 	if parent == RootInode && name == TrashName {
@@ -1636,10 +1639,12 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
 	// check group quota in transaction
-	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
-		return err
+	if !(parent == TrashInode && _type == TypeDirectory) {
+		if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
+			return err
+		}
 	}
-	ino, err := m.nextInode()
+	ino, err := m.nextInode(ctx)
 	if err != nil {
 		return errno(err)
 	}
@@ -1773,7 +1778,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 			// ctime and mtime are ignored since symlink can't be modified
 			atime := int64(binary.BigEndian.Uint64(buf[:8]))
 			attr := &Attr{Atime: atime / int64(time.Second), Atimensec: uint32(atime % int64(time.Second))}
-			if !m.atimeNeedsUpdate(attr, time.Now()) {
+			if !m.atimeNeedsUpdate(ctx, attr, time.Now()) {
 				*path = buf[8:]
 				return 0
 			}
@@ -1838,7 +1843,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == RootInode && name == TrashName || parent == TrashInode || parent.IsTrash() && ctx.Uid() != 0 {
+	if parent == RootInode && name == TrashName || parent == TrashInode && !isApplyMode(ctx) || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -1850,7 +1855,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	var inode Ino
 	var oldAttr Attr
 	st := m.en.doRmdir(ctx, parent, name, &inode, &oldAttr, skipCheckTrash...)
-	if st == 0 {
+	if st == 0 && parent != TrashInode {
 		if !parent.IsTrash() {
 			m.parentMu.Lock()
 			delete(m.dirParents, inode)
@@ -2039,7 +2044,7 @@ func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
 		}
 	}
 	now := time.Now()
-	if attr.Full && !m.atimeNeedsUpdate(attr, now) {
+	if attr.Full && !m.atimeNeedsUpdate(ctx, attr, now) {
 		return
 	}
 
@@ -2182,7 +2187,7 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		}
 		m.Unlock()
 		if removed {
-			_ = m.en.doDeleteSustainedInode(m.sid, inode)
+			_ = m.en.doDeleteSustainedInode(Background(), m.sid, inode)
 		}
 	}
 	return 0
@@ -2830,6 +2835,9 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 }
 
 func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID int) {
+	if m.conf.NoCompact {
+		return
+	}
 	// avoid too many or duplicated compaction
 	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
@@ -3048,7 +3056,11 @@ func (m *baseMeta) toTrash(parent Ino) bool {
 	return m.getFormat().TrashDays > 0
 }
 
-func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
+func (m *baseMeta) checkTrash(ctx Context, parent Ino, trash *Ino) syscall.Errno {
+	if state := getChangelogApplyState(ctx); state != nil {
+		*trash = state.Trash
+		return 0
+	}
 	if !m.toTrash(parent) {
 		return 0
 	}
@@ -3434,7 +3446,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 }
 
 func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, dstIno *Ino, cmode uint8, cumask uint16, count *uint64, top bool, concurrent chan struct{}) syscall.Errno {
-	ino, err := m.nextInode()
+	ino, err := m.nextInode(ctx)
 	if err != nil {
 		return errno(err)
 	}
