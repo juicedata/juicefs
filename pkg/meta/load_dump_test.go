@@ -18,6 +18,7 @@ package meta
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -28,6 +29,8 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
@@ -467,6 +470,217 @@ func TestLoadDumpV2(t *testing.T) {
 			}
 			testLoadOtherEngine(t, src, dst, dstAddr[1])
 		}
+	}
+}
+
+func duplicateBackup(t *testing.T, conflict bool) []byte {
+	t.Helper()
+	format, err := json.Marshal(testFormat())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	attr := (&Attr{Typ: TypeFile, Mode: 0644, Nlink: 1, Parent: RootInode, Length: 4096}).Marshal()
+	otherAttr := (&Attr{Typ: TypeFile, Mode: 0600, Nlink: 1, Parent: RootInode, Length: 8192}).Marshal()
+	slices := marshalSlice(0, 11, 4096, 0, 4096)
+	records := []*pb.Batch{
+		{Nodes: []*pb.Node{{Inode: 2, Data: attr}, {Inode: 2, Data: attr}}},
+		{Edges: []*pb.Edge{{Parent: 1, Inode: 2, Name: []byte("file"), Type: TypeFile}, {Parent: 1, Inode: 2, Name: []byte("file"), Type: TypeFile}}},
+		{Chunks: []*pb.Chunk{{Inode: 2, Index: 0, Slices: slices}, {Inode: 2, Index: 0, Slices: slices}}},
+		{Symlinks: []*pb.Symlink{{Inode: 3, Target: []byte("target")}, {Inode: 3, Target: []byte("target")}}},
+		{Xattrs: []*pb.Xattr{{Inode: 2, Name: "user.test", Value: []byte("value")}, {Inode: 2, Name: "user.test", Value: []byte("value")}}},
+		{Parents: []*pb.Parent{{Inode: 2, Parent: 1, Cnt: 2}, {Inode: 2, Parent: 1, Cnt: 2}}},
+		{SliceRefs: []*pb.SliceRef{{Id: 11, Size: 4096, Refs: 2}, {Id: 11, Size: 4096, Refs: 2}}},
+	}
+	if conflict {
+		records = []*pb.Batch{{Nodes: []*pb.Node{{Inode: 2, Data: attr}, {Inode: 2, Data: otherAttr}}}}
+	}
+
+	var buf bytes.Buffer
+	bak := newBakFormat()
+	if err = bak.writeSegment(&buf, newBakSegment(&pb.Format{Data: format})); err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range records {
+		if err = bak.writeSegment(&buf, newBakSegment(record)); err != nil {
+			t.Fatal(err)
+		}
+		if !conflict {
+			if err = bak.writeSegment(&buf, newBakSegment(record)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err = bak.writeFooter(&buf); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func loadDuplicateBackup(t *testing.T, m Meta) {
+	t.Helper()
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err := m.LoadMetaV2(Background(), bytes.NewReader(duplicateBackup(t, false)), &LoadOption{Threads: 10}); err != nil {
+		t.Fatalf("load duplicate backup: %s", err)
+	}
+}
+
+func checkSQLDuplicateBackup(t *testing.T, m *dbMeta) {
+	t.Helper()
+	loadDuplicateBackup(t, m)
+	for name, bean := range map[string]interface{}{
+		"node":     &node{},
+		"edge":     &edge{},
+		"chunk":    &chunk{},
+		"symlink":  &symlink{},
+		"xattr":    &xattr{},
+		"sliceRef": &sliceRef{},
+	} {
+		count, err := m.db.Count(bean)
+		if err != nil {
+			t.Fatalf("count %s: %s", name, err)
+		}
+		if count != 1 {
+			t.Fatalf("%s count: got %d, want 1", name, count)
+		}
+	}
+}
+
+func TestLoadMetaV2DuplicateRecords(t *testing.T) {
+	t.Run("sqlite", func(t *testing.T) {
+		client, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "duplicate.db"), testConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := client.(*dbMeta)
+		t.Cleanup(func() { _ = m.Shutdown() })
+		checkSQLDuplicateBackup(t, m)
+	})
+
+	t.Run("badger", func(t *testing.T) {
+		client, err := newKVMeta("badger", t.TempDir(), testConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := client.(*kvMeta)
+		t.Cleanup(func() { _ = m.Shutdown() })
+		loadDuplicateBackup(t, m)
+
+		edgeValue := utils.NewBuffer(9)
+		edgeValue.Put8(TypeFile)
+		edgeValue.Put64(2)
+		checks := []struct {
+			key, want []byte
+		}{
+			{m.inodeKey(2), (&Attr{Typ: TypeFile, Mode: 0644, Nlink: 1, Parent: RootInode, Length: 4096}).Marshal()},
+			{m.entryKey(1, "file"), edgeValue.Bytes()},
+			{m.chunkKey(2, 0), marshalSlice(0, 11, 4096, 0, 4096)},
+			{m.symKey(3), []byte("target")},
+			{m.xattrKey(2, "user.test"), []byte("value")},
+			{m.parentKey(2, 1), packCounter(2)},
+			{m.sliceKey(11, 4096), packCounter(1)},
+		}
+		for _, check := range checks {
+			got, err := m.get(check.key)
+			if err != nil {
+				t.Fatalf("get %q: %s", check.key, err)
+			}
+			if !bytes.Equal(got, check.want) {
+				t.Fatalf("value for %q: got %v, want %v", check.key, got, check.want)
+			}
+		}
+	})
+}
+
+func TestMySQLClientLoadMetaV2DuplicateRecords(t *testing.T) { //skip mutate
+	client, err := newSQLMeta("mysql", "root:@/dev", testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := client.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	checkSQLDuplicateBackup(t, m)
+}
+
+func TestPostgreSQLClientLoadMetaV2DuplicateRecords(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
+	client, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := client.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	checkSQLDuplicateBackup(t, m)
+}
+
+func TestLoadMetaV2ConflictingDuplicateRecord(t *testing.T) {
+	client, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "duplicate-conflict.db"), testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := client.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err = m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err = m.LoadMetaV2(Background(), bytes.NewReader(duplicateBackup(t, true)), &LoadOption{Threads: 10}); err == nil {
+		t.Fatal("load conflicting duplicate record succeeded")
+	}
+}
+
+func TestInsertRowsIdempotentPreservesBeans(t *testing.T) {
+	client, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "duplicate-beans.db"), testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := client.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err = m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err = m.prepareLoad(Background(), &LoadOption{}); err != nil {
+		t.Fatalf("prepare load: %s", err)
+	}
+
+	first := &edge{Parent: 1, Name: []byte("file"), Inode: 2, Type: TypeFile}
+	second := &edge{Parent: 1, Name: []byte("file"), Inode: 2, Type: TypeFile}
+	if err = m.insertRowsIdempotent([]interface{}{first, second}); err != nil {
+		t.Fatalf("insert duplicate rows: %s", err)
+	}
+	if first.Id != 0 || second.Id != 0 {
+		t.Fatalf("input rows were mutated: first ID %d, second ID %d", first.Id, second.Id)
+	}
+}
+
+func TestRedisLoadMetaV2DuplicateRecords(t *testing.T) {
+	client, err := newRedisMeta("redis", "127.0.0.1:6379/13", testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := client.(*redisMeta)
+	t.Cleanup(func() {
+		_ = m.Reset()
+		_ = m.Shutdown()
+	})
+	loadDuplicateBackup(t, m)
+
+	slices, err := m.rdb.LRange(Background(), m.chunkKey(2, 0), 0, -1).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(slices) != 1 || !bytes.Equal([]byte(slices[0]), marshalSlice(0, 11, 4096, 0, 4096)) {
+		t.Fatalf("chunk slices: %v", slices)
+	}
+	parent, err := m.rdb.HGet(Background(), m.parentKey(2), "1").Int64()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parent != 2 {
+		t.Fatalf("parent count: got %d, want 2", parent)
 	}
 }
 

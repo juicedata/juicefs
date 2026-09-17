@@ -20,9 +20,11 @@
 package meta
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -608,7 +610,7 @@ func (m *dbMeta) loadNodes(ctx Context, msg proto.Message) error {
 		m.parseNode(attr, pn)
 		rows = append(rows, pn)
 	}
-	return m.insertRows(rows)
+	return m.insertRowsIdempotent(rows)
 }
 
 func genMultiSQL(stmt string, num int) string {
@@ -676,7 +678,7 @@ func (m *dbMeta) loadChunks(ctx Context, msg proto.Message) error {
 			srRows = append(srRows, &sliceRef{Id: s.id, Size: s.size, Refs: 1})
 		}
 	}
-	if err := m.insertRows(chkRows); err != nil {
+	if err := m.insertRowsIdempotent(chkRows); err != nil {
 		return err
 	}
 	return insertSliceRefs(m, srRows)
@@ -694,7 +696,7 @@ func (m *dbMeta) loadEdges(ctx Context, msg proto.Message) error {
 		pe.Type = uint8(e.Type)
 		rows = append(rows, pe)
 	}
-	return m.insertRows(rows)
+	return m.insertRowsIdempotent(rows)
 }
 
 func (m *dbMeta) loadSymlinks(ctx Context, msg proto.Message) error {
@@ -703,7 +705,7 @@ func (m *dbMeta) loadSymlinks(ctx Context, msg proto.Message) error {
 	for _, sl := range symlinks {
 		rows = append(rows, &symlink{Ino(sl.Inode), sl.Target})
 	}
-	return m.insertRows(rows)
+	return m.insertRowsIdempotent(rows)
 }
 
 func (m *dbMeta) loadSustained(ctx Context, msg proto.Message) error {
@@ -788,7 +790,7 @@ func (m *dbMeta) loadXattrs(ctx Context, msg proto.Message) error {
 	for _, x := range xattrs {
 		rows = append(rows, &xattr{Inode: Ino(x.Inode), Name: x.Name, Value: x.Value})
 	}
-	return m.insertRows(rows)
+	return m.insertRowsIdempotent(rows)
 }
 
 func (m *dbMeta) loadQuota(ctx Context, msg proto.Message) error {
@@ -900,6 +902,107 @@ func (m *dbMeta) insertRows(beans []interface{}) error {
 		beans = beans[bs:]
 	}
 	return nil
+}
+
+func (m *dbMeta) insertRowsIdempotent(beans []interface{}) error {
+	batch := m.getTxnBatchNum()
+	for len(beans) > 0 {
+		bs := min(batch, len(beans))
+		err := m.txn(func(s *xorm.Session) error {
+			const savepoint = "load_duplicate"
+			if _, err := s.Exec("SAVEPOINT " + savepoint); err != nil {
+				return err
+			}
+			n, err := s.Insert(beans[:bs])
+			if err == nil {
+				if int(n) != bs {
+					return fmt.Errorf("only %d records inserted", n)
+				}
+				_, err = s.Exec("RELEASE SAVEPOINT " + savepoint)
+				return err
+			}
+			if !isDuplicateEntryErr(err) {
+				return err
+			}
+			if _, err = s.Exec("ROLLBACK TO SAVEPOINT " + savepoint); err != nil {
+				return err
+			}
+			if _, err = s.Exec("RELEASE SAVEPOINT " + savepoint); err != nil {
+				return err
+			}
+			for _, bean := range beans[:bs] {
+				if err = m.insertDuplicateRow(s, savepoint, bean); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			logger.Errorf("Write %d beans: %s", bs, err)
+			return err
+		}
+		beans = beans[bs:]
+	}
+	return nil
+}
+
+func (m *dbMeta) insertDuplicateRow(s *xorm.Session, savepoint string, bean interface{}) error {
+	if _, err := s.Exec("SAVEPOINT " + savepoint); err != nil {
+		return err
+	}
+	value := reflect.ValueOf(bean).Elem()
+	cloned := reflect.New(value.Type())
+	cloned.Elem().Set(value)
+	n, err := s.Insert(cloned.Interface())
+	if err == nil {
+		if n != 1 {
+			return fmt.Errorf("only %d records inserted", n)
+		}
+		_, err = s.Exec("RELEASE SAVEPOINT " + savepoint)
+		return err
+	}
+	if !isDuplicateEntryErr(err) {
+		return err
+	}
+	if _, err = s.Exec("ROLLBACK TO SAVEPOINT " + savepoint); err != nil {
+		return err
+	}
+	same, err := sameBackupRow(s, bean)
+	if err != nil {
+		return err
+	}
+	if !same {
+		return fmt.Errorf("conflicting duplicate backup record %T", bean)
+	}
+	_, err = s.Exec("RELEASE SAVEPOINT " + savepoint)
+	return err
+}
+
+func sameBackupRow(s *xorm.Session, bean interface{}) (bool, error) {
+	switch want := bean.(type) {
+	case *node:
+		got := node{Inode: want.Inode}
+		ok, err := s.Get(&got)
+		return ok && got == *want, err
+	case *edge:
+		got := edge{}
+		ok, err := s.Where("parent = ? AND name = ?", want.Parent, want.Name).Get(&got)
+		return ok && got.Parent == want.Parent && bytes.Equal(got.Name, want.Name) && got.Inode == want.Inode && got.Type == want.Type, err
+	case *chunk:
+		got := chunk{}
+		ok, err := s.Where("inode = ? AND indx = ?", want.Inode, want.Indx).Get(&got)
+		return ok && got.Inode == want.Inode && got.Indx == want.Indx && bytes.Equal(got.Slices, want.Slices), err
+	case *symlink:
+		got := symlink{Inode: want.Inode}
+		ok, err := s.Get(&got)
+		return ok && got.Inode == want.Inode && bytes.Equal(got.Target, want.Target), err
+	case *xattr:
+		got := xattr{}
+		ok, err := s.Where("inode = ? AND name = ?", want.Inode, want.Name).Get(&got)
+		return ok && got.Inode == want.Inode && got.Name == want.Name && bytes.Equal(got.Value, want.Value), err
+	default:
+		return false, fmt.Errorf("unsupported backup record type %T", bean)
+	}
 }
 
 func (m *dbMeta) prepareLoad(ctx Context, opt *LoadOption) error {
