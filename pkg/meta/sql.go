@@ -1103,9 +1103,10 @@ func (m *dbMeta) sqlChangelogRewind() int {
 	return rewind
 }
 
-func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
+func (m *dbMeta) ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error {
 	const batchSize = 1000
 	rewind := m.sqlChangelogRewind()
+	last := opt.From
 	if last == 0 {
 		var maxLog changeLog
 		if ok, err := m.db.Desc("id").Limit(1).Get(&maxLog); err != nil {
@@ -1115,7 +1116,10 @@ func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 		}
 		logger.Infof("last version is %d", last)
 	}
-	seen := make(map[int64]struct{})
+	seen := make(map[int64]struct{}, len(opt.Seen))
+	for id := range opt.Seen {
+		seen[int64(id)] = struct{}{}
+	}
 	for {
 		if ctx.Canceled() {
 			return context.Canceled
@@ -1146,6 +1150,9 @@ func (m *dbMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, 
 			}
 		}
 		if len(logs) < rewind+batchSize {
+			if !opt.Follow {
+				return nil
+			}
 			time.Sleep(time.Millisecond * 100)
 		}
 	}
