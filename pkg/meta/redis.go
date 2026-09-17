@@ -1451,9 +1451,6 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 // A nonzero return value must be written to nextTrash in the creation pipeline.
 func (m *redisMeta) nextTrashInode(ctx Context, tx *redis.Tx, inode *Ino) (int64, error) {
 	if isApplyMode(ctx) {
-		if err := tx.Watch(ctx, m.nextTrashKey()).Err(); err != nil {
-			return 0, err
-		}
 		current, err := tx.Get(ctx, m.nextTrashKey()).Int64()
 		if err != nil && err != redis.Nil {
 			return 0, err
