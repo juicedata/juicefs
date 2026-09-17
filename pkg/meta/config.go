@@ -42,6 +42,7 @@ type Config struct {
 	CaseInsensi        bool
 	ReadOnly           bool
 	NoBGJob            bool // disable background jobs like clean-up, backup, etc.
+	NoCompact          bool // disable compaction initiated by this client.
 	OpenCache          time.Duration
 	OpenCacheLimit     uint64 // max number of files to cache (soft limit)
 	Heartbeat          time.Duration

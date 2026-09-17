@@ -1428,6 +1428,18 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 	return
 }
 
+func (m *kvMeta) nextTrashInode(ctx Context, tx *kvTxn, inode *Ino) {
+	key := m.counterKey("nextTrash")
+	if isApplyMode(ctx) {
+		if next := int64(*inode - TrashInode); parseCounter(tx.get(key)) < next {
+			tx.set(key, packCounter(next))
+		}
+	} else {
+		next := tx.incrBy(key, 1)
+		*inode = TrashInode + Ino(next)
+	}
+}
+
 func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
 		var pattr Attr
@@ -1478,15 +1490,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 			return syscall.EEXIST
 		} else if parent == TrashInode { // user's inode is allocated by prefetch, trash inode is allocated on demand
-			key := m.counterKey("nextTrash")
-			if isApplyMode(ctx) {
-				if next := int64(*inode - TrashInode); parseCounter(tx.get(key)) < next {
-					tx.set(key, packCounter(next))
-				}
-			} else {
-				next := tx.incrBy(key, 1)
-				*inode = TrashInode + Ino(next)
-			}
+			m.nextTrashInode(ctx, tx, inode)
 		}
 		mode &= 07777
 		if pattr.DefaultACL != aclAPI.None && _type != TypeSymlink {
@@ -4601,7 +4605,7 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	srcInodes := make([]Ino, 0, len(entries))
 	srcInodeSet := make(map[Ino]struct{}, len(entries))
 	for i, e := range entries {
-		dstIno, err := m.nextInode()
+		dstIno, err := m.nextInode(ctx)
 		if err != nil {
 			return errno(err)
 		}

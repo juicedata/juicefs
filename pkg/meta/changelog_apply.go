@@ -18,9 +18,9 @@ package meta
 
 import "time"
 
-type applyStateKey struct{}
+type changelogApplyStateKey struct{}
 
-type applyState struct {
+type changelogApplyState struct {
 	Time    time.Time
 	Inode   Ino
 	Trash   Ino          // Source trash directory; zero skips trash.
@@ -29,24 +29,24 @@ type applyState struct {
 	Opened  map[Ino]bool // Whether each inode was open on the source when removed.
 }
 
-func getApplyState(ctx Context) *applyState {
-	s, _ := ctx.Value(applyStateKey{}).(*applyState)
+func getChangelogApplyState(ctx Context) *changelogApplyState {
+	s, _ := ctx.Value(changelogApplyStateKey{}).(*changelogApplyState)
 	return s
 }
 
 func isApplyMode(ctx Context) bool {
-	return getApplyState(ctx) != nil
+	return getChangelogApplyState(ctx) != nil
 }
 
 func operationTime(ctx Context) time.Time {
-	if s := getApplyState(ctx); s != nil {
+	if s := getChangelogApplyState(ctx); s != nil {
 		return s.Time
 	}
 	return time.Now()
 }
 
 func applyParent(ctx Context, parent Ino, update bool) bool {
-	if s := getApplyState(ctx); s != nil {
+	if s := getChangelogApplyState(ctx); s != nil {
 		if v, ok := s.Parents[parent]; ok {
 			return v
 		}
@@ -55,14 +55,14 @@ func applyParent(ctx Context, parent Ino, update bool) bool {
 }
 
 func (m *baseMeta) sessionID(ctx Context) uint64 {
-	if s := getApplyState(ctx); s != nil {
+	if s := getChangelogApplyState(ctx); s != nil {
 		return s.Sid
 	}
 	return m.sid
 }
 
 func (m *baseMeta) isOpen(ctx Context, inode Ino) bool {
-	if s := getApplyState(ctx); s != nil {
+	if s := getChangelogApplyState(ctx); s != nil {
 		return s.Opened[inode]
 	}
 	return m.of.IsOpen(inode)

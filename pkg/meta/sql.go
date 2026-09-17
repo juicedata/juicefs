@@ -1820,6 +1820,32 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 	return
 }
 
+func (m *dbMeta) nextTrashInode(ctx Context, s *xorm.Session, inode *Ino) error {
+	if isApplyMode(ctx) {
+		c := counter{Name: "nextTrash"}
+		ok, err := s.ForUpdate().Get(&c)
+		if err != nil {
+			return err
+		}
+		if next := int64(*inode - TrashInode); c.Value < next {
+			c.Value = next
+			if ok {
+				_, err = s.Cols("value").Update(&c, &counter{Name: "nextTrash"})
+			} else {
+				err = mustInsert(s, &c)
+			}
+			if err != nil {
+				return err
+			}
+		}
+	} else if next, err := m.incrSessionCounter(s, "nextTrash", 1); err != nil {
+		return err
+	} else {
+		*inode = TrashInode + Ino(next)
+	}
+	return nil
+}
+
 func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
@@ -1877,27 +1903,8 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 			return syscall.EEXIST
 		} else if parent == TrashInode {
-			if isApplyMode(ctx) {
-				c := counter{Name: "nextTrash"}
-				ok, err := s.ForUpdate().Get(&c)
-				if err != nil {
-					return err
-				}
-				if next := int64(*inode - TrashInode); c.Value < next {
-					c.Value = next
-					if ok {
-						_, err = s.Cols("value").Update(&c, &counter{Name: "nextTrash"})
-					} else {
-						err = mustInsert(s, &c)
-					}
-					if err != nil {
-						return err
-					}
-				}
-			} else if next, err := m.incrSessionCounter(s, "nextTrash", 1); err != nil {
+			if err := m.nextTrashInode(ctx, s, inode); err != nil {
 				return err
-			} else {
-				*inode = TrashInode + Ino(next)
 			}
 		}
 
@@ -5638,7 +5645,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	srcInodes := make([]Ino, 0, len(entries))
 	srcInodeSet := make(map[Ino]struct{}, len(entries))
 	for i, e := range entries {
-		dstIno, err := m.nextInode()
+		dstIno, err := m.nextInode(ctx)
 		if err != nil {
 			return errno(err)
 		}

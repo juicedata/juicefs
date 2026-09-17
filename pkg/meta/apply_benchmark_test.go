@@ -33,13 +33,13 @@ func BenchmarkApplyContext(b *testing.B) {
 		runtime.KeepAlive(now)
 	})
 
-	b.Run("WithApplyState", func(b *testing.B) {
-		var state *applyState
-		ctx := Background().WithValue(applyStateKey{}, &applyState{Time: time.Now()})
+	b.Run("WithChangelogApplyState", func(b *testing.B) {
+		var state *changelogApplyState
+		ctx := Background().WithValue(changelogApplyStateKey{}, &changelogApplyState{Time: time.Now()})
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			state = getApplyState(ctx)
+			state = getChangelogApplyState(ctx)
 			_ = state.Time
 		}
 		runtime.KeepAlive(state)

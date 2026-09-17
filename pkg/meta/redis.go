@@ -1448,6 +1448,27 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 	return
 }
 
+// A nonzero return value must be written to nextTrash in the creation pipeline.
+func (m *redisMeta) nextTrashInode(ctx Context, tx *redis.Tx, inode *Ino) (int64, error) {
+	if isApplyMode(ctx) {
+		if err := tx.Watch(ctx, m.nextTrashKey()).Err(); err != nil {
+			return 0, err
+		}
+		current, err := tx.Get(ctx, m.nextTrashKey()).Int64()
+		if err != nil && err != redis.Nil {
+			return 0, err
+		}
+		if next := int64(*inode - TrashInode); current < next {
+			return next, nil
+		}
+	} else if next, err := tx.Incr(ctx, m.nextTrashKey()).Result(); err != nil { // Some inode will be wasted if conflict happens
+		return 0, err
+	} else {
+		*inode = TrashInode + Ino(next)
+	}
+	return 0, nil
+}
+
 func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var pattr Attr
@@ -1505,21 +1526,8 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		}
 		var nextTrash int64
 		if parent == TrashInode {
-			if isApplyMode(ctx) {
-				if err := tx.Watch(ctx, m.nextTrashKey()).Err(); err != nil {
-					return err
-				}
-				current, err := tx.Get(ctx, m.nextTrashKey()).Int64()
-				if err != nil && err != redis.Nil {
-					return err
-				}
-				if next := int64(*inode - TrashInode); current < next {
-					nextTrash = next
-				}
-			} else if next, err := tx.Incr(ctx, m.nextTrashKey()).Result(); err != nil { // Some inode will be wasted if conflict happens
+			if nextTrash, err = m.nextTrashInode(ctx, tx, inode); err != nil {
 				return err
-			} else {
-				*inode = TrashInode + Ino(next)
 			}
 		}
 		mode &= 07777
@@ -5524,7 +5532,7 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 				continue
 			}
 			nameSet[name] = struct{}{}
-			dstIno, err := m.nextInode()
+			dstIno, err := m.nextInode(ctx)
 			if err != nil {
 				return errno(err)
 			}

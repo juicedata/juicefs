@@ -1529,7 +1529,10 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 	return err
 }
 
-func (m *baseMeta) nextInode() (Ino, error) {
+func (m *baseMeta) nextInode(ctx Context) (Ino, error) {
+	if state := getChangelogApplyState(ctx); state != nil && state.Inode != 0 {
+		return state.Inode, nil
+	}
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeInodes.next >= m.freeInodes.maxid {
@@ -1634,20 +1637,14 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
 	// check group quota in transaction
-	if !(isApplyMode(ctx) && parent == TrashInode && _type == TypeDirectory) {
+	if !(parent == TrashInode && _type == TypeDirectory) {
 		if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
 			return err
 		}
 	}
-	var ino Ino
-	if state := getApplyState(ctx); state != nil {
-		ino = state.Inode
-	}
-	if ino == 0 {
-		var err error
-		if ino, err = m.nextInode(); err != nil {
-			return errno(err)
-		}
+	ino, err := m.nextInode(ctx)
+	if err != nil {
+		return errno(err)
 	}
 	if inode == nil {
 		inode = &ino
@@ -2209,7 +2206,7 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 	if st == 0 {
 		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
-		if !isApplyMode(ctx) && (numSlices%100 == 99 || numSlices > 350) {
+		if numSlices%100 == 99 || numSlices > 350 {
 			if numSlices < maxSlices {
 				go m.compactChunk(inode, indx, false, false, int(attr.Tier))
 			} else {
@@ -2836,6 +2833,9 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 }
 
 func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID int) {
+	if m.conf.NoCompact {
+		return
+	}
 	// avoid too many or duplicated compaction
 	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
@@ -3055,7 +3055,7 @@ func (m *baseMeta) toTrash(parent Ino) bool {
 }
 
 func (m *baseMeta) checkTrash(ctx Context, parent Ino, trash *Ino) syscall.Errno {
-	if state := getApplyState(ctx); state != nil {
+	if state := getChangelogApplyState(ctx); state != nil {
 		*trash = state.Trash
 		return 0
 	}
@@ -3444,7 +3444,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 }
 
 func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, dstIno *Ino, cmode uint8, cumask uint16, count *uint64, top bool, concurrent chan struct{}) syscall.Errno {
-	ino, err := m.nextInode()
+	ino, err := m.nextInode(ctx)
 	if err != nil {
 		return errno(err)
 	}
