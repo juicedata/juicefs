@@ -60,11 +60,11 @@ $ juicefs changelog apply redis://src redis://dst --dry-run`,
 Apply metadata changes recorded in the changelog of SRC-META-URL to DST-META-URL, to keep the
 latter as an incrementally synchronized copy of the former.
 
-The destination volume must be a copy of the source created with "juicefs dump --binary" and
+The destination volume must be a copy of the source created with "juicefs dump" and
 "juicefs load", and both volumes must share the same object storage: the changelog only carries
 metadata, never file data.
 
-Use --backup to read lastChangelog and the rewind deduplication entries from the binary
+Use --backup to read lastChangelog and the rewind deduplication entries from the JSON or binary
 backup used to create the destination. When specified, its lastChangelog overrides --from.
 
 Only one apply process may write to the destination. Do not mount it for writes while applying.
@@ -80,7 +80,7 @@ $ juicefs changelog apply redis://src redis://dst --dry-run --from 100`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "backup",
-				Usage: "apply: path to the baseline binary backup (overrides --from)",
+				Usage: "apply: path to the baseline JSON or binary backup (overrides --from)",
 			},
 			&cli.Int64Flag{
 				Name:  "from",
@@ -159,7 +159,7 @@ func changelogApply(ctx *cli.Context) error {
 			defer r.Close()
 			backupReader, ok := r.(io.ReadSeeker)
 			if !ok {
-				fp, err := os.CreateTemp("", "juicefs-changelog-backup-*.bin")
+				fp, err := os.CreateTemp("", "juicefs-changelog-backup-*")
 				if err != nil {
 					return nil, err
 				}
