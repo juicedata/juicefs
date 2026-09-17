@@ -1431,7 +1431,7 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 			return syscall.EIO
 		}
 		target = []byte(rs[1].(string))
-		if !m.atimeNeedsUpdate(attr, now) {
+		if !m.atimeNeedsUpdate(ctx, attr, now) {
 			atime = attr.Atime*int64(time.Second) + int64(attr.Atimensec)
 			return nil
 		}
@@ -5899,7 +5899,7 @@ func (m *redisMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Ti
 			return err
 		}
 		m.parseAttr(a, attr)
-		if !isApplyMode(ctx) && !m.atimeNeedsUpdate(attr, now) {
+		if !m.atimeNeedsUpdate(ctx, attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()

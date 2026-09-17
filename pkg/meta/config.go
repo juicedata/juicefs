@@ -73,6 +73,10 @@ func (c *Config) SelfCheck() {
 		logger.Warnf("heartbeat should not be greater than 10 minutes")
 		c.Heartbeat = time.Minute * 10
 	}
+	if c.ReadOnly {
+		logger.Warnf("Read-only mode enabled, background compaction will be disabled")
+		c.NoCompact = true
+	}
 }
 
 type Format struct {

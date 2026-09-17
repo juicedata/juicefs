@@ -1414,7 +1414,7 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 			return syscall.EIO
 		}
 		target = rs[1]
-		if !m.atimeNeedsUpdate(attr, now) {
+		if !m.atimeNeedsUpdate(ctx, attr, now) {
 			atime = attr.Atime*int64(time.Second) + int64(attr.Atimensec)
 			return nil
 		}
@@ -4829,7 +4829,7 @@ func (m *kvMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, attr)
-		if !isApplyMode(ctx) && !m.atimeNeedsUpdate(attr, now) {
+		if !m.atimeNeedsUpdate(ctx, attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()

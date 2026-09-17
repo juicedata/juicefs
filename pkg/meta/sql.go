@@ -1807,7 +1807,7 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 		}
 		m.parseAttr(&nodeAttr, attr)
 		target = l.Target
-		if !m.atimeNeedsUpdate(attr, now) {
+		if !m.atimeNeedsUpdate(ctx, attr, now) {
 			atime = attr.Atime*int64(time.Second) + int64(attr.Atimensec)
 			return nil
 		}
@@ -5942,7 +5942,7 @@ func (m *dbMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 			return syscall.ENOENT
 		}
 		m.parseAttr(&curNode, attr)
-		if !isApplyMode(ctx) && !m.atimeNeedsUpdate(attr, now) {
+		if !m.atimeNeedsUpdate(ctx, attr, now) {
 			return nil
 		}
 		curNode.setAtime(now.UnixNano())

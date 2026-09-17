@@ -1776,7 +1776,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 			// ctime and mtime are ignored since symlink can't be modified
 			atime := int64(binary.BigEndian.Uint64(buf[:8]))
 			attr := &Attr{Atime: atime / int64(time.Second), Atimensec: uint32(atime % int64(time.Second))}
-			if !m.atimeNeedsUpdate(attr, time.Now()) {
+			if !m.atimeNeedsUpdate(ctx, attr, time.Now()) {
 				*path = buf[8:]
 				return 0
 			}
@@ -2042,7 +2042,7 @@ func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
 		}
 	}
 	now := time.Now()
-	if attr.Full && !m.atimeNeedsUpdate(attr, now) {
+	if attr.Full && !m.atimeNeedsUpdate(ctx, attr, now) {
 		return
 	}
 
