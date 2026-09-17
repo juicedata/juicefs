@@ -419,9 +419,8 @@ func dumpResult(ctx context.Context, ch chan<- *dumpedResult, res *dumpedResult)
 }
 
 type LoadOption struct {
-	Threads         int
-	Progress        func(name string, cnt int)
-	rebuildCounters bool // set by prepareLoad, redis doesn't rebuild counters for now
+	Threads  int
+	Progress func(name string, cnt int)
 }
 
 func (opt *LoadOption) check() {
@@ -430,7 +429,7 @@ func (opt *LoadOption) check() {
 	}
 }
 
-func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counter) bool {
+func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counter, seenInodes map[uint64]struct{}) bool {
 	recordInode := func(inode uint64) {
 		if Ino(inode) < TrashInode {
 			c.NextInode = max(c.NextInode, int64(inode)+1)
@@ -458,7 +457,14 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counte
 		return true
 	case segTypeNode:
 		var attr Attr
-		for _, node := range seg.val.(*pb.Batch).Nodes {
+		batch := seg.val.(*pb.Batch)
+		nodes := batch.Nodes[:0]
+		for _, node := range batch.Nodes {
+			if _, ok := seenInodes[node.Inode]; ok {
+				continue
+			}
+			seenInodes[node.Inode] = struct{}{}
+			nodes = append(nodes, node)
 			recordInode(node.Inode)
 			if Ino(node.Inode) != RootInode && Ino(node.Inode) != TrashInode {
 				attr.Unmarshal(node.Data)
@@ -466,6 +472,7 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counte
 				c.UsedInodes++
 			}
 		}
+		batch.Nodes = nodes
 	case segTypeChunk:
 		for _, chunk := range seg.val.(*pb.Batch).Chunks {
 			recordInode(chunk.Inode)

@@ -4084,6 +4084,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	}
 
 	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
+	seenInodes := make(map[uint64]struct{})
 	var counters []*pb.Counter
 	bak := &BakFormat{}
 
@@ -4103,10 +4104,8 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
-				if opt.rebuildCounters {
-					batch := loaded.toBatch(counters)
-					sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
-				}
+				batch := loaded.toBatch(counters)
+				sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
 				close(taskCh)
 				break
 			}
@@ -4115,7 +4114,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			return err
 		}
 
-		if opt.rebuildCounters && loaded.updateFromSegment(seg, &counters) {
+		if loaded.updateFromSegment(seg, &counters, seenInodes) {
 			continue
 		}
 

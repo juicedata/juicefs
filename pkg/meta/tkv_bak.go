@@ -767,6 +767,7 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	go workerFunc(ctx, taskCh)
 
 	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
+	seenInodes := make(map[uint64]struct{})
 	var counters []*pb.Counter
 	bak := &BakFormat{}
 
@@ -795,7 +796,7 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			wg.Wait()
 			return err
 		}
-		if loaded.updateFromSegment(seg, &counters) {
+		if loaded.updateFromSegment(seg, &counters, seenInodes) {
 			continue
 		}
 
