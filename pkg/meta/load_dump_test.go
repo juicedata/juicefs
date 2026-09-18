@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -530,6 +532,7 @@ func loadDuplicateBackup(t *testing.T, m Meta) {
 func checkSQLDuplicateBackup(t *testing.T, m *dbMeta) {
 	t.Helper()
 	loadDuplicateBackup(t, m)
+	t.Cleanup(func() { _ = m.Reset() })
 	for name, bean := range map[string]interface{}{
 		"node":     &node{},
 		"edge":     &edge{},
@@ -546,11 +549,19 @@ func checkSQLDuplicateBackup(t *testing.T, m *dbMeta) {
 			t.Fatalf("%s count: got %d, want 1", name, count)
 		}
 	}
+	if err := m.loadXattrs(Background(), &pb.Batch{Xattrs: []*pb.Xattr{{Inode: 4, Name: "user.empty"}}}); err != nil {
+		t.Fatalf("load empty xattr: %s", err)
+	}
+	var empty xattr
+	if ok, err := m.db.Where("inode = ?", 4).Get(&empty); err != nil || !ok || len(empty.Value) != 0 {
+		t.Fatalf("empty xattr: %+v, found %v, err %v", empty, ok, err)
+	}
+	checkSQLIgnoredRows(t, m)
 }
 
 func TestLoadMetaV2DuplicateRecords(t *testing.T) {
 	t.Run("sqlite", func(t *testing.T) {
-		client, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "duplicate.db"), testConfig())
+		client, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "duplicate.db")+"?table_prefix=backup", testConfig())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -627,32 +638,144 @@ func TestLoadMetaV2ConflictingDuplicateRecord(t *testing.T) {
 	if err = m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
-	if err = m.LoadMetaV2(Background(), bytes.NewReader(duplicateBackup(t, true)), &LoadOption{Threads: 10}); err == nil {
-		t.Fatal("load conflicting duplicate record succeeded")
+	if err = m.LoadMetaV2(Background(), bytes.NewReader(duplicateBackup(t, true)), &LoadOption{Threads: 10}); err != nil {
+		t.Fatalf("load conflicting duplicate record: %s", err)
+	}
+	got := node{Inode: 2}
+	if ok, err := m.db.Get(&got); err != nil || !ok || got.Mode != 0644 || got.Length != 4096 {
+		t.Fatalf("existing node changed: %+v, found %v, err %v", got, ok, err)
 	}
 }
 
-func TestInsertRowsIdempotentPreservesBeans(t *testing.T) {
-	client, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "duplicate-beans.db"), testConfig())
+func checkSQLIgnoredRows(t *testing.T, m *dbMeta) {
+	t.Helper()
+	tests := []struct {
+		name string
+		row  func(Ino) interface{}
+	}{
+		{"node", func(ino Ino) interface{} {
+			return &node{Inode: ino, Type: TypeFile, Flags: 1, Mode: 0640, Uid: 1001, Gid: 1002,
+				Atime: -100, Mtime: 200, Ctime: 300, Atimensec: 123, Mtimensec: 456, Ctimensec: 789,
+				Nlink: 2, Length: 1 << 33, Rdev: 17, Parent: 1, AccessACLId: 7, DefaultACLId: 8, Tier: 2}
+		}},
+		{"edge", func(ino Ino) interface{} {
+			return &edge{Parent: 1, Name: []byte(fmt.Sprintf("file-%d\xff\n", ino)), Inode: ino, Type: TypeFile}
+		}},
+		{"chunk", func(ino Ino) interface{} {
+			return &chunk{Inode: ino, Indx: 2, Slices: marshalSlice(0, 11, 4096, 0, 4096)}
+		}},
+		{"symlink", func(ino Ino) interface{} { return &symlink{Inode: ino, Target: []byte("target\xff")} }},
+		{"xattr", func(ino Ino) interface{} { return &xattr{Inode: ino, Name: "user.empty", Value: []byte{}} }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const first Ino = 100
+			n := m.getTxnBatchNum() + 1
+			rows := make([]interface{}, 0, n+2)
+			for i := 0; i < n; i++ {
+				rows = append(rows, tt.row(first+Ino(i)))
+				if i == 0 {
+					rows = append(rows, tt.row(first))
+				}
+			}
+			rows = append(rows, tt.row(first))
+			if err := m.insertRowsIdempotent(rows); err != nil {
+				t.Fatal(err)
+			}
+			// Keep the existing row even when the incoming contents differ.
+			conflict := tt.row(first)
+			switch v := conflict.(type) {
+			case *node:
+				v.Mode = 0600
+			case *edge:
+				v.Inode = 99999
+			case *chunk:
+				v.Slices = marshalSlice(0, 12, 4096, 0, 4096)
+			case *symlink:
+				v.Target = []byte("other")
+			case *xattr:
+				v.Value = []byte("other")
+			}
+			if err := m.insertRowsIdempotent([]interface{}{conflict}); err != nil {
+				t.Fatal(err)
+			}
+			const workers = 4
+			start := make(chan struct{})
+			errs := make(chan error, workers)
+			for i := 0; i < workers; i++ {
+				go func(i int) {
+					<-start
+					errs <- m.insertRowsIdempotent([]interface{}{tt.row(first), tt.row(first + Ino(n+i)), tt.row(first + Ino(n+workers))})
+				}(i)
+			}
+			close(start)
+			for i := 0; i < workers; i++ {
+				if err := <-errs; err != nil {
+					t.Fatal(err)
+				}
+			}
+			count, err := m.db.Where("inode >= ?", first).Count(reflect.New(reflect.TypeOf(tt.row(first)).Elem()).Interface())
+			if err != nil || count != int64(n+workers+1) {
+				t.Fatalf("count: got %d, want %d, err %v", count, n+workers+1, err)
+			}
+			for _, ino := range []Ino{first, first + Ino(n-1), first + Ino(n+workers-1)} {
+				want := tt.row(ino)
+				got := reflect.New(reflect.TypeOf(want).Elem()).Interface()
+				if ok, err := m.db.Where("inode = ?", ino).Get(got); err != nil || !ok {
+					t.Fatalf("get inode %d: found %v, err %v", ino, ok, err)
+				}
+				gv, wv := reflect.ValueOf(got).Elem(), reflect.ValueOf(want).Elem()
+				for j := 0; j < wv.NumField(); j++ {
+					if wv.Type().Field(j).Name == "Id" {
+						continue
+					}
+					g, w := gv.Field(j).Interface(), wv.Field(j).Interface()
+					if wb, ok := w.([]byte); ok {
+						if !bytes.Equal(g.([]byte), wb) {
+							t.Fatalf("%s: got %v, want %v", wv.Type().Field(j).Name, g, w)
+						}
+					} else if !reflect.DeepEqual(g, w) {
+						t.Fatalf("%s: got %v, want %v", wv.Type().Field(j).Name, g, w)
+					}
+				}
+			}
+			for _, row := range rows {
+				if id := reflect.ValueOf(row).Elem().FieldByName("Id"); id.IsValid() && id.Int() != 0 {
+					t.Fatalf("input row ID was changed: %v", row)
+				}
+			}
+		})
+	}
+}
+
+func TestInsertRowsIdempotentLogs(t *testing.T) {
+	client, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "duplicate-logs.db")+"?table_prefix=backup", testConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
 	m := client.(*dbMeta)
 	t.Cleanup(func() { _ = m.Shutdown() })
-	if err = m.Reset(); err != nil {
-		t.Fatalf("reset meta: %s", err)
-	}
 	if err = m.prepareLoad(Background(), &LoadOption{}); err != nil {
-		t.Fatalf("prepare load: %s", err)
+		t.Fatal(err)
 	}
-
-	first := &edge{Parent: 1, Name: []byte("file"), Inode: 2, Type: TypeFile}
-	second := &edge{Parent: 1, Name: []byte("file"), Inode: 2, Type: TypeFile}
-	if err = m.insertRowsIdempotent([]interface{}{first, second}); err != nil {
-		t.Fatalf("insert duplicate rows: %s", err)
+	hooks := logger.ReplaceHooks(make(logrus.LevelHooks))
+	t.Cleanup(func() { logger.ReplaceHooks(hooks) })
+	hook := logtest.NewLocal(&logger.Logger)
+	first := &xattr{Inode: 2, Name: "user.secret", Value: []byte("secret")}
+	second := &xattr{Inode: 3, Name: "user.secret", Value: []byte{}}
+	if err = m.insertRowsIdempotent([]interface{}{first}); err != nil {
+		t.Fatal(err)
 	}
-	if first.Id != 0 || second.Id != 0 {
-		t.Fatalf("input rows were mutated: first ID %d, second ID %d", first.Id, second.Id)
+	if len(hook.AllEntries()) != 0 {
+		t.Fatalf("unexpected log for unique rows: %v", hook.AllEntries())
+	}
+	if err = m.insertRowsIdempotent([]interface{}{first, second, first}); err != nil {
+		t.Fatal(err)
+	}
+	entries := hook.AllEntries()
+	want := "Load backup rows: table=jfs_backup_xattr submitted=3 inserted=1 skipped=2"
+	if len(entries) != 1 || entries[0].Level != logrus.WarnLevel || entries[0].Message != want {
+		t.Fatalf("unexpected skipped-row logs: %v", entries)
 	}
 }
 
@@ -682,6 +805,28 @@ func TestRedisLoadMetaV2DuplicateRecords(t *testing.T) {
 	if parent != 2 {
 		t.Fatalf("parent count: got %d, want 2", parent)
 	}
+	multi := append(marshalSlice(0, 21, 4096, 0, 2048), marshalSlice(2048, 22, 4096, 0, 2048)...)
+	batch := &pb.Batch{}
+	for i := 0; i <= redisPipeLimit; i++ {
+		batch.Chunks = append(batch.Chunks, &pb.Chunk{Inode: 4, Index: uint32(i), Slices: multi})
+	}
+	batch.Chunks = append(batch.Chunks, batch.Chunks[0])
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() { errs <- m.loadChunks(Background(), batch) }()
+	}
+	for i := 0; i < 2; i++ {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i <= redisPipeLimit; i++ {
+		got, err := m.rdb.LRange(Background(), m.chunkKey(4, uint32(i)), 0, -1).Result()
+		if err != nil || len(got) != 2 || strings.Join(got, "") != string(multi) {
+			t.Fatalf("chunk %d: %v, err %v", i, got, err)
+		}
+	}
+
 }
 
 func TestLoadDumpSlow(t *testing.T) { //skip mutate

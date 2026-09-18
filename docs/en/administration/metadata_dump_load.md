@@ -107,6 +107,8 @@ juicefs load redis://192.168.1.6:6379 meta-dump
 juicefs load redis://192.168.1.6:6379 meta-dump --binary
 ```
 
+Binary backups may contain repeated records, for example when Redis `SCAN` returns the same key more than once. When loading nodes, directory entries, chunks, symlinks, and extended attributes into SQLite, MySQL, or PostgreSQL, JuiceFS skips duplicate keys and logs the submitted, inserted, and skipped counts for each affected batch. Existing records are retained without comparing their contents; concurrent loading does not guarantee which occurrence is kept. MySQL uses `INSERT IGNORE`, which can also convert some invalid values into warnings.
+
 Once imported, JuiceFS will recalculate the file system statistics including space usage, inode counters, and eventually generates a globally consistent metadata in the database. If you have a deep understanding of the metadata design of JuiceFS, you can also modify the metadata backup file before restoring to debug.
 
 The dump file is written in an uniform format, which can be recognized and imported by all metadata engines, making it easy to migrate to other types of metadata engines.

@@ -20,11 +20,9 @@
 package meta
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -905,104 +903,90 @@ func (m *dbMeta) insertRows(beans []interface{}) error {
 }
 
 func (m *dbMeta) insertRowsIdempotent(beans []interface{}) error {
+	if len(beans) == 0 {
+		return nil
+	}
+	blob := func(b []byte) []byte {
+		if b == nil {
+			return []byte{}
+		}
+		return b
+	}
+	var columns string
+	var values func(interface{}) []interface{}
+	switch beans[0].(type) {
+	case *node:
+		columns = "inode,type,flags,mode,uid,gid,atime,mtime,ctime,atimensec,mtimensec,ctimensec,nlink,length,rdev,parent,access_acl_id,default_acl_id,tier_id"
+		values = func(bean interface{}) []interface{} {
+			n := bean.(*node)
+			return []interface{}{n.Inode, n.Type, n.Flags, n.Mode, n.Uid, n.Gid, n.Atime, n.Mtime, n.Ctime,
+				n.Atimensec, n.Mtimensec, n.Ctimensec, n.Nlink, n.Length, n.Rdev, n.Parent, n.AccessACLId, n.DefaultACLId, n.Tier}
+		}
+	case *edge:
+		columns = "parent,name,inode,type"
+		values = func(bean interface{}) []interface{} {
+			e := bean.(*edge)
+			return []interface{}{e.Parent, blob(e.Name), e.Inode, e.Type}
+		}
+	case *chunk:
+		columns = "inode,indx,slices"
+		values = func(bean interface{}) []interface{} {
+			c := bean.(*chunk)
+			return []interface{}{c.Inode, c.Indx, blob(c.Slices)}
+		}
+	case *symlink:
+		columns = "inode,target"
+		values = func(bean interface{}) []interface{} {
+			s := bean.(*symlink)
+			return []interface{}{s.Inode, blob(s.Target)}
+		}
+	case *xattr:
+		columns = "inode,name,value"
+		values = func(bean interface{}) []interface{} {
+			x := bean.(*xattr)
+			return []interface{}{x.Inode, x.Name, blob(x.Value)}
+		}
+	default:
+		return fmt.Errorf("unsupported backup record type %T", beans[0])
+	}
+	cols := strings.Split(columns, ",")
+	for i := range cols {
+		cols[i] = m.db.Quote(cols[i])
+	}
+	table := m.db.TableName(beans[0])
+	prefix, suffix := "INSERT INTO ", " ON CONFLICT DO NOTHING"
+	if m.Name() == "mysql" {
+		prefix, suffix = "INSERT IGNORE INTO ", ""
+	}
+	prefix += m.db.Quote(table) + " (" + strings.Join(cols, ",") + ") VALUES "
+	placeholder := "(" + strings.TrimSuffix(strings.Repeat("?,", len(cols)), ",") + ")"
 	batch := m.getTxnBatchNum()
 	for len(beans) > 0 {
 		bs := min(batch, len(beans))
+		args := make([]interface{}, 1, 1+bs*len(cols))
+		args[0] = prefix + strings.TrimSuffix(strings.Repeat(placeholder+",", bs), ",") + suffix
+		for _, bean := range beans[:bs] {
+			args = append(args, values(bean)...)
+		}
+		var inserted int64
 		err := m.txn(func(s *xorm.Session) error {
-			const savepoint = "load_duplicate"
-			if _, err := s.Exec("SAVEPOINT " + savepoint); err != nil {
+			result, err := s.Exec(args...)
+			if err != nil {
 				return err
 			}
-			n, err := s.Insert(beans[:bs])
-			if err == nil {
-				if int(n) != bs {
-					return fmt.Errorf("only %d records inserted", n)
-				}
-				_, err = s.Exec("RELEASE SAVEPOINT " + savepoint)
-				return err
-			}
-			if !isDuplicateEntryErr(err) {
-				return err
-			}
-			if _, err = s.Exec("ROLLBACK TO SAVEPOINT " + savepoint); err != nil {
-				return err
-			}
-			if _, err = s.Exec("RELEASE SAVEPOINT " + savepoint); err != nil {
-				return err
-			}
-			for _, bean := range beans[:bs] {
-				if err = m.insertDuplicateRow(s, savepoint, bean); err != nil {
-					return err
-				}
-			}
-			return nil
+			inserted, err = result.RowsAffected()
+			return err
 		})
 		if err != nil {
 			logger.Errorf("Write %d beans: %s", bs, err)
 			return err
 		}
+		if inserted < int64(bs) {
+			logger.Warnf("Load backup rows: table=%s submitted=%d inserted=%d skipped=%d", table, bs, inserted, int64(bs)-inserted)
+		}
 		beans = beans[bs:]
 	}
 	return nil
-}
-
-func (m *dbMeta) insertDuplicateRow(s *xorm.Session, savepoint string, bean interface{}) error {
-	if _, err := s.Exec("SAVEPOINT " + savepoint); err != nil {
-		return err
-	}
-	value := reflect.ValueOf(bean).Elem()
-	cloned := reflect.New(value.Type())
-	cloned.Elem().Set(value)
-	n, err := s.Insert(cloned.Interface())
-	if err == nil {
-		if n != 1 {
-			return fmt.Errorf("only %d records inserted", n)
-		}
-		_, err = s.Exec("RELEASE SAVEPOINT " + savepoint)
-		return err
-	}
-	if !isDuplicateEntryErr(err) {
-		return err
-	}
-	if _, err = s.Exec("ROLLBACK TO SAVEPOINT " + savepoint); err != nil {
-		return err
-	}
-	same, err := sameBackupRow(s, bean)
-	if err != nil {
-		return err
-	}
-	if !same {
-		return fmt.Errorf("conflicting duplicate backup record %T", bean)
-	}
-	_, err = s.Exec("RELEASE SAVEPOINT " + savepoint)
-	return err
-}
-
-func sameBackupRow(s *xorm.Session, bean interface{}) (bool, error) {
-	switch want := bean.(type) {
-	case *node:
-		got := node{Inode: want.Inode}
-		ok, err := s.Get(&got)
-		return ok && got == *want, err
-	case *edge:
-		got := edge{}
-		ok, err := s.Where("parent = ? AND name = ?", want.Parent, want.Name).Get(&got)
-		return ok && got.Parent == want.Parent && bytes.Equal(got.Name, want.Name) && got.Inode == want.Inode && got.Type == want.Type, err
-	case *chunk:
-		got := chunk{}
-		ok, err := s.Where("inode = ? AND indx = ?", want.Inode, want.Indx).Get(&got)
-		return ok && got.Inode == want.Inode && got.Indx == want.Indx && bytes.Equal(got.Slices, want.Slices), err
-	case *symlink:
-		got := symlink{Inode: want.Inode}
-		ok, err := s.Get(&got)
-		return ok && got.Inode == want.Inode && bytes.Equal(got.Target, want.Target), err
-	case *xattr:
-		got := xattr{}
-		ok, err := s.Where("inode = ? AND name = ?", want.Inode, want.Name).Get(&got)
-		return ok && got.Inode == want.Inode && got.Name == want.Name && bytes.Equal(got.Value, want.Value), err
-	default:
-		return false, fmt.Errorf("unsupported backup record type %T", bean)
-	}
 }
 
 func (m *dbMeta) prepareLoad(ctx Context, opt *LoadOption) error {
