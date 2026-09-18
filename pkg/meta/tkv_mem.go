@@ -242,7 +242,7 @@ func (c *memKV) txn(ctx context.Context, f func(*kvTxn) error, retry int) error 
 		observed: make(map[string]int),
 		buffer:   make(map[string][]byte),
 	}
-	if err := f(&kvTxn{tx, retry}); err != nil {
+	if err := f(&kvTxn{kvtxn: tx, retry: retry}); err != nil {
 		return err
 	}
 

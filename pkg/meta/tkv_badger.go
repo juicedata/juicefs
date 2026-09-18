@@ -194,7 +194,7 @@ func (c *badgerClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retr
 			}
 		}
 	}()
-	return f(&kvTxn{tx, retry})
+	return f(&kvTxn{kvtxn: tx, retry: retry})
 }
 
 func (c *badgerClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
@@ -210,7 +210,7 @@ func (c *badgerClient) txn(ctx context.Context, f func(*kvTxn) error, retry int)
 			}
 		}
 	}()
-	err = f(&kvTxn{tx, retry})
+	err = f(&kvTxn{kvtxn: tx, retry: retry})
 	if err != nil {
 		return err
 	}

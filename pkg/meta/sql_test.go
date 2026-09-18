@@ -26,11 +26,126 @@ import (
 	"path"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"xorm.io/xorm"
 	xormlog "xorm.io/xorm/log"
 )
+
+func TestSQLACLTransactionRollback(t *testing.T) {
+	for _, retry := range []bool{true, false} {
+		t.Run(fmt.Sprintf("retry=%v", retry), func(t *testing.T) {
+			raw, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "acl.db"), testConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := raw.(*dbMeta)
+			t.Cleanup(func() { _ = m.Shutdown() })
+			format := testFormat()
+			format.EnableACL = true
+			if err := m.Init(format, true); err != nil {
+				t.Fatal(err)
+			}
+			ctx := Background()
+			var inode Ino
+			if st := m.Create(ctx, RootInode, "child", 0666, 022, 0, &inode, nil); st != 0 {
+				t.Fatal(st)
+			}
+			rule := &aclAPI.Rule{Owner: 6, Group: 5, Mask: 4, Other: 0, NamedUsers: []aclAPI.Entry{{Id: 1001, Perm: 4}}}
+			attempts := 0
+			var id uint32
+			setACL := func(s *xorm.Session) error {
+				attempts++
+				var err error
+				id, err = m.insertACL(s, rule)
+				if err != nil {
+					return err
+				}
+				if m.aclCache.GetId(rule) != aclAPI.None {
+					t.Error("uncommitted ACL is visible to other transactions")
+				}
+				if _, err := s.Cols("access_acl_id").Update(&node{AccessACLId: id}, &node{Inode: inode}); err != nil {
+					return err
+				}
+				if attempts == 1 {
+					if retry {
+						return errBusy
+					}
+					return syscall.EIO
+				}
+				return nil
+			}
+			err = m.txn(setACL, inode)
+			if !retry {
+				if err != syscall.EIO {
+					t.Fatalf("first transaction: %v", err)
+				}
+				err = m.txn(setACL, inode)
+			}
+			if err != nil || attempts != 2 {
+				t.Fatalf("transaction: %v, attempts: %d", err, attempts)
+			}
+			if m.aclCache.GetId(rule) != id {
+				t.Fatal("committed ACL was not cached")
+			}
+			m.aclCache.Clear()
+			var attr Attr
+			if st := m.GetAttr(ctx, inode, &attr); st != 0 || attr.AccessACL != id {
+				t.Fatalf("getattr: %s, ACL: %d, want %d", st, attr.AccessACL, id)
+			}
+			var got aclAPI.Rule
+			if st := m.GetFacl(ctx, inode, aclAPI.TypeAccess, &got); st != 0 {
+				t.Fatalf("getfacl after rollback and cache clear: %s", st)
+			}
+			if !got.IsEqual(rule) {
+				t.Fatalf("ACL: %s, want %s", &got, rule)
+			}
+		})
+	}
+}
+
+func TestSQLACLCacheMissingRecord(t *testing.T) {
+	raw, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "acl.db"), testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := raw.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatal(err)
+	}
+	rule := &aclAPI.Rule{Owner: 6, Group: 5, Mask: 4, Other: 0, NamedUsers: []aclAPI.Entry{{Id: 1001, Perm: 4}}}
+	// ACL IDs can commit out of order across concurrent transactions.
+	val := newSQLAcl(rule)
+	val.Id = 2
+	if _, err := m.db.Insert(val); err != nil {
+		t.Fatal(err)
+	}
+	m.aclCache.Put(val.Id, rule)
+	if err := m.txn(m.tryLoadMissACLs); err != nil {
+		t.Fatal(err)
+	}
+	if m.aclCache.Get(1) != nil {
+		t.Error("missing ACL was cached before it committed")
+	}
+	val = newSQLAcl(rule)
+	val.Id = 1
+	if _, err := m.db.Insert(val); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.txn(func(s *xorm.Session) error {
+		got, err := m.getACL(s, 1)
+		if err == nil && !got.IsEqual(rule) {
+			t.Errorf("ACL: %s, want %s", got, rule)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestSQLQueryBatch(t *testing.T) {
 	queryErr := errors.New("query failed")
