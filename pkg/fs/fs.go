@@ -1582,7 +1582,7 @@ func (f *File) GetTreeSummary(ctx meta.Context, depth, entries uint8, strict boo
 	defer func() {
 		f.fs.log(l, "GetTreeSummary (%s,%d,%d,%t): %s (%d,%d,%d)", f.path, depth, entries, strict, errstr(err), s.Size, s.Files, s.Dirs)
 	}()
-	err = f.fs.m.GetTreeSummary(ctx, s, depth, entries, strict, nil)
+	err = f.fs.m.GetTreeSummary(ctx, s, depth, entries, strict, meta.SortBySize, nil)
 	s.Path = path.Base(f.path)
 	return
 }
