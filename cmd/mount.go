@@ -413,6 +413,9 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	} else {
 		chunkConf.Readahead = 8 * chunkConf.BlockSize
 	}
+	if c.IsSet("initial-readahead") {
+		chunkConf.InitReadahead = int(utils.ParseBytes(c, "initial-readahead", 'M'))
+	}
 
 	if chunkConf.UploadLimit == 0 {
 		chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
