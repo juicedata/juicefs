@@ -3196,12 +3196,13 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			}
 			if len(entryInfos) > 0 {
 				names := make([]string, 0, len(entryInfos))
-				inodes := make([]string, 0, len(entryInfos))
+				results := make([]string, 0, 2*len(entryInfos))
 				for _, info := range entryInfos {
 					names = append(names, logEncode2(string(info.e.Name)))
-					inodes = append(inodes, strconv.FormatUint(uint64(info.e.Inode), 10))
+					dnode := batchDelNodes[info.e.Inode]
+					results = append(results, strconv.FormatUint(uint64(info.e.Inode), 10), strconv.FormatBool(dnode != nil && dnode.opened))
 				}
-				m.genLog(ctx, s, now, "UNLINKBATCH(%d,%s,%d,%t):%s", parent, strings.Join(names, ","), trash, updateParent, strings.Join(inodes, ","))
+				m.genLog(ctx, s, now, "UNLINKBATCH(%d,%s,%d,%t):%s", parent, strings.Join(names, ","), trash, updateParent, strings.Join(results, ","))
 			}
 
 			return nil
