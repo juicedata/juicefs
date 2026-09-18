@@ -412,6 +412,7 @@ func testACL(t *testing.T, m Meta) {
 	assert.True(t, rule3.IsEqual(rule2))
 
 	// subdir access acl
+	m.getBase().aclCache.Clear()
 	rule3 = &aclAPI.Rule{}
 	if st := m.GetFacl(ctx, subDirIno, aclAPI.TypeAccess, rule3); st != 0 {
 		t.Fatalf("getfacl error: %s", st)

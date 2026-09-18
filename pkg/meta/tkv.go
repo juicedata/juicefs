@@ -83,7 +83,8 @@ type tkvClient interface {
 
 type kvTxn struct {
 	kvtxn
-	retry int
+	retry    int
+	onCommit func(func())
 }
 
 func (tx *kvTxn) deleteKeys(prefix []byte) {
@@ -1116,7 +1117,20 @@ func (m *kvMeta) txn(ctx Context, f func(tx *kvTxn) error, inodes ...Ino) error 
 			logger.Warnf("Transaction %s interrupted after %s, tried %d, inodes: %v", method.name(ctx), time.Since(start), i+1, inodes)
 			return syscall.EINTR
 		}
-		err := m.client.txn(ctx, f, i)
+		var callbacks []func()
+		err := m.client.txn(ctx, func(tx *kvTxn) error {
+			// Drivers may retry the callback internally, so keep only the last attempt.
+			callbacks = nil
+			tx.onCommit = func(callback func()) {
+				callbacks = append(callbacks, callback)
+			}
+			return f(tx)
+		}, i)
+		if err == nil {
+			for _, callback := range callbacks {
+				callback()
+			}
+		}
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
@@ -4939,9 +4953,19 @@ func (m *kvMeta) insertACL(tx *kvTxn, rule *aclAPI.Rule) (uint32, error) {
 		aclId = uint32(newId)
 
 		tx.set(m.aclKey(aclId), rule.Encode())
-		m.aclCache.Put(aclId, rule)
+		m.cacheACL(tx, aclId, rule.Dup())
 	}
 	return aclId, nil
+}
+
+func (m *kvMeta) cacheACL(tx *kvTxn, id uint32, rule *aclAPI.Rule) {
+	if tx.onCommit != nil {
+		// A transaction may be reading its own uncommitted ACL writes.
+		tx.onCommit(func() { m.aclCache.Put(id, rule) })
+	} else {
+		// Read paths outside m.txn only see committed ACLs.
+		m.aclCache.Put(id, rule)
+	}
 }
 
 func (m *kvMeta) tryLoadMissACLs(tx *kvTxn) error {
@@ -4954,11 +4978,13 @@ func (m *kvMeta) tryLoadMissACLs(tx *kvTxn) error {
 
 		acls := tx.gets(missKeys...)
 		for i, data := range acls {
-			var rule aclAPI.Rule
-			if len(data) > 0 {
-				rule.Decode(data)
+			// Missing records may belong to transactions that have not committed yet.
+			if len(data) == 0 {
+				continue
 			}
-			m.aclCache.Put(missIds[i], &rule)
+			var rule aclAPI.Rule
+			rule.Decode(data)
+			m.cacheACL(tx, missIds[i], &rule)
 		}
 	}
 	return nil
@@ -4979,7 +5005,7 @@ func (m *kvMeta) getACL(tx *kvTxn, id uint32) (*aclAPI.Rule, error) {
 
 	rule := &aclAPI.Rule{}
 	rule.Decode(val)
-	m.aclCache.Put(id, rule)
+	m.cacheACL(tx, id, rule)
 	return rule, nil
 }
 

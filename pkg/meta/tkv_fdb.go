@@ -79,7 +79,7 @@ func (c *fdbClient) config(key string) interface{} {
 // attempts to write will panic on the nil `write` field of fdbTxn.
 func (c *fdbClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
 	_, err = c.client.ReadTransact(func(t fdb.ReadTransaction) (interface{}, error) {
-		e := f(&kvTxn{&fdbTxn{ReadTransaction: t.Snapshot(), c: c}, retry})
+		e := f(&kvTxn{kvtxn: &fdbTxn{ReadTransaction: t.Snapshot(), c: c}, retry: retry})
 		return nil, e
 	})
 	return err
@@ -87,7 +87,7 @@ func (c *fdbClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry i
 
 func (c *fdbClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) error {
 	_, err := c.client.Transact(func(t fdb.Transaction) (interface{}, error) {
-		e := f(&kvTxn{&fdbTxn{ReadTransaction: t, write: t, c: c}, retry})
+		e := f(&kvTxn{kvtxn: &fdbTxn{ReadTransaction: t, write: t, c: c}, retry: retry})
 		return nil, e
 	})
 	return err
