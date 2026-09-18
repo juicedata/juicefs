@@ -2425,13 +2425,14 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 	return errno(err)
 }
 
-func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
+func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inheritMetadata bool, mode uint16, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
 	exchange := flags == RenameExchange
 	var opened bool
 	var trash, dino Ino
 	var dtyp uint8
 	var tattr Attr
 	var newSpace, newInode int64
+	var oldGid, newGid uint32
 	keys := []string{m.inodeKey(parentSrc), m.entryKey(parentSrc), m.inodeKey(parentDst), m.entryKey(parentDst)}
 	if parentSrc.IsTrash() {
 		// lock the parentDst
@@ -2620,6 +2621,19 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
 			return syscall.EACCES
 		}
+		if inheritMetadata {
+			if iattr.Typ != TypeFile {
+				return syscall.EINVAL
+			}
+			oldGid = iattr.Gid
+			if err := m.inheritFileAttr(ctx, &dattr, &iattr, mode,
+				func(id uint32) (*aclAPI.Rule, error) { return m.getACL(ctx, tx, id) },
+				func(rule *aclAPI.Rule) (uint32, error) { return m.insertACL(ctx, tx, rule) }); err != nil {
+				return err
+			}
+			newGid = iattr.Gid
+			m.runRenameMetadataConcurrencyHook(ctx)
+		}
 
 		if parentSrc != parentDst {
 			if typ == TypeDirectory {
@@ -2752,6 +2766,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, tattr.Uid, tattr.Gid, newSpace, newInode)
 		}
+	}
+	if err == nil && inheritMetadata && oldGid != newGid {
+		space := align4K(attr.Length)
+		m.updateUserGroupStat(ctx, 0, oldGid, -space, -1)
+		m.updateUserGroupStat(ctx, 0, newGid, space, 1)
 	}
 	return errno(err)
 }

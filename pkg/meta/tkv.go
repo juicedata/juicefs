@@ -2147,7 +2147,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 	return errno(err)
 }
 
-func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
+func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inheritMetadata bool, mode uint16, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parentDst, &trash); st != 0 {
 		return st
@@ -2158,6 +2158,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dtyp uint8
 	var tattr Attr
 	var newSpace, newInode int64
+	var oldGid, newGid uint32
 	parentLocks := []Ino{parentDst}
 	if !parentSrc.IsTrash() { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
 		parentLocks = append(parentLocks, parentSrc)
@@ -2219,6 +2220,19 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if parentSrc != parentDst && sattr.Mode&0o1000 != 0 && ctx.Uid() != 0 &&
 			ctx.Uid() != iattr.Uid && (ctx.Uid() != sattr.Uid || iattr.Typ == TypeDirectory) {
 			return syscall.EACCES
+		}
+		if inheritMetadata {
+			if iattr.Typ != TypeFile {
+				return syscall.EINVAL
+			}
+			oldGid = iattr.Gid
+			if err := m.inheritFileAttr(ctx, &dattr, &iattr, mode,
+				func(id uint32) (*aclAPI.Rule, error) { return m.getACL(tx, id) },
+				func(rule *aclAPI.Rule) (uint32, error) { return m.insertACL(tx, rule) }); err != nil {
+				return err
+			}
+			newGid = iattr.Gid
+			m.runRenameMetadataConcurrencyHook(ctx)
 		}
 
 		dbuf := rs[3]
@@ -2436,6 +2450,11 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, tattr.Uid, tattr.Gid, newSpace, newInode)
 		}
+	}
+	if err == nil && inheritMetadata && oldGid != newGid {
+		space := align4K(attr.Length)
+		m.updateUserGroupStat(ctx, 0, oldGid, -space, -1)
+		m.updateUserGroupStat(ctx, 0, newGid, space, 1)
 	}
 	return errno(err)
 }

@@ -209,6 +209,12 @@ func testMeta(t *testing.T, m Meta) {
 	testClone(t, m)
 	testBatchClone(t, m)
 	testACL(t, m)
+	testRenameWithInheritedMetadata(t, m)
+	testRenameWithInheritedMetadataVariants(t, m)
+	testRenamePreservesMetadata(t, m)
+	testRenameWithInheritedMetadataOverwrite(t, m)
+	testConcurrentRenameWithInheritedMetadata(t, m)
+	testRenameWithInheritedMetadataQuota(t, m)
 	testKerberosToken(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
@@ -6798,5 +6804,670 @@ func TestRedisLockIndexRelease(t *testing.T) {
 	}
 	if lockedLists(r1, inode) {
 		t.Fatalf("locked$%d still lists plock inode after last owner released", r1.sid)
+	}
+}
+
+// testRenameWithInheritedMetadata verifies that a staged file receives the
+// destination directory's GID and extended access ACL when it is committed.
+func testRenameWithInheritedMetadata(t *testing.T, m Meta) {
+	t.Helper()
+	ctx := Background()
+	const (
+		targetName = "rename-inherit-target"
+		stageName  = "rename-inherit-stage"
+	)
+
+	// The target directory has a different GID and a default ACL. The staged
+	// file is created elsewhere to model a gateway upload before it is committed.
+	defaultRule := &aclAPI.Rule{
+		Owner: 6,
+		Group: 0,
+		Mask:  0,
+		Other: 0,
+		NamedUsers: []aclAPI.Entry{{
+			Id:   1001,
+			Perm: 0,
+		}},
+	}
+	targetIno := setupRenameInheritanceTarget(t, m, targetName, defaultRule)
+	stageIno := createRenameStage(t, m, stageName)
+	defer func() {
+		_ = m.Unlink(ctx, targetIno, "result")
+		_ = m.Unlink(ctx, RootInode, stageName)
+		_ = m.Rmdir(ctx, RootInode, targetName)
+	}()
+
+	// The special rename should apply the destination directory's metadata to
+	// the staged file as part of the commit.
+	if st := m.RenameWithInheritedMetadata(ctx, RootInode, stageName, targetIno, "result", 0, 0666, nil, nil); st != 0 {
+		t.Fatalf("rename with inherited metadata: %s", st)
+	}
+
+	// Verify both the effective mode/GID and the materialized access ACL.
+	var attr Attr
+	if st := m.GetAttr(ctx, stageIno, &attr); st != 0 {
+		t.Fatalf("get result attr: %s", st)
+	}
+	wantACL := defaultRule.ChildAccessACL(0666)
+	gotACL := &aclAPI.Rule{}
+	if st := m.GetFacl(ctx, stageIno, aclAPI.TypeAccess, gotACL); st != 0 {
+		t.Fatalf("get result access acl: %s", st)
+	}
+	if attr.Gid != 2468 || attr.Mode&07777 != wantACL.GetMode() || !gotACL.IsEqual(wantACL) {
+		t.Fatalf("inherited metadata mismatch: mode=%#o gid=%d acl=%s, want mode=%#o gid=%d acl=%s",
+			attr.Mode&07777, attr.Gid, gotACL, wantACL.GetMode(), 2468, wantACL)
+	}
+}
+
+func setupRenameInheritanceTarget(t *testing.T, m Meta, name string, defaultRule *aclAPI.Rule) Ino {
+	t.Helper()
+	ctx := Background()
+	var target Ino
+	// The setgid bit makes the destination GID observable during inheritance;
+	// defaultRule is optional so callers can exercise both ACL and non-ACL cases.
+	if st := m.Mkdir(ctx, RootInode, name, 02770, 0, 0, &target, nil); st != 0 {
+		t.Fatalf("mkdir target %s: %s", name, st)
+	}
+	if st := m.SetAttr(ctx, target, SetAttrGID, 0, &Attr{Gid: 2468}); st != 0 {
+		t.Fatalf("set target %s gid: %s", name, st)
+	}
+	if st := m.SetAttr(ctx, target, SetAttrMode, 0, &Attr{Mode: 02770}); st != 0 {
+		t.Fatalf("set target %s mode: %s", name, st)
+	}
+	if defaultRule != nil {
+		if st := m.SetFacl(ctx, target, aclAPI.TypeDefault, defaultRule.Dup()); st != 0 {
+			t.Fatalf("set target %s default acl: %s", name, st)
+		}
+	}
+	return target
+}
+
+func createRenameStage(t *testing.T, m Meta, name string) Ino {
+	t.Helper()
+	ctx := Background()
+	var inode Ino
+	// Keep this helper representative of an uploaded/staged regular file: it is
+	// created outside the destination directory and carries no destination ACL.
+	if st := m.Create(ctx, RootInode, name, 0666, 022, 0, &inode, nil); st != 0 {
+		t.Fatalf("create staged file %s: %s", name, st)
+	}
+	if st := m.Close(ctx, inode); st != 0 {
+		t.Fatalf("close staged file %s: %s", name, st)
+	}
+	return inode
+}
+
+// testRenameWithInheritedMetadataVariants covers rename inheritance when the
+// destination has no default ACL or only a minimal default ACL.
+func testRenameWithInheritedMetadataVariants(t *testing.T, m Meta) {
+	// Both cases should inherit the destination GID but materialize no extended
+	// access ACL: a missing default ACL preserves the mode, while a minimal
+	// default ACL changes only the mode bits.
+	cases := []struct {
+		name        string
+		targetName  string
+		stageName   string
+		defaultRule *aclAPI.Rule
+		wantMode    uint16
+	}{
+		{
+			name:       "without default acl",
+			targetName: "rename-inherit-no-default-acl",
+			stageName:  "rename-inherit-no-default-stage",
+			wantMode:   0644,
+		},
+		{
+			name:        "with minimal default acl",
+			targetName:  "rename-inherit-minimal-default-acl",
+			stageName:   "rename-inherit-minimal-stage",
+			defaultRule: &aclAPI.Rule{Owner: 7, Group: 5, Mask: 0xFFFF, Other: 1},
+			wantMode:    0640,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := Background()
+			target := setupRenameInheritanceTarget(t, m, tc.targetName, tc.defaultRule)
+			stageIno := createRenameStage(t, m, tc.stageName)
+			defer func() {
+				_ = m.Unlink(ctx, target, "result")
+				_ = m.Unlink(ctx, RootInode, tc.stageName)
+				_ = m.Rmdir(ctx, RootInode, tc.targetName)
+			}()
+
+			if st := m.RenameWithInheritedMetadata(ctx, RootInode, tc.stageName, target, "result", 0, 0666, nil, nil); st != 0 {
+				t.Fatalf("rename with inherited metadata: %s", st)
+			}
+
+			var attr Attr
+			if st := m.GetAttr(ctx, stageIno, &attr); st != 0 {
+				t.Fatalf("get result attr: %s", st)
+			}
+			if attr.Gid != 2468 || attr.Mode&07777 != tc.wantMode || attr.AccessACL != aclAPI.None {
+				t.Fatalf("unexpected metadata: mode=%#o gid=%d access_acl=%d, want mode=%#o gid=%d access_acl=%d",
+					attr.Mode&07777, attr.Gid, attr.AccessACL, tc.wantMode, 2468, aclAPI.None)
+			}
+			if st := m.GetFacl(ctx, stageIno, aclAPI.TypeAccess, &aclAPI.Rule{}); st != ENOATTR {
+				t.Fatalf("get access acl: got %s, want %s", st, ENOATTR)
+			}
+		})
+	}
+}
+
+// testRenamePreservesMetadata protects the ordinary POSIX rename path from
+// accidentally inheriting metadata from the destination directory.
+func testRenamePreservesMetadata(t *testing.T, m Meta) {
+	ctx := Background()
+	const targetName = "rename-preserve-metadata-target"
+	// Give the source and destination distinct metadata so an accidental
+	// inheritance by ordinary Rename is visible.
+	targetRule := &aclAPI.Rule{
+		Owner: 7,
+		Group: 7,
+		Mask:  0,
+		Other: 0,
+		NamedUsers: []aclAPI.Entry{{
+			Id:   1001,
+			Perm: 0,
+		}},
+	}
+	target := setupRenameInheritanceTarget(t, m, targetName, targetRule)
+	const stageName = "rename-preserve-metadata-stage"
+	stageIno := createRenameStage(t, m, stageName)
+	defer func() {
+		_ = m.Unlink(ctx, target, "result")
+		_ = m.Unlink(ctx, RootInode, stageName)
+		_ = m.Rmdir(ctx, RootInode, targetName)
+	}()
+
+	if st := m.SetAttr(ctx, stageIno, SetAttrGID, 0, &Attr{Gid: 1357}); st != 0 {
+		t.Fatalf("set staged file gid: %s", st)
+	}
+	sourceRule := &aclAPI.Rule{
+		Owner: 6,
+		Group: 4,
+		Mask:  4,
+		Other: 0,
+		NamedUsers: []aclAPI.Entry{{
+			Id:   2001,
+			Perm: 4,
+		}},
+	}
+	if st := m.SetFacl(ctx, stageIno, aclAPI.TypeAccess, sourceRule); st != 0 {
+		t.Fatalf("set staged file access acl: %s", st)
+	}
+
+	var before Attr
+	if st := m.GetAttr(ctx, stageIno, &before); st != 0 {
+		t.Fatalf("get staged file before rename: %s", st)
+	}
+	beforeACL := &aclAPI.Rule{}
+	if st := m.GetFacl(ctx, stageIno, aclAPI.TypeAccess, beforeACL); st != 0 {
+		t.Fatalf("get staged file access acl before rename: %s", st)
+	}
+	// Ordinary POSIX rename moves the directory entry only; it must not rewrite
+	// the source file's GID, mode, or access ACL.
+	if st := m.Rename(ctx, RootInode, stageName, target, "result", 0, nil, nil); st != 0 {
+		t.Fatalf("ordinary rename: %s", st)
+	}
+
+	var after Attr
+	if st := m.GetAttr(ctx, stageIno, &after); st != 0 {
+		t.Fatalf("get result attr after ordinary rename: %s", st)
+	}
+	afterACL := &aclAPI.Rule{}
+	if st := m.GetFacl(ctx, stageIno, aclAPI.TypeAccess, afterACL); st != 0 {
+		t.Fatalf("get result access acl after ordinary rename: %s", st)
+	}
+	if after.Gid != before.Gid || after.Mode != before.Mode || !afterACL.IsEqual(beforeACL) {
+		t.Fatalf("ordinary rename changed source metadata: before mode=%#o gid=%d acl=%s, after mode=%#o gid=%d acl=%s",
+			before.Mode&07777, before.Gid, beforeACL, after.Mode&07777, after.Gid, afterACL)
+	}
+}
+
+// testRenameWithInheritedMetadataOverwrite covers replacement and failed
+// no-replace rename paths, including rollback of staged metadata changes.
+func testRenameWithInheritedMetadataOverwrite(t *testing.T, m Meta) {
+	// Replacing an existing file must apply the destination metadata to the
+	// incoming staged inode and leave the destination name pointing to it.
+	t.Run("overwrite existing file", func(t *testing.T) {
+		ctx := Background()
+		// The destination name already exists, so this verifies replacement while
+		// applying the destination directory's metadata to the incoming file.
+		const targetName = "rename-inherit-overwrite-target"
+		defaultRule := &aclAPI.Rule{
+			Owner: 7,
+			Group: 1,
+			Mask:  4,
+			Other: 0,
+			NamedUsers: []aclAPI.Entry{{
+				Id:   1001,
+				Perm: 4,
+			}},
+		}
+		target := setupRenameInheritanceTarget(t, m, targetName, defaultRule)
+		stageName := "rename-inherit-overwrite-stage"
+		stageIno := createRenameStage(t, m, stageName)
+		defer func() {
+			_ = m.Unlink(ctx, target, "result")
+			_ = m.Unlink(ctx, RootInode, stageName)
+			_ = m.Rmdir(ctx, RootInode, targetName)
+		}()
+
+		var oldIno Ino
+		if st := m.Create(ctx, target, "result", 0666, 022, 0, &oldIno, nil); st != 0 {
+			t.Fatalf("create existing result: %s", st)
+		}
+		if st := m.Close(ctx, oldIno); st != 0 {
+			t.Fatalf("close existing result: %s", st)
+		}
+		if st := m.RenameWithInheritedMetadata(ctx, RootInode, stageName, target, "result", 0, 0666, nil, nil); st != 0 {
+			t.Fatalf("rename over existing result: %s", st)
+		}
+
+		var resultIno Ino
+		var resultAttr Attr
+		if st := m.Lookup(ctx, target, "result", &resultIno, &resultAttr, true); st != 0 {
+			t.Fatalf("lookup overwritten result: %s", st)
+		}
+		if resultIno != stageIno || resultAttr.Gid != 2468 || resultAttr.Mode&07777 != 0640 {
+			t.Fatalf("unexpected overwritten result: inode=%d mode=%#o gid=%d", resultIno, resultAttr.Mode&07777, resultAttr.Gid)
+		}
+		gotACL := &aclAPI.Rule{}
+		if st := m.GetFacl(ctx, resultIno, aclAPI.TypeAccess, gotACL); st != 0 {
+			t.Fatalf("get overwritten result access acl: %s", st)
+		}
+		wantACL := &aclAPI.Rule{Owner: 6, Group: 1, Mask: 4, Other: 0, NamedUsers: []aclAPI.Entry{{Id: 1001, Perm: 4}}}
+		if !gotACL.IsEqual(wantACL) {
+			t.Fatalf("unexpected overwritten result access acl: got %s, want %s", gotACL, wantACL)
+		}
+		if st := m.Lookup(ctx, RootInode, stageName, new(Ino), new(Attr), false); st != syscall.ENOENT {
+			t.Fatalf("staged entry after overwrite: got %s, want %s", st, syscall.ENOENT)
+		}
+	})
+
+	// A failed no-replace commit must roll back the inheritance changes made to
+	// the staged inode and preserve the existing destination entry.
+	t.Run("no replace leaves source unchanged", func(t *testing.T) {
+		ctx := Background()
+		// A failed no-replace operation must not leave partially inherited
+		// metadata on the staged source.
+		const targetName = "rename-inherit-no-replace-target"
+		defaultRule := &aclAPI.Rule{Owner: 7, Group: 1, Mask: 4, Other: 0, NamedUsers: []aclAPI.Entry{{Id: 1001, Perm: 4}}}
+		target := setupRenameInheritanceTarget(t, m, targetName, defaultRule)
+		stageName := "rename-inherit-no-replace-stage"
+		stageIno := createRenameStage(t, m, stageName)
+		defer func() {
+			_ = m.Unlink(ctx, target, "result")
+			_ = m.Unlink(ctx, RootInode, stageName)
+			_ = m.Rmdir(ctx, RootInode, targetName)
+		}()
+
+		if st := m.SetAttr(ctx, stageIno, SetAttrGID, 0, &Attr{Gid: 1357}); st != 0 {
+			t.Fatalf("set staged file gid: %s", st)
+		}
+		sourceRule := &aclAPI.Rule{Owner: 6, Group: 4, Mask: 4, Other: 0, NamedUsers: []aclAPI.Entry{{Id: 2001, Perm: 4}}}
+		if st := m.SetFacl(ctx, stageIno, aclAPI.TypeAccess, sourceRule); st != 0 {
+			t.Fatalf("set staged file access acl: %s", st)
+		}
+		var before Attr
+		if st := m.GetAttr(ctx, stageIno, &before); st != 0 {
+			t.Fatalf("get staged file before no-replace rename: %s", st)
+		}
+		beforeACL := &aclAPI.Rule{}
+		if st := m.GetFacl(ctx, stageIno, aclAPI.TypeAccess, beforeACL); st != 0 {
+			t.Fatalf("get staged file acl before no-replace rename: %s", st)
+		}
+
+		var existing Ino
+		if st := m.Create(ctx, target, "result", 0666, 022, 0, &existing, nil); st != 0 {
+			t.Fatalf("create existing result: %s", st)
+		}
+		if st := m.Close(ctx, existing); st != 0 {
+			t.Fatalf("close existing result: %s", st)
+		}
+		// The existing destination forces EEXIST before the rename can commit.
+		if st := m.RenameWithInheritedMetadata(ctx, RootInode, stageName, target, "result", RenameNoReplace, 0666, nil, nil); st != syscall.EEXIST {
+			t.Fatalf("no-replace rename: got %s, want %s", st, syscall.EEXIST)
+		}
+
+		var after Attr
+		if st := m.GetAttr(ctx, stageIno, &after); st != 0 {
+			t.Fatalf("get staged file after failed no-replace rename: %s", st)
+		}
+		afterACL := &aclAPI.Rule{}
+		if st := m.GetFacl(ctx, stageIno, aclAPI.TypeAccess, afterACL); st != 0 {
+			t.Fatalf("get staged file acl after failed no-replace rename: %s", st)
+		}
+		if after.Gid != before.Gid || after.Mode != before.Mode || !afterACL.IsEqual(beforeACL) {
+			t.Fatalf("failed no-replace rename changed source metadata: before mode=%#o gid=%d acl=%s, after mode=%#o gid=%d acl=%s",
+				before.Mode&07777, before.Gid, beforeACL, after.Mode&07777, after.Gid, afterACL)
+		}
+		var resultIno Ino
+		if st := m.Lookup(ctx, target, "result", &resultIno, new(Attr), false); st != 0 || resultIno != existing {
+			t.Fatalf("existing result after failed no-replace rename: status=%s inode=%d, want status=success inode=%d", st, resultIno, existing)
+		}
+	})
+}
+
+func sharedMetaClientForConcurrencyTest(t *testing.T, m Meta) (Meta, func()) {
+	t.Helper()
+	base := newBaseMeta(m.getBase().addr, testConfig())
+	base.setFormat(m.getBase().getFormat())
+	switch current := m.(type) {
+	case *kvMeta:
+		other := &kvMeta{baseMeta: base, client: current.client}
+		other.en = other
+		return other, func() { other.of.close() }
+	case *dbMeta:
+		other := &dbMeta{
+			baseMeta:    base,
+			db:          current.db,
+			spool:       current.spool,
+			statement:   current.statement,
+			tablePrefix: current.tablePrefix,
+		}
+		other.en = other
+		return other, func() { other.of.close() }
+	case *redisMeta:
+		other := &redisMeta{baseMeta: base, rdb: current.rdb, prefix: current.prefix}
+		other.en = other
+		return other, func() { other.of.close() }
+	default:
+		t.Fatalf("unsupported metadata client %T", m)
+		return nil, func() {}
+	}
+}
+
+func setupConcurrentRenameInheritanceTarget(t *testing.T, m Meta, name string) (Ino, *aclAPI.Rule, *aclAPI.Rule) {
+	t.Helper()
+	ctx := Background()
+	var target Ino
+	if st := m.Mkdir(ctx, RootInode, name, 02770, 0, 0, &target, nil); st != 0 {
+		t.Fatalf("mkdir %s: %s", name, st)
+	}
+	if st := m.SetAttr(ctx, target, SetAttrGID, 0, &Attr{Gid: 2468}); st != 0 {
+		t.Fatalf("set %s gid: %s", name, st)
+	}
+	if st := m.SetAttr(ctx, target, SetAttrMode, 0, &Attr{Mode: 02770}); st != 0 {
+		t.Fatalf("set %s mode: %s", name, st)
+	}
+
+	ruleA := &aclAPI.Rule{
+		Owner: 7,
+		Group: 5,
+		Mask:  5,
+		Other: 0,
+		NamedUsers: []aclAPI.Entry{{
+			Id:   1001,
+			Perm: 4,
+		}},
+	}
+	ruleB := &aclAPI.Rule{
+		Owner: 6,
+		Group: 2,
+		Mask:  6,
+		Other: 1,
+		NamedUsers: []aclAPI.Entry{{
+			Id:   1001,
+			Perm: 0,
+		}},
+	}
+	if st := m.SetFacl(ctx, target, aclAPI.TypeDefault, ruleA); st != 0 {
+		t.Fatalf("set %s default acl A: %s", name, st)
+	}
+	if st := m.SetFacl(ctx, target, aclAPI.TypeDefault, ruleB); st != 0 {
+		t.Fatalf("set %s default acl B: %s", name, st)
+	}
+	if st := m.SetFacl(ctx, target, aclAPI.TypeDefault, ruleA); st != 0 {
+		t.Fatalf("reset %s default acl A: %s", name, st)
+	}
+	return target, ruleA, ruleB
+}
+
+func assertConcurrentInheritedMetadata(t *testing.T, m Meta, inode Ino, rules ...*aclAPI.Rule) {
+	t.Helper()
+	ctx := Background()
+	var attr Attr
+	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+		t.Fatalf("get inherited attr: %s", st)
+	}
+	got := &aclAPI.Rule{}
+	if st := m.GetFacl(ctx, inode, aclAPI.TypeAccess, got); st != 0 {
+		t.Fatalf("get inherited access acl: %s", st)
+	}
+	for _, rule := range rules {
+		want := rule.ChildAccessACL(0666)
+		if attr.Gid == 2468 && attr.Mode&07777 == want.GetMode() && got.IsEqual(want) {
+			return
+		}
+	}
+	t.Fatalf("inherited metadata is not a complete parent version: mode=%#o gid=%d acl=%s", attr.Mode&07777, attr.Gid, got)
+}
+
+func testConcurrentRenameWithInheritedMetadata(t *testing.T, m Meta) {
+	// Force an ACL update after the parent metadata is read and verify that the
+	// backend transaction retries or serializes the rename without mixed metadata.
+	t.Run("metadata read window", func(t *testing.T) {
+		ctx := Background()
+		const targetName = "rename-inherit-concurrent-window"
+		target, ruleA, ruleB := setupConcurrentRenameInheritanceTarget(t, m, targetName)
+		stageName := "rename-inherit-window-stage"
+		defer func() {
+			_ = m.Unlink(ctx, RootInode, stageName)
+			_ = m.Unlink(ctx, target, "result")
+			_ = m.Rmdir(ctx, RootInode, targetName)
+		}()
+
+		var stageIno Ino
+		if st := m.Create(ctx, RootInode, stageName, 0666, 022, 0, &stageIno, nil); st != 0 {
+			t.Fatalf("create staged file: %s", st)
+		}
+		if st := m.Close(ctx, stageIno); st != 0 {
+			t.Fatalf("close staged file: %s", st)
+		}
+
+		updater, closeUpdater := sharedMetaClientForConcurrencyTest(t, m)
+		defer closeUpdater()
+
+		// Pause after reading the parent metadata, then update that parent through
+		// another metadata client to force the backend's conflict path.
+		metadataRead := make(chan struct{})
+		release := make(chan struct{})
+		var hookOnce sync.Once
+		hookCtx := ctx.WithValue(renameMetadataConcurrencyHookKey, func() {
+			hookOnce.Do(func() {
+				close(metadataRead)
+				<-release
+			})
+		})
+
+		renameDone := make(chan syscall.Errno, 1)
+		go func() {
+			renameDone <- m.RenameWithInheritedMetadata(hookCtx, RootInode, stageName, target, "result", 0, 0666, nil, nil)
+		}()
+		select {
+		case <-metadataRead:
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for rename transaction to read parent metadata")
+		}
+
+		updateDone := make(chan syscall.Errno, 1)
+		go func() {
+			updateDone <- updater.SetFacl(ctx, target, aclAPI.TypeDefault, ruleB)
+		}()
+
+		updatedBeforeRelease := false
+		if _, ok := m.(*dbMeta); ok {
+			// SQL backends may hold a row/write lock until the rename commits.
+			select {
+			case st := <-updateDone:
+				if st != 0 {
+					t.Fatalf("concurrent default acl update: %s", st)
+				}
+				updatedBeforeRelease = true
+			default:
+			}
+		} else {
+			select {
+			case st := <-updateDone:
+				if st != 0 {
+					t.Fatalf("concurrent default acl update: %s", st)
+				}
+				updatedBeforeRelease = true
+			case <-time.After(10 * time.Second):
+				t.Fatal("timed out waiting for concurrent default acl update")
+			}
+		}
+
+		close(release)
+		select {
+		case st := <-renameDone:
+			if st != 0 {
+				t.Fatalf("rename with inherited metadata: %s", st)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for rename transaction")
+		}
+		if !updatedBeforeRelease {
+			select {
+			case st := <-updateDone:
+				if st != 0 {
+					t.Fatalf("concurrent default acl update after release: %s", st)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("timed out waiting for concurrent default acl update after release")
+			}
+		}
+
+		assertConcurrentInheritedMetadata(t, m, stageIno, ruleA, ruleB)
+		if updatedBeforeRelease {
+			// An optimistic transaction must retry after the parent changed.
+			got := &aclAPI.Rule{}
+			if st := m.GetFacl(ctx, stageIno, aclAPI.TypeAccess, got); st != 0 {
+				t.Fatalf("get result access acl: %s", st)
+			}
+			if !got.IsEqual(ruleB.ChildAccessACL(0666)) {
+				t.Fatalf("rename committed stale metadata: got %s, want %s", got, ruleB.ChildAccessACL(0666))
+			}
+		}
+	})
+}
+
+// testRenameWithInheritedMetadataQuota verifies that changing a staged file's
+// GID during rename moves its inode and aligned space usage between groups.
+func testRenameWithInheritedMetadataQuota(t *testing.T, m Meta) {
+	t.Helper()
+	ctx := Background()
+	const (
+		targetName   = "rename-inherit-quota-target"
+		stageName    = "rename-inherit-quota-stage"
+		ordinaryName = "rename-inherit-quota-ordinary"
+		oldGID       = uint32(1357)
+		newGID       = uint32(2468)
+		fileSize     = uint64(8192)
+	)
+	oldKey := fmt.Sprintf("%d", oldGID)
+	newKey := fmt.Sprintf("%d", newGID)
+	var target Ino
+
+	// Enable group quota accounting before creating the test objects so all
+	// setup changes are included in the baseline measurements below.
+	for _, gid := range []uint32{oldGID, newGID} {
+		key := fmt.Sprintf("%d", gid)
+		if err := m.HandleQuota(ctx, QuotaSet, key, GroupQuotaType,
+			map[string]*Quota{key: {MaxSpace: 1 << 30, MaxInodes: 100}}, false, false, false); err != nil {
+			t.Fatalf("set group quota %d: %s", gid, err)
+		}
+	}
+	m.getBase().loadQuotas()
+
+	getUsage := func(key string) (int64, int64) {
+		m.getBase().doFlushQuotas()
+		quotas := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, key, GroupQuotaType, quotas, false, false, false); err != nil {
+			t.Fatalf("get group quota %s: %s", key, err)
+		}
+		q := quotas[key]
+		if q == nil {
+			t.Fatalf("group quota %s not found", key)
+		}
+		return q.UsedInodes, q.UsedSpace
+	}
+
+	defer func() {
+		_ = m.Unlink(ctx, RootInode, stageName)
+		if target > 0 {
+			_ = m.Unlink(ctx, target, "result")
+		}
+		_ = m.Unlink(ctx, RootInode, ordinaryName)
+		_ = m.Rmdir(ctx, RootInode, targetName)
+		_ = m.HandleQuota(ctx, QuotaDel, oldKey, GroupQuotaType, nil, false, false, false)
+		_ = m.HandleQuota(ctx, QuotaDel, newKey, GroupQuotaType, nil, false, false, false)
+	}()
+
+	// Prepare a staged file owned by oldGID and a setgid destination owned by
+	// newGID. The file has data so both inode and aligned space deltas matter.
+	target = setupRenameInheritanceTarget(t, m, targetName, nil)
+	var stageIno Ino
+	if st := m.Create(ctx, RootInode, stageName, 0666, 022, 0, &stageIno, nil); st != 0 {
+		t.Fatalf("create staged file: %s", st)
+	}
+	if st := m.SetAttr(ctx, stageIno, SetAttrGID, 0, &Attr{Gid: oldGID}); st != 0 {
+		t.Fatalf("set staged file gid: %s", st)
+	}
+	var sliceID uint64
+	if st := m.NewSlice(ctx, &sliceID); st != 0 {
+		t.Fatalf("new slice: %s", st)
+	}
+	if st := m.Write(ctx, stageIno, 0, 0, Slice{Id: sliceID, Size: uint32(fileSize), Len: uint32(fileSize)}, time.Now()); st != 0 {
+		t.Fatalf("write staged file: %s", st)
+	}
+	if st := m.Close(ctx, stageIno); st != 0 {
+		t.Fatalf("close staged file: %s", st)
+	}
+
+	oldBeforeInodes, oldBeforeSpace := getUsage(oldKey)
+	newBeforeInodes, newBeforeSpace := getUsage(newKey)
+
+	// Inherited-metadata rename reassigns the file to newGID, so accounting must
+	// move exactly one inode and fileSize bytes between the two groups.
+	if st := m.RenameWithInheritedMetadata(ctx, RootInode, stageName, target, "result", 0, 0666, nil, nil); st != 0 {
+		t.Fatalf("rename with inherited metadata: %s", st)
+	}
+
+	oldAfterInodes, oldAfterSpace := getUsage(oldKey)
+	newAfterInodes, newAfterSpace := getUsage(newKey)
+	wantSpace := align4K(fileSize)
+	if oldAfterInodes != oldBeforeInodes-1 || oldAfterSpace != oldBeforeSpace-wantSpace {
+		t.Fatalf("old group quota mismatch: before=%d/%d after=%d/%d, want %d/%d",
+			oldBeforeInodes, oldBeforeSpace, oldAfterInodes, oldAfterSpace, oldBeforeInodes-1, oldBeforeSpace-wantSpace)
+	}
+	if newAfterInodes != newBeforeInodes+1 || newAfterSpace != newBeforeSpace+wantSpace {
+		t.Fatalf("new group quota mismatch: before=%d/%d after=%d/%d, want %d/%d",
+			newBeforeInodes, newBeforeSpace, newAfterInodes, newAfterSpace, newBeforeInodes+1, newBeforeSpace+wantSpace)
+	}
+
+	// Reuse the same data-bearing inode for ordinary rename after restoring its
+	// original GID. This isolates rename from quota accounting without another
+	// full file setup.
+	if st := m.SetAttr(ctx, stageIno, SetAttrGID, 0, &Attr{Gid: oldGID}); st != 0 {
+		t.Fatalf("restore staged file gid: %s", st)
+	}
+	oldBeforeInodes, oldBeforeSpace = getUsage(oldKey)
+	newBeforeInodes, newBeforeSpace = getUsage(newKey)
+	// The ordinary path must only move the directory entry; group accounting
+	// must remain identical even though the destination has a different GID.
+	if st := m.Rename(ctx, target, "result", RootInode, ordinaryName, 0, nil, nil); st != 0 {
+		t.Fatalf("ordinary rename: %s", st)
+	}
+	oldAfterInodes, oldAfterSpace = getUsage(oldKey)
+	newAfterInodes, newAfterSpace = getUsage(newKey)
+	if oldAfterInodes != oldBeforeInodes || oldAfterSpace != oldBeforeSpace ||
+		newAfterInodes != newBeforeInodes || newAfterSpace != newBeforeSpace {
+		t.Fatalf("ordinary rename changed group quota: before old=%d/%d new=%d/%d, after old=%d/%d new=%d/%d",
+			oldBeforeInodes, oldBeforeSpace, newBeforeInodes, newBeforeSpace,
+			oldAfterInodes, oldAfterSpace, newAfterInodes, newAfterSpace)
 	}
 }
