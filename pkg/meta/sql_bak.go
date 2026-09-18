@@ -39,6 +39,10 @@ var (
 	sqlDumpBatchSize = 100000
 )
 
+func (m *dbMeta) backupSource() pb.Footer_Engine {
+	return pb.Footer_SQL
+}
+
 func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var dumps = []func(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error{
 		m.dumpFormat,

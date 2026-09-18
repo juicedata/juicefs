@@ -18,76 +18,59 @@ package meta
 
 import (
 	"bytes"
+	"encoding/binary"
+	"errors"
+	"io"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"google.golang.org/protobuf/proto"
 )
 
-func TestDumpMetaV2RecordsSource(t *testing.T) {
-	m := NewClient("sqlite3://"+filepath.Join(t.TempDir(), "meta.db"), nil)
-	defer m.Shutdown()
-	if err := m.Init(&Format{Name: "test"}, true); err != nil {
-		t.Fatalf("init metadata: %v", err)
+func newBackupTestMeta(t *testing.T, engine string) Meta {
+	t.Helper()
+	uri := engine + "://" + filepath.Join(t.TempDir(), "meta")
+	if engine == "redis" {
+		uri = os.Getenv("REDIS_ADDR")
+		if uri == "" {
+			uri = "redis://127.0.0.1:6379/14"
+		}
 	}
-
-	var data bytes.Buffer
-	if err := m.DumpMetaV2(Background(), &data, &DumpOption{Threads: 1}); err != nil {
-		t.Fatalf("dump metadata: %v", err)
+	m := NewClient(uri, nil)
+	if err := m.Reset(); err != nil {
+		t.Fatal(err)
 	}
-	footer, err := (&BakFormat{}).ReadFooter(bytes.NewReader(data.Bytes()))
-	if err != nil {
-		t.Fatalf("read footer: %v", err)
-	}
-	if footer.Msg.Source != pb.Footer_SQL {
-		t.Fatalf("source: got %s, want %s", footer.Msg.Source, pb.Footer_SQL)
-	}
+	t.Cleanup(func() {
+		if err := m.Reset(); err != nil {
+			t.Error(err)
+		}
+		if err := m.Shutdown(); err != nil {
+			t.Error(err)
+		}
+	})
+	return m
 }
 
-func TestBackupCountersBySource(t *testing.T) {
-	newCounters := func() (DumpedCounters, []*pb.Counter, []*pb.Counter) {
-		counters := DumpedCounters{NextInode: 2, NextChunk: 1}
-		var others, dumped []*pb.Counter
-		counterSeg := newBakSegment(&pb.Batch{Counters: []*pb.Counter{
-			{Key: usedSpace, Value: 7},
-			{Key: totalInodes, Value: 8},
-			{Key: "nextInode", Value: 9},
-		}})
-		dumped = append(dumped, counterSeg.val.(*pb.Batch).Counters...)
-		counters.updateFromSegment(counterSeg, &others)
-		counters.updateFromSegment(newBakSegment(&pb.Batch{Nodes: []*pb.Node{
-			{Inode: 3, Data: (&Attr{Typ: TypeFile, Length: 1}).Marshal()},
-		}}), &others)
-		return counters, others, dumped
-	}
-
-	tests := []struct {
-		name           string
-		source         pb.Footer_Engine
-		wantUsedSpace  int64
-		wantUsedInodes int64
-	}{
-		{"redis", pb.Footer_REDIS, 7, 8},
-		{"sql", pb.Footer_SQL, 4096, 1},
-		{"kv", pb.Footer_KV, 4096, 1},
-		{"unknown", pb.Footer_UNKNOWN, 4096, 1},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			counters, others, dumped := newCounters()
-			batch := &pb.Batch{Counters: dumped}
-			if test.source != pb.Footer_REDIS {
-				batch = counters.toBatch(others)
+func TestDumpMetaV2RecordsSource(t *testing.T) {
+	for engine, source := range map[string]pb.Footer_Engine{"redis": pb.Footer_REDIS, "sqlite3": pb.Footer_SQL, "badger": pb.Footer_KV} {
+		t.Run(engine, func(t *testing.T) {
+			m := newBackupTestMeta(t, engine)
+			if err := m.Init(&Format{Name: "test"}, true); err != nil {
+				t.Fatal(err)
 			}
-			values := make(map[string]int64)
-			for _, counter := range batch.Counters {
-				values[counter.Key] = counter.Value
+			var data bytes.Buffer
+			if err := m.DumpMetaV2(Background(), &data, &DumpOption{Threads: 1}); err != nil {
+				t.Fatal(err)
 			}
-			if values[usedSpace] != test.wantUsedSpace {
-				t.Errorf("used space: got %d, want %d", values[usedSpace], test.wantUsedSpace)
+			footer, err := (&BakFormat{}).ReadFooter(bytes.NewReader(data.Bytes()))
+			if err != nil {
+				t.Fatal(err)
 			}
-			if values[totalInodes] != test.wantUsedInodes {
-				t.Errorf("used inodes: got %d, want %d", values[totalInodes], test.wantUsedInodes)
+			if footer.Msg.Source != source {
+				t.Fatalf("source: got %s, want %s", footer.Msg.Source, source)
 			}
 		})
 	}
@@ -95,90 +78,225 @@ func TestBackupCountersBySource(t *testing.T) {
 
 func makeCounterBackup(t *testing.T, source pb.Footer_Engine) []byte {
 	t.Helper()
-	data := &bytes.Buffer{}
+	var data bytes.Buffer
 	bak := newBakFormat()
 	bak.Footer.Msg.Source = source
-	if err := bak.writeSegment(data, newBakSegment(&pb.Batch{Counters: []*pb.Counter{
-		{Key: usedSpace, Value: 7},
-		{Key: totalInodes, Value: 8},
-	}})); err != nil {
-		t.Fatalf("write counters: %v", err)
+	for _, batch := range []*pb.Batch{
+		{Counters: []*pb.Counter{
+			{Key: usedSpace, Value: 7}, {Key: totalInodes, Value: 8},
+			{Key: "nextInode", Value: 9}, {Key: "nextChunk", Value: 10},
+		}},
+		{Nodes: []*pb.Node{{Inode: 23, Data: (&Attr{Typ: TypeFile, Length: 1, Nlink: 1}).Marshal()}}},
+		{SliceRefs: []*pb.SliceRef{{Id: 30, Size: 1, Refs: 2}}},
+		{Counters: []*pb.Counter{{Key: "nextSession", Value: 6}, {Key: "nextTrash", Value: 4}, {Key: "otherCounter", Value: 17}}},
+	} {
+		if err := bak.writeSegment(&data, newBakSegment(batch)); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := bak.writeSegment(data, newBakSegment(&pb.Batch{Nodes: []*pb.Node{
-		{Inode: 3, Data: (&Attr{Typ: TypeFile, Length: 1}).Marshal()},
-	}})); err != nil {
-		t.Fatalf("write nodes: %v", err)
-	}
-	if err := bak.writeFooter(data); err != nil {
-		t.Fatalf("write footer: %v", err)
+	if err := bak.writeFooter(&data); err != nil {
+		t.Fatal(err)
 	}
 	return data.Bytes()
 }
 
-func TestLoadMetaV2CountersBySource(t *testing.T) {
-	tests := []struct {
-		name           string
-		source         pb.Footer_Engine
-		wantUsedSpace  int64
-		wantUsedInodes int64
-	}{
-		{"redis", pb.Footer_REDIS, 7, 8},
-		{"sql", pb.Footer_SQL, 4096, 1},
-		{"kv", pb.Footer_KV, 4096, 1},
-		{"old footer", pb.Footer_UNKNOWN, 4096, 1},
+type backupShortReader struct{ io.Reader }
+
+func (r *backupShortReader) Read(p []byte) (int, error) {
+	if len(p) > 1 {
+		p = p[:1]
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			m := NewClient("sqlite3://"+filepath.Join(t.TempDir(), "meta.db"), nil)
-			defer m.Shutdown()
-			if err := m.LoadMetaV2(Background(), bytes.NewReader(makeCounterBackup(t, test.source)), &LoadOption{Threads: 1}); err != nil {
-				t.Fatalf("load backup: %v", err)
-			}
-			for name, expected := range map[string]int64{
-				usedSpace:   test.wantUsedSpace,
-				totalInodes: test.wantUsedInodes,
-			} {
-				actual, err := m.getBase().en.getCounter(name)
-				if err != nil {
-					t.Fatalf("get counter %s: %v", name, err)
-				}
-				if actual != expected {
-					t.Errorf("counter %s: got %d, want %d", name, actual, expected)
-				}
+	return r.Reader.Read(p)
+}
+
+func backupTestReader(t *testing.T, data []byte, input string) io.Reader {
+	t.Helper()
+	switch input {
+	case "seekable":
+		return bytes.NewReader(data)
+	case "reader":
+		return bytes.NewBuffer(data)
+	case "short reads":
+		return &backupShortReader{bytes.NewReader(data)}
+	case "pipe":
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { r.Close() })
+		if _, err := w.Write(data); err != nil {
+			w.Close()
+			t.Fatal(err)
+		}
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	default:
+		t.Fatalf("unknown input %q", input)
+		return nil
+	}
+}
+
+func TestLoadMetaV2CountersBySource(t *testing.T) {
+	for _, engine := range []string{"redis", "sqlite3", "badger"} {
+		t.Run(engine, func(t *testing.T) {
+			for _, source := range []pb.Footer_Engine{pb.Footer_REDIS, pb.Footer_SQL, pb.Footer_KV, pb.Footer_UNKNOWN} {
+				t.Run(source.String(), func(t *testing.T) {
+					for _, input := range []string{"seekable", "reader", "short reads", "pipe"} {
+						t.Run(input, func(t *testing.T) {
+							m := newBackupTestMeta(t, engine)
+							if err := m.LoadMetaV2(Background(), backupTestReader(t, makeCounterBackup(t, source), input), &LoadOption{Threads: 2}); err != nil {
+								t.Fatal(err)
+							}
+							want := map[string]int64{usedSpace: 4096, totalInodes: 1, "nextInode": 24, "nextChunk": 31, "nextSession": 6, "nextTrash": 4, "otherCounter": 17}
+							if source == pb.Footer_REDIS {
+								want[usedSpace] = 7
+								want[totalInodes] = 8
+								want["nextInode"] = 9
+								want["nextChunk"] = 10
+							}
+							for name, expected := range want {
+								if engine == "redis" && (name == "nextInode" || name == "nextChunk") {
+									expected--
+								}
+								got, err := m.getBase().en.getCounter(name)
+								if err != nil {
+									t.Fatal(err)
+								}
+								if got != expected {
+									t.Errorf("%s: got %d, want %d", name, got, expected)
+								}
+							}
+						})
+					}
+				})
 			}
 		})
 	}
 }
 
-func TestKVLoadMetaV2CountersBySource(t *testing.T) {
-	tests := []struct {
-		name           string
-		source         pb.Footer_Engine
-		wantUsedSpace  int64
-		wantUsedInodes int64
-	}{
-		{"redis", pb.Footer_REDIS, 7, 8},
-		{"sql", pb.Footer_SQL, 4096, 1},
-		{"old footer", pb.Footer_UNKNOWN, 4096, 1},
+func replaceBackupFooter(t *testing.T, data []byte, change func(*pb.Footer)) []byte {
+	t.Helper()
+	length := int(binary.BigEndian.Uint64(data[len(data)-8:]))
+	offset := len(data) - 8 - length
+	footer := &pb.Footer{}
+	if err := proto.Unmarshal(data[offset:len(data)-8], footer); err != nil {
+		t.Fatal(err)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			m := NewClient("badger://"+filepath.Join(t.TempDir(), "meta"), nil)
-			defer m.Shutdown()
-			if err := m.LoadMetaV2(Background(), bytes.NewReader(makeCounterBackup(t, test.source)), &LoadOption{Threads: 1}); err != nil {
-				t.Fatalf("load backup: %v", err)
+	change(footer)
+	result := bytes.NewBuffer(append([]byte(nil), data[:offset]...))
+	if err := (&BakFooter{Msg: footer}).Marshal(result); err != nil {
+		t.Fatal(err)
+	}
+	return result.Bytes()
+}
+
+type backupErrorReader struct{ err error }
+
+func (r backupErrorReader) Read([]byte) (int, error) { return 0, r.err }
+
+func TestLoadMetaV2InvalidFooter(t *testing.T) {
+	data := makeCounterBackup(t, pb.Footer_REDIS)
+	readErr := errors.New("backup read failed")
+	invalidProto := append([]byte(nil), data...)
+	footerStart := len(data) - 8 - int(binary.BigEndian.Uint64(data[len(data)-8:]))
+	invalidProto[footerStart] = 0xff
+	cases := []struct {
+		name string
+		data []byte
+		err  string
+	}{
+		{"truncated", data[:len(data)-5], "footer length"},
+		{"missing", data[:len(data)-8-int(binary.BigEndian.Uint64(data[len(data)-8:]))], "footer length"},
+		{"oversized", append(append([]byte(nil), data[:len(data)-8]...), bytes.Repeat([]byte{255}, 8)...), "footer length"},
+		{"magic", replaceBackupFooter(t, data, func(f *pb.Footer) { f.Magic = 0 }), "magic"},
+		{"version", replaceBackupFooter(t, data, func(f *pb.Footer) { f.Version = BakVersion + 1 }), "version"},
+		{"source", replaceBackupFooter(t, data, func(f *pb.Footer) { f.Source = 99 }), "source"},
+		{"protobuf", invalidProto, "unmarshal footer"},
+		{"read error", data, readErr.Error()},
+	}
+	for _, engine := range []string{"redis", "sqlite3", "badger"} {
+		t.Run(engine, func(t *testing.T) {
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					m := newBackupTestMeta(t, engine)
+					var r io.Reader = bytes.NewBuffer(tc.data)
+					if tc.name == "read error" {
+						r = io.MultiReader(r, backupErrorReader{readErr})
+					}
+					ctx := Background()
+					err := m.LoadMetaV2(ctx, r, &LoadOption{Threads: 2})
+					if err == nil || !strings.Contains(err.Error(), tc.err) {
+						t.Fatalf("got %v, want error containing %q", err, tc.err)
+					}
+					if tc.name == "read error" && !errors.Is(err, readErr) {
+						t.Fatalf("lost read error: %v", err)
+					}
+					if !ctx.Canceled() {
+						t.Fatal("load context was not canceled")
+					}
+					// LoadMetaV2 waits for its workers before returning; no counter task may escape.
+					got, err := m.getBase().en.getCounter(usedSpace)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if got != 0 {
+						t.Fatalf("counter written before validating footer: %d", got)
+					}
+				})
 			}
-			for name, expected := range map[string]int64{
-				usedSpace:   test.wantUsedSpace,
-				totalInodes: test.wantUsedInodes,
-			} {
-				actual, err := m.getBase().en.getCounter(name)
-				if err != nil {
-					t.Fatalf("get counter %s: %v", name, err)
-				}
-				if actual != expected {
-					t.Errorf("counter %s: got %d, want %d", name, actual, expected)
-				}
+		})
+	}
+}
+
+type backupTestSeeker struct {
+	*bytes.Reader
+	short   bool
+	failAt  int
+	seeks   int
+	readErr error
+}
+
+func (r *backupTestSeeker) Seek(offset int64, whence int) (int64, error) {
+	r.seeks++
+	if r.seeks == r.failAt {
+		return 0, errors.New("seek failed")
+	}
+	return r.Reader.Seek(offset, whence)
+}
+func (r *backupTestSeeker) Read(p []byte) (int, error) {
+	if r.readErr != nil {
+		return 0, r.readErr
+	}
+	if r.short && len(p) > 1 {
+		p = p[:1]
+	}
+	return r.Reader.Read(p)
+}
+
+func TestBackupReadFooter(t *testing.T) {
+	data := makeCounterBackup(t, pb.Footer_SQL)
+	for _, tc := range []struct {
+		name    string
+		data    []byte
+		failAt  int
+		short   bool
+		readErr error
+		wantErr bool
+	}{
+		{name: "short reads", data: data, short: true},
+		{name: "length seek", data: data, failAt: 1, wantErr: true},
+		{name: "footer seek", data: data, failAt: 2, wantErr: true},
+		{name: "read error", data: data, readErr: io.ErrUnexpectedEOF, wantErr: true},
+		{name: "truncated", data: data[:4], wantErr: true},
+		{name: "oversized", data: append(append([]byte(nil), data[:len(data)-8]...), bytes.Repeat([]byte{255}, 8)...), wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &backupTestSeeker{Reader: bytes.NewReader(tc.data), short: tc.short, failAt: tc.failAt, readErr: tc.readErr}
+			_, err := (&BakFormat{}).ReadFooter(r)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("got %v, want error: %t", err, tc.wantErr)
 			}
 		})
 	}

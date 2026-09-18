@@ -165,6 +165,7 @@ type engine interface {
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
+	backupSource() pb.Footer_Engine
 	dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error
 	load(ctx Context, typ int, opt *LoadOption, val proto.Message) error
 	prepareLoad(ctx Context, opt *LoadOption) error
@@ -3991,14 +3992,7 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 	opt = opt.check()
 
 	bak := newBakFormat()
-	switch m.en.(type) {
-	case *redisMeta:
-		bak.Footer.Msg.Source = pb.Footer_REDIS
-	case *dbMeta:
-		bak.Footer.Msg.Source = pb.Footer_SQL
-	case *kvMeta:
-		bak.Footer.Msg.Source = pb.Footer_KV
-	}
+	bak.Footer.Msg.Source = m.en.backupSource()
 	ch := make(chan *dumpedResult, 100)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -4053,14 +4047,9 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	if opt == nil {
 		opt = &LoadOption{}
 	}
-	source, err := readBackupSource(r)
-	if err != nil {
-		return err
-	}
 	if err := m.en.prepareLoad(ctx, opt); err != nil {
 		return err
 	}
-	rebuildCounters := source != pb.Footer_REDIS
 
 	type task struct {
 		typ int
@@ -4097,7 +4086,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	}
 
 	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
-	var counters []*pb.Counter
+	var counters, dumped []*pb.Counter
 	bak := &BakFormat{}
 
 	sendTask := func(t *task, name string, num int) bool {
@@ -4116,8 +4105,17 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
-				if rebuildCounters {
-					batch := loaded.toBatch(counters)
+				source, err := readBackupSource(r)
+				if err != nil {
+					ctx.Cancel()
+					wg.Wait()
+					return err
+				}
+				batch := &pb.Batch{Counters: dumped}
+				if source != pb.Footer_REDIS {
+					batch = loaded.toBatch(counters)
+				}
+				if len(batch.Counters) > 0 {
 					sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
 				}
 				close(taskCh)
@@ -4128,7 +4126,8 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			return err
 		}
 
-		if rebuildCounters && loaded.updateFromSegment(seg, &counters) {
+		if loaded.updateFromSegment(seg, &counters) {
+			dumped = append(dumped, seg.val.(*pb.Batch).Counters...)
 			continue
 		}
 
