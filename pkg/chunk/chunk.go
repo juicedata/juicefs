@@ -27,6 +27,14 @@ type Reader interface {
 	ReadAt(ctx context.Context, p *Page, off int) (int, error)
 }
 
+// CachedReader is implemented by readers that can serve a range from the
+// local cache alone, without contacting the object storage.
+type CachedReader interface {
+	// ReadCachedAt fills p from the local cache. It returns false as soon as
+	// any part of the range is not cached; the caller then falls back to ReadAt.
+	ReadCachedAt(p []byte, off int) (int, bool)
+}
+
 type Writer interface {
 	io.WriterAt
 	ID() uint64
