@@ -4086,7 +4086,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	}
 
 	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
-	var counters, dumped []*pb.Counter
+	var counters []*pb.Counter
 	bak := &BakFormat{}
 
 	sendTask := func(t *task, name string, num int) bool {
@@ -4111,7 +4111,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 					wg.Wait()
 					return err
 				}
-				batch := &pb.Batch{Counters: dumped}
+				batch := &pb.Batch{Counters: counters}
 				if source != pb.Footer_REDIS {
 					batch = loaded.toBatch(counters)
 				}
@@ -4127,7 +4127,6 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		}
 
 		if loaded.updateFromSegment(seg, &counters) {
-			dumped = append(dumped, seg.val.(*pb.Batch).Counters...)
 			continue
 		}
 

@@ -115,8 +115,9 @@ func sqlQueryBatch(ctx Context, opt *DumpOption, maxId uint64, query func(ctx co
 			return err
 		})
 	}
+	err := eg.Wait()
 	logger.Debugf("dump %d rows", sum)
-	return eg.Wait()
+	return err
 }
 
 func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {

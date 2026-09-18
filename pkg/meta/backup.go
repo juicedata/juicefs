@@ -467,7 +467,7 @@ func (opt *LoadOption) check() {
 	}
 }
 
-func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counter) bool {
+func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Counter) bool {
 	recordInode := func(inode uint64) {
 		if Ino(inode) < TrashInode {
 			c.NextInode = max(c.NextInode, int64(inode)+1)
@@ -477,7 +477,9 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counte
 	}
 	switch seg.typ {
 	case segTypeCounter:
-		for _, counter := range seg.val.(*pb.Batch).Counters {
+		batch := seg.val.(*pb.Batch)
+		*counters = append(*counters, batch.Counters...)
+		for _, counter := range batch.Counters {
 			switch counter.Key {
 			case "nextInode":
 				c.NextInode = max(c.NextInode, counter.Value)
@@ -487,9 +489,6 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counte
 				c.NextSession = max(c.NextSession, counter.Value)
 			case "nextTrash":
 				c.NextTrash = max(c.NextTrash, counter.Value)
-			case usedSpace, totalInodes:
-			default:
-				*others = append(*others, counter)
 			}
 		}
 		return true
@@ -529,7 +528,15 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counte
 	return false
 }
 
-func (c *DumpedCounters) toBatch(others []*pb.Counter) *pb.Batch {
+func (c *DumpedCounters) toBatch(counters []*pb.Counter) *pb.Batch {
+	others := counters[:0]
+	for _, counter := range counters {
+		switch counter.Key {
+		case usedSpace, totalInodes, "nextInode", "nextChunk", "nextSession", "nextTrash":
+		default:
+			others = append(others, counter)
+		}
+	}
 	return &pb.Batch{Counters: append(others,
 		&pb.Counter{Key: usedSpace, Value: c.UsedSpace},
 		&pb.Counter{Key: totalInodes, Value: c.UsedInodes},
