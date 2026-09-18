@@ -173,6 +173,21 @@ func (f *BakFormat) ReadFooter(r io.ReadSeeker) (*BakFooter, error) { // nolint:
 	return footer, nil
 }
 
+func readBackupSource(r io.Reader) (pb.Footer_Engine, error) {
+	rs, ok := r.(io.ReadSeeker)
+	if !ok {
+		return pb.Footer_UNKNOWN, nil
+	}
+	footer, err := (&BakFormat{}).ReadFooter(rs)
+	if err != nil {
+		return pb.Footer_UNKNOWN, err
+	}
+	if _, err = rs.Seek(0, io.SeekStart); err != nil {
+		return pb.Footer_UNKNOWN, err
+	}
+	return footer.Msg.Source, nil
+}
+
 type BakFooter struct {
 	Msg *pb.Footer
 	Len uint64
@@ -419,9 +434,8 @@ func dumpResult(ctx context.Context, ch chan<- *dumpedResult, res *dumpedResult)
 }
 
 type LoadOption struct {
-	Threads         int
-	Progress        func(name string, cnt int)
-	rebuildCounters bool // set by prepareLoad, redis doesn't rebuild counters for now
+	Threads  int
+	Progress func(name string, cnt int)
 }
 
 func (opt *LoadOption) check() {

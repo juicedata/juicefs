@@ -149,7 +149,7 @@ func open(src string, key string, algo string) (io.ReadCloser, error) {
 	} else if strings.HasSuffix(src, ".zstd") {
 		r = zstd.NewReader(fp)
 	} else {
-		r = fp
+		return fp, nil
 	}
 	return &reader{compressR: r, encryptR: fp}, nil
 }
@@ -199,6 +199,7 @@ func load(ctx *cli.Context) error {
 		if src, err = convert(src, key, algo); err != nil {
 			return err
 		}
+		key = ""
 		if ctx.Bool("stat") {
 			return statBak(ctx, src)
 		}

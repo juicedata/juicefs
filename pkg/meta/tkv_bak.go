@@ -678,9 +678,14 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	if opt == nil {
 		opt = &LoadOption{}
 	}
+	source, err := readBackupSource(r)
+	if err != nil {
+		return err
+	}
 	if err := m.en.prepareLoad(ctx, opt); err != nil {
 		return err
 	}
+	rebuildCounters := source != pb.Footer_REDIS
 
 	type task struct {
 		typ int
@@ -786,8 +791,10 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
-				batch := loaded.toBatch(counters)
-				sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
+				if rebuildCounters {
+					batch := loaded.toBatch(counters)
+					sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
+				}
 				close(taskCh)
 				break
 			}
@@ -795,7 +802,7 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			wg.Wait()
 			return err
 		}
-		if loaded.updateFromSegment(seg, &counters) {
+		if rebuildCounters && loaded.updateFromSegment(seg, &counters) {
 			continue
 		}
 
