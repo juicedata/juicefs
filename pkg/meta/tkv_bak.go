@@ -36,6 +36,10 @@ var (
 	kvDumpBatchSize = 10000
 )
 
+func (m *kvMeta) backupSource() pb.Footer_Engine {
+	return pb.Footer_KV
+}
+
 func (m *kvMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var dumps = []func(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error{
 		m.dumpFormat,
@@ -786,8 +790,19 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
-				batch := loaded.toBatch(counters)
-				sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
+				source, err := readBackupSource(r)
+				if err != nil {
+					ctx.Cancel()
+					wg.Wait()
+					return err
+				}
+				batch := &pb.Batch{Counters: counters}
+				if source != pb.Footer_REDIS {
+					batch = loaded.toBatch(counters)
+				}
+				if len(batch.Counters) > 0 {
+					sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
+				}
 				close(taskCh)
 				break
 			}

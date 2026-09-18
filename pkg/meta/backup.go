@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"unsafe"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -166,11 +165,28 @@ func (f *BakFormat) ReadFooter(r io.ReadSeeker) (*BakFooter, error) { // nolint:
 	if err := footer.Unmarshal(r); err != nil {
 		return nil, err
 	}
-	if footer.Msg.Magic != BakMagic {
-		return nil, fmt.Errorf("invalid magic number %d, expect %d", footer.Msg.Magic, BakMagic)
-	}
 	f.Footer = footer
 	return footer, nil
+}
+
+// readBackupSource reads the footer after the end-of-segments marker.
+func readBackupSource(r io.Reader) (pb.Footer_Engine, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return pb.Footer_UNKNOWN, fmt.Errorf("failed to read footer: %w", err)
+	}
+	if len(data) < 8 {
+		return pb.Footer_UNKNOWN, fmt.Errorf("failed to read footer length: %w", io.ErrUnexpectedEOF)
+	}
+	length := binary.BigEndian.Uint64(data[len(data)-8:])
+	if length != uint64(len(data)-8) {
+		return pb.Footer_UNKNOWN, fmt.Errorf("invalid footer length %d, actual %d", length, len(data)-8)
+	}
+	footer := &BakFooter{Len: length}
+	if err := footer.unmarshal(data[:len(data)-8]); err != nil {
+		return pb.Footer_UNKNOWN, err
+	}
+	return footer.Msg.Source, nil
 }
 
 type BakFooter struct {
@@ -196,24 +212,46 @@ func (h *BakFooter) Marshal(w io.Writer) error {
 }
 
 func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
-	lenSize := int64(unsafe.Sizeof(h.Len))
-	_, _ = r.Seek(-lenSize, io.SeekEnd)
-
-	data := make([]byte, lenSize)
-	if n, err := r.Read(data); err != nil && n != int(lenSize) {
-		return fmt.Errorf("failed to read footer length: err %w, read len %d, expect len %d", err, n, lenSize)
+	end, err := r.Seek(-8, io.SeekEnd)
+	if err != nil {
+		return fmt.Errorf("failed to seek footer length: %w", err)
 	}
-
-	h.Len = binary.BigEndian.Uint64(data)
-	_, _ = r.Seek(-int64(h.Len)-lenSize, io.SeekEnd)
-	data = make([]byte, h.Len)
-	if n, err := r.Read(data); err != nil && n != int(h.Len) {
-		return fmt.Errorf("failed to read footer: err %w, read len %d, expect len %d", err, n, h.Len)
+	if end < 0 {
+		return fmt.Errorf("failed to read footer length: %w", io.ErrUnexpectedEOF)
 	}
+	var length [8]byte
+	if _, err := io.ReadFull(r, length[:]); err != nil {
+		return fmt.Errorf("failed to read footer length: %w", err)
+	}
+	h.Len = binary.BigEndian.Uint64(length[:])
+	if h.Len > uint64(end) || h.Len > uint64(^uint(0)>>1) {
+		return fmt.Errorf("invalid footer length %d, available %d", h.Len, end)
+	}
+	if _, err := r.Seek(end-int64(h.Len), io.SeekStart); err != nil {
+		return fmt.Errorf("failed to seek footer: %w", err)
+	}
+	data := make([]byte, int(h.Len))
+	if _, err := io.ReadFull(r, data); err != nil {
+		return fmt.Errorf("failed to read footer: %w", err)
+	}
+	return h.unmarshal(data)
+}
 
+func (h *BakFooter) unmarshal(data []byte) error {
 	h.Msg = &pb.Footer{}
 	if err := proto.Unmarshal(data, h.Msg); err != nil {
 		return fmt.Errorf("failed to unmarshal footer: %w", err)
+	}
+	if h.Msg.Magic != BakMagic {
+		return fmt.Errorf("invalid magic number %d, expect %d", h.Msg.Magic, BakMagic)
+	}
+	if h.Msg.Version != BakVersion {
+		return fmt.Errorf("unsupported backup version %d", h.Msg.Version)
+	}
+	switch h.Msg.Source {
+	case pb.Footer_UNKNOWN, pb.Footer_REDIS, pb.Footer_SQL, pb.Footer_KV:
+	default:
+		return fmt.Errorf("unsupported backup source %d", h.Msg.Source)
 	}
 	return nil
 }
@@ -359,8 +397,8 @@ func (s *BakSegment) Unmarshal(r io.Reader) error {
 		return fmt.Errorf("failed to read segment %s length: %v", s, err)
 	}
 	data := make([]byte, s.len)
-	n, err := r.Read(data)
-	if err != nil && n != int(s.len) {
+	n, err := io.ReadFull(r, data)
+	if err != nil {
 		return fmt.Errorf("failed to read segment value: err %v, read len %d, expect len %d", err, n, s.len)
 	}
 
@@ -419,9 +457,8 @@ func dumpResult(ctx context.Context, ch chan<- *dumpedResult, res *dumpedResult)
 }
 
 type LoadOption struct {
-	Threads         int
-	Progress        func(name string, cnt int)
-	rebuildCounters bool // set by prepareLoad, redis doesn't rebuild counters for now
+	Threads  int
+	Progress func(name string, cnt int)
 }
 
 func (opt *LoadOption) check() {
@@ -430,7 +467,7 @@ func (opt *LoadOption) check() {
 	}
 }
 
-func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counter) bool {
+func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Counter) bool {
 	recordInode := func(inode uint64) {
 		if Ino(inode) < TrashInode {
 			c.NextInode = max(c.NextInode, int64(inode)+1)
@@ -440,7 +477,9 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counte
 	}
 	switch seg.typ {
 	case segTypeCounter:
-		for _, counter := range seg.val.(*pb.Batch).Counters {
+		batch := seg.val.(*pb.Batch)
+		*counters = append(*counters, batch.Counters...)
+		for _, counter := range batch.Counters {
 			switch counter.Key {
 			case "nextInode":
 				c.NextInode = max(c.NextInode, counter.Value)
@@ -450,9 +489,6 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counte
 				c.NextSession = max(c.NextSession, counter.Value)
 			case "nextTrash":
 				c.NextTrash = max(c.NextTrash, counter.Value)
-			case usedSpace, totalInodes:
-			default:
-				*others = append(*others, counter)
 			}
 		}
 		return true
@@ -492,7 +528,15 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, others *[]*pb.Counte
 	return false
 }
 
-func (c *DumpedCounters) toBatch(others []*pb.Counter) *pb.Batch {
+func (c *DumpedCounters) toBatch(counters []*pb.Counter) *pb.Batch {
+	others := counters[:0]
+	for _, counter := range counters {
+		switch counter.Key {
+		case usedSpace, totalInodes, "nextInode", "nextChunk", "nextSession", "nextTrash":
+		default:
+			others = append(others, counter)
+		}
+	}
 	return &pb.Batch{Counters: append(others,
 		&pb.Counter{Key: usedSpace, Value: c.UsedSpace},
 		&pb.Counter{Key: totalInodes, Value: c.UsedInodes},

@@ -17,11 +17,14 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -84,4 +87,46 @@ func TestDumpAndLoad(t *testing.T) {
 		}
 	})
 	rdb.FlushDB(context.Background())
+}
+
+func TestLoadBinaryPipe(t *testing.T) {
+	source := meta.NewClient("sqlite3://"+filepath.Join(t.TempDir(), "source.db"), nil)
+	defer source.Shutdown()
+	if err := source.Init(&meta.Format{Name: "pipe-test"}, true); err != nil {
+		t.Fatal(err)
+	}
+	var data bytes.Buffer
+	if err := source.DumpMetaV2(meta.Background(), &data, &meta.DumpOption{Threads: 1}); err != nil {
+		t.Fatal(err)
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	written := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(w, &data)
+		w.Close()
+		written <- err
+	}()
+	stdin := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = stdin }()
+	uri := "sqlite3://" + filepath.Join(t.TempDir(), "target.db")
+	if err := Main([]string{"", "load", "--binary", uri}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-written; err != nil {
+		t.Fatal(err)
+	}
+	restored := meta.NewClient(uri, nil)
+	defer restored.Shutdown()
+	format, err := restored.Load(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if format.Name != "pipe-test" {
+		t.Fatalf("restored volume: %q", format.Name)
+	}
 }

@@ -39,6 +39,10 @@ var (
 	sqlDumpBatchSize = 100000
 )
 
+func (m *dbMeta) backupSource() pb.Footer_Engine {
+	return pb.Footer_SQL
+}
+
 func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var dumps = []func(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error{
 		m.dumpFormat,
@@ -111,8 +115,9 @@ func sqlQueryBatch(ctx Context, opt *DumpOption, maxId uint64, query func(ctx co
 			return err
 		})
 	}
+	err := eg.Wait()
 	logger.Debugf("dump %d rows", sum)
-	return eg.Wait()
+	return err
 }
 
 func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
@@ -991,7 +996,6 @@ func (m *dbMeta) insertRowsIdempotent(beans []interface{}) error {
 
 func (m *dbMeta) prepareLoad(ctx Context, opt *LoadOption) error {
 	opt.check()
-	opt.rebuildCounters = true
 	if err := m.checkAddr(); err != nil {
 		return err
 	}

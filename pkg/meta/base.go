@@ -165,6 +165,7 @@ type engine interface {
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
+	backupSource() pb.Footer_Engine
 	dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error
 	load(ctx Context, typ int, opt *LoadOption, val proto.Message) error
 	prepareLoad(ctx Context, opt *LoadOption) error
@@ -3991,6 +3992,7 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 	opt = opt.check()
 
 	bak := newBakFormat()
+	bak.Footer.Msg.Source = m.en.backupSource()
 	ch := make(chan *dumpedResult, 100)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -4103,8 +4105,17 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
-				if opt.rebuildCounters {
-					batch := loaded.toBatch(counters)
+				source, err := readBackupSource(r)
+				if err != nil {
+					ctx.Cancel()
+					wg.Wait()
+					return err
+				}
+				batch := &pb.Batch{Counters: counters}
+				if source != pb.Footer_REDIS {
+					batch = loaded.toBatch(counters)
+				}
+				if len(batch.Counters) > 0 {
 					sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
 				}
 				close(taskCh)
@@ -4115,7 +4126,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			return err
 		}
 
-		if opt.rebuildCounters && loaded.updateFromSegment(seg, &counters) {
+		if loaded.updateFromSegment(seg, &counters) {
 			continue
 		}
 
