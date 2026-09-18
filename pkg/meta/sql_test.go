@@ -18,15 +18,43 @@
 package meta
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	xormlog "xorm.io/xorm/log"
 )
+
+func TestSQLQueryBatch(t *testing.T) {
+	queryErr := errors.New("query failed")
+	for _, threads := range []int{1, 4} {
+		for _, wantErr := range []error{nil, queryErr} {
+			t.Run(fmt.Sprintf("threads=%d/error=%v", threads, wantErr), func(t *testing.T) {
+				var completed atomic.Int64
+				err := sqlQueryBatch(Background(), &DumpOption{Threads: threads}, 3*uint64(sqlDumpBatchSize), func(ctx context.Context, start, end uint64) (int, error) {
+					completed.Add(1)
+					if start == 3*uint64(sqlDumpBatchSize) {
+						return 7, wantErr
+					}
+					return 7, nil
+				})
+				if !errors.Is(err, wantErr) {
+					t.Fatalf("query error: got %v, want %v", err, wantErr)
+				}
+				if got := completed.Load(); got != 4 {
+					t.Fatalf("completed queries: got %d, want 4", got)
+				}
+			})
+		}
+	}
+}
 
 func TestSQLiteClient(t *testing.T) {
 	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), testConfig())

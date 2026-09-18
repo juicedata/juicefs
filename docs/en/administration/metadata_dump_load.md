@@ -107,7 +107,9 @@ juicefs load redis://192.168.1.6:6379 meta-dump
 juicefs load redis://192.168.1.6:6379 meta-dump --binary
 ```
 
-Once imported, JuiceFS will recalculate the file system statistics including space usage, inode counters, and eventually generates a globally consistent metadata in the database. If you have a deep understanding of the metadata design of JuiceFS, you can also modify the metadata backup file before restoring to debug.
+JSON imports recalculate file system statistics, including space usage and inode counters. Binary imports preserve the dumped counters when the backup identifies Redis as its source. SQL/KV backups and older backups without source information rebuild counters from the restored records, regardless of the destination engine, including Redis. If you have a deep understanding of the metadata design of JuiceFS, you can also modify the metadata backup file before restoring to debug.
+
+Binary imports also support pipes. Counters are written only after the footer at the end of the input has been read and validated. If the footer is damaged or the import fails, the destination may already contain some metadata; loading does not roll back those records. Retry with an empty destination.
 
 The dump file is written in an uniform format, which can be recognized and imported by all metadata engines, making it easy to migrate to other types of metadata engines.
 

@@ -41,6 +41,10 @@ var (
 	redisPipeLimit = 1000
 )
 
+func (m *redisMeta) backupSource() pb.Footer_Engine {
+	return pb.Footer_REDIS
+}
+
 func (m *redisMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var dumps = []func(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error{
 		m.dumpFormat,
