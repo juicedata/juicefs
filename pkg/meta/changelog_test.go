@@ -88,6 +88,14 @@ func TestParseChangeEntry(t *testing.T) {
 		txn    uint64
 	}{
 		{
+			entry:  "1716440752.123456789|CREATE(1,report.txt,1000,1000,1,420,18,,Keep,true,0):1024|(3,88)",
+			op:     OpCreate,
+			args:   []string{"1", "report.txt", "1000", "1000", "1", "420", "18", "", "Keep", "true", "0"},
+			result: []string{"1024"},
+			sid:    3,
+			txn:    88,
+		},
+		{ // CREATE recorded before rdev was logged
 			entry:  "1716440752.123456789|CREATE(1,report.txt,1000,1000,1,420,18,,Keep,true):1024|(3,88)",
 			op:     OpCreate,
 			args:   []string{"1", "report.txt", "1000", "1000", "1", "420", "18", "", "Keep", "true"},
@@ -206,6 +214,12 @@ func TestChangeEntryValidate(t *testing.T) {
 	if err := mustParse("1.0|UNLINKBATCH(1,a,b,0,true):11|(1,1)").Validate(); err == nil {
 		t.Fatal("mismatched batch sizes should not validate")
 	}
+	if err := mustParse("1.0|CREATE(1,f,1000,1000,1,420,18,,Keep):1024|(1,1)").Validate(); err == nil {
+		t.Fatal("missing required argument should not validate")
+	}
+	if err := mustParse("1.0|CREATE(1,f,1000,1000,1,420,18,,Keep,true,0,9):1024|(1,1)").Validate(); err == nil {
+		t.Fatal("extra argument should not validate")
+	}
 	e := mustParse("1.0|UNLINKBATCH(1,a,b,0,true):11,12|(1,1)")
 	if err := e.Validate(); err != nil {
 		t.Fatal(err)
@@ -238,6 +252,13 @@ func TestChangeEntryAccessors(t *testing.T) {
 	if _, err := e.Ino(10); err == nil {
 		t.Fatal("out of range should fail")
 	}
+	e, err = ParseChangeEntry(1, "1.0|CREATE(1,f,1000,1000,3,420,18,,Keep,true,2049):1024|(3,88)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rdev, err := e.Uint32(10); err != nil || rdev != 2049 {
+		t.Fatalf("Uint32(10) = %v, %v", rdev, err)
+	}
 	if _, err := e.Bool(0); err == nil {
 		t.Fatal("Bool on a number should fail")
 	}
@@ -247,7 +268,7 @@ func TestChangeEntryAccessors(t *testing.T) {
 }
 
 func BenchmarkParseChangeEntry(b *testing.B) {
-	entry := fmt.Sprintf("1716440752.123456789|CREATE(1,%s,1000,1000,1,420,18,,Keep,true):1024|(3,88)", logEncode2("report.txt"))
+	entry := fmt.Sprintf("1716440752.123456789|CREATE(1,%s,1000,1000,1,420,18,,Keep,true,0):1024|(3,88)", logEncode2("report.txt"))
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
 		if _, err := ParseChangeEntry(int64(i), entry); err != nil {

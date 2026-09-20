@@ -224,9 +224,13 @@ func applyCreate(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	// FIXME: CREATE does not record rdev for device nodes.
-	if typ == TypeBlockDev || typ == TypeCharDev {
-		return fmt.Errorf("CREATE of a device node is missing rdev")
+	var rdev uint32
+	if len(e.Args) > 10 {
+		if rdev, err = e.Uint32(10); err != nil {
+			return err
+		}
+	} else if typ == TypeBlockDev || typ == TypeCharDev {
+		return fmt.Errorf("%s of a device node was recorded before rdev was logged", e.Op)
 	}
 	mode, err := e.Uint16(5)
 	if err != nil {
@@ -253,7 +257,7 @@ func applyCreate(ctx Context, dst Meta, e *ChangeEntry) error {
 	ctx = ctx.WithValue(CtxKey("behavior"), e.Args[8])
 	// FIXME: CREATE does not record the resulting mode/gid/flags or ACL IDs; apply
 	// can inherit different attributes across platforms or ACL allocation orders.
-	if err := changelogCall(e, dst.Mknod(ctx, parent, name, typ, mode, cumask, 0, path, &inode, nil)); err != nil {
+	if err := changelogCall(e, dst.Mknod(ctx, parent, name, typ, mode, cumask, rdev, path, &inode, nil)); err != nil {
 		return err
 	}
 	return changelogVerifyIno(e, 0, inode)
