@@ -29,6 +29,7 @@ type changelogApplyStateKey struct{}
 type changelogApplyState struct {
 	Time    time.Time
 	Inode   Ino
+	Inodes  []Ino        // Source inodes of a batch operation, consumed in order.
 	Trash   Ino          // Source trash directory; zero skips trash.
 	Sid     uint64       // Source session ID for sustained inodes.
 	Parents map[Ino]bool // Whether the source updated each parent directory.
@@ -104,6 +105,8 @@ func Apply(ctx Context, dst Meta, e *ChangeEntry) (err error) {
 		return applyMove(ctx, dst, e)
 	case OpClone:
 		return applyClone(ctx, dst, e)
+	case OpCloneBatch:
+		return applyCloneBatch(ctx, dst, e)
 	case OpAttach:
 		return applyAttach(ctx, dst, e)
 	case OpCleanup:
@@ -433,6 +436,60 @@ func applyClone(ctx Context, dst Meta, e *ChangeEntry) error {
 		// Clone accounts the new entry in its parent; directories do it after ATTACH.
 		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
 		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
+	}
+	return nil
+}
+
+func applyCloneBatch(ctx Context, dst Meta, e *ChangeEntry) error {
+	dstParent, err := e.Ino(0)
+	if err != nil {
+		return err
+	}
+	cmode, err := e.Uint8(1)
+	if err != nil {
+		return err
+	}
+	cumask, err := e.Uint16(2)
+	if err != nil {
+		return err
+	}
+	entries := make([]*Entry, len(e.Result))
+	inodes := make([]Ino, len(e.Result))
+	for i := range e.Result {
+		srcIno, err := e.Ino(5 + i*2)
+		if err != nil {
+			return err
+		}
+		name, err := e.Str(6 + i*2)
+		if err != nil {
+			return err
+		}
+		entries[i] = &Entry{Inode: srcIno, Name: []byte(name)}
+		if inodes[i], err = e.ResultIno(i); err != nil {
+			return err
+		}
+	}
+	ctx, err = changelogOwnerContext(ctx, e, 3, 4)
+	if err != nil {
+		return err
+	}
+	state := getChangelogApplyState(ctx)
+	state.Inodes = inodes
+	m := dst.getBase()
+	// The engines ignore srcParent; the changelog does not record it.
+	if err := changelogCall(e, m.BatchClone(ctx, 0, dstParent, entries, cmode, cumask, nil)); err != nil {
+		return err
+	}
+	// Entries whose source disappeared are skipped silently, so check each one.
+	for i, entry := range entries {
+		var inode Ino
+		var attr Attr
+		if st := dst.Lookup(ctx, dstParent, string(entry.Name), &inode, &attr, false); st != 0 {
+			return fmt.Errorf("%s lookup %q: %s", e.Op, entry.Name, st)
+		}
+		if inode != inodes[i] {
+			return fmt.Errorf("%s: %q resolved to inode %d, changelog has %d", e.Op, entry.Name, inode, inodes[i])
+		}
 	}
 	return nil
 }

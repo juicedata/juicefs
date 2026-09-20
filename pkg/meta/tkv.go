@@ -4652,7 +4652,7 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	}
 
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
-		now := time.Now()
+		now := operationTime(ctx)
 		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
 		// validate destination parent

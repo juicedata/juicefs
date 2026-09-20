@@ -1532,8 +1532,15 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 }
 
 func (m *baseMeta) nextInode(ctx Context) (Ino, error) {
-	if state := getChangelogApplyState(ctx); state != nil && state.Inode != 0 {
-		return state.Inode, nil
+	if state := getChangelogApplyState(ctx); state != nil {
+		if state.Inode != 0 {
+			return state.Inode, nil
+		}
+		if len(state.Inodes) > 0 {
+			ino := state.Inodes[0]
+			state.Inodes = state.Inodes[1:]
+			return ino, nil
+		}
 	}
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()

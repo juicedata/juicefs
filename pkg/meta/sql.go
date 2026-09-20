@@ -5666,7 +5666,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	}
 
 	err := m.txn(func(s *xorm.Session) error {
-		nowNano := time.Now().UnixNano()
+		nowNano := operationTime(ctx).UnixNano()
 		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
 		if _, err := m.validateCloneTarget(ctx, s, dstParent); err != nil {
