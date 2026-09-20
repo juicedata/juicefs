@@ -95,10 +95,7 @@ func (n ZStandard) Decompress(dst, src []byte) (int, error) {
 	if len(src) == 0 {
 		return 0, fmt.Errorf("decompress an empty input")
 	}
-	// DecompressInto writes at most len(dst) bytes, while Decompress expands
-	// dst to cap(dst) and lets libzstd stage a block's literals past the
-	// decompressed output, overwriting the rest of the buffer dst is a slice
-	// of (the reader shares one readahead buffer between several slices).
+	// Use DecompressInto to limit writes to len(dst), not cap(dst).
 	out := dst
 	if len(out) == 0 {
 		// libzstd needs a non-empty output, even for an empty frame
