@@ -5065,12 +5065,16 @@ func (m *kvMeta) loadDumpedACLs(ctx Context) error {
 
 func (m *kvMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
 	err := m.txn(ctx, func(tx *kvTxn) error {
-		newId, err := m.incrCounter(krbTokenCounter, 1)
-		if err != nil {
-			return err
+		newId := applyTokenId(ctx)
+		if newId == 0 {
+			v, err := m.incrCounter(krbTokenCounter, 1)
+			if err != nil {
+				return err
+			}
+			newId = uint32(v)
 		}
-		tx.set(m.krbTokenKey(uint32(newId)), token)
-		id = uint32(newId)
+		tx.set(m.krbTokenKey(newId), token)
+		id = newId
 		m.genLog(tx, time.Now(), "STORETOKEN(%d,%s)", id, logEncode(token))
 		return nil
 	})

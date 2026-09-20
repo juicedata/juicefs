@@ -30,6 +30,7 @@ type changelogApplyState struct {
 	Time    time.Time
 	Inode   Ino
 	Inodes  []Ino        // Source inodes of a batch operation, consumed in order.
+	TokenId uint32       // Source token ID for STORETOKEN.
 	Trash   Ino          // Source trash directory; zero skips trash.
 	Sid     uint64       // Source session ID for sustained inodes.
 	Parents map[Ino]bool // Whether the source updated each parent directory.
@@ -59,6 +60,14 @@ func applyParent(ctx Context, parent Ino, update bool) bool {
 		}
 	}
 	return update
+}
+
+// applyTokenId returns the token ID to reuse when replaying STORETOKEN, or 0.
+func applyTokenId(ctx Context) uint32 {
+	if s := getChangelogApplyState(ctx); s != nil {
+		return s.TokenId
+	}
+	return 0
 }
 
 func (m *baseMeta) sessionID(ctx Context) uint64 {
@@ -154,6 +163,8 @@ func Apply(ctx Context, dst Meta, e *ChangeEntry) (err error) {
 		return applyDelQuota(ctx, dst, e)
 	case OpUpdateToken:
 		return applyUpdateToken(ctx, dst, e)
+	case OpStoreToken:
+		return applyStoreToken(ctx, dst, e)
 	case OpDeleteTokens:
 		return applyDeleteTokens(ctx, dst, e)
 	case OpAccess:
@@ -870,6 +881,25 @@ func applyDelQuota(ctx Context, dst Meta, e *ChangeEntry) error {
 		return err
 	}
 	return dst.getBase().en.doDelQuota(ctx, qtype, key)
+}
+
+func applyStoreToken(ctx Context, dst Meta, e *ChangeEntry) error {
+	id, err := e.Uint32(0)
+	if err != nil {
+		return err
+	}
+	if id == 0 {
+		return fmt.Errorf("%s: token ID must not be zero", e.Op)
+	}
+	getChangelogApplyState(ctx).TokenId = id
+	actual, st := dst.StoreToken(ctx, []byte(e.Args[1]))
+	if err := changelogCall(e, st); err != nil {
+		return err
+	}
+	if actual != id {
+		return fmt.Errorf("%s stored token %d, changelog has %d", e.Op, actual, id)
+	}
+	return nil
 }
 
 func applyUpdateToken(ctx Context, dst Meta, e *ChangeEntry) error {

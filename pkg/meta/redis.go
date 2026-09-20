@@ -6124,13 +6124,17 @@ func (m *redisMeta) loadDumpedACLs(ctx Context) error {
 
 func (m *redisMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
 	err := m.txn(ctx, func(tx *redis.Tx) error {
-		newId, err := m.incrCounter(krbTokenCounter, 1)
-		if err != nil {
-			return err
+		newId := applyTokenId(ctx)
+		if newId == 0 {
+			v, err := m.incrCounter(krbTokenCounter, 1)
+			if err != nil {
+				return err
+			}
+			newId = uint32(v)
 		}
-		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, m.krbTokenKey(), strconv.FormatUint(uint64(newId), 10), token)
-			id = uint32(newId)
+			id = newId
 			m.genLog(ctx, pipe, time.Now(), "STORETOKEN(%d,%s)", id, logEncode(token))
 			return nil
 		})

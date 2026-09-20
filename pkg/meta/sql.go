@@ -6165,7 +6165,7 @@ func (m *dbMeta) loadDumpedACLs(ctx Context) error {
 
 func (m *dbMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
 	err := m.txn(func(s *xorm.Session) error {
-		t := &delegationToken{Token: token}
+		t := &delegationToken{Id: applyTokenId(ctx), Token: token}
 		_, err := s.Insert(t)
 		if err != nil {
 			return err
