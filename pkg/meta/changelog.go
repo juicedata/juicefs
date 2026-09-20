@@ -107,7 +107,7 @@ var changelogOps = map[string][]changelogOpSpec{
 	OpDelQuota:             {{2, 0}},
 	OpDirStat:              {{4, 0}},
 	OpRepairDir:            {{1, 0}},
-	OpClone:                {{7, 1}},
+	OpClone:                {{9, 1}, {7, 1}}, // uid and gids appended
 	OpCloneBatch:           {{variadic, variadic}},
 	OpAttach:               {{3, 0}},
 	OpCleanup:              {{1, 0}},
@@ -345,6 +345,24 @@ func (e *ChangeEntry) Uint8(i int) (uint8, error) {
 func (e *ChangeEntry) Ino(i int) (Ino, error) {
 	v, err := e.Uint64(i)
 	return Ino(v), err
+}
+
+// Gids parses a group list produced by logGids.
+func (e *ChangeEntry) Gids(i int) ([]uint32, error) {
+	s, err := e.Str(i)
+	if err != nil {
+		return nil, err
+	}
+	parts := strings.Split(s, ":")
+	gids := make([]uint32, len(parts))
+	for j, p := range parts {
+		v, err := strconv.ParseUint(p, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("%s: argument %d %q is not a group list", e.Op, i, s)
+		}
+		gids[j] = uint32(v)
+	}
+	return gids, nil
 }
 
 func (e *ChangeEntry) Bool(i int) (bool, error) {

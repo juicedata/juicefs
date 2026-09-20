@@ -5520,7 +5520,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		}
 		n.Inode = ino
 		n.Parent = parent
-		now := time.Now()
+		now := operationTime(ctx)
 
 		m.parseAttr(&n, attr)
 		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
@@ -5547,15 +5547,16 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				return err
 			}
 			if n.Type != TypeDirectory {
-				pn.setMtime(now.UnixNano())
-				pn.setCtime(now.UnixNano())
+				ns := now.UnixNano()
+				pn.setMtime(ns)
+				pn.setCtime(ns)
 				if _, err = s.Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: parent}); err != nil {
 					return err
 				}
 			}
 		}
 		if top && n.Type == TypeDirectory {
-			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})
+			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: now.Unix()})
 		} else {
 			err = mustInsert(s, &n, &edge{Parent: parent, Name: []byte(name), Inode: ino, Type: n.Type})
 			if isDuplicateEntryErr(err) {
@@ -5918,7 +5919,7 @@ func (m *dbMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 			return syscall.EPERM
 		}
 		n.Nlink++
-		now := time.Now().UnixNano()
+		now := operationTime(ctx).UnixNano()
 		n.setMtime(now)
 		n.setCtime(now)
 		if _, err = s.Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&n, &node{Inode: parent}); err != nil {

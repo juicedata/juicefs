@@ -220,6 +220,15 @@ func TestChangeEntryValidate(t *testing.T) {
 	if err := mustParse("1.0|CREATE(1,f,1000,1000,1,420,18,,Keep,true,0,9):1024|(1,1)").Validate(); err == nil {
 		t.Fatal("extra argument should not validate")
 	}
+	if err := mustParse("1.0|CLONE(1,2,f,3,0,18,true,1000,1000:1001):3|(1,1)").Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := mustParse("1.0|CLONE(1,2,f,3,0,18,true):3|(1,1)").Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := mustParse("1.0|CLONE(1,2,f,3,0,18,true,1000):3|(1,1)").Validate(); err == nil {
+		t.Fatal("partial owner should not validate")
+	}
 	e := mustParse("1.0|UNLINKBATCH(1,a,b,0,true):11,12|(1,1)")
 	if err := e.Validate(); err != nil {
 		t.Fatal(err)
@@ -264,6 +273,16 @@ func TestChangeEntryAccessors(t *testing.T) {
 	}
 	if _, err := e.Uint8(2); err == nil {
 		t.Fatal("Uint8 overflow should fail")
+	}
+	e, err = ParseChangeEntry(1, "1.0|CLONE(1,2,f,3,0,18,true,1000,1000:1001):3|(3,88)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gids, err := e.Gids(8); err != nil || len(gids) != 2 || gids[0] != 1000 || gids[1] != 1001 {
+		t.Fatalf("Gids(8) = %v, %v", gids, err)
+	}
+	if _, err := e.Gids(2); err == nil {
+		t.Fatal("Gids on a name should fail")
 	}
 }
 

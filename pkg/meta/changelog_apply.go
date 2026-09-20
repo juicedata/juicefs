@@ -102,6 +102,16 @@ func Apply(ctx Context, dst Meta, e *ChangeEntry) (err error) {
 		return applyRmdir(ctx, dst, e)
 	case OpMove:
 		return applyMove(ctx, dst, e)
+	case OpClone:
+		return applyClone(ctx, dst, e)
+	case OpAttach:
+		return applyAttach(ctx, dst, e)
+	case OpCleanup:
+		inode, err := e.Ino(0)
+		if err != nil {
+			return err
+		}
+		return changelogCall(e, dst.getBase().en.doCleanupDetachedNode(ctx, inode))
 	case OpSetXattr:
 		return applySetXattr(ctx, dst, e)
 	case OpRemoveXattr:
@@ -177,7 +187,7 @@ func Apply(ctx Context, dst Meta, e *ChangeEntry) (err error) {
 	case OpInitDirStats, OpInitUserGroupQuota:
 		skipReason = "statistics initialization is not applied"
 		return nil
-	case OpDelChunk, OpDeleteSlice, OpCleanupDelayedSlices, OpCleanupTrashSlices, OpCleanup:
+	case OpDelChunk, OpDeleteSlice, OpCleanupDelayedSlices, OpCleanupTrashSlices:
 		skipReason = "background cleanup is not applied"
 		return nil
 	case OpSet:
@@ -373,6 +383,102 @@ func applyMove(ctx Context, dst Meta, e *ChangeEntry) error {
 		return err
 	}
 	return changelogVerifyIno(e, 0, inode)
+}
+
+func applyClone(ctx Context, dst Meta, e *ChangeEntry) error {
+	srcIno, err := e.Ino(0)
+	if err != nil {
+		return err
+	}
+	parent, err := e.Ino(1)
+	if err != nil {
+		return err
+	}
+	name := e.Args[2]
+	ino, err := e.Ino(3)
+	if err != nil {
+		return err
+	}
+	cmode, err := e.Uint8(4)
+	if err != nil {
+		return err
+	}
+	cumask, err := e.Uint16(5)
+	if err != nil {
+		return err
+	}
+	top, err := e.Bool(6)
+	if err != nil {
+		return err
+	}
+	if err := changelogVerifyIno(e, 0, ino); err != nil {
+		return err
+	}
+	if len(e.Args) > 7 {
+		ctx, err = changelogOwnerContext(ctx, e, 7, 8)
+		if err != nil {
+			return err
+		}
+	} else if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+		return fmt.Errorf("%s without preserved attributes was recorded before the owner was logged", e.Op)
+	}
+	m := dst.getBase()
+	var attr Attr
+	if err := changelogCall(e, m.en.doCloneEntry(ctx, srcIno, parent, name, ino, &attr, cmode, cumask, top)); err != nil {
+		return err
+	}
+	m.en.updateStats(align4K(attr.Length), 1)
+	m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
+	if top && attr.Typ != TypeDirectory {
+		// Clone accounts the new entry in its parent; directories do it after ATTACH.
+		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
+		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
+	}
+	return nil
+}
+
+func applyAttach(ctx Context, dst Meta, e *ChangeEntry) error {
+	dstIno, err := e.Ino(0)
+	if err != nil {
+		return err
+	}
+	parent, err := e.Ino(1)
+	if err != nil {
+		return err
+	}
+	name := e.Args[2]
+	var attr Attr
+	if err := changelogCall(e, dst.GetAttr(ctx, dstIno, &attr)); err != nil {
+		return err
+	}
+	// Clone accounts the whole cloned tree in the quotas of the destination parent.
+	var sum Summary
+	if err := changelogCall(e, dst.GetSummary(ctx, dstIno, &sum, true, false)); err != nil {
+		return err
+	}
+	m := dst.getBase()
+	if err := changelogCall(e, m.en.doAttachDirNode(ctx, parent, dstIno, name)); err != nil {
+		return err
+	}
+	m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
+	m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
+	return nil
+}
+
+// changelogOwnerContext replays an operation as the user recorded in the changelog.
+func changelogOwnerContext(ctx Context, e *ChangeEntry, uidIndex, gidsIndex int) (Context, error) {
+	uid, err := e.Uint32(uidIndex)
+	if err != nil {
+		return nil, err
+	}
+	gids, err := e.Gids(gidsIndex)
+	if err != nil {
+		return nil, err
+	}
+	if len(gids) == 0 {
+		return nil, fmt.Errorf("%s: argument %d has no group", e.Op, gidsIndex)
+	}
+	return &wrapContext{Context: ctx, pid: ctx.Pid(), uid: uid, gids: gids}, nil
 }
 
 func applySetXattr(ctx Context, dst Meta, e *ChangeEntry) error {

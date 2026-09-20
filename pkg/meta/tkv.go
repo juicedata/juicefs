@@ -4495,7 +4495,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			return eno
 		}
 		attr.Parent = parent
-		now := time.Now()
+		now := operationTime(ctx)
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			attr.Uid = ctx.Uid()
 			attr.Gid = ctx.Gid()
@@ -4547,7 +4547,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			return true
 		})
 		if top && attr.Typ == TypeDirectory {
-			tx.set(m.detachedKey(ino), m.packInt64(time.Now().Unix()))
+			tx.set(m.detachedKey(ino), m.packInt64(now.Unix()))
 		} else {
 			tx.set(m.entryKey(parent, name), m.packEntry(attr.Typ, ino))
 		}
@@ -4843,7 +4843,7 @@ func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 		}
 
 		pattr.Nlink++
-		now := time.Now()
+		now := operationTime(ctx)
 		pattr.Mtime = now.Unix()
 		pattr.Mtimensec = uint32(now.Nanosecond())
 		pattr.Ctime = now.Unix()
