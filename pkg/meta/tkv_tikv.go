@@ -346,7 +346,7 @@ func (c *tikvClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry 
 			}
 		}
 	}()
-	if err = f(&kvTxn{&tikvTxn{tx}, retry}); err != nil {
+	if err = f(&kvTxn{kvtxn: &tikvTxn{tx}, retry: retry}); err != nil {
 		return err
 	}
 	if !tx.IsReadOnly() {
@@ -375,7 +375,7 @@ func (c *tikvClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (
 			}
 		}
 	}()
-	if err = f(&kvTxn{&tikvTxn{tx}, retry}); err != nil {
+	if err = f(&kvTxn{kvtxn: &tikvTxn{tx}, retry: retry}); err != nil {
 		return err
 	}
 	if !tx.IsReadOnly() {

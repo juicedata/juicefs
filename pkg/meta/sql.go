@@ -5944,11 +5944,13 @@ func (m *dbMeta) insertACL(s *xorm.Session, rule *aclAPI.Rule) (uint32, error) {
 	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
 		// TODO conflicts from multiple clients are rare and result in only minor duplicates, thus not addressed for now.
 		val := newSQLAcl(rule)
-		if _, err := s.Insert(val); err != nil {
+		// Xorm defers After callbacks until the enclosing transaction commits.
+		if _, err := s.After(func(interface{}) {
+			m.aclCache.Put(val.Id, rule)
+		}).Insert(val); err != nil {
 			return aclAPI.None, err
 		}
 		aclId = val.Id
-		m.aclCache.Put(aclId, rule)
 	}
 	return aclId, nil
 }
@@ -5961,17 +5963,9 @@ func (m *dbMeta) tryLoadMissACLs(s *xorm.Session) error {
 			return err
 		}
 
-		got := make(map[uint32]struct{}, len(acls))
+		// Missing IDs may belong to transactions that have not committed yet.
 		for _, data := range acls {
-			got[data.Id] = struct{}{}
 			m.aclCache.Put(data.Id, data.toRule())
-		}
-		if len(acls) < len(missIds) {
-			for _, id := range missIds {
-				if _, ok := got[id]; !ok {
-					m.aclCache.Put(id, aclAPI.EmptyRule())
-				}
-			}
 		}
 	}
 	return nil
