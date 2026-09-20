@@ -1587,7 +1587,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			if behavior == nil {
 				behavior = runtime.GOOS
 			}
-			m.genLog(ctx, pipe, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, *inode)
+			m.genLog(ctx, pipe, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, *inode)
 			return nil
 		})
 		return err
