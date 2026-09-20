@@ -17,7 +17,10 @@
 package compress
 
 import (
+	"bytes"
+	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"testing"
 )
@@ -148,4 +151,65 @@ func BenchmarkCompressCLZ4(b *testing.B) {
 }
 func BenchmarkCompressNone(b *testing.B) {
 	benchmarkCompress(b, NewCompressor("none"))
+}
+
+// A block is often decompressed into a sub-slice of a larger buffer: the
+// reader serves one read-ahead buffer to several slices of a chunk at once,
+// handing each of them a Page.Slice of it. Decompression must stay inside the
+// requested output, or it corrupts the data of whatever shares that buffer.
+func TestDecompressStaysInsideDst(t *testing.T) {
+	// > 128 KiB of literal-heavy but compressible data (random hex with a
+	// repeating prefix), so zstd stages a whole block of literals inside the
+	// spare room after the output
+	r := rand.New(rand.NewSource(1))
+	var b bytes.Buffer
+	for b.Len() < 262005 {
+		fmt.Fprintf(&b, "%016x%016x\t%d\tsome/shared/prefix/dir/file-%d\n",
+			r.Uint64(), r.Uint64(), r.Intn(1<<20), b.Len())
+	}
+	data := b.Bytes()[:262005]
+
+	// a slice in the middle of a chunk is decompressed at a non-zero offset,
+	// with neighbours on both sides
+	for _, off := range []int{0, 4096} {
+		for _, algr := range []string{"zstd", "lz4"} {
+			c := NewCompressor(algr)
+			buf := make([]byte, c.CompressBound(len(data)))
+			n, err := c.Compress(buf, data)
+			if err != nil {
+				t.Fatalf("%s compress: %s", algr, err)
+			}
+			const guard = 1 << 20
+			big := make([]byte, off+len(data)+guard)
+			for i := range big {
+				big[i] = 0xA5
+			}
+			dst := big[off : off+len(data)]
+			if _, err = c.Decompress(dst, buf[:n]); err != nil {
+				t.Fatalf("%s decompress at offset %d: %s", algr, off, err)
+			}
+			if !bytes.Equal(dst, data) {
+				t.Fatalf("%s at offset %d: decompressed data differs", algr, off)
+			}
+			checkUntouched(t, algr, off, "before", big[:off])
+			checkUntouched(t, algr, off, "after", big[off+len(data):])
+		}
+	}
+}
+
+func checkUntouched(t *testing.T, algr string, off int, where string, neighbour []byte) {
+	t.Helper()
+	dirty, first := 0, -1
+	for i, b := range neighbour {
+		if b != 0xA5 {
+			if first < 0 {
+				first = i
+			}
+			dirty++
+		}
+	}
+	if dirty > 0 {
+		t.Fatalf("%s at offset %d: wrote %d bytes %s the requested output, first at %d",
+			algr, off, dirty, where, first)
+	}
 }
