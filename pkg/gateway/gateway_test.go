@@ -26,6 +26,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"syscall"
 	"testing"
@@ -58,6 +59,135 @@ func (m *createErrMeta) Create(ctx meta.Context, parent meta.Ino, name string, m
 		return syscall.ENOENT
 	}
 	return m.Meta.Create(ctx, parent, name, mode, cumask, flags, inode, attr)
+}
+
+func TestObjectLocks(t *testing.T) {
+	var locks objectLocks
+	var wg sync.WaitGroup
+	var count int
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				unlock := locks.lock("bucket", "key")
+				previous := count
+				runtime.Gosched()
+				count = previous + 1
+				unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	if count != 1600 || len(locks.locks) != 0 {
+		t.Fatalf("count=%d, remaining locks=%d", count, len(locks.locks))
+	}
+
+	unlock := locks.lock("bucket", "key")
+	defer unlock()
+	done := make(chan struct{})
+	go func() {
+		for _, key := range [][2]string{{"bucket", "other"}, {"other", "key"}} {
+			release := locks.lock(key[0], key[1])
+			release()
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("unrelated keys blocked")
+	}
+}
+
+func TestObjectWriteSerialization(t *testing.T) {
+	n, _, bucket := newTestGateway(t, Config{})
+	ctx := context.Background()
+	data := []byte("object data")
+	reader := func() *minio.PutObjReader {
+		return newTestPutObjReader(t, bytes.NewReader(data), data)
+	}
+	if _, err := n.PutObject(ctx, bucket, "source", reader(), minio.ObjectOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	uploadID, err := n.NewMultipartUpload(ctx, bucket, "target", minio.ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	part, err := n.PutObjectPart(ctx, bucket, "target", uploadID, 1, reader(), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		wait  bool
+		write func() error
+	}{
+		{"put", true, func() error {
+			_, err := n.PutObject(ctx, bucket, "target", reader(), minio.ObjectOptions{})
+			return err
+		}},
+		{"different key", false, func() error {
+			_, err := n.PutObject(ctx, bucket, "unrelated", reader(), minio.ObjectOptions{})
+			return err
+		}},
+		{"copy", true, func() error {
+			_, err := n.CopyObject(ctx, bucket, "source", bucket, "target", minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{})
+			return err
+		}},
+		{"complete", true, func() error {
+			_, err := n.CompleteMultipartUpload(ctx, bucket, "target", uploadID, []minio.CompletePart{{PartNumber: 1, ETag: part.ETag}}, minio.ObjectOptions{})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gated := &gatedReader{reader: bytes.NewReader(data), started: make(chan struct{}), release: make(chan struct{})}
+			putReader := newTestPutObjReader(t, gated, data)
+			release := sync.OnceFunc(func() { close(gated.release) })
+			var wg sync.WaitGroup
+			defer func() { release(); wg.Wait() }()
+			start := func(fn func() error) <-chan error {
+				done := make(chan error, 1)
+				wg.Add(1)
+				go func() { defer wg.Done(); done <- fn() }()
+				return done
+			}
+			first := start(func() error {
+				_, err := n.PutObject(ctx, bucket, "target", putReader, minio.ObjectOptions{})
+				return err
+			})
+			select {
+			case <-gated.started:
+			case <-time.After(2 * time.Second):
+				t.Fatal("first PUT did not start")
+			}
+			second := start(tc.write)
+			if tc.wait {
+				select {
+				case err := <-second:
+					t.Fatalf("write did not wait for same-key PUT: %v", err)
+				case <-time.After(50 * time.Millisecond):
+				}
+				release()
+			}
+			waitObjectWrite(t, second)
+			release()
+			waitObjectWrite(t, first)
+		})
+	}
+}
+
+func waitObjectWrite(t *testing.T, done <-chan error) {
+	t.Helper()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("object write did not finish")
+	}
 }
 
 func TestGatewayLock(t *testing.T) {
