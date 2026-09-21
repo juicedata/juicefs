@@ -3573,7 +3573,7 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 			origin.UsedInodes = quota.UsedInodes
 		}
 		tx.set(quotaKey, m.packQuota(origin))
-		m.genLog(tx, time.Now(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes)
+		m.genLog(tx, time.Now(), "SETQUOTA(%d,%d,%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes, quota.UsedSpace, quota.UsedInodes)
 		return nil
 	})
 	return created, err

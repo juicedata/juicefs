@@ -4497,7 +4497,7 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			} else if created {
 				pipe.HSet(ctx, config.usedInodesKey, field, 0)
 			}
-			m.genLog(ctx, pipe, time.Now(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes)
+			m.genLog(ctx, pipe, time.Now(), "SETQUOTA(%d,%d,%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes, quota.UsedSpace, quota.UsedInodes)
 			return nil
 		})
 		return e

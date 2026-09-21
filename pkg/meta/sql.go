@@ -4483,7 +4483,7 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				e = mustInsert(s, origin)
 			}
 			if e == nil {
-				m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, origin.MaxSpace, origin.MaxInodes)
+				m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes, quota.UsedSpace, quota.UsedInodes)
 			}
 			return e
 		} else if qtype == UserQuotaType || qtype == GroupQuotaType {
@@ -4500,7 +4500,7 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				e = mustInsert(s, origin)
 			}
 			if e == nil {
-				m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, origin.MaxSpace, origin.MaxInodes)
+				m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes, quota.UsedSpace, quota.UsedInodes)
 			}
 			return e
 		} else {
