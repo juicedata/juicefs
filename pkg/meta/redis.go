@@ -4279,7 +4279,7 @@ func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		}
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
-			m.genLog(ctx, pipe, time.Now(), "REPAIRDIR(%d)", inode)
+			m.genLog(ctx, pipe, time.Now(), "REPAIRDIR(%d,%d,%d,%d,%d,%d,%d)", inode, attr.Mode, attr.Uid, attr.Gid, attr.Atime, attr.Mtime, attr.Ctime)
 			return nil
 		})
 		return err

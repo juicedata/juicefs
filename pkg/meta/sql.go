@@ -4297,7 +4297,7 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 			}
 		}
 		if err == nil {
-			m.genLog(ctx, s, time.Now().UnixNano(), "REPAIRDIR(%d)", inode)
+			m.genLog(ctx, s, time.Now().UnixNano(), "REPAIRDIR(%d,%d,%d,%d,%d,%d,%d)", inode, attr.Mode, attr.Uid, attr.Gid, attr.Atime, attr.Mtime, attr.Ctime)
 		}
 		return err
 	}, inode))
