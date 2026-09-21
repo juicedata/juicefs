@@ -3585,8 +3585,8 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 		return err
 	}
 
-	if qtype == UserQuotaType || qtype == GroupQuotaType {
-		return m.txn(ctx, func(tx *kvTxn) error {
+	return m.txn(ctx, func(tx *kvTxn) error {
+		if qtype == UserQuotaType || qtype == GroupQuotaType {
 			quota := &Quota{}
 			if val := tx.get(quotaKey); len(val) > 0 {
 				quota = m.parseQuota(val)
@@ -3594,13 +3594,13 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 			quota.MaxSpace = -1
 			quota.MaxInodes = -1
 			tx.set(quotaKey, m.packQuota(quota))
-			m.genLog(tx, time.Now(), "DELQUOTA(%d,%d)", qtype, key)
-			return nil
-		})
-	} else {
-		// For dir quotas, remove all data
-		return m.deleteKeys(quotaKey)
-	}
+		} else {
+			// For dir quotas, remove all data
+			tx.delete(quotaKey)
+		}
+		m.genLog(tx, time.Now(), "DELQUOTA(%d,%d)", qtype, key)
+		return nil
+	})
 }
 
 func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
