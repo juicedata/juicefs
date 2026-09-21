@@ -5514,9 +5514,8 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				return err
 			}
 			if n.Type != TypeDirectory {
-				now := time.Now().UnixNano()
-				pn.setMtime(now)
-				pn.setCtime(now)
+				pn.setMtime(now.UnixNano())
+				pn.setCtime(now.UnixNano())
 				if _, err = s.Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: parent}); err != nil {
 					return err
 				}
@@ -5595,10 +5594,10 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			if err := mustInsert(s, &sym); err != nil {
 				return err
 			}
-			m.genLog(ctx, s, now.UnixNano(), "CLONE(%d,%d,%s,%d,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
+			m.genLog(ctx, s, now.UnixNano(), "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
 			return nil
 		}
-		m.genLog(ctx, s, now.UnixNano(), "CLONE(%d,%d,%s,%d,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
+		m.genLog(ctx, s, now.UnixNano(), "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
 		return nil
 	}, srcIno))
 }

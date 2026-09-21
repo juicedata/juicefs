@@ -4502,7 +4502,6 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				return eno
 			}
 			if attr.Typ != TypeDirectory {
-				now := time.Now()
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -4555,7 +4554,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		case TypeSymlink:
 			tx.set(m.symKey(ino), tx.get(m.symKey(srcIno)))
 		}
-		m.genLog(tx, time.Now(), "CLONE(%d,%d,%s,%d,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
+		m.genLog(tx, now, "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
 		return nil
 	}, srcIno))
 }

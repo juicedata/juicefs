@@ -5405,7 +5405,6 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 			} else {
 				p.HSet(ctx, m.entryKey(parent), name, m.packEntry(attr.Typ, ino))
 				if top {
-					now := time.Now()
 					pattr.Mtime = now.Unix()
 					pattr.Mtimensec = uint32(now.Nanosecond())
 					pattr.Ctime = now.Unix()
@@ -5458,7 +5457,7 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 				}
 				p.Set(ctx, m.symKey(ino), path, 0)
 			}
-			m.genLog(ctx, p, time.Now(), "CLONE(%d,%d,%s,%d,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
+			m.genLog(ctx, p, now, "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
 			return nil
 		})
 		return err
