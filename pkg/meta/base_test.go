@@ -292,6 +292,16 @@ func testAccess(t *testing.T, m Meta) {
 	assert.Equal(t, syscall.Errno(0), st)
 }
 
+type aclCacheWithMissCount struct {
+	aclAPI.Cache
+	missCalls int
+}
+
+func (c *aclCacheWithMissCount) GetMissIds() []uint32 {
+	c.missCalls++
+	return c.Cache.GetMissIds()
+}
+
 func testACL(t *testing.T, m Meta) {
 	format := testFormat()
 	format.EnableACL = true
@@ -421,6 +431,46 @@ func testACL(t *testing.T, m Meta) {
 	rule2.Mask &= (mode >> 3) & 7
 	rule2.Other &= mode & 7
 	assert.True(t, rule3.IsEqual(rule2))
+
+	t.Run("ACLCacheHitWithGaps", func(t *testing.T) {
+		base := m.getBase()
+		cache := &aclCacheWithMissCount{Cache: base.aclCache}
+		base.aclCache = cache
+		defer func() { base.aclCache = cache.Cache }()
+		require.NotEmpty(t, cache.Cache.GetMissIds())
+		aclID := cache.GetId(rule3)
+		require.NotEqual(t, uint32(aclAPI.None), aclID)
+
+		for i := 0; i < 2; i++ {
+			require.Zero(t, m.SetFacl(ctx, subDirIno, aclAPI.TypeAccess, rule3.Dup()))
+			var attr Attr
+			require.Zero(t, m.GetAttr(ctx, subDirIno, &attr))
+			assert.Equal(t, aclID, attr.AccessACL)
+			assert.Zero(t, cache.missCalls, "cached setfacl should not load missing ACLs")
+
+			name := fmt.Sprintf("acl-cache-%d", i)
+			var inode Ino
+			require.Zero(t, m.Mknod(ctx, testDirIno, name, TypeFile, mode, 0022, 0, "", &inode, &attr))
+			defer m.Unlink(ctx, testDirIno, name)
+			assert.Equal(t, aclID, attr.AccessACL)
+			assert.Equal(t, mode, attr.Mode)
+			assert.Zero(t, cache.missCalls, "cached inherited ACL should not load missing ACLs")
+		}
+
+		uncached := rule3.Dup()
+		uncached.NamedUsers = aclAPI.Entries{{Id: 1002, Perm: 4}}
+		require.Equal(t, uint32(aclAPI.None), cache.GetId(uncached))
+		require.Zero(t, m.SetFacl(ctx, subDirIno, aclAPI.TypeAccess, uncached))
+		assert.Positive(t, cache.missCalls, "uncached ACL should still load missing ACLs")
+		var attr Attr
+		require.Zero(t, m.GetAttr(ctx, subDirIno, &attr))
+		assert.NotEqual(t, aclID, attr.AccessACL)
+		assert.Equal(t, mode, attr.Mode)
+		cache.Clear()
+		var got aclAPI.Rule
+		require.Zero(t, m.GetFacl(ctx, subDirIno, aclAPI.TypeAccess, &got))
+		assert.True(t, got.IsEqual(uncached))
+	})
 
 	// case: set minimal default acl
 	rule = &aclAPI.Rule{

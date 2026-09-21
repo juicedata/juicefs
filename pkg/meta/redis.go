@@ -6018,6 +6018,9 @@ func (m *redisMeta) insertACL(ctx Context, tx *redis.Tx, rule *aclAPI.Rule) (uin
 	if rule == nil || rule.IsEmpty() {
 		return aclAPI.None, nil
 	}
+	if aclId := m.aclCache.GetId(rule); aclId != aclAPI.None {
+		return aclId, nil
+	}
 
 	if err := m.tryLoadMissACLs(ctx, tx); err != nil {
 		logger.Warnf("SetFacl: load miss acls error: %s", err)

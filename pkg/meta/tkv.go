@@ -4939,6 +4939,9 @@ func (m *kvMeta) insertACL(tx *kvTxn, rule *aclAPI.Rule) (uint32, error) {
 	if rule == nil || rule.IsEmpty() {
 		return aclAPI.None, nil
 	}
+	if aclId := m.aclCache.GetId(rule); aclId != aclAPI.None {
+		return aclId, nil
+	}
 
 	if err := m.tryLoadMissACLs(tx); err != nil {
 		logger.Warnf("load miss acls error: %s", err)
