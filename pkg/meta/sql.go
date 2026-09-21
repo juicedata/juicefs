@@ -5938,6 +5938,9 @@ func (m *dbMeta) insertACL(s *xorm.Session, rule *aclAPI.Rule) (uint32, error) {
 	if rule == nil {
 		return aclAPI.None, nil
 	}
+	if aclId := m.aclCache.GetId(rule); aclId != aclAPI.None {
+		return aclId, nil
+	}
 	if err := m.tryLoadMissACLs(s); err != nil {
 		logger.Warnf("Mknode: load miss acls error: %s", err)
 	}
