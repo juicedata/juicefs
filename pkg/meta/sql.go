@@ -6061,7 +6061,7 @@ func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 			dirtyNode.setCtime(time.Now().UnixNano())
 			_, err := s.Cols(updateCols...).Update(&dirtyNode, &node{Inode: ino})
 			if err == nil {
-				m.genLog(ctx, s, time.Now().UnixNano(), "SETFACL(%d,%d,%s)", ino, aclType, logEncode(rule.Encode()))
+				m.genLog(ctx, s, time.Now().UnixNano(), "SETFACL(%d,%d,%s,%d,%d)", ino, aclType, logEncode(rule.Encode()), getAttrACLId(attr, aclType), attr.Mode)
 			}
 			return err
 		}

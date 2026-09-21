@@ -5954,7 +5954,7 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 			attr.Ctimensec = uint32(now.Nanosecond())
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
-				m.genLog(ctx, pipe, now, "SETFACL(%d,%d,%s)", ino, aclType, logEncode(rule.Encode()))
+				m.genLog(ctx, pipe, now, "SETFACL(%d,%d,%s,%d,%d)", ino, aclType, logEncode(rule.Encode()), getAttrACLId(attr, aclType), attr.Mode)
 				return nil
 			})
 			return err

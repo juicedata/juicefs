@@ -4904,7 +4904,7 @@ func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			tx.set(m.inodeKey(ino), m.marshal(attr))
-			m.genLog(tx, now, "SETFACL(%d,%d,%s)", ino, aclType, logEncode(rule.Encode()))
+			m.genLog(tx, now, "SETFACL(%d,%d,%s,%d,%d)", ino, aclType, logEncode(rule.Encode()), getAttrACLId(attr, aclType), attr.Mode)
 		}
 		return nil
 	}, ino))
