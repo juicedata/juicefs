@@ -118,10 +118,10 @@ func TestParseChangeEntry(t *testing.T) {
 			txn:   90,
 		},
 		{
-			entry:  "1716440761.000000000|UNLINKBATCH(1,a,b,c,0,true):11,12,13|(3,91)",
+			entry:  "1716440761.000000000|UNLINKBATCH(1,a,b,c,0,true):11,false,12,true,13,false|(3,91)",
 			op:     OpUnlinkBatch,
 			args:   []string{"1", "a", "b", "c", "0", "true"},
-			result: []string{"11", "12", "13"},
+			result: []string{"11", "false", "12", "true", "13", "false"},
 			sid:    3,
 			txn:    91,
 		},
@@ -214,6 +214,9 @@ func TestChangeEntryValidate(t *testing.T) {
 	if err := mustParse("1.0|UNLINKBATCH(1,a,b,0,true):11|(1,1)").Validate(); err == nil {
 		t.Fatal("mismatched batch sizes should not validate")
 	}
+	if err := mustParse("1.0|UNLINKBATCH(1,a,b,0,true):11,12|(1,1)").Validate(); err == nil {
+		t.Fatal("missing opened flags should not validate")
+	}
 	if err := mustParse("1.0|CREATE(1,f,1000,1000,1,420,18,,Keep):1024|(1,1)").Validate(); err == nil {
 		t.Fatal("missing required argument should not validate")
 	}
@@ -229,7 +232,7 @@ func TestChangeEntryValidate(t *testing.T) {
 	if err := mustParse("1.0|CLONE(1,2,f,3,0,18,true,1000):3|(1,1)").Validate(); err == nil {
 		t.Fatal("partial owner should not validate")
 	}
-	e := mustParse("1.0|UNLINKBATCH(1,a,b,0,true):11,12|(1,1)")
+	e := mustParse("1.0|UNLINKBATCH(1,a,b,0,true):11,false,12,true|(1,1)")
 	if err := e.Validate(); err != nil {
 		t.Fatal(err)
 	}

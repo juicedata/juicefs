@@ -248,12 +248,12 @@ func (e *ChangeEntry) Validate() error {
 		return fmt.Errorf("%w: %s", ErrUnknownChangelogOp, e.Op)
 	}
 	if e.Op == OpUnlinkBatch {
-		// parent, name..., trash, updateParent : inode...
+		// parent, name..., trash, updateParent : (inode, opened)...
 		if len(e.Args) < 4 {
 			return fmt.Errorf("%s: expect at least 4 arguments, got %d", e.Op, len(e.Args))
 		}
-		if names := len(e.Args) - 3; names != len(e.Result) {
-			return fmt.Errorf("%s: %d names but %d inodes", e.Op, names, len(e.Result))
+		if names := len(e.Args) - 3; 2*names != len(e.Result) {
+			return fmt.Errorf("%s: %d names but %d results", e.Op, names, len(e.Result))
 		}
 		return nil
 	}
@@ -394,6 +394,19 @@ func (e *ChangeEntry) ResultUint64(i int) (uint64, error) {
 func (e *ChangeEntry) ResultIno(i int) (Ino, error) {
 	v, err := e.ResultUint64(i)
 	return Ino(v), err
+}
+
+func (e *ChangeEntry) ResultBool(i int) (bool, error) {
+	if i < 0 || i >= len(e.Result) {
+		return false, fmt.Errorf("%s: result %d out of range (%d)", e.Op, i, len(e.Result))
+	}
+	switch e.Result[i] {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	}
+	return false, fmt.Errorf("%s: result %d %q is not a boolean", e.Op, i, e.Result[i])
 }
 
 func splitAndDecode(s string) ([]string, error) {

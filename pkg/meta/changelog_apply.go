@@ -799,8 +799,7 @@ func applyUnlinkBatch(ctx Context, dst Meta, e *ChangeEntry) error {
 	state := getChangelogApplyState(ctx)
 	state.Trash = Ino(trash)
 	state.Parents = map[Ino]bool{parent: updateParent}
-	// FIXME: UNLINKBATCH lacks each inode's open state and can delete an inode
-	// still open on the source before its later writes and DELSUSTAINED entry.
+	state.Opened = make(map[Ino]bool, len(names))
 	entries := make([]*Entry, len(names))
 	for i, name := range names {
 		var inode Ino
@@ -808,13 +807,18 @@ func applyUnlinkBatch(ctx Context, dst Meta, e *ChangeEntry) error {
 		if st := dst.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
 			return fmt.Errorf("%s lookup %q: %s", e.Op, name, st)
 		}
-		expected, err := e.ResultUint64(i)
+		expected, err := e.ResultUint64(2 * i)
 		if err != nil {
 			return err
 		}
 		if uint64(inode) != expected {
 			return fmt.Errorf("%s: %q resolved to inode %d, changelog has %d", e.Op, name, inode, expected)
 		}
+		opened, err := e.ResultBool(2*i + 1)
+		if err != nil {
+			return err
+		}
+		state.Opened[inode] = opened
 		entries[i] = &Entry{Inode: inode, Name: []byte(name)}
 	}
 	var count uint64
