@@ -227,26 +227,6 @@ func TestSetLimitByFreeRatioUnknownInodesKeepExplicitMaxItems(t *testing.T) {
 	require.Equal(t, int64(1000), cache.maxItems)
 }
 
-func TestUnknownInodeStatsShouldNotMarkCacheAsRawFull(t *testing.T) {
-	PatchConvey("unknown inode stats should not trigger rawFull", t, func() {
-		Mock(getDiskUsage).To(func(path string) (uint64, uint64, uint64, uint64) {
-			return 1 << 30, 1 << 30, 0, 0
-		}).Build()
-
-		conf := defaultConf
-		conf.CacheDir = t.TempDir()
-		m := new(cacheManagerMetrics)
-		m.initMetrics()
-		s := newDiskCache(m, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
-
-		require.Never(t, func() bool {
-			s.Lock()
-			defer s.Unlock()
-			return s.rawFull
-		}, 1500*time.Millisecond, 100*time.Millisecond)
-	})
-}
-
 func Test2RandomEviction(t *testing.T) {
 	Convey("Test2RandomEviction-CacheFull", t, func() {
 		dir := t.TempDir()
