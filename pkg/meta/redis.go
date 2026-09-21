@@ -2121,7 +2121,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 			// collect data for batch operations
 			var names []string
 			var encodedNames []string
-			var inodeStrs []string
+			var results []string
 			var keys []string
 			var sustained []interface{}
 			var delfiles []redis.Z
@@ -2133,7 +2133,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 			for _, info := range entryInfos {
 				names = append(names, info.name)
 				encodedNames = append(encodedNames, logEncode2(info.name))
-				inodeStrs = append(inodeStrs, strconv.FormatUint(uint64(info.inode), 10))
+				dnode := delNodes[info.inode]
+				results = append(results, strconv.FormatUint(uint64(info.inode), 10), strconv.FormatBool(dnode != nil && dnode.opened))
 				if info.attr == nil {
 					continue
 				}
@@ -2272,7 +2273,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 				if updateParent {
 					pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 				}
-				m.genLog(ctx, pipe, now, "UNLINKBATCH(%d,%s,%d,%t):%s", parent, strings.Join(encodedNames, ","), trash, updateParent, strings.Join(inodeStrs, ","))
+				m.genLog(ctx, pipe, now, "UNLINKBATCH(%d,%s,%d,%t):%s", parent, strings.Join(encodedNames, ","), trash, updateParent, strings.Join(results, ","))
 				return nil
 			})
 			return err
