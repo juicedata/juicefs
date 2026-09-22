@@ -478,11 +478,21 @@ type DiskFreeRatio struct {
 	inodeCap uint64
 }
 
+// diskUsage is called from cache background loops. Tests replace the value
+// instead of rewriting the function body, which races with those loops.
+var diskUsage atomic.Value // diskUsageFunc
+
+type diskUsageFunc func(path string) (uint64, uint64, uint64, uint64)
+
+func init() {
+	diskUsage.Store(diskUsageFunc(getDiskUsage))
+}
+
 // caller should not hold cache lock
 func (cache *diskCache) curFreeRatio() DiskFreeRatio {
 	var total, free, files, ffree uint64
 	_ = cache.checkErr(func() error {
-		total, free, files, ffree = getDiskUsage(cache.dir)
+		total, free, files, ffree = diskUsage.Load().(diskUsageFunc)(cache.dir)
 		return nil
 	})
 	usage := DiskFreeRatio{

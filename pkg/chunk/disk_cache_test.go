@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -138,29 +139,33 @@ func TestCheckPath(t *testing.T) {
 }
 
 func TestCleanupFullDoesNotBlockLoad(t *testing.T) {
-	PatchConvey("test getDiskUsage", t, func() {
-		conf := defaultConf
-		conf.CacheEviction = EvictionNone
-		s := newTestCacheStore(t.TempDir()+"/", &conf, nil)
-		Mock(getDiskUsage).To(func(path string) (uint64, uint64, uint64, uint64) {
+	conf := defaultConf
+	conf.CacheEviction = EvictionNone
+	dir := t.TempDir() + "/"
+	s := newTestCacheStore(dir, &conf, nil)
+	orig := diskUsage.Load()
+	diskUsage.Store(diskUsageFunc(func(path string) (uint64, uint64, uint64, uint64) {
+		if strings.HasPrefix(path, dir) {
 			time.Sleep(time.Second * 10)
 			return 1, 1, 1, 1
-		}).Build()
+		}
+		return orig.(diskUsageFunc)(path)
+	}))
+	t.Cleanup(func() { diskUsage.Store(orig) })
 
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			s.Lock()
-			wg.Done()
-			s.cleanupFull()
-			s.Unlock()
-		}()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		s.Lock()
+		wg.Done()
+		s.cleanupFull()
+		s.Unlock()
+	}()
 
-		wg.Wait()
-		start := time.Now()
-		_, _ = s.load("1_1_1")
-		So(time.Since(start), ShouldBeLessThan, time.Second*3)
-	})
+	wg.Wait()
+	start := time.Now()
+	_, _ = s.load("1_1_1")
+	require.Less(t, time.Since(start), time.Second*3)
 }
 
 func TestAtimeNotLost(t *testing.T) {
@@ -422,9 +427,11 @@ func TestUploadStagingToFreeCalculation(t *testing.T) {
 			s.keys.add(k, cacheItem{size: -1000, atime: uint32(time.Now().Unix()) - uint32(i*60)})
 		}
 
-		Mock(getDiskUsage).To(func(path string) (uint64, uint64, uint64, uint64) {
+		orig := diskUsage.Load()
+		diskUsage.Store(diskUsageFunc(func(string) (uint64, uint64, uint64, uint64) {
 			return 100000, 5000, 100000, 100000
-		}).Build()
+		}))
+		t.Cleanup(func() { diskUsage.Store(orig) })
 
 		s.uploadStaging()
 		uploaded := len(uploadedKeys)
@@ -453,9 +460,11 @@ func TestUploadStagingInodeToFree(t *testing.T) {
 			s.keys.add(k, cacheItem{size: -1000, atime: uint32(time.Now().Unix()) - uint32(i*60)})
 		}
 
-		Mock(getDiskUsage).To(func(path string) (uint64, uint64, uint64, uint64) {
+		orig := diskUsage.Load()
+		diskUsage.Store(diskUsageFunc(func(string) (uint64, uint64, uint64, uint64) {
 			return 100000, 20000, 1000, 50
-		}).Build()
+		}))
+		t.Cleanup(func() { diskUsage.Store(orig) })
 		s.uploadStaging()
 		count := uploadCount
 		require.Greater(t, count, 0, "should upload blocks when inodes are tight")
@@ -483,10 +492,12 @@ func TestSpaceToFreeNoAction(t *testing.T) {
 			s.keys.add(k, cacheItem{size: -1000, atime: uint32(time.Now().Unix())})
 		}
 
-		// Mock: 20% free space, 20% free inodes - both above freeRatio (10%)
-		Mock(getDiskUsage).To(func(path string) (uint64, uint64, uint64, uint64) {
+		// 20% free space, 20% free inodes - both above freeRatio (10%)
+		orig := diskUsage.Load()
+		diskUsage.Store(diskUsageFunc(func(string) (uint64, uint64, uint64, uint64) {
 			return 100000, 20000, 100000, 20000
-		}).Build()
+		}))
+		t.Cleanup(func() { diskUsage.Store(orig) })
 
 		s.uploadStaging()
 		require.Equal(t, 0, uploadCount, "should not upload when disk has enough free space and inodes")
