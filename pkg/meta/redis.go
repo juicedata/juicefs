@@ -4264,20 +4264,22 @@ func (m *redisMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	return nil
 }
 
-func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr, trustNlink bool) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
-		attr.Nlink = 2
-		vals, err := tx.HGetAll(ctx, m.entryKey(inode)).Result()
-		if err != nil {
-			return err
-		}
-		for _, v := range vals {
-			typ, _ := m.parseEntry([]byte(v))
-			if typ == TypeDirectory {
-				attr.Nlink++
+		if !trustNlink {
+			attr.Nlink = 2
+			vals, err := tx.HGetAll(ctx, m.entryKey(inode)).Result()
+			if err != nil {
+				return err
+			}
+			for _, v := range vals {
+				typ, _ := m.parseEntry([]byte(v))
+				if typ == TypeDirectory {
+					attr.Nlink++
+				}
 			}
 		}
-		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 			m.genLog(ctx, pipe, time.Now(), "REPAIRDIR(%d,%s)", inode, attr.logFields())
 			return nil
@@ -5460,7 +5462,11 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 			m.genLog(ctx, p, now, "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
 			return nil
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		*originAttr = attr
+		return nil
 	}, m.inodeKey(srcIno), m.xattrKey(srcIno)))
 }
 

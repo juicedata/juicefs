@@ -3399,17 +3399,19 @@ func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	return scanErr
 }
 
-func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr, trustNlink bool) syscall.Errno {
 	prefix := m.entryKey(inode, "")
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
-		attr.Nlink = 2
-		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
-			typ, _ := m.parseEntry(v)
-			if typ == TypeDirectory {
-				attr.Nlink++
-			}
-			return true
-		})
+		if !trustNlink {
+			attr.Nlink = 2
+			tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
+				typ, _ := m.parseEntry(v)
+				if typ == TypeDirectory {
+					attr.Nlink++
+				}
+				return true
+			})
+		}
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		m.genLog(tx, time.Now(), "REPAIRDIR(%d,%s)", inode, attr.logFields())
 		return nil
@@ -4554,6 +4556,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		case TypeSymlink:
 			tx.set(m.symKey(ino), tx.get(m.symKey(srcIno)))
 		}
+		*originAttr = attr
 		m.genLog(tx, now, "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
 		return nil
 	}, srcIno))

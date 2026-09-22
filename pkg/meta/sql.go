@@ -4256,7 +4256,7 @@ func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	return nil
 }
 
-func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr, trustNlink bool) syscall.Errno {
 	n := &node{
 		Inode:  inode,
 		Type:   attr.Typ,
@@ -4271,14 +4271,16 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	n.setMtime(attr.Mtime*1e9 + int64(attr.Mtimensec))
 	n.setCtime(attr.Ctime*1e9 + int64(attr.Ctimensec))
 	return errno(m.txn(func(s *xorm.Session) error {
-		n.Nlink = 2
-		var rows []edge
-		if err := s.Find(&rows, &edge{Parent: inode}); err != nil {
-			return err
-		}
-		for _, row := range rows {
-			if row.Type == TypeDirectory {
-				n.Nlink++
+		if !trustNlink {
+			n.Nlink = 2
+			var rows []edge
+			if err := s.Find(&rows, &edge{Parent: inode}); err != nil {
+				return err
+			}
+			for _, row := range rows {
+				if row.Type == TypeDirectory {
+					n.Nlink++
+				}
 			}
 		}
 		ok, err := s.ForUpdate().Get(&node{Inode: inode})
@@ -5594,9 +5596,8 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			if err := mustInsert(s, &sym); err != nil {
 				return err
 			}
-			m.genLog(ctx, s, now.UnixNano(), "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
-			return nil
 		}
+		m.parseAttr(&n, attr)
 		m.genLog(ctx, s, now.UnixNano(), "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
 		return nil
 	}, srcIno))
