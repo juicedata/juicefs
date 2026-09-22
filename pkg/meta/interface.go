@@ -180,7 +180,7 @@ type Attr struct {
 	Tier uint8 // storage tier of the file
 }
 
-// logFields is the comma-separated attribute tail of a SETATTR changelog entry.
+// logFields is the comma-separated attribute tail shared by SETATTR and REPAIRDIR changelog entries.
 func (a *Attr) logFields() string {
 	return fmt.Sprintf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
 		a.Uid, a.Gid, a.Mode, a.Flags, a.Atime, a.Mtime,
