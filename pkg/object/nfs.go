@@ -475,12 +475,12 @@ func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
 	}
 	auth := rpc.NewAuthUnix(username, uint32(utils.GetCurrentUID()), uint32(utils.GetCurrentGID()))
 	target, err := mount.Mount(path, auth.Auth())
-	target.Config.DirCount = 1 << 17
-	// Readdir returns up to 1M at a time, even if MaxCount is set larger
-	target.Config.MaxCount = 1 << 20
 	if err != nil {
 		return nil, fmt.Errorf("unable to mount %s: %v", addr, err)
 	}
+	target.Config.DirCount = 1 << 17
+	// Readdir returns up to 1M at a time, even if MaxCount is set larger
+	target.Config.MaxCount = 1 << 20
 	umask := utils.GetUmask()
 	return &nfsStore{
 		username: username,
