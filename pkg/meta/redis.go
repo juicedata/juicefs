@@ -1394,7 +1394,7 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(dirtyAttr), 0)
-			m.genLog(ctx, pipe, now, "SETATTR(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", inode, set, sugidclearmode, dirtyAttr.Uid, dirtyAttr.Gid, dirtyAttr.Mode, dirtyAttr.Flags, dirtyAttr.Atime, dirtyAttr.Mtime, dirtyAttr.Atimensec, dirtyAttr.Mtimensec, dirtyAttr.Ctime, dirtyAttr.Ctimensec, dirtyAttr.AccessACL)
+			m.genLog(ctx, pipe, now, "SETATTR(%d,%d,%d,%s)", inode, set, sugidclearmode, dirtyAttr.logFields())
 			return nil
 		})
 		if err == nil {
@@ -1587,7 +1587,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			if behavior == nil {
 				behavior = runtime.GOOS
 			}
-			m.genLog(ctx, pipe, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, *inode)
+			m.genLog(ctx, pipe, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, *inode)
 			return nil
 		})
 		return err
@@ -4279,7 +4279,7 @@ func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		}
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
-			m.genLog(ctx, pipe, time.Now(), "REPAIRDIR(%d)", inode)
+			m.genLog(ctx, pipe, time.Now(), "REPAIRDIR(%d,%d,%d,%d,%d,%d,%d)", inode, attr.Mode, attr.Uid, attr.Gid, attr.Atime, attr.Mtime, attr.Ctime)
 			return nil
 		})
 		return err
@@ -4497,7 +4497,7 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			} else if created {
 				pipe.HSet(ctx, config.usedInodesKey, field, 0)
 			}
-			m.genLog(ctx, pipe, time.Now(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes)
+			m.genLog(ctx, pipe, time.Now(), "SETQUOTA(%d,%d,%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes, quota.UsedSpace, quota.UsedInodes)
 			return nil
 		})
 		return e
@@ -5405,7 +5405,6 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 			} else {
 				p.HSet(ctx, m.entryKey(parent), name, m.packEntry(attr.Typ, ino))
 				if top {
-					now := time.Now()
 					pattr.Mtime = now.Unix()
 					pattr.Mtimensec = uint32(now.Nanosecond())
 					pattr.Ctime = now.Unix()
@@ -5458,7 +5457,7 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 				}
 				p.Set(ctx, m.symKey(ino), path, 0)
 			}
-			m.genLog(ctx, p, time.Now(), "CLONE(%d,%d,%s,%d,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
+			m.genLog(ctx, p, now, "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
 			return nil
 		})
 		return err
@@ -5954,7 +5953,7 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 			attr.Ctimensec = uint32(now.Nanosecond())
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
-				m.genLog(ctx, pipe, now, "SETFACL(%d,%d,%s)", ino, aclType, logEncode(rule.Encode()))
+				m.genLog(ctx, pipe, now, "SETFACL(%d,%d,%s,%d)", ino, aclType, logEncode(rule.Encode()), attr.Mode)
 				return nil
 			})
 			return err

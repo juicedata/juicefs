@@ -1278,7 +1278,7 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(inode), m.marshal(dirtyAttr))
 		*attr = *dirtyAttr
-		m.genLog(tx, now, "SETATTR(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", inode, set, sugidclearmode, attr.Uid, attr.Gid, attr.Mode, attr.Flags, attr.Atime, attr.Mtime, attr.Atimensec, attr.Mtimensec, attr.Ctime, attr.Ctimensec, attr.AccessACL)
+		m.genLog(tx, now, "SETATTR(%d,%d,%d,%s)", inode, set, sugidclearmode, attr.logFields())
 		return nil
 	}, inode))
 }
@@ -1571,7 +1571,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if behavior == nil {
 			behavior = runtime.GOOS
 		}
-		m.genLog(tx, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, *inode)
+		m.genLog(tx, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, *inode)
 		return nil
 	}, parent))
 }
@@ -3411,7 +3411,7 @@ func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 			return true
 		})
 		tx.set(m.inodeKey(inode), m.marshal(attr))
-		m.genLog(tx, time.Now(), "REPAIRDIR(%d)", inode)
+		m.genLog(tx, time.Now(), "REPAIRDIR(%d,%d,%d,%d,%d,%d,%d)", inode, attr.Mode, attr.Uid, attr.Gid, attr.Atime, attr.Mtime, attr.Ctime)
 		return nil
 	}, inode))
 }
@@ -3573,7 +3573,7 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 			origin.UsedInodes = quota.UsedInodes
 		}
 		tx.set(quotaKey, m.packQuota(origin))
-		m.genLog(tx, time.Now(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes)
+		m.genLog(tx, time.Now(), "SETQUOTA(%d,%d,%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes, quota.UsedSpace, quota.UsedInodes)
 		return nil
 	})
 	return created, err
@@ -3585,8 +3585,8 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 		return err
 	}
 
-	if qtype == UserQuotaType || qtype == GroupQuotaType {
-		return m.txn(ctx, func(tx *kvTxn) error {
+	return m.txn(ctx, func(tx *kvTxn) error {
+		if qtype == UserQuotaType || qtype == GroupQuotaType {
 			quota := &Quota{}
 			if val := tx.get(quotaKey); len(val) > 0 {
 				quota = m.parseQuota(val)
@@ -3594,13 +3594,13 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 			quota.MaxSpace = -1
 			quota.MaxInodes = -1
 			tx.set(quotaKey, m.packQuota(quota))
-			m.genLog(tx, time.Now(), "DELQUOTA(%d,%d)", qtype, key)
-			return nil
-		})
-	} else {
-		// For dir quotas, remove all data
-		return m.deleteKeys(quotaKey)
-	}
+		} else {
+			// For dir quotas, remove all data
+			tx.delete(quotaKey)
+		}
+		m.genLog(tx, time.Now(), "DELQUOTA(%d,%d)", qtype, key)
+		return nil
+	})
 }
 
 func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
@@ -4502,7 +4502,6 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				return eno
 			}
 			if attr.Typ != TypeDirectory {
-				now := time.Now()
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -4555,7 +4554,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		case TypeSymlink:
 			tx.set(m.symKey(ino), tx.get(m.symKey(srcIno)))
 		}
-		m.genLog(tx, time.Now(), "CLONE(%d,%d,%s,%d,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
+		m.genLog(tx, now, "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
 		return nil
 	}, srcIno))
 }
@@ -4904,7 +4903,7 @@ func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			tx.set(m.inodeKey(ino), m.marshal(attr))
-			m.genLog(tx, now, "SETFACL(%d,%d,%s)", ino, aclType, logEncode(rule.Encode()))
+			m.genLog(tx, now, "SETFACL(%d,%d,%s,%d)", ino, aclType, logEncode(rule.Encode()), attr.Mode)
 		}
 		return nil
 	}, ino))
