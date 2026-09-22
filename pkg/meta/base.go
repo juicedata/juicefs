@@ -128,7 +128,7 @@ type engine interface {
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
-	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
+	doRepair(ctx Context, inode Ino, attr *Attr, trustNlink bool) syscall.Errno
 	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
 	doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno)
 	doList(ctx Context, inode Ino) ([]*slice, syscall.Errno)
@@ -2660,7 +2660,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 							attr.Ctime = now
 							attr.Length = 4 << 10
 						}
-						if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 || st1 == syscall.ENOENT {
+						if st1 := m.en.doRepair(ctx, inode, attr, false); st1 == 0 || st1 == syscall.ENOENT {
 							logger.Debugf("Path %s (inode %d) is successfully repaired", path, inode)
 						} else {
 							hasError = true
@@ -3452,9 +3452,6 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	if attr.Typ != TypeDirectory {
 		return 0
 	}
-	if eno = m.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &attr); eno != 0 {
-		return eno
-	}
 	// Use DirHandler for batch processing to avoid loading all entries at once
 	handler, eno := m.NewDirHandler(ctx, srcIno, true, nil)
 	if eno == syscall.ENOENT {
@@ -3469,21 +3466,20 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	defer cloneCtx.Cancel()
 
 	var g errgroup.Group
-	var skipped uint32
+	nlink := uint32(2)
 
 	cloneChild := func(e *Entry) syscall.Errno {
 		childEno := m.cloneEntry(cloneCtx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrent)
 		if childEno == syscall.ENOENT {
 			logger.Warnf("ignore deleted %s in dir %d", string(e.Name), srcIno)
-			if e.Attr.Typ == TypeDirectory {
-				atomic.AddUint32(&skipped, 1)
-			}
 			return 0
 		}
 		if childEno != 0 {
 			cloneCtx.Cancel()
+			return childEno
 		}
-		return childEno
+		atomic.AddUint32(&nlink, 1)
+		return 0
 	}
 
 	offset := 0
@@ -3555,10 +3551,10 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		eno = syscall.EINTR
 	}
 
-	if eno == 0 && skipped > 0 {
-		attr.Nlink -= skipped
-		if eno := m.en.doRepair(ctx, ino, &attr); eno != 0 {
-			logger.Warnf("fix nlink of %d: %s", ino, eno)
+	if eno == 0 && nlink != attr.Nlink {
+		attr.Nlink = nlink
+		if st := m.en.doRepair(ctx, ino, &attr, true); st != 0 {
+			logger.Warnf("fix nlink of %d: %s", ino, st)
 		}
 	}
 	return eno
