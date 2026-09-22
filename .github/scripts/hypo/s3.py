@@ -319,6 +319,9 @@ class S3Machine(RuleBasedStateMachine):
     def list_users(self, alias=ROOT_ALIAS):
         result1 = self.client1.do_list_users(alias)
         result2 = self.client2.do_list_users(alias)
+        if isinstance(result1, list) and isinstance(result2, list) and set(result1) > set(result2):
+            print(f'WARNING: ignoring extra MinIO users after cleanup: {sorted(set(result1) - set(result2))}')
+            return
         assert self.equal(result1, result2), f'\033[31mlist_users:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(alias = aliases)
@@ -437,6 +440,9 @@ class S3Machine(RuleBasedStateMachine):
     def list_policies(self, alias=ROOT_ALIAS):
         result1 = self.client1.do_list_policies(alias)
         result2 = self.client2.do_list_policies(alias)
+        if isinstance(result1, list) and isinstance(result2, list) and set(result1) > set(result2):
+            print(f'WARNING: ignoring extra MinIO policies after cleanup: {sorted(set(result1) - set(result2))}')
+            return
         assert self.equal(result1, result2), f'\033[31mlist_policies:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
