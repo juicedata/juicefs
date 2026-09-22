@@ -1977,7 +1977,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if behavior == nil {
 			behavior = runtime.GOOS
 		}
-		m.genLog(ctx, s, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, attr.AccessACL, *inode)
+		m.genLog(ctx, s, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, *inode)
 		return nil
 	}))
 }
@@ -6060,7 +6060,7 @@ func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 			dirtyNode.setCtime(time.Now().UnixNano())
 			_, err := s.Cols(updateCols...).Update(&dirtyNode, &node{Inode: ino})
 			if err == nil {
-				m.genLog(ctx, s, time.Now().UnixNano(), "SETFACL(%d,%d,%s,%d,%d)", ino, aclType, logEncode(rule.Encode()), getAttrACLId(attr, aclType), attr.Mode)
+				m.genLog(ctx, s, time.Now().UnixNano(), "SETFACL(%d,%d,%s,%d)", ino, aclType, logEncode(rule.Encode()), attr.Mode)
 			}
 			return err
 		}
