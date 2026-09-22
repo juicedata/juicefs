@@ -180,6 +180,13 @@ type Attr struct {
 	Tier uint8 // storage tier of the file
 }
 
+// logFields is the comma-separated attribute tail of a SETATTR changelog entry.
+func (a *Attr) logFields() string {
+	return fmt.Sprintf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+		a.Uid, a.Gid, a.Mode, a.Flags, a.Atime, a.Mtime,
+		a.Atimensec, a.Mtimensec, a.Ctime, a.Ctimensec, a.AccessACL, a.Tier)
+}
+
 func (attr *Attr) Marshal() []byte {
 	size := uint32(36 + 24 + 4 + 8)
 	if attr.AccessACL|attr.DefaultACL != aclAPI.None {
