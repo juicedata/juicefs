@@ -2395,7 +2395,7 @@ func (m *dbMeta) getNodes(s *xorm.Session, nodes ...*node) error {
 	return nil
 }
 
-func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
+func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inheritMetadata bool, mode uint16, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parentDst, &trash); st != 0 {
 		return st
@@ -2405,6 +2405,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dino Ino
 	var dn node
 	var newSpace, newInode int64
+	var oldGid, newGid uint32
 	parentLocks := []Ino{parentDst}
 	if !parentSrc.IsTrash() { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
 		parentLocks = append(parentLocks, parentSrc)
@@ -2417,7 +2418,14 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		trash = requestedTrash
 		var spn = node{Inode: parentSrc}
 		var dpn = node{Inode: parentDst}
-		err := m.getNodes(s, &spn, &dpn)
+		var err error
+		if inheritMetadata {
+			// Lock both parent inodes so a concurrent default-ACL/GID change
+			// cannot race with the inheritance decision below.
+			err = m.getNodesForUpdate(s, &spn, &dpn)
+		} else {
+			err = m.getNodes(s, &spn, &dpn)
+		}
 		if err != nil {
 			return err
 		}
@@ -2457,7 +2465,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return syscall.EPERM
 		}
 		var sn = node{Inode: se.Inode}
-		ok, err = s.Get(&sn)
+		if inheritMetadata {
+			ok, err = s.ForUpdate().Get(&sn)
+		} else {
+			ok, err = s.Get(&sn)
+		}
 		if err != nil {
 			return err
 		}
@@ -2568,6 +2580,20 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		if ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
 			return syscall.EACCES
+		}
+		if inheritMetadata {
+			if sattr.Typ != TypeFile {
+				return syscall.EINVAL
+			}
+			oldGid = sattr.Gid
+			if err := m.inheritFileAttr(ctx, &dpattr, &sattr, mode,
+				func(id uint32) (*aclAPI.Rule, error) { return m.getACL(s, id) },
+				func(rule *aclAPI.Rule) (uint32, error) { return m.insertACL(s, rule) }); err != nil {
+				return err
+			}
+			newGid = sattr.Gid
+			m.parseNode(&sattr, &sn)
+			m.runRenameMetadataConcurrencyHook(ctx)
 		}
 
 		if parentSrc != parentDst {
@@ -2680,7 +2706,14 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 		}
 
-		if _, err := s.Cols("ctime", "ctimensec", "parent").Update(&sn, &node{Inode: sn.Inode}); err != nil {
+		updateCols := []string{"ctime", "ctimensec", "parent"}
+		if inheritMetadata {
+			// The staged inode's GID, mode, and access ACL were calculated from
+			// the destination parent inside this transaction. Include them in
+			// the same update as the rename's parent/ctime changes.
+			updateCols = []string{"mode", "gid", "ctime", "ctimensec", "parent", "access_acl_id"}
+		}
+		if _, err := s.Cols(updateCols...).Update(&sn, &node{Inode: sn.Inode}); err != nil {
 			return err
 		}
 
@@ -2749,6 +2782,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			m.updateStats(newSpace, newInode)
 			m.updateUserGroupStat(ctx, dn.Uid, dn.Gid, newSpace, newInode)
 		}
+	}
+	if err == nil && inheritMetadata && oldGid != newGid {
+		space := align4K(attr.Length)
+		m.updateUserGroupStat(ctx, 0, oldGid, -space, -1)
+		m.updateUserGroupStat(ctx, 0, newGid, space, 1)
 	}
 	return errno(err)
 }
