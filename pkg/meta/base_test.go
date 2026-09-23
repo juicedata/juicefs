@@ -3562,6 +3562,10 @@ func testDirStat(t *testing.T, m Meta) {
 	}); err != nil {
 		t.Fatalf("test dir usage fallocate: %v", err)
 	}
+	// resyncing rewrites a row that already exists
+	if stat, st := m.getBase().en.doSyncDirStat(Background(), testInode); st != 0 || *stat != (dirStat{4097, align4K(4097), 1}) {
+		t.Fatalf("sync an existing dir stat: %+v %s", stat, st)
+	}
 
 	// test dir with file and truncate
 	if st := m.Truncate(Background(), fileInode, 0, 0, nil, false); st != 0 {
