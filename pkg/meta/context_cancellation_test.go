@@ -47,7 +47,7 @@ func TestGetTreeSummaryCanceledByProgressCallback(t *testing.T) {
 
 	tree := &TreeSummary{Inode: RootInode}
 	updates := 0
-	st := m.GetTreeSummary(ctx, tree, 8, 10, true, func(count uint64, bytes uint64) {
+	st := m.GetTreeSummary(ctx, tree, 8, 10, true, SortBySize, func(count uint64, bytes uint64) {
 		updates++
 		if updates >= 10 {
 			ctx.Cancel()

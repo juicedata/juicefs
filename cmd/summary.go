@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -52,6 +53,9 @@ func cmdSummary() *cli.Command {
  # Show top 20 entries
  $ juicefs summary --entries 20 /mnt/jfs/foo
 
+ # Show directories holding most inodes
+ $ juicefs summary --sort-by inodes /mnt/jfs/foo
+
  # Show accurate result
  $ juicefs summary --strict /mnt/jfs/foo
  `,
@@ -66,7 +70,12 @@ func cmdSummary() *cli.Command {
 				Name:    "entries",
 				Aliases: []string{"e"},
 				Value:   10,
-				Usage:   "show top N entries (sort by size)",
+				Usage:   "show top N entries",
+			},
+			&cli.StringFlag{
+				Name:  "sort-by",
+				Value: "size",
+				Usage: "how to rank entries, supported mode are: size, inodes, cost",
 			},
 			&cli.BoolFlag{
 				Name:  "strict",
@@ -96,6 +105,15 @@ func summary(ctx *cli.Context) error {
 		logger.Warn("entries should be less than 101")
 		topN = 100
 	}
+	sortMode := ctx.String("sort-by")
+	sortBy, ok := map[string]meta.TreeSort{
+		"size":   meta.SortBySize,
+		"inodes": meta.SortByInodes,
+		"cost":   meta.SortByCost,
+	}[sortMode]
+	if !ok {
+		logger.Fatalf("unknown sort-by %q, supported mode are: size, inodes, cost", sortMode)
+	}
 
 	csv := ctx.Bool("csv")
 	progress := utils.NewProgress(csv)
@@ -118,7 +136,7 @@ func summary(ctx *cli.Context) error {
 	}
 	defer f.Close()
 	headerLen := uint32(8)
-	contentLen := uint32(8 + 1 + 1 + 1)
+	contentLen := uint32(8 + 1 + 1 + 1 + 1)
 	wb := utils.NewBuffer(headerLen + contentLen)
 	wb.Put32(meta.OpSummary)
 	wb.Put32(contentLen)
@@ -126,6 +144,7 @@ func summary(ctx *cli.Context) error {
 	wb.Put8(uint8(depth))
 	wb.Put8(uint8(topN))
 	wb.Put8(strict)
+	wb.Put8(uint8(sortBy))
 	_, err = f.Write(wb.Bytes())
 	if err != nil {
 		logger.Fatalf("write message: %s", err)
@@ -150,7 +169,7 @@ func summary(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("summary: %s", err)
 	}
-	results := [][]string{{"PATH", "SIZE", "DIRS", "FILES"}}
+	results := [][]string{{"PATH", "SIZE", "DIRS", "FILES", "COST"}}
 	renderTree(&results, &resp.Tree, csv)
 	if csv {
 		printCSVResult(results)
@@ -177,11 +196,13 @@ func renderTree(results *[][]string, tree *meta.TreeSummary, csv bool) {
 	if tree == nil {
 		return
 	}
-	var size string
+	var size, cost string
 	if csv {
 		size = strconv.FormatUint(tree.Size, 10)
+		cost = strconv.FormatInt(tree.Duration.Milliseconds(), 10)
 	} else {
 		size = humanize.IBytes(uint64(tree.Size))
+		cost = tree.Duration.Truncate(time.Millisecond).String()
 	}
 
 	path := tree.Path
@@ -194,6 +215,7 @@ func renderTree(results *[][]string, tree *meta.TreeSummary, csv bool) {
 		size,
 		strconv.FormatUint(tree.Dirs, 10),
 		strconv.FormatUint(tree.Files, 10),
+		cost,
 	}
 	*results = append(*results, result)
 	for _, child := range tree.Children {
