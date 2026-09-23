@@ -850,6 +850,12 @@ func applyRepairDir(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
+	var current Attr
+	if err := changelogCall(e, dst.GetAttr(ctx, inode, &current)); err != nil {
+		return err
+	}
+	attr.Parent = current.Parent
+	attr.DefaultACL = current.DefaultACL
 	attr.Typ = TypeDirectory
 	attr.Length = 4 << 10
 	attr.Full = true
