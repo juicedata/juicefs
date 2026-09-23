@@ -78,51 +78,49 @@ type changelogOpSpec struct {
 	results int
 }
 
-// changelogOps lists the accepted shapes of every operation, the current one
-// first; older shapes stay listed so that entries written before an argument
-// was added remain replayable.
-var changelogOps = map[string][]changelogOpSpec{
-	OpCreate:               {{11, 1}, {10, 1}}, // rdev appended
-	OpUnlink:               {{5, 1}},
-	OpUnlinkBatch:          {{variadic, variadic}},
-	OpRmdir:                {{3, 1}},
-	OpMove:                 {{8, 1}},
-	OpLink:                 {{4, 1}},
-	OpSetAttr:              {{14, 0}},
-	OpTruncate:             {{4, 0}},
-	OpFallocate:            {{4, 0}},
-	OpAccess:               {{1, 0}},
-	OpWrite:                {{7, 1}},
-	OpCopyFileRange:        {{5, 1}},
-	OpDelChunk:             {{2, 0}},
-	OpCompactChunk:         {{7, 0}},
-	OpDeleteSlice:          {{2, 0}},
-	OpCleanupDelayedSlices: {{2, 0}},
-	OpCleanupTrashSlices:   {{2, 0}},
-	OpSetXattr:             {{4, 0}},
-	OpRemoveXattr:          {{2, 0}},
-	OpSetFacl:              {{3, 0}},
-	OpLoadDumpedAcls:       {{1, 0}},
-	OpSetQuota:             {{4, 0}},
-	OpDelQuota:             {{2, 0}},
-	OpDirStat:              {{4, 0}},
-	OpRepairDir:            {{1, 0}},
-	OpClone:                {{9, 1}, {7, 1}}, // uid and gids appended
-	OpCloneBatch:           {{variadic, variadic}},
-	OpAttach:               {{3, 0}},
-	OpCleanup:              {{1, 0}},
-	OpNewSession:           {{3, 0}},
-	OpCleanSession:         {{1, 0}},
-	OpDelSustained:         {{2, 0}},
-	OpFlock:                {{3, 0}},
-	OpSetlk:                {{6, 0}},
-	OpSet:                  {{2, 0}},
-	OpIncrCounter:          {{2, 0}},
-	OpInitDirStats:         {{0, 0}},
-	OpInitUserGroupQuota:   {{0, 0}},
-	OpStoreToken:           {{2, 0}},
-	OpUpdateToken:          {{2, 0}},
-	OpDeleteTokens:         {{variadic, 0}},
+// changelogOps lists the shape of every operation.
+var changelogOps = map[string]changelogOpSpec{
+	OpCreate:               {12, 1},
+	OpUnlink:               {5, 1},
+	OpUnlinkBatch:          {variadic, variadic},
+	OpRmdir:                {3, 1},
+	OpMove:                 {8, 1},
+	OpLink:                 {4, 1},
+	OpSetAttr:              {15, 0},
+	OpTruncate:             {4, 0},
+	OpFallocate:            {4, 0},
+	OpAccess:               {1, 0},
+	OpWrite:                {7, 1},
+	OpCopyFileRange:        {5, 1},
+	OpDelChunk:             {2, 0},
+	OpCompactChunk:         {7, 0},
+	OpDeleteSlice:          {2, 0},
+	OpCleanupDelayedSlices: {2, 0},
+	OpCleanupTrashSlices:   {2, 0},
+	OpSetXattr:             {4, 0},
+	OpRemoveXattr:          {2, 0},
+	OpSetFacl:              {4, 0},
+	OpLoadDumpedAcls:       {1, 0},
+	OpSetQuota:             {6, 0},
+	OpDelQuota:             {2, 0},
+	OpDirStat:              {4, 0},
+	OpRepairDir:            {13, 0},
+	OpClone:                {9, 1},
+	OpCloneBatch:           {variadic, variadic},
+	OpAttach:               {3, 0},
+	OpCleanup:              {1, 0},
+	OpNewSession:           {3, 0},
+	OpCleanSession:         {1, 0},
+	OpDelSustained:         {2, 0},
+	OpFlock:                {3, 0},
+	OpSetlk:                {6, 0},
+	OpSet:                  {2, 0},
+	OpIncrCounter:          {2, 0},
+	OpInitDirStats:         {0, 0},
+	OpInitUserGroupQuota:   {0, 0},
+	OpStoreToken:           {2, 0},
+	OpUpdateToken:          {2, 0},
+	OpDeleteTokens:         {variadic, 0},
 }
 
 // match reports whether the counts fit the shape; a variadic argument count
@@ -138,18 +136,14 @@ func (s changelogOpSpec) match(args, results int) bool {
 	return s.results == variadic || results == s.results
 }
 
-func changelogShapes(specs []changelogOpSpec) string {
+func (s changelogOpSpec) String() string {
 	count := func(n int) string {
 		if n == variadic {
 			return "any"
 		}
 		return strconv.Itoa(n)
 	}
-	parts := make([]string, len(specs))
-	for i, s := range specs {
-		parts[i] = fmt.Sprintf("(args=%s, results=%s)", count(s.args), count(s.results))
-	}
-	return strings.Join(parts, " or ")
+	return fmt.Sprintf("(args=%s, results=%s)", count(s.args), count(s.results))
 }
 
 // ErrUnknownChangelogOp indicates an operation unknown to Validate.
@@ -243,7 +237,7 @@ func ParseChangeEntry(ver int64, entry string) (*ChangeEntry, error) {
 
 // Validate checks the operation and its argument and result counts.
 func (e *ChangeEntry) Validate() error {
-	specs, ok := changelogOps[e.Op]
+	spec, ok := changelogOps[e.Op]
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknownChangelogOp, e.Op)
 	}
@@ -267,12 +261,10 @@ func (e *ChangeEntry) Validate() error {
 		}
 		return nil
 	}
-	for _, spec := range specs {
-		if spec.match(len(e.Args), len(e.Result)) {
-			return nil
-		}
+	if !spec.match(len(e.Args), len(e.Result)) {
+		return fmt.Errorf("%s: expect %s, got (args=%d, results=%d)", e.Op, spec, len(e.Args), len(e.Result))
 	}
-	return fmt.Errorf("%s: expect %s, got (args=%d, results=%d)", e.Op, changelogShapes(specs), len(e.Args), len(e.Result))
+	return nil
 }
 
 // BatchNames returns the entry names of an UNLINKBATCH operation.
@@ -363,6 +355,31 @@ func (e *ChangeEntry) Gids(i int) ([]uint32, error) {
 		gids[j] = uint32(v)
 	}
 	return gids, nil
+}
+
+// attrLogFields is the number of fields written by Attr.logFields.
+const attrLogFields = 12
+
+// AttrFields parses the attribute tail written by Attr.logFields starting at i.
+func (e *ChangeEntry) AttrFields(i int) (*Attr, error) {
+	if n := len(e.Args) - i; n != attrLogFields {
+		return nil, fmt.Errorf("%s: attribute tail at %d has %d of %d fields", e.Op, i, n, attrLogFields)
+	}
+	var v [attrLogFields]int64
+	for j := range v {
+		var err error
+		if v[j], err = e.Int64(i + j); err != nil {
+			return nil, err
+		}
+	}
+	return &Attr{
+		Uid: uint32(v[0]), Gid: uint32(v[1]),
+		Mode: uint16(v[2]), Flags: uint8(v[3]),
+		Atime: v[4], Mtime: v[5],
+		Atimensec: uint32(v[6]), Mtimensec: uint32(v[7]),
+		Ctime: v[8], Ctimensec: uint32(v[9]),
+		AccessACL: uint32(v[10]), Tier: uint8(v[11]),
+	}, nil
 }
 
 func (e *ChangeEntry) Bool(i int) (bool, error) {

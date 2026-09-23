@@ -33,6 +33,7 @@ type changelogApplyState struct {
 	TokenId uint32       // Source token ID for STORETOKEN.
 	Trash   Ino          // Source trash directory; zero skips trash.
 	Sid     uint64       // Source session ID for sustained inodes.
+	Mode    *uint16      // Source mode of a created or re-permissioned inode.
 	Parents map[Ino]bool // Whether the source updated each parent directory.
 	Opened  map[Ino]bool // Whether each inode was open on the source when removed.
 }
@@ -68,6 +69,15 @@ func applyTokenId(ctx Context) uint32 {
 		return s.TokenId
 	}
 	return 0
+}
+
+// applyMode returns the mode recorded by the source, so that umask, default ACL
+// inheritance and sgid clearing do not diverge on the destination.
+func applyMode(ctx Context, computed uint16) uint16 {
+	if s := getChangelogApplyState(ctx); s != nil && s.Mode != nil {
+		return *s.Mode
+	}
+	return computed
 }
 
 func (m *baseMeta) sessionID(ctx Context) uint64 {
@@ -161,6 +171,8 @@ func Apply(ctx Context, dst Meta, e *ChangeEntry) (err error) {
 		return applySetQuota(ctx, dst, e)
 	case OpDelQuota:
 		return applyDelQuota(ctx, dst, e)
+	case OpRepairDir:
+		return applyRepairDir(ctx, dst, e)
 	case OpUpdateToken:
 		return applyUpdateToken(ctx, dst, e)
 	case OpStoreToken:
@@ -248,13 +260,9 @@ func applyCreate(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	var rdev uint32
-	if len(e.Args) > 10 {
-		if rdev, err = e.Uint32(10); err != nil {
-			return err
-		}
-	} else if typ == TypeBlockDev || typ == TypeCharDev {
-		return fmt.Errorf("%s of a device node was recorded before rdev was logged", e.Op)
+	rdev, err := e.Uint32(10)
+	if err != nil {
+		return err
 	}
 	mode, err := e.Uint16(5)
 	if err != nil {
@@ -269,9 +277,14 @@ func applyCreate(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
+	finalMode, err := e.Uint16(11)
+	if err != nil {
+		return err
+	}
 	var inode Ino
 	state := getChangelogApplyState(ctx)
 	state.Inode = expected
+	state.Mode = &finalMode
 	updateParent, err := e.Bool(9)
 	if err != nil {
 		return err
@@ -279,8 +292,8 @@ func applyCreate(ctx Context, dst Meta, e *ChangeEntry) error {
 	state.Parents = map[Ino]bool{parent: updateParent}
 	ctx = &wrapContext{Context: ctx, pid: ctx.Pid(), uid: uid, gids: []uint32{gid}}
 	ctx = ctx.WithValue(CtxKey("behavior"), e.Args[8])
-	// FIXME: CREATE does not record the resulting mode/gid/flags or ACL IDs; apply
-	// can inherit different attributes across platforms or ACL allocation orders.
+	// FIXME: CREATE does not record the ACL IDs inherited from the parent, so
+	// apply can allocate different ones.
 	if err := changelogCall(e, dst.Mknod(ctx, parent, name, typ, mode, cumask, rdev, path, &inode, nil)); err != nil {
 		return err
 	}
@@ -428,13 +441,8 @@ func applyClone(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err := changelogVerifyIno(e, 0, ino); err != nil {
 		return err
 	}
-	if len(e.Args) > 7 {
-		ctx, err = changelogOwnerContext(ctx, e, 7, 8)
-		if err != nil {
-			return err
-		}
-	} else if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-		return fmt.Errorf("%s without preserved attributes was recorded before the owner was logged", e.Op)
+	if ctx, err = changelogOwnerContext(ctx, e, 7, 8); err != nil {
+		return err
 	}
 	m := dst.getBase()
 	var attr Attr
@@ -581,32 +589,17 @@ func applySetAttr(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	// FIXME: SETATTR does not record the resulting storage tier.
-	if set&SetAttrTier != 0 {
-		return fmt.Errorf("SETATTR with SetAttrTier is missing the storage tier")
-	}
 	sgid, err := e.Uint8(2)
 	if err != nil {
 		return err
 	}
-	var values [11]int64
-	for i := range values {
-		values[i], err = e.Int64(3 + i)
-		if err != nil {
-			return err
-		}
-	}
-	attr := Attr{
-		Uid: uint32(values[0]), Gid: uint32(values[1]),
-		Mode: uint16(values[2]), Flags: uint8(values[3]),
-		Atime: values[4], Mtime: values[5],
-		Atimensec: uint32(values[6]), Mtimensec: uint32(values[7]),
-		Ctime: values[8], Ctimensec: uint32(values[9]),
-		AccessACL: uint32(values[10]),
+	attr, err := e.AttrFields(3)
+	if err != nil {
+		return err
 	}
 	// FIXME: SETATTR records an ACL ID but not its rule; apply needs to preserve
 	// the source's ACL mapping when allocating ACLs or changing modes.
-	return changelogCall(e, dst.SetAttr(ctx, inode, set, sgid, &attr))
+	return changelogCall(e, dst.SetAttr(ctx, inode, set, sgid, attr))
 }
 
 func applyWrite(ctx Context, dst Meta, e *ChangeEntry) error {
@@ -837,9 +830,30 @@ func applySetFacl(ctx Context, dst Meta, e *ChangeEntry) error {
 	encoded := []byte(e.Args[2])
 	rule := &aclAPI.Rule{}
 	rule.Decode(encoded)
-	// FIXME: SETFACL lacks the assigned ACL ID and final mode (including sgid
-	// clearing), so apply can allocate a different ID or retain different bits.
+	mode, err := e.Uint16(3)
+	if err != nil {
+		return err
+	}
+	getChangelogApplyState(ctx).Mode = &mode
+	// FIXME: SETFACL lacks the assigned ACL ID, so apply can allocate a different one.
 	return changelogCall(e, dst.SetFacl(ctx, ino, aclType, rule))
+}
+
+// applyRepairDir rebuilds a directory inode; nlink is recounted on the
+// destination because the changelog does not record it.
+func applyRepairDir(ctx Context, dst Meta, e *ChangeEntry) error {
+	inode, err := e.Ino(0)
+	if err != nil {
+		return err
+	}
+	attr, err := e.AttrFields(1)
+	if err != nil {
+		return err
+	}
+	attr.Typ = TypeDirectory
+	attr.Length = 4 << 10
+	attr.Full = true
+	return changelogCall(e, dst.getBase().en.doRepair(ctx, inode, attr, false))
 }
 
 func applySetQuota(ctx Context, dst Meta, e *ChangeEntry) error {
@@ -859,17 +873,25 @@ func applySetQuota(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
+	usedSpace, err := e.Int64(4)
+	if err != nil {
+		return err
+	}
+	usedInodes, err := e.Int64(5)
+	if err != nil {
+		return err
+	}
 	m := dst.getBase()
 	created, err := m.en.doSetQuota(ctx, qtype, key, &Quota{
 		MaxSpace:   maxSpace,
 		MaxInodes:  maxInodes,
-		UsedSpace:  -1,
-		UsedInodes: -1,
+		UsedSpace:  usedSpace,
+		UsedInodes: usedInodes,
 	})
 	if err != nil {
 		return err
 	}
-	if created && qtype == DirQuotaType {
+	if created && qtype == DirQuotaType && usedSpace < 0 && usedInodes < 0 {
 		return m.calcDirQuotaUsage(ctx, Ino(key), fmt.Sprintf("inode %d", key), false)
 	}
 	return nil

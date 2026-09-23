@@ -88,17 +88,9 @@ func TestParseChangeEntry(t *testing.T) {
 		txn    uint64
 	}{
 		{
-			entry:  "1716440752.123456789|CREATE(1,report.txt,1000,1000,1,420,18,,Keep,true,0):1024|(3,88)",
+			entry:  "1716440752.123456789|CREATE(1,report.txt,1000,1000,1,420,18,,Keep,true,0,420):1024|(3,88)",
 			op:     OpCreate,
-			args:   []string{"1", "report.txt", "1000", "1000", "1", "420", "18", "", "Keep", "true", "0"},
-			result: []string{"1024"},
-			sid:    3,
-			txn:    88,
-		},
-		{ // CREATE recorded before rdev was logged
-			entry:  "1716440752.123456789|CREATE(1,report.txt,1000,1000,1,420,18,,Keep,true):1024|(3,88)",
-			op:     OpCreate,
-			args:   []string{"1", "report.txt", "1000", "1000", "1", "420", "18", "", "Keep", "true"},
+			args:   []string{"1", "report.txt", "1000", "1000", "1", "420", "18", "", "Keep", "true", "0", "420"},
 			result: []string{"1024"},
 			sid:    3,
 			txn:    88,
@@ -220,17 +212,33 @@ func TestChangeEntryValidate(t *testing.T) {
 	if err := mustParse("1.0|CREATE(1,f,1000,1000,1,420,18,,Keep):1024|(1,1)").Validate(); err == nil {
 		t.Fatal("missing required argument should not validate")
 	}
-	if err := mustParse("1.0|CREATE(1,f,1000,1000,1,420,18,,Keep,true,0,9):1024|(1,1)").Validate(); err == nil {
+	if err := mustParse("1.0|CREATE(1,f,1000,1000,1,420,18,,Keep,true,0,420,9):1024|(1,1)").Validate(); err == nil {
 		t.Fatal("extra argument should not validate")
 	}
-	if err := mustParse("1.0|CLONE(1,2,f,3,0,18,true,1000,1000:1001):3|(1,1)").Validate(); err != nil {
-		t.Fatal(err)
+	for _, s := range []string{
+		"1.0|CLONE(1,2,f,3,0,18,true,1000,1000:1001):3|(1,1)",
+		"1.0|SETATTR(1,2,0,1000,1000,420,0,100,200,1,2,300,3,7,1)|(1,1)",
+		"1.0|SETFACL(1,0,abc,420)|(1,1)",
+		"1.0|SETQUOTA(1,2,3,4,5,6)|(1,1)",
+		"1.0|REPAIRDIR(5,1000,1000,493,0,100,200,1,2,300,3,7,1)|(1,1)",
+	} {
+		if err := mustParse(s).Validate(); err != nil {
+			t.Fatalf("validate %q: %s", s, err)
+		}
 	}
-	if err := mustParse("1.0|CLONE(1,2,f,3,0,18,true):3|(1,1)").Validate(); err != nil {
-		t.Fatal(err)
-	}
-	if err := mustParse("1.0|CLONE(1,2,f,3,0,18,true,1000):3|(1,1)").Validate(); err == nil {
-		t.Fatal("partial owner should not validate")
+	// shapes written before an argument was appended are no longer accepted
+	for _, s := range []string{
+		"1.0|CLONE(1,2,f,3,0,18,true):3|(1,1)",
+		"1.0|CLONE(1,2,f,3,0,18,true,1000):3|(1,1)",
+		"1.0|SETATTR(1,2,0,1000,1000,420,0,100,200,1,2,300,3,7)|(1,1)",
+		"1.0|SETFACL(1,0,abc)|(1,1)",
+		"1.0|SETQUOTA(1,2,3,4)|(1,1)",
+		"1.0|REPAIRDIR(5)|(1,1)",
+		"1.0|REPAIRDIR(5,493,1000,1000,100,200,300)|(1,1)",
+	} {
+		if err := mustParse(s).Validate(); err == nil {
+			t.Fatalf("%q should not validate", s)
+		}
 	}
 	e := mustParse("1.0|UNLINKBATCH(1,a,b,0,true):11,false,12,true|(1,1)")
 	if err := e.Validate(); err != nil {
@@ -242,7 +250,7 @@ func TestChangeEntryValidate(t *testing.T) {
 }
 
 func TestChangeEntryAccessors(t *testing.T) {
-	e, err := ParseChangeEntry(1, "1.0|CREATE(1,f,1000,1000,1,420,18,,Keep,true):1024|(3,88)")
+	e, err := ParseChangeEntry(1, "1.0|CREATE(1,f,1000,1000,1,420,18,,Keep,true,0,420):1024|(3,88)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,10 +269,10 @@ func TestChangeEntryAccessors(t *testing.T) {
 	if ino, err := e.ResultIno(0); err != nil || ino != 1024 {
 		t.Fatalf("ResultIno(0) = %v, %v", ino, err)
 	}
-	if _, err := e.Ino(10); err == nil {
+	if _, err := e.Ino(12); err == nil {
 		t.Fatal("out of range should fail")
 	}
-	e, err = ParseChangeEntry(1, "1.0|CREATE(1,f,1000,1000,3,420,18,,Keep,true,2049):1024|(3,88)")
+	e, err = ParseChangeEntry(1, "1.0|CREATE(1,f,1000,1000,3,420,18,,Keep,true,2049,420):1024|(3,88)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,8 +297,49 @@ func TestChangeEntryAccessors(t *testing.T) {
 	}
 }
 
+func TestChangeEntryAttrFields(t *testing.T) {
+	attr := &Attr{
+		Uid: 1000, Gid: 1001, Mode: 0755, Flags: 2,
+		Atime: 100, Mtime: 200, Atimensec: 1, Mtimensec: 2,
+		Ctime: 300, Ctimensec: 3, AccessACL: 7, Tier: 1,
+	}
+	if got := strings.Count(attr.logFields(), ",") + 1; got != attrLogFields {
+		t.Fatalf("Attr.logFields writes %d fields, attrLogFields is %d", got, attrLogFields)
+	}
+	e, err := ParseChangeEntry(1, fmt.Sprintf("1.0|REPAIRDIR(5,%s)|(3,88)", attr.logFields()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.AttrFields(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *got != *attr {
+		t.Fatalf("AttrFields(1) = %+v, want %+v", got, attr)
+	}
+	e, err = ParseChangeEntry(1, fmt.Sprintf("1.0|SETATTR(1,2,0,%s)|(3,88)", attr.logFields()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = e.AttrFields(3); err != nil {
+		t.Fatal(err)
+	}
+	if *got != *attr {
+		t.Fatalf("AttrFields(3) = %+v, want %+v", got, attr)
+	}
+	if _, err := e.AttrFields(4); err == nil {
+		t.Fatal("a truncated attribute tail should fail")
+	}
+}
+
 func BenchmarkParseChangeEntry(b *testing.B) {
-	entry := fmt.Sprintf("1716440752.123456789|CREATE(1,%s,1000,1000,1,420,18,,Keep,true,0):1024|(3,88)", logEncode2("report.txt"))
+	entry := fmt.Sprintf("1716440752.123456789|CREATE(1,%s,1000,1000,1,420,18,,Keep,true,0,420):1024|(3,88)", logEncode2("report.txt"))
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
 		if _, err := ParseChangeEntry(int64(i), entry); err != nil {

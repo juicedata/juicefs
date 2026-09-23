@@ -1973,7 +1973,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		n.setMtime(now)
 		n.setCtime(now)
 		n.Gid = ihGid
-		n.Mode = m.inheritMode(ctx, _type, pn.Gid, pn.Mode, n.Mode)
+		n.Mode = applyMode(ctx, m.inheritMode(ctx, _type, pn.Gid, pn.Mode, n.Mode))
 
 		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: *inode, Type: _type}, &n); err != nil {
 			return err
@@ -2004,11 +2004,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 		m.parseAttr(&n, attr)
-		behavior := ctx.Value(CtxKey("behavior"))
-		if behavior == nil {
-			behavior = runtime.GOOS
-		}
-		m.genLog(ctx, s, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, *inode)
+		m.genLog(ctx, s, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), clientBehavior(ctx), updateParent, attr.Rdev, attr.Mode, *inode)
 		return nil
 	}))
 }
@@ -6081,6 +6077,7 @@ func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 		}
 
 		// update attr
+		attr.Mode = applyMode(ctx, attr.Mode)
 		var updateCols []string
 		if oriACL != getAttrACLId(attr, aclType) {
 			updateCols = append(updateCols, getACLIdColName(aclType))

@@ -34,7 +34,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -1582,7 +1581,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 		attr.Gid = ihGid
-		attr.Mode = m.inheritMode(ctx, _type, pattr.Gid, pattr.Mode, attr.Mode)
+		attr.Mode = applyMode(ctx, m.inheritMode(ctx, _type, pattr.Gid, pattr.Mode, attr.Mode))
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			if nextTrash > 0 {
@@ -1604,11 +1603,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			pipe.Incr(ctx, m.totalInodesKey())
-			behavior := ctx.Value(CtxKey("behavior"))
-			if behavior == nil {
-				behavior = runtime.GOOS
-			}
-			m.genLog(ctx, pipe, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, *inode)
+			m.genLog(ctx, pipe, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), clientBehavior(ctx), updateParent, attr.Rdev, attr.Mode, *inode)
 			return nil
 		})
 		return err
@@ -5977,6 +5972,7 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 		}
 
 		// update attr
+		attr.Mode = applyMode(ctx, attr.Mode)
 		if oriACL != getAttrACLId(attr, aclType) || oriMode != attr.Mode {
 			now := operationTime(ctx)
 			attr.Ctime = now.Unix()

@@ -1595,29 +1595,37 @@ func (m *baseMeta) allocateInodes() (freeID, error) {
 	return freeID{next: uint64(v) - inodeBatch, maxid: uint64(v)}, nil
 }
 
-func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parentMode uint16) uint32 {
-	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
-		return parentGid
+// clientBehavior reports the platform semantics of the client that issued the
+// operation; changelog apply replays the value recorded by the source.
+func clientBehavior(ctx Context) string {
+	if b, ok := ctx.Value(CtxKey("behavior")).(string); ok && b != "" {
+		return b
 	}
-	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
+	return runtime.GOOS
+}
+
+func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parentMode uint16) uint32 {
+	switch clientBehavior(ctx) {
+	case "Hadoop", "darwin":
 		return parentGid
+	case "linux":
+		if parentMode&02000 != 0 {
+			return parentGid
+		}
 	}
 	return ctx.Gid()
 }
 
 func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, parentMode, childMode uint16) uint16 {
-	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+	if clientBehavior(ctx) != "linux" || parentMode&02000 == 0 {
 		return childMode
 	}
-	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
-		if _type == TypeDirectory {
-			childMode |= 02000
-		} else if ctx.CheckPermission() && childMode&02010 == 02010 && ctx.Uid() != 0 {
-			if !containsGid(ctx, parentGid) {
-				childMode &= ^uint16(02000)
-			}
+	if _type == TypeDirectory {
+		childMode |= 02000
+	} else if ctx.CheckPermission() && childMode&02010 == 02010 && ctx.Uid() != 0 {
+		if !containsGid(ctx, parentGid) {
+			childMode &= ^uint16(02000)
 		}
-		return childMode
 	}
 	return childMode
 }

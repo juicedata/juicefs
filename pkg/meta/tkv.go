@@ -26,7 +26,6 @@ import (
 	"io"
 	"math"
 	"math/rand"
-	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -1582,7 +1581,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 		attr.Gid = ihGid
-		attr.Mode = m.inheritMode(ctx, _type, pattr.Gid, pattr.Mode, attr.Mode)
+		attr.Mode = applyMode(ctx, m.inheritMode(ctx, _type, pattr.Gid, pattr.Mode, attr.Mode))
 
 		tx.set(m.entryKey(parent, name), m.packEntry(_type, *inode))
 		if updateParent {
@@ -1595,11 +1594,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if _type == TypeDirectory {
 			tx.set(m.dirStatKey(*inode), m.packDirStat(&dirStat{}))
 		}
-		behavior := ctx.Value(CtxKey("behavior"))
-		if behavior == nil {
-			behavior = runtime.GOOS
-		}
-		m.genLog(tx, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, *inode)
+		m.genLog(tx, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), clientBehavior(ctx), updateParent, attr.Rdev, attr.Mode, *inode)
 		return nil
 	}, parent))
 }
@@ -4929,6 +4924,7 @@ func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 		}
 
 		// update attr
+		attr.Mode = applyMode(ctx, attr.Mode)
 		if oriACL != getAttrACLId(attr, aclType) || oriMode != attr.Mode {
 			now := operationTime(ctx)
 			attr.Ctime = now.Unix()
