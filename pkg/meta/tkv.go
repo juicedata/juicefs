@@ -4557,7 +4557,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			tx.set(m.symKey(ino), tx.get(m.symKey(srcIno)))
 		}
 		*originAttr = attr
-		m.genLog(tx, now, "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
+		m.genLog(tx, now, "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%s):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), logGids(ctx), ino)
 		return nil
 	}, srcIno))
 }

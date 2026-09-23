@@ -5459,7 +5459,7 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 				}
 				p.Set(ctx, m.symKey(ino), path, 0)
 			}
-			m.genLog(ctx, p, now, "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%d):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), ctx.Gid(), ino)
+			m.genLog(ctx, p, now, "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%s):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), logGids(ctx), ino)
 			return nil
 		})
 		if err != nil {
