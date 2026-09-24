@@ -26,7 +26,6 @@ import (
 	"io"
 	"math"
 	"math/rand"
-	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -1582,7 +1581,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 		attr.Gid = ihGid
-		attr.Mode = m.inheritMode(ctx, _type, pattr.Gid, pattr.Mode, attr.Mode)
+		attr.Mode = applyMode(ctx, m.inheritMode(ctx, _type, pattr.Gid, pattr.Mode, attr.Mode))
 
 		tx.set(m.entryKey(parent, name), m.packEntry(_type, *inode))
 		if updateParent {
@@ -1595,11 +1594,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if _type == TypeDirectory {
 			tx.set(m.dirStatKey(*inode), m.packDirStat(&dirStat{}))
 		}
-		behavior := ctx.Value(CtxKey("behavior"))
-		if behavior == nil {
-			behavior = runtime.GOOS
-		}
-		m.genLog(tx, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, *inode)
+		m.genLog(tx, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), clientBehavior(ctx), updateParent, attr.Rdev, attr.Mode, *inode)
 		return nil
 	}, parent))
 }
@@ -4495,7 +4490,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			return eno
 		}
 		attr.Parent = parent
-		now := time.Now()
+		now := operationTime(ctx)
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			attr.Uid = ctx.Uid()
 			attr.Gid = ctx.Gid()
@@ -4547,7 +4542,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			return true
 		})
 		if top && attr.Typ == TypeDirectory {
-			tx.set(m.detachedKey(ino), m.packInt64(time.Now().Unix()))
+			tx.set(m.detachedKey(ino), m.packInt64(now.Unix()))
 		} else {
 			tx.set(m.entryKey(parent, name), m.packEntry(attr.Typ, ino))
 		}
@@ -4652,7 +4647,7 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	}
 
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
-		now := time.Now()
+		now := operationTime(ctx)
 		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
 		// validate destination parent
@@ -4843,7 +4838,7 @@ func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 		}
 
 		pattr.Nlink++
-		now := time.Now()
+		now := operationTime(ctx)
 		pattr.Mtime = now.Unix()
 		pattr.Mtimensec = uint32(now.Nanosecond())
 		pattr.Ctime = now.Unix()
@@ -4929,6 +4924,7 @@ func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 		}
 
 		// update attr
+		attr.Mode = applyMode(ctx, attr.Mode)
 		if oriACL != getAttrACLId(attr, aclType) || oriMode != attr.Mode {
 			now := operationTime(ctx)
 			attr.Ctime = now.Unix()
@@ -5065,12 +5061,16 @@ func (m *kvMeta) loadDumpedACLs(ctx Context) error {
 
 func (m *kvMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
 	err := m.txn(ctx, func(tx *kvTxn) error {
-		newId, err := m.incrCounter(krbTokenCounter, 1)
-		if err != nil {
-			return err
+		newId := applyTokenId(ctx)
+		if newId == 0 {
+			v, err := m.incrCounter(krbTokenCounter, 1)
+			if err != nil {
+				return err
+			}
+			newId = uint32(v)
 		}
-		tx.set(m.krbTokenKey(uint32(newId)), token)
-		id = uint32(newId)
+		tx.set(m.krbTokenKey(newId), token)
+		id = newId
 		m.genLog(tx, time.Now(), "STORETOKEN(%d,%s)", id, logEncode(token))
 		return nil
 	})

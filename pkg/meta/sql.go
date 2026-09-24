@@ -1973,7 +1973,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		n.setMtime(now)
 		n.setCtime(now)
 		n.Gid = ihGid
-		n.Mode = m.inheritMode(ctx, _type, pn.Gid, pn.Mode, n.Mode)
+		n.Mode = applyMode(ctx, m.inheritMode(ctx, _type, pn.Gid, pn.Mode, n.Mode))
 
 		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: *inode, Type: _type}, &n); err != nil {
 			return err
@@ -2004,11 +2004,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 		m.parseAttr(&n, attr)
-		behavior := ctx.Value(CtxKey("behavior"))
-		if behavior == nil {
-			behavior = runtime.GOOS
-		}
-		m.genLog(ctx, s, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, *inode)
+		m.genLog(ctx, s, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), clientBehavior(ctx), updateParent, attr.Rdev, attr.Mode, *inode)
 		return nil
 	}))
 }
@@ -5520,7 +5516,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		}
 		n.Inode = ino
 		n.Parent = parent
-		now := time.Now()
+		now := operationTime(ctx)
 
 		m.parseAttr(&n, attr)
 		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
@@ -5547,15 +5543,16 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				return err
 			}
 			if n.Type != TypeDirectory {
-				pn.setMtime(now.UnixNano())
-				pn.setCtime(now.UnixNano())
+				ns := now.UnixNano()
+				pn.setMtime(ns)
+				pn.setCtime(ns)
 				if _, err = s.Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: parent}); err != nil {
 					return err
 				}
 			}
 		}
 		if top && n.Type == TypeDirectory {
-			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})
+			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: now.Unix()})
 		} else {
 			err = mustInsert(s, &n, &edge{Parent: parent, Name: []byte(name), Inode: ino, Type: n.Type})
 			if isDuplicateEntryErr(err) {
@@ -5665,7 +5662,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	}
 
 	err := m.txn(func(s *xorm.Session) error {
-		nowNano := time.Now().UnixNano()
+		nowNano := operationTime(ctx).UnixNano()
 		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
 		if _, err := m.validateCloneTarget(ctx, s, dstParent); err != nil {
@@ -5918,7 +5915,7 @@ func (m *dbMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 			return syscall.EPERM
 		}
 		n.Nlink++
-		now := time.Now().UnixNano()
+		now := operationTime(ctx).UnixNano()
 		n.setMtime(now)
 		n.setCtime(now)
 		if _, err = s.Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&n, &node{Inode: parent}); err != nil {
@@ -6080,6 +6077,7 @@ func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 		}
 
 		// update attr
+		attr.Mode = applyMode(ctx, attr.Mode)
 		var updateCols []string
 		if oriACL != getAttrACLId(attr, aclType) {
 			updateCols = append(updateCols, getACLIdColName(aclType))
@@ -6164,7 +6162,7 @@ func (m *dbMeta) loadDumpedACLs(ctx Context) error {
 
 func (m *dbMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
 	err := m.txn(func(s *xorm.Session) error {
-		t := &delegationToken{Token: token}
+		t := &delegationToken{Id: applyTokenId(ctx), Token: token}
 		_, err := s.Insert(t)
 		if err != nil {
 			return err

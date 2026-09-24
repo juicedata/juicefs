@@ -78,14 +78,15 @@ type changelogOpSpec struct {
 	results int
 }
 
+// changelogOps lists the shape of every operation.
 var changelogOps = map[string]changelogOpSpec{
-	OpCreate:               {10, 1},
+	OpCreate:               {12, 1},
 	OpUnlink:               {5, 1},
 	OpUnlinkBatch:          {variadic, variadic},
 	OpRmdir:                {3, 1},
 	OpMove:                 {8, 1},
 	OpLink:                 {4, 1},
-	OpSetAttr:              {14, 0},
+	OpSetAttr:              {15, 0},
 	OpTruncate:             {4, 0},
 	OpFallocate:            {4, 0},
 	OpAccess:               {1, 0},
@@ -98,13 +99,13 @@ var changelogOps = map[string]changelogOpSpec{
 	OpCleanupTrashSlices:   {2, 0},
 	OpSetXattr:             {4, 0},
 	OpRemoveXattr:          {2, 0},
-	OpSetFacl:              {3, 0},
+	OpSetFacl:              {4, 0},
 	OpLoadDumpedAcls:       {1, 0},
-	OpSetQuota:             {4, 0},
+	OpSetQuota:             {6, 0},
 	OpDelQuota:             {2, 0},
 	OpDirStat:              {4, 0},
-	OpRepairDir:            {1, 0},
-	OpClone:                {7, 1},
+	OpRepairDir:            {13, 0},
+	OpClone:                {9, 1},
 	OpCloneBatch:           {variadic, variadic},
 	OpAttach:               {3, 0},
 	OpCleanup:              {1, 0},
@@ -120,6 +121,29 @@ var changelogOps = map[string]changelogOpSpec{
 	OpStoreToken:           {2, 0},
 	OpUpdateToken:          {2, 0},
 	OpDeleteTokens:         {variadic, 0},
+}
+
+// match reports whether the counts fit the shape; a variadic argument count
+// still requires at least one argument.
+func (s changelogOpSpec) match(args, results int) bool {
+	if s.args == variadic {
+		if args == 0 {
+			return false
+		}
+	} else if args != s.args {
+		return false
+	}
+	return s.results == variadic || results == s.results
+}
+
+func (s changelogOpSpec) String() string {
+	count := func(n int) string {
+		if n == variadic {
+			return "any"
+		}
+		return strconv.Itoa(n)
+	}
+	return fmt.Sprintf("(args=%s, results=%s)", count(s.args), count(s.results))
 }
 
 // ErrUnknownChangelogOp indicates an operation unknown to Validate.
@@ -218,12 +242,12 @@ func (e *ChangeEntry) Validate() error {
 		return fmt.Errorf("%w: %s", ErrUnknownChangelogOp, e.Op)
 	}
 	if e.Op == OpUnlinkBatch {
-		// parent, name..., trash, updateParent : inode...
+		// parent, name..., trash, updateParent : (inode, opened)...
 		if len(e.Args) < 4 {
 			return fmt.Errorf("%s: expect at least 4 arguments, got %d", e.Op, len(e.Args))
 		}
-		if names := len(e.Args) - 3; names != len(e.Result) {
-			return fmt.Errorf("%s: %d names but %d inodes", e.Op, names, len(e.Result))
+		if names := len(e.Args) - 3; 2*names != len(e.Result) {
+			return fmt.Errorf("%s: %d names but %d results", e.Op, names, len(e.Result))
 		}
 		return nil
 	}
@@ -237,15 +261,8 @@ func (e *ChangeEntry) Validate() error {
 		}
 		return nil
 	}
-	if spec.args == variadic {
-		if len(e.Args) == 0 {
-			return fmt.Errorf("%s: expect at least 1 argument", e.Op)
-		}
-	} else if len(e.Args) != spec.args {
-		return fmt.Errorf("%s: expect %d arguments, got %d", e.Op, spec.args, len(e.Args))
-	}
-	if spec.results != variadic && len(e.Result) != spec.results {
-		return fmt.Errorf("%s: expect %d results, got %d", e.Op, spec.results, len(e.Result))
+	if !spec.match(len(e.Args), len(e.Result)) {
+		return fmt.Errorf("%s: expect %s, got (args=%d, results=%d)", e.Op, spec, len(e.Args), len(e.Result))
 	}
 	return nil
 }
@@ -322,6 +339,49 @@ func (e *ChangeEntry) Ino(i int) (Ino, error) {
 	return Ino(v), err
 }
 
+// Gids parses a group list produced by logGids.
+func (e *ChangeEntry) Gids(i int) ([]uint32, error) {
+	s, err := e.Str(i)
+	if err != nil {
+		return nil, err
+	}
+	parts := strings.Split(s, ":")
+	gids := make([]uint32, len(parts))
+	for j, p := range parts {
+		v, err := strconv.ParseUint(p, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("%s: argument %d %q is not a group list", e.Op, i, s)
+		}
+		gids[j] = uint32(v)
+	}
+	return gids, nil
+}
+
+// attrLogFields is the number of fields written by Attr.logFields.
+const attrLogFields = 12
+
+// AttrFields parses the attribute tail written by Attr.logFields starting at i.
+func (e *ChangeEntry) AttrFields(i int) (*Attr, error) {
+	if n := len(e.Args) - i; n != attrLogFields {
+		return nil, fmt.Errorf("%s: attribute tail at %d has %d of %d fields", e.Op, i, n, attrLogFields)
+	}
+	var v [attrLogFields]int64
+	for j := range v {
+		var err error
+		if v[j], err = e.Int64(i + j); err != nil {
+			return nil, err
+		}
+	}
+	return &Attr{
+		Uid: uint32(v[0]), Gid: uint32(v[1]),
+		Mode: uint16(v[2]), Flags: uint8(v[3]),
+		Atime: v[4], Mtime: v[5],
+		Atimensec: uint32(v[6]), Mtimensec: uint32(v[7]),
+		Ctime: v[8], Ctimensec: uint32(v[9]),
+		AccessACL: uint32(v[10]), Tier: uint8(v[11]),
+	}, nil
+}
+
 func (e *ChangeEntry) Bool(i int) (bool, error) {
 	s, err := e.Str(i)
 	if err != nil {
@@ -351,6 +411,19 @@ func (e *ChangeEntry) ResultUint64(i int) (uint64, error) {
 func (e *ChangeEntry) ResultIno(i int) (Ino, error) {
 	v, err := e.ResultUint64(i)
 	return Ino(v), err
+}
+
+func (e *ChangeEntry) ResultBool(i int) (bool, error) {
+	if i < 0 || i >= len(e.Result) {
+		return false, fmt.Errorf("%s: result %d out of range (%d)", e.Op, i, len(e.Result))
+	}
+	switch e.Result[i] {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	}
+	return false, fmt.Errorf("%s: result %d %q is not a boolean", e.Op, i, e.Result[i])
 }
 
 func splitAndDecode(s string) ([]string, error) {
