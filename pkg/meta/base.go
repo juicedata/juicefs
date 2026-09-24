@@ -1418,7 +1418,7 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 	if ctx.Uid() == 0 {
 		return 0
 	}
-	if !ctx.CheckPermission() {
+	if !ctx.CheckPermission() || isApplyMode(ctx) {
 		return 0
 	}
 
