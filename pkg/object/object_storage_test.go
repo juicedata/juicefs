@@ -561,6 +561,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 					<-pool
 					wg.Done()
 				}()
+				var err error
 				parts[num-1], err = s.UploadPart(ctx, k, upload.UploadID, num, content[num-1])
 				if err != nil {
 					errCh <- fmt.Errorf("multipart upload error: %v", err)
