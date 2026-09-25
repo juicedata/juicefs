@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -87,15 +88,25 @@ func (n *nfsStore) String() string {
 	return fmt.Sprintf("nfs://%s@%s:%s", n.username, n.host, n.root)
 }
 
-func (n *nfsStore) path(key string) string {
+func (n *nfsStore) path(key string) (string, error) {
 	if key == "" {
-		return "./"
+		return "./", nil
 	}
-	return key
+	p := filepath.Clean(key)
+	if p == ".." || strings.HasPrefix(p, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("object key %q escapes storage root", key)
+	}
+	if strings.HasSuffix(key, "/") && !strings.HasSuffix(p, "/") {
+		p += "/"
+	}
+	return p, nil
 }
 
 func (n *nfsStore) Head(ctx context.Context, key string) (Object, error) {
-	p := n.path(key)
+	p, err := n.path(key)
+	if err != nil {
+		return nil, err
+	}
 	fi, _, err := n.target.Lookup(p)
 	if err != nil {
 		return nil, err
@@ -119,7 +130,10 @@ func (n *nfsStore) Head(ctx context.Context, key string) (Object, error) {
 }
 
 func (n *nfsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	p := n.path(key)
+	p, err := n.path(key)
+	if err != nil {
+		return nil, err
+	}
 	if strings.HasSuffix(p, "/") {
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
@@ -163,7 +177,10 @@ func (n *nfsStore) mkdirAll(p string) error {
 }
 
 func (n *nfsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	p := n.path(key)
+	p, err := n.path(key)
+	if err != nil {
+		return err
+	}
 	if strings.HasSuffix(p, dirSuffix) {
 		return n.mkdirAll(p)
 	}
@@ -218,7 +235,10 @@ func (n *nfsStore) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (n *nfsStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	path := n.path(key)
+	path, err := n.path(key)
+	if err != nil {
+		return err
+	}
 	if path == "./" {
 		return nil
 	}
@@ -360,7 +380,10 @@ func (n *nfsStore) List(ctx context.Context, prefix, marker, token, delimiter st
 }
 
 func (n *nfsStore) setAttr(path string, attrSet func(attr *nfs.Fattr) nfs.Sattr3) error {
-	p := n.path(path)
+	p, err := n.path(path)
+	if err != nil {
+		return err
+	}
 	fi, fh, err := n.target.Lookup(p)
 	if err != nil {
 		return err
@@ -417,7 +440,14 @@ func (n *nfsStore) Chown(path string, owner, group string) error {
 
 func (n *nfsStore) Symlink(oldName, newName string) error {
 	newName = strings.TrimRight(newName, "/")
-	p := n.path(newName)
+	p, err := n.path(newName)
+	if err != nil {
+		return err
+	}
+	oldP, err := n.path(oldName)
+	if err != nil {
+		return err
+	}
 	dir := path.Dir(p)
 	if _, _, err := n.target.Lookup(dir); err != nil && os.IsNotExist(err) {
 		if _, err := n.target.Mkdir(dir, n.dmode); err != nil && !os.IsExist(err) {
@@ -426,11 +456,15 @@ func (n *nfsStore) Symlink(oldName, newName string) error {
 	} else if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return n.target.Symlink(n.path(oldName), n.path(newName))
+	return n.target.Symlink(oldP, p)
 }
 
 func (n *nfsStore) Readlink(name string) (string, error) {
-	f, err := n.target.Open(n.path(name))
+	p, err := n.path(name)
+	if err != nil {
+		return "", err
+	}
+	f, err := n.target.Open(p)
 	if err != nil {
 		return "", errors.Wrapf(err, "open %s", name)
 	}

@@ -57,8 +57,26 @@ func (g *gluster) vol() *gfapi.Volume {
 	return g.vols[n%uint64(len(g.vols))]
 }
 
+func (g *gluster) path(key string) (string, error) {
+	if key == "" {
+		return "./", nil
+	}
+	p := filepath.Clean(key)
+	if p == ".." || strings.HasPrefix(p, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("object key %q escapes storage root", key)
+	}
+	if strings.HasSuffix(key, "/") && !strings.HasSuffix(p, "/") {
+		p += "/"
+	}
+	return p, nil
+}
+
 func (g *gluster) Head(ctx context.Context, key string) (Object, error) {
-	fi, err := g.vol().Stat(key)
+	p, err := g.path(key)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := g.vol().Stat(p)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +106,11 @@ func (g *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 }
 
 func (g *gluster) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	f, err := g.vol().Open(key)
+	p, err := g.path(key)
+	if err != nil {
+		return nil, err
+	}
+	f, err := g.vol().Open(p)
 	if err != nil {
 		return nil, err
 	}
@@ -113,23 +135,27 @@ func (g *gluster) Get(ctx context.Context, key string, off, limit int64, getters
 }
 
 func (g *gluster) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	v := g.vol()
-	if strings.HasSuffix(key, dirSuffix) {
-		return v.MkdirAll(key, os.FileMode(0777))
+	p, err := g.path(key)
+	if err != nil {
+		return err
 	}
-	f, err := v.OpenFile(key, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	v := g.vol()
+	if strings.HasSuffix(p, dirSuffix) {
+		return v.MkdirAll(p, os.FileMode(0777))
+	}
+	f, err := v.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil && os.IsNotExist(err) {
-		if err := v.MkdirAll(filepath.Dir(key), os.FileMode(0777)); err != nil {
+		if err := v.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
 			return err
 		}
-		f, err = v.OpenFile(key, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		f, err = v.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	}
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
-			_ = v.Unlink(key)
+			_ = v.Unlink(p)
 		}
 	}()
 
@@ -149,10 +175,14 @@ func (g *gluster) Put(ctx context.Context, key string, in io.Reader, getters ...
 }
 
 func (g *gluster) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	p, err := g.path(key)
+	if err != nil {
+		return err
+	}
 	v := g.vol()
-	err := v.Unlink(key)
+	err = v.Unlink(p)
 	if err != nil && strings.Contains(err.Error(), "is a directory") {
-		err = v.Rmdir(key)
+		err = v.Rmdir(p)
 	}
 	if os.IsNotExist(err) {
 		err = nil
@@ -264,7 +294,11 @@ func (g *gluster) Chtimes(path string, mtime time.Time) error {
 }
 
 func (g *gluster) Chmod(path string, mode os.FileMode) error {
-	return g.vol().Chmod(path, mode)
+	p, err := g.path(path)
+	if err != nil {
+		return err
+	}
+	return g.vol().Chmod(p, mode)
 }
 
 func (g *gluster) Chown(path string, owner, group string) error {

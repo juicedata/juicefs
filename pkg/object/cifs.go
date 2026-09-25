@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -68,8 +69,12 @@ type cifsStore struct {
 // The returned mode from Stat() will always be either 0666 (writable) or 0444 (read-only)
 // regardless of the specific mode bits passed to this function.
 func (c *cifsStore) Chmod(path string, mode os.FileMode) error {
+	p, err := c.path(path)
+	if err != nil {
+		return err
+	}
 	return c.withConn(context.Background(), func(share *smb2.Share) error {
-		return share.Chmod(path, mode)
+		return share.Chmod(p, mode)
 	})
 }
 
@@ -80,13 +85,31 @@ func (c *cifsStore) Chown(path string, owner string, group string) error {
 
 // Chtimes implements MtimeChanger.
 func (c *cifsStore) Chtimes(path string, mtime time.Time) error {
+	p, err := c.path(path)
+	if err != nil {
+		return err
+	}
 	return c.withConn(context.Background(), func(share *smb2.Share) error {
-		return share.Chtimes(path, time.Time{}, mtime)
+		return share.Chtimes(p, time.Time{}, mtime)
 	})
 }
 
 func (c *cifsStore) String() string {
 	return fmt.Sprintf("cifs://%s@%s:%s/%s/", c.user, c.host, c.port, c.share)
+}
+
+func (c *cifsStore) path(key string) (string, error) {
+	if key == "" {
+		return "./", nil
+	}
+	p := filepath.Clean(key)
+	if p == ".." || strings.HasPrefix(p, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("object key %q escapes storage root", key)
+	}
+	if strings.HasSuffix(key, "/") && !strings.HasSuffix(p, "/") {
+		p += "/"
+	}
+	return p, nil
 }
 
 // getConnection returns a CIFS connection from the pool or creates a new one
@@ -189,15 +212,18 @@ func (c *cifsStore) withConn(ctx context.Context, f func(*smb2.Share) error) (er
 }
 
 func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error) {
+	p, err := c.path(key)
+	if err != nil {
+		return nil, err
+	}
 	err = c.withConn(ctx, func(share *smb2.Share) error {
-		fi, err := share.Lstat(key)
+		fi, err := share.Lstat(p)
 		if err != nil {
 			return err
 		}
 		isSymlink := fi.Mode()&os.ModeSymlink != 0
 		if isSymlink {
-			// SMB doesn't fully support symlinks like POSIX, but we'll try our best
-			fi, err = share.Stat(key)
+			fi, err = share.Stat(p)
 			if err != nil {
 				return err
 			}
@@ -222,6 +248,10 @@ func (r *cifsReadCloser) Close() error {
 }
 
 func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	p, err := c.path(key)
+	if err != nil {
+		return nil, err
+	}
 	if off < 0 {
 		off = 0
 	}
@@ -232,7 +262,7 @@ func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, gette
 	}
 
 	share := conn.share.WithContext(ctx)
-	f, err := share.Open(key)
+	f, err := share.Open(p)
 	if err != nil {
 		c.releaseConnection(conn, err)
 		return nil, err
@@ -277,9 +307,12 @@ func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
+	p, err := c.path(key)
+	if err != nil {
+		return err
+	}
 	return c.withConn(ctx, func(share *smb2.Share) error {
-		p := key
-		if strings.HasSuffix(key, dirSuffix) {
+		if strings.HasSuffix(p, dirSuffix) {
 			// perm will not take effect, is not used
 			// ref: https://github.com/cloudsoda/go-smb2/blob/c8e61c7a5fa7bcd1143359f071f9425a9f4dda3f/client.go#L341-L370
 			return share.MkdirAll(p, 0755)
@@ -337,8 +370,12 @@ func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters .
 }
 
 func (c *cifsStore) Delete(ctx context.Context, key string, getters ...AttrGetter) (err error) {
+	p, err := c.path(key)
+	if err != nil {
+		return err
+	}
 	return c.withConn(ctx, func(share *smb2.Share) error {
-		p := strings.TrimRight(key, dirSuffix)
+		p := strings.TrimRight(p, dirSuffix)
 		err = share.Remove(p)
 		if err != nil && os.IsNotExist(err) {
 			err = nil

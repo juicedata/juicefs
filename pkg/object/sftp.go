@@ -155,26 +155,46 @@ func (f *sftpStore) String() string {
 	return fmt.Sprintf("sftp://%s@%s:%s", f.config.User, f.host, f.root)
 }
 
-// always preserve suffix `/` for directory key
-func (f *sftpStore) path(key string) string {
-	return f.root + key
+func (f *sftpStore) path(key string) (string, error) {
+	var p string
+	if strings.HasSuffix(f.root, dirSuffix) {
+		p = filepath.Join(f.root, key)
+	} else {
+		p = filepath.Clean(f.root + key)
+	}
+	boundary := f.root
+	if !strings.HasSuffix(boundary, dirSuffix) {
+		boundary = filepath.Dir(boundary)
+	}
+	rel, err := filepath.Rel(boundary, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("object key %q escapes storage root %q", key, f.root)
+	}
+	if strings.HasSuffix(f.root+key, dirSuffix) && !strings.HasSuffix(p, dirSuffix) {
+		p += dirSuffix
+	}
+	return p, nil
 }
 
 func (f *sftpStore) Head(ctx context.Context, key string) (Object, error) {
+	p, err := f.path(key)
+	if err != nil {
+		return nil, err
+	}
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return nil, err
 	}
 	defer func() { f.putSftpConnection(c, err) }()
 
-	info, err := c.sftpClient.Lstat(f.path(key))
+	info, err := c.sftpClient.Lstat(p)
 	if err != nil {
 		return nil, err
 	}
 	var isSymlink bool
 	if info.Mode()&os.ModeSymlink != 0 {
 		isSymlink = true
-		info, err = c.sftpClient.Stat(f.path(key))
+		info, err = c.sftpClient.Stat(p)
 		if err != nil {
 			return nil, err
 		}
@@ -183,13 +203,15 @@ func (f *sftpStore) Head(ctx context.Context, key string) (Object, error) {
 }
 
 func (f *sftpStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	p, err := f.path(key)
+	if err != nil {
+		return nil, err
+	}
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return nil, err
 	}
 	defer func() { f.putSftpConnection(c, err) }()
-
-	p := f.path(key)
 	ff, err := c.sftpClient.Open(p)
 	if err != nil {
 		return nil, err
@@ -213,13 +235,15 @@ func (f *sftpStore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (f *sftpStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
+	p, err := f.path(key)
+	if err != nil {
+		return err
+	}
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err
 	}
 	defer func() { f.putSftpConnection(c, err) }()
-
-	p := f.path(key)
 	if strings.HasSuffix(p, dirSuffix) {
 		return c.sftpClient.MkdirAll(p)
 	}
@@ -265,6 +289,10 @@ func (f *sftpStore) Put(ctx context.Context, key string, in io.Reader, getters .
 }
 
 func (f *sftpStore) Chtimes(key string, mtime time.Time) (err error) {
+	p, err := f.path(key)
+	if err != nil {
+		return err
+	}
 	var c *conn
 	c, err = f.getSftpConnection()
 	if err != nil {
@@ -273,20 +301,28 @@ func (f *sftpStore) Chtimes(key string, mtime time.Time) (err error) {
 	defer func() { f.putSftpConnection(c, err) }()
 	// fixme: 1. The Chtimes of sftp always follows link 2. Only pass the mtime field to avoid updating atime
 	// ref: https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-13#section-8.6
-	return c.sftpClient.Chtimes(f.path(key), mtime, mtime)
+	return c.sftpClient.Chtimes(p, mtime, mtime)
 }
 
 func (f *sftpStore) Chmod(key string, mode os.FileMode) (err error) {
+	p, err := f.path(key)
+	if err != nil {
+		return err
+	}
 	var c *conn
 	c, err = f.getSftpConnection()
 	if err != nil {
 		return err
 	}
 	defer func() { f.putSftpConnection(c, err) }()
-	return c.sftpClient.Chmod(f.path(key), mode)
+	return c.sftpClient.Chmod(p, mode)
 }
 
 func (f *sftpStore) Chown(key string, owner, group string) (err error) {
+	p, err := f.path(key)
+	if err != nil {
+		return err
+	}
 	var c *conn
 	c, err = f.getSftpConnection()
 	if err != nil {
@@ -298,16 +334,19 @@ func (f *sftpStore) Chown(key string, owner, group string) (err error) {
 	if uid == -1 || gid == -1 {
 		return fmt.Errorf("user(%s):group(%s) not found", owner, group)
 	}
-	return c.sftpClient.Chown(f.path(key), uid, gid)
+	return c.sftpClient.Chown(p, uid, gid)
 }
 
 func (f *sftpStore) Symlink(oldName, newName string) error {
+	p, err := f.path(newName)
+	if err != nil {
+		return err
+	}
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err
 	}
 	defer func() { f.putSftpConnection(c, err) }()
-	p := f.path(newName)
 	err = c.sftpClient.Symlink(oldName, p)
 	if err != nil && os.IsNotExist(err) {
 		_ = c.sftpClient.MkdirAll(filepath.Dir(p))
@@ -317,21 +356,29 @@ func (f *sftpStore) Symlink(oldName, newName string) error {
 }
 
 func (f *sftpStore) Readlink(name string) (link string, err error) {
+	p, err := f.path(name)
+	if err != nil {
+		return "", err
+	}
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return "", err
 	}
 	defer func() { f.putSftpConnection(c, err) }()
-	return c.sftpClient.ReadLink(f.path(name))
+	return c.sftpClient.ReadLink(p)
 }
 
 func (f *sftpStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	p, err := f.path(key)
+	if err != nil {
+		return err
+	}
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err
 	}
 	defer func() { f.putSftpConnection(c, err) }()
-	err = c.sftpClient.Remove(strings.TrimRight(f.path(key), dirSuffix))
+	err = c.sftpClient.Remove(strings.TrimRight(p, dirSuffix))
 	if err != nil && os.IsNotExist(err) {
 		err = nil
 	}
@@ -402,7 +449,10 @@ func (f *sftpStore) List(ctx context.Context, prefix, marker, token, delimiter s
 	defer func() { f.putSftpConnection(c, err) }()
 
 	var objs []Object
-	dir := f.path(prefix)
+	dir, err := f.path(prefix)
+	if err != nil {
+		return nil, false, "", err
+	}
 	if !strings.HasSuffix(dir, "/") {
 		dir = filepath.Dir(dir)
 		if !strings.HasSuffix(dir, dirSuffix) {
