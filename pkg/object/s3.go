@@ -194,14 +194,28 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return err
 }
 
+// copySource returns the URL-encoded x-amz-copy-source value, which the SDK sends as is.
+func (s *s3client) copySource(key string) string {
+	src := s.bucket + "/" + key
+	var b strings.Builder
+	for i := 0; i < len(src); i++ {
+		c := src[i]
+		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || strings.IndexByte("-_.~/", c) >= 0 {
+			b.WriteByte(c)
+		} else {
+			fmt.Fprintf(&b, "%%%02X", c)
+		}
+	}
+	return b.String()
+}
+
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
 	t := s.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, string(types.StorageClassStandard))
-	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,
 		Key:          &dst,
-		CopySource:   &src,
+		CopySource:   aws.String(s.copySource(src)),
 		StorageClass: types.StorageClass(sc),
 	}
 	if t.encodedTag != "" {
@@ -329,7 +343,7 @@ func (s *s3client) UploadPart(ctx context.Context, key string, uploadID string, 
 func (s *s3client) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.s3.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),
-		CopySource:      aws.String(s.bucket + "/" + srcKey),
+		CopySource:      aws.String(s.copySource(srcKey)),
 		CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
 		Key:             aws.String(key),
 		PartNumber:      aws.Int32(int32(num)),
