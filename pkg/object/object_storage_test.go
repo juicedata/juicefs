@@ -1159,6 +1159,62 @@ func TestSharding(t *testing.T) {
 	testStorage(t, s)
 }
 
+// tokenPagedStore pages by continuation token only and treats startAfter as a
+// client-side filter, like qiniu; a continuation call fails once.
+type tokenPagedStore struct {
+	ObjectStorage
+	keys   []string
+	failed bool
+}
+
+func (s *tokenPagedStore) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	var start int
+	if token != "" {
+		if !s.failed {
+			s.failed = true
+			return nil, false, "", errors.New("transient list error")
+		}
+		_, _ = fmt.Sscanf(token, "%d", &start)
+	}
+	end := start + 2
+	if end > len(s.keys) {
+		end = len(s.keys)
+	}
+	var objs []Object
+	for _, k := range s.keys[start:end] {
+		if k > startAfter {
+			objs = append(objs, &obj{key: k})
+		}
+	}
+	if len(objs) == 0 {
+		return nil, false, "", nil
+	}
+	if end == len(s.keys) {
+		return objs, false, "", nil
+	}
+	return objs, true, fmt.Sprintf("%d", end), nil
+}
+
+func TestShardingListRetryKeepsToken(t *testing.T) {
+	keys := []string{"k0", "k1", "k2", "k3", "k4", "k5"}
+	mem, _ := newMem("paged", "", "", "")
+	s := &sharded{stores: []ObjectStorage{&tokenPagedStore{ObjectStorage: mem, keys: keys}}}
+	ch, err := s.ListAll(context.Background(), "", "", false)
+	if err != nil {
+		t.Fatalf("list all: %s", err)
+	}
+	var got []string
+	for o := range ch {
+		if o == nil {
+			t.Fatal("list all returned nil object")
+		}
+		got = append(got, o.Key())
+	}
+	if !reflect.DeepEqual(got, keys) {
+		t.Fatalf("unexpected keys: got %v, want %v", got, keys)
+	}
+}
+
 func TestSQLite(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "teststore.db")
 	s, err := newSQLStore("sqlite3", dbPath, "", "")
