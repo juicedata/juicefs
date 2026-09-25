@@ -92,6 +92,10 @@ jobs:
           make juicefs.lite
           ./juicefs.lite version
 
+      - name: vet nosftp
+        timeout-minutes: 10
+        run: go vet -tags nosftp ./pkg/object/
+
       - name: build windows
         timeout-minutes: 10
         run: make juicefs.exe
