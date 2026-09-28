@@ -105,6 +105,8 @@ jobs:
       - name: Deploy minio
         run: |
           rm -rf /data/minio-data/*
+          docker build --build-arg MINIO_VERSION=RELEASE.2025-09-07T16-13-09Z -t juicefs/minio-test:RELEASE.2025-09-07T16-13-09Z -f .github/scripts/command/Dockerfile.minio-old .
+          kind load docker-image juicefs/minio-test:RELEASE.2025-09-07T16-13-09Z --name chart-testing
           kubectl apply -f .github/scripts/chaos/minio.yaml
 
       - name: Mount Juicefs 

@@ -35,12 +35,13 @@ cleanup_on_exit(){
 trap cleanup_on_exit EXIT
 
 if ! docker ps | grep -q minio; then
+    docker build --build-arg MINIO_VERSION=RELEASE.2025-09-07T16-13-09Z -t juicefs/minio-test:RELEASE.2025-09-07T16-13-09Z -f .github/scripts/command/Dockerfile.minio-old .
     docker run -d -p 9000:9000 --name minio \
             -e "MINIO_ACCESS_KEY=minioadmin" \
             -e "MINIO_SECRET_KEY=minioadmin" \
             -v /tmp/data:/data \
             -v /tmp/config:/root/.minio \
-            quay.io/minio/minio server /data
+            juicefs/minio-test:RELEASE.2025-09-07T16-13-09Z server /data
 fi
 [[ ! -f /usr/local/bin/mc ]] && .github/scripts/download_mc.sh linux-amd64 /usr/local/bin/mc && chmod +x /usr/local/bin/mc
 sleep 3s
