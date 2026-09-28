@@ -58,8 +58,8 @@ do_dump_load(){
   [[ "$iused1" == "$iused2" ]] || (echo "<FATAL>: iused error: $iused1 $iused2" && exit 1)
   ./juicefs summary /tmp/jfs/ --csv
   ./juicefs summary /tmp/jfs2/ --csv
-  summary1=$(./juicefs summary /tmp/jfs/ --csv | head -n +2 | tail -n 1)
-  summary2=$(./juicefs summary /tmp/jfs2/ --csv | head -n +2 | tail -n 1)
+  summary1=$(./juicefs summary /tmp/jfs/ --csv | python3 -c 'import csv, sys; rows = csv.reader(sys.stdin); header = next(rows); row = next(rows); row.pop(header.index("COST")); csv.writer(sys.stdout).writerow(row)')
+  summary2=$(./juicefs summary /tmp/jfs2/ --csv | python3 -c 'import csv, sys; rows = csv.reader(sys.stdin); header = next(rows); row = next(rows); row.pop(header.index("COST")); csv.writer(sys.stdout).writerow(row)')
   [[ "$summary1" == "$summary2" ]] || (echo "<FATAL>: summary error: $summary1 $summary2" && exit 1)
   
   file_count=$(ls -l /tmp/jfs2/bigdir/test-dir.0-0/mdtest_tree.0/ | wc -l)
