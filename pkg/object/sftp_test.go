@@ -20,6 +20,8 @@
 package object
 
 import (
+	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -31,6 +33,9 @@ func TestSftp(t *testing.T) { //skip mutate
 	}
 	b, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
 	testStorage(t, b)
+	if _, err := b.Head(context.Background(), "unit-test/"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("testStorage left unit-test/ behind: %v", err)
+	}
 }
 
 func TestSftp2(t *testing.T) { //skip mutate

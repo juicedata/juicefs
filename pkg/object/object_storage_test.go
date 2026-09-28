@@ -154,6 +154,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	prefix := "unit-test/"
 	s = WithPrefix(s, prefix)
+	defer s.Delete(ctx, "") // the prefix directory on file systems
 	defer func() {
 		if err := s.Delete(ctx, "test"); err != nil {
 			t.Fatalf("delete failed: %s", err)
@@ -324,7 +325,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put(ctx, "a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	defer s.Delete(ctx, "a/b/c/d/e/f")
+	defer func() {
+		// file systems create the parent directories implicitly
+		for _, k := range []string{"a/b/c/d/e/f", "a/b/c/d/e/", "a/b/c/d/", "a/b/c/", "a/b/"} {
+			_ = s.Delete(ctx, k)
+		}
+	}()
 	if err := s.Put(ctx, "a/b/c/d/e/f", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
