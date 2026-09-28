@@ -22,7 +22,7 @@ if ! docker ps | grep -q minio; then
             -e "MINIO_SECRET_KEY=minioadmin" \
             -v /tmp/data:/data \
             -v /tmp/config:/root/.minio \
-            quay.io/minio/minio server /data
+            chenyunhui/minio@sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2 server /data
 fi
 [[ ! -f /usr/local/bin/mc ]] && .github/scripts/download_mc.sh linux-amd64 /usr/local/bin/mc && chmod +x /usr/local/bin/mc
 sleep 3s
