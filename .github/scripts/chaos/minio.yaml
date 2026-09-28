@@ -18,8 +18,7 @@ spec:
     spec:
       containers:
       - name: minio
-        image: juicefs/minio-test:RELEASE.2025-09-07T16-13-09Z
-        imagePullPolicy: IfNotPresent
+        image: chenyunhui/minio@sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2
         resources:
           limits:
             memory: "500Mi"

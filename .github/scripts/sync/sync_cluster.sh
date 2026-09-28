@@ -57,14 +57,13 @@ configure_redis_for_cluster(){
 }
 
 start_minio(){
-    if ! docker ps --filter "name=^/minio$" --format '{{.Names}}' | grep -qx minio; then
-        docker build --build-arg MINIO_VERSION=RELEASE.2025-09-07T16-13-09Z -t juicefs/minio-test:RELEASE.2025-09-07T16-13-09Z -f .github/scripts/command/Dockerfile.minio-old .
+    if ! docker ps | grep "chenyunhui/minio"; then
         docker run -d -p 9000:9000 --name minio \
                 -e "MINIO_ACCESS_KEY=minioadmin" \
                 -e "MINIO_SECRET_KEY=minioadmin" \
                 -v /tmp/data:/data \
                 -v /tmp/config:/root/.minio \
-                juicefs/minio-test:RELEASE.2025-09-07T16-13-09Z server /data
+                chenyunhui/minio@sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2 server /data
         sleep 3s
     fi
     [ ! -x mc ] && .github/scripts/download_mc.sh linux-amd64 ./mc && chmod +x mc
