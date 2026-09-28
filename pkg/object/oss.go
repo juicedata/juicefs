@@ -121,7 +121,7 @@ func (o *ossClient) Get(ctx context.Context, key string, off, limit int64, gette
 		} else {
 			resp = verifyChecksum(result.Body,
 				result.Headers.Get(oss.HeaderOssMetaPrefix+checksumAlgr),
-				result.ContentLength)
+				result.ContentLength, key)
 		}
 	}
 
@@ -143,8 +143,11 @@ func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters .
 		req.Tagging = oss.Ptr(t.encodedTag)
 	}
 	if ins, ok := in.(io.ReadSeeker); ok {
-		req.Metadata = make(map[string]string)
-		req.Metadata[checksumAlgr] = generateChecksum(ins)
+		var err error
+		req.Metadata, err = generateChecksums(ins, checksumFull)
+		if err != nil {
+			return fmt.Errorf("checksum %s: %w", key, err)
+		}
 	}
 	var reqId string
 	result, err := o.client.PutObject(ctx, req)
