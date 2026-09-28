@@ -433,7 +433,7 @@ class Client(object):
                 for v in entry["Children"]:
                     parseSummary(v, removefields)
 
-        parseSummary(res, ["Inode"])
+        parseSummary(res, ["Inode", "Duration"])
         self.lib.free(buf)
         return res
 
