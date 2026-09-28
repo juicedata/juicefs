@@ -44,7 +44,11 @@ test_config_max_client_version()
     ./juicefs-1.0.0 format $LEGACY_META_URL myjfs
     ./juicefs-1.0.0 config $LEGACY_META_URL --max-client-version 1.0.1
     ./juicefs mount $META_URL /jfs -d && exit 1 || true
-    ./juicefs config $META_URL --max-client-version $current_version
+    if ./juicefs config $META_URL --max-client-version $current_version; then
+        echo "<FATAL>: expect max-client-version update by a disallowed client to fail"
+        exit 1
+    fi
+    ./juicefs config $META_URL --max-client-version $current_version --force
     ./juicefs mount $META_URL /jfs -d
 }
 
