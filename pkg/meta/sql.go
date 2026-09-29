@@ -3734,9 +3734,14 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 			return syscall.ENOENT
 		}
 		record := &dirStats{ino, stat.length, stat.space, stat.inodes}
-		_, err = s.Insert(record)
-		if err != nil && isDuplicateEntryErr(err) {
+		// check first: a failed insert aborts the whole transaction on PostgreSQL,
+		// so the update could never run after a duplicate key
+		if exist, err = s.Exist(&dirStats{Inode: ino}); err != nil {
+			return err
+		} else if exist {
 			_, err = s.Cols("data_length", "used_space", "used_inodes").Update(record, &dirStats{Inode: ino})
+		} else {
+			_, err = s.Insert(record)
 		}
 		if err == nil {
 			m.genLog(ctx, s, time.Now().UnixNano(), "DIRSTAT(%d,%d,%d,%d)", ino, stat.length, stat.space, stat.inodes)
