@@ -871,6 +871,9 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		}
 	}
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
+		if !store.conf.Writeback {
+			return false
+		}
 		if fi, err := os.Stat(fpath); err == nil {
 			return store.addDelayedStaging(key, fpath, fi.ModTime(), force)
 		} else {

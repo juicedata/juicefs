@@ -254,25 +254,55 @@ func TestWritebackStageTimeoutRemovesLateStage(t *testing.T) {
 }
 
 func TestStoreAsync(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "", "")
-	conf := defaultConf
-	conf.Writeback = true
-	p := filepath.Join(conf.CacheDir, stagingDir, "chunks/0/0/123_0_4")
-	os.MkdirAll(filepath.Dir(p), 0744)
-	f, _ := os.Create(p)
-	f.WriteString("good")
-	f.Close()
-	store := NewCachedStore(mem, conf, nil)
-	time.Sleep(time.Millisecond * 50) // wait for scan to finish
-	in, err := mem.Get(ctx, "chunks/0/0/123_0_4", 0, -1)
-	if err != nil {
-		t.Fatalf("staging object should be upload")
+	for _, writeback := range []bool{false, true} {
+		t.Run(fmt.Sprintf("writeback=%t", writeback), func(t *testing.T) {
+			mem, err := object.CreateStorage("mem", "", "", "", "")
+			require.NoError(t, err)
+			conf := defaultConf
+			conf.CacheDir = t.TempDir()
+			conf.Writeback = writeback
+			key := "chunks/0/0/123_0_4"
+			p := filepath.Join(conf.CacheDir, stagingDir, key)
+			require.NoError(t, os.MkdirAll(filepath.Dir(p), 0744))
+			require.NoError(t, os.WriteFile(p, []byte("good"), 0600))
+			store := NewCachedStore(mem, conf, nil).(*cachedStore)
+			if !writeback {
+				cache := store.bcache.(*cacheManager)
+				for _, force := range []bool{false, true} {
+					require.False(t, cache.stores[0].uploader(key, p, force))
+				}
+				require.Eventually(t, func() bool {
+					return toFloat64(cache.metrics.stageBlocks) == 1 && toFloat64(cache.metrics.stageBlockBytes) == 4
+				}, time.Second, time.Millisecond*10)
+				store.pendingMutex.Lock()
+				pending := len(store.pendingKeys)
+				store.pendingMutex.Unlock()
+				require.Zero(t, pending)
+				require.Empty(t, store.pendingCh)
+				data, err := os.ReadFile(p)
+				require.NoError(t, err)
+				require.Equal(t, "good", string(data))
+				_, err = mem.Head(ctx, key)
+				require.Error(t, err)
+			} else {
+				require.Eventually(t, func() bool {
+					_, err := mem.Head(ctx, key)
+					return err == nil
+				}, time.Second, time.Millisecond*10)
+				in, err := mem.Get(ctx, key, 0, -1)
+				require.NoError(t, err)
+				defer in.Close()
+				data, err := io.ReadAll(in)
+				require.NoError(t, err)
+				require.Equal(t, "good", string(data))
+				require.Eventually(t, func() bool {
+					_, err := os.Stat(p)
+					return os.IsNotExist(err)
+				}, time.Second, time.Millisecond*10)
+			}
+			testStore(t, store)
+		})
 	}
-	data, _ := io.ReadAll(in)
-	if string(data) != "good" {
-		t.Fatalf("data %s != expect good", data)
-	}
-	testStore(t, store)
 }
 
 func TestForceUpload(t *testing.T) {
