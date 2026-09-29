@@ -52,10 +52,10 @@ func addS3UserAgent(stack *smithymiddleware.Stack) error {
 
 type s3client struct {
 	tierStorage
-	s3              *s3.Client
-	bucket          string
-	region          string
-	disableChecksum bool
+	s3           *s3.Client
+	bucket       string
+	region       string
+	checksumMode checksumMode
 }
 
 func (s *s3client) String() string {
@@ -119,12 +119,22 @@ func (s *s3client) Head(ctx context.Context, key string) (Object, error) {
 
 func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
-	if off > 0 || limit > 0 {
+	ranged := off > 0 || limit > 0
+	verifyRange := ranged && s.checksumMode == checksumExtend
+	start, end := off, off+limit
+	if verifyRange {
+		var err error
+		start, end, err = alignChunkRange(off, limit)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if ranged {
 		var r string
 		if limit > 0 {
-			r = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
+			r = fmt.Sprintf("bytes=%d-%d", start, end-1)
 		} else {
-			r = fmt.Sprintf("bytes=%d-", off)
+			r = fmt.Sprintf("bytes=%d-", start)
 		}
 		params.Range = &r
 	}
@@ -140,10 +150,21 @@ func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getter
 	if reqID, ok := middleware.GetRequestIDMetadata(resp.ResultMetadata); ok {
 		attrs.SetRequestID(reqID)
 	}
-	if off == 0 && limit == -1 && !s.disableChecksum {
-		cs := resp.Metadata[strings.ToLower(checksumAlgr)]
-		if cs != "" && resp.ContentLength != nil {
-			resp.Body = verifyChecksum(resp.Body, cs, *resp.ContentLength)
+	if s.checksumMode != checksumNone && (!ranged || verifyRange) {
+		contentLength := int64(-1)
+		if resp.ContentLength != nil {
+			contentLength = *resp.ContentLength
+		}
+		crcChunks := resp.Metadata[strings.ToLower(chunksChecksumAlgr)]
+		if !ranged && crcChunks == "" {
+			resp.Body = verifyChecksum(resp.Body, resp.Metadata[strings.ToLower(checksumAlgr)], contentLength, key) // uploaded by old versions
+		} else {
+			body, err := checksumRangeReader(resp.Body, key, crcChunks, aws.ToString(resp.ContentRange), contentLength, off, limit)
+			if err != nil {
+				_ = resp.Body.Close()
+				return nil, fmt.Errorf("verify get %s: %w", key, err)
+			}
+			resp.Body = body
 		}
 	}
 	attrs.SetStorageClass(string(resp.StorageClass))
@@ -174,10 +195,11 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 	if t.encodedTag != "" {
 		params.Tagging = aws.String(t.encodedTag)
 	}
-	if !s.disableChecksum {
-		checksum := generateChecksum(body)
-		params.Metadata = map[string]string{checksumAlgr: checksum}
+	metadata, err := generateChecksums(body, s.checksumMode)
+	if err != nil {
+		return fmt.Errorf("checksum %s: %w", key, err)
 	}
+	params.Metadata = metadata
 	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(t.Sc)
 	resp, err := s.s3.PutObject(ctx, params)
@@ -504,6 +526,11 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err.Error())
 	}
+	query := uri.Query()
+	crcMode, err := parseChecksumMode(query)
+	if err != nil {
+		return nil, err
+	}
 
 	var (
 		bucketName      string
@@ -593,16 +620,12 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		options.RetryMaxAttempts = 1
 	})
 
-	disable100Continue := strings.EqualFold(uri.Query().Get("disable-100-continue"), "true")
+	disable100Continue := strings.EqualFold(query.Get("disable-100-continue"), "true")
 	if disable100Continue {
 		logger.Infof("HTTP header 100-Continue is disabled")
 		optFns = append(optFns, func(options *s3.Options) {
 			options.ContinueHeaderThresholdBytes = -1
 		})
-	}
-	disableChecksum := strings.EqualFold(uri.Query().Get("disable-checksum"), "true")
-	if disableChecksum {
-		logger.Infof("default CRC checksum is disabled")
 	}
 
 	if ep != "" {
@@ -626,7 +649,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 
 	cfg.HTTPClient = httpClient
 	client := s3.NewFromConfig(cfg, optFns...)
-	return &s3client{bucket: bucketName, s3: client, disableChecksum: disableChecksum, region: region}, nil
+	return &s3client{bucket: bucketName, s3: client, checksumMode: crcMode, region: region}, nil
 }
 
 func init() {

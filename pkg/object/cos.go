@@ -120,7 +120,7 @@ func (c *COS) Get(ctx context.Context, key string, off, limit int64, getters ...
 			length = -1
 			logger.Warnf("failed to parse content-length %s: %s", resp.Header.Get("Content-Length"), err)
 		}
-		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length)
+		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length, key)
 	}
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
@@ -143,8 +143,12 @@ func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 	t := c.getRuntimeTier(ctx)
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
+		metadata, err := generateChecksums(ins, checksumFull)
+		if err != nil {
+			return fmt.Errorf("checksum %s: %w", key, err)
+		}
 		header := http.Header(map[string][]string{
-			cosChecksumKey: {generateChecksum(ins)},
+			cosChecksumKey: {metadata[checksumAlgr]},
 		})
 		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosMetaXXX: &header}
 	}
