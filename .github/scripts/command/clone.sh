@@ -212,8 +212,8 @@ do_clone_with_batch_size()
     threads=$3
 
     time ./juicefs clone "$src" "$dst" --threads "$threads" 
-    ./juicefs summary "$src" --depth=1 | head -n 4 | tail -n 1 | sed 's/ //g' | tee /tmp/sum_src.log
-    ./juicefs summary "$dst" --depth=1 | head -n 4 | tail -n 1 | sed 's/ //g' | tee /tmp/sum_dst.log
+    ./juicefs summary "$src" --depth=1 --csv | python3 -c 'import csv, sys; rows = csv.reader(sys.stdin); header = next(rows); row = next(rows); row.pop(header.index("COST")); csv.writer(sys.stdout).writerow(row)' | tee /tmp/sum_src.log
+    ./juicefs summary "$dst" --depth=1 --csv | python3 -c 'import csv, sys; rows = csv.reader(sys.stdin); header = next(rows); row = next(rows); row.pop(header.index("COST")); csv.writer(sys.stdout).writerow(row)' | tee /tmp/sum_dst.log
     diff /tmp/sum_src.log /tmp/sum_dst.log
 }
 
