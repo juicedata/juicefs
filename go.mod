@@ -105,6 +105,7 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
 	pgregory.net/rapid v0.5.3
+	slatedb.io/slatedb-go v0.15.0
 	storj.io/uplink v1.14.2
 	xorm.io/xorm v1.0.7
 )
