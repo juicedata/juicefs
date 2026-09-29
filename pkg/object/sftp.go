@@ -246,9 +246,11 @@ func (f *sftpStore) Put(ctx context.Context, key string, in io.Reader, getters .
 	if err != nil {
 		return err
 	}
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
-	_, err = io.CopyBuffer(ff, in, *buf)
+	if PutInplace {
+		_, err = io.Copy(ff, in)
+	} else {
+		_, err = ff.ReadFromWithConcurrency(in, 0)
+	}
 	if err != nil {
 		_ = ff.Close()
 		return err

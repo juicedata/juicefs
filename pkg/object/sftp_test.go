@@ -20,11 +20,19 @@
 package object
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"net"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/iotest"
+	"time"
+
+	"github.com/pkg/sftp"
 )
 
 func TestSftp(t *testing.T) { //skip mutate
@@ -184,4 +192,144 @@ func TestParseSftpEndpoint(t *testing.T) {
 			}
 		})
 	}
+}
+
+type sftpTestFileWriter struct {
+	sftp.FileWriter
+	beforeWrite func(off int64) error
+}
+
+func (w sftpTestFileWriter) Filewrite(r *sftp.Request) (io.WriterAt, error) {
+	f, err := w.FileWriter.Filewrite(r)
+	if err != nil {
+		return nil, err
+	}
+	return sftpTestWriterAt{f, w.beforeWrite}, nil
+}
+
+type sftpTestWriterAt struct {
+	io.WriterAt
+	beforeWrite func(off int64) error
+}
+
+func (w sftpTestWriterAt) WriteAt(p []byte, off int64) (int, error) {
+	if err := w.beforeWrite(off); err != nil {
+		return 0, err
+	}
+	return w.WriterAt.WriteAt(p, off)
+}
+
+func newSftpTestStore(t *testing.T, beforeWrite func(off int64) error) *sftpStore {
+	handlers := sftp.InMemHandler()
+	handlers.FilePut = sftpTestFileWriter{handlers.FilePut, beforeWrite}
+	a, b := net.Pipe()
+	server := sftp.NewRequestServer(b, handlers)
+	go func() { _ = server.Serve() }()
+	client, err := sftp.NewClientPipe(a, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close(); _ = server.Close() })
+	return &sftpStore{root: "/", pool: []*conn{{sftpClient: client, err: make(chan error, 1)}}}
+}
+
+// sftpShortReader returns at most n bytes per Read, like a TLS-backed HTTP body.
+type sftpShortReader struct {
+	r io.Reader
+	n int
+}
+
+func (r *sftpShortReader) Read(p []byte) (int, error) {
+	if len(p) > r.n {
+		p = p[:r.n]
+	}
+	return r.r.Read(p)
+}
+
+func TestSftpPut(t *testing.T) {
+	defer func(v bool) { PutInplace = v }(PutInplace)
+	data := bytes.Repeat([]byte("sftp concurrent upload\n"), 12000)
+	injected := errors.New("injected failure")
+
+	PutInplace = false
+	t.Run("pipelined", func(t *testing.T) {
+		second := make(chan struct{})
+		store := newSftpTestStore(t, func(off int64) error {
+			switch off {
+			case 0:
+				select {
+				case <-second:
+				case <-time.After(2 * time.Second):
+					return errors.New("second write was not sent before the first one completed")
+				}
+			case 32768:
+				close(second)
+			}
+			return nil
+		})
+		if err := store.Put(context.Background(), "file", &sftpShortReader{bytes.NewReader(data), 16 << 10}); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := get(store, "file", 0, -1); err != nil || got != string(data) {
+			t.Fatalf("content mismatch: len=%d, err=%v", len(got), err)
+		}
+	})
+	t.Run("empty", func(t *testing.T) {
+		store := newSftpTestStore(t, func(int64) error { return nil })
+		if err := store.Put(context.Background(), "file", bytes.NewReader(nil)); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := get(store, "file", 0, -1); err != nil || got != "" {
+			t.Fatalf("got %q, err=%v", got, err)
+		}
+	})
+	for _, failure := range []string{"read", "write"} {
+		t.Run("failure/"+failure, func(t *testing.T) {
+			var failing atomic.Bool
+			store := newSftpTestStore(t, func(off int64) error {
+				if failing.Load() && failure == "write" && off == 32768 {
+					return injected
+				}
+				return nil
+			})
+			if err := store.Put(context.Background(), "file", bytes.NewReader([]byte("old"))); err != nil {
+				t.Fatal(err)
+			}
+			failing.Store(true)
+			var in io.Reader = bytes.NewReader(data)
+			if failure == "read" {
+				in = io.MultiReader(bytes.NewReader(data[:32768]), iotest.ErrReader(injected))
+			}
+			// Write errors come back as SFTP status errors; source errors must be returned as is.
+			if err := store.Put(context.Background(), "file", in); err == nil || failure == "read" && !errors.Is(err, injected) {
+				t.Fatalf("expected injected failure, got %v", err)
+			}
+			if got, err := get(store, "file", 0, -1); err != nil || got != "old" {
+				t.Fatalf("destination changed after failed upload: %q, err=%v", got, err)
+			}
+			if entries, err := store.pool[0].sftpClient.ReadDir("/"); err != nil || len(entries) != 1 {
+				t.Fatalf("temporary file leaked: %v, err=%v", entries, err)
+			}
+		})
+	}
+
+	PutInplace = true
+	t.Run("inplace/failure", func(t *testing.T) {
+		big := data[:8*32768+1]
+		// A WriterTo source reaches File.Write instead of File.ReadFrom.
+		for _, in := range []io.Reader{struct{ io.Reader }{bytes.NewReader(big)}, bytes.NewReader(big)} {
+			store := newSftpTestStore(t, func(off int64) error {
+				if off == 32768 {
+					return injected
+				}
+				return nil
+			})
+			if err := store.Put(context.Background(), "file", in); err == nil {
+				t.Fatal("expected injected failure")
+			}
+			if got, err := get(store, "file", 0, -1); err != nil || got != string(big[:32768]) {
+				t.Fatalf("failed in-place upload left %d bytes, want a 32768-byte prefix, err=%v", len(got), err)
+			}
+		}
+	})
 }
