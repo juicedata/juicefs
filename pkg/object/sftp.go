@@ -247,10 +247,8 @@ func (f *sftpStore) Put(ctx context.Context, key string, in io.Reader, getters .
 		return err
 	}
 	if PutInplace {
-		// Sequential writes leave only a prefix on failure, never holes.
 		_, err = io.Copy(ff, in)
 	} else {
-		// Pipelined writes may leave holes on failure, but tmp is removed then.
 		_, err = ff.ReadFromWithConcurrency(in, 0)
 	}
 	if err != nil {
