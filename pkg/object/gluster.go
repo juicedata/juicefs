@@ -57,22 +57,8 @@ func (g *gluster) vol() *gfapi.Volume {
 	return g.vols[n%uint64(len(g.vols))]
 }
 
-func (g *gluster) path(key string) (string, error) {
-	if key == "" {
-		return "./", nil
-	}
-	p := filepath.Clean(key)
-	if p == ".." || strings.HasPrefix(p, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("object key %q escapes storage root", key)
-	}
-	if strings.HasSuffix(key, "/") && !strings.HasSuffix(p, "/") {
-		p += "/"
-	}
-	return p, nil
-}
-
 func (g *gluster) Head(ctx context.Context, key string) (Object, error) {
-	p, err := g.path(key)
+	p, err := safePath("", key)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +92,7 @@ func (g *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 }
 
 func (g *gluster) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	p, err := g.path(key)
+	p, err := safePath("", key)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +121,7 @@ func (g *gluster) Get(ctx context.Context, key string, off, limit int64, getters
 }
 
 func (g *gluster) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	p, err := g.path(key)
+	p, err := safePath("", key)
 	if err != nil {
 		return err
 	}
@@ -175,7 +161,7 @@ func (g *gluster) Put(ctx context.Context, key string, in io.Reader, getters ...
 }
 
 func (g *gluster) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	p, err := g.path(key)
+	p, err := safePath("", key)
 	if err != nil {
 		return err
 	}
@@ -242,6 +228,9 @@ func (g *gluster) List(ctx context.Context, prefix, marker, token, delimiter str
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
+	if _, err := safePath("", prefix); err != nil {
+		return nil, false, "", err
+	}
 	var dir string = prefix
 	var objs []Object
 	if !strings.HasSuffix(dir, dirSuffix) {
@@ -294,7 +283,7 @@ func (g *gluster) Chtimes(path string, mtime time.Time) error {
 }
 
 func (g *gluster) Chmod(path string, mode os.FileMode) error {
-	p, err := g.path(path)
+	p, err := safePath("", path)
 	if err != nil {
 		return err
 	}

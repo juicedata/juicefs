@@ -333,3 +333,40 @@ func TestSftpPut(t *testing.T) {
 		}
 	})
 }
+
+func TestSftpRejectsKeyPathTraversal(t *testing.T) {
+	ctx := context.Background()
+	store := newSftpTestStore(t, func(int64) error { return nil })
+	store.root = "/data/"
+	client := store.pool[0].sftpClient
+
+	for _, key := range []string{"..", "../pwned.txt", "a/../../pwned.txt", "/../pwned.txt"} {
+		if err := store.Put(ctx, key, bytes.NewReader([]byte("x"))); err == nil {
+			t.Fatalf("Put(%q) should be rejected", key)
+		}
+		if _, err := store.Head(ctx, key); err == nil || os.IsNotExist(err) {
+			t.Fatalf("Head(%q) should be rejected, got %v", key, err)
+		}
+		if _, err := store.Get(ctx, key, 0, -1); err == nil || os.IsNotExist(err) {
+			t.Fatalf("Get(%q) should be rejected, got %v", key, err)
+		}
+		if err := store.Delete(ctx, key); err == nil {
+			t.Fatalf("Delete(%q) should be rejected", key)
+		}
+		if _, _, _, err := store.List(ctx, key, "", "", "/", 10, false); err == nil {
+			t.Fatalf("List(%q) should be rejected", key)
+		}
+	}
+	if _, err := client.Stat("/pwned.txt"); !os.IsNotExist(err) {
+		t.Fatalf("object escaped the root: %v", err)
+	}
+
+	for key, p := range map[string]string{"a/b.txt": "/data/a/b.txt", "a/../c.txt": "/data/c.txt"} {
+		if err := store.Put(ctx, key, bytes.NewReader([]byte("x"))); err != nil {
+			t.Fatalf("Put(%q): %s", key, err)
+		}
+		if _, err := client.Stat(p); err != nil {
+			t.Fatalf("stat %s: %s", p, err)
+		}
+	}
+}

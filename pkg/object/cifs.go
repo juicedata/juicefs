@@ -28,7 +28,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,7 +68,7 @@ type cifsStore struct {
 // The returned mode from Stat() will always be either 0666 (writable) or 0444 (read-only)
 // regardless of the specific mode bits passed to this function.
 func (c *cifsStore) Chmod(path string, mode os.FileMode) error {
-	p, err := c.path(path)
+	p, err := safeBackslashPath("", path)
 	if err != nil {
 		return err
 	}
@@ -85,7 +84,7 @@ func (c *cifsStore) Chown(path string, owner string, group string) error {
 
 // Chtimes implements MtimeChanger.
 func (c *cifsStore) Chtimes(path string, mtime time.Time) error {
-	p, err := c.path(path)
+	p, err := safeBackslashPath("", path)
 	if err != nil {
 		return err
 	}
@@ -98,19 +97,7 @@ func (c *cifsStore) String() string {
 	return fmt.Sprintf("cifs://%s@%s:%s/%s/", c.user, c.host, c.port, c.share)
 }
 
-func (c *cifsStore) path(key string) (string, error) {
-	if key == "" {
-		return "./", nil
-	}
-	p := filepath.Clean(key)
-	if p == ".." || strings.HasPrefix(p, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("object key %q escapes storage root", key)
-	}
-	if strings.HasSuffix(key, "/") && !strings.HasSuffix(p, "/") {
-		p += "/"
-	}
-	return p, nil
-}
+func (c *cifsStore) backslashSeparated() {}
 
 // getConnection returns a CIFS connection from the pool or creates a new one
 func (c *cifsStore) getConnection(ctx context.Context) (*cifsConn, error) {
@@ -212,7 +199,7 @@ func (c *cifsStore) withConn(ctx context.Context, f func(*smb2.Share) error) (er
 }
 
 func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error) {
-	p, err := c.path(key)
+	p, err := safeBackslashPath("", key)
 	if err != nil {
 		return nil, err
 	}
@@ -223,6 +210,7 @@ func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error)
 		}
 		isSymlink := fi.Mode()&os.ModeSymlink != 0
 		if isSymlink {
+			// SMB doesn't fully support symlinks like POSIX, but we'll try our best
 			fi, err = share.Stat(p)
 			if err != nil {
 				return err
@@ -248,7 +236,7 @@ func (r *cifsReadCloser) Close() error {
 }
 
 func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	p, err := c.path(key)
+	p, err := safeBackslashPath("", key)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +295,7 @@ func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	p, err := c.path(key)
+	p, err := safeBackslashPath("", key)
 	if err != nil {
 		return err
 	}
@@ -370,7 +358,7 @@ func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters .
 }
 
 func (c *cifsStore) Delete(ctx context.Context, key string, getters ...AttrGetter) (err error) {
-	p, err := c.path(key)
+	p, err := safeBackslashPath("", key)
 	if err != nil {
 		return err
 	}
@@ -404,6 +392,9 @@ func (c *cifsStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object 
 func (c *cifsStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
+	}
+	if _, err := safeBackslashPath("", prefix); err != nil {
+		return nil, false, "", err
 	}
 
 	dir := prefix

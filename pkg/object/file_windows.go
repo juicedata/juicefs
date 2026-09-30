@@ -25,6 +25,8 @@ func getOwnerGroup(info os.FileInfo) (string, string) {
 	return "", ""
 }
 
+func (d *filestore) backslashSeparated() {}
+
 func lookupUser(name string) int {
 	return 0
 }
@@ -34,7 +36,7 @@ func lookupGroup(name string) int {
 }
 
 func (d *filestore) Chtimes(key string, mtime time.Time) error {
-	p, err := d.path(key)
+	p, err := safeLocalPath(d.root, key)
 	if err != nil {
 		return err
 	}

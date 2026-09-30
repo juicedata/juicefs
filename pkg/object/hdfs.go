@@ -29,7 +29,6 @@ import (
 	"os"
 	"os/user"
 	"path"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -57,20 +56,8 @@ func (h *hdfsclient) String() string {
 	return fmt.Sprintf("hdfs://%s%s", h.addr, h.basePath)
 }
 
-func (h *hdfsclient) path(key string) (string, error) {
-	p := filepath.Join(h.basePath, key)
-	rel, err := filepath.Rel(h.basePath, p)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("object key %q escapes storage root %q", key, h.basePath)
-	}
-	if strings.HasSuffix(h.basePath+key, "/") && !strings.HasSuffix(p, "/") {
-		p += "/"
-	}
-	return p, nil
-}
-
 func (h *hdfsclient) Head(ctx context.Context, key string) (Object, error) {
-	p, err := h.path(key)
+	p, err := safeRawPath(h.basePath, key)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +106,7 @@ func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 }
 
 func (h *hdfsclient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	p, err := h.path(key)
+	p, err := safeRawPath(h.basePath, key)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +131,7 @@ func (h *hdfsclient) Get(ctx context.Context, key string, off, limit int64, gett
 }
 
 func (h *hdfsclient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	p, err := h.path(key)
+	p, err := safeRawPath(h.basePath, key)
 	if err != nil {
 		return err
 	}
@@ -221,7 +208,7 @@ func IsErrReplicating(err error) bool {
 }
 
 func (h *hdfsclient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	p, err := h.path(key)
+	p, err := safeRawPath(h.basePath, key)
 	if err != nil {
 		return err
 	}
@@ -236,7 +223,7 @@ func (h *hdfsclient) List(ctx context.Context, prefix, marker, token, delimiter 
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
-	dir, err := h.path(prefix)
+	dir, err := safeRawPath(h.basePath, prefix)
 	if err != nil {
 		return nil, false, "", err
 	}
@@ -307,7 +294,7 @@ func (h *hdfsclient) List(ctx context.Context, prefix, marker, token, delimiter 
 func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {
 	// fixme: need set the atime in hdfs.SetTimesRequestProto to -1 to avoid updating the atime
 	// ref: https://hadoop.apache.org/docs/stable/api/org/apache/hadoop/fs/FileSystem.html#setTimes-org.apache.hadoop.fs.Path-long-long-
-	p, err := h.path(key)
+	p, err := safeRawPath(h.basePath, key)
 	if err != nil {
 		return err
 	}
@@ -315,7 +302,7 @@ func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {
 }
 
 func (h *hdfsclient) Chmod(key string, mode os.FileMode) error {
-	p, err := h.path(key)
+	p, err := safeRawPath(h.basePath, key)
 	if err != nil {
 		return err
 	}
@@ -329,7 +316,7 @@ func (h *hdfsclient) Chown(key string, owner, group string) error {
 	if group == "root" {
 		group = supergroup
 	}
-	p, err := h.path(key)
+	p, err := safeRawPath(h.basePath, key)
 	if err != nil {
 		return err
 	}

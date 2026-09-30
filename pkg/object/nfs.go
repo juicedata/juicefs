@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/user"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -88,22 +87,8 @@ func (n *nfsStore) String() string {
 	return fmt.Sprintf("nfs://%s@%s:%s", n.username, n.host, n.root)
 }
 
-func (n *nfsStore) path(key string) (string, error) {
-	if key == "" {
-		return "./", nil
-	}
-	p := filepath.Clean(key)
-	if p == ".." || strings.HasPrefix(p, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("object key %q escapes storage root", key)
-	}
-	if strings.HasSuffix(key, "/") && !strings.HasSuffix(p, "/") {
-		p += "/"
-	}
-	return p, nil
-}
-
 func (n *nfsStore) Head(ctx context.Context, key string) (Object, error) {
-	p, err := n.path(key)
+	p, err := safePath("./", key)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +115,7 @@ func (n *nfsStore) Head(ctx context.Context, key string) (Object, error) {
 }
 
 func (n *nfsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	p, err := n.path(key)
+	p, err := safePath("./", key)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +162,7 @@ func (n *nfsStore) mkdirAll(p string) error {
 }
 
 func (n *nfsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	p, err := n.path(key)
+	p, err := safePath("./", key)
 	if err != nil {
 		return err
 	}
@@ -235,7 +220,7 @@ func (n *nfsStore) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (n *nfsStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	path, err := n.path(key)
+	path, err := safePath("./", key)
 	if err != nil {
 		return err
 	}
@@ -334,6 +319,9 @@ func (n *nfsStore) List(ctx context.Context, prefix, marker, token, delimiter st
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
+	if _, err := safePath("./", prefix); err != nil {
+		return nil, false, "", err
+	}
 	dir := prefix
 	var objs []Object
 	if dir != "" && !strings.HasSuffix(dir, dirSuffix) {
@@ -380,7 +368,7 @@ func (n *nfsStore) List(ctx context.Context, prefix, marker, token, delimiter st
 }
 
 func (n *nfsStore) setAttr(path string, attrSet func(attr *nfs.Fattr) nfs.Sattr3) error {
-	p, err := n.path(path)
+	p, err := safePath("./", path)
 	if err != nil {
 		return err
 	}
@@ -440,11 +428,7 @@ func (n *nfsStore) Chown(path string, owner, group string) error {
 
 func (n *nfsStore) Symlink(oldName, newName string) error {
 	newName = strings.TrimRight(newName, "/")
-	p, err := n.path(newName)
-	if err != nil {
-		return err
-	}
-	oldP, err := n.path(oldName)
+	p, err := safePath("./", newName)
 	if err != nil {
 		return err
 	}
@@ -456,11 +440,11 @@ func (n *nfsStore) Symlink(oldName, newName string) error {
 	} else if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return n.target.Symlink(oldP, p)
+	return n.target.Symlink(oldName, p)
 }
 
 func (n *nfsStore) Readlink(name string) (string, error) {
-	p, err := n.path(name)
+	p, err := safePath("./", name)
 	if err != nil {
 		return "", err
 	}

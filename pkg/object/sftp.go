@@ -155,29 +155,8 @@ func (f *sftpStore) String() string {
 	return fmt.Sprintf("sftp://%s@%s:%s", f.config.User, f.host, f.root)
 }
 
-func (f *sftpStore) path(key string) (string, error) {
-	var p string
-	if strings.HasSuffix(f.root, dirSuffix) {
-		p = filepath.Join(f.root, key)
-	} else {
-		p = filepath.Clean(f.root + key)
-	}
-	boundary := f.root
-	if !strings.HasSuffix(boundary, dirSuffix) {
-		boundary = filepath.Dir(boundary)
-	}
-	rel, err := filepath.Rel(boundary, p)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("object key %q escapes storage root %q", key, f.root)
-	}
-	if strings.HasSuffix(f.root+key, dirSuffix) && !strings.HasSuffix(p, dirSuffix) {
-		p += dirSuffix
-	}
-	return p, nil
-}
-
 func (f *sftpStore) Head(ctx context.Context, key string) (Object, error) {
-	p, err := f.path(key)
+	p, err := safePath(f.root, key)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +182,7 @@ func (f *sftpStore) Head(ctx context.Context, key string) (Object, error) {
 }
 
 func (f *sftpStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	p, err := f.path(key)
+	p, err := safePath(f.root, key)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +214,7 @@ func (f *sftpStore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (f *sftpStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	p, err := f.path(key)
+	p, err := safePath(f.root, key)
 	if err != nil {
 		return err
 	}
@@ -291,7 +270,7 @@ func (f *sftpStore) Put(ctx context.Context, key string, in io.Reader, getters .
 }
 
 func (f *sftpStore) Chtimes(key string, mtime time.Time) (err error) {
-	p, err := f.path(key)
+	p, err := safePath(f.root, key)
 	if err != nil {
 		return err
 	}
@@ -307,7 +286,7 @@ func (f *sftpStore) Chtimes(key string, mtime time.Time) (err error) {
 }
 
 func (f *sftpStore) Chmod(key string, mode os.FileMode) (err error) {
-	p, err := f.path(key)
+	p, err := safePath(f.root, key)
 	if err != nil {
 		return err
 	}
@@ -321,7 +300,7 @@ func (f *sftpStore) Chmod(key string, mode os.FileMode) (err error) {
 }
 
 func (f *sftpStore) Chown(key string, owner, group string) (err error) {
-	p, err := f.path(key)
+	p, err := safePath(f.root, key)
 	if err != nil {
 		return err
 	}
@@ -340,7 +319,7 @@ func (f *sftpStore) Chown(key string, owner, group string) (err error) {
 }
 
 func (f *sftpStore) Symlink(oldName, newName string) error {
-	p, err := f.path(newName)
+	p, err := safePath(f.root, newName)
 	if err != nil {
 		return err
 	}
@@ -358,7 +337,7 @@ func (f *sftpStore) Symlink(oldName, newName string) error {
 }
 
 func (f *sftpStore) Readlink(name string) (link string, err error) {
-	p, err := f.path(name)
+	p, err := safePath(f.root, name)
 	if err != nil {
 		return "", err
 	}
@@ -371,7 +350,7 @@ func (f *sftpStore) Readlink(name string) (link string, err error) {
 }
 
 func (f *sftpStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	p, err := f.path(key)
+	p, err := safePath(f.root, key)
 	if err != nil {
 		return err
 	}
@@ -443,6 +422,10 @@ func (f *sftpStore) List(ctx context.Context, prefix, marker, token, delimiter s
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
+	dir, err := safePath(f.root, prefix)
+	if err != nil {
+		return nil, false, "", err
+	}
 
 	c, err := f.getSftpConnection()
 	if err != nil {
@@ -451,10 +434,6 @@ func (f *sftpStore) List(ctx context.Context, prefix, marker, token, delimiter s
 	defer func() { f.putSftpConnection(c, err) }()
 
 	var objs []Object
-	dir, err := f.path(prefix)
-	if err != nil {
-		return nil, false, "", err
-	}
 	if !strings.HasSuffix(dir, "/") {
 		dir = filepath.Dir(dir)
 		if !strings.HasSuffix(dir, dirSuffix) {
