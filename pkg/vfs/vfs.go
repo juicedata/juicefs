@@ -426,12 +426,16 @@ func (v *VFS) Opendir(ctx Context, ino Ino, flags uint32) (fh uint64, err syscal
 	return
 }
 
+// mergeWriterLen merges the in-memory writer length into attr.Length.
+func (v *VFS) mergeWriterLen(inode Ino, attr *meta.Attr) {
+	if length := v.writer.GetLength(inode); length > attr.Length {
+		attr.Length = length
+	}
+}
+
 func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 	if attr.Full && attr.Typ == meta.TypeFile {
-		length := v.writer.GetLength(inode)
-		if length > attr.Length {
-			attr.Length = length
-		}
+		v.mergeWriterLen(inode, attr)
 		v.reader.Truncate(inode, attr.Length)
 	}
 }

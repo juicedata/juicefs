@@ -564,6 +564,30 @@ func (w *dataWriter) GetLength(inode Ino) uint64 {
 	return 0
 }
 
+// MergeWriterLength merges the in-memory writer length into attr.Length and reports
+// whether ino was modified since start. Returns true if the size may be stale and
+// should not be cached. Runs atomically under modM.
+//
+// The writer length is always merged so the reported size never drops below data
+// that is buffered but not yet in meta. The reader length is only synced when the
+// size is trustworthy (not modified since start): a stale attr could otherwise
+// re-expand a reader that a concurrent truncate just shrank.
+func (v *VFS) MergeWriterLength(ino Ino, attr *meta.Attr, start time.Time) bool {
+	v.modM.Lock()
+	defer v.modM.Unlock()
+	modified := false
+	if t, ok := v.modifiedAt[ino]; ok && t.After(start) {
+		modified = true
+	}
+	if attr.Full && attr.Typ == meta.TypeFile {
+		v.mergeWriterLen(ino, attr)
+		if !modified {
+			v.reader.Truncate(ino, attr.Length)
+		}
+	}
+	return modified
+}
+
 func (w *dataWriter) Truncate(inode Ino, len uint64) {
 	f := w.find(inode)
 	if f != nil {
