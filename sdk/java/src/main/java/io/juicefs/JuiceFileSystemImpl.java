@@ -72,6 +72,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -1055,6 +1057,9 @@ public class JuiceFileSystemImpl extends FileSystem {
   class FileInputStream extends FSInputStream implements ByteBufferReadable {
     private int fd;
     private final Path path;
+    // Positioned reads run without the stream monitor so they can overlap each
+    // other; this lock only keeps close() from freeing fd under an in-flight one.
+    private final ReadWriteLock closeLock = new ReentrantReadWriteLock();
 
     private ByteBuffer buf;
     private long position;
@@ -1128,8 +1133,10 @@ public class JuiceFileSystemImpl extends FileSystem {
       return true;
     }
 
+    // Not synchronized: a positioned read touches only fd and path, and HBase
+    // issues many of them on one stream at once.
     @Override
-    public synchronized int read(long pos, byte[] b, int off, int len) throws IOException {
+    public int read(long pos, byte[] b, int off, int len) throws IOException {
       if (b == null || off < 0 || len < 0 || b.length - off < len) {
         throw new IllegalArgumentException("arguments: " + off + " " + len);
       }
@@ -1165,14 +1172,19 @@ public class JuiceFileSystemImpl extends FileSystem {
       return got + more;
     }
 
-    private synchronized int read(long pos, ByteBuffer b) throws IOException {
+    private int read(long pos, ByteBuffer b) throws IOException {
       if (pos < 0)
         throw new EOFException("position is negative");
       if (!b.hasRemaining())
         return 0;
       int got;
       int startPos = b.position();
-      got = lib.jfs_pread(Thread.currentThread().getId(), fd, b, b.remaining(), pos);
+      closeLock.readLock().lock();
+      try {
+        got = lib.jfs_pread(Thread.currentThread().getId(), fd, b, b.remaining(), pos);
+      } finally {
+        closeLock.readLock().unlock();
+      }
       if (got == EINVAL)
         throw new IOException("stream was closed");
       if (got < 0)
@@ -1235,8 +1247,14 @@ public class JuiceFileSystemImpl extends FileSystem {
       }
       directBufferPool.returnBuffer(buf);
       buf = null;
-      int r = lib.jfs_close(Thread.currentThread().getId(), fd);
-      fd = 0;
+      int r;
+      closeLock.writeLock().lock();
+      try {
+        r = lib.jfs_close(Thread.currentThread().getId(), fd);
+        fd = 0;
+      } finally {
+        closeLock.writeLock().unlock();
+      }
       if (r < 0)
         throw error(r, path);
     }

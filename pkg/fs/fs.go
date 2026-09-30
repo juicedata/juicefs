@@ -174,6 +174,8 @@ type File struct {
 	dircache []os.FileInfo
 	entries  []*meta.Entry
 	data     []byte
+	preads   sync.WaitGroup // positioned reads running outside the lock
+	closed   bool
 }
 
 func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *prometheus.Registry) (*FileSystem, error) {
@@ -1336,37 +1338,62 @@ func (f *File) Pread(ctx meta.Context, b []byte, offset int64) (n int, err error
 	defer task.End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Pread (%s,%d,%d): (%d,%s)", f.path, len(b), offset, n, errstr(err)) }()
+	// Hold the lock only while touching the File's own state; the read itself
+	// may wait on the object storage, and positioned reads on one file must be
+	// able to overlap there (vfs.FileReader is safe for concurrent Read/Close).
 	f.Lock()
-	defer f.Unlock()
-	n, err = f.pread(ctx, b, offset)
-	return
+	rdata, b, n, err := f.preparePread(ctx, b, offset)
+	if rdata != nil {
+		f.preads.Add(1)
+		defer f.preads.Done()
+	}
+	f.Unlock()
+	if rdata == nil {
+		return
+	}
+	return f.readData(ctx, rdata, b, offset)
 }
 
 func (f *File) pread(ctx meta.Context, b []byte, offset int64) (n int, err error) {
+	rdata, b, n, err := f.preparePread(ctx, b, offset)
+	if rdata == nil {
+		return
+	}
+	return f.readData(ctx, rdata, b, offset)
+}
+
+// preparePread must be called with f locked. It returns a nil reader when the
+// request is already complete (EOF, in-memory data, or a flush error).
+func (f *File) preparePread(ctx meta.Context, b []byte, offset int64) (rdata vfs.FileReader, buf []byte, n int, err error) {
+	if f.closed {
+		return nil, nil, 0, syscall.EBADF
+	}
 	if offset >= f.info.Size() {
-		return 0, io.EOF
+		return nil, nil, 0, io.EOF
 	}
 	if int64(len(b))+offset > f.info.Size() {
 		b = b[:f.info.Size()-offset]
 	}
 	if f.data != nil {
 		n := copy(b, f.data[offset:])
-		return n, nil
+		return nil, nil, n, nil
 	}
 	if f.wdata != nil {
 		eno := f.wdata.Flush(ctx)
 		if eno != 0 {
-			err = eno
-			return
+			return nil, nil, 0, eno
 		}
 	}
 	if f.rdata == nil {
 		f.rdata = f.fs.reader.Open(f.inode, uint64(f.info.Size()))
 	}
+	return f.rdata, b, 0, nil
+}
 
-	got, eno := f.rdata.Read(ctx, uint64(offset), b)
+func (f *File) readData(ctx meta.Context, rdata vfs.FileReader, b []byte, offset int64) (n int, err error) {
+	got, eno := rdata.Read(ctx, uint64(offset), b)
 	for eno == syscall.EAGAIN {
-		got, eno = f.rdata.Read(ctx, uint64(offset), b)
+		got, eno = rdata.Read(ctx, uint64(offset), b)
 	}
 	if eno != 0 {
 		err = eno
@@ -1474,6 +1501,10 @@ func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 	f.Lock()
 	defer f.Unlock()
 	if f.flags != 0 && !f.info.IsDir() {
+		// Later reads fail with EBADF instead of opening a new reader on a
+		// closed file; then drain the positioned reads already in flight.
+		f.closed = true
+		f.preads.Wait()
 		f.offset = 0
 		if f.rdata != nil {
 			rdata := f.rdata
