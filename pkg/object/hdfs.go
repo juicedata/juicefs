@@ -56,12 +56,12 @@ func (h *hdfsclient) String() string {
 	return fmt.Sprintf("hdfs://%s%s", h.addr, h.basePath)
 }
 
-func (h *hdfsclient) path(key string) string {
-	return h.basePath + key
-}
-
 func (h *hdfsclient) Head(ctx context.Context, key string) (Object, error) {
-	info, err := h.c.Stat(h.path(key))
+	p, err := safeRawPath(h.basePath, key)
+	if err != nil {
+		return nil, err
+	}
+	info, err := h.c.Stat(p)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,11 @@ func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 }
 
 func (h *hdfsclient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	f, err := h.c.Open(h.path(key))
+	p, err := safeRawPath(h.basePath, key)
+	if err != nil {
+		return nil, err
+	}
+	f, err := h.c.Open(p)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +131,10 @@ func (h *hdfsclient) Get(ctx context.Context, key string, off, limit int64, gett
 }
 
 func (h *hdfsclient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	p := h.path(key)
+	p, err := safeRawPath(h.basePath, key)
+	if err != nil {
+		return err
+	}
 	if strings.HasSuffix(p, dirSuffix) {
 		return h.c.MkdirAll(p, 0777&^h.umask)
 	}
@@ -201,7 +208,11 @@ func IsErrReplicating(err error) bool {
 }
 
 func (h *hdfsclient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	err := h.c.Remove(h.path(key))
+	p, err := safeRawPath(h.basePath, key)
+	if err != nil {
+		return err
+	}
+	err = h.c.Remove(p)
 	if err != nil && os.IsNotExist(err) {
 		err = nil
 	}
@@ -212,7 +223,10 @@ func (h *hdfsclient) List(ctx context.Context, prefix, marker, token, delimiter 
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
-	dir := h.path(prefix)
+	dir, err := safeRawPath(h.basePath, prefix)
+	if err != nil {
+		return nil, false, "", err
+	}
 	var objs []Object
 	if !strings.HasSuffix(dir, dirSuffix) {
 		dir = path.Dir(dir)
@@ -280,11 +294,19 @@ func (h *hdfsclient) List(ctx context.Context, prefix, marker, token, delimiter 
 func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {
 	// fixme: need set the atime in hdfs.SetTimesRequestProto to -1 to avoid updating the atime
 	// ref: https://hadoop.apache.org/docs/stable/api/org/apache/hadoop/fs/FileSystem.html#setTimes-org.apache.hadoop.fs.Path-long-long-
-	return h.c.Chtimes(h.path(key), mtime, mtime)
+	p, err := safeRawPath(h.basePath, key)
+	if err != nil {
+		return err
+	}
+	return h.c.Chtimes(p, mtime, mtime)
 }
 
 func (h *hdfsclient) Chmod(key string, mode os.FileMode) error {
-	return h.c.Chmod(h.path(key), mode)
+	p, err := safeRawPath(h.basePath, key)
+	if err != nil {
+		return err
+	}
+	return h.c.Chmod(p, mode)
 }
 
 func (h *hdfsclient) Chown(key string, owner, group string) error {
@@ -294,7 +316,11 @@ func (h *hdfsclient) Chown(key string, owner, group string) error {
 	if group == "root" {
 		group = supergroup
 	}
-	return h.c.Chown(h.path(key), owner, group)
+	p, err := safeRawPath(h.basePath, key)
+	if err != nil {
+		return err
+	}
+	return h.c.Chown(p, owner, group)
 }
 
 func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {

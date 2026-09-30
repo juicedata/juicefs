@@ -81,23 +81,65 @@ func DirStorage(s ObjectStorage) ObjectStorage {
 	return s
 }
 
+// key returns the key in the underlying storage. For file systems, keys must
+// not escape the prefix, which is usually the target directory of sync. The key
+// is not cleaned here to keep the prefix of returned keys, the underlying file
+// system will clean the whole path.
+func (s *withPrefix) key(key string) (string, error) {
+	var err error
+	switch underlyingStorage(s.os).(type) {
+	case backslashSeparated:
+		_, err = safeBackslashPath(s.prefix, key)
+	case FileSystem:
+		_, err = safePath(s.prefix, key)
+	}
+	if err != nil {
+		return "", err
+	}
+	return s.prefix + key, nil
+}
+
+// underlyingStorage returns the storage wrapped by (nested) withPrefix, since
+// withPrefix itself always implements FileSystem.
+func underlyingStorage(s ObjectStorage) ObjectStorage {
+	for {
+		p, ok := s.(*withPrefix)
+		if !ok {
+			return s
+		}
+		s = p.os
+	}
+}
+
 func (s *withPrefix) Symlink(oldName, newName string) error {
 	if w, ok := s.os.(SupportSymlink); ok {
-		return w.Symlink(oldName, s.prefix+newName)
+		k, err := s.key(newName)
+		if err != nil {
+			return err
+		}
+		return w.Symlink(oldName, k)
 	}
 	return notSupported
 }
 
 func (s *withPrefix) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
 	if w, ok := s.os.(SupportUploadPartStream); ok {
-		return w.UploadPartStream(s.prefix+key, uploadID, num, in)
+		k, err := s.key(key)
+		if err != nil {
+			return nil, err
+		}
+		return w.UploadPartStream(k, uploadID, num, in)
 	}
 	return nil, notSupported
 }
 
 func (s *withPrefix) Readlink(name string) (string, error) {
 	if w, ok := s.os.(SupportSymlink); ok {
-		return w.Readlink(s.prefix + name)
+		k, err := s.key(name)
+		if err != nil {
+			return "", err
+		}
+		return w.Readlink(k)
 	}
 	return "", notSupported
 }
@@ -159,7 +201,11 @@ func (p *withPrefix) updateKey(o Object) Object {
 }
 
 func (p *withPrefix) Head(ctx context.Context, key string) (Object, error) {
-	o, err := p.os.Head(ctx, p.prefix+key)
+	k, err := p.key(key)
+	if err != nil {
+		return nil, err
+	}
+	o, err := p.os.Head(ctx, k)
 	if err != nil {
 		return nil, err
 	}
@@ -170,11 +216,19 @@ func (p *withPrefix) Get(ctx context.Context, key string, off, limit int64, gett
 	if off > 0 && limit < 0 {
 		return nil, fmt.Errorf("invalid range: %d-%d", off, limit)
 	}
-	return p.os.Get(ctx, p.prefix+key, off, limit, getters...)
+	k, err := p.key(key)
+	if err != nil {
+		return nil, err
+	}
+	return p.os.Get(ctx, k, off, limit, getters...)
 }
 
 func (p *withPrefix) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	return p.os.Put(ctx, p.prefix+key, in, getters...)
+	k, err := p.key(key)
+	if err != nil {
+		return err
+	}
+	return p.os.Put(ctx, k, in, getters...)
 }
 
 func (p *withPrefix) Copy(ctx context.Context, dst, src string) error {
@@ -182,14 +236,22 @@ func (p *withPrefix) Copy(ctx context.Context, dst, src string) error {
 }
 
 func (p *withPrefix) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	return p.os.Delete(ctx, p.prefix+key, getters...)
+	k, err := p.key(key)
+	if err != nil {
+		return err
+	}
+	return p.os.Delete(ctx, k, getters...)
 }
 
 func (p *withPrefix) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	k, err := p.key(prefix)
+	if err != nil {
+		return nil, false, "", err
+	}
 	if start != "" {
 		start = p.prefix + start
 	}
-	objs, hasMore, nextMarker, err := p.os.List(ctx, p.prefix+prefix, start, token, delimiter, limit, followLink)
+	objs, hasMore, nextMarker, err := p.os.List(ctx, k, start, token, delimiter, limit, followLink)
 	for i, o := range objs {
 		objs[i] = p.updateKey(o)
 	}
@@ -197,10 +259,14 @@ func (p *withPrefix) List(ctx context.Context, prefix, start, token, delimiter s
 }
 
 func (p *withPrefix) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
+	k, err := p.key(prefix)
+	if err != nil {
+		return nil, err
+	}
 	if marker != "" {
 		marker = p.prefix + marker
 	}
-	r, err := p.os.ListAll(ctx, p.prefix+prefix, marker, followLink)
+	r, err := p.os.ListAll(ctx, k, marker, followLink)
 	if err != nil {
 		return r, err
 	}
@@ -219,43 +285,77 @@ func (p *withPrefix) ListAll(ctx context.Context, prefix, marker string, followL
 
 func (p *withPrefix) Chmod(path string, mode os.FileMode) error {
 	if fs, ok := p.os.(FileSystem); ok {
-		return fs.Chmod(p.prefix+path, mode)
+		k, err := p.key(path)
+		if err != nil {
+			return err
+		}
+		return fs.Chmod(k, mode)
 	}
 	return notSupported
 }
 
 func (p *withPrefix) Chown(path string, owner, group string) error {
 	if fs, ok := p.os.(FileSystem); ok {
-		return fs.Chown(p.prefix+path, owner, group)
+		k, err := p.key(path)
+		if err != nil {
+			return err
+		}
+		return fs.Chown(k, owner, group)
 	}
 	return notSupported
 }
 
 func (p *withPrefix) Chtimes(key string, mtime time.Time) error {
 	if fs, ok := p.os.(FileSystem); ok {
-		return fs.Chtimes(p.prefix+key, mtime)
+		k, err := p.key(key)
+		if err != nil {
+			return err
+		}
+		return fs.Chtimes(k, mtime)
 	}
 	return notSupported
 }
 
 func (p *withPrefix) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
-	return p.os.CreateMultipartUpload(ctx, p.prefix+key)
+	k, err := p.key(key)
+	if err != nil {
+		return nil, err
+	}
+	return p.os.CreateMultipartUpload(ctx, k)
 }
 
 func (p *withPrefix) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
-	return p.os.UploadPart(ctx, p.prefix+key, uploadID, num, body)
+	k, err := p.key(key)
+	if err != nil {
+		return nil, err
+	}
+	return p.os.UploadPart(ctx, k, uploadID, num, body)
 }
 
 func (s *withPrefix) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	return s.os.UploadPartCopy(ctx, s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
+	k, err := s.key(key)
+	if err != nil {
+		return nil, err
+	}
+	src, err := s.key(srcKey)
+	if err != nil {
+		return nil, err
+	}
+	return s.os.UploadPartCopy(ctx, k, uploadID, num, src, off, size)
 }
 
 func (p *withPrefix) AbortUpload(ctx context.Context, key string, uploadID string) {
-	p.os.AbortUpload(ctx, p.prefix+key, uploadID)
+	if k, err := p.key(key); err == nil {
+		p.os.AbortUpload(ctx, k, uploadID)
+	}
 }
 
 func (p *withPrefix) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
-	return p.os.CompleteUpload(ctx, p.prefix+key, uploadID, parts)
+	k, err := p.key(key)
+	if err != nil {
+		return err
+	}
+	return p.os.CompleteUpload(ctx, k, uploadID, parts)
 }
 
 func (p *withPrefix) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
@@ -267,16 +367,17 @@ func (p *withPrefix) ListUploads(ctx context.Context, marker string) ([]*Pending
 }
 
 func (p *withPrefix) Restore(ctx context.Context, key string, days int32) error {
-	return p.os.Restore(ctx, p.prefix+key, days)
+	k, err := p.key(key)
+	if err != nil {
+		return err
+	}
+	return p.os.Restore(ctx, k, days)
 }
 
 var _ ObjectStorage = (*withPrefix)(nil)
 var _ SupportTier = (*withPrefix)(nil)
 
 func IsFileSystem(object ObjectStorage) bool {
-	if o, ok := object.(*withPrefix); ok {
-		object = o.os
-	}
-	_, ok := object.(FileSystem)
+	_, ok := underlyingStorage(object).(FileSystem)
 	return ok
 }

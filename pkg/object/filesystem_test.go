@@ -70,6 +70,24 @@ func TestHDFS2(t *testing.T) { //skip mutate
 	}
 	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "testUser1", "", "")
 	testFileSystem(t, dfs)
+
+	// MkdirAll of the HDFS client cleans the path, so directory keys could escape
+	ctx := context.Background()
+	base, err := newHDFS(os.Getenv("HDFS_ADDR")+"/prefix-test", "testUser1", "", "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	for _, s := range []ObjectStorage{base, WithPrefix(dfs, "prefix-test/")} {
+		for _, key := range []string{"../escaped/", "../escaped/x", "a/../../escaped/"} {
+			if err := s.Put(ctx, key, bytes.NewReader(nil)); err == nil {
+				t.Fatalf("Put(%q) to %s should be rejected", key, s)
+			}
+		}
+	}
+	if _, err := dfs.Head(ctx, "escaped/"); !os.IsNotExist(err) {
+		t.Fatalf("escaped/ should not be created: %v", err)
+	}
+	_ = dfs.Delete(ctx, "prefix-test/")
 }
 
 func TestNFS2(t *testing.T) { //skip mutate
