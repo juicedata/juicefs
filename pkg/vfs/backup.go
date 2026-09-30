@@ -68,8 +68,7 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 			continue
 		}
 		if now := time.Now(); now.Sub(last) >= interval {
-			var iused, dummy uint64
-			_ = m.StatFS(ctx, meta.RootInode, &dummy, &dummy, &iused, &dummy)
+			iused := usedInodes(ctx, m)
 			if interval <= time.Hour {
 				if iused > 1e6 {
 					logger.Warnf("backup metadata skipped because of too many inodes: %d %s; "+
@@ -96,6 +95,14 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 			LastBackupDurationG.Set(0)
 		}
 	}
+}
+
+// usedInodes counts the whole volume, which is what the backup dumps: inode 0
+// resolves to the volume root even when the client is mounted with --subdir.
+func usedInodes(ctx meta.Context, m meta.Meta) uint64 {
+	var iused, dummy uint64
+	_ = m.StatFS(ctx, 0, &dummy, &dummy, &iused, &dummy)
+	return iused
 }
 
 func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTrash bool) (string, error) {
