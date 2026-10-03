@@ -446,6 +446,13 @@ func NewTiers(defaultSc string) Tiers {
 	return t
 }
 
+// encodeCopySource escapes a copy-source header without encoding path separators.
+func encodeCopySource(bucket, key string) string {
+	src := url.QueryEscape(bucket + "/" + key)
+	src = strings.ReplaceAll(src, "+", "%20")
+	return strings.ReplaceAll(src, "%2F", "/")
+}
+
 func getOrDefaultScValue(v, defaultValue string) string {
 	if v == "" {
 		return defaultValue

@@ -172,7 +172,7 @@ func (s *ks3) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 func (s *ks3) Copy(ctx context.Context, dst, src string) error {
 	t := s.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, s3.StorageClassStandard)
-	src = s.bucket + "/" + src
+	src = encodeCopySource(s.bucket, src)
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
 		Key:        &dst,
@@ -303,7 +303,7 @@ func (s *ks3) Restore(ctx context.Context, key string, days int32) error {
 func (s *ks3) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.s3.UploadPartCopyWithContext(ctx, &s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),
-		CopySource:      aws.String(s.bucket + "/" + srcKey),
+		CopySource:      aws.String(encodeCopySource(s.bucket, srcKey)),
 		CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
 		Key:             aws.String(key),
 		PartNumber:      aws.Long(int64(num)),
