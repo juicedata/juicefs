@@ -97,7 +97,7 @@ func (s *sqlStore) Put(ctx context.Context, key string, in io.Reader, getters ..
 	} else {
 		n, err = s.db.Insert(&b)
 		if err != nil || n == 0 {
-			n, err = s.db.Update(&b, &blob{Key: []byte(key)})
+			n, err = s.db.Cols("size", "data").Update(&b, &blob{Key: []byte(key)})
 		}
 	}
 	if err == nil && n == 0 {
