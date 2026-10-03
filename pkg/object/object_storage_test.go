@@ -1030,6 +1030,65 @@ func TestSQLite(t *testing.T) {
 	testStorage(t, s)
 }
 
+func TestSQLitePutOverwrite(t *testing.T) {
+	store, err := newSQLStore("sqlite3", filepath.Join(t.TempDir(), "overwrite.db"), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.(*sqlStore).db.Close()
+	if err := store.Put(ctx, "untouched", bytes.NewReader([]byte("keep this object"))); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"nil", nil},
+		{"shorter", []byte("x")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := store.Put(ctx, tc.name, bytes.NewReader([]byte("original content"))); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Put(ctx, tc.name, bytes.NewReader(tc.data)); err != nil {
+				t.Fatal(err)
+			}
+			r, err := store.Get(ctx, tc.name, 0, -1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := io.ReadAll(r)
+			r.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, tc.data) {
+				t.Errorf("read after overwrite: got %q, want %q", got, tc.data)
+			}
+			o, err := store.Head(ctx, tc.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if o.Size() != int64(len(tc.data)) {
+				t.Errorf("size after overwrite: got %d, want %d", o.Size(), len(tc.data))
+			}
+			r, err = store.Get(ctx, "untouched", 0, -1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err = io.ReadAll(r)
+			r.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != "keep this object" {
+				t.Errorf("unrelated object changed: got %q", got)
+			}
+		})
+	}
+}
+
 func TestPG(t *testing.T) { //skip mutate
 	if os.Getenv("PG_ADDR") == "" {
 		t.SkipNow()
