@@ -98,6 +98,42 @@ func deepEqualWithOutMtime(a, b object.Object) bool {
 		math.Abs(a.Mtime().Sub(b.Mtime()).Seconds()) < 1
 }
 
+func TestSyncStopsPendingProgress(t *testing.T) {
+	src, err := object.CreateStorage("mem", "pending-src", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst, err := object.CreateStorage("mem", "pending-dst", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := src.Put(ctx, "file", bytes.NewReader([]byte("data"))); err != nil {
+		t.Fatal(err)
+	}
+	before := runtime.NumGoroutine()
+	for i := 0; i < 8; i++ {
+		config := &Config{
+			Threads: 1, ListThreads: 1, ForceUpdate: true,
+			MaxSize: math.MaxInt64, Limit: -1, Quiet: true,
+		}
+		if err := Sync(src, dst, config); err != nil {
+			t.Fatal(err)
+		}
+		if copied.Current() != 1 || pending.Current() != 0 {
+			t.Fatalf("copied=%d pending=%d", copied.Current(), pending.Current())
+		}
+		// Let any updater left behind by the preceding call run before the next.
+		time.Sleep(120 * time.Millisecond)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for runtime.NumGoroutine() > before+2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if after := runtime.NumGoroutine(); after > before+2 {
+		t.Fatalf("goroutines leaked across sequential syncs: before=%d after=%d", before, after)
+	}
+}
+
 // nolint:errcheck
 func TestSync(t *testing.T) {
 	tmpA := t.TempDir() + "/"
