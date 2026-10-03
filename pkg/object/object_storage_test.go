@@ -1030,6 +1030,76 @@ func TestSQLite(t *testing.T) {
 	testStorage(t, s)
 }
 
+func TestListPrefixBoundary(t *testing.T) {
+	for _, backend := range []string{"mem", "sqlite3"} {
+		t.Run(backend, func(t *testing.T) {
+			var store ObjectStorage
+			var err error
+			if backend == "mem" {
+				store, err = newMem("prefix-test", "", "", "")
+			} else {
+				store, err = newSQLStore("sqlite3", filepath.Join(t.TempDir(), "prefix.db"), "", "")
+				if err == nil {
+					defer store.(*sqlStore).db.Close()
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, key := range []string{"a", "b", "p", "p/a", "p/b", "z"} {
+				if err := store.Put(ctx, key, bytes.NewReader([]byte(key))); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, tc := range []struct {
+				name, prefix, marker string
+				want                 []string
+			}{
+				{"no-marker", "p", "", []string{"p", "p/a", "p/b"}},
+				{"earlier-marker", "p", "a", []string{"p", "p/a", "p/b"}},
+				{"exact-marker", "p", "p", []string{"p/a", "p/b"}},
+				{"later-marker", "p", "p/a", []string{"p/b"}},
+				{"no-matches", "q", "", nil},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					objects, _, _, err := store.List(ctx, tc.prefix, tc.marker, "", "", 10, true)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var keys []string
+					for _, o := range objects {
+						keys = append(keys, o.Key())
+					}
+					if !reflect.DeepEqual(keys, tc.want) {
+						t.Fatalf("keys: got %q, want %q", keys, tc.want)
+					}
+				})
+			}
+			t.Run("paged", func(t *testing.T) {
+				marker, token := "", ""
+				var keys []string
+				for page := 0; page < 4; page++ {
+					objects, more, next, err := store.List(ctx, "p", marker, token, "", 1, true)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, o := range objects {
+						keys = append(keys, o.Key())
+						marker = o.Key()
+					}
+					if !more {
+						break
+					}
+					token = next
+				}
+				if want := []string{"p", "p/a", "p/b"}; !reflect.DeepEqual(keys, want) {
+					t.Fatalf("paged keys: got %q, want %q", keys, want)
+				}
+			})
+		})
+	}
+}
+
 func TestPG(t *testing.T) { //skip mutate
 	if os.Getenv("PG_ADDR") == "" {
 		t.SkipNow()
