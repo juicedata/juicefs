@@ -40,6 +40,8 @@ import (
 	"github.com/qiniu/go-sdk/v7/auth"
 	qiniuclient "github.com/qiniu/go-sdk/v7/client"
 	"github.com/qiniu/go-sdk/v7/storage"
+	"github.com/qiniu/go-sdk/v7/storagev2/apis"
+	"github.com/qiniu/go-sdk/v7/storagev2/http_client"
 )
 
 type qiniu struct {
@@ -95,8 +97,20 @@ func (q *qiniu) download(ctx context.Context, key string, off, limit int64) (io.
 
 var notexist = "no such file or directory"
 
+// The legacy Stat, Copy and Delete methods replace the caller's context.
+func (q *qiniu) objectAPI() *apis.Storage {
+	return apis.NewStorage(&http_client.Options{
+		BasicHTTPClient:     q.bm.Client.Client,
+		Credentials:         q.bm.Mac,
+		Regions:             q.bm.Cfg.GetRegion(),
+		UseInsecureProtocol: !q.bm.Cfg.UseHTTPS,
+		HostRetryConfig:     &http_client.RetryConfig{},
+		HostsRetryConfig:    &http_client.RetryConfig{},
+	})
+}
+
 func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
-	r, err := q.bm.Stat(q.bucket, key)
+	r, err := q.objectAPI().StatObject(ctx, &apis.StatObjectRequest{Entry: q.bucket + ":" + key}, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), notexist) {
 			err = os.ErrNotExist
@@ -107,7 +121,7 @@ func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
 	mtime := time.Unix(0, r.PutTime*100)
 	return &obj{
 		key,
-		r.Fsize,
+		r.Size,
 		mtime,
 		strings.HasSuffix(key, "/"),
 		"", "",
@@ -134,7 +148,10 @@ func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, getters ...At
 }
 
 func (q *qiniu) Copy(ctx context.Context, dst, src string) error {
-	return q.bm.Copy(q.bucket, src, q.bucket, dst, true)
+	_, err := q.objectAPI().CopyObject(ctx, &apis.CopyObjectRequest{
+		SrcEntry: q.bucket + ":" + src, DestEntry: q.bucket + ":" + dst, IsForce: true,
+	}, nil)
+	return err
 }
 
 func (q *qiniu) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
@@ -142,7 +159,7 @@ func (q *qiniu) CreateMultipartUpload(ctx context.Context, key string) (*Multipa
 }
 
 func (q *qiniu) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	err := q.bm.Delete(q.bucket, key)
+	_, err := q.objectAPI().DeleteObject(ctx, &apis.DeleteObjectRequest{Entry: q.bucket + ":" + key}, nil)
 	if err != nil && strings.Contains(err.Error(), notexist) {
 		return nil
 	}
