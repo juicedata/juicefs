@@ -21,6 +21,7 @@ package object
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -28,6 +29,8 @@ import (
 	"time"
 
 	"github.com/qiniu/go-sdk/v7/auth"
+	qiniuclient "github.com/qiniu/go-sdk/v7/client"
+	"github.com/qiniu/go-sdk/v7/storage"
 )
 
 func TestQiniuPrivateGet_ContextCanceled(t *testing.T) {
@@ -71,5 +74,120 @@ func TestQiniuPrivateGet_ContextCanceled(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Qiniu Get did not stop after context cancellation")
+	}
+}
+
+func TestQiniuList_ContextCancellation(t *testing.T) {
+	for _, mode := range []string{"canceled", "expired", "in-flight cancel", "in-flight deadline"} {
+		t.Run(mode, func(t *testing.T) {
+			started := make(chan struct{}, 1)
+			stopped := make(chan struct{}, 1)
+			release := make(chan struct{})
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				started <- struct{}{}
+				select {
+				case <-r.Context().Done():
+					stopped <- struct{}{}
+				case <-release:
+					_, _ = w.Write([]byte(`{"items":[]}`))
+				}
+			}))
+			defer server.Close()
+			defer close(release)
+			cfg := &storage.Config{RsfHost: server.URL}
+			store := &qiniu{
+				s3client: s3client{bucket: "bucket"},
+				bm: storage.NewBucketManagerEx(auth.New("access-key", "secret-key"), cfg,
+					&qiniuclient.Client{Client: server.Client()}),
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			want := context.Canceled
+			switch mode {
+			case "canceled":
+				cancel()
+			case "expired":
+				cancel()
+				ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+				want = context.DeadlineExceeded
+			case "in-flight deadline":
+				cancel()
+				ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+				want = context.DeadlineExceeded
+			}
+			defer cancel()
+			result := make(chan error, 1)
+			go func() {
+				_, _, _, err := store.List(ctx, "", "", "", "", 10, false)
+				result <- err
+			}()
+			if mode == "in-flight cancel" || mode == "in-flight deadline" {
+				select {
+				case <-started:
+				case <-time.After(2 * time.Second):
+					t.Fatal("Qiniu List did not start")
+				}
+				if mode == "in-flight cancel" {
+					cancel()
+				}
+			}
+			select {
+			case err := <-result:
+				if !errors.Is(err, want) {
+					t.Fatalf("expected %v, got %v", want, err)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("Qiniu List did not stop after cancellation/deadline")
+			}
+			if mode == "canceled" || mode == "expired" {
+				select {
+				case <-started:
+					t.Fatal("already canceled List reached the server")
+				default:
+				}
+			} else {
+				select {
+				case <-stopped:
+				case <-time.After(2 * time.Second):
+					t.Fatal("List returned but its HTTP request was not canceled")
+				}
+			}
+		})
+	}
+}
+
+func TestQiniuList_OptionsAndPagination(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if r.Method != http.MethodPost || r.URL.Path != "/list" || q.Get("bucket") != "bucket" ||
+			q.Get("prefix") != "dir/" || q.Get("delimiter") != "/" ||
+			q.Get("marker") != "previous" || q.Get("limit") != "1000" {
+			t.Errorf("unexpected List request: %s %s", r.Method, r.URL)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(storage.ListFilesRet{
+			Marker: "next",
+			Items: []storage.ListItem{
+				{Key: "dir/a", Fsize: 1, PutTime: 10000000},
+				{Key: "dir/z", Fsize: 7, PutTime: 20000000},
+			},
+			CommonPrefixes: []string{"dir/m/"},
+		})
+	}))
+	defer server.Close()
+	store := &qiniu{
+		s3client: s3client{bucket: "bucket"},
+		bm: storage.NewBucketManagerEx(auth.New("access-key", "secret-key"),
+			&storage.Config{RsfHost: server.URL}, &qiniuclient.Client{Client: server.Client()}),
+	}
+	objects, more, marker, err := store.List(context.Background(), "dir/", "dir/a", "previous", "/", 1001, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !more || marker != "next" || len(objects) != 2 {
+		t.Fatalf("unexpected page: %v, %v, %q", objects, more, marker)
+	}
+	if objects[0].Key() != "dir/m/" || !objects[0].IsDir() || objects[1].Key() != "dir/z" ||
+		objects[1].Size() != 7 || objects[1].Mtime().Unix() != 2 {
+		t.Fatalf("unexpected List metadata: %v", objects)
 	}
 }

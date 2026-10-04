@@ -153,7 +153,17 @@ func (q *qiniu) List(ctx context.Context, prefix, startAfter, token, delimiter s
 	if limit > 1000 {
 		limit = 1000
 	}
-	entries, prefixes, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, token, int(limit))
+	ret, hasNext, err := q.bm.ListFilesWithContext(ctx, q.bucket,
+		storage.ListInputOptionsPrefix(prefix),
+		storage.ListInputOptionsDelimiter(delimiter),
+		storage.ListInputOptionsMarker(token),
+		storage.ListInputOptionsLimit(int(limit)))
+	var entries []storage.ListItem
+	var prefixes []string
+	var markerOut string
+	if ret != nil {
+		entries, prefixes, markerOut = ret.Items, ret.CommonPrefixes, ret.Marker
+	}
 	if len(entries) > 0 || err == io.EOF {
 		// ignore error if returned something
 		err = nil
