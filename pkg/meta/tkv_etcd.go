@@ -322,9 +322,8 @@ func newEtcdClient(addr string) (tkvClient, error) {
 	passwd, _ := u.User.Password()
 	hosts := strings.Split(u.Host, ",")
 	for i, h := range hosts {
-		h, _, err := net.SplitHostPort(h)
-		if err != nil {
-			hosts[i] = net.JoinHostPort(h, "2379")
+		if _, _, err := net.SplitHostPort(h); err != nil {
+			hosts[i] = net.JoinHostPort(strings.Trim(h, "[]"), "2379")
 		}
 	}
 	conf := etcd.Config{

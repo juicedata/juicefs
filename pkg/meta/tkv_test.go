@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"sort"
 	"syscall"
 	"testing"
@@ -311,6 +312,34 @@ func TestBadgerClient(t *testing.T) {
 		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
+}
+
+func TestEtcdClientEndpoints(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		addr string
+		want []string
+	}{
+		{"hostname", "localhost/jfs", []string{"localhost:2379"}},
+		{"ipv4", "127.0.0.1/jfs", []string{"127.0.0.1:2379"}},
+		{"ipv6", "[::1]/jfs", []string{"[::1]:2379"}},
+		{"explicit_port", "localhost:12379/jfs", []string{"localhost:12379"}},
+		{"explicit_ipv6_port", "[::1]:12379/jfs", []string{"[::1]:12379"}},
+		{"mixed_ports", "localhost,127.0.0.1:12379/jfs", []string{"localhost:2379", "127.0.0.1:12379"}},
+		{"http_url", "http://localhost/jfs", []string{"localhost:2379"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, err := newEtcdClient(tc.addr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = c.close() })
+			client := c.(*prefixClient).tkvClient.(*etcdClient).client
+			if got := client.Endpoints(); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("endpoints = %v, want %v", got, tc.want)
+			}
+		})
+	}
 }
 
 func TestEtcdClient(t *testing.T) { //skip mutate

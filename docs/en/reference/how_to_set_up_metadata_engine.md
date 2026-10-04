@@ -289,7 +289,7 @@ When using etcd as the metadata engine, the `Meta-URL` parameter needs to be spe
 etcd://[user:password@]<addr>[,<addr>...]/<prefix>
 ```
 
-Where `user` and `password` are required when etcd enables user authentication. The `prefix` is a user-defined string. When multiple file systems or applications share an etcd cluster, setting the prefix can avoid confusion and conflict. An example is as follows:
+Where `user` and `password` are required when etcd enables user authentication. Each `addr` may omit the port, in which case it defaults to `2379`; enclose IPv6 addresses in brackets. The `prefix` is a user-defined string. When multiple file systems or applications share an etcd cluster, setting the prefix can avoid confusion and conflict. An example is as follows:
 
 ```shell
 juicefs format etcd://user:password@192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs pics

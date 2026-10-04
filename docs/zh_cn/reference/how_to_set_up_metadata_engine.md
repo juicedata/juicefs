@@ -276,7 +276,7 @@ juicefs mount -d "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs"
 etcd://[user:password@]<addr>[,<addr>...]/<prefix>
 ```
 
-其中 `user` 和 `password` 是当 etcd 开启了用户认证时需要。`prefix` 是一个用户自定义的字符串，当多个文件系统或者应用共用一个 etcd 集群时，设置前缀可以避免混淆和冲突。示例如下：
+其中 `user` 和 `password` 是当 etcd 开启了用户认证时需要。每个 `addr` 可以省略端口，默认使用 `2379`；IPv6 地址需要用方括号括起。`prefix` 是一个用户自定义的字符串，当多个文件系统或者应用共用一个 etcd 集群时，设置前缀可以避免混淆和冲突。示例如下：
 
 ```shell
 juicefs format etcd://user:password@192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs pics
