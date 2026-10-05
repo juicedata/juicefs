@@ -72,6 +72,7 @@ type diskCache struct {
 	capacity      int64
 	maxItems      int64
 	freeRatio     float32
+	freeRatioMu   sync.RWMutex
 	hashPrefix    bool
 	scanInterval  time.Duration
 	cacheExpire   time.Duration
@@ -221,9 +222,13 @@ func (cache *diskCache) checkLockFile() {
 		time.Sleep(time.Second * 10)
 		if err := cache.statFile(lockfile); err != nil && os.IsNotExist(err) {
 			logger.Infof("lockfile %s is lost, cache device maybe broken", lockfile)
-			if inRootVolume(cache.dir) && cache.freeRatio < 0.2 {
-				logger.Infof("cache directory %s is in root volume, keep 20%% space free", cache.dir)
-				cache.freeRatio = 0.2
+			if inRootVolume(cache.dir) {
+				cache.freeRatioMu.Lock()
+				if cache.freeRatio < 0.2 {
+					logger.Infof("cache directory %s is in root volume, keep 20%% space free", cache.dir)
+					cache.freeRatio = 0.2
+				}
+				cache.freeRatioMu.Unlock()
 			}
 		}
 	}
@@ -334,11 +339,19 @@ func (cache *diskCache) stats() (int64, int64) {
 	return int64(len(cache.pages) + cache.keys.len()), cache.used + cache.usedMemory()
 }
 
+func (cache *diskCache) getFreeRatio() float32 {
+	// The lock-file checker can raise the threshold while other cache workers run.
+	cache.freeRatioMu.RLock()
+	defer cache.freeRatioMu.RUnlock()
+	return cache.freeRatio
+}
+
 func (cache *diskCache) isFull(usage DiskFreeRatio, stage bool) bool {
+	freeRatio := cache.getFreeRatio()
 	if stage {
-		return usage.br < cache.freeRatio/2 || (usage.inodeCap > 0 && usage.fr < cache.freeRatio/2)
+		return usage.br < freeRatio/2 || (usage.inodeCap > 0 && usage.fr < freeRatio/2)
 	}
-	return usage.br < cache.freeRatio || (usage.inodeCap > 0 && usage.fr < cache.freeRatio)
+	return usage.br < freeRatio || (usage.inodeCap > 0 && usage.fr < freeRatio)
 }
 
 func (cache *diskCache) checkFreeSpace() {
@@ -347,7 +360,7 @@ func (cache *diskCache) checkFreeSpace() {
 		cache.stageFull = cache.isFull(usage, true)
 		cache.rawFull = cache.isFull(usage, false)
 		if cache.rawFull && cache.keys.name() != EvictionNone {
-			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(usage.br*100), int(usage.fr*100))
+			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.getFreeRatio()*100), int(usage.br*100), int(usage.fr*100))
 			cache.Lock()
 			cache.cleanupFull()
 			cache.Unlock()
@@ -804,15 +817,17 @@ func (cache *diskCache) uploaded(key string, size int) {
 }
 
 func (cache *diskCache) spaceToFree(usage DiskFreeRatio) int64 {
-	if usage.br < cache.freeRatio {
-		return int64(float64(usage.spaceCap) * float64(cache.freeRatio-usage.br))
+	freeRatio := cache.getFreeRatio()
+	if usage.br < freeRatio {
+		return int64(float64(usage.spaceCap) * float64(freeRatio-usage.br))
 	}
 	return 0
 }
 
 func (cache *diskCache) inodesToFree(usage DiskFreeRatio) int64 {
-	if usage.fr < cache.freeRatio {
-		return int64(float64(usage.inodeCap) * float64(cache.freeRatio-usage.fr))
+	freeRatio := cache.getFreeRatio()
+	if usage.fr < freeRatio {
+		return int64(float64(usage.inodeCap) * float64(freeRatio-usage.fr))
 	}
 	return 0
 }

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -43,6 +44,61 @@ func TestNewCacheStore(t *testing.T) {
 	if s == nil {
 		t.Fatalf("Create new cache store failed")
 	}
+}
+
+func TestDiskCacheLockLossFreeRatio(t *testing.T) {
+	conf := defaultConf
+	conf.CacheDir = t.TempDir()
+	if !inRootVolume(conf.CacheDir) {
+		t.Skip("cache directory must be on the root volume")
+	}
+	conf.FreeSpace = 0.1
+	conf.Writeback = true
+	conf.CacheEviction = EvictionNone
+	conf.CacheScanInterval = -1
+	cache := newDiskCache(nil, conf.CacheDir, 1<<20, 10, 1, &conf, nil)
+	t.Cleanup(cache.state.stop)
+	require.NoError(t, os.Remove(cache.lockFilePath()))
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	var reads int64
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				usage := DiskFreeRatio{br: 0.15, fr: 0.075, spaceCap: 1000, inodeCap: 1000}
+				cache.Lock()
+				if cache.isFull(usage, false) {
+					reads++
+				}
+				if cache.isFull(usage, true) {
+					reads++
+				}
+				reads += cache.spaceToFree(usage) + cache.inodesToFree(usage)
+				cache.Unlock()
+				runtime.Gosched()
+			}
+		}
+	}()
+	defer func() {
+		close(stop)
+		wg.Wait()
+		require.Positive(t, reads)
+	}()
+
+	// The production lock checker runs every ten seconds. Keep concurrent
+	// readers alive until it observes the missing lock and raises the threshold.
+	time.Sleep(12 * time.Second)
+	require.True(t, cache.isFull(DiskFreeRatio{br: 0.15}, false))
+	require.True(t, cache.isFull(DiskFreeRatio{br: 0.075}, true))
+	require.False(t, cache.isFull(DiskFreeRatio{br: 0.15}, true))
+	require.InDelta(t, 50, cache.spaceToFree(DiskFreeRatio{br: 0.15, spaceCap: 1000}), 1)
+	require.InDelta(t, 50, cache.inodesToFree(DiskFreeRatio{fr: 0.15, inodeCap: 1000}), 1)
 }
 
 func TestScanCached(t *testing.T) {
