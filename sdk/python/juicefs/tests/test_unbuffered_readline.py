@@ -70,8 +70,9 @@ def test_unbuffered_readline_preserves_remaining_lines(open_file, data):
 
 
 @pytest.mark.parametrize("data", LINE_CONTENTS + [b""])
-def test_unbuffered_iteration_preserves_all_lines(open_file, data):
-    with open_file(data) as stream:
+@pytest.mark.parametrize("buffering", [0, -1])
+def test_iteration_preserves_all_lines(open_file, data, buffering):
+    with open_file(data, buffering) as stream:
         assert list(stream) == list(io.BytesIO(data))
 
 

@@ -681,9 +681,9 @@ class File(object):
         return self.next()
 
     def next(self):
-        lines = self.readlines(1)
-        if lines:
-            return lines[0]
+        line = self.readline()
+        if line:
+            return line
         raise StopIteration
 
     def fileno(self):
