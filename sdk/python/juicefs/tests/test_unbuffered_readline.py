@@ -53,7 +53,13 @@ def open_file(tmp_path):
     return open_content
 
 
-@pytest.mark.parametrize("data", [b"first\nsecond\nlast", b"\n\nlast", b"one\r\ntwo\r\n", b"last"])
+LINE_CONTENTS = [
+    b"first\nsecond\nlast", b"\n\nlast", b"one\r\ntwo\r\n", b"last",
+    b"one\rtwo\nlast", b"\r", b"\r\n\r",
+]
+
+
+@pytest.mark.parametrize("data", LINE_CONTENTS)
 def test_unbuffered_readline_preserves_remaining_lines(open_file, data):
     expected = io.BytesIO(data)
     with open_file(data) as stream:
@@ -63,7 +69,7 @@ def test_unbuffered_readline_preserves_remaining_lines(open_file, data):
         assert stream.readline() == b''
 
 
-@pytest.mark.parametrize("data", [b"first\nsecond\nlast", b"\n\nlast", b"one\r\ntwo\r\n", b""])
+@pytest.mark.parametrize("data", LINE_CONTENTS + [b""])
 def test_unbuffered_iteration_preserves_all_lines(open_file, data):
     with open_file(data) as stream:
         assert list(stream) == list(io.BytesIO(data))
@@ -77,8 +83,8 @@ def test_unbuffered_readlines_one_leaves_the_next_line(open_file):
 
 
 @pytest.mark.parametrize("buffering", [0, -1])
-def test_readlines_without_hint_preserves_all_lines(open_file, buffering):
-    data = b"first\nsecond\nlast"
+@pytest.mark.parametrize("data", LINE_CONTENTS + [b""])
+def test_readlines_without_hint_preserves_all_lines(open_file, buffering, data):
     with open_file(data, buffering) as stream:
         assert stream.readlines() == list(io.BytesIO(data))
 
@@ -88,3 +94,10 @@ def test_unbuffered_readline_rejects_closed_stream(open_file):
     stream.close()
     with pytest.raises(ValueError):
         stream.readline()
+
+
+def test_binary_line_boundaries_match_native_file(open_file):
+    for value in range(256):
+        data = b"prefix" + bytes([value]) + b"suffix\nlast"
+        with open_file(data) as stream, open(stream.name, 'rb', buffering=0) as expected:
+            assert list(stream) == list(expected), value
