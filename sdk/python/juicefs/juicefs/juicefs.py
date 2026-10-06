@@ -628,7 +628,7 @@ class _File(object):
                 if not r:
                     break
                 rs.append(r)
-                if r[0] == b'\n':
+                if r == b'\n':
                     hint -= 1
             data = b''.join(rs)
         return data.splitlines(True)
@@ -736,6 +736,16 @@ def test():
         assert data == [b"hello"]
     print(list(v.open("/d/file")))
     assert list(v.open("/d/file")) == ['hello']
+    with v.open("/d/lines", 'wb') as f:
+        f.write(b"first\nsecond\nlast")
+    with v.open("/d/lines", 'rb', 0) as f:
+        assert f.readline() == b"first\n"
+        assert f.tell() == len(b"first\n")
+        assert f.readline() == b"second\n"
+        assert f.readline() == b"last"
+        assert f.readline() == b''
+    with v.open("/d/lines", 'rb', 0) as f:
+        assert list(f) == [b"first\n", b"second\n", b"last"]
     try:
         v.open("/d/d/file", "w")
     except OSError as e:
