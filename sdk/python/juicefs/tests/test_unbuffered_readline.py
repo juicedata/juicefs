@@ -89,6 +89,28 @@ def test_readlines_without_hint_preserves_all_lines(open_file, buffering, data):
         assert stream.readlines() == list(io.BytesIO(data))
 
 
+@pytest.mark.parametrize("buffering", [0, -1])
+@pytest.mark.parametrize("hint", [-2, 0, None])
+@pytest.mark.parametrize("offset", [0, len(b"first\n")])
+def test_readlines_nonpositive_or_none_hint_reads_remaining_lines(open_file, buffering, hint, offset):
+    data = b"first\nsecond\nlast"
+    expected = io.BytesIO(data)
+    expected.seek(offset)
+    with open_file(data, buffering) as stream:
+        stream.seek(offset)
+        assert stream.readlines(hint) == expected.readlines(hint)
+        assert stream.tell() == expected.tell()
+        assert stream.read() == b''
+
+
+@pytest.mark.parametrize("buffering", [0, -1])
+@pytest.mark.parametrize("hint", [-2, 0, None])
+def test_readlines_nonpositive_or_none_hint_at_eof(open_file, buffering, hint):
+    with open_file(b"", buffering) as stream:
+        assert stream.readlines(hint) == []
+        assert stream.tell() == 0
+
+
 def test_unbuffered_readline_rejects_closed_stream(open_file):
     stream = open_file(b"first\nsecond\n")
     stream.close()

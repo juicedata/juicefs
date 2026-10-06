@@ -619,7 +619,7 @@ class _File(object):
     def readlines(self, hint=-1):
         """Return a list of lines from the stream."""
         self._check_closed()
-        if hint == -1:
+        if hint is None or hint <= 0:
             data = self.read(-1)
         else:
             rs = []
