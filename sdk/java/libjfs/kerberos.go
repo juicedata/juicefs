@@ -106,9 +106,10 @@ func (r *kRule) replaceSubs(base string) string {
 	if r.repeat {
 		return r.fromPattern.ReplaceAllString(base, r.toPattern)
 	}
-	m := r.fromPattern.FindStringIndex(base)
+	m := r.fromPattern.FindStringSubmatchIndex(base)
 	if m != nil {
-		return base[:m[0]] + r.toPattern + base[m[1]:]
+		result := r.fromPattern.ExpandString([]byte(base[:m[0]]), r.toPattern, base, m)
+		return string(result) + base[m[1]:]
 	}
 	return base
 }
