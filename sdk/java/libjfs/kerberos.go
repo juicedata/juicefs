@@ -574,7 +574,7 @@ func (k *kerberos) cleanupTokens() {
 		tokens, eno := m.ListTokens(ctx)
 		if eno != 0 {
 			logger.Errorf("list tokens: %s", eno)
-			return
+			continue
 		}
 		var todelete []uint32
 		now := time.Now().Unix()
@@ -589,7 +589,7 @@ func (k *kerberos) cleanupTokens() {
 			}
 		}
 		if len(todelete) == 0 {
-			return
+			continue
 		}
 		logger.Infof("cleaning up %d expired tokens", len(todelete))
 		eno = m.DeleteTokens(ctx, todelete)
