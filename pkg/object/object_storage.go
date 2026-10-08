@@ -263,7 +263,7 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
-					t.entries, t.hasMore, t.nextToken, t.err = store.List(ctx, key, "\x00", t.nextToken, "/", 1000, followLink) // exclude itself
+					t.entries, t.hasMore, t.nextToken, t.err = store.List(ctx, key, key, t.nextToken, "/", 1000, followLink) // exclude itself
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()

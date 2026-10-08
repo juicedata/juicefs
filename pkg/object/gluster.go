@@ -219,7 +219,7 @@ func (g *gluster) List(ctx context.Context, prefix, marker, token, delimiter str
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
-	} else if marker == "" {
+	} else if marker == "" || marker < prefix {
 		obj, err := g.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {

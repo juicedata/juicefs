@@ -131,6 +131,21 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 	if err = testKeysEqual(objs, expectedKeys); err != nil {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
+	// a marker before the prefix should not hide the directory itself
+	for _, marker := range []string{"a", "x"} {
+		objs, err = listAll(ctx, s, "x/", marker, 100, true)
+		if err != nil {
+			t.Fatalf("list with marker %q failed: %s", marker, err)
+		}
+		if err = testKeysEqual(objs, expectedKeys); err != nil {
+			t.Fatalf("list with marker %q: %s", marker, err)
+		}
+	}
+	if objs, _, _, err = s.List(ctx, "x/", "x/", "", "/", 100, true); err != nil {
+		t.Fatalf("list with marker x/ failed: %s", err)
+	} else if err = testKeysEqual(objs, []string{"x/x.txt"}); err != nil {
+		t.Fatalf("list with marker x/: %s", err)
+	}
 
 	objs, err = listAll(ctx, s, "x", "", 100, true)
 	if err != nil {

@@ -321,7 +321,7 @@ func (n *nfsStore) List(ctx context.Context, prefix, marker, token, delimiter st
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
-	} else if marker == "" {
+	} else if marker == "" || marker < prefix {
 		obj, err := n.Head(ctx, dir)
 		if err != nil {
 			if os.IsNotExist(err) {
