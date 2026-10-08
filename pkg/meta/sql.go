@@ -1034,6 +1034,21 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	return nil
 }
 
+// mustInsertBatch is like mustInsert, but beans must belong to the same table
+// and are written with multi-row INSERT statements instead of one per row.
+func (m *dbMeta) mustInsertBatch(s *xorm.Session, beans []interface{}) error {
+	batch := min(200, m.getTxnBatchNum())
+	for start := 0; start < len(beans); start += batch {
+		end := min(start+batch, len(beans))
+		if n, err := s.Insert(beans[start:end]); err != nil {
+			return err
+		} else if d := end - start - int(n); d > 0 {
+			return fmt.Errorf("%d records not inserted: %+v", d, beans[start:end])
+		}
+	}
+	return nil
+}
+
 func (m *dbMeta) batchUpdateChunkRefs(s *xorm.Session, chunkRefDeltas map[uint64]int) error {
 	if len(chunkRefDeltas) == 0 {
 		return nil
@@ -5722,10 +5737,10 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			})
 		}
 
-		if err := mustInsert(s, nodesIns...); err != nil {
+		if err := m.mustInsertBatch(s, nodesIns); err != nil {
 			return err
 		}
-		if err := mustInsert(s, edgesIns...); err != nil {
+		if err := m.mustInsertBatch(s, edgesIns); err != nil {
 			if isDuplicateEntryErr(err) {
 				return syscall.EEXIST
 			}
@@ -5755,7 +5770,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 					}
 				}
 			}
-			if err := mustInsert(s, chunksIns...); err != nil {
+			if err := m.mustInsertBatch(s, chunksIns); err != nil {
 				return err
 			}
 		}
@@ -5777,7 +5792,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 					return syscall.ENOENT
 				}
 			}
-			if err := mustInsert(s, symlinksIns...); err != nil {
+			if err := m.mustInsertBatch(s, symlinksIns); err != nil {
 				return err
 			}
 		}
@@ -5797,7 +5812,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 					xattrsIns = append(xattrsIns, &xattr{Inode: cloneInfos[i].dstIno, Name: x.Name, Value: x.Value})
 				}
 			}
-			if err := mustInsert(s, xattrsIns...); err != nil {
+			if err := m.mustInsertBatch(s, xattrsIns); err != nil {
 				return err
 			}
 		}
