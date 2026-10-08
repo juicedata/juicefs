@@ -164,6 +164,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Vultr Object Storage](#vultr-object-storage)               | `s3`       |
 | [Cloudflare R2](#r2)                                        | `s3`       |
 | [Bunny Storage](#bunny)                                     | `bunny`    |
+| [Neon Object Storage](#neon)                                | `s3`       |
 | [Alibaba Cloud OSS](#alibaba-cloud-oss)                     | `oss`      |
 | [Tencent Cloud COS](#tencent-cloud-cos)                     | `cos`      |
 | [Huawei Cloud OBS](#huawei-cloud-obs)                       | `obs`      |
@@ -578,6 +579,37 @@ juicefs format \
     --bucket "https://uk.storage.bunnycdn.com/myzone" \ # https://<Endpoint>/<Zonename>
     myjfs
 ```
+
+### Neon Object Storage {#neon}
+
+[Neon Object Storage](https://neon.com/docs/storage/overview) is S3-compatible object storage that branches together with Neon Postgres, so usage is the same as Amazon S3. Every Neon branch has its own storage endpoint, and a new branch starts with a copy-on-write view of its parent's buckets. Check the [Get started with Object Storage](https://neon.com/docs/storage/get-started) guide to obtain the S3 credentials.
+
+Neon Object Storage only supports path-style requests, so the `--bucket` option format is `https://<branch-endpoint>/<bucket>`. `<branch-endpoint>` is the storage endpoint of the branch, which is the value of `AWS_ENDPOINT_URL_S3` shown in the Console (or written by `neon env pull`), for example `br-cool-darkness-a1b2c3d4.storage.c-1.us-east-2.aws.neon.tech`. The bucket is created automatically if it does not exist. For example:
+
+```shell
+juicefs format \
+    --storage s3 \
+    --bucket https://<branch-endpoint>/<bucket> \
+    --access-key <token-id> \
+    --secret-key <s3-secret-access-key> \
+    ... \
+    myjfs
+```
+
+Do not set `JFS_S3_VHOST_STYLE`, because Neon Object Storage does not accept virtual-hosted-style requests.
+
+For `juicefs sync`, use the URL format `s3://<access-key>:<secret-key>@<branch-endpoint>/<bucket>/<prefix>/`.
+
+:::caution
+If you also use Neon Postgres as the [metadata engine](how_to_set_up_metadata_engine.md#postgresql), creating a Neon branch forks both the metadata and the data of the volume. The metadata on the new branch still points to the parent branch's storage endpoint, so update it to the new branch's endpoint before writing to the volume on that branch:
+
+```shell
+juicefs config "postgres://<user>:<password>@<branch-db-host>/<database>?sslmode=require" \
+    --bucket https://<new-branch-endpoint>/<bucket>
+```
+
+Without this step, writes from the new branch go to the parent's bucket and can overwrite blocks written later by the parent volume, because both copies of the metadata allocate the same slice IDs.
+:::
 
 ### Alibaba Cloud OSS
 
