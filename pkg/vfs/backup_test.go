@@ -109,16 +109,19 @@ func TestUsedInodesWithSubdir(t *testing.T) {
 	}
 	defer m.CloseSession()
 
-	want := usedInodes(ctx, m)
+	var dummy, want uint64
+	_ = m.StatFS(ctx, 0, &dummy, &dummy, &want, &dummy)
 	if st := m.Chroot(ctx, "sub"); st != 0 {
 		t.Fatalf("chroot sub: %s", st)
 	}
-	var dummy, subUsed uint64
+	var subUsed uint64
 	_ = m.StatFS(ctx, meta.RootInode, &dummy, &dummy, &subUsed, &dummy)
 	if subUsed >= want {
 		t.Fatalf("used inodes of the subdir quota = %d, want less than %d (the whole volume)", subUsed, want)
 	}
-	if got := usedInodes(ctx, m); got != want {
+	var got uint64
+	_ = m.StatFS(ctx, 0, &dummy, &dummy, &got, &dummy)
+	if got != want {
 		t.Fatalf("used inodes with subdir = %d, want %d (the whole volume)", got, want)
 	}
 }
