@@ -597,6 +597,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 			agent := agent.NewClient(conn)
 			signer, err := agent.Signers()
 			if err != nil {
+				_ = conn.Close()
 				logger.Warnf("load signer from agent: %s", err)
 			} else {
 				signers = append(signers, signer...)
