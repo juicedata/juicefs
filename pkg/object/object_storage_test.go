@@ -152,6 +152,9 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Create(ctx); err != nil {
 		t.Fatalf("err should be nil when creating a bucket with the same name")
 	}
+	t.Run("list-prefix-boundary", func(t *testing.T) {
+		testListPrefixBoundary(t, s)
+	})
 	prefix := "unit-test/"
 	s = WithPrefix(s, prefix)
 	defer s.Delete(ctx, "") // the prefix directory on file systems
@@ -1031,71 +1034,165 @@ func TestSQLite(t *testing.T) {
 }
 
 func TestListPrefixBoundary(t *testing.T) {
-	for _, backend := range []string{"mem", "sqlite3"} {
+	for _, backend := range []string{"mem", "file", "sqlite3"} {
 		t.Run(backend, func(t *testing.T) {
 			var store ObjectStorage
 			var err error
-			if backend == "mem" {
+			switch backend {
+			case "mem":
 				store, err = newMem("prefix-test", "", "", "")
-			} else {
+			case "file":
+				store, err = newDisk(t.TempDir()+"/", "", "", "")
+			case "sqlite3":
 				store, err = newSQLStore("sqlite3", filepath.Join(t.TempDir(), "prefix.db"), "", "")
 				if err == nil {
-					defer store.(*sqlStore).db.Close()
+					t.Cleanup(func() { _ = store.(*sqlStore).db.Close() })
 				}
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, key := range []string{"a", "b", "p", "p/a", "p/b", "z"} {
-				if err := store.Put(ctx, key, bytes.NewReader([]byte(key))); err != nil {
-					t.Fatal(err)
-				}
+			testListPrefixBoundary(t, store)
+		})
+	}
+}
+
+func testListPrefixBoundary(t *testing.T, store ObjectStorage) {
+	t.Helper()
+	_, isFileSystem := store.(FileSystem)
+	store = WithPrefix(store, fmt.Sprintf("unit-test/list-prefix-boundary-%d/", time.Now().UnixNano()))
+	// Flat keys also allow filesystem backends to use the same fixture.
+	allKeys := []string{"a", "b", "p", "p1", "p2", "z", "测试", "测试1"}
+	t.Cleanup(func() {
+		for _, key := range allKeys {
+			if err := store.Delete(ctx, key); err != nil {
+				t.Errorf("delete %q: %s", key, err)
 			}
-			for _, tc := range []struct {
-				name, prefix, marker string
-				want                 []string
-			}{
-				{"no-marker", "p", "", []string{"p", "p/a", "p/b"}},
-				{"earlier-marker", "p", "a", []string{"p", "p/a", "p/b"}},
-				{"exact-marker", "p", "p", []string{"p/a", "p/b"}},
-				{"later-marker", "p", "p/a", []string{"p/b"}},
-				{"no-matches", "q", "", nil},
-			} {
+		}
+		_ = store.Delete(ctx, "")
+	})
+	for _, key := range allKeys {
+		if err := store.Put(ctx, key, bytes.NewReader([]byte(key))); err != nil {
+			t.Fatalf("put %q: %s", key, err)
+		}
+	}
+	emptyPrefixKeys := allKeys
+	if isFileSystem {
+		emptyPrefixKeys = append([]string{""}, allKeys...)
+	}
+	cases := []struct {
+		name, prefix, marker string
+		want                 []string
+	}{
+		{"no-marker", "p", "", []string{"p", "p1", "p2"}},
+		{"earlier-marker", "p", "a", []string{"p", "p1", "p2"}},
+		{"exact-marker", "p", "p", []string{"p1", "p2"}},
+		{"between-marker", "p", "p0", []string{"p1", "p2"}},
+		{"later-marker", "p", "p1", []string{"p2"}},
+		{"after-prefix", "p", "z", nil},
+		{"no-matches", "q", "", nil},
+		{"empty-prefix", "", "", emptyPrefixKeys},
+		{"unicode-prefix", "测试", "p", []string{"测试", "测试1"}},
+		{"unicode-marker", "测试", "测试", []string{"测试1"}},
+	}
+	keysOf := func(t *testing.T, objects []Object) []string {
+		t.Helper()
+		var keys []string
+		for _, o := range objects {
+			if o == nil {
+				t.Fatal("listing returned a nil object")
+			}
+			keys = append(keys, o.Key())
+		}
+		return keys
+	}
+	for _, delimiter := range []string{"", "/"} {
+		name := "flat"
+		if delimiter != "" {
+			name = "delimiter"
+		}
+		t.Run("list/"+name, func(t *testing.T) {
+			if _, _, _, err := store.List(ctx, "p", "", "", delimiter, 10, true); errors.Is(err, notSupported) {
+				t.Skipf("List with delimiter %q is not supported", delimiter)
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			for _, tc := range cases {
 				t.Run(tc.name, func(t *testing.T) {
-					objects, _, _, err := store.List(ctx, tc.prefix, tc.marker, "", "", 10, true)
+					objects, _, _, err := store.List(ctx, tc.prefix, tc.marker, "", delimiter, 10, true)
 					if err != nil {
 						t.Fatal(err)
 					}
-					var keys []string
-					for _, o := range objects {
-						keys = append(keys, o.Key())
-					}
-					if !reflect.DeepEqual(keys, tc.want) {
+					if keys := keysOf(t, objects); !reflect.DeepEqual(keys, tc.want) {
 						t.Fatalf("keys: got %q, want %q", keys, tc.want)
 					}
 				})
 			}
-			t.Run("paged", func(t *testing.T) {
-				marker, token := "", ""
-				var keys []string
-				for page := 0; page < 4; page++ {
-					objects, more, next, err := store.List(ctx, "p", marker, token, "", 1, true)
-					if err != nil {
-						t.Fatal(err)
+			for _, limit := range []int64{1, 2, 3} {
+				t.Run(fmt.Sprintf("paged/limit=%d", limit), func(t *testing.T) {
+					marker, token := "", ""
+					var keys []string
+					for page := 0; page < 5; page++ {
+						objects, more, next, err := store.List(ctx, "p", marker, token, delimiter, limit, true)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if int64(len(objects)) > limit {
+							t.Fatalf("page exceeds limit: got %d, limit %d", len(objects), limit)
+						}
+						for _, o := range objects {
+							if o.Key() <= marker {
+								t.Fatalf("listing did not advance: key %q, marker %q", o.Key(), marker)
+							}
+							keys = append(keys, o.Key())
+							marker = o.Key()
+						}
+						if !more {
+							if want := []string{"p", "p1", "p2"}; !reflect.DeepEqual(keys, want) {
+								t.Fatalf("paged keys: got %q, want %q", keys, want)
+							}
+							return
+						}
+						if len(objects) == 0 && next == token {
+							t.Fatal("listing returned an empty page without advancing its token")
+						}
+						token = next
 					}
-					for _, o := range objects {
-						keys = append(keys, o.Key())
-						marker = o.Key()
-					}
-					if !more {
-						break
-					}
-					token = next
-				}
-				if want := []string{"p", "p/a", "p/b"}; !reflect.DeepEqual(keys, want) {
-					t.Fatalf("paged keys: got %q, want %q", keys, want)
-				}
-			})
+					t.Fatal("listing did not terminate")
+				})
+			}
+		})
+	}
+	for _, tc := range cases {
+		t.Run("list-all/"+tc.name, func(t *testing.T) {
+			objects, err := listAll(ctx, store, tc.prefix, tc.marker, 1e9, true)
+			if errors.Is(err, notSupported) {
+				t.Skip("ListAll is not supported")
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if keys := keysOf(t, objects); !reflect.DeepEqual(keys, tc.want) {
+				t.Fatalf("keys: got %q, want %q", keys, tc.want)
+			}
+		})
+	}
+}
+
+func TestGenNextKey(t *testing.T) {
+	for _, tc := range []struct{ prefix, want string }{
+		{"p", "q"},
+		{"p/", "p0"},
+		{"p\xff", "q"},
+		{"p\xff\xff", "q"},
+		{"\xffp", "\xffq"},
+		{"\xff", ""},
+		{"\xff\xff", ""},
+		{"", ""},
+	} {
+		t.Run(fmt.Sprintf("%x", tc.prefix), func(t *testing.T) {
+			if got := genNextKey(tc.prefix); got != tc.want {
+				t.Fatalf("prefix range end: got %q, want %q", got, tc.want)
+			}
 		})
 	}
 }

@@ -338,6 +338,18 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 	return listed, nil
 }
 
+// genNextKey returns the exclusive upper bound of a prefix, or "" if unbounded.
+func genNextKey(prefix string) string {
+	end := []byte(prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		if end[i] != 0xff {
+			end[i]++
+			return string(end[:i+1])
+		}
+	}
+	return ""
+}
+
 func generateListResult(objs []Object, limit int64) ([]Object, bool, string, error) {
 	var nextMarker string
 	if len(objs) > 0 {
