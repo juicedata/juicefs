@@ -1039,14 +1039,15 @@ func TestSQLitePutOverwrite(t *testing.T) {
 	if err := store.Put(ctx, "untouched", bytes.NewReader([]byte("keep this object"))); err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct {
+	cases := []struct {
 		name string
 		data []byte
 	}{
 		{"empty", []byte{}},
 		{"nil", nil},
 		{"shorter", []byte("x")},
-	} {
+	}
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := store.Put(ctx, tc.name, bytes.NewReader([]byte("original content"))); err != nil {
 				t.Fatal(err)
@@ -1087,6 +1088,43 @@ func TestSQLitePutOverwrite(t *testing.T) {
 			}
 		})
 	}
+	t.Run("empty-key", func(t *testing.T) {
+		if err := store.Put(ctx, "", bytes.NewReader([]byte("original content"))); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				if err := store.Put(ctx, "", bytes.NewReader(tc.data)); err != nil {
+					t.Fatal(err)
+				}
+				var b blob
+				ok, err := store.(*sqlStore).db.Where("`key` = ?", []byte("")).Get(&b)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !ok {
+					t.Fatal("empty-key object missing after overwrite")
+				}
+				if !bytes.Equal(b.Data, tc.data) || b.Size != int64(len(tc.data)) {
+					t.Errorf("empty-key object after overwrite: got %q, size %d; want %q, size %d", b.Data, b.Size, tc.data, len(tc.data))
+				}
+				got, err := get(store, "untouched", 0, -1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got != "keep this object" {
+					t.Errorf("unrelated object changed: got %q", got)
+				}
+				o, err := store.Head(ctx, "untouched")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if o.Size() != int64(len("keep this object")) {
+					t.Errorf("unrelated object size changed: got %d", o.Size())
+				}
+			})
+		}
+	})
 }
 
 func TestPG(t *testing.T) { //skip mutate
