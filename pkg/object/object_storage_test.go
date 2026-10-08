@@ -1060,6 +1060,7 @@ func TestListPrefixBoundary(t *testing.T) {
 func testListPrefixBoundary(t *testing.T, store ObjectStorage) {
 	t.Helper()
 	_, isFileSystem := store.(FileSystem)
+	_, isMinIO := store.(*minio)
 	store = WithPrefix(store, fmt.Sprintf("unit-test/list-prefix-boundary-%d/", time.Now().UnixNano()))
 	// Flat keys also allow filesystem backends to use the same fixture.
 	allKeys := []string{"a", "b", "p", "p1", "p2", "z", "测试", "测试1"}
@@ -1119,6 +1120,9 @@ func testListPrefixBoundary(t *testing.T, store ObjectStorage) {
 			}
 			for _, tc := range cases {
 				t.Run(tc.name, func(t *testing.T) {
+					if isMinIO && tc.marker != "" && !strings.HasPrefix(tc.marker, tc.prefix) {
+						t.Skip("MinIO RELEASE.2022-01-25T19-56-04Z used in CI requires marker to start with prefix")
+					}
 					objects, _, _, err := store.List(ctx, tc.prefix, tc.marker, "", delimiter, 10, true)
 					if err != nil {
 						t.Fatal(err)
@@ -1130,6 +1134,9 @@ func testListPrefixBoundary(t *testing.T, store ObjectStorage) {
 			}
 			for _, limit := range []int64{1, 2, 3} {
 				t.Run(fmt.Sprintf("paged/limit=%d", limit), func(t *testing.T) {
+					if isMinIO && delimiter == "" && limit == 1 {
+						t.Skip("MinIO RELEASE.2022-01-25T19-56-04Z returns an exact prefix match without IsTruncated when limit is 1")
+					}
 					marker, token := "", ""
 					var keys []string
 					for page := 0; page < 5; page++ {
@@ -1165,6 +1172,9 @@ func testListPrefixBoundary(t *testing.T, store ObjectStorage) {
 	}
 	for _, tc := range cases {
 		t.Run("list-all/"+tc.name, func(t *testing.T) {
+			if isMinIO && tc.marker != "" && !strings.HasPrefix(tc.marker, tc.prefix) {
+				t.Skip("MinIO RELEASE.2022-01-25T19-56-04Z used in CI requires marker to start with prefix")
+			}
 			objects, err := listAll(ctx, store, tc.prefix, tc.marker, 1e9, true)
 			if errors.Is(err, notSupported) {
 				t.Skip("ListAll is not supported")
