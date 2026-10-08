@@ -1030,6 +1030,103 @@ func TestSQLite(t *testing.T) {
 	testStorage(t, s)
 }
 
+func TestSQLitePutOverwrite(t *testing.T) {
+	store, err := newSQLStore("sqlite3", filepath.Join(t.TempDir(), "overwrite.db"), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.(*sqlStore).db.Close()
+	if err := store.Put(ctx, "untouched", bytes.NewReader([]byte("keep this object"))); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"nil", nil},
+		{"shorter", []byte("x")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := store.Put(ctx, tc.name, bytes.NewReader([]byte("original content"))); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Put(ctx, tc.name, bytes.NewReader(tc.data)); err != nil {
+				t.Fatal(err)
+			}
+			r, err := store.Get(ctx, tc.name, 0, -1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := io.ReadAll(r)
+			r.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, tc.data) {
+				t.Errorf("read after overwrite: got %q, want %q", got, tc.data)
+			}
+			o, err := store.Head(ctx, tc.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if o.Size() != int64(len(tc.data)) {
+				t.Errorf("size after overwrite: got %d, want %d", o.Size(), len(tc.data))
+			}
+			r, err = store.Get(ctx, "untouched", 0, -1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err = io.ReadAll(r)
+			r.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != "keep this object" {
+				t.Errorf("unrelated object changed: got %q", got)
+			}
+		})
+	}
+	t.Run("empty-key", func(t *testing.T) {
+		if err := store.Put(ctx, "", bytes.NewReader([]byte("original content"))); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				if err := store.Put(ctx, "", bytes.NewReader(tc.data)); err != nil {
+					t.Fatal(err)
+				}
+				var b blob
+				ok, err := store.(*sqlStore).db.Where("`key` = ?", []byte("")).Get(&b)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !ok {
+					t.Fatal("empty-key object missing after overwrite")
+				}
+				if !bytes.Equal(b.Data, tc.data) || b.Size != int64(len(tc.data)) {
+					t.Errorf("empty-key object after overwrite: got %q, size %d; want %q, size %d", b.Data, b.Size, tc.data, len(tc.data))
+				}
+				got, err := get(store, "untouched", 0, -1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got != "keep this object" {
+					t.Errorf("unrelated object changed: got %q", got)
+				}
+				o, err := store.Head(ctx, "untouched")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if o.Size() != int64(len("keep this object")) {
+					t.Errorf("unrelated object size changed: got %d", o.Size())
+				}
+			})
+		}
+	})
+}
+
 func TestPG(t *testing.T) { //skip mutate
 	if os.Getenv("PG_ADDR") == "" {
 		t.SkipNow()
