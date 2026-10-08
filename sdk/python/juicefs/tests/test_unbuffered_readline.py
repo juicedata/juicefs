@@ -83,6 +83,14 @@ def test_unbuffered_readlines_one_leaves_the_next_line(open_file):
         assert stream.read() == b"second\n"
 
 
+@pytest.mark.parametrize("hint", [1, 2, 3, 4])
+def test_unbuffered_positive_hint_counts_lines(open_file, hint):
+    lines = [b"first long line\n", b"\n", b"last"]
+    with open_file(b"".join(lines)) as stream:
+        assert stream.readlines(hint) == lines[:hint]
+        assert stream.read() == b"".join(lines[hint:])
+
+
 @pytest.mark.parametrize("buffering", [0, -1])
 @pytest.mark.parametrize("data", LINE_CONTENTS + [b""])
 def test_readlines_without_hint_preserves_all_lines(open_file, buffering, data):

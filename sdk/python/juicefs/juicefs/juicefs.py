@@ -617,11 +617,12 @@ class _File(object):
         return self
 
     def readlines(self, hint=-1):
-        """Return a list of lines from the stream."""
+        """Return lines; a positive hint counts lines, not bytes."""
         self._check_closed()
         if hint is None or hint <= 0:
             data = self.read(-1)
         else:
+            # Unlike the standard library's size hint, this is a line limit.
             rs = []
             while hint > 0:
                 r = self.read(1)
@@ -746,6 +747,7 @@ def test():
         assert f.readline() == b''
     with v.open("/d/lines", 'rb', 0) as f:
         assert list(f) == [b"first\rpart\n", b"second\n", b"last"]
+    v.remove("/d/lines")
     try:
         v.open("/d/d/file", "w")
     except OSError as e:
