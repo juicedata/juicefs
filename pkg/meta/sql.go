@@ -1286,6 +1286,14 @@ func (m *dbMeta) shouldRetry(err error) bool {
 			strings.Contains(msg, "duplicate entry") || strings.Contains(msg, "error 1020 (hy000)") ||
 			strings.Contains(msg, "invalid connection") || strings.Contains(msg, "bad connection") || errors.Is(err, io.EOF) || strings.Contains(msg, "serialize access") // could not send data to client: No buffer space available
 	case "postgres":
+		// A database leader change (Patroni switchover/failover behind PgBouncer) answers
+		// 57P01 "terminating connection", then PgBouncer's "server_login_retry", then 25006 "read-only transaction"
+		// from the demoted node for a few seconds; retry them (txn retries ~40 s) instead of failing the open file for good.
+		if strings.Contains(msg, "sqlstate 57p01") || strings.Contains(msg, "server_login_retry") ||
+			strings.Contains(msg, "sqlstate 25006") || strings.Contains(msg, "sqlstate 57p03") ||
+			strings.Contains(msg, "failed to connect to") {
+			return true
+		}
 		if e, ok := err.(interface{ SafeToRetry() bool }); ok {
 			return e.SafeToRetry()
 		}
