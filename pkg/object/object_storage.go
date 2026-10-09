@@ -263,7 +263,7 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
-					t.entries, t.hasMore, t.nextToken, t.err = store.List(ctx, key, "\x00", t.nextToken, "/", 1000, followLink) // exclude itself
+					t.entries, t.hasMore, t.nextToken, t.err = store.List(ctx, key, key, t.nextToken, "/", 1000, followLink) // exclude itself
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()
@@ -336,6 +336,18 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 		}
 	}()
 	return listed, nil
+}
+
+// genNextKey returns the exclusive upper bound of a prefix, or "" if unbounded.
+func genNextKey(prefix string) string {
+	end := []byte(prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		if end[i] != 0xff {
+			end[i]++
+			return string(end[:i+1])
+		}
+	}
+	return ""
 }
 
 func generateListResult(objs []Object, limit int64) ([]Object, bool, string, error) {

@@ -254,7 +254,7 @@ func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter str
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
-	} else if marker == "" {
+	} else if marker == "" || marker < prefix {
 		obj, err := j.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -263,6 +263,9 @@ func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter str
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return objs, true, obj.Key(), nil
+		}
 	}
 	entries, err := j.readDirSorted(dir, followLink)
 	if err != 0 {

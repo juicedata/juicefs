@@ -321,7 +321,7 @@ func (n *nfsStore) List(ctx context.Context, prefix, marker, token, delimiter st
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
-	} else if marker == "" {
+	} else if marker == "" || marker < prefix {
 		obj, err := n.Head(ctx, dir)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -330,6 +330,9 @@ func (n *nfsStore) List(ctx context.Context, prefix, marker, token, delimiter st
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return generateListResult(objs, limit)
+		}
 	}
 	entries, err := n.readDirSorted(ctx, dir, followLink)
 	if err != nil {

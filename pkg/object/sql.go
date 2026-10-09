@@ -131,15 +131,17 @@ func (s *sqlStore) Delete(ctx context.Context, key string, getters ...AttrGetter
 }
 
 func (s *sqlStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-	if marker == "" {
+	condition := "`key` > ?"
+	if marker < prefix {
 		marker = prefix
+		condition = "`key` >= ?"
 	}
 	// todo
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
 	var bs []blob
-	err := s.db.Context(ctx).Where("`key` > ?", []byte(marker)).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)
+	err := s.db.Context(ctx).Where(condition, []byte(marker)).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)
 	if err != nil {
 		return nil, false, "", err
 	}
