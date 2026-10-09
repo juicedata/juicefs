@@ -890,6 +890,8 @@ The Kerberos configuration file:
 {VOL_NAME}.proxy.client.hosts=*
 ```
 
+Rule substitutions follow the same replacement syntax as Hadoop (Java `Matcher`) in both first-match and `g` (all-match) mode. For example, `RULE:[1:$1]s/(alice)/local_$1/` maps `alice-alice@EXAMPLE.COM` to `local_alice-alice`; adding `g` maps it to `local_alice-local_alice`. `$1_x` means group 1 followed by `_x`, and `\$` is a literal `$`.
+
 `core-site.xml` configuration:
 
 ```xml

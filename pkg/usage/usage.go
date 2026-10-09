@@ -57,6 +57,7 @@ func sendUsage(u usage) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("got %s", resp.Status)
 	}

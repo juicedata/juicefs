@@ -294,6 +294,7 @@ func (d *dragonfly) Get(ctx context.Context, key string, off, limit int64, gette
 	}
 
 	if resp.StatusCode/100 != 2 {
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("bad response status %s", resp.Status)
 	}
 	attrs := ApplyGetters(getters...)
