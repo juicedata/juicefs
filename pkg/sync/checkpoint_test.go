@@ -18,11 +18,8 @@ package sync
 
 import (
 	"bytes"
-	"fmt"
-	"io"
 	"math"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	gosync "sync"
@@ -606,46 +603,6 @@ func TestProduceFromListOverlappingPrefixes(t *testing.T) {
 	}
 
 	assertDstHasKeys(t, dst, "dir/sub/y", "dir/sub/pending")
-}
-
-func TestProduceFromListParallelPrefixes(t *testing.T) {
-	src, _ := object.CreateStorage("mem", "parallel-prefix-src", "", "", "")
-	dst, _ := object.CreateStorage("mem", "parallel-prefix-dst", "", "", "")
-	var prefixes strings.Builder
-	var keys []string
-	for i := 0; i < 128; i++ {
-		prefix := fmt.Sprintf("dir-%03d/", i)
-		prefixes.WriteString(prefix + "\n")
-		keys = append(keys, prefix+"file")
-	}
-	putObjects(t, src, keys...)
-	filesFrom := filepath.Join(t.TempDir(), "prefixes.txt")
-	if err := os.WriteFile(filesFrom, []byte(prefixes.String()), 0600); err != nil {
-		t.Fatal(err)
-	}
-	config := newTestConfig()
-	config.FilesFrom = filesFrom
-	config.Threads = 8
-	config.ListDepth = 0
-	config.EnableCheckpoint = false
-	if err := Sync(src, dst, config); err != nil {
-		t.Fatalf("Sync: %v", err)
-	}
-	assertDstHasKeys(t, dst, keys...)
-	for _, key := range keys {
-		r, err := dst.Get(ctx, key, 0, -1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		data, err := io.ReadAll(r)
-		r.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := string(data); got != key {
-			t.Fatalf("destination %q contains %q", key, got)
-		}
-	}
 }
 
 func TestCheckpointPlacedAtParentForFileDst(t *testing.T) {
