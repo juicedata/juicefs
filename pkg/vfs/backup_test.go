@@ -184,7 +184,7 @@ func TestBackupTempIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "juicefs-meta-backup-") {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "juicefs-backup-") {
 			t.Fatalf("temporary backup left behind: %s", entry.Name())
 		}
 	}

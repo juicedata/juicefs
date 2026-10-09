@@ -98,7 +98,7 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTrash bool) (string, error) {
 	name := "dump-" + now.UTC().Format("2006-01-02-150405") + ".json.gz"
 	// Other volumes may back up in the same second on this host.
-	localDir, err := os.MkdirTemp("", "juicefs-meta-backup-")
+	localDir, err := os.MkdirTemp("", "juicefs-backup-")
 	if err != nil {
 		return "", err
 	}
