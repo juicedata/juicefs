@@ -890,7 +890,7 @@ The Kerberos configuration file:
 {VOL_NAME}.proxy.client.hosts=*
 ```
 
-Rule substitutions expand capture references in both first-match and `g` (all-match) mode. For example, `RULE:[1:$1]s/(alice)/local_${1}/` maps `alice-alice@EXAMPLE.COM` to `local_alice-alice`; adding `g` maps it to `local_alice-local_alice`. The replacement string uses Go regexp template syntax, which differs from Hadoop (Java), so always reference capture groups as `${N}`, e.g. `RULE:[1:$1]s/(alice)/${1}_x/`. `$1_x` is treated as a group named `1_x` and expands to an empty string. Use `$$` for a literal `$`.
+Rule substitutions follow the same replacement syntax as Hadoop (Java `Matcher`) in both first-match and `g` (all-match) mode. For example, `RULE:[1:$1]s/(alice)/local_$1/` maps `alice-alice@EXAMPLE.COM` to `local_alice-alice`; adding `g` maps it to `local_alice-local_alice`. `$1_x` means group 1 followed by `_x`, and `\$` is a literal `$`.
 
 `core-site.xml` configuration:
 

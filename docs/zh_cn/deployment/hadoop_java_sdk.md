@@ -1013,7 +1013,7 @@ kerbero 配置文件
 {VOL_NAME}.proxy.client.hosts=*
 ```
 
-规则替换在首次匹配和 `g`（全部匹配）模式下均展开捕获组引用。例如，`RULE:[1:$1]s/(alice)/local_${1}/` 将 `alice-alice@EXAMPLE.COM` 映射为 `local_alice-alice`；添加 `g` 后则映射为 `local_alice-local_alice`。替换串使用 Go 正则模板语法，与 Hadoop（Java）不完全一致，引用捕获组时请统一写成 `${N}`，例如 `RULE:[1:$1]s/(alice)/${1}_x/`。若写成 `$1_x`，会被当作名为 `1_x` 的组并替换为空串。字面量 `$` 需写成 `$$`。
+规则替换在首次匹配和 `g`（全部匹配）模式下均与 Hadoop（Java `Matcher`）的替换语法一致。例如，`RULE:[1:$1]s/(alice)/local_$1/` 将 `alice-alice@EXAMPLE.COM` 映射为 `local_alice-alice`；添加 `g` 后则映射为 `local_alice-local_alice`。`$1_x` 表示第 1 个捕获组后接 `_x`，`\$` 表示字面量 `$`。
 
 core-site 配置
 
