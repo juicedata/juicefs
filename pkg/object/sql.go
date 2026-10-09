@@ -89,15 +89,15 @@ func (s *sqlStore) Put(ctx context.Context, key string, in io.Reader, getters ..
 	b := blob{Key: []byte(key), Data: d, Size: int64(len(d)), Modified: now}
 	if name := s.db.DriverName(); name == "postgres" || name == "pgx" {
 		var r sql.Result
-		r, err = s.db.Exec("INSERT INTO jfs_blob(key, size,modified, data) VALUES(?, ?, ?,? ) "+
+		r, err = s.db.Context(ctx).Exec("INSERT INTO jfs_blob(key, size,modified, data) VALUES(?, ?, ?,? ) "+
 			"ON CONFLICT (key) DO UPDATE SET size=?,data=?", []byte(key), b.Size, now, d, b.Size, d)
 		if err == nil {
 			n, err = r.RowsAffected()
 		}
 	} else {
-		n, err = s.db.Insert(&b)
+		n, err = s.db.Context(ctx).Insert(&b)
 		if err != nil || n == 0 {
-			n, err = s.db.Where("`key` = ?", []byte(key)).Cols("size", "data").Update(&b)
+			n, err = s.db.Context(ctx).Where("`key` = ?", []byte(key)).Cols("size", "data").Update(&b)
 		}
 	}
 	if err == nil && n == 0 {
@@ -108,7 +108,7 @@ func (s *sqlStore) Put(ctx context.Context, key string, in io.Reader, getters ..
 
 func (s *sqlStore) Head(ctx context.Context, key string) (Object, error) {
 	var b = blob{Key: []byte(key)}
-	ok, err := s.db.Cols("key", "modified", "size").Get(&b)
+	ok, err := s.db.Context(ctx).Cols("key", "modified", "size").Get(&b)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (s *sqlStore) Head(ctx context.Context, key string) (Object, error) {
 }
 
 func (s *sqlStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	_, err := s.db.Delete(&blob{Key: []byte(key)})
+	_, err := s.db.Context(ctx).Delete(&blob{Key: []byte(key)})
 	return err
 }
 
@@ -139,7 +139,7 @@ func (s *sqlStore) List(ctx context.Context, prefix, marker, token, delimiter st
 		return nil, false, "", notSupported
 	}
 	var bs []blob
-	err := s.db.Where("`key` > ?", []byte(marker)).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)
+	err := s.db.Context(ctx).Where("`key` > ?", []byte(marker)).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)
 	if err != nil {
 		return nil, false, "", err
 	}
