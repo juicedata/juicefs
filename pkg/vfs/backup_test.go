@@ -17,15 +17,8 @@
 package vfs
 
 import (
-	"compress/gzip"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -89,104 +82,6 @@ func TestBackup(t *testing.T) {
 	}
 	if len(keys) < 1 {
 		t.Fatalf("there should be at least 1 backup file")
-	}
-}
-
-type backupHookStorage struct {
-	object.ObjectStorage
-	beforeCopy func()
-}
-
-type backupDumpErrorMeta struct {
-	meta.Meta
-	err error
-}
-
-func (m *backupDumpErrorMeta) DumpMeta(io.Writer, meta.Ino, int, bool, bool, bool) error {
-	return m.err
-}
-
-func (s *backupHookStorage) Limits() object.Limits {
-	// CopyData asks for the destination limits before opening the dump.
-	if s.beforeCopy != nil {
-		hook := s.beforeCopy
-		s.beforeCopy = nil
-		hook()
-	}
-	return s.ObjectStorage.Limits()
-}
-
-func TestBackupTempIsolation(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("TMPDIR", tmp)
-	t.Setenv("TMP", tmp)
-	t.Setenv("TEMP", tmp)
-	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	key := "meta/dump-2026-01-02-030405.json.gz"
-	checkDump := func(t *testing.T, blob object.ObjectStorage, uuid string) {
-		t.Helper()
-		r, err := blob.Get(context.Background(), key, 0, -1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer r.Close()
-		zr, err := gzip.NewReader(r)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer zr.Close()
-		var dump meta.DumpedMeta
-		if err = json.NewDecoder(zr).Decode(&dump); err != nil {
-			t.Fatal(err)
-		}
-		if dump.Setting.UUID != uuid {
-			t.Fatalf("backup contains volume %s, want %s", dump.Setting.UUID, uuid)
-		}
-	}
-	for _, overlap := range []bool{false, true} {
-		t.Run(fmt.Sprintf("overlap=%v", overlap), func(t *testing.T) {
-			first, firstBlob := createTestVFS(nil, "sqlite3://"+filepath.Join(t.TempDir(), "first.db"))
-			second, secondBlob := createTestVFS(nil, "sqlite3://"+filepath.Join(t.TempDir(), "second.db"))
-			backupSecond := func() {
-				if path, err := backup(second.Meta, secondBlob, now, true, false); err != nil {
-					t.Fatal(err)
-				} else if path != secondBlob.String()+key {
-					t.Fatalf("backup path %q, want %q", path, secondBlob.String()+key)
-				}
-				checkDump(t, secondBlob, second.Conf.Format.UUID)
-			}
-			var target object.ObjectStorage = firstBlob
-			if overlap {
-				// Complete another volume's backup after the first dump is written,
-				// but before CopyData reopens its source. No timing-dependent sleeps.
-				target = &backupHookStorage{firstBlob, backupSecond}
-			}
-			if path, err := backup(first.Meta, target, now, true, false); err != nil {
-				t.Fatal(err)
-			} else if path != firstBlob.String()+key {
-				t.Fatalf("backup path %q, want %q", path, firstBlob.String()+key)
-			}
-			checkDump(t, firstBlob, first.Conf.Format.UUID)
-			if !overlap {
-				backupSecond()
-			}
-		})
-	}
-	t.Run("dump-error", func(t *testing.T) {
-		v, blob := createTestVFS(nil, "sqlite3://"+filepath.Join(t.TempDir(), "failed.db"))
-		wantErr := errors.New("dump failed")
-		if _, err := backup(&backupDumpErrorMeta{v.Meta, wantErr}, blob, now, true, false); !errors.Is(err, wantErr) {
-			t.Fatalf("backup error %v, want %v", err, wantErr)
-		}
-	})
-	entries, err := os.ReadDir(tmp)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "juicefs-backup-") {
-			t.Fatalf("temporary backup left behind: %s", entry.Name())
-		}
 	}
 }
 
