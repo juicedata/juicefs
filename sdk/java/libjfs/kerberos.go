@@ -63,6 +63,7 @@ type kRule struct {
 	match       *regexp.Regexp
 	fromPattern *regexp.Regexp
 	toPattern   string
+	toTemplate  string
 	repeat      bool
 	lower       bool
 }
@@ -104,11 +105,12 @@ func (r *kRule) replaceSubs(base string) string {
 		return base
 	}
 	if r.repeat {
-		return r.fromPattern.ReplaceAllString(base, r.toPattern)
+		return r.fromPattern.ReplaceAllString(base, r.toTemplate)
 	}
-	m := r.fromPattern.FindStringIndex(base)
+	m := r.fromPattern.FindStringSubmatchIndex(base)
 	if m != nil {
-		return base[:m[0]] + r.toPattern + base[m[1]:]
+		result := r.fromPattern.ExpandString([]byte(base[:m[0]]), r.toTemplate, base, m)
+		return string(result) + base[m[1]:]
 	}
 	return base
 }
@@ -132,6 +134,48 @@ func (r *kRule) apply(param []string, mechanism string, realm string) string {
 		result = strings.ToLower(result)
 	}
 	return result
+}
+
+// toGoTemplate converts a Java Matcher replacement (as used by Hadoop) into a
+// Go regexp template, so that "$1_x" means group 1 followed by "_x" instead of
+// a group named "1_x". Like Java, "$NN" takes the longest number not exceeding
+// the group count and "\c" is a literal c. Other "$" are kept literally.
+func toGoTemplate(repl string, groups int) string {
+	isDigit := func(c byte) bool { return c >= '0' && c <= '9' }
+	var b strings.Builder
+	for i := 0; i < len(repl); i++ {
+		c := repl[i]
+		switch {
+		case c == '\\' && i+1 < len(repl):
+			i++
+			if repl[i] == '$' {
+				b.WriteString("$$")
+			} else {
+				b.WriteByte(repl[i])
+			}
+		case c == '$' && i+1 < len(repl) && isDigit(repl[i+1]):
+			i++
+			n := int(repl[i] - '0')
+			for i+1 < len(repl) && isDigit(repl[i+1]) {
+				next := n*10 + int(repl[i+1]-'0')
+				if next > groups {
+					break
+				}
+				n = next
+				i++
+			}
+			fmt.Fprintf(&b, "${%d}", n)
+		case c == '$' && i+1 < len(repl) && repl[i+1] == '{' && strings.IndexByte(repl[i:], '}') > 0:
+			end := i + strings.IndexByte(repl[i:], '}')
+			b.WriteString(repl[i : end+1])
+			i = end
+		case c == '$':
+			b.WriteString("$$")
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 func parseRule(rule string) *kRule {
@@ -158,6 +202,7 @@ func parseRule(rule string) *kRule {
 		return nil
 	}
 	r.toPattern = m[8]
+	r.toTemplate = toGoTemplate(r.toPattern, r.fromPattern.NumSubexp())
 	r.repeat = m[9] == "g"
 	r.lower = m[10] == "L"
 	return &r
