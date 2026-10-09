@@ -34,9 +34,6 @@ func lookupGroup(name string) int {
 }
 
 func (d *filestore) Chtimes(key string, mtime time.Time) error {
-	p, err := d.path(key)
-	if err != nil {
-		return err
-	}
+	p := d.path(key)
 	return os.Chtimes(p, time.Time{}, mtime)
 }
