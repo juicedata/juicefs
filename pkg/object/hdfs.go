@@ -228,6 +228,9 @@ func (h *hdfsclient) List(ctx context.Context, prefix, marker, token, delimiter 
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return generateListResult(objs, limit)
+		}
 	}
 
 	file, err := h.c.Open(dir)

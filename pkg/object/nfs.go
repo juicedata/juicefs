@@ -330,6 +330,9 @@ func (n *nfsStore) List(ctx context.Context, prefix, marker, token, delimiter st
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return generateListResult(objs, limit)
+		}
 	}
 	entries, err := n.readDirSorted(ctx, dir, followLink)
 	if err != nil {

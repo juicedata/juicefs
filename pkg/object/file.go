@@ -343,6 +343,9 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return generateListResult(objs, limit)
+		}
 	}
 	entries, err := readDirSorted(dir, followLink)
 	if err != nil {

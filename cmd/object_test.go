@@ -117,6 +117,26 @@ func testFileSystem(t *testing.T, s object.ObjectStorage) {
 	} else if err = testKeysEqual(objs, []string{"x/x.txt"}); err != nil {
 		t.Fatalf("list with marker x/: %s", err)
 	}
+	// the directory itself should count towards the limit
+	for _, start := range []string{"", "a"} {
+		var paged []object.Object
+		for marker, more := start, true; more; {
+			var page []object.Object
+			if page, more, _, err = s.List(ctx, "x/", marker, "", "/", 1, true); err != nil {
+				t.Fatalf("list with limit 1 failed: %s", err)
+			}
+			if len(page) > 1 {
+				t.Fatalf("list with limit 1 returned %d objects", len(page))
+			}
+			if len(page) > 0 {
+				marker = page[0].Key()
+			}
+			paged = append(paged, page...)
+		}
+		if err = testKeysEqual(paged, expectedKeys); err != nil {
+			t.Fatalf("list with limit 1 from %q: %s", start, err)
+		}
+	}
 
 	objs, err = listAll(ctx, s, "x", "", 100)
 	if err != nil {

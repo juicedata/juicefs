@@ -419,6 +419,9 @@ func (f *sftpStore) List(ctx context.Context, prefix, marker, token, delimiter s
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return generateListResult(objs, limit)
+		}
 	}
 	infos, err := c.sftpClient.ReadDir(dir)
 	if err != nil {

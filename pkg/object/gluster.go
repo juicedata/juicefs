@@ -228,6 +228,9 @@ func (g *gluster) List(ctx context.Context, prefix, marker, token, delimiter str
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return generateListResult(objs, limit)
+		}
 	}
 	entries, err := g.readDirSorted(dir, followLink)
 	if err != nil {

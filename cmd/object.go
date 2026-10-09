@@ -263,6 +263,9 @@ func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter str
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return objs, true, obj.Key(), nil
+		}
 	}
 	entries, err := j.readDirSorted(dir, followLink)
 	if err != 0 {
