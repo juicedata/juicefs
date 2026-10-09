@@ -145,6 +145,11 @@ func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, fo
 			var nextToken2 string
 			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
 			for err != nil {
+				if ctx.Err() != nil {
+					logger.Errorf("Stop listing %s at marker %q: %s", store, marker, err)
+					out <- nil
+					return
+				}
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)

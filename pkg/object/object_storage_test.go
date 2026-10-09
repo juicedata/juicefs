@@ -1223,6 +1223,48 @@ func TestListAllWithDelimiterDeepStart(t *testing.T) {
 	}
 }
 
+type failingNextPageStore struct {
+	ObjectStorage
+	calls int
+}
+
+func (s *failingNextPageStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	s.calls++
+	if s.calls == 1 {
+		return []Object{&obj{key: "a"}}, true, "", nil
+	}
+	return nil, false, "", errors.New("list failed")
+}
+
+func TestListAllStopsRetryingAfterCancel(t *testing.T) {
+	mem, _ := newMem("", "", "", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch, err := ListAll(ctx, &failingNextPageStore{ObjectStorage: mem}, "", "", true, true)
+	if err != nil {
+		t.Fatalf("list all: %s", err)
+	}
+	timeout := time.After(5 * time.Second)
+	var got []Object
+	for {
+		select {
+		case o, ok := <-ch:
+			if !ok {
+				if len(got) != 2 || got[0] == nil || got[0].Key() != "a" || got[1] != nil {
+					t.Fatalf("expected object a followed by nil, got %v", got)
+				}
+				return
+			}
+			got = append(got, o)
+			if len(got) == 1 {
+				cancel()
+			}
+		case <-timeout:
+			t.Fatalf("ListAll kept retrying after context was canceled, got %v", got)
+		}
+	}
+}
+
 func TestEtcd(t *testing.T) { //skip mutate
 	if os.Getenv("ETCD_ADDR") == "" {
 		t.SkipNow()
