@@ -399,6 +399,26 @@ func (m *dbMeta) initStatement() {
 			 VALUES (?, ?, ?)
 			 ON DUPLICATE KEY UPDATE
 			 size=?, refs=?`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT (inode)
+			 DO UPDATE SET data_length=?, used_space=?, used_inodes=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %sdir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT (inode)
+			 DO UPDATE SET data_length=?, used_space=?, used_inodes=?`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 data_length=?, used_space=?, used_inodes=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %sdir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 data_length=?, used_space=?, used_inodes=?`, m.tablePrefix)
 	m.statement["edge.inode=node.inode"] = fmt.Sprintf("%sedge.inode=%snode.inode", m.tablePrefix, m.tablePrefix)
 	m.statement["edge.id"] = fmt.Sprintf("%sedge.id", m.tablePrefix)
 	m.statement["edge.name"] = fmt.Sprintf("%sedge.name", m.tablePrefix)
@@ -3732,6 +3752,27 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return nil
 }
 
+func (m *dbMeta) upsertDirStat(s *xorm.Session, ino Ino, stat *dirStat) error {
+	var err error
+	driver := m.Name()
+	if driver == "sqlite3" || driver == "postgres" {
+		_, err = s.Exec(m.sqlConv(`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT (inode)
+			 DO UPDATE SET data_length=?, used_space=?, used_inodes=?`),
+			ino, stat.length, stat.space, stat.inodes, stat.length, stat.space, stat.inodes)
+	} else {
+		_, err = s.Exec(m.sqlConv(`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 data_length=?, used_space=?, used_inodes=?`),
+			ino, stat.length, stat.space, stat.inodes, stat.length, stat.space, stat.inodes)
+	}
+	return err
+}
+
 func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	if m.conf.ReadOnly {
 		return nil, syscall.EROFS
@@ -3748,11 +3789,8 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 		if !exist {
 			return syscall.ENOENT
 		}
-		record := &dirStats{ino, stat.length, stat.space, stat.inodes}
-		_, err = s.Insert(record)
-		if err != nil && isDuplicateEntryErr(err) {
-			_, err = s.Cols("data_length", "used_space", "used_inodes").Update(record, &dirStats{Inode: ino})
-		}
+		// upsert: a failed insert aborts the whole transaction on PostgreSQL
+		err = m.upsertDirStat(s, ino, stat)
 		if err == nil {
 			m.genLog(ctx, s, time.Now().UnixNano(), "DIRSTAT(%d,%d,%d,%d)", ino, stat.length, stat.space, stat.inodes)
 		}
