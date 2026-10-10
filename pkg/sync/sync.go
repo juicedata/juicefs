@@ -2354,11 +2354,24 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		listedPrefix = progress.AddCountSpinner("Prefix")
 	}
 
-	go func() {
+	pendingCtx, stopPending := context.WithCancel(ctx)
+	pendingDone := make(chan struct{})
+	go func(bar *utils.Bar) {
+		defer close(pendingDone)
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
 		for {
-			pending.SetCurrent(int64(len(tasks)))
-			time.Sleep(time.Millisecond * 100)
+			bar.SetCurrent(int64(len(tasks)))
+			select {
+			case <-pendingCtx.Done():
+				return
+			case <-ticker.C:
+			}
 		}
+	}(pending)
+	defer func() {
+		stopPending()
+		<-pendingDone
 	}()
 
 	initSyncMetrics(config)
@@ -2443,6 +2456,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}()
 		delWg.Wait()
 	}
+	stopPending()
+	<-pendingDone
 	return syncExitFunc()
 }
 
