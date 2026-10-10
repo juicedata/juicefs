@@ -26,15 +26,18 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/davies/groupcache/consistenthash"
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/murmur3"
 )
 
 func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
@@ -445,6 +448,309 @@ func TestFillCache(t *testing.T) {
 	err = store.CheckCache(11, uint32(bsize), nil, handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(bsize), missBytes)
+}
+
+type fillCacheGET struct {
+	key        string
+	off, limit int64
+}
+
+type fillCacheBlockedStore struct {
+	object.ObjectStorage
+	entered  chan fillCacheGET
+	release  <-chan struct{}
+	calls    atomic.Int64
+	bytes    atomic.Int64
+	firstErr error
+}
+
+func (s *fillCacheBlockedStore) Get(ctx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	seq := s.calls.Add(1)
+	select {
+	case s.entered <- fillCacheGET{key, off, limit}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	select {
+	case <-s.release:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if seq == 1 && s.firstErr != nil {
+		return nil, s.firstErr
+	}
+	r, err := s.ObjectStorage.Get(ctx, key, off, limit, getters...)
+	if err != nil {
+		return nil, err
+	}
+	return &fillCacheCountingReader{ReadCloser: r, bytes: &s.bytes}, nil
+}
+
+type fillCacheCountingReader struct {
+	io.ReadCloser
+	bytes *atomic.Int64
+}
+
+func (r *fillCacheCountingReader) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	r.bytes.Add(int64(n))
+	return n, err
+}
+
+type fillCacheBlockingCache struct {
+	CacheManager
+	entered chan [2]bool
+	release <-chan struct{}
+}
+
+func (c *fillCacheBlockingCache) cache(key string, p *Page, force, dropCache bool) {
+	c.entered <- [2]bool{force, dropCache}
+	<-c.release
+	c.CacheManager.cache(key, p, force, dropCache)
+}
+
+func TestFillCacheConcurrentRead(t *testing.T) {
+	cases := []struct {
+		name           string
+		warmup         bool
+		firstErr       error
+		cancelRead     bool
+		disk           bool
+		blockCache     bool
+		compress       string
+		prefetch       bool
+		cacheFullBlock bool
+	}{
+		{name: "read-read"},
+		{name: "read-warmup", warmup: true},
+		{name: "read-warmup-error", warmup: true, firstErr: errors.New("injected GET failure")},
+		{name: "read-warmup-canceled", warmup: true, cancelRead: true},
+		{name: "read-warmup-disk", warmup: true, disk: true},
+		{name: "read-warmup-blocked-cache", warmup: true, blockCache: true},
+		{name: "read-warmup-compressed", warmup: true, compress: "zstd"},
+		{name: "prefetch-warmup", warmup: true, prefetch: true},
+		{name: "read-warmup-cache-full-block", warmup: true, cacheFullBlock: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			const blockSize = 4096
+			data := bytes.Repeat([]byte{0x5a}, blockSize)
+			mem, err := object.CreateStorage("mem", "", "", "", "")
+			require.NoError(t, err)
+			release := make(chan struct{})
+			backend := &fillCacheBlockedStore{ObjectStorage: mem, entered: make(chan fillCacheGET, 2), release: release, firstErr: tc.firstErr}
+			conf := defaultConf
+			conf.BlockSize = blockSize
+			conf.CacheDir = "memory"
+			conf.CacheEviction = Eviction2Random
+			conf.CacheFullBlock = tc.cacheFullBlock
+			conf.Compress = tc.compress
+			conf.Prefetch = 0
+			conf.GetTimeout = 10 * time.Second
+			store := NewCachedStore(backend, conf, nil).(*cachedStore)
+			if tc.disk {
+				// Exercise disk admission and flushing without background space checks.
+				cache := newTestCacheStore(t.TempDir()+string(filepath.Separator), &conf, nil)
+				cache.id = "test"
+				cache.m = store.bcache.getMetrics()
+				cache.capacity = int64(conf.CacheSize)
+				cache.checksum = conf.CacheChecksum
+				mgr := &cacheManager{
+					consistentMap: consistenthash.New(100, murmur3.Sum32),
+					storeMap:      map[string]*diskCache{cache.id: cache},
+					stores:        []*diskCache{cache},
+					metrics:       cache.m,
+				}
+				mgr.consistentMap.Add(cache.id)
+				store.bcache = mgr
+				go cache.flush()
+			}
+			key := sliceForRead(10, blockSize, store).key(0)
+			encoded := make([]byte, store.compressor.CompressBound(blockSize))
+			n, err := store.compressor.Compress(encoded, data)
+			require.NoError(t, err)
+			require.NoError(t, mem.Put(context.Background(), key, bytes.NewReader(encoded[:n])))
+			cnt, _ := store.bcache.stats()
+			require.Zero(t, cnt)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			var once sync.Once
+			unblock := func() { once.Do(func() { close(release) }) }
+			cacheRelease := make(chan struct{})
+			var cacheOnce sync.Once
+			unblockCache := func() { cacheOnce.Do(func() { close(cacheRelease) }) }
+			blockedCache := &fillCacheBlockingCache{CacheManager: store.bcache, entered: make(chan [2]bool, 1), release: cacheRelease}
+			if tc.blockCache {
+				store.bcache = blockedCache
+			}
+			var workers sync.WaitGroup
+			t.Cleanup(func() {
+				unblock()
+				unblockCache()
+				cancel()
+				workers.Wait()
+				_ = store.EvictCache(10, blockSize, nil)
+			})
+			type result struct {
+				warmup bool
+				err    error
+			}
+			results := make(chan result, 2)
+			pages := make(chan *Page, 2)
+			read := func(ctx context.Context) error {
+				page := NewPage(make([]byte, blockSize))
+				pages <- page
+				defer page.Release()
+				n, err := store.NewReader(10, blockSize).ReadAt(ctx, page, 0)
+				if err != nil {
+					return err
+				}
+				if n != blockSize || !bytes.Equal(page.Data, data) {
+					return fmt.Errorf("unexpected read: %d bytes, data matches: %t", n, bytes.Equal(page.Data, data))
+				}
+				return nil
+			}
+			start := func(fn func() error, warmup bool) {
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					results <- result{warmup, fn()}
+				}()
+			}
+			checkGET := func(req fillCacheGET) {
+				require.Equal(t, fillCacheGET{key, 0, -1}, req)
+			}
+			deadline := time.NewTimer(5 * time.Second)
+			defer deadline.Stop()
+			if tc.prefetch {
+				start(func() error { store.fetcher.op(key); return nil }, false)
+			} else {
+				start(func() error { return read(ctx) }, false)
+			}
+			select {
+			case req := <-backend.entered:
+				checkGET(req)
+			case <-deadline.C:
+				t.Fatal("first read did not enter GET")
+			}
+			var firstPage *Page
+			if !tc.prefetch {
+				firstPage = <-pages
+			}
+			if tc.warmup {
+				start(func() error { return store.FillCache(10, blockSize, nil) }, true)
+			} else {
+				start(func() error { return read(context.Background()) }, false)
+			}
+
+			// Wait for a positive event while the first GET is still blocked.
+			joined, duplicate := false, false
+			for !joined && !duplicate {
+				select {
+				case req := <-backend.entered:
+					checkGET(req)
+					duplicate = true
+				case <-deadline.C:
+					t.Fatal("second operation neither joined the read nor entered GET")
+				default:
+					store.group.Lock()
+					if req := store.group.rs[key]; req != nil {
+						joined = req.dups == 1
+					}
+					store.group.Unlock()
+					runtime.Gosched()
+				}
+			}
+			firstErr := tc.firstErr
+			if tc.cancelRead {
+				firstErr = context.Canceled
+				cancel()
+			}
+			checkResult := func(res result) {
+				if !res.warmup && firstErr != nil {
+					require.ErrorContains(t, res.err, firstErr.Error())
+				} else {
+					require.NoError(t, res.err)
+				}
+			}
+			waitResult := func() result {
+				select {
+				case res := <-results:
+					checkResult(res)
+					return res
+				case <-deadline.C:
+					t.Fatal("operation did not finish")
+					return result{}
+				}
+			}
+			remaining := 2
+			if tc.cancelRead {
+				res := waitResult()
+				require.False(t, res.warmup)
+				remaining--
+			}
+			unblock()
+			if tc.blockCache {
+				select {
+				case flags := <-blockedCache.entered:
+					require.Equal(t, [2]bool{true, !store.conf.OSCache}, flags)
+				case <-deadline.C:
+					t.Fatal("warmup did not enter cache admission")
+				}
+				res := waitResult()
+				require.False(t, res.warmup, "foreground read must finish while cache admission is blocked")
+				require.Equal(t, int32(1), atomic.LoadInt32(&firstPage.refs), "warmup must retain the shared page")
+				remaining--
+				unblockCache()
+			}
+			for i := 0; i < remaining; i++ {
+				waitResult()
+			}
+			workers.Wait()
+			require.True(t, joined, "second operation must reuse the in-flight full-block download")
+			var cachedPage *Page
+			if tc.warmup {
+				_, exists := store.bcache.exist(key)
+				require.True(t, exists, "warmup must cache the block")
+				require.NoError(t, read(context.Background()))
+				if tc.disk {
+					path := store.bcache.(*cacheManager).getStore(key).cachePath(key)
+					require.Eventually(t, func() bool {
+						cached, err := os.ReadFile(path)
+						return err == nil && bytes.Equal(cached, data) && atomic.LoadInt32(&firstPage.refs) == 0
+					}, 5*time.Second, time.Millisecond, "shared data must be flushed to disk and its page released")
+				} else {
+					r, err := store.bcache.load(key)
+					require.NoError(t, err)
+					cachedPage = r.(*pageReader).p
+					require.NoError(t, r.Close())
+					require.Equal(t, int32(1), atomic.LoadInt32(&cachedPage.refs), "only the cache should retain the page")
+				}
+			} else {
+				cnt, _ = store.bcache.stats()
+				require.Zero(t, cnt)
+			}
+			expectedGETs := int64(1)
+			if firstErr != nil {
+				expectedGETs++
+			}
+			cnt, _ = store.bcache.stats()
+			t.Logf("joined=%t duplicate=%t GETs=%d bytes=%d cache_blocks=%d", joined, duplicate, backend.calls.Load(), backend.bytes.Load(), cnt)
+			assert.Equal(t, expectedGETs, backend.calls.Load())
+			assert.Equal(t, int64(n), backend.bytes.Load(), "successful data should be downloaded once")
+			require.NoError(t, store.EvictCache(10, blockSize, nil))
+			if cachedPage != nil {
+				require.Zero(t, atomic.LoadInt32(&cachedPage.refs))
+			}
+			for len(pages) > 0 {
+				p := <-pages
+				require.Zero(t, atomic.LoadInt32(&p.refs))
+			}
+			if firstPage != nil {
+				require.Eventually(t, func() bool { return atomic.LoadInt32(&firstPage.refs) == 0 }, 5*time.Second, time.Millisecond)
+			}
+		})
+	}
 }
 
 func BenchmarkCachedRead(b *testing.B) {
