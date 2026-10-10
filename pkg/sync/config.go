@@ -78,9 +78,10 @@ type Config struct {
 	CheckpointInterval   time.Duration
 	CheckpointForceReset bool
 
-	rules          []rule
-	concurrentList chan int              `json:"-"`
-	Registerer     prometheus.Registerer `json:"-"`
+	rules               []rule
+	concurrentList      chan int              `json:"-"`
+	concurrentProducers chan struct{}         `json:"-"`
+	Registerer          prometheus.Registerer `json:"-"`
 
 	clusterSource      string
 	clusterDestination string
