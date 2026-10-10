@@ -66,8 +66,13 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 	}
+	query := uri.Query()
+	crcMode, err := parseChecksumMode(query)
+	if err != nil {
+		return nil, err
+	}
 	ssl := strings.ToLower(uri.Scheme) == "https"
-	region := uri.Query().Get("region")
+	region := query.Get("region")
 	if region == "" {
 		region = os.Getenv("MINIO_REGION")
 	}
@@ -109,7 +114,7 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		bucket = bucket[len("minio/"):]
 	}
 	bucket = strings.Split(bucket, "/")[0]
-	return &minio{s3client{bucket: bucket, s3: client, region: region}}, nil
+	return &minio{s3client{bucket: bucket, s3: client, region: region, checksumMode: crcMode}}, nil
 }
 
 func init() {

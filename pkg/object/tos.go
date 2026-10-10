@@ -85,7 +85,7 @@ func (t *tosClient) Get(ctx context.Context, key string, off, limit int64, gette
 	}
 	if off == 0 && limit == -1 {
 		v, _ := resp.Meta.Get(checksumAlgr)
-		resp.Content = verifyChecksum(resp.Content, v, resp.ContentLength)
+		resp.Content = verifyChecksum(resp.Content, v, resp.ContentLength, key)
 	}
 
 	return resp.Content, nil
@@ -94,8 +94,10 @@ func (t *tosClient) Get(ctx context.Context, key string, off, limit int64, gette
 func (t *tosClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var meta map[string]string
 	if ins, ok := in.(io.ReadSeeker); ok {
-		meta = map[string]string{
-			checksumAlgr: generateChecksum(ins),
+		var err error
+		meta, err = generateChecksums(ins, checksumFull)
+		if err != nil {
+			return fmt.Errorf("checksum %s: %w", key, err)
 		}
 	}
 	tier := t.getRuntimeTier(ctx)
