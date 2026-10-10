@@ -1400,6 +1400,100 @@ func TestListAllWithDelimiterDeepStart(t *testing.T) {
 	}
 }
 
+type delimiterErrorStore struct {
+	ObjectStorage
+	prefix string
+	err    error
+}
+
+func (s *delimiterErrorStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	if prefix == s.prefix {
+		return nil, false, "", s.err
+	}
+	return s.ObjectStorage.List(ctx, prefix, marker, token, delimiter, limit, followLink)
+}
+
+func TestListAllWithDelimiterConcurrentWalk(t *testing.T) {
+	ctx := context.Background()
+	store, err := newMem("concurrent-walk", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := make(map[string]bool)
+	for dir := 0; dir < 24; dir++ {
+		for sub := 0; sub < 2; sub++ {
+			key := fmt.Sprintf("d%02d/s%d/file", dir, sub)
+			if err := store.Put(ctx, key, strings.NewReader(key)); err != nil {
+				t.Fatal(err)
+			}
+			keys[key] = true
+			keys[fmt.Sprintf("d%02d/", dir)] = true
+			keys[fmt.Sprintf("d%02d/s%d/", dir, sub)] = true
+		}
+	}
+	for _, tc := range []struct {
+		name, start, end string
+	}{
+		{"All", "", ""},
+		{"DeepStart", "d04/s1/file", ""},
+		{"BoundedRange", "d04/s1/file", "d19/s1/file"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var want []string
+			for key := range keys {
+				if key >= tc.start && (tc.end == "" || key < tc.end) {
+					want = append(want, key)
+				}
+			}
+			sort.Strings(want)
+			for repeat := 0; repeat < 8; repeat++ {
+				listed, err := ListAllWithDelimiter(ctx, store, "", tc.start, tc.end, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var got []string
+				for obj := range listed {
+					if obj == nil {
+						t.Fatal("unexpected listing error")
+					}
+					got = append(got, obj.Key())
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("repeat %d: got %v, want %v", repeat, got, want)
+				}
+			}
+		})
+	}
+	for _, tc := range []struct{ name, prefix string }{
+		{"Initial", ""}, {"Child", "d04/"}, {"Grandchild", "d04/s1/"},
+	} {
+		t.Run("Error/"+tc.name, func(t *testing.T) {
+			failed := &delimiterErrorStore{ObjectStorage: store, prefix: tc.prefix, err: errors.New("list failed")}
+			listed, err := ListAllWithDelimiter(ctx, failed, "", "", "", false)
+			if tc.prefix == "" {
+				if !errors.Is(err, failed.err) || listed != nil {
+					t.Fatalf("initial failure: channel=%v, error=%v", listed, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			sentinels := 0
+			for obj := range listed {
+				if obj == nil {
+					sentinels++
+				} else if sentinels != 0 {
+					t.Fatal("object emitted after failure sentinel")
+				}
+			}
+			if sentinels != 1 {
+				t.Fatalf("got %d failure sentinels, want 1", sentinels)
+			}
+		})
+	}
+}
+
 func TestEtcd(t *testing.T) { //skip mutate
 	if os.Getenv("ETCD_ADDR") == "" {
 		t.SkipNow()
