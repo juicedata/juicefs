@@ -151,6 +151,20 @@ func (q *qiniu) Delete(ctx context.Context, key string, getters ...AttrGetter) e
 }
 
 func (q *qiniu) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, false, "", err
+		}
+		objs, hasNext, nextToken, err := q.listPage(ctx, prefix, startAfter, token, delimiter, limit, followLink)
+		if err != nil || len(objs) > 0 || !hasNext {
+			return objs, hasNext, nextToken, err
+		}
+		// Filtering a page does not mean the remote listing is exhausted.
+		token = nextToken
+	}
+}
+
+func (q *qiniu) listPage(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -180,10 +194,6 @@ func (q *qiniu) List(ctx context.Context, prefix, startAfter, token, delimiter s
 			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
-	}
-	if len(objs) == 0 {
-		hasNext = false
-		markerOut = ""
 	}
 	return objs, hasNext, markerOut, nil
 }
