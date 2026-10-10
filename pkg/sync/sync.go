@@ -1409,7 +1409,7 @@ func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config 
 	return config.Limit == 0
 }
 
-func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, config *Config, checkpointMgr *CheckpointManager) error {
+func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, config *Config, checkpointMgr *CheckpointManager) (retErr error) {
 	start, end := config.Start, config.End
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
@@ -1424,6 +1424,12 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 	if err != nil {
 		return fmt.Errorf("list %s: %s", src, err)
 	}
+	defer func() {
+		if retErr != nil {
+			for range srckeys {
+			}
+		}
+	}()
 
 	var dstkeys <-chan object.Object
 	if config.ForceUpdate && !config.DeleteDst {
@@ -1442,6 +1448,14 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, config *Config, checkpointMgr *CheckpointManager, prefix string) (retErr error) {
 	srckeys = filter(srckeys, config.rules, config)
 	dstkeys = filter(dstkeys, config.rules, config)
+	defer func() {
+		if retErr != nil {
+			for range srckeys {
+			}
+			for range dstkeys {
+			}
+		}
+	}()
 	var dstobj object.Object
 	var (
 		skip, skipBytes int64
@@ -1999,7 +2013,7 @@ func restoreFromCheckpoint(tasks chan<- object.Object, src, dst object.ObjectSto
 	return nil
 }
 
-func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config, checkpointMgr *CheckpointManager) error {
+func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config, checkpointMgr *CheckpointManager) (retErr error) {
 	config.concurrentList <- 1
 	defer func() {
 		<-config.concurrentList
@@ -2015,6 +2029,22 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 
 	commonPrefix := make(chan object.Object, 1000)
 	done := make(chan bool)
+	var srckeys, dstkeys <-chan object.Object
+	defer func() {
+		// Let child producers finish before their shared task channel is closed.
+		<-config.concurrentList
+		if retErr != nil && srckeys != nil {
+			for range srckeys {
+			}
+		}
+		if dstkeys != nil {
+			for range dstkeys {
+			}
+		}
+		close(commonPrefix)
+		<-done
+		config.concurrentList <- 1
+	}()
 	go func() {
 		defer close(done)
 		var mu sync.Mutex
@@ -2072,7 +2102,8 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		}
 	}
 
-	srckeys, err := listCommonPrefix(src, prefix, commonPrefix, !config.Links, startAfter, onChildPrefix)
+	var err error
+	srckeys, err = listCommonPrefix(src, prefix, commonPrefix, !config.Links, startAfter, onChildPrefix)
 	if err == utils.ErrNotSUP {
 		return startSingleProducer(tasks, src, dst, prefix, config, checkpointMgr)
 	} else if err != nil {
@@ -2082,7 +2113,6 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	if config.DeleteDst {
 		dcp = commonPrefix // search common prefix in dst
 	}
-	var dstkeys <-chan object.Object
 	if config.ForceUpdate && !config.DeleteDst {
 		t := make(chan object.Object)
 		close(t)
@@ -2099,14 +2129,6 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	if err := produce(tasks, srckeys, dstkeys, config, checkpointMgr, prefix); err != nil {
 		return err
 	}
-	// consume all the keys from dst
-	for range dstkeys {
-	}
-	close(commonPrefix)
-
-	<-config.concurrentList
-	<-done
-	config.concurrentList <- 1
 	return nil
 }
 
@@ -2378,6 +2400,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		if len(config.Workers) > 0 {
 			addr, err := startManager(config, tasks, checkpointMgr)
 			if err != nil {
+				close(tasks)
+				wg.Wait()
 				return err
 			}
 			launchWorker(addr, config, &wg)
@@ -2400,6 +2424,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			err = startProducer(tasks, src, dst, "", config.ListDepth, config, checkpointMgr)
 		}
 		if err != nil {
+			close(tasks)
+			wg.Wait()
 			return err
 		}
 		close(tasks)
