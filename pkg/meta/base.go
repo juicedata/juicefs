@@ -37,6 +37,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
@@ -127,7 +128,7 @@ type engine interface {
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inheritMetadata bool, mode uint16, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
-	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
+	doRepair(ctx Context, inode Ino, attr *Attr, trustNlink bool) syscall.Errno
 	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
 	doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno)
 	doList(ctx Context, inode Ino) ([]*slice, syscall.Errno)
@@ -164,6 +165,7 @@ type engine interface {
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
+	backupSource() pb.Footer_Engine
 	dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error
 	load(ctx Context, typ int, opt *LoadOption, val proto.Message) error
 	prepareLoad(ctx Context, opt *LoadOption) error
@@ -2717,7 +2719,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 							attr.Ctime = now
 							attr.Length = 4 << 10
 						}
-						if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 || st1 == syscall.ENOENT {
+						if st1 := m.en.doRepair(ctx, inode, attr, false); st1 == 0 || st1 == syscall.ENOENT {
 							logger.Debugf("Path %s (inode %d) is successfully repaired", path, inode)
 						} else {
 							hasError = true
@@ -3208,6 +3210,21 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 	}
 }
 
+type ignoreAttrFlagsKey struct{}
+
+// A detached tree is unreachable, so it can only be removed by the cleanup of
+// detached nodes; immutable/append flags on the entries it contains (copied
+// from the source by clone) must not block that, or the tree would pin its
+// slices forever.
+func withIgnoredAttrFlags(ctx Context) Context {
+	return ctx.WithValue(ignoreAttrFlagsKey{}, true)
+}
+
+func ignoreAttrFlags(ctx Context) bool {
+	ignored, _ := ctx.Value(ignoreAttrFlagsKey{}).(bool)
+	return ignored
+}
+
 func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
 	for _, inode := range m.en.doFindDetachedNodes(edge) {
 		if eno := m.en.doCleanupDetachedNode(Background(), inode); eno != 0 {
@@ -3509,9 +3526,6 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	if attr.Typ != TypeDirectory {
 		return 0
 	}
-	if eno = m.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &attr); eno != 0 {
-		return eno
-	}
 	// Use DirHandler for batch processing to avoid loading all entries at once
 	handler, eno := m.NewDirHandler(ctx, srcIno, true, nil)
 	if eno == syscall.ENOENT {
@@ -3526,21 +3540,20 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	defer cloneCtx.Cancel()
 
 	var g errgroup.Group
-	var skipped uint32
+	nlink := uint32(2)
 
 	cloneChild := func(e *Entry) syscall.Errno {
 		childEno := m.cloneEntry(cloneCtx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrent)
 		if childEno == syscall.ENOENT {
 			logger.Warnf("ignore deleted %s in dir %d", string(e.Name), srcIno)
-			if e.Attr.Typ == TypeDirectory {
-				atomic.AddUint32(&skipped, 1)
-			}
 			return 0
 		}
 		if childEno != 0 {
 			cloneCtx.Cancel()
+			return childEno
 		}
-		return childEno
+		atomic.AddUint32(&nlink, 1)
+		return 0
 	}
 
 	offset := 0
@@ -3612,10 +3625,10 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		eno = syscall.EINTR
 	}
 
-	if eno == 0 && skipped > 0 {
-		attr.Nlink -= skipped
-		if eno := m.en.doRepair(ctx, ino, &attr); eno != 0 {
-			logger.Warnf("fix nlink of %d: %s", ino, eno)
+	if eno == 0 && nlink != attr.Nlink {
+		attr.Nlink = nlink
+		if st := m.en.doRepair(ctx, ino, &attr, true); st != 0 {
+			logger.Warnf("fix nlink of %d: %s", ino, st)
 		}
 	}
 	return eno
@@ -4049,6 +4062,7 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 	opt = opt.check()
 
 	bak := newBakFormat()
+	bak.Footer.Msg.Source = m.en.backupSource()
 	ch := make(chan *dumpedResult, 100)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -4141,11 +4155,39 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		go workerFunc(ctx, taskCh)
 	}
 
+	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
+	var counters []*pb.Counter
 	bak := &BakFormat{}
+
+	sendTask := func(t *task, name string, num int) bool {
+		select {
+		case <-ctx.Done():
+			return false
+		case taskCh <- t:
+			if opt.Progress != nil {
+				opt.Progress(name, num)
+			}
+			return true
+		}
+	}
+
 	for {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
+				source, err := readBackupSource(r)
+				if err != nil {
+					ctx.Cancel()
+					wg.Wait()
+					return err
+				}
+				batch := &pb.Batch{Counters: counters}
+				if source != pb.Footer_REDIS {
+					batch = loaded.toBatch(counters)
+				}
+				if len(batch.Counters) > 0 {
+					sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
+				}
 				close(taskCh)
 				break
 			}
@@ -4154,16 +4196,15 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			return err
 		}
 
-		select {
-		case <-ctx.Done():
+		if loaded.updateFromSegment(seg, &counters) {
+			continue
+		}
+
+		if !sendTask(&task{int(seg.typ), seg.val}, seg.Name(), int(seg.num())) {
 			wg.Wait()
 			return ctx.Err()
-		case taskCh <- &task{int(seg.typ), seg.val}:
-			if opt.Progress != nil {
-				opt.Progress(seg.Name(), int(seg.num()))
-			}
 		}
 	}
 	wg.Wait()
-	return nil
+	return ctx.Err()
 }

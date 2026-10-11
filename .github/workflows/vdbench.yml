@@ -90,7 +90,7 @@ jobs:
       - name: Install tools
         shell: bash
         run: |
-          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          .github/scripts/download_mc.sh linux-amd64 ./mc
           chmod +x mc 
           wget -q https://s.juicefs.com/static/bench/vdbench50407.zip
           unzip vdbench50407.zip -d vdbench

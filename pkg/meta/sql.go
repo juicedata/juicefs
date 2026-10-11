@@ -399,6 +399,26 @@ func (m *dbMeta) initStatement() {
 			 VALUES (?, ?, ?)
 			 ON DUPLICATE KEY UPDATE
 			 size=?, refs=?`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT (inode)
+			 DO UPDATE SET data_length=?, used_space=?, used_inodes=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %sdir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT (inode)
+			 DO UPDATE SET data_length=?, used_space=?, used_inodes=?`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 data_length=?, used_space=?, used_inodes=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %sdir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 data_length=?, used_space=?, used_inodes=?`, m.tablePrefix)
 	m.statement["edge.inode=node.inode"] = fmt.Sprintf("%sedge.inode=%snode.inode", m.tablePrefix, m.tablePrefix)
 	m.statement["edge.id"] = fmt.Sprintf("%sedge.id", m.tablePrefix)
 	m.statement["edge.name"] = fmt.Sprintf("%sedge.name", m.tablePrefix)
@@ -1034,6 +1054,21 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	return nil
 }
 
+// mustInsertBatch is like mustInsert, but beans must belong to the same table
+// and are written with multi-row INSERT statements instead of one per row.
+func (m *dbMeta) mustInsertBatch(s *xorm.Session, beans []interface{}) error {
+	batch := min(200, m.getTxnBatchNum())
+	for start := 0; start < len(beans); start += batch {
+		end := min(start+batch, len(beans))
+		if n, err := s.Insert(beans[start:end]); err != nil {
+			return err
+		} else if d := end - start - int(n); d > 0 {
+			return fmt.Errorf("%d records not inserted: %+v", d, beans[start:end])
+		}
+	}
+	return nil
+}
+
 func (m *dbMeta) batchUpdateChunkRefs(s *xorm.Session, chunkRefDeltas map[uint64]int) error {
 	if len(chunkRefDeltas) == 0 {
 		return nil
@@ -1579,7 +1614,7 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			Update(&dirtyNode, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&dirtyNode, attr)
-			m.genLog(ctx, s, now.UnixNano(), "SETATTR(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", inode, set, sugidclearmode, attr.Uid, attr.Gid, attr.Mode, attr.Flags, attr.Atime, attr.Mtime, attr.Atimensec, attr.Mtimensec, attr.Ctime, attr.Ctimensec, attr.AccessACL)
+			m.genLog(ctx, s, now.UnixNano(), "SETATTR(%d,%d,%d,%s)", inode, set, sugidclearmode, attr.logFields())
 		}
 		return err
 	}, inode))
@@ -1977,7 +2012,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if behavior == nil {
 			behavior = runtime.GOOS
 		}
-		m.genLog(ctx, s, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, *inode)
+		m.genLog(ctx, s, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, *inode)
 		return nil
 	}))
 }
@@ -2273,7 +2308,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
-		if pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0 {
+		if !ignoreAttrFlags(ctx) && (pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0) {
 			return syscall.EPERM
 		}
 		e, ok, err := m.getEdge(ctx, s, parent, name)
@@ -2522,6 +2557,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if (dn.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
+			if !exchange && trash > 0 && dn.Nlink > 1 {
+				if o, e := s.Get(&edge{Parent: trash, Name: []byte(m.trashEntry(parentDst, dino, string(de.Name))), Inode: dino, Type: de.Type}); e == nil && o {
+					trash = 0
+				}
+			}
 			dn.setCtime(now)
 			if exchange {
 				if parentSrc != parentDst {
@@ -2765,7 +2805,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			}
 		}
-		m.genLog(ctx, s, now, "MOVE(%d,%s,%d,%s,%d,%d,%d):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, se.Inode)
+		m.genLog(ctx, s, now, "MOVE(%d,%s,%d,%s,%d,%d,%d,%t):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, opened, se.Inode)
 		return err
 	}, parentLocks...)
 	if err == nil && !exchange && dino > 0 {
@@ -2928,6 +2968,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		length uint64
 	}
 	delNodes := make(map[Ino]*dNode)
+	skipFlags := ignoreAttrFlags(ctx)
 
 	batchSize := m.getTxnBatchNum()
 	for len(entries) > 0 {
@@ -2971,7 +3012,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 				return st
 			}
-			if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
+			if !skipFlags && ((pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0) {
 				return syscall.EPERM
 			}
 			now := time.Now().UnixNano()
@@ -3031,7 +3072,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
 						return syscall.EACCES
 					}
-					if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
+					if !skipFlags && ((n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0) {
 						return syscall.EPERM
 					}
 					if (n.Flags & FlagSkipTrash) != 0 {
@@ -3234,12 +3275,13 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			}
 			if len(entryInfos) > 0 {
 				names := make([]string, 0, len(entryInfos))
-				inodes := make([]string, 0, len(entryInfos))
+				results := make([]string, 0, 2*len(entryInfos))
 				for _, info := range entryInfos {
 					names = append(names, logEncode2(string(info.e.Name)))
-					inodes = append(inodes, strconv.FormatUint(uint64(info.e.Inode), 10))
+					dnode := batchDelNodes[info.e.Inode]
+					results = append(results, strconv.FormatUint(uint64(info.e.Inode), 10), strconv.FormatBool(dnode != nil && dnode.opened))
 				}
-				m.genLog(ctx, s, now, "UNLINKBATCH(%d,%s,%d,%t):%s", parent, strings.Join(names, ","), trash, updateParent, strings.Join(inodes, ","))
+				m.genLog(ctx, s, now, "UNLINKBATCH(%d,%s,%d,%t):%s", parent, strings.Join(names, ","), trash, updateParent, strings.Join(results, ","))
 			}
 
 			return nil
@@ -3748,6 +3790,27 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return nil
 }
 
+func (m *dbMeta) upsertDirStat(s *xorm.Session, ino Ino, stat *dirStat) error {
+	var err error
+	driver := m.Name()
+	if driver == "sqlite3" || driver == "postgres" {
+		_, err = s.Exec(m.sqlConv(`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT (inode)
+			 DO UPDATE SET data_length=?, used_space=?, used_inodes=?`),
+			ino, stat.length, stat.space, stat.inodes, stat.length, stat.space, stat.inodes)
+	} else {
+		_, err = s.Exec(m.sqlConv(`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 data_length=?, used_space=?, used_inodes=?`),
+			ino, stat.length, stat.space, stat.inodes, stat.length, stat.space, stat.inodes)
+	}
+	return err
+}
+
 func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	if m.conf.ReadOnly {
 		return nil, syscall.EROFS
@@ -3764,11 +3827,8 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 		if !exist {
 			return syscall.ENOENT
 		}
-		record := &dirStats{ino, stat.length, stat.space, stat.inodes}
-		_, err = s.Insert(record)
-		if err != nil && isDuplicateEntryErr(err) {
-			_, err = s.Cols("data_length", "used_space", "used_inodes").Update(record, &dirStats{Inode: ino})
-		}
+		// upsert: a failed insert aborts the whole transaction on PostgreSQL
+		err = m.upsertDirStat(s, ino, stat)
 		if err == nil {
 			m.genLog(ctx, s, time.Now().UnixNano(), "DIRSTAT(%d,%d,%d,%d)", ino, stat.length, stat.space, stat.inodes)
 		}
@@ -4293,7 +4353,7 @@ func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	return nil
 }
 
-func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr, trustNlink bool) syscall.Errno {
 	n := &node{
 		Inode:  inode,
 		Type:   attr.Typ,
@@ -4308,14 +4368,16 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	n.setMtime(attr.Mtime*1e9 + int64(attr.Mtimensec))
 	n.setCtime(attr.Ctime*1e9 + int64(attr.Ctimensec))
 	return errno(m.txn(func(s *xorm.Session) error {
-		n.Nlink = 2
-		var rows []edge
-		if err := s.Find(&rows, &edge{Parent: inode}); err != nil {
-			return err
-		}
-		for _, row := range rows {
-			if row.Type == TypeDirectory {
-				n.Nlink++
+		if !trustNlink {
+			n.Nlink = 2
+			var rows []edge
+			if err := s.Find(&rows, &edge{Parent: inode}); err != nil {
+				return err
+			}
+			for _, row := range rows {
+				if row.Type == TypeDirectory {
+					n.Nlink++
+				}
 			}
 		}
 		ok, err := s.ForUpdate().Get(&node{Inode: inode})
@@ -4334,7 +4396,7 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 			}
 		}
 		if err == nil {
-			m.genLog(ctx, s, time.Now().UnixNano(), "REPAIRDIR(%d)", inode)
+			m.genLog(ctx, s, time.Now().UnixNano(), "REPAIRDIR(%d,%s)", inode, attr.logFields())
 		}
 		return err
 	}, inode))
@@ -4520,7 +4582,7 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				e = mustInsert(s, origin)
 			}
 			if e == nil {
-				m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, origin.MaxSpace, origin.MaxInodes)
+				m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes, quota.UsedSpace, quota.UsedInodes)
 			}
 			return e
 		} else if qtype == UserQuotaType || qtype == GroupQuotaType {
@@ -4537,7 +4599,7 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				e = mustInsert(s, origin)
 			}
 			if e == nil {
-				m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d)", qtype, key, origin.MaxSpace, origin.MaxInodes)
+				m.genLog(ctx, s, time.Now().UnixNano(), "SETQUOTA(%d,%d,%d,%d,%d,%d)", qtype, key, quota.MaxSpace, quota.MaxInodes, quota.UsedSpace, quota.UsedInodes)
 			}
 			return e
 		} else {
@@ -5551,9 +5613,8 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				return err
 			}
 			if n.Type != TypeDirectory {
-				now := time.Now().UnixNano()
-				pn.setMtime(now)
-				pn.setCtime(now)
+				pn.setMtime(now.UnixNano())
+				pn.setCtime(now.UnixNano())
 				if _, err = s.Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: parent}); err != nil {
 					return err
 				}
@@ -5632,10 +5693,9 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			if err := mustInsert(s, &sym); err != nil {
 				return err
 			}
-			m.genLog(ctx, s, now.UnixNano(), "CLONE(%d,%d,%s,%d,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
-			return nil
 		}
-		m.genLog(ctx, s, now.UnixNano(), "CLONE(%d,%d,%s,%d,%d,%d,%t):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ino)
+		m.parseAttr(&n, attr)
+		m.genLog(ctx, s, now.UnixNano(), "CLONE(%d,%d,%s,%d,%d,%d,%t,%d,%s):%d", srcIno, parent, logEncode2(name), ino, cmode, cumask, top, ctx.Uid(), logGids(ctx), ino)
 		return nil
 	}, srcIno))
 }
@@ -5753,10 +5813,10 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			})
 		}
 
-		if err := mustInsert(s, nodesIns...); err != nil {
+		if err := m.mustInsertBatch(s, nodesIns); err != nil {
 			return err
 		}
-		if err := mustInsert(s, edgesIns...); err != nil {
+		if err := m.mustInsertBatch(s, edgesIns); err != nil {
 			if isDuplicateEntryErr(err) {
 				return syscall.EEXIST
 			}
@@ -5786,7 +5846,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 					}
 				}
 			}
-			if err := mustInsert(s, chunksIns...); err != nil {
+			if err := m.mustInsertBatch(s, chunksIns); err != nil {
 				return err
 			}
 		}
@@ -5808,7 +5868,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 					return syscall.ENOENT
 				}
 			}
-			if err := mustInsert(s, symlinksIns...); err != nil {
+			if err := m.mustInsertBatch(s, symlinksIns); err != nil {
 				return err
 			}
 		}
@@ -5828,7 +5888,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 					xattrsIns = append(xattrsIns, &xattr{Inode: cloneInfos[i].dstIno, Name: x.Name, Value: x.Value})
 				}
 			}
-			if err := mustInsert(s, xattrsIns...); err != nil {
+			if err := m.mustInsertBatch(s, xattrsIns); err != nil {
 				return err
 			}
 		}
@@ -5881,7 +5941,7 @@ func (m *dbMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		return errno(err)
 	}
 	rmConcurrent := make(chan int, backgroundDeleteThreads)
-	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
+	if eno := m.emptyDir(withIgnoredAttrFlags(ctx), ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}
 	m.updateStats(-align4K(0), -1)
@@ -5975,6 +6035,9 @@ func (m *dbMeta) insertACL(s *xorm.Session, rule *aclAPI.Rule) (uint32, error) {
 	if rule == nil {
 		return aclAPI.None, nil
 	}
+	if aclId := m.aclCache.GetId(rule); aclId != aclAPI.None {
+		return aclId, nil
+	}
 	if err := m.tryLoadMissACLs(s); err != nil {
 		logger.Warnf("Mknode: load miss acls error: %s", err)
 	}
@@ -5982,11 +6045,13 @@ func (m *dbMeta) insertACL(s *xorm.Session, rule *aclAPI.Rule) (uint32, error) {
 	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
 		// TODO conflicts from multiple clients are rare and result in only minor duplicates, thus not addressed for now.
 		val := newSQLAcl(rule)
-		if _, err := s.Insert(val); err != nil {
+		// Xorm defers After callbacks until the enclosing transaction commits.
+		if _, err := s.After(func(interface{}) {
+			m.aclCache.Put(val.Id, rule)
+		}).Insert(val); err != nil {
 			return aclAPI.None, err
 		}
 		aclId = val.Id
-		m.aclCache.Put(aclId, rule)
 	}
 	return aclId, nil
 }
@@ -5999,17 +6064,9 @@ func (m *dbMeta) tryLoadMissACLs(s *xorm.Session) error {
 			return err
 		}
 
-		got := make(map[uint32]struct{}, len(acls))
+		// Missing IDs may belong to transactions that have not committed yet.
 		for _, data := range acls {
-			got[data.Id] = struct{}{}
 			m.aclCache.Put(data.Id, data.toRule())
-		}
-		if len(acls) < len(missIds) {
-			for _, id := range missIds {
-				if _, ok := got[id]; !ok {
-					m.aclCache.Put(id, aclAPI.EmptyRule())
-				}
-			}
 		}
 	}
 	return nil
@@ -6104,7 +6161,7 @@ func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 			dirtyNode.setCtime(time.Now().UnixNano())
 			_, err := s.Cols(updateCols...).Update(&dirtyNode, &node{Inode: ino})
 			if err == nil {
-				m.genLog(ctx, s, time.Now().UnixNano(), "SETFACL(%d,%d,%s)", ino, aclType, logEncode(rule.Encode()))
+				m.genLog(ctx, s, time.Now().UnixNano(), "SETFACL(%d,%d,%s,%d)", ino, aclType, logEncode(rule.Encode()), attr.Mode)
 			}
 			return err
 		}

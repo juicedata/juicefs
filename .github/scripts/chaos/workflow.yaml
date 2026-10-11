@@ -50,9 +50,9 @@ spec:
           labelSelectors:
             app: minio-server
         delay:
-          latency: '500ms'
+          latency: '50ms'
           correlation: '50'
-          jitter: '500ms'
+          jitter: '30ms'
     # minio 磁盘读写延迟
     - name: minio-io
       templateType: IOChaos

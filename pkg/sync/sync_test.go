@@ -250,6 +250,49 @@ func TestSyncForceUpdateDeleteDst(t *testing.T) {
 	}
 }
 
+// Directories listed as child prefixes must be synced even when --start
+// sorts before them, regardless of the number of list threads.
+func TestSyncDirsWithStartAndListThreads(t *testing.T) {
+	for _, listThreads := range []int{1, 2} {
+		t.Run(fmt.Sprintf("list-threads=%d", listThreads), func(t *testing.T) {
+			tmpSrc := t.TempDir() + "/"
+			tmpDst := t.TempDir() + "/"
+			src, _ := object.CreateStorage("file", tmpSrc, "", "", "")
+			dst, _ := object.CreateStorage("file", tmpDst, "", "", "")
+			for _, key := range []string{"a", "p/", "q/x"} {
+				if err := src.Put(ctx, key, bytes.NewReader([]byte(key))); err != nil {
+					t.Fatalf("put src %s: %s", key, err)
+				}
+			}
+			if err := os.Chmod(tmpSrc+"q", 0700); err != nil {
+				t.Fatalf("chmod src q: %s", err)
+			}
+			config := &Config{
+				Start:       "a",
+				Threads:     10,
+				ListThreads: listThreads,
+				ListDepth:   1,
+				Dirs:        true,
+				Perms:       true,
+				Limit:       -1,
+				MaxSize:     math.MaxInt64,
+				Quiet:       true,
+			}
+			if err := Sync(src, dst, config); err != nil {
+				t.Fatalf("sync: %s", err)
+			}
+			if fi, err := os.Stat(tmpDst + "p"); err != nil || !fi.IsDir() {
+				t.Fatalf("empty dir p should be synced: %v", err)
+			}
+			if fi, err := os.Stat(tmpDst + "q"); err != nil {
+				t.Fatalf("stat dst q: %s", err)
+			} else if fi.Mode().Perm() != 0700 {
+				t.Fatalf("mode of dir q should be synced: got %o, want 700", fi.Mode().Perm())
+			}
+		})
+	}
+}
+
 // nolint:errcheck
 func TestSyncIncludeAndExclude(t *testing.T) {
 	tmpA := t.TempDir() + "/"

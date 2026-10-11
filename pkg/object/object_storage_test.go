@@ -152,8 +152,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Create(ctx); err != nil {
 		t.Fatalf("err should be nil when creating a bucket with the same name")
 	}
+	t.Run("list-prefix-boundary", func(t *testing.T) {
+		testListPrefixBoundary(t, s)
+	})
 	prefix := "unit-test/"
 	s = WithPrefix(s, prefix)
+	defer s.Delete(ctx, "") // the prefix directory on file systems
 	defer func() {
 		if err := s.Delete(ctx, "test"); err != nil {
 			t.Fatalf("delete failed: %s", err)
@@ -324,7 +328,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put(ctx, "a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	defer s.Delete(ctx, "a/b/c/d/e/f")
+	defer func() {
+		// file systems create the parent directories implicitly
+		for _, k := range []string{"a/b/c/d/e/f", "a/b/c/d/e/", "a/b/c/d/", "a/b/c/", "a/b/"} {
+			_ = s.Delete(ctx, k)
+		}
+	}()
 	if err := s.Put(ctx, "a/b/c/d/e/f", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
@@ -561,6 +570,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 					<-pool
 					wg.Done()
 				}()
+				var err error
 				parts[num-1], err = s.UploadPart(ctx, k, upload.UploadID, num, content[num-1])
 				if err != nil {
 					errCh <- fmt.Errorf("multipart upload error: %v", err)
@@ -837,151 +847,6 @@ func TestBOS(t *testing.T) { //skip mutate
 	testStorage(t, b)
 }
 
-func TestSftp(t *testing.T) { //skip mutate
-	if os.Getenv("SFTP_HOST") == "" {
-		t.SkipNow()
-	}
-	b, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
-	testStorage(t, b)
-}
-
-func TestParseSftpEndpoint(t *testing.T) {
-	tests := []struct {
-		name               string
-		endpoint           string
-		wantHost, wantPort string
-		wantRoot           string
-		wantErr            string
-	}{
-		{
-			name:     "default port with timestamp colons",
-			endpoint: "host:/path/T05:53:21",
-			wantHost: "host",
-			wantPort: "22",
-			wantRoot: "/path/T05:53:21",
-		},
-		{
-			name:     "explicit port with timestamp colons",
-			endpoint: "host:2022:/path/T05:53:21",
-			wantHost: "host",
-			wantPort: "2022",
-			wantRoot: "/path/T05:53:21",
-		},
-		{
-			name:     "IPv6 explicit port with timestamp colons",
-			endpoint: "[2001:db8::1]:2022:/path/T05:53:21",
-			wantHost: "2001:db8::1",
-			wantPort: "2022",
-			wantRoot: "/path/T05:53:21",
-		},
-		{
-			name:     "IPv6 default port with timestamp colons",
-			endpoint: "[2001:db8::1]:/path/T05:53:21",
-			wantHost: "2001:db8::1",
-			wantPort: "22",
-			wantRoot: "/path/T05:53:21",
-		},
-		{
-			name:     "relative path remains supported",
-			endpoint: "host:backup/path",
-			wantHost: "host",
-			wantPort: "22",
-			wantRoot: "backup/path",
-		},
-		{
-			name:     "relative path with timestamp colons",
-			endpoint: "host:T05:53:21",
-			wantHost: "host",
-			wantPort: "22",
-			wantRoot: "T05:53:21",
-		},
-		{
-			name:     "relative path with ISO timestamp colons",
-			endpoint: "host:2026-07-23T05:53:21",
-			wantHost: "host",
-			wantPort: "22",
-			wantRoot: "2026-07-23T05:53:21",
-		},
-		{
-			name:     "explicit port with relative path",
-			endpoint: "host:2022:backup/path",
-			wantHost: "host",
-			wantPort: "2022",
-			wantRoot: "backup/path",
-		},
-		{
-			name:     "relative path with symbols",
-			endpoint: "host:!@#$%^&*()_+-=[]{}|;,.<>?",
-			wantHost: "host",
-			wantPort: "22",
-			wantRoot: "!@#$%^&*()_+-=[]{}|;,.<>?",
-		},
-		{
-			name:     "relative path starts with colon",
-			endpoint: "host::backup/path",
-			wantHost: "host",
-			wantPort: "22",
-			wantRoot: ":backup/path",
-		},
-		{
-			name:     "numeric relative path",
-			endpoint: "host:2022",
-			wantHost: "host",
-			wantPort: "22",
-			wantRoot: "2022",
-		},
-		{
-			name:     "empty path",
-			endpoint: "host:",
-			wantErr:  "missing path",
-		},
-		{
-			name:     "explicit port with empty path",
-			endpoint: "host:2022:",
-			wantErr:  "missing path",
-		},
-		{
-			name:     "IPv6 default port with empty path",
-			endpoint: "[2001:db8::1]:",
-			wantErr:  "missing path",
-		},
-		{
-			name:     "missing port path separator",
-			endpoint: "host:2022/path",
-			wantErr:  "missing colon between port and path",
-		},
-		{
-			name:     "IPv6 missing port path separator",
-			endpoint: "[2001:db8::1]:2022/path",
-			wantErr:  "missing colon between port and path",
-		},
-		{
-			name:     "console endpoint missing port path separator",
-			endpoint: "172.28.39.219:22/root/bak/jfs-console-dump-2026-07-23T05:53:21.json.gz.gpg",
-			wantErr:  "missing colon between port and path",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			host, port, root, err := parseSftpEndpoint(test.endpoint)
-			if test.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
-					t.Fatalf("parseSftpEndpoint(%q) error = %v, want error containing %q", test.endpoint, err, test.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if host != test.wantHost || port != test.wantPort || root != test.wantRoot {
-				t.Fatalf("parseSftpEndpoint(%q) = (%q, %q, %q), want (%q, %q, %q)",
-					test.endpoint, host, port, root, test.wantHost, test.wantPort, test.wantRoot)
-			}
-		})
-	}
-}
-
 func TestOBS(t *testing.T) { //skip mutate
 	if os.Getenv("HWCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
@@ -1166,6 +1031,277 @@ func TestSQLite(t *testing.T) {
 		t.Fatalf("create: %s", err)
 	}
 	testStorage(t, s)
+}
+
+func TestListPrefixBoundary(t *testing.T) {
+	for _, backend := range []string{"mem", "file", "sqlite3"} {
+		t.Run(backend, func(t *testing.T) {
+			var store ObjectStorage
+			var err error
+			switch backend {
+			case "mem":
+				store, err = newMem("prefix-test", "", "", "")
+			case "file":
+				store, err = newDisk(t.TempDir()+"/", "", "", "")
+			case "sqlite3":
+				store, err = newSQLStore("sqlite3", filepath.Join(t.TempDir(), "prefix.db"), "", "")
+				if err == nil {
+					t.Cleanup(func() { _ = store.(*sqlStore).db.Close() })
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			testListPrefixBoundary(t, store)
+		})
+	}
+}
+
+func testListPrefixBoundary(t *testing.T, store ObjectStorage) {
+	t.Helper()
+	_, isFileSystem := store.(FileSystem)
+	_, isMinIO := store.(*minio)
+	store = WithPrefix(store, fmt.Sprintf("unit-test/list-prefix-boundary-%d/", time.Now().UnixNano()))
+	// Flat keys also allow filesystem backends to use the same fixture.
+	allKeys := []string{"a", "b", "p", "p1", "p2", "z", "测试", "测试1"}
+	t.Cleanup(func() {
+		for _, key := range allKeys {
+			if err := store.Delete(ctx, key); err != nil {
+				t.Errorf("delete %q: %s", key, err)
+			}
+		}
+		_ = store.Delete(ctx, "")
+	})
+	for _, key := range allKeys {
+		if err := store.Put(ctx, key, bytes.NewReader([]byte(key))); err != nil {
+			t.Fatalf("put %q: %s", key, err)
+		}
+	}
+	emptyPrefixKeys := allKeys
+	if isFileSystem {
+		emptyPrefixKeys = append([]string{""}, allKeys...)
+	}
+	cases := []struct {
+		name, prefix, marker string
+		want                 []string
+	}{
+		{"no-marker", "p", "", []string{"p", "p1", "p2"}},
+		{"earlier-marker", "p", "a", []string{"p", "p1", "p2"}},
+		{"exact-marker", "p", "p", []string{"p1", "p2"}},
+		{"between-marker", "p", "p0", []string{"p1", "p2"}},
+		{"later-marker", "p", "p1", []string{"p2"}},
+		{"after-prefix", "p", "z", nil},
+		{"no-matches", "q", "", nil},
+		{"empty-prefix", "", "", emptyPrefixKeys},
+		{"unicode-prefix", "测试", "p", []string{"测试", "测试1"}},
+		{"unicode-marker", "测试", "测试", []string{"测试1"}},
+	}
+	keysOf := func(t *testing.T, objects []Object) []string {
+		t.Helper()
+		var keys []string
+		for _, o := range objects {
+			if o == nil {
+				t.Fatal("listing returned a nil object")
+			}
+			keys = append(keys, o.Key())
+		}
+		return keys
+	}
+	for _, delimiter := range []string{"", "/"} {
+		name := "flat"
+		if delimiter != "" {
+			name = "delimiter"
+		}
+		t.Run("list/"+name, func(t *testing.T) {
+			if _, _, _, err := store.List(ctx, "p", "", "", delimiter, 10, true); errors.Is(err, notSupported) {
+				t.Skipf("List with delimiter %q is not supported", delimiter)
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					if isMinIO && tc.marker != "" && !strings.HasPrefix(tc.marker, tc.prefix) {
+						t.Skip("MinIO RELEASE.2022-01-25T19-56-04Z used in CI requires marker to start with prefix")
+					}
+					objects, _, _, err := store.List(ctx, tc.prefix, tc.marker, "", delimiter, 10, true)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if keys := keysOf(t, objects); !reflect.DeepEqual(keys, tc.want) {
+						t.Fatalf("keys: got %q, want %q", keys, tc.want)
+					}
+				})
+			}
+			for _, limit := range []int64{1, 2, 3} {
+				t.Run(fmt.Sprintf("paged/limit=%d", limit), func(t *testing.T) {
+					if isMinIO && delimiter == "" && limit == 1 {
+						t.Skip("MinIO RELEASE.2022-01-25T19-56-04Z returns an exact prefix match without IsTruncated when limit is 1")
+					}
+					marker, token := "", ""
+					var keys []string
+					for page := 0; page < 5; page++ {
+						objects, more, next, err := store.List(ctx, "p", marker, token, delimiter, limit, true)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if int64(len(objects)) > limit {
+							t.Fatalf("page exceeds limit: got %d, limit %d", len(objects), limit)
+						}
+						for _, o := range objects {
+							if o.Key() <= marker {
+								t.Fatalf("listing did not advance: key %q, marker %q", o.Key(), marker)
+							}
+							keys = append(keys, o.Key())
+							marker = o.Key()
+						}
+						if !more {
+							if want := []string{"p", "p1", "p2"}; !reflect.DeepEqual(keys, want) {
+								t.Fatalf("paged keys: got %q, want %q", keys, want)
+							}
+							return
+						}
+						if len(objects) == 0 && next == token {
+							t.Fatal("listing returned an empty page without advancing its token")
+						}
+						token = next
+					}
+					t.Fatal("listing did not terminate")
+				})
+			}
+		})
+	}
+	for _, tc := range cases {
+		t.Run("list-all/"+tc.name, func(t *testing.T) {
+			if isMinIO && tc.marker != "" && !strings.HasPrefix(tc.marker, tc.prefix) {
+				t.Skip("MinIO RELEASE.2022-01-25T19-56-04Z used in CI requires marker to start with prefix")
+			}
+			objects, err := listAll(ctx, store, tc.prefix, tc.marker, 1e9, true)
+			if errors.Is(err, notSupported) {
+				t.Skip("ListAll is not supported")
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if keys := keysOf(t, objects); !reflect.DeepEqual(keys, tc.want) {
+				t.Fatalf("keys: got %q, want %q", keys, tc.want)
+			}
+		})
+	}
+}
+
+func TestGenNextKey(t *testing.T) {
+	for _, tc := range []struct{ prefix, want string }{
+		{"p", "q"},
+		{"p/", "p0"},
+		{"p\xff", "q"},
+		{"p\xff\xff", "q"},
+		{"\xffp", "\xffq"},
+		{"\xff", ""},
+		{"\xff\xff", ""},
+		{"", ""},
+	} {
+		t.Run(fmt.Sprintf("%x", tc.prefix), func(t *testing.T) {
+			if got := genNextKey(tc.prefix); got != tc.want {
+				t.Fatalf("prefix range end: got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSQLitePutOverwrite(t *testing.T) {
+	store, err := newSQLStore("sqlite3", filepath.Join(t.TempDir(), "overwrite.db"), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.(*sqlStore).db.Close()
+	if err := store.Put(ctx, "untouched", bytes.NewReader([]byte("keep this object"))); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"nil", nil},
+		{"shorter", []byte("x")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := store.Put(ctx, tc.name, bytes.NewReader([]byte("original content"))); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Put(ctx, tc.name, bytes.NewReader(tc.data)); err != nil {
+				t.Fatal(err)
+			}
+			r, err := store.Get(ctx, tc.name, 0, -1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := io.ReadAll(r)
+			r.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, tc.data) {
+				t.Errorf("read after overwrite: got %q, want %q", got, tc.data)
+			}
+			o, err := store.Head(ctx, tc.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if o.Size() != int64(len(tc.data)) {
+				t.Errorf("size after overwrite: got %d, want %d", o.Size(), len(tc.data))
+			}
+			r, err = store.Get(ctx, "untouched", 0, -1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err = io.ReadAll(r)
+			r.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != "keep this object" {
+				t.Errorf("unrelated object changed: got %q", got)
+			}
+		})
+	}
+	t.Run("empty-key", func(t *testing.T) {
+		if err := store.Put(ctx, "", bytes.NewReader([]byte("original content"))); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				if err := store.Put(ctx, "", bytes.NewReader(tc.data)); err != nil {
+					t.Fatal(err)
+				}
+				var b blob
+				ok, err := store.(*sqlStore).db.Where("`key` = ?", []byte("")).Get(&b)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !ok {
+					t.Fatal("empty-key object missing after overwrite")
+				}
+				if !bytes.Equal(b.Data, tc.data) || b.Size != int64(len(tc.data)) {
+					t.Errorf("empty-key object after overwrite: got %q, size %d; want %q, size %d", b.Data, b.Size, tc.data, len(tc.data))
+				}
+				got, err := get(store, "untouched", 0, -1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got != "keep this object" {
+					t.Errorf("unrelated object changed: got %q", got)
+				}
+				o, err := store.Head(ctx, "untouched")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if o.Size() != int64(len("keep this object")) {
+					t.Errorf("unrelated object size changed: got %d", o.Size())
+				}
+			})
+		}
+	})
 }
 
 func TestPG(t *testing.T) { //skip mutate

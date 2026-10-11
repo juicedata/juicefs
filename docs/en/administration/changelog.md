@@ -49,7 +49,7 @@ To resume consumption from a known version, pass the last processed version to `
 juicefs changelog META-URL --from 100
 ```
 
-External consumers should persist the latest fully processed version and pass it to `--from` on restart. For TiKV metadata engines, the command may output already-processed entries because of the rewind window. Consumers need to deduplicate by changelog version or use idempotent application logic.
+External consumers should persist the latest fully processed version and pass it to `--from` on restart. For TiKV and SQL metadata engines other than SQLite, the command may output already-processed entries because of the rewind window, including when `--from=0`. Consumers need to deduplicate by changelog version or use idempotent application logic.
 
 ## Incremental sync {#incremental-sync}
 
@@ -70,6 +70,10 @@ If the source metadata engine is TiKV, note that changelog versions use the tran
 To avoid missing entries, the consumer needs to read from a window that precedes the backup‑recorded version and deduplicate already‑applied entries. `juicefs changelog` performs this rewind internally for TiKV. The default TiKV rewind window is 10 seconds of TSO time, and you can adjust it with the `JFS_TKV_REWIND` environment variable.
 
 TiKV metadata backups include changelog entries in this rewind window, so consumers can use those entries in the backup to build the initial deduplication set. When the same versions are later read from `juicefs changelog`, skip entries already applied from the baseline backup.
+
+### SQL rewind window {#sql-rewind-window}
+
+SQL changelog IDs are allocated before transactions commit, so a transaction with a lower ID may commit after the scanner has read a higher ID. To avoid missing these entries, SQL engines other than SQLite scan a rewind window of 3,000 IDs by default. Set `JFS_SQL_REWIND` to a positive integer to change this window. Metadata backups include changelog entries in the window so consumers can initialize their deduplication set when resuming from a backup.
 
 ## Output format {#output-format}
 

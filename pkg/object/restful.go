@@ -300,7 +300,9 @@ func (s *RestfulStorage) Get(ctx context.Context, key string, off, limit int64, 
 		return nil, err
 	}
 	if resp.StatusCode != 200 && resp.StatusCode != 206 {
-		return nil, parseError(resp)
+		err = parseError(resp)
+		_ = resp.Body.Close()
+		return nil, err
 	}
 	if err = checkGetStatus(resp.StatusCode, len(headers) > 0); err != nil {
 		_ = resp.Body.Close()

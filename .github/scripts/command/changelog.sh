@@ -88,7 +88,7 @@ wait_changelog_tail() {
 }
 
 full_changelog_from() {
-    # SQL/Redis support negative `from` and will return entries with version > from.
+    # SQL/Redis use signed changelog IDs, so -1 reads all retained entries.
     # TiKV uses unsigned ids internally in ScanChangelog, so negative values do not work.
     if [[ "$META" == "tikv" ]]; then
         echo 1
@@ -292,7 +292,9 @@ test_changelog_from_parameter()
 
     collect_changelog "$mid" "$LOG_DIR/from-mid.log"
     assert_line_count_ge "$LOG_DIR/from-mid.log" 1
-    if [[ "$META" != "tikv" ]]; then
+    assert_file_contains "$LOG_DIR/from-mid.log" 'old.txt'
+    # SQL (except SQLite) and TiKV rewind to catch late-committing transactions.
+    if [[ "$META" == "redis" || "$META" == "sqlite3" ]]; then
         assert_versions_gt "$LOG_DIR/from-mid.log" "$mid"
     fi
 
@@ -305,7 +307,9 @@ test_changelog_from_parameter()
     wait_changelog_tail "$LOG_DIR/from-latest.log"
 
     assert_file_contains "$LOG_DIR/from-latest.log" 'new.txt'
-    assert_file_not_contains "$LOG_DIR/from-latest.log" 'old.txt'
+    if [[ "$META" == "redis" || "$META" == "sqlite3" ]]; then
+        assert_file_not_contains "$LOG_DIR/from-latest.log" 'old.txt'
+    fi
 
     umount_jfs "$MOUNT_POINT" "$META_URL"
 }

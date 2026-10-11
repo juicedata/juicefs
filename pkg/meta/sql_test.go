@@ -18,15 +18,160 @@
 package meta
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"xorm.io/xorm"
 	xormlog "xorm.io/xorm/log"
 )
+
+func TestSQLACLTransactionRollback(t *testing.T) {
+	for _, retry := range []bool{true, false} {
+		t.Run(fmt.Sprintf("retry=%v", retry), func(t *testing.T) {
+			raw, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "acl.db"), testConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := raw.(*dbMeta)
+			t.Cleanup(func() { _ = m.Shutdown() })
+			format := testFormat()
+			format.EnableACL = true
+			if err := m.Init(format, true); err != nil {
+				t.Fatal(err)
+			}
+			ctx := Background()
+			var inode Ino
+			if st := m.Create(ctx, RootInode, "child", 0666, 022, 0, &inode, nil); st != 0 {
+				t.Fatal(st)
+			}
+			rule := &aclAPI.Rule{Owner: 6, Group: 5, Mask: 4, Other: 0, NamedUsers: []aclAPI.Entry{{Id: 1001, Perm: 4}}}
+			attempts := 0
+			var id uint32
+			setACL := func(s *xorm.Session) error {
+				attempts++
+				var err error
+				id, err = m.insertACL(s, rule)
+				if err != nil {
+					return err
+				}
+				if m.aclCache.GetId(rule) != aclAPI.None {
+					t.Error("uncommitted ACL is visible to other transactions")
+				}
+				if _, err := s.Cols("access_acl_id").Update(&node{AccessACLId: id}, &node{Inode: inode}); err != nil {
+					return err
+				}
+				if attempts == 1 {
+					if retry {
+						return errBusy
+					}
+					return syscall.EIO
+				}
+				return nil
+			}
+			err = m.txn(setACL, inode)
+			if !retry {
+				if err != syscall.EIO {
+					t.Fatalf("first transaction: %v", err)
+				}
+				err = m.txn(setACL, inode)
+			}
+			if err != nil || attempts != 2 {
+				t.Fatalf("transaction: %v, attempts: %d", err, attempts)
+			}
+			if m.aclCache.GetId(rule) != id {
+				t.Fatal("committed ACL was not cached")
+			}
+			m.aclCache.Clear()
+			var attr Attr
+			if st := m.GetAttr(ctx, inode, &attr); st != 0 || attr.AccessACL != id {
+				t.Fatalf("getattr: %s, ACL: %d, want %d", st, attr.AccessACL, id)
+			}
+			var got aclAPI.Rule
+			if st := m.GetFacl(ctx, inode, aclAPI.TypeAccess, &got); st != 0 {
+				t.Fatalf("getfacl after rollback and cache clear: %s", st)
+			}
+			if !got.IsEqual(rule) {
+				t.Fatalf("ACL: %s, want %s", &got, rule)
+			}
+		})
+	}
+}
+
+func TestSQLACLCacheMissingRecord(t *testing.T) {
+	raw, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "acl.db"), testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := raw.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatal(err)
+	}
+	rule := &aclAPI.Rule{Owner: 6, Group: 5, Mask: 4, Other: 0, NamedUsers: []aclAPI.Entry{{Id: 1001, Perm: 4}}}
+	// ACL IDs can commit out of order across concurrent transactions.
+	val := newSQLAcl(rule)
+	val.Id = 2
+	if _, err := m.db.Insert(val); err != nil {
+		t.Fatal(err)
+	}
+	m.aclCache.Put(val.Id, rule)
+	if err := m.txn(m.tryLoadMissACLs); err != nil {
+		t.Fatal(err)
+	}
+	if m.aclCache.Get(1) != nil {
+		t.Error("missing ACL was cached before it committed")
+	}
+	val = newSQLAcl(rule)
+	val.Id = 1
+	if _, err := m.db.Insert(val); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.txn(func(s *xorm.Session) error {
+		got, err := m.getACL(s, 1)
+		if err == nil && !got.IsEqual(rule) {
+			t.Errorf("ACL: %s, want %s", got, rule)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSQLQueryBatch(t *testing.T) {
+	queryErr := errors.New("query failed")
+	for _, threads := range []int{1, 4} {
+		for _, wantErr := range []error{nil, queryErr} {
+			t.Run(fmt.Sprintf("threads=%d/error=%v", threads, wantErr), func(t *testing.T) {
+				var completed atomic.Int64
+				err := sqlQueryBatch(Background(), &DumpOption{Threads: threads}, 3*uint64(sqlDumpBatchSize), func(ctx context.Context, start, end uint64) (int, error) {
+					completed.Add(1)
+					if start == 3*uint64(sqlDumpBatchSize) {
+						return 7, wantErr
+					}
+					return 7, nil
+				})
+				if !errors.Is(err, wantErr) {
+					t.Fatalf("query error: got %v, want %v", err, wantErr)
+				}
+				if got := completed.Load(); got != 4 {
+					t.Fatalf("completed queries: got %d, want 4", got)
+				}
+			})
+		}
+	}
+}
 
 func TestSQLiteClient(t *testing.T) {
 	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), testConfig())
@@ -34,6 +179,17 @@ func TestSQLiteClient(t *testing.T) {
 		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
+}
+
+func TestSQLiteRenameOverRelinkedHardlink(t *testing.T) {
+	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-rename-relink.db"), testConfig())
+	if err != nil || m.Name() != "sqlite3" {
+		t.Fatalf("create meta: %s", err)
+	}
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	testRenameOverRelinkedHardlink(t, m)
 }
 
 type commitOnSQLiteBusyLogger struct {
@@ -306,6 +462,158 @@ func sqlSliceRefCount(t *testing.T, m *dbMeta, id uint64, size uint32) int {
 		t.Fatalf("slice ref %d size: got %d, want %d", id, ref.Size, size)
 	}
 	return ref.Refs
+}
+
+type insertCountingLogger struct {
+	xormlog.ContextLogger
+	table  *regexp.Regexp
+	mu     sync.Mutex
+	counts map[string]int
+}
+
+func (l *insertCountingLogger) BeforeSQL(xormlog.LogContext) {}
+
+func (l *insertCountingLogger) AfterSQL(ctx xormlog.LogContext) {
+	if m := l.table.FindStringSubmatch(ctx.SQL); m != nil && ctx.Err == nil {
+		l.mu.Lock()
+		l.counts[m[1]]++
+		l.mu.Unlock()
+	}
+}
+
+func (l *insertCountingLogger) IsShowSQL() bool { return true }
+
+func TestSQLiteBatchCloneMultiRowInsert(t *testing.T) {
+	metaClient, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-batch-clone-insert.db"), testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	m := metaClient.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+
+	ctx := Background()
+	var srcDir, dstDir Ino
+	if st := m.Mkdir(ctx, RootInode, "src_insert", 0777, 022, 0, &srcDir, nil); st != 0 {
+		t.Fatalf("mkdir src_insert: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "dst_insert", 0777, 022, 0, &dstDir, nil); st != 0 {
+		t.Fatalf("mkdir dst_insert: %s", st)
+	}
+
+	// Enough rows for several multi-row statements per table.
+	batch := min(200, m.getTxnBatchNum())
+	files, symlinks := 3*batch+7, batch+1
+	const sliceSize = uint32(4096)
+	slices := make(map[string]uint64, files)
+	xattrs := make(map[string]bool)
+	for i := 0; i < files; i++ {
+		name := fmt.Sprintf("f%d", i)
+		var ino Ino
+		if st := m.Mknod(ctx, srcDir, name, TypeFile, 0644, 022, 0, "", &ino, nil); st != 0 {
+			t.Fatalf("mknod %s: %s", name, st)
+		}
+		var id uint64
+		if st := m.NewSlice(ctx, &id); st != 0 {
+			t.Fatalf("new slice: %s", st)
+		}
+		if st := m.Write(ctx, ino, 0, 0, Slice{Id: id, Size: sliceSize, Len: sliceSize}, time.Now()); st != 0 {
+			t.Fatalf("write %s: %s", name, st)
+		}
+		slices[name] = id
+		if i%3 == 0 {
+			if st := m.SetXattr(ctx, ino, "user.name", []byte(name), XattrCreateOrReplace); st != 0 {
+				t.Fatalf("setxattr %s: %s", name, st)
+			}
+			xattrs[name] = true
+		}
+	}
+	for i := 0; i < symlinks; i++ {
+		var ino Ino
+		if st := m.Symlink(ctx, srcDir, fmt.Sprintf("s%d", i), fmt.Sprintf("/target/%d", i), &ino, nil); st != 0 {
+			t.Fatalf("symlink s%d: %s", i, st)
+		}
+	}
+
+	var entries []*Entry
+	if st := m.Readdir(ctx, srcDir, 1, &entries); st != 0 {
+		t.Fatalf("readdir src_insert: %s", st)
+	}
+	var batchEntries []*Entry
+	for _, e := range entries {
+		if name := string(e.Name); name != "." && name != ".." {
+			batchEntries = append(batchEntries, e)
+		}
+	}
+
+	counter := &insertCountingLogger{
+		ContextLogger: m.db.Logger(),
+		table:         regexp.MustCompile(`(?i)^\s*INSERT\s+INTO\s+\W?` + regexp.QuoteMeta(m.tablePrefix) + `(\w+)`),
+		counts:        make(map[string]int),
+	}
+	m.db.SetLogger(counter)
+	var cloned uint64
+	st := m.getBase().BatchClone(ctx, srcDir, dstDir, batchEntries, CLONE_MODE_PRESERVE_ATTR, 022, &cloned)
+	m.db.SetLogger(counter.ContextLogger)
+	if st != 0 {
+		t.Fatalf("batch clone: %s", st)
+	}
+	if int(cloned) != files+symlinks {
+		t.Fatalf("batch clone count: got %d, want %d", cloned, files+symlinks)
+	}
+	for table, rows := range map[string]int{
+		"node":    files + symlinks,
+		"edge":    files + symlinks,
+		"chunk":   files,
+		"symlink": symlinks,
+		"xattr":   len(xattrs),
+	} {
+		if got, want := counter.counts[table], (rows+batch-1)/batch; got != want {
+			t.Fatalf("INSERT statements for %d %s rows: got %d, want %d", rows, table, got, want)
+		}
+	}
+
+	var cloneEntries []*Entry
+	if st := m.Readdir(ctx, dstDir, 1, &cloneEntries); st != 0 {
+		t.Fatalf("readdir dst_insert: %s", st)
+	}
+	var seen int
+	for _, e := range cloneEntries {
+		name := string(e.Name)
+		if name == "." || name == ".." {
+			continue
+		}
+		seen++
+		if e.Attr.Typ == TypeSymlink {
+			var target []byte
+			if st := m.ReadLink(ctx, e.Inode, &target); st != 0 || string(target) != "/target/"+name[1:] {
+				t.Fatalf("readlink cloned %s: %s %q", name, st, target)
+			}
+			continue
+		}
+		var got []Slice
+		if st := m.Read(ctx, e.Inode, 0, &got); st != 0 || len(got) != 1 || got[0].Id != slices[name] {
+			t.Fatalf("read cloned %s: %s %+v", name, st, got)
+		}
+		if refs := sqlSliceRefCount(t, m, slices[name], sliceSize); refs != 2 {
+			t.Fatalf("refs of slice in %s: got %d, want 2", name, refs)
+		}
+		var value []byte
+		st := m.GetXattr(ctx, e.Inode, "user.name", &value)
+		if xattrs[name] && (st != 0 || string(value) != name) {
+			t.Fatalf("getxattr cloned %s: %s %q", name, st, value)
+		} else if !xattrs[name] && st != ENOATTR {
+			t.Fatalf("getxattr cloned %s: got %s, want ENOATTR", name, st)
+		}
+	}
+	if seen != files+symlinks {
+		t.Fatalf("cloned entries: got %d, want %d", seen, files+symlinks)
+	}
 }
 
 func TestMySQLClient(t *testing.T) { //skip mutate

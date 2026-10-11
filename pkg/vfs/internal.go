@@ -542,13 +542,17 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		if r.HasMore() {
 			strict = r.Get8() != 0
 		}
+		sortBy := meta.SortBySize
+		if r.HasMore() {
+			sortBy = meta.TreeSort(r.Get8())
+		}
 
 		done := make(chan struct{})
 		var files, size uint64
 		var r syscall.Errno
 		go func() {
 			logger.Infof("Start to get summary of %d, depth=%d, topN=%d", inode, depth, topN)
-			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict,
+			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict, sortBy,
 				func(count, bytes uint64) {
 					atomic.AddUint64(&files, count)
 					atomic.AddUint64(&size, bytes)

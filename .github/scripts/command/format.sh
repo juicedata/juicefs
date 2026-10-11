@@ -102,7 +102,7 @@ ensure_mc_binary()
             os_arch="linux-amd64"
         fi
     fi
-    wget -q "https://dl.min.io/client/mc/release/${os_arch}/mc" -O ./mc
+    .github/scripts/download_mc.sh "$os_arch" ./mc
     chmod +x ./mc
 }
 

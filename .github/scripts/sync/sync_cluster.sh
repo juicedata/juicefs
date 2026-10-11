@@ -57,16 +57,16 @@ configure_redis_for_cluster(){
 }
 
 start_minio(){
-    if ! docker ps | grep "minio/minio"; then
+    if ! docker ps | grep "chenyunhui/minio"; then
         docker run -d -p 9000:9000 --name minio \
                 -e "MINIO_ACCESS_KEY=minioadmin" \
                 -e "MINIO_SECRET_KEY=minioadmin" \
                 -v /tmp/data:/data \
                 -v /tmp/config:/root/.minio \
-                minio/minio server /data
+                chenyunhui/minio@sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2 server /data
         sleep 3s
     fi
-    [ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
+    [ ! -x mc ] && .github/scripts/download_mc.sh linux-amd64 ./mc && chmod +x mc
     ./mc alias set myminio http://localhost:9000 minioadmin minioadmin || ./mc alias set myminio http://127.0.0.1:9000 minioadmin minioadmin
 }
 start_minio

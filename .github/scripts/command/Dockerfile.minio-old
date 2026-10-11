@@ -1,0 +1,6 @@
+# Package an official release binary, keeping the original reference server as the default.
+FROM scratch
+ARG TARGETARCH
+ARG MINIO_VERSION=RELEASE.2021-04-22T15-44-28Z
+ADD --chmod=755 https://github.com/minio/minio/releases/download/${MINIO_VERSION}/minio.linux-${TARGETARCH}.${MINIO_VERSION} /minio
+ENTRYPOINT ["/minio"]

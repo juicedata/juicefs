@@ -444,6 +444,7 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 	}
 
 	var wg sync.WaitGroup
+	defer wg.Wait()
 	var errCh = make(chan syscall.Errno, 1)
 	for _, e := range entries {
 		if e.Attr.Typ == TypeDirectory {
@@ -496,7 +497,7 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 	return err
 }
 
-func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool,
+func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, sortBy TreeSort,
 	updateProgress func(count uint64, bytes uint64)) syscall.Errno {
 	var attr Attr
 	if st := m.GetAttr(ctx, root.Inode, &attr); st != 0 {
@@ -514,11 +515,17 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 	root.Size += uint64(align4K(0))
 	concurrent := make(chan struct{}, 50)
 	root.Inode = m.checkRoot(root.Inode)
-	return m.getTreeSummary(ctx, root, depth, topN, strict, concurrent, updateProgress)
+	return m.getTreeSummary(ctx, root, depth, topN, strict, sortBy, concurrent, updateProgress)
 }
 
-func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN uint8, strict bool, concurrent chan struct{},
+func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN uint8, strict bool, sortBy TreeSort, concurrent chan struct{},
 	updateProgress func(count uint64, bytes uint64)) syscall.Errno {
+	start := time.Now()
+	var wg sync.WaitGroup
+	defer func() {
+		wg.Wait()
+		tree.Duration = time.Since(start)
+	}()
 	if depth <= 0 {
 		var summary Summary
 		err := m.getDirSummary(ctx, tree.Inode, &summary, true, strict, concurrent, updateProgress)
@@ -534,7 +541,6 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 	if err := m.en.doReaddir(ctx, tree.Inode, 1, &entries, -1); err != 0 {
 		return err
 	}
-	var wg sync.WaitGroup
 	tree.Children = make([]*TreeSummary, len(entries))
 	errCh := make(chan syscall.Errno, 1)
 	var err syscall.Errno
@@ -563,7 +569,7 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err := m.getTreeSummary(ctx, child, depth-1, topN, strict, concurrent, updateProgress)
+				err := m.getTreeSummary(ctx, child, depth-1, topN, strict, sortBy, concurrent, updateProgress)
 				<-concurrent
 				if err != 0 && err != syscall.ENOENT {
 					select {
@@ -573,7 +579,7 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 				}
 			}()
 		default:
-			if err = m.getTreeSummary(ctx, child, depth-1, topN, strict, concurrent, updateProgress); err != 0 && err != syscall.ENOENT {
+			if err = m.getTreeSummary(ctx, child, depth-1, topN, strict, sortBy, concurrent, updateProgress); err != 0 && err != syscall.ENOENT {
 				return err
 			}
 		}
@@ -592,7 +598,7 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 		tree.Size += c.Size
 	}
 	sort.Slice(tree.Children, func(i, j int) bool {
-		return tree.Children[i].Size > tree.Children[j].Size
+		return tree.Children[i].sortKey(sortBy) > tree.Children[j].sortKey(sortBy)
 	})
 	if len(tree.Children) > int(topN) {
 		omitChild := &TreeSummary{
@@ -603,6 +609,10 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 			omitChild.Size += child.Size
 			omitChild.Files += child.Files
 			omitChild.Dirs += child.Dirs
+			// durations overlap since children are scanned concurrently, so report the slowest
+			if child.Duration > omitChild.Duration {
+				omitChild.Duration = child.Duration
+			}
 		}
 		tree.Children = append(tree.Children[:topN], omitChild)
 	}

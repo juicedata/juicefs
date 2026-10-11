@@ -193,6 +193,8 @@ juicefs sync /media/ "username:password"@192.168.1.100:/backup/
 
 When using the SFTP/SSH protocol, if no password is specified, the sync task will prompt for the password. If you want to explicitly specify the username and password, you need to enclose them in double quotation marks, with a colon separating the username and password.
 
+SFTP uploads pipeline multiple write requests for each file to reduce the impact of network latency, including when the source size is unknown. This concurrency is separate from the file-level concurrency controlled by `--threads`. With `--inplace`, writes remain sequential so a failed upload leaves only a prefix of the data rather than holes.
+
 SFTP remote paths use the following formats:
 
 - Default SSH port: `username@host:/path`
@@ -424,7 +426,7 @@ If `--traffic-control-url` is set without `--bwlimit`, there is no local fallbac
 
 When using `sync` to transfer large files, the progress bar might move slowly or get stuck. If this happens, you can observe the progress using other methods.
 
-`sync` is designed for scenarios involving a large number of files. Its progress bar only updates when a file has been transferred. In a large file scenario, each file is transferred slowly, so the progress bar updates infrequently or even appears stuck. This is worse for destinations without multipart upload support (such as `file`, `sftp`, and `jfs` schemes), where each file is transferred using a single thread.
+`sync` is designed for scenarios involving a large number of files. Its progress bar only updates when a file has been transferred. In a large file scenario, each file is transferred slowly, so the progress bar updates infrequently or even appears stuck. This is worse for destinations without multipart upload support (such as `file`, `sftp`, and `jfs` schemes), where each file uses a single copy task. SFTP uploads still pipeline multiple write requests within that task to reduce the impact of network latency.
 
 If you notice the progress bar is not changing, use the methods below for monitoring and troubleshooting:
 

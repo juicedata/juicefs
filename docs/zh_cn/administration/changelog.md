@@ -49,7 +49,7 @@ juicefs changelog META-URL
 juicefs changelog META-URL --from 100
 ```
 
-外部消费程序应保存已经处理完成的最新版本，并在重启后传给 `--from`。在 TKV 场景下，命令可能因为 rewind 窗口输出已经处理过的条目，消费程序需要按 changelog 版本或业务侧幂等逻辑去重。
+外部消费程序应保存已经处理完成的最新版本，并在重启后传给 `--from`。在 TiKV 以及 SQLite 以外的 SQL 元数据引擎中，命令可能因为 rewind 窗口输出已经处理过的条目，`--from=0` 时也可能发生。消费程序需要按 changelog 版本或业务侧幂等逻辑去重。
 
 ## 用于增量同步 {#incremental-sync}
 
@@ -70,6 +70,10 @@ changelog 可以作为自定义增量同步程序的变更源。
 为避免遗漏，消费程序需要从备份记录版本之前回退一个窗口开始读取，并对已经应用过的条目去重。`juicefs changelog` 在 TKV 场景下会内置执行这个 rewind；TiKV 默认 rewind 窗口是 10 秒 TSO 时间，也可以通过 `JFS_TKV_REWIND` 环境变量调整。
 
 TKV 元数据备份会包含这个 rewind 窗口内的 changelog 条目，因此消费程序可以用备份里的这些条目建立初始去重集合。后续从 `juicefs changelog` 读取到相同版本的条目时，应跳过已经在基线备份中应用过的内容。
+
+### SQL 的 rewind 窗口 {#sql-rewind-window}
+
+SQL changelog 的 ID 在事务提交前分配，因此较小 ID 的事务可能在扫描器读到较大 ID 后才提交。为避免遗漏这类条目，SQLite 以外的 SQL 元数据引擎默认回退 3000 个 ID 进行扫描，可通过将 `JFS_SQL_REWIND` 设为正整数来调整窗口。元数据备份会包含窗口内的 changelog 条目，消费程序从备份恢复时可据此初始化去重集合。
 
 ## 输出格式 {#output-format}
 

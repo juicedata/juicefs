@@ -89,11 +89,41 @@ func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.O
 }
 
 type jfsObjects struct {
-	conf     *vfs.Config
-	fs       *fs.FileSystem
-	listPool *minio.TreeWalkPool
-	nsMutex  *minio.NsLockMap
-	gConf    *Config
+	conf       *vfs.Config
+	fs         *fs.FileSystem
+	listPool   *minio.TreeWalkPool
+	nsMutex    *minio.NsLockMap
+	gConf      *Config
+	writeLocks objectLocks
+}
+
+type objectLocks struct {
+	mu    sync.Mutex
+	locks map[[2]string]chan struct{}
+}
+
+func (m *objectLocks) lock(bucket, object string) func() {
+	key := [2]string{bucket, object}
+	m.mu.Lock()
+	if m.locks == nil {
+		m.locks = make(map[[2]string]chan struct{})
+	}
+	for m.locks[key] != nil {
+		done := m.locks[key]
+		m.mu.Unlock()
+		<-done
+		m.mu.Lock()
+	}
+	done := make(chan struct{})
+	m.locks[key] = done
+	m.mu.Unlock()
+
+	return func() {
+		m.mu.Lock()
+		delete(m.locks, key)
+		close(done)
+		m.mu.Unlock()
+	}
 }
 
 func (n *jfsObjects) PutObjectMetadata(ctx context.Context, s string, s2 string, options minio.ObjectOptions) (minio.ObjectInfo, error) {
@@ -668,6 +698,9 @@ func (n *jfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 }
 
 func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (info minio.ObjectInfo, err error) {
+	unlock := n.writeLocks.lock(dstBucket, dstObject)
+	defer unlock()
+
 	if err = n.checkBucket(ctx, srcBucket); err != nil {
 		return
 	}
@@ -689,7 +722,11 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	tmp := n.tpath(dstBucket, "tmp", uuid[:subDirPrefix], uuid)
 	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
 	if eno == syscall.ENOENT {
-		_ = n.mkdirAll(ctx, path.Dir(tmp))
+		if err = n.mkdirAll(ctx, path.Dir(tmp)); err != nil {
+			logger.Errorf("mkdirAll %s: %s", path.Dir(tmp), err)
+			err = n.objectCommitErr(ctx, err, dstBucket, dstObject)
+			return
+		}
 		f, eno = n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
 	}
 	if eno != 0 {
@@ -871,7 +908,7 @@ func (n *jfsObjects) mkdirAllUntil(ctx context.Context, p, root string) error {
 		}
 		eno = n.fs.Mkdir(mctx, p, 0777, n.gConf.Umask)
 	}
-	if eno != 0 && fs.IsExist(eno) {
+	if errors.Is(eno, syscall.EEXIST) {
 		eno = 0
 	}
 	if eno == 0 {
@@ -885,7 +922,10 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 	tmpname := n.tpath(bucket, "tmp", uuid[:subDirPrefix], uuid)
 	f, eno := n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
 	if eno == syscall.ENOENT {
-		_ = n.mkdirAll(ctx, path.Dir(tmpname))
+		if err = n.mkdirAll(ctx, path.Dir(tmpname)); err != nil {
+			logger.Errorf("mkdirAll %s: %s", path.Dir(tmpname), err)
+			return
+		}
 		f, eno = n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
 	}
 	if eno != 0 {
@@ -963,6 +1003,9 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 }
 
 func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	unlock := n.writeLocks.lock(bucket, object)
+	defer unlock()
+
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
@@ -1322,6 +1365,9 @@ func (n *jfsObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploa
 }
 
 func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, parts []minio.CompletePart, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	unlock := n.writeLocks.lock(bucket, object)
+	defer unlock()
+
 	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return
 	}

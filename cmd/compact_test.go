@@ -22,8 +22,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func createTestFile(path string, size int, partCnt int) error {
@@ -112,8 +114,10 @@ func TestCompact(t *testing.T) {
 		err := Main([]string{"", "compact", filepath.Join(testMountPoint, d.path)})
 		assert.Nil(t, err)
 
-		chunkCnt = getFileCount(dataDir)
 		sumChunks -= d.fileCnt * (d.filePart - 1)
-		assert.Equal(t, sumChunks, chunkCnt)
+		// Compaction returns before old slices are deleted asynchronously.
+		require.Eventually(t, func() bool {
+			return getFileCount(dataDir) == sumChunks
+		}, 5*time.Second, 10*time.Millisecond, "unexpected object count after compacting %s", path)
 	}
 }

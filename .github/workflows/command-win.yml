@@ -99,7 +99,6 @@ jobs:
           $redisRoot | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "Updated PATH: $env:Path"
           & $redisCli --version
-          scoop install minio@2021-12-10T23-03-39Z
           scoop install runasti
 
       - name: Download winsw

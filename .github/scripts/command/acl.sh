@@ -8,6 +8,7 @@ META_URL=$(get_meta_url $META)
 
 prepare_test()
 {
+    cleanup_test_mounts
     umount_jfs /tmp/jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs || true

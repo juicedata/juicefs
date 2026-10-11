@@ -238,7 +238,7 @@ func (c *etcdClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (
 			}
 		}
 	}()
-	err = f(&kvTxn{tx, retry})
+	err = f(&kvTxn{kvtxn: tx, retry: retry})
 	if err != nil {
 		return err
 	}
