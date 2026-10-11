@@ -529,11 +529,15 @@ class _File(object):
         return buf
 
     def readinto(self, buffer):
-        data = self.read(len(buffer))
-        if not data:
-            return 0
-        buffer[:len(data)] = data
-        return len(data)
+        """Read bytes into a writable, contiguous buffer."""
+        self._check_closed()
+        with memoryview(buffer) as view:
+            if view.readonly:
+                raise TypeError('readinto() argument must be a writable bytes-like object')
+            with view.cast('B') as byte_view:
+                data = self.read(len(byte_view))
+                byte_view[:len(data)] = data
+                return len(data)
 
     def write(self, data):
         """Write the string data to the file."""

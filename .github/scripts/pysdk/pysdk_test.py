@@ -1,5 +1,7 @@
 import errno
+from array import array
 import fractions
+import io
 import unittest
 import os
 import pwd
@@ -47,6 +49,42 @@ class FileTests(unittest.TestCase):
         fd.close()
         with self.v.open(TESTFILE, "rb") as fobj:
             self.assertEqual(fobj.read().splitlines(), [b"bacon"])
+
+    def test_readinto_writable_buffers(self):
+        content = b"abcdefghijk"
+        self.create_file(TESTFILE, content)
+        buffers = [
+            lambda: bytearray(8),
+            lambda: bytearray(),
+            lambda: array('I', [0, 0]),
+            lambda: memoryview(array('I', [0, 0])),
+            lambda: memoryview(bytearray(8)).cast('B', (2, 4)),
+            lambda: memoryview(bytearray(12))[2:10],
+        ]
+        for make_buffer in buffers:
+            with self.subTest(buffer=make_buffer()):
+                actual = make_buffer()
+                expected = make_buffer()
+                reference = io.BytesIO(content)
+                with self.v.open(TESTFILE, 'rb', 0) as stream:
+                    for _ in range(3):
+                        self.assertEqual(stream.readinto(actual), reference.readinto(expected))
+                        self.assertEqual(memoryview(actual).tobytes(), memoryview(expected).tobytes())
+                        self.assertEqual(stream.tell(), reference.tell())
+
+    def test_readinto_invalid_buffer_preserves_position(self):
+        content = b"abcdefghijk"
+        self.create_file(TESTFILE, content)
+        for position in (2, len(content)):
+            for buffer in (b"1234", b"", memoryview(b"1234"),
+                           memoryview(bytearray(8))[::2], [0, 0, 0, 0]):
+                with self.subTest(position=position, buffer=buffer):
+                    with self.v.open(TESTFILE, 'rb', 0) as stream:
+                        stream.seek(position)
+                        with self.assertRaises(TypeError):
+                            stream.readinto(buffer)
+                        self.assertEqual(stream.tell(), position)
+                        self.assertEqual(stream.read(), content[position:])
 
 
 class UtimeTests(FileTests):
