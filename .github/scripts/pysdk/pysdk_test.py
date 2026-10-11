@@ -94,6 +94,56 @@ class ReadintoTests(FileTests):
                         self.assertEqual(stream.read(), content[position:])
 
 
+class SeekTests(FileTests):
+    def test_seek_invalid_position_preserves_stream(self):
+        content = b'abcdef'
+        self.create_file(TESTFILE, content)
+        for buffering in (0, 8):
+            for offset, whence in ((-1, os.SEEK_SET), (-3, os.SEEK_CUR), (-7, os.SEEK_END)):
+                with self.subTest(buffering=buffering, offset=offset, whence=whence):
+                    with self.v.open(TESTFILE, 'r+b', buffering) as stream:
+                        stream.seek(2)
+                        with self.assertRaises(OSError):
+                            stream.seek(offset, whence)
+                        self.assertEqual(stream.tell(), 2)
+                        self.assertEqual(stream.read(1), b'c')
+
+    def test_seek_overflow_does_not_wrap_native_offset(self):
+        self.create_file(TESTFILE, b'abcdef')
+        with self.v.open(TESTFILE, 'r+b', 0) as stream:
+            stream.seek(2)
+            for offset, whence in (((1 << 64), os.SEEK_SET),
+                                   ((1 << 63), os.SEEK_SET),
+                                   (-(1 << 63) - 1, os.SEEK_SET),
+                                   ((1 << 63) - 1, os.SEEK_CUR),
+                                   ((1 << 63) - 1, os.SEEK_END)):
+                with self.subTest(offset=offset, whence=whence):
+                    with self.assertRaises(OverflowError):
+                        stream.seek(offset, whence)
+                    self.assertEqual(stream.tell(), 2)
+            stream.write(b'Z')
+            stream.seek(0)
+            self.assertEqual(stream.read(), b'abZdef')
+
+    def test_seek_requires_integer_arguments(self):
+        class Index:
+            def __index__(self):
+                return 1
+
+        self.create_file(TESTFILE, b'abcdef')
+        with self.v.open(TESTFILE, 'rb', 0) as stream:
+            stream.seek(2)
+            for offset, whence in ((1.5, 0), (1, 0.0), (1, 3)):
+                with self.subTest(offset=offset, whence=whence):
+                    with self.assertRaises((TypeError, ValueError)):
+                        stream.seek(offset, whence)
+                    self.assertEqual(stream.tell(), 2)
+            self.assertEqual(stream.seek(Index(), Index()), 3)
+            self.assertEqual(stream.read(1), b'd')
+            self.assertEqual(stream.seek(-1, os.SEEK_END), 5)
+            self.assertEqual(stream.read(), b'f')
+
+
 class UtimeTests(FileTests):
     def setUp(self):
         super().setUp()

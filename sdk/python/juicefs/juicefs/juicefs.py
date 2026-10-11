@@ -19,6 +19,7 @@ import grp
 import io
 import json
 import locale
+import operator
 import os
 import pwd
 import sys
@@ -568,16 +569,27 @@ class _File(object):
     def seek(self, offset, whence=0):
         """Set the stream position to the given byte offset.
         offset is interpreted relative to the position indicated by whence.
-        The default value for whence is SEEK_SET."""
+        The default value for whence is SEEK_SET. The resulting position must
+        be nonnegative and fit in a signed 64-bit integer. Invalid arguments
+        leave the current position unchanged."""
         self._check_closed()
+        offset = operator.index(offset)
+        whence = operator.index(whence)
         if whence not in (os.SEEK_SET, os.SEEK_CUR, os.SEEK_END):
             raise ValueError(f'invalid whence ({whence}, should be {os.SEEK_SET}, {os.SEEK_CUR} or {os.SEEK_END})')
+        if not -(1 << 63) <= offset < (1 << 63):
+            raise OverflowError('seek offset does not fit in a signed 64-bit integer')
         if whence == os.SEEK_SET:
-            self.off = offset
+            position = offset
         elif whence == os.SEEK_CUR:
-            self.off += offset
+            position = self.off + offset
         else:
-            self.off = self.length + offset
+            position = self.length + offset
+        if position < 0:
+            raise OSError(errno.EINVAL, os.strerror(errno.EINVAL))
+        if position >= (1 << 63):
+            raise OverflowError('seek position does not fit in a signed 64-bit integer')
+        self.off = position
         return self.off
 
     def tell(self):
