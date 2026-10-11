@@ -88,6 +88,7 @@ func (q *qiniu) download(ctx context.Context, key string, off, limit int64) (io.
 		return nil, err
 	}
 	if resp.StatusCode != 200 && resp.StatusCode != 206 {
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("Status code: %d", resp.StatusCode)
 	}
 	return resp.Body, nil

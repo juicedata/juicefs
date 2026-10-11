@@ -100,28 +100,21 @@ func (c *etcdClient) Delete(ctx context.Context, key string, getters ...AttrGett
 	return err
 }
 
-func genNextKey(key string) string {
-	next := make([]byte, len(key))
-	copy(next, key)
-	p := len(next) - 1
-	next[p]++
-	for next[p] == 0 {
-		p--
-		next[p]++
-	}
-	return string(next)
-}
-
 func (c *etcdClient) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
-	if start == "" {
+	if start < prefix {
 		start = prefix
+	} else {
+		start += "\x00"
 	}
 	var opts = []etcd.OpOption{etcd.WithLimit(limit), etcd.WithSort(etcd.SortByKey, etcd.SortAscend)}
-	if len(prefix) > 0 && prefix[0] != 0xFF {
-		opts = append(opts, etcd.WithRange(genNextKey(prefix)))
+	if end := genNextKey(prefix); end != "" {
+		if start >= end {
+			return nil, false, "", nil
+		}
+		opts = append(opts, etcd.WithRange(end))
 	} else {
 		opts = append(opts, etcd.WithFromKey())
 	}

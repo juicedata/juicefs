@@ -1905,7 +1905,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 					listedPrefix.Increment()
 					continue
 				}
-				err = startProducer(tasks, src, dst, key, config.ListDepth, config, checkpointMgr)
+				err := startProducer(tasks, src, dst, key, config.ListDepth, config, checkpointMgr)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", key, err)
 					failed.Increment()

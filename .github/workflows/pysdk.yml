@@ -11,6 +11,7 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
+    - 'sdk/python/juicefs/tests/**'
     - '**/pysdk.yml'
   pull_request:
     branches:
@@ -22,6 +23,7 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
+    - 'sdk/python/juicefs/tests/**'
     - '**/pysdk.yml'
   schedule:
     - cron:  '0 19 * * *'
@@ -42,6 +44,20 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  stream-regressions:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Run Python stream regressions
+        env:
+          PYTHONPATH: sdk/python/juicefs
+        run: |
+          python -m pip install pytest six
+          python -m pytest -q sdk/python/juicefs/tests/test_unbuffered_readline.py
+
   build-matrix:
     runs-on: ubuntu-22.04
     steps:
@@ -240,7 +256,7 @@ jobs:
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [pysdk]
+    needs: [pysdk, stream-regressions]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3

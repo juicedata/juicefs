@@ -37,9 +37,26 @@ import (
 // failing regression can join the old infinite-retry producer safely.
 type stoppableS3Listing struct {
 	*s3client
-	released atomic.Bool
-	calls    atomic.Int32
-	errors   chan struct{}
+	released     atomic.Bool
+	calls        atomic.Int32
+	errors       chan struct{}
+	retryContext *cancelAfterRetryCheck
+}
+
+// Cancel immediately after the retry loop observes no context error. This
+// exercises cancellation between that check and the delay without a sleep race.
+type cancelAfterRetryCheck struct {
+	context.Context
+	cancel context.CancelFunc
+	armed  atomic.Bool
+}
+
+func (c *cancelAfterRetryCheck) Err() error {
+	err := c.Context.Err()
+	if err == nil && c.armed.CompareAndSwap(true, false) {
+		c.cancel()
+	}
+	return err
 }
 
 func (s *stoppableS3Listing) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
@@ -48,6 +65,9 @@ func (s *stoppableS3Listing) List(ctx context.Context, prefix, marker, token, de
 		return nil, false, "", nil
 	}
 	objects, more, next, err := s.s3client.List(ctx, prefix, marker, token, delimiter, limit, followLink)
+	if err != nil && s.retryContext != nil {
+		s.retryContext.armed.Store(true)
+	}
 	if err != nil && s.errors != nil {
 		select {
 		case s.errors <- struct{}{}:
@@ -106,6 +126,10 @@ func TestListAllNativeS3StopsCanceledRetry(t *testing.T) {
 			}
 			defer cancel()
 			store := &stoppableS3Listing{s3client: nativeS3Listing(server), errors: make(chan struct{}, 1)}
+			if mode == "backoff" {
+				store.retryContext = &cancelAfterRetryCheck{Context: ctx, cancel: cancel}
+				ctx = store.retryContext
+			}
 			out, err := ListAll(ctx, store, "", "", false, true)
 			if err != nil {
 				t.Fatal(err)
@@ -137,13 +161,11 @@ func TestListAllNativeS3StopsCanceledRetry(t *testing.T) {
 			if mode == "backoff" {
 				select {
 				case <-store.errors:
-					// Let the producer enter its normal retry delay.
-					time.Sleep(25 * time.Millisecond)
 				case <-time.After(time.Second):
 					t.Fatal("real SDK did not return the transient error")
 				}
 			}
-			if mode != "deadline" {
+			if mode == "cancel" {
 				cancel()
 			}
 			<-ctx.Done()
@@ -160,6 +182,9 @@ func TestListAllNativeS3StopsCanceledRetry(t *testing.T) {
 					if !ok {
 						if !failed {
 							t.Error("canceled enumeration closed without the failure sentinel")
+						}
+						if mode == "backoff" && store.calls.Load() != 2 {
+							t.Errorf("retry invoked List after cancellation: %d calls, want 2", store.calls.Load())
 						}
 						return
 					}

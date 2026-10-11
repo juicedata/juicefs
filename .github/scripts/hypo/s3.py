@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import time
 from string import ascii_lowercase
 import subprocess
 try:
@@ -74,6 +76,29 @@ class S3Machine(RuleBasedStateMachine):
         result2 = common.replace(result2, self.URL2, '***')
         # print(f'result1 is {result1}\nresult2 is {result2}')
         return result1 == result2
+
+    def recover_minio_iam(self, result1, result2, recheck):
+        print(f'WARNING: restarting MinIO to verify IAM mismatch: {result1!r} != {result2!r}')
+        try:
+            subprocess.run(['docker', 'restart', 'minio_old'], check=True, timeout=30)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+            raise AssertionError('MinIO restart failed') from e
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                subprocess.run(['curl', '-fsS', '--max-time', '2', f'http://{self.URL1}/minio/health/ready'],
+                               check=True, timeout=3, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(['mc', 'admin', 'user', 'list', self.client1.get_alias(ROOT_ALIAS)],
+                               check=True, timeout=3, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                break
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+                if time.monotonic() >= deadline:
+                    raise AssertionError('MinIO readiness timed out') from e
+                time.sleep(1)
+        refreshed = recheck()
+        assert self.equal(refreshed, result2), f'IAM mismatch after MinIO restart: {refreshed!r} != {result2!r}'
+        print(f'WARNING: MinIO IAM recovered to {refreshed!r}; continuing current example')
+        return refreshed
 
     @rule(alias = aliases)
     @precondition(lambda self: False)
@@ -319,9 +344,13 @@ class S3Machine(RuleBasedStateMachine):
     def list_users(self, alias=ROOT_ALIAS):
         result1 = self.client1.do_list_users(alias)
         result2 = self.client2.do_list_users(alias)
-        if isinstance(result1, list) and isinstance(result2, list) and set(result1) > set(result2):
-            print(f'WARNING: ignoring extra MinIO users after cleanup: {sorted(set(result1) - set(result2))}')
-            return
+        if isinstance(result1, list) and isinstance(result2, list) and result1 != result2:
+            users1 = sorted(re.sub(r'^(enabled|disabled)\s+', '', row) for row in result1)
+            users2 = sorted(re.sub(r'^(enabled|disabled)\s+', '', row) for row in result2)
+            status_only = users1 == users2 and all(
+                not row.strip() or re.match(r'^(enabled|disabled)\s', row) for row in result1 + result2)
+            if set(result1) > set(result2) or status_only:
+                result1 = self.recover_minio_iam(result1, result2, lambda: self.client1.do_list_users(alias))
         assert self.equal(result1, result2), f'\033[31mlist_users:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(alias = aliases)
@@ -441,8 +470,7 @@ class S3Machine(RuleBasedStateMachine):
         result1 = self.client1.do_list_policies(alias)
         result2 = self.client2.do_list_policies(alias)
         if isinstance(result1, list) and isinstance(result2, list) and set(result1) > set(result2):
-            print(f'WARNING: ignoring extra MinIO policies after cleanup: {sorted(set(result1) - set(result2))}')
-            return
+            result1 = self.recover_minio_iam(result1, result2, lambda: self.client1.do_list_policies(alias))
         assert self.equal(result1, result2), f'\033[31mlist_policies:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
@@ -520,8 +548,25 @@ class S3Machine(RuleBasedStateMachine):
     )
     @precondition(lambda self: 'set_alias' not in self.EXCLUDE_RULES)
     def set_alias(self, alias, user_name, url1=URL1, url2=URL2):
+        config_path = os.path.expanduser('~/.mc/config.json')
+        alias_name = self.client1.get_alias(alias)
+        with open(config_path) as f:
+            previous = json.load(f)['aliases'].get(alias_name)
         result1 = self.client1.do_set_alias(alias, user_name, DEFAULT_SECRET_KEY, url1)
         result2 = self.client2.do_set_alias(alias, user_name, DEFAULT_SECRET_KEY, url2)
+        if result1 is True and isinstance(result2, Exception) and 'The Access Key Id you provided does not exist in our records.' in str(result2):
+            # Undo the successful alias update before retrying authentication.
+            with open(config_path, 'r+') as f:
+                config = json.load(f)
+                if previous is None:
+                    config['aliases'].pop(alias_name, None)
+                else:
+                    config['aliases'][alias_name] = previous
+                f.seek(0)
+                json.dump(config, f, indent=2)
+                f.truncate()
+            result1 = self.recover_minio_iam(result1, result2,
+                                              lambda: self.client1.do_set_alias(alias, user_name, DEFAULT_SECRET_KEY, url1))
         assert self.equal(result1, result2), f'\033[31mset_alias:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()

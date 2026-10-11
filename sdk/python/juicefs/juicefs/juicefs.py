@@ -617,21 +617,22 @@ class _File(object):
         return self
 
     def readlines(self, hint=-1):
-        """Return a list of lines from the stream."""
+        """Return lines; a positive hint counts lines, not bytes."""
         self._check_closed()
-        if hint == -1:
+        if hint is None or hint <= 0:
             data = self.read(-1)
         else:
+            # Unlike the standard library's size hint, this is a line limit.
             rs = []
             while hint > 0:
                 r = self.read(1)
                 if not r:
                     break
                 rs.append(r)
-                if r[0] == b'\n':
+                if r == b'\n':
                     hint -= 1
             data = b''.join(rs)
-        return data.splitlines(True)
+        return io.BytesIO(data).readlines()
 
     def writelines(self, lines):
         """Write a list of lines to the file."""
@@ -681,9 +682,9 @@ class File(object):
         return self.next()
 
     def next(self):
-        lines = self.readlines(1)
-        if lines:
-            return lines[0]
+        line = self.readline()
+        if line:
+            return line
         raise StopIteration
 
     def fileno(self):
@@ -736,6 +737,17 @@ def test():
         assert data == [b"hello"]
     print(list(v.open("/d/file")))
     assert list(v.open("/d/file")) == ['hello']
+    with v.open("/d/lines", 'wb') as f:
+        f.write(b"first\rpart\nsecond\nlast")
+    with v.open("/d/lines", 'rb', 0) as f:
+        assert f.readline() == b"first\rpart\n"
+        assert f.tell() == len(b"first\rpart\n")
+        assert f.readline() == b"second\n"
+        assert f.readline() == b"last"
+        assert f.readline() == b''
+    with v.open("/d/lines", 'rb', 0) as f:
+        assert list(f) == [b"first\rpart\n", b"second\n", b"last"]
+    v.remove("/d/lines")
     try:
         v.open("/d/d/file", "w")
     except OSError as e:

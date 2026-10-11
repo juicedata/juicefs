@@ -24,7 +24,9 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -460,6 +462,158 @@ func sqlSliceRefCount(t *testing.T, m *dbMeta, id uint64, size uint32) int {
 		t.Fatalf("slice ref %d size: got %d, want %d", id, ref.Size, size)
 	}
 	return ref.Refs
+}
+
+type insertCountingLogger struct {
+	xormlog.ContextLogger
+	table  *regexp.Regexp
+	mu     sync.Mutex
+	counts map[string]int
+}
+
+func (l *insertCountingLogger) BeforeSQL(xormlog.LogContext) {}
+
+func (l *insertCountingLogger) AfterSQL(ctx xormlog.LogContext) {
+	if m := l.table.FindStringSubmatch(ctx.SQL); m != nil && ctx.Err == nil {
+		l.mu.Lock()
+		l.counts[m[1]]++
+		l.mu.Unlock()
+	}
+}
+
+func (l *insertCountingLogger) IsShowSQL() bool { return true }
+
+func TestSQLiteBatchCloneMultiRowInsert(t *testing.T) {
+	metaClient, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-batch-clone-insert.db"), testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	m := metaClient.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+
+	ctx := Background()
+	var srcDir, dstDir Ino
+	if st := m.Mkdir(ctx, RootInode, "src_insert", 0777, 022, 0, &srcDir, nil); st != 0 {
+		t.Fatalf("mkdir src_insert: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "dst_insert", 0777, 022, 0, &dstDir, nil); st != 0 {
+		t.Fatalf("mkdir dst_insert: %s", st)
+	}
+
+	// Enough rows for several multi-row statements per table.
+	batch := min(200, m.getTxnBatchNum())
+	files, symlinks := 3*batch+7, batch+1
+	const sliceSize = uint32(4096)
+	slices := make(map[string]uint64, files)
+	xattrs := make(map[string]bool)
+	for i := 0; i < files; i++ {
+		name := fmt.Sprintf("f%d", i)
+		var ino Ino
+		if st := m.Mknod(ctx, srcDir, name, TypeFile, 0644, 022, 0, "", &ino, nil); st != 0 {
+			t.Fatalf("mknod %s: %s", name, st)
+		}
+		var id uint64
+		if st := m.NewSlice(ctx, &id); st != 0 {
+			t.Fatalf("new slice: %s", st)
+		}
+		if st := m.Write(ctx, ino, 0, 0, Slice{Id: id, Size: sliceSize, Len: sliceSize}, time.Now()); st != 0 {
+			t.Fatalf("write %s: %s", name, st)
+		}
+		slices[name] = id
+		if i%3 == 0 {
+			if st := m.SetXattr(ctx, ino, "user.name", []byte(name), XattrCreateOrReplace); st != 0 {
+				t.Fatalf("setxattr %s: %s", name, st)
+			}
+			xattrs[name] = true
+		}
+	}
+	for i := 0; i < symlinks; i++ {
+		var ino Ino
+		if st := m.Symlink(ctx, srcDir, fmt.Sprintf("s%d", i), fmt.Sprintf("/target/%d", i), &ino, nil); st != 0 {
+			t.Fatalf("symlink s%d: %s", i, st)
+		}
+	}
+
+	var entries []*Entry
+	if st := m.Readdir(ctx, srcDir, 1, &entries); st != 0 {
+		t.Fatalf("readdir src_insert: %s", st)
+	}
+	var batchEntries []*Entry
+	for _, e := range entries {
+		if name := string(e.Name); name != "." && name != ".." {
+			batchEntries = append(batchEntries, e)
+		}
+	}
+
+	counter := &insertCountingLogger{
+		ContextLogger: m.db.Logger(),
+		table:         regexp.MustCompile(`(?i)^\s*INSERT\s+INTO\s+\W?` + regexp.QuoteMeta(m.tablePrefix) + `(\w+)`),
+		counts:        make(map[string]int),
+	}
+	m.db.SetLogger(counter)
+	var cloned uint64
+	st := m.getBase().BatchClone(ctx, srcDir, dstDir, batchEntries, CLONE_MODE_PRESERVE_ATTR, 022, &cloned)
+	m.db.SetLogger(counter.ContextLogger)
+	if st != 0 {
+		t.Fatalf("batch clone: %s", st)
+	}
+	if int(cloned) != files+symlinks {
+		t.Fatalf("batch clone count: got %d, want %d", cloned, files+symlinks)
+	}
+	for table, rows := range map[string]int{
+		"node":    files + symlinks,
+		"edge":    files + symlinks,
+		"chunk":   files,
+		"symlink": symlinks,
+		"xattr":   len(xattrs),
+	} {
+		if got, want := counter.counts[table], (rows+batch-1)/batch; got != want {
+			t.Fatalf("INSERT statements for %d %s rows: got %d, want %d", rows, table, got, want)
+		}
+	}
+
+	var cloneEntries []*Entry
+	if st := m.Readdir(ctx, dstDir, 1, &cloneEntries); st != 0 {
+		t.Fatalf("readdir dst_insert: %s", st)
+	}
+	var seen int
+	for _, e := range cloneEntries {
+		name := string(e.Name)
+		if name == "." || name == ".." {
+			continue
+		}
+		seen++
+		if e.Attr.Typ == TypeSymlink {
+			var target []byte
+			if st := m.ReadLink(ctx, e.Inode, &target); st != 0 || string(target) != "/target/"+name[1:] {
+				t.Fatalf("readlink cloned %s: %s %q", name, st, target)
+			}
+			continue
+		}
+		var got []Slice
+		if st := m.Read(ctx, e.Inode, 0, &got); st != 0 || len(got) != 1 || got[0].Id != slices[name] {
+			t.Fatalf("read cloned %s: %s %+v", name, st, got)
+		}
+		if refs := sqlSliceRefCount(t, m, slices[name], sliceSize); refs != 2 {
+			t.Fatalf("refs of slice in %s: got %d, want 2", name, refs)
+		}
+		var value []byte
+		st := m.GetXattr(ctx, e.Inode, "user.name", &value)
+		if xattrs[name] && (st != 0 || string(value) != name) {
+			t.Fatalf("getxattr cloned %s: %s %q", name, st, value)
+		} else if !xattrs[name] && st != ENOATTR {
+			t.Fatalf("getxattr cloned %s: got %s, want ENOATTR", name, st)
+		}
+	}
+	if seen != files+symlinks {
+		t.Fatalf("cloned entries: got %d, want %d", seen, files+symlinks)
+	}
 }
 
 func TestMySQLClient(t *testing.T) { //skip mutate

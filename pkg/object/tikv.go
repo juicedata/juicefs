@@ -94,14 +94,20 @@ func (t *tikv) List(ctx context.Context, prefix, marker, token, delimiter string
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
-	if marker == "" {
+	if marker < prefix {
 		marker = prefix
+	} else {
+		marker += "\x00"
+	}
+	end := genNextKey(prefix)
+	if end != "" && marker >= end {
+		return nil, false, "", nil
 	}
 	if limit > int64(rawkv.MaxRawKVScanLimit) {
 		limit = int64(rawkv.MaxRawKVScanLimit)
 	}
 	// TODO: key only
-	keys, vs, err := t.c.Scan(ctx, []byte(marker), nil, int(limit))
+	keys, vs, err := t.c.Scan(ctx, []byte(marker), []byte(end), int(limit))
 	if err != nil {
 		return nil, false, "", err
 	}

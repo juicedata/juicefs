@@ -399,6 +399,26 @@ func (m *dbMeta) initStatement() {
 			 VALUES (?, ?, ?)
 			 ON DUPLICATE KEY UPDATE
 			 size=?, refs=?`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT (inode)
+			 DO UPDATE SET data_length=?, used_space=?, used_inodes=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %sdir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT (inode)
+			 DO UPDATE SET data_length=?, used_space=?, used_inodes=?`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 data_length=?, used_space=?, used_inodes=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %sdir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 data_length=?, used_space=?, used_inodes=?`, m.tablePrefix)
 	m.statement["edge.inode=node.inode"] = fmt.Sprintf("%sedge.inode=%snode.inode", m.tablePrefix, m.tablePrefix)
 	m.statement["edge.id"] = fmt.Sprintf("%sedge.id", m.tablePrefix)
 	m.statement["edge.name"] = fmt.Sprintf("%sedge.name", m.tablePrefix)
@@ -1026,6 +1046,21 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 			end = size
 		}
 		if n, err := s.Insert(beans[start:end]...); err != nil {
+			return err
+		} else if d := end - start - int(n); d > 0 {
+			return fmt.Errorf("%d records not inserted: %+v", d, beans[start:end])
+		}
+	}
+	return nil
+}
+
+// mustInsertBatch is like mustInsert, but beans must belong to the same table
+// and are written with multi-row INSERT statements instead of one per row.
+func (m *dbMeta) mustInsertBatch(s *xorm.Session, beans []interface{}) error {
+	batch := min(200, m.getTxnBatchNum())
+	for start := 0; start < len(beans); start += batch {
+		end := min(start+batch, len(beans))
+		if n, err := s.Insert(beans[start:end]); err != nil {
 			return err
 		} else if d := end - start - int(n); d > 0 {
 			return fmt.Errorf("%d records not inserted: %+v", d, beans[start:end])
@@ -3717,6 +3752,27 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return nil
 }
 
+func (m *dbMeta) upsertDirStat(s *xorm.Session, ino Ino, stat *dirStat) error {
+	var err error
+	driver := m.Name()
+	if driver == "sqlite3" || driver == "postgres" {
+		_, err = s.Exec(m.sqlConv(`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT (inode)
+			 DO UPDATE SET data_length=?, used_space=?, used_inodes=?`),
+			ino, stat.length, stat.space, stat.inodes, stat.length, stat.space, stat.inodes)
+	} else {
+		_, err = s.Exec(m.sqlConv(`
+			 INSERT INTO dir_stats (inode, data_length, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 data_length=?, used_space=?, used_inodes=?`),
+			ino, stat.length, stat.space, stat.inodes, stat.length, stat.space, stat.inodes)
+	}
+	return err
+}
+
 func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	if m.conf.ReadOnly {
 		return nil, syscall.EROFS
@@ -3733,11 +3789,8 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 		if !exist {
 			return syscall.ENOENT
 		}
-		record := &dirStats{ino, stat.length, stat.space, stat.inodes}
-		_, err = s.Insert(record)
-		if err != nil && isDuplicateEntryErr(err) {
-			_, err = s.Cols("data_length", "used_space", "used_inodes").Update(record, &dirStats{Inode: ino})
-		}
+		// upsert: a failed insert aborts the whole transaction on PostgreSQL
+		err = m.upsertDirStat(s, ino, stat)
 		if err == nil {
 			m.genLog(ctx, s, time.Now().UnixNano(), "DIRSTAT(%d,%d,%d,%d)", ino, stat.length, stat.space, stat.inodes)
 		}
@@ -5722,10 +5775,10 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			})
 		}
 
-		if err := mustInsert(s, nodesIns...); err != nil {
+		if err := m.mustInsertBatch(s, nodesIns); err != nil {
 			return err
 		}
-		if err := mustInsert(s, edgesIns...); err != nil {
+		if err := m.mustInsertBatch(s, edgesIns); err != nil {
 			if isDuplicateEntryErr(err) {
 				return syscall.EEXIST
 			}
@@ -5755,7 +5808,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 					}
 				}
 			}
-			if err := mustInsert(s, chunksIns...); err != nil {
+			if err := m.mustInsertBatch(s, chunksIns); err != nil {
 				return err
 			}
 		}
@@ -5777,7 +5830,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 					return syscall.ENOENT
 				}
 			}
-			if err := mustInsert(s, symlinksIns...); err != nil {
+			if err := m.mustInsertBatch(s, symlinksIns); err != nil {
 				return err
 			}
 		}
@@ -5797,7 +5850,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 					xattrsIns = append(xattrsIns, &xattr{Inode: cloneInfos[i].dstIno, Name: x.Name, Value: x.Value})
 				}
 			}
-			if err := mustInsert(s, xattrsIns...); err != nil {
+			if err := m.mustInsertBatch(s, xattrsIns); err != nil {
 				return err
 			}
 		}
