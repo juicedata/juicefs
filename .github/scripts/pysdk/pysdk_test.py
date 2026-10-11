@@ -50,6 +50,8 @@ class FileTests(unittest.TestCase):
         with self.v.open(TESTFILE, "rb") as fobj:
             self.assertEqual(fobj.read().splitlines(), [b"bacon"])
 
+
+class ReadintoTests(FileTests):
     def test_readinto_writable_buffers(self):
         content = b"abcdefghijk"
         self.create_file(TESTFILE, content)
