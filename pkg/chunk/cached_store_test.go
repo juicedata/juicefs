@@ -305,6 +305,101 @@ func TestStoreAsync(t *testing.T) {
 	}
 }
 
+type blockedPutStorage struct {
+	object.ObjectStorage
+	release chan struct{}
+}
+
+func (s *blockedPutStorage) Put(ctx context.Context, key string, in io.Reader, getters ...object.AttrGetter) error {
+	<-s.release
+	return s.ObjectStorage.Put(ctx, key, in, getters...)
+}
+
+func TestFlushStaging(t *testing.T) {
+	newStore := func(t *testing.T, blob object.ObjectStorage) *cachedStore {
+		conf := defaultConf
+		conf.CacheDir = t.TempDir()
+		conf.Writeback = true
+		conf.WritebackThresholdSize = conf.BlockSize + 1
+		conf.UploadDelay = time.Hour
+		return NewCachedStore(blob, conf, nil).(*cachedStore)
+	}
+	key := "chunks/0/0/10_0_1024"
+	pending := func(store *cachedStore) int {
+		store.pendingMutex.Lock()
+		defer store.pendingMutex.Unlock()
+		return len(store.pendingKeys)
+	}
+
+	t.Run("upload before the delay", func(t *testing.T) {
+		mem, _ := object.CreateStorage("mem", "", "", "", "")
+		store := newStore(t, mem)
+		require.NoError(t, forgetSlice(store, 10, 1024))
+		require.Equal(t, 1, pending(store))
+		_, err := mem.Head(ctx, key)
+		require.Error(t, err)
+
+		c, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		require.Zero(t, store.FlushStaging(c))
+		_, err = mem.Head(ctx, key)
+		require.NoError(t, err)
+		_, err = os.Stat(filepath.Join(store.conf.CacheDir, stagingDir, key))
+		require.True(t, os.IsNotExist(err))
+	})
+
+	t.Run("give up after timeout", func(t *testing.T) {
+		mem, _ := object.CreateStorage("mem", "", "", "", "")
+		blob := &blockedPutStorage{ObjectStorage: mem, release: make(chan struct{})}
+		store := newStore(t, blob)
+		require.NoError(t, forgetSlice(store, 10, 1024))
+
+		c, cancel := context.WithTimeout(context.Background(), time.Millisecond*300)
+		defer cancel()
+		start := time.Now()
+		require.Equal(t, 1, store.FlushStaging(c))
+		require.Less(t, time.Since(start), time.Second*5)
+		close(blob.release)
+		require.Eventually(t, func() bool { return pending(store) == 0 }, time.Second*10, time.Millisecond*10)
+	})
+
+	t.Run("outside upload hours", func(t *testing.T) {
+		mem, _ := object.CreateStorage("mem", "", "", "", "")
+		store := newStore(t, mem)
+		require.NoError(t, forgetSlice(store, 10, 1024))
+		store.startHour = (time.Now().Hour() + 2) % 24
+		store.endHour = (time.Now().Hour() + 3) % 24
+
+		start := time.Now()
+		require.Equal(t, 1, store.FlushStaging(context.Background()))
+		require.Less(t, time.Since(start), time.Second)
+		_, err := mem.Head(ctx, key)
+		require.Error(t, err)
+	})
+
+	t.Run("staging file removed by another client", func(t *testing.T) {
+		mem, _ := object.CreateStorage("mem", "", "", "", "")
+		store := newStore(t, mem)
+		gone := filepath.Join(store.conf.CacheDir, stagingDir, key)
+		store.addDelayedStaging(key, gone, time.Now(), false)
+		require.Equal(t, 1, pending(store))
+
+		c, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		require.Zero(t, store.FlushStaging(c))
+		_, err := mem.Head(ctx, key)
+		require.Error(t, err)
+	})
+
+	t.Run("writeback disabled", func(t *testing.T) {
+		mem, _ := object.CreateStorage("mem", "", "", "", "")
+		conf := defaultConf
+		conf.CacheDir = t.TempDir()
+		store := NewCachedStore(mem, conf, nil).(*cachedStore)
+		require.Zero(t, store.FlushStaging(context.Background()))
+	})
+}
+
 func TestForceUpload(t *testing.T) {
 	blob, _ := object.CreateStorage("mem", "", "", "", "")
 	config := defaultConf

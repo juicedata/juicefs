@@ -31,6 +31,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -693,8 +694,30 @@ func mount(c *cli.Context) error {
 	if err := v.FlushAll(""); err != nil {
 		logger.Errorf("flush all delayed data: %s", err)
 	}
+	flushStaging(store, utils.Duration(c.String("staging-flush-timeout")))
 	err = metaCli.CloseSession()
 	object.Shutdown(blob)
 	logger.Infof("The juicefs mount process exit successfully, mountpoint: %q", metaConf.MountPoint)
 	return err
+}
+
+// flushingStaging is set while staged blocks are uploaded after umount,
+// which takes at most --staging-flush-timeout.
+var flushingStaging atomic.Bool
+
+func flushStaging(store chunk.ChunkStore, timeout time.Duration) {
+	s, ok := store.(interface{ FlushStaging(context.Context) int })
+	if !ok || timeout <= 0 {
+		return
+	}
+	flushingStaging.Store(true)
+	defer flushingStaging.Store(false)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	start := time.Now()
+	if left := s.FlushStaging(ctx); left > 0 {
+		logger.Warnf("%d staged blocks are not uploaded after %s, they stay in the cache dir", left, time.Since(start))
+	} else {
+		logger.Infof("upload staged blocks in %s", time.Since(start))
+	}
 }
