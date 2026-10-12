@@ -38,6 +38,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -5011,6 +5012,41 @@ func testAtime(t *testing.T, m Meta) {
 			t.Fatalf("Test %s: expected %v, got %v", name, exp, ret)
 		}
 	}
+}
+
+// memkv seeds every client from settingPath and writes the setting back to it,
+// so a test must neither inherit one nor leave one behind.
+func newTestMemKV(t *testing.T, name string, format *Format) Meta {
+	t.Helper()
+	_ = os.Remove(settingPath)
+	t.Cleanup(func() { _ = os.Remove(settingPath) })
+	m, err := newKVMeta("memkv", name, testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init: %s", err)
+	}
+	return m
+}
+
+// The Format published by setFormat is shared with every reader that calls
+// getFormat, so a change has to be published as a new value: mutating the live
+// one races with those readers. The atomic pointer guards the pointer, not the
+// struct it points at.
+func TestPublishedFormatIsNotMutated(t *testing.T) {
+	// Tiers is a map, so a copy sharing it would let a caller patching its own
+	// copy (the .config handler does) write into the format every reader shares
+	t.Run("tiers are copied", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-tiers", &Format{Name: "test", Tiers: object.NewTiers("standard")})
+		base := m.getBase()
+
+		f := m.GetFormat()
+		f.Tiers[0] = object.Tier{ID: 0, Sc: "patched"}
+		if got := base.getFormat().Tiers[0].Sc; got == "patched" {
+			t.Fatalf("GetFormat shares Tiers with the published format: Sc=%q", got)
+		}
+	})
 }
 
 // TestQuotaEdgeCases
