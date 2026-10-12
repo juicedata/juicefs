@@ -348,7 +348,9 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 			// remove dir stats as they are outdated
 			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey())
-				m.genLog(ctx, pipe, time.Now(), "INIT_ENABLE_DIRSTATS()")
+				if format.ChangeLog {
+					m.doGenLog(ctx, pipe, time.Now(), "INIT_ENABLE_DIRSTATS()")
+				}
 				return nil
 			})
 			if err != nil {
@@ -360,7 +362,9 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Del(ctx, m.userQuotaKey(), m.userQuotaUsedSpaceKey(), m.userQuotaUsedInodesKey(),
 					m.groupQuotaKey(), m.groupQuotaUsedSpaceKey(), m.groupQuotaUsedInodesKey())
-				m.genLog(ctx, pipe, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
+				if format.ChangeLog {
+					m.doGenLog(ctx, pipe, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
+				}
 				return nil
 			})
 			if err != nil {
@@ -1606,6 +1610,10 @@ func (m *redisMeta) genLog(ctx Context, pipe redis.Pipeliner, ts time.Time, op s
 	if !m.getFormat().ChangeLog {
 		return
 	}
+	m.doGenLog(ctx, pipe, ts, op, args...)
+}
+
+func (m *redisMeta) doGenLog(ctx Context, pipe redis.Pipeliner, ts time.Time, op string, args ...any) {
 	op = fmt.Sprintf(op, args...)
 	ns := ts.UnixNano()
 	log := fmt.Sprintf("%d.%09d|%s|(%d,%d)", ns/1e9, ns%1e9, op, m.sid, m.getTxnId())

@@ -122,7 +122,8 @@ type SecurityConfig struct {
 }
 
 type Config struct {
-	Meta                 *meta.Config
+	Meta *meta.Config
+	// Format is the startup snapshot; Meta.GetFormat returns the current one
 	Format               meta.Format
 	Chunk                *chunk.Config
 	Security             *SecurityConfig
@@ -573,12 +574,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		case StatsInode:
 			h.data = CollectMetrics(v.registry)
 		case ConfigInode:
-			v.Conf.Format = v.Meta.GetFormat()
-			if v.UpdateFormat != nil {
-				v.UpdateFormat(&v.Conf.Format)
-			}
-			v.Conf.Format.RemoveSecret()
-			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
+			h.data = v.marshalConf()
 			entry.Attr.Length = uint64(len(h.data))
 		}
 		return
@@ -591,6 +587,18 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
 	return
+}
+
+// marshalConf renders the config with the latest format on a private copy.
+func (v *VFS) marshalConf() []byte {
+	conf := *v.Conf
+	conf.Format = v.Meta.GetFormat()
+	if v.UpdateFormat != nil {
+		v.UpdateFormat(&conf.Format)
+	}
+	conf.Format.RemoveSecret()
+	data, _ := json.MarshalIndent(&conf, "", " ")
+	return data
 }
 
 func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) (err syscall.Errno) {
@@ -706,12 +714,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 			case StatsInode:
 				h.data = CollectMetrics(v.registry)
 			case ConfigInode:
-				v.Conf.Format = v.Meta.GetFormat()
-				if v.UpdateFormat != nil {
-					v.UpdateFormat(&v.Conf.Format)
-				}
-				v.Conf.Format.RemoveSecret()
-				h.data, _ = json.MarshalIndent(v.Conf, "", " ")
+				h.data = v.marshalConf()
 			}
 		}
 

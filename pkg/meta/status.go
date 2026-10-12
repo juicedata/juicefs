@@ -53,6 +53,7 @@ func Status(ctx context.Context, m Meta, trash bool, sections *Sections) error {
 	if err != nil {
 		return fmt.Errorf("load setting: %v", err)
 	}
+	format = format.Clone() // never touch the published format
 	format.RemoveSecret()
 
 	sessions, err := m.ListSessions()

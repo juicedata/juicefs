@@ -460,6 +460,7 @@ func (h *storageHolder) Shutdown() {
 }
 
 func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.Format)) (object.ObjectStorage, error) {
+	format = format.Clone()
 	if patch != nil {
 		patch(format)
 	}
