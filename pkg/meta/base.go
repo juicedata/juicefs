@@ -2356,6 +2356,27 @@ func (m *baseMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
 	}
 }
 
+func (m *baseMeta) IsUnderRoot(ctx Context, inode Ino) bool {
+	if m.root == RootInode || inode == RootInode || inode == m.root {
+		return true
+	}
+	if inode == 0 { // checkRoot maps 0 to the root of the volume
+		return false
+	}
+	for p := range m.GetParents(ctx, inode) {
+		for p > RootInode && p != m.root {
+			var st syscall.Errno
+			if p, st = m.getDirParent(ctx, p); st != 0 {
+				break
+			}
+		}
+		if p == m.root {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *baseMeta) GetPaths(ctx Context, inode Ino) []string {
 	if inode == RootInode {
 		return []string{"/"}

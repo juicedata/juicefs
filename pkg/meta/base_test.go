@@ -177,6 +177,7 @@ func testMeta(t *testing.T, m Meta) {
 	testTrash(t, m)
 	testRenameOverRelinkedHardlink(t, m)
 	testParents(t, m)
+	testIsUnderRoot(t, m)
 	testRemove(t, m)
 	testResolve(t, m)
 	testStickyBit(t, m)
@@ -3041,6 +3042,67 @@ func testParents(t *testing.T, m Meta) {
 	}
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)
+	}
+}
+
+func testIsUnderRoot(t *testing.T, m Meta) {
+	ctx := Background()
+	var a, b, c, f, g Ino
+	var attr Attr
+	if st := m.Mkdir(ctx, RootInode, "a", 0755, 022, 0, &a, &attr); st != 0 {
+		t.Fatalf("mkdir a: %s", st)
+	}
+	if st := m.Mkdir(ctx, a, "b", 0755, 022, 0, &b, &attr); st != 0 {
+		t.Fatalf("mkdir a/b: %s", st)
+	}
+	if st := m.Create(ctx, b, "f", 0644, 022, 0, &f, &attr); st != 0 {
+		t.Fatalf("create a/b/f: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "c", 0755, 022, 0, &c, &attr); st != 0 {
+		t.Fatalf("mkdir c: %s", st)
+	}
+	if st := m.Create(ctx, c, "g", 0644, 022, 0, &g, &attr); st != 0 {
+		t.Fatalf("create c/g: %s", st)
+	}
+	check := func(expect map[Ino]bool) {
+		for inode, under := range expect {
+			if got := m.IsUnderRoot(ctx, inode); got != under {
+				t.Fatalf("IsUnderRoot(%d) = %v, expect %v", inode, got, under)
+			}
+		}
+	}
+
+	check(map[Ino]bool{0: true, RootInode: true, a: true, b: true, f: true, c: true, g: true})
+	if st := m.Chroot(ctx, "a"); st != 0 {
+		t.Fatalf("chroot a: %s", st)
+	}
+	check(map[Ino]bool{0: false, RootInode: true, a: true, b: true, f: true, c: false, g: false, 1 << 40: false})
+	// a hardlink inside the mounted root makes the file reachable
+	if st := m.Link(ctx, g, RootInode, "g", &attr); st != 0 {
+		t.Fatalf("link a/g -> c/g: %s", st)
+	}
+	check(map[Ino]bool{c: false, g: true})
+	if st := m.Unlink(ctx, RootInode, "g"); st != 0 {
+		t.Fatalf("unlink a/g: %s", st)
+	}
+	check(map[Ino]bool{g: false})
+	m.chroot(RootInode)
+
+	// clean up
+	if st := m.Unlink(ctx, c, "g"); st != 0 {
+		t.Fatalf("unlink c/g: %s", st)
+	}
+	if st := m.Rmdir(ctx, RootInode, "c"); st != 0 {
+		t.Fatalf("rmdir c: %s", st)
+	}
+	if st := m.Unlink(ctx, b, "f"); st != 0 {
+		t.Fatalf("unlink a/b/f: %s", st)
+	}
+	if st := m.Rmdir(ctx, a, "b"); st != 0 {
+		t.Fatalf("rmdir a/b: %s", st)
+	}
+	if st := m.Rmdir(ctx, RootInode, "a"); st != 0 {
+		t.Fatalf("rmdir a: %s", st)
 	}
 }
 
