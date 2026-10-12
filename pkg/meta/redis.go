@@ -5038,7 +5038,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	groupQuotas := m.loadQuotasForDump(ctx, m.groupQuotaKey())
 
 	dm := &DumpedMeta{
-		Setting: *m.getFormat(),
+		Setting: m.GetFormat(),
 		Counters: &DumpedCounters{
 			UsedSpace:     cs[0],
 			UsedInodes:    cs[1],
