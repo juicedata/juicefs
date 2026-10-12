@@ -564,7 +564,6 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.setFormat(format)
 	ts := time.Now().Unix()
 	attr := &Attr{
 		Typ:    TypeDirectory,
@@ -910,7 +909,8 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 }
 
 func (m *kvMeta) genLog(tx *kvTxn, ts time.Time, op string, args ...any) {
-	if !m.getFormat().ChangeLog {
+	// doInit calls this before the format is published, so it can be nil here
+	if f := m.getFormat(); f == nil || !f.ChangeLog {
 		return
 	}
 	id := tx.id()

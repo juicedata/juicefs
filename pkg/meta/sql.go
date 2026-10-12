@@ -691,7 +691,6 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.setFormat(format)
 	n := &node{
 		Type:   TypeDirectory,
 		Nlink:  2,
@@ -1112,7 +1111,8 @@ func (m *dbMeta) batchUpdateChunkRefs(s *xorm.Session, chunkRefDeltas map[uint64
 }
 
 func (m *dbMeta) genLog(ctx Context, s *xorm.Session, ns int64, op string, args ...any) {
-	if !m.getFormat().ChangeLog {
+	// doInit calls this before the format is published, so it can be nil here
+	if f := m.getFormat(); f == nil || !f.ChangeLog {
 		return
 	}
 	op = fmt.Sprintf(op, args...)

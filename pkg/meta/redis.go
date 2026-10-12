@@ -395,7 +395,6 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 	if err = m.rdb.Set(ctx, m.setting(), data, 0).Err(); err != nil {
 		return err
 	}
-	m.setFormat(format)
 	if body != nil {
 		return nil
 	}
@@ -1603,7 +1602,8 @@ func (m *redisMeta) txnLastLog() string {
 }
 
 func (m *redisMeta) genLog(ctx Context, pipe redis.Pipeliner, ts time.Time, op string, args ...any) {
-	if !m.getFormat().ChangeLog {
+	// doInit calls this before the format is published, so it can be nil here
+	if f := m.getFormat(); f == nil || !f.ChangeLog {
 		return
 	}
 	op = fmt.Sprintf(op, args...)

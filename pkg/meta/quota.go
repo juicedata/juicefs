@@ -628,30 +628,19 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	switch qtype {
 	case DirQuotaType:
 		if !format.DirStats {
-			format.DirStats = true
-			err := m.en.doInit(format, false)
-			if err != nil {
-				logger.Warnf("init dir stats: %s", err)
+			// give up if the flag cannot be stored: the quota would be created
+			// but never accounted, as updateDirQuota skips a volume without it.
+			// EIO, so the caller retries instead of reading it as a bad request
+			if err := m.enableFormatFlag(func(f *Format) { f.DirStats = true }); err != nil {
+				return fmt.Errorf("init dir stats: %s (%w)", err, syscall.EIO)
 			}
 		}
 		quota = quotas[dpath]
-	case UserQuotaType:
+	case UserQuotaType, GroupQuotaType:
 		if !format.UserGroupQuota {
-			format.UserGroupQuota = true
 			scan = true
-			err := m.en.doInit(format, false)
-			if err != nil {
-				logger.Warnf("init user group quota: %s", err)
-			}
-		}
-		quota = quotas[fmt.Sprintf("%d", key)]
-	case GroupQuotaType:
-		if !format.UserGroupQuota {
-			format.UserGroupQuota = true
-			scan = true
-			err := m.en.doInit(format, false)
-			if err != nil {
-				logger.Warnf("init user group quota: %s", err)
+			if err := m.enableFormatFlag(func(f *Format) { f.UserGroupQuota = true }); err != nil {
+				return fmt.Errorf("init user group quota: %s (%w)", err, syscall.EIO)
 			}
 		}
 		quota = quotas[fmt.Sprintf("%d", key)]

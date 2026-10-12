@@ -49,10 +49,22 @@ type Sections struct {
 
 // Status retrieves the status of the filesystem
 func Status(ctx context.Context, m Meta, trash bool, sections *Sections) error {
-	format, err := m.Load(true)
+	base := m.getBase()
+	stored, err := base.loadFormat(true)
 	if err != nil {
 		return fmt.Errorf("load setting: %v", err)
 	}
+	// publishing here would drop the patches the reload callbacks applied to
+	// the live format, and the next reload would find it unchanged and not run
+	// them again; a client that has none yet (the status command makes a fresh
+	// one) needs it published for StatFS below
+	if base.getFormat() == nil {
+		base.setFormat(stored)
+	}
+	// only the reported copy may be scrubbed: stripping the secrets from the
+	// format every reader shares would race with them, and a later store would
+	// write the placeholders into the volume
+	format := stored.Clone()
 	format.RemoveSecret()
 
 	sessions, err := m.ListSessions()
