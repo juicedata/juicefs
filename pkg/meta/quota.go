@@ -629,9 +629,8 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	case DirQuotaType:
 		if !format.DirStats {
 			format.DirStats = true
-			err := m.en.doInit(format, false)
-			if err != nil {
-				logger.Warnf("init dir stats: %s", err)
+			if err := m.en.doInit(format, false); err != nil {
+				return errors.Wrap(err, "enable dir stats")
 			}
 		}
 		quota = quotas[dpath]
@@ -639,9 +638,8 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 		if !format.UserGroupQuota {
 			format.UserGroupQuota = true
 			scan = true
-			err := m.en.doInit(format, false)
-			if err != nil {
-				logger.Warnf("init user group quota: %s", err)
+			if err := m.en.doInit(format, false); err != nil {
+				return errors.Wrap(err, "enable user group quota")
 			}
 		}
 		quota = quotas[fmt.Sprintf("%d", key)]
@@ -649,9 +647,8 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 		if !format.UserGroupQuota {
 			format.UserGroupQuota = true
 			scan = true
-			err := m.en.doInit(format, false)
-			if err != nil {
-				logger.Warnf("init user group quota: %s", err)
+			if err := m.en.doInit(format, false); err != nil {
+				return errors.Wrap(err, "enable user group quota")
 			}
 		}
 		quota = quotas[fmt.Sprintf("%d", key)]
