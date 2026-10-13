@@ -660,7 +660,9 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 				if err != nil {
 					return err
 				}
-				m.genLog(Background(), s, time.Now().UnixNano(), "INIT_ENABLE_DIRSTATS()")
+				if format.ChangeLog {
+					m.doGenLog(Background(), s, time.Now().UnixNano(), "INIT_ENABLE_DIRSTATS()")
+				}
 				return nil
 			})
 			if err != nil {
@@ -674,7 +676,9 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 				if err != nil {
 					return err
 				}
-				m.genLog(Background(), s, time.Now().UnixNano(), "INIT_ENABLE_USERGROUPQUOTA()")
+				if format.ChangeLog {
+					m.doGenLog(Background(), s, time.Now().UnixNano(), "INIT_ENABLE_USERGROUPQUOTA()")
+				}
 				return nil
 			})
 			if err != nil {
@@ -691,7 +695,6 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.setFormat(format)
 	n := &node{
 		Type:   TypeDirectory,
 		Nlink:  2,
@@ -702,7 +705,7 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 	n.setAtime(now)
 	n.setMtime(now)
 	n.setCtime(now)
-	return m.txn(func(s *xorm.Session) error {
+	err = m.txn(func(s *xorm.Session) error {
 		if format.TrashDays > 0 {
 			ok2, err := s.ForUpdate().Get(&node{Inode: TrashInode})
 			if err != nil {
@@ -740,6 +743,11 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 		}
 		return mustInsert(s, n, &cs)
 	})
+	if err != nil {
+		return err
+	}
+	m.setFormat(format)
+	return nil
 }
 
 func (m *dbMeta) cacheACLs(ctx Context) error {
@@ -1115,6 +1123,10 @@ func (m *dbMeta) genLog(ctx Context, s *xorm.Session, ns int64, op string, args 
 	if !m.getFormat().ChangeLog {
 		return
 	}
+	m.doGenLog(ctx, s, ns, op, args...)
+}
+
+func (m *dbMeta) doGenLog(ctx Context, s *xorm.Session, ns int64, op string, args ...any) {
 	op = fmt.Sprintf(op, args...)
 	log := fmt.Sprintf("%d.%09d|%s|(%d,%d)", ns/1e9, ns%1e9, op, m.sid, m.getTxnId())
 	err := mustInsert(s, &changeLog{Entry: log})

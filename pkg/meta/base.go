@@ -720,10 +720,22 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
+var ErrNotFormatted = errors.New("database is not formatted, please run `juicefs format ...` first")
+
 func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
+	format, err := m.loadFormat(checkVersion)
+	if err != nil {
+		return nil, err
+	}
+	m.setFormat(format)
+	return format, nil
+}
+
+// loadFormat reads the stored format without publishing it.
+func (m *baseMeta) loadFormat(checkVersion bool) (*Format, error) {
 	body, err := m.en.doLoad()
 	if err == nil && len(body) == 0 {
-		err = fmt.Errorf("database is not formatted, please run `juicefs format ...` first")
+		err = ErrNotFormatted
 	}
 	if err != nil {
 		return nil, err
@@ -740,7 +752,6 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	if format.Tiers == nil {
 		format.Tiers = object.NewTiers(format.StorageClass)
 	}
-	m.setFormat(format)
 	return format, nil
 }
 
@@ -899,6 +910,39 @@ func (m *baseMeta) OnReload(fn func(f *Format)) {
 
 const UmountCode = 11
 
+// reloadFormat reloads the stored format and republishes it.
+func (m *baseMeta) reloadFormat() {
+	old := m.getFormat()
+	format, err := m.loadFormat(false)
+	if err != nil {
+		if errors.Is(err, ErrNotFormatted) {
+			logger.Errorf("reload setting: %s", err)
+			os.Exit(UmountCode)
+		}
+		logger.Warnf("reload setting: %s", err)
+		return
+	}
+	if format.MetaVersion > MaxVersion {
+		logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
+		os.Exit(UmountCode)
+	}
+	if format.UUID != old.UUID {
+		logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
+		os.Exit(UmountCode)
+	}
+	if !reflect.DeepEqual(format, old) {
+		m.msgCallbacks.Lock()
+		cbs := m.reloadCb
+		m.msgCallbacks.Unlock()
+		// run the callbacks on a private copy; they may patch it with local overrides
+		patched := format.Clone()
+		for _, cb := range cbs {
+			cb(patched)
+		}
+	}
+	m.setFormat(format)
+}
+
 func (m *baseMeta) refresh(ctx Context) {
 	for {
 		if ctx.Canceled() {
@@ -921,27 +965,7 @@ func (m *baseMeta) refresh(ctx Context) {
 		}
 		m.sesMu.Unlock()
 
-		old := m.getFormat()
-		if format, err := m.Load(false); err != nil {
-			if strings.HasPrefix(err.Error(), "database is not formatted") {
-				logger.Errorf("reload setting: %s", err)
-				os.Exit(UmountCode)
-			}
-			logger.Warnf("reload setting: %s", err)
-		} else if format.MetaVersion > MaxVersion {
-			logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
-			os.Exit(UmountCode)
-		} else if format.UUID != old.UUID {
-			logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
-			os.Exit(UmountCode)
-		} else if !reflect.DeepEqual(format, old) {
-			m.msgCallbacks.Lock()
-			cbs := m.reloadCb
-			m.msgCallbacks.Unlock()
-			for _, cb := range cbs {
-				cb(format)
-			}
-		}
+		m.reloadFormat()
 
 		if v, err := m.en.getCounter(usedSpace); err == nil {
 			atomic.StoreInt64(&m.usedSpace, v)
