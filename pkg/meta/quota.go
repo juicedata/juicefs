@@ -591,7 +591,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 	if qtype == DirQuotaType && cmd != QuotaList {
 		dpath = qkey
 		if st := m.resolve(ctx, dpath, &inode, create); st != 0 {
-			return fmt.Errorf("resolve dir %s: %s", dpath, st)
+			return fmt.Errorf("resolve dir %s: %w", dpath, st)
 		}
 		if inode.IsTrash() {
 			return errors.New("no quota for any trash directory")
@@ -600,7 +600,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 	} else if (qtype == UserQuotaType || qtype == GroupQuotaType) && cmd != QuotaCheck {
 		id, err := strconv.ParseUint(qkey, 10, 64)
 		if err != nil {
-			return fmt.Errorf("parse quota key %q: %s", qkey, err)
+			return fmt.Errorf("parse quota key %q: %s: %w", qkey, err, syscall.EINVAL)
 		}
 		key = id
 	}
@@ -617,7 +617,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 	case QuotaCheck:
 		return m.handleQuotaCheck(ctx, qtype, key, dpath, strict, repair, quotas)
 	default:
-		return fmt.Errorf("invalid quota command: %d", cmd)
+		return fmt.Errorf("invalid quota command: %d: %w", cmd, syscall.EINVAL)
 	}
 }
 
@@ -630,7 +630,7 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 		if !format.DirStats {
 			format.DirStats = true
 			if err := m.en.doInit(format, false); err != nil {
-				return errors.Wrap(err, "enable dir stats")
+				return fmt.Errorf("enable dir stats: %s (%w)", err, syscall.EIO)
 			}
 		}
 		quota = quotas[dpath]
@@ -639,7 +639,7 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 			format.UserGroupQuota = true
 			scan = true
 			if err := m.en.doInit(format, false); err != nil {
-				return errors.Wrap(err, "enable user group quota")
+				return fmt.Errorf("enable user group quota: %s (%w)", err, syscall.EIO)
 			}
 		}
 		quota = quotas[fmt.Sprintf("%d", key)]
@@ -648,7 +648,7 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 			format.UserGroupQuota = true
 			scan = true
 			if err := m.en.doInit(format, false); err != nil {
-				return errors.Wrap(err, "enable user group quota")
+				return fmt.Errorf("enable user group quota: %s (%w)", err, syscall.EIO)
 			}
 		}
 		quota = quotas[fmt.Sprintf("%d", key)]
