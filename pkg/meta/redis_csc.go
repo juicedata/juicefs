@@ -47,6 +47,7 @@ func (e *cachedEntry) isMark() bool {
 // cache attrs and entries only, chunks are already cached in OpenCache
 type redisCache struct {
 	cli          *redis.Client
+	tracker      *redis.Client // dedicated client for the tracking connection
 	prefix       string
 	cap          int
 	expiry       time.Duration
@@ -72,7 +73,7 @@ func newRedisCache(prefix string, cap int, expiry time.Duration, preload int) *r
 }
 
 func (c *redisCache) init(cli redis.UniversalClient) error {
-	ctx := context.WithValue(context.Background(), invalidConnKey{}, true)
+	ctx := context.Background()
 	var err error
 	if rc, ok := cli.(*redis.Client); ok {
 		c.cli = rc
@@ -82,16 +83,24 @@ func (c *redisCache) init(cli redis.UniversalClient) error {
 			return err
 		}
 	}
-	c.cli.Options().OnConnect = c.onInvalidateConnect
-	// under the RESP3 protocol, "__redis__:invalidate" actually has no effect.
-	// we use Pubsub channel to simplify connection management and receiving PUSH messages.
-	c.subscription = c.cli.Subscribe(ctx, "__redis__:invalidate")
-	_ = c.subscription.Channel()
+	// A dedicated client, so that every connection it makes (including reconnects inside PubSub)
+	// purges the cache and enables tracking.
+	opt := *c.cli.Options()
+	opt.OnConnect = c.onInvalidateConnect
+	c.tracker = redis.NewClient(&opt)
 	// handle PUSH notifications for invalidation in c.HandlePushNotification
-	if err = c.cli.RegisterPushNotificationHandler("invalidate", c, true); err != nil {
+	if err = c.tracker.RegisterPushNotificationHandler("invalidate", c, true); err != nil {
 		c.close()
 		return err
 	}
+	// under the RESP3 protocol, "__redis__:invalidate" actually has no effect.
+	// we use Pubsub channel to simplify connection management and receiving PUSH messages.
+	c.subscription = c.tracker.Subscribe(ctx)
+	if err = c.subscription.Subscribe(ctx, "__redis__:invalidate"); err != nil {
+		c.close()
+		return err
+	}
+	_ = c.subscription.Channel()
 	// handle client cmd to avoid race conditions
 	c.cli.AddHook(c)
 	return nil
@@ -291,18 +300,16 @@ func (c *redisCache) close() {
 		}
 		c.subscription = nil
 	}
-	if c.cli != nil {
-		c.cli.Options().OnConnect = nil
+	if c.tracker != nil {
+		if err := c.tracker.Close(); err != nil {
+			logger.Warnf("failed closing Redis cache tracking client: %v", err)
+		}
+		c.tracker = nil
 	}
 	c.cli = nil
 }
 
-type invalidConnKey struct{}
-
 func (c *redisCache) onInvalidateConnect(ctx context.Context, cn *redis.Conn) error {
-	if ctx.Value(invalidConnKey{}) == nil {
-		return nil
-	}
 	// clear all caches on reconnect
 	c.inodeCache.Purge()
 	c.entryCache.Purge()
