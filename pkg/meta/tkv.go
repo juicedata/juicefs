@@ -532,7 +532,9 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 				for _, key := range keys {
 					tx.delete(key)
 				}
-				m.genLog(tx, time.Now(), "INIT_ENABLE_DIRSTATS()")
+				if format.ChangeLog {
+					m.doGenLog(tx, time.Now(), "INIT_ENABLE_DIRSTATS()")
+				}
 				return nil
 			})
 			if err != nil {
@@ -546,7 +548,9 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 			err := m.txn(Background(), func(tx *kvTxn) error {
 				tx.deleteKeys(userPrefix)
 				tx.deleteKeys(groupPrefix)
-				m.genLog(tx, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
+				if format.ChangeLog {
+					m.doGenLog(tx, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
+				}
 				return nil
 			})
 			if err != nil {
@@ -563,7 +567,6 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.setFormat(format)
 	ts := time.Now().Unix()
 	attr := &Attr{
 		Typ:    TypeDirectory,
@@ -574,7 +577,7 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		Length: 4 << 10,
 		Parent: RootInode,
 	}
-	return m.txn(Background(), func(tx *kvTxn) error {
+	err = m.txn(Background(), func(tx *kvTxn) error {
 		if format.TrashDays > 0 {
 			buf := tx.get(m.inodeKey(TrashInode))
 			if buf == nil {
@@ -591,6 +594,11 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	m.setFormat(format)
+	return nil
 }
 
 func (m *kvMeta) cacheACLs(ctx Context) error {
@@ -912,6 +920,10 @@ func (m *kvMeta) genLog(tx *kvTxn, ts time.Time, op string, args ...any) {
 	if !m.getFormat().ChangeLog {
 		return
 	}
+	m.doGenLog(tx, ts, op, args...)
+}
+
+func (m *kvMeta) doGenLog(tx *kvTxn, ts time.Time, op string, args ...any) {
 	id := tx.id()
 	if id == 0 {
 		return
