@@ -13,7 +13,7 @@ LEGACY_META_URL=$META_URL
 if [[ "$META" == "redis" ]]; then
     LEGACY_META_URL=${META_URL%%\?*}
 fi
-[ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
+[ ! -x mc ] && .github/scripts/download_mc.sh linux-amd64 ./mc && chmod +x mc
 
 download_juicefs_client(){
     version=$1
