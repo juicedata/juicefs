@@ -63,7 +63,7 @@ var (
 	extra, extraBytes       *utils.Bar
 	deleted, failed         *utils.Bar
 	listedPrefix            *utils.Bar
-	concurrent              chan int
+	concurrent              = make(chan int, 10)
 	limiter                 *ratelimit.Bucket
 	totalHandled            atomic.Int64
 )
@@ -564,7 +564,9 @@ func (w *withProgress) Read(b []byte) (int, error) {
 		limiter.Wait(int64(len(b)))
 	}
 	n, err := w.r.Read(b)
-	copiedBytes.IncrInt64(int64(n))
+	if copiedBytes != nil {
+		copiedBytes.IncrInt64(int64(n))
+	}
 	return n, err
 }
 
@@ -627,7 +629,9 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		return nil, 0, fmt.Errorf("part %d: %s", num, err)
 	}
 	logger.Debugf("Copied data of %s part %d in %s", key, num, time.Since(start))
-	copiedBytes.IncrInt64(sz)
+	if copiedBytes != nil {
+		copiedBytes.IncrInt64(sz)
+	}
 	return part, chksum, nil
 }
 
@@ -768,13 +772,6 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	}
 
 	return chksum, nil
-}
-
-func InitForCopyData() {
-	concurrent = make(chan int, 10)
-	progress := utils.NewProgress(true)
-	copied = progress.AddCountSpinner("Copied objects")
-	copiedBytes = progress.AddByteSpinner("Copied bytes")
 }
 
 func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
