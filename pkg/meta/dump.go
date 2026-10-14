@@ -385,9 +385,7 @@ func (m *baseMeta) loadDumpedQuotas(ctx Context, dm *DumpedMeta) {
 
 	if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
 		format := dm.Setting
-		m.Lock()
-		m.fmt = &format
-		m.Unlock()
+		m.setFormat(&format)
 		if err := m.ScanUserGroupUsage(ctx); err != nil {
 			logger.Warnf("rebuild user/group quota usage failed: %v", err)
 		}
