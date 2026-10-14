@@ -3,9 +3,17 @@ source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
 source .github/scripts/start_meta_engine.sh
-start_meta_engine $META
 META_URL=$(get_meta_url $META)
 META_URL2=$(get_meta_url2 $META)
+# Drop mounts left behind by a previous step *before* the metadata engine is
+# replaced. start_meta_engine tears the old engine down, and a mount that
+# survives it keeps restarting against a wiped database, which wedges the next
+# umount and hangs the job (see #7458). The old engine is still up here, so the
+# sessions can be looked up and the mount processes reaped cleanly.
+umount_jfs /jfs "$META_URL"
+umount_jfs /jfs2 "$META_URL2"
+umount_jfs /jfs2 sqlite3://test2.db
+start_meta_engine $META
 [[ -z "$SEED" ]] && SEED=$(date +%s)
 HEARTBEAT_INTERVAL=2
 DIR_QUOTA_FLUSH_INTERVAL=4
@@ -13,7 +21,18 @@ DIR_QUOTA_FLUSH_INTERVAL=4
 [[ -z "$BINARY" ]] && BINARY=false
 [[ -z "$FAST" ]] && FAST=false
 
-trap "echo random seed is $SEED" EXIT
+# Leave no mount behind for the next workflow step: it would outlive the
+# metadata engine that start_meta_engine replaces. Each umount runs in a
+# subshell so that a failing cleanup cannot mask the real exit status.
+cleanup_on_exit(){
+    local exit_code=$?
+    echo "random seed is $SEED"
+    ( umount_jfs /jfs2 "$META_URL2" ) || true
+    ( umount_jfs /jfs2 sqlite3://test2.db ) || true
+    ( umount_jfs /jfs "$META_URL" ) || true
+    exit $exit_code
+}
+trap cleanup_on_exit EXIT
 
 if ! docker ps | grep -q minio; then
     docker run -d -p 9000:9000 --name minio \
@@ -252,6 +271,7 @@ get_load_option(){
 
 prepare_test(){
     umount_jfs /jfs $META_URL
+    umount_jfs /jfs2 $META_URL2
     umount_jfs /jfs2 sqlite3://test2.db
     python3 .github/scripts/flush_meta.py $META_URL
     rm test2.db -rf 
