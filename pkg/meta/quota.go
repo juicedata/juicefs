@@ -618,7 +618,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 }
 
 func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath string, quotas map[string]*Quota, strict bool) error {
-	format := m.getFormat()
+	format := m.getFormat().Clone()
 	var quota *Quota
 	var scan bool = false
 	switch qtype {
