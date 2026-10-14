@@ -4170,7 +4170,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	}
 
 	dm := DumpedMeta{
-		Setting: *m.getFormat(),
+		Setting: m.GetFormat(),
 		Counters: &DumpedCounters{
 			UsedSpace:     cs[0],
 			UsedInodes:    cs[1],
