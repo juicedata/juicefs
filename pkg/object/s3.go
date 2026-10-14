@@ -39,6 +39,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+	"github.com/aws/smithy-go/encoding/httpbinding"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
@@ -196,17 +197,7 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 
 // copySource returns the URL-encoded x-amz-copy-source value, which the SDK sends as is.
 func (s *s3client) copySource(key string) string {
-	src := s.bucket + "/" + key
-	var b strings.Builder
-	for i := 0; i < len(src); i++ {
-		c := src[i]
-		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || strings.IndexByte("-_.~/", c) >= 0 {
-			b.WriteByte(c)
-		} else {
-			fmt.Fprintf(&b, "%%%02X", c)
-		}
-	}
-	return b.String()
+	return httpbinding.EscapePath(s.bucket+"/"+key, false)
 }
 
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
