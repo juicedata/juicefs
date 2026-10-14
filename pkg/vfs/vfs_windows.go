@@ -35,8 +35,14 @@ func (v *VFS) ChFlags(ctx Context, ino Ino, flags uint8) (err syscall.Errno) {
 		return
 	}
 
-	err = syscall.EINVAL
-	var attr = &Attr{Flags: flags}
+	// The attributes a Windows client can express. The POSIX-only append flag
+	// is absent from the mask it sends, so it must survive an attribute change.
+	const mapped = meta.FlagImmutable | meta.FlagWindowsHidden | meta.FlagWindowsSystem | meta.FlagWindowsArchive
+	var cur = &Attr{}
+	if err = v.Meta.GetAttr(ctx, ino, cur); err != 0 {
+		return
+	}
+	var attr = &Attr{Flags: cur.Flags&^mapped | flags&mapped}
 
 	if ctx.CheckPermission() {
 		if err = v.Meta.CheckSetAttr(ctx, ino, meta.SetAttrFlag, *attr); err != 0 {
