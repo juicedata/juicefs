@@ -90,6 +90,7 @@ jobs:
           sudo META=${{matrix.meta}} .github/scripts/command/changelog.sh
     
       - name: Test Tier
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         timeout-minutes: 40
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}

@@ -82,16 +82,10 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Install nodejs
-        run: |
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
-          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
-          nvm install 22
-          nvm use 22
-          node -v 
-          nvm current
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
 
       - name: Download Random Test
         run: |
@@ -102,17 +96,17 @@ jobs:
         timeout-minutes: 30
         continue-on-error: true
         run: |
-          sudo BINARY=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
+          sudo NODE_BIN="$(command -v node)" BINARY=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
 
       - name: Test Load & Dump with Json Fast Mode
         timeout-minutes: 30
         run: |
-          sudo FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh  
+          sudo NODE_BIN="$(command -v node)" FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
 
       - name: Test Load & Dump with Json
         timeout-minutes: 30
         run: |
-          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh     
+          sudo NODE_BIN="$(command -v node)" GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
 
       - name: log
         if: always()
@@ -172,4 +166,3 @@ jobs:
       - name: Success
         if: success()
         run: echo "All Done"
-        
