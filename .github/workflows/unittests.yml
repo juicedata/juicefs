@@ -112,6 +112,13 @@ jobs:
         run: |
           TEST=${{matrix.test}} ./.github/scripts/prepare_db.sh
 
+      - name: Set up Go for package tests
+        if: matrix.test == 'test.pkg'
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.22'
+          cache: true
+
       - name: Unit Test
         timeout-minutes: 30
         run: |
