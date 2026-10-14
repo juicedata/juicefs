@@ -58,10 +58,31 @@ const (
 	markChecksum                 = -4
 )
 
+// counter abstracts the progress accounting used on data paths, so they never
+// need to check for uninitialized progress bars. Package-level defaults count
+// without any progress bar machinery; Sync replaces them with real bars.
+type counter interface {
+	Increment()
+	IncrInt64(int64)
+	SetCurrent(int64)
+	Current() int64
+}
+
+// plainCounter is a progress-bar-free counter used when CopyData runs outside
+// Sync (e.g. metadata backup).
+type plainCounter struct {
+	n atomic.Int64
+}
+
+func (c *plainCounter) Increment()         { c.n.Add(1) }
+func (c *plainCounter) IncrInt64(n int64)  { c.n.Add(n) }
+func (c *plainCounter) SetCurrent(n int64) { c.n.Store(n) }
+func (c *plainCounter) Current() int64     { return c.n.Load() }
+
 var (
 	handled                 *utils.Bar
 	pending                 *utils.Bar
-	copied, copiedBytes     *utils.Bar
+	copied, copiedBytes     counter = &plainCounter{}, &plainCounter{}
 	checked, checkedBytes   *utils.Bar
 	skipped, skippedBytes   *utils.Bar
 	excluded, excludedBytes *utils.Bar

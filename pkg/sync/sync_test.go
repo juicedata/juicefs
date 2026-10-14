@@ -1546,8 +1546,10 @@ func TestGlobalLimitDrainWaitersOnFailure(t *testing.T) {
 }
 
 func TestCopyDataWithoutProgress(t *testing.T) {
+	// Simulate the daemon scenario (e.g. metadata backup): CopyData runs with
+	// the package-level counters, without Sync initializing any progress bar.
 	savedCopied, savedCopiedBytes := copied, copiedBytes
-	copied, copiedBytes = nil, nil
+	copied, copiedBytes = &plainCounter{}, &plainCounter{}
 	defer func() { copied, copiedBytes = savedCopied, savedCopiedBytes }()
 
 	src, err := object.CreateStorage("mem", "", "", "", "")
@@ -1586,5 +1588,8 @@ func TestCopyDataWithoutProgress(t *testing.T) {
 	settleGoroutines()
 	if leaked := runtime.NumGoroutine() - base; leaked > cycles/10 {
 		t.Fatalf("leaked %d goroutines after %d CopyData calls", leaked, cycles)
+	}
+	if n := copiedBytes.Current(); n != int64(len(data))*cycles {
+		t.Fatalf("copiedBytes: got %d, want %d", n, int64(len(data))*cycles)
 	}
 }
