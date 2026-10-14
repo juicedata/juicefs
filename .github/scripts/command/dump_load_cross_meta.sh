@@ -22,9 +22,9 @@ if ! docker ps | grep -q minio; then
             -e "MINIO_SECRET_KEY=minioadmin" \
             -v /tmp/data:/data \
             -v /tmp/config:/root/.minio \
-            minio/minio server /data
+            quay.io/minio/minio server /data
 fi
-[[ ! -f /usr/local/bin/mc ]] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && chmod +x /usr/local/bin/mc
+[[ ! -f /usr/local/bin/mc ]] && .github/scripts/download_mc.sh linux-amd64 /usr/local/bin/mc && chmod +x /usr/local/bin/mc
 sleep 3s
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
 [[ ! -x random-test ]] && wget -q https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test -O random-test && chmod +x random-test
