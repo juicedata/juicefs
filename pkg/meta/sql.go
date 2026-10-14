@@ -5096,7 +5096,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		}
 
 		dm := DumpedMeta{
-			Setting:     *m.getFormat(),
+			Setting:     m.GetFormat(),
 			Counters:    counters,
 			Sustained:   sessions,
 			DelFiles:    dels,
