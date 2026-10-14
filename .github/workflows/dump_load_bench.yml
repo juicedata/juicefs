@@ -86,16 +86,10 @@ jobs:
         with:
           target: ${{steps.vars.outputs.target}}
 
-      - name: Install nodejs
-        run: |
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
-          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
-          nvm install 22
-          nvm use 22
-          node -v 
-          nvm current
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Benchmark dump load in binary format
         timeout-minutes: 60
