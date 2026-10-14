@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -490,4 +491,64 @@ func TestReadAtNeverReportsSuccessWithUnfilledBuffer(t *testing.T) {
 
 	t.Logf("reads: ok=%d failed=%d CORRUPT=%d", ok.Load(), failed.Load(), bad.Load())
 	require.Zero(t, bad.Load(), "ReadAt reported success but delivered another block's bytes")
+}
+
+// Hold range GETs past their timeout and record any full-read fallback.
+type rangeTimeoutStore struct {
+	object.ObjectStorage
+	started  chan struct{}
+	release  chan struct{}
+	fullGets atomic.Int64
+}
+
+func (s *rangeTimeoutStore) Get(key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	if off > 0 {
+		close(s.started)
+		<-s.release
+		return nil, errors.New("released range request")
+	}
+	s.fullGets.Add(1)
+	return nil, errors.New("unexpected full-read fallback")
+}
+
+func TestReadAtRangeTimeoutDoesNotFallBack(t *testing.T) {
+	mem, err := object.CreateStorage("mem", "", "", "", "")
+	require.NoError(t, err)
+	slow := &rangeTimeoutStore{
+		ObjectStorage: mem,
+		started:       make(chan struct{}),
+		release:       make(chan struct{}),
+	}
+	defer close(slow.release)
+	conf := defaultConf
+	conf.CacheDir = t.TempDir()
+	conf.Compress = "none"
+	conf.GetTimeout = 20 * time.Millisecond
+	conf.MaxRetries = 1
+	store := NewCachedStore(slow, conf, nil)
+	page := NewOffPage(1024)
+	defer page.Release()
+
+	type readResult struct {
+		n   int
+		err error
+	}
+	done := make(chan readResult, 1)
+	go func() {
+		n, err := store.NewReader(1, conf.BlockSize).ReadAt(context.Background(), page, 1)
+		done <- readResult{n, err}
+	}()
+	select {
+	case <-slow.started:
+	case <-time.After(time.Second):
+		t.Fatal("range GET did not start")
+	}
+	select {
+	case result := <-done:
+		require.ErrorIs(t, result.err, utils.ErrFuncTimeout)
+		require.Zero(t, result.n)
+	case <-time.After(time.Second):
+		t.Fatal("range read did not return after its timeout")
+	}
+	require.Zero(t, slow.fullGets.Load(), "timed-out range GET must not fall back to a full read")
 }
