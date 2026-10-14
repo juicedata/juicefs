@@ -2488,16 +2488,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if err := tx.Watch(ctx, keys...).Err(); err != nil {
 			return err
 		}
-		if dino > 0 {
-			if ino == dino {
-				return errno(nil)
-			}
-			if exchange {
-			} else if typ == TypeDirectory && dtyp != TypeDirectory {
-				return syscall.ENOTDIR
-			} else if typ != TypeDirectory && dtyp == TypeDirectory {
-				return syscall.EISDIR
-			}
+		if dino > 0 && ino == dino {
+			return errno(nil)
 		}
 
 		keys = []string{m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino)}
@@ -2540,6 +2532,15 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if parentSrc != parentDst && sattr.Mode&0o1000 != 0 && ctx.Uid() != 0 &&
 			ctx.Uid() != iattr.Uid && (ctx.Uid() != sattr.Uid || iattr.Typ == TypeDirectory) {
 			return syscall.EACCES
+		}
+		if dino > 0 && !exchange {
+			if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
+				return syscall.EACCES
+			} else if typ == TypeDirectory && dtyp != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if typ != TypeDirectory && dtyp == TypeDirectory {
+				return syscall.EISDIR
+			}
 		}
 
 		var supdate, dupdate bool
