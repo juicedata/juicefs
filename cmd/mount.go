@@ -414,10 +414,10 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		chunkConf.Readahead = 8 * chunkConf.BlockSize
 	}
 
-	if chunkConf.UploadLimit == 0 {
+	if !c.IsSet("upload-limit") {
 		chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
 	}
-	if chunkConf.DownloadLimit == 0 {
+	if !c.IsSet("download-limit") {
 		chunkConf.DownloadLimit = format.DownloadLimit * 1e6 / 8
 	}
 	chunkConf.SelfCheck(format.UUID)
