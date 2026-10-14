@@ -339,7 +339,7 @@ prepare_test()
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs || true
     rm -rf /var/jfsCache/myjfs || true
-    [[ ! -f /usr/local/bin/mc ]] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && chmod +x /usr/local/bin/mc
+    [[ ! -f /usr/local/bin/mc ]] && .github/scripts/download_mc.sh linux-amd64 /usr/local/bin/mc && chmod +x /usr/local/bin/mc
     mc alias set myminio http://localhost:9000 minioadmin minioadmin
     mc rm --force --recursive myminio/test || true
 }
