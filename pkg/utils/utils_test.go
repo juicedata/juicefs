@@ -17,6 +17,7 @@
 package utils
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -84,6 +85,24 @@ func TestTimeout(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), "timeout after") {
 		t.Fatalf("slow function should  be timeout: %s", err)
 	}
+}
+
+func TestWithTimeoutLateResultRace(t *testing.T) {
+	callbackReturning := make(chan struct{})
+	err := WithTimeout(func() error {
+		// Return independently after the timeout, without synchronizing with
+		// WithTimeout's return; -race must catch a shared result write.
+		time.Sleep(50 * time.Millisecond)
+		close(callbackReturning)
+		return nil
+	}, time.Millisecond)
+	if !errors.Is(err, ErrFuncTimeout) {
+		t.Fatalf("timeout should be returned: %v", err)
+	}
+
+	<-callbackReturning
+	// Give the callback goroutine time to publish its late result.
+	time.Sleep(time.Millisecond)
 }
 
 func TestRemovePassword(t *testing.T) {
