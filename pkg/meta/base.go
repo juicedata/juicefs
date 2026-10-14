@@ -279,6 +279,7 @@ type baseMeta struct {
 	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict
 	subTrash     internalNode
 	sid          uint64
+	sessionJSON  atomic.Value // []byte
 	nextTxnId    uint64
 	of           *openfiles
 	removedFiles map[Ino]bool
@@ -761,7 +762,15 @@ func (m *baseMeta) newSessionInfo() []byte {
 	if err != nil {
 		panic(err) // marshal SessionInfo should never fail
 	}
+	m.sessionJSON.Store(buf) // keep session info unchanged throughout its lifecycle
 	return buf
+}
+
+func (m *baseMeta) currentSessionInfo() []byte {
+	if data := m.sessionJSON.Load(); data != nil {
+		return data.([]byte)
+	}
+	return m.newSessionInfo()
 }
 
 func (m *baseMeta) NewSession(record bool) error {
