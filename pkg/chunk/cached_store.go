@@ -182,6 +182,9 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 			res = tmp
 		}
 		logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", boff, len(p)), res.reqID, err, used)
+		if errors.Is(err, utils.ErrFuncTimeout) {
+			return 0, err
+		}
 		s.store.objectDataBytes.WithLabelValues("GET", res.sc).Add(float64(res.n))
 		s.store.objectReqsHistogram.WithLabelValues("GET", res.sc).Observe(used.Seconds())
 		if err == nil {
