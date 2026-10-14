@@ -47,6 +47,7 @@ import (
 type qiniu struct {
 	s3client
 	bm     *storage.BucketManager
+	api    *apis.Storage
 	cred   *auth.Credentials
 	cfg    *storage.Config
 	marker string
@@ -98,20 +99,12 @@ func (q *qiniu) download(ctx context.Context, key string, off, limit int64) (io.
 
 var notexist = "no such file or directory"
 
-// The legacy Stat, Copy and Delete methods replace the caller's context.
-func (q *qiniu) objectAPI() *apis.Storage {
-	return apis.NewStorage(&http_client.Options{
-		BasicHTTPClient:     q.bm.Client.Client,
-		Credentials:         q.bm.Mac,
-		Regions:             q.bm.Cfg.GetRegion(),
-		UseInsecureProtocol: !q.bm.Cfg.UseHTTPS,
-		HostRetryConfig:     &http_client.RetryConfig{},
-		HostsRetryConfig:    &http_client.RetryConfig{},
-	})
+func (q *qiniu) entry(key string) string {
+	return q.bucket + ":" + key
 }
 
 func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
-	r, err := q.objectAPI().StatObject(ctx, &apis.StatObjectRequest{Entry: q.bucket + ":" + key}, nil)
+	r, err := q.api.StatObject(ctx, &apis.StatObjectRequest{Entry: q.entry(key)}, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), notexist) {
 			err = os.ErrNotExist
@@ -141,7 +134,7 @@ func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, getters ...At
 	if err != nil {
 		return err
 	}
-	putPolicy := storage.PutPolicy{Scope: q.bucket + ":" + key}
+	putPolicy := storage.PutPolicy{Scope: q.entry(key)}
 	upToken := putPolicy.UploadToken(q.cred)
 	formUploader := storage.NewFormUploader(q.cfg)
 	var ret storage.PutRet
@@ -149,8 +142,8 @@ func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, getters ...At
 }
 
 func (q *qiniu) Copy(ctx context.Context, dst, src string) error {
-	_, err := q.objectAPI().CopyObject(ctx, &apis.CopyObjectRequest{
-		SrcEntry: q.bucket + ":" + src, DestEntry: q.bucket + ":" + dst, IsForce: true,
+	_, err := q.api.CopyObject(ctx, &apis.CopyObjectRequest{
+		SrcEntry: q.entry(src), DestEntry: q.entry(dst), IsForce: true,
 	}, nil)
 	return err
 }
@@ -160,7 +153,7 @@ func (q *qiniu) CreateMultipartUpload(ctx context.Context, key string) (*Multipa
 }
 
 func (q *qiniu) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	_, err := q.objectAPI().DeleteObject(ctx, &apis.DeleteObjectRequest{Entry: q.bucket + ":" + key}, nil)
+	_, err := q.api.DeleteObject(ctx, &apis.DeleteObjectRequest{Entry: q.entry(key)}, nil)
 	if err != nil && strings.Contains(err.Error(), notexist) {
 		return nil
 	}
@@ -279,7 +272,15 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 	}
 	cred := auth.New(accessKey, secretKey)
 	bucketManager := storage.NewBucketManager(cred, &cfg)
-	return &qiniu{s3c, bucketManager, cred, &cfg, ""}, nil
+	api := apis.NewStorage(&http_client.Options{
+		BasicHTTPClient:     bucketManager.Client.Client,
+		Credentials:         cred,
+		Regions:             cfg.GetRegion(),
+		UseInsecureProtocol: !cfg.UseHTTPS,
+		HostRetryConfig:     &http_client.RetryConfig{},
+		HostsRetryConfig:    &http_client.RetryConfig{},
+	})
+	return &qiniu{s3c, bucketManager, api, cred, &cfg, ""}, nil
 }
 
 func init() {
