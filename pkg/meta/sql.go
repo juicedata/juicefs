@@ -670,7 +670,7 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.fmt = format
+	m.setFormat(format)
 	n := &node{
 		Type:   TypeDirectory,
 		Nlink:  2,
@@ -1076,7 +1076,7 @@ func (m *dbMeta) batchUpdateChunkRefs(s *xorm.Session, chunkRefDeltas map[uint64
 }
 
 func (m *dbMeta) genLog(ctx Context, s *xorm.Session, ns int64, op string, args ...any) {
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		return
 	}
 	op = fmt.Sprintf(op, args...)
@@ -5254,9 +5254,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.Lock()
-	m.fmt = &dm.Setting
-	m.Unlock()
+	m.setFormat(&dm.Setting)
 	if err = m.loadDumpedACLs(Background()); err != nil {
 		return err
 	}
