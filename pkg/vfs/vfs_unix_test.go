@@ -20,8 +20,10 @@
 package vfs
 
 import (
+	"path/filepath"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -205,4 +207,63 @@ func TestIoctlSetFlagsPermission(t *testing.T) {
 			t.Fatalf("unsupported flag should be ENOTSUP, got %s", e)
 		}
 	})
+}
+
+func TestIoctlSetFlagsRejectsStaleCachedPermissions(t *testing.T) {
+	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "meta.db")
+	v, _ := createTestVFS(func(conf *meta.Config) {
+		conf.OpenCache = time.Minute
+	}, metaURL)
+	t.Cleanup(func() { _ = v.Meta.Shutdown() })
+
+	rootCtx := NewLogContext(meta.NewContext(1, 0, []uint32{0}))
+	userCtx := NewLogContext(meta.NewContext(10, 1, []uint32{2, 3}))
+
+	writer := meta.NewClient(metaURL, meta.DefaultConf())
+	if _, err := writer.Load(true); err != nil {
+		t.Fatalf("load metadata for second client: %s", err)
+	}
+	t.Cleanup(func() { _ = writer.Shutdown() })
+
+	for _, c := range []struct {
+		name string
+		flag uint8
+	}{
+		{"immutable", meta.FlagImmutable},
+		{"append", meta.FlagAppend},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			fe, e := v.Mknod(rootCtx, 1, c.name, 0666|syscall.S_IFREG, 0, 0)
+			if e != 0 {
+				t.Fatalf("mknod: %s", e)
+			}
+			if _, e = v.SetAttr(rootCtx, fe.Inode, meta.SetAttrUID|meta.SetAttrGID, 0, 0, 1, 2, 0, 0, 0, 0, 0); e != 0 {
+				t.Fatalf("chown: %s", e)
+			}
+
+			// Keep the first client's pre-change flags cached while another
+			// client sets a privileged flag in metadata.
+			var cached Attr
+			if e = v.Meta.Open(userCtx, fe.Inode, syscall.O_RDONLY, &cached); e != 0 {
+				t.Fatalf("populate open cache: %s", e)
+			}
+			defer v.Meta.Close(userCtx, fe.Inode)
+
+			if e = writer.SetAttr(rootCtx, fe.Inode, meta.SetAttrFlag, 0, &meta.Attr{Flags: c.flag}); e != 0 {
+				t.Fatalf("second client setting %s: %s", c.name, e)
+			}
+
+			if e = testSetFlags(v, userCtx, fe.Inode, 0); e != syscall.EPERM {
+				t.Errorf("owner clearing stale cached %s should be EPERM, got %s", c.name, e)
+			}
+
+			var current Attr
+			if e = writer.GetAttr(rootCtx, fe.Inode, &current); e != 0 {
+				t.Fatalf("get flags from second client: %s", e)
+			}
+			if current.Flags&c.flag == 0 {
+				t.Errorf("%s was cleared using stale cached flags", c.name)
+			}
+		})
+	}
 }
