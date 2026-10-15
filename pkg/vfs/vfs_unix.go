@@ -360,9 +360,6 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		if iflag &= ^uint64(FS_SECRM_FL | FS_IMMUTABLE_FL | FS_APPEND_FL); iflag != 0 {
 			return syscall.ENOTSUP
 		}
-		// The merge with the unmapped flags (e.g. the Windows attributes) and the
-		// permission checks of vfs_fileattr_set() happen in the metadata
-		// transaction, so neither can rely on stale flags from the open cache.
 		attr.Flags = flags
 		return v.Meta.SetAttr(ctx, ino, meta.SetAttrLinuxFlags, 0, attr)
 	} else {

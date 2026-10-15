@@ -3688,10 +3688,10 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		dirtyAttr.Flags = attr.Flags
 		changed = true
 	} else if set&SetAttrLinuxFlags != 0 {
-		flags := cur.Flags&^LinuxFlagsMask | attr.Flags&LinuxFlagsMask
+		const linuxFlags = FlagSkipTrash | FlagImmutable | FlagAppend
+		flags := cur.Flags&^linuxFlags | attr.Flags&linuxFlags
 		// The kernel may pass FS_IOC_SETFLAGS through unchecked (before 5.13, or
-		// for FS_IOC_SETFLAGS_32), so redo the checks of vfs_fileattr_set() here,
-		// against the flags read in this transaction rather than a cached copy.
+		// for FS_IOC_SETFLAGS_32), so redo the checks of vfs_fileattr_set() here.
 		if ctx.Uid() != 0 {
 			if ctx.Uid() != cur.Uid { // inode_owner_or_capable()
 				return nil, syscall.EPERM
@@ -3703,7 +3703,8 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		dirtyAttr.Flags = flags
 		changed = true
 	} else if set&SetAttrWindowsFlags != 0 {
-		dirtyAttr.Flags = cur.Flags&^WindowsFlagsMask | attr.Flags&WindowsFlagsMask
+		const windowsFlags = FlagImmutable | FlagWindowsHidden | FlagWindowsSystem | FlagWindowsArchive
+		dirtyAttr.Flags = cur.Flags&^windowsFlags | attr.Flags&windowsFlags
 		changed = true
 	}
 	if set&SetAttrTier != 0 {

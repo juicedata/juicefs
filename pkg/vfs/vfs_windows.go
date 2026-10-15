@@ -35,10 +35,7 @@ func (v *VFS) ChFlags(ctx Context, ino Ino, flags uint8) (err syscall.Errno) {
 		return
 	}
 
-	// The POSIX-only flags (append-only, skip-trash) are absent from the mask a
-	// Windows client sends, so only the Windows attributes are replaced, merged
-	// with the current flags inside the metadata transaction.
-	var attr = &Attr{Flags: flags & meta.WindowsFlagsMask}
+	var attr = &Attr{Flags: flags}
 
 	if ctx.CheckPermission() {
 		if err = v.Meta.CheckSetAttr(ctx, ino, meta.SetAttrWindowsFlags, *attr); err != 0 {
