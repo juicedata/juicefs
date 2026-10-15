@@ -114,31 +114,13 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 	return 0
 }
 
-// fattrToSetAttr maps kernel FATTR_* bits to meta.SetAttr* bits. The two bit spaces are
-// independent: kernel bits not listed here (FATTR_FH, FATTR_LOCKOWNER, FATTR_KILL_SUIDGID,
-// future additions, ...) must be dropped, otherwise they may collide with JuiceFS-internal
-// flags such as meta.SetAttrTier.
-var fattrToSetAttr = [...]struct {
-	fattr uint32
-	set   int
-}{
-	{fuse.FATTR_MODE, meta.SetAttrMode},
-	{fuse.FATTR_UID, meta.SetAttrUID},
-	{fuse.FATTR_GID, meta.SetAttrGID},
-	{fuse.FATTR_SIZE, meta.SetAttrSize},
-	{fuse.FATTR_ATIME, meta.SetAttrAtime},
-	{fuse.FATTR_MTIME, meta.SetAttrMtime},
-	{fuse.FATTR_ATIME_NOW, meta.SetAttrAtimeNow},
-	{fuse.FATTR_MTIME_NOW, meta.SetAttrMtimeNow},
-	{fuse.FATTR_CTIME, meta.SetAttrCtime},
-}
+const fattrPassthrough = fuse.FATTR_MODE | fuse.FATTR_UID | fuse.FATTR_GID | fuse.FATTR_SIZE |
+	fuse.FATTR_ATIME | fuse.FATTR_MTIME | fuse.FATTR_ATIME_NOW | fuse.FATTR_MTIME_NOW
 
 func toSetAttrMask(valid uint32) int {
-	var set int
-	for _, m := range fattrToSetAttr {
-		if valid&m.fattr != 0 {
-			set |= m.set
-		}
+	set := int(valid & fattrPassthrough)
+	if valid&fuse.FATTR_CTIME != 0 {
+		set |= meta.SetAttrCtime
 	}
 	return set
 }
