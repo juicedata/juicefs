@@ -114,10 +114,39 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 	return 0
 }
 
+// fattrToSetAttr maps kernel FATTR_* bits to meta.SetAttr* bits. The two bit spaces are
+// independent: kernel bits not listed here (FATTR_FH, FATTR_LOCKOWNER, FATTR_KILL_SUIDGID,
+// future additions, ...) must be dropped, otherwise they may collide with JuiceFS-internal
+// flags such as meta.SetAttrTier.
+var fattrToSetAttr = [...]struct {
+	fattr uint32
+	set   int
+}{
+	{fuse.FATTR_MODE, meta.SetAttrMode},
+	{fuse.FATTR_UID, meta.SetAttrUID},
+	{fuse.FATTR_GID, meta.SetAttrGID},
+	{fuse.FATTR_SIZE, meta.SetAttrSize},
+	{fuse.FATTR_ATIME, meta.SetAttrAtime},
+	{fuse.FATTR_MTIME, meta.SetAttrMtime},
+	{fuse.FATTR_ATIME_NOW, meta.SetAttrAtimeNow},
+	{fuse.FATTR_MTIME_NOW, meta.SetAttrMtimeNow},
+	{fuse.FATTR_CTIME, meta.SetAttrCtime},
+}
+
+func toSetAttrMask(valid uint32) int {
+	var set int
+	for _, m := range fattrToSetAttr {
+		if valid&m.fattr != 0 {
+			set |= m.set
+		}
+	}
+	return set
+}
+
 func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entry, err := fs.v.SetAttr(ctx, Ino(in.NodeId), int(in.Valid), in.Fh, in.Mode, in.Uid, in.Gid, int64(in.Atime), int64(in.Mtime), in.Atimensec, in.Mtimensec, in.Size)
+	entry, err := fs.v.SetAttr(ctx, Ino(in.NodeId), toSetAttrMask(in.Valid), in.Fh, in.Mode, in.Uid, in.Gid, int64(in.Atime), int64(in.Mtime), in.Atimensec, in.Mtimensec, in.Size)
 	if err != 0 {
 		return fuse.Status(err)
 	}
