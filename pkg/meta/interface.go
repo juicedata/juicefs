@@ -91,10 +91,6 @@ const (
 	SetAttrMtimeNow
 	SetAttrCtimeNow
 	SetAttrTier
-	// SetAttrLinuxFlags and SetAttrWindowsFlags replace only the Linux (chattr)
-	// or Windows flags, merging them with the current flags inside the metadata
-	// transaction; SetAttrFlag replaces all the flags.
-	// 1<<11 is skipped since FUSE passes FATTR_* through as is.
 	SetAttrLinuxFlags   = 1 << 13
 	SetAttrWindowsFlags = 1 << 14
 	SetAttrFlag         = 1 << 15
