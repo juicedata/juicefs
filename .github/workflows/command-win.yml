@@ -160,11 +160,6 @@ jobs:
         run: |
           choco install python3 -y
 
-      - name: Enable mount logs
-        shell: bash
-        run: |
-          sed -i '/\.\/juicefs\.exe mount /s|$| --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log|' .github/scripts/command-win/*.sh
-
       - name: Wins_fs_test
         shell: bash
         run: |

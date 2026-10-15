@@ -12,7 +12,7 @@ test_total_capacity()
 {
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs --capacity 1
-    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL --debug
+    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL --debug --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     dd if=/dev/zero of=/z/test1 bs=1G count=1
     sleep $VOLUME_QUOTA_FLUSH_INTERVAL
     dd if=/dev/zero of=/z/test2 bs=1G count=1  && echo "dd should fail on out of space" && exit 1 || true
@@ -25,7 +25,7 @@ test_total_capacity()
 test_total_inodes(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs --inodes 1000
-    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL
+    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     set +x
     for i in {1..1000}; do
         echo $i | tee /z/test$i > /dev/null
@@ -48,7 +48,7 @@ test_total_inodes(){
 test_remove_and_restore(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs
-    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL
+    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     mkdir -p /z/d
     ./juicefs.exe quota set $META_URL --path //d --capacity 1
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
@@ -77,7 +77,7 @@ test_remove_and_restore(){
 test_dir_capacity(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs
-    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL
+    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     mkdir -p /z/d
     ./juicefs.exe quota set $META_URL --path //d --capacity 1
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
@@ -105,7 +105,7 @@ test_dir_capacity(){
 test_dir_inodes(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs 
-    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL
+    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     mkdir -p /z/d
     ./juicefs.exe quota set $META_URL --path //d --inodes 1000
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
