@@ -158,7 +158,7 @@ func errorconv(err syscall.Errno) int {
 		return -fuse.EINVAL
 	case syscall.EBADFD:
 		return -fuse.EBADF
-	case syscall.EDQUOT:
+	case syscall.ENOSPC, syscall.EDQUOT:
 		return -fuse.ENOSPC
 	case syscall.EBUSY:
 		return -fuse.EBUSY
