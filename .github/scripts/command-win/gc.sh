@@ -11,7 +11,7 @@ test_delay_delete_slice_after_compaction(){
     fi
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs --trash-days 1
-    ./juicefs.exe mount -d $META_URL z: --no-usage-report
+    ./juicefs.exe mount -d $META_URL z: --no-usage-report --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     redis-cli save
     # don't skip files when gc compact
     export JFS_SKIPPED_TIME=1
@@ -22,7 +22,7 @@ test_delay_delete_slice_after_compaction(){
 test_gc_trash_slices(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs
-    ./juicefs.exe mount -d $META_URL z: --no-usage-report
+    ./juicefs.exe mount -d $META_URL z: --no-usage-report --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     local suffix="${RANDOM}_$$"
     local local_file="${RUNNER_TEMP:-.}/random_read_write_${suffix}"
     local mount_file="z:\\random_read_write_${suffix}"

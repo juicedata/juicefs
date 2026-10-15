@@ -8,7 +8,7 @@ test_clone_with_jfs_source()
 {
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     ls /z
     [[ ! -d /z/juicefs ]] && git clone https://github.com/juicedata/juicefs.git /z/juicefs --depth 1
     ls /z/juicefs
@@ -39,7 +39,7 @@ do_clone()
 test_clone_with_small_files(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     mkdir /z/test
     for i in $(seq 1 2000); do
         echo $i > /z/test/$i

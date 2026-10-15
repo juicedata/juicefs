@@ -9,7 +9,7 @@ test_sync_dir_stat()
 {
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     ./juicefs.exe mdtest $META_URL //d --depth 15 --dirs 2 --files 100 --threads 10 & 
     pid=$!
     sleep 15s

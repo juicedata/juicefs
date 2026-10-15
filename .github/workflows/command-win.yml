@@ -7,12 +7,14 @@ on:
       - 'release-**'
     paths:
       - '**/command-win.yml'
+      - '.github/scripts/command-win/**'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
       - '**/command-win.yml'
+      - '.github/scripts/command-win/**'
   workflow_dispatch:
     inputs:
       debug_enabled:
@@ -159,10 +161,11 @@ jobs:
           choco install python3 -y
 
       - name: Wins_fs_test
+        shell: bash
         run: |
+          export PATH="/c/Program Files (x86)/WinFsp/bin:$PATH"
           ./juicefs.exe format redis://127.0.0.1:6379/1 myjfs
-          $env:PATH+=";C:\Program Files (x86)\WinFsp\bin"
-          ./juicefs.exe mount -d redis://127.0.0.1:6379/1 z:
+          ./juicefs.exe mount -d redis://127.0.0.1:6379/1 z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
           python3 .github/scripts/wins_fs_test.py
 
       - name: Test Gc
@@ -248,6 +251,18 @@ jobs:
           export LC_ALL=C.UTF-8
           META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/quota.sh
           
+      - name: Upload runtime logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-cmd-test-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            c:/mount.log*
+            c:/fuse.log*
+            c:/fsop.log*
+
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         timeout-minutes: 60
