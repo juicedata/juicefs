@@ -115,6 +115,38 @@ func TestTimeout(t *testing.T) {
 	}
 }
 
+func TestWithTimeoutCancelResultRace(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	release := make(chan struct{})
+	callbackReturning := make(chan struct{})
+
+	result := make(chan error, 1)
+	go func() {
+		result <- WithTimeout(ctx, func(ctx context.Context) error {
+			close(started)
+			<-ctx.Done()
+			<-release
+			// Let the cancellation branch return before publishing the callback result.
+			time.Sleep(10 * time.Millisecond)
+			close(callbackReturning)
+			return nil
+		}, time.Second)
+	}()
+
+	<-started
+	cancel()
+	close(release)
+	err := <-result
+	if err != context.Canceled {
+		t.Fatalf("canceled context should be returned: %s", err)
+	}
+
+	<-callbackReturning
+	// Give the callback goroutine time to publish its late result to the race detector.
+	time.Sleep(time.Millisecond)
+}
+
 func TestRemovePassword(t *testing.T) {
 	testCase := []struct {
 		uri      string

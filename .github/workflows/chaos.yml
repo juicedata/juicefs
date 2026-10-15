@@ -41,7 +41,7 @@ jobs:
 
       - uses: actions/setup-go@v3
         with:
-          go-version: 'oldstable'
+          go-version: '1.25.0'
           cache: true
 
       - name: Build
@@ -76,7 +76,7 @@ jobs:
 
       - name: Build And Load CSI Docker Image
         run: |
-          version=`./juicefs version |awk '{print $3}' | cut -d '-' -f1`
+          version=$(./juicefs version | awk '{print $3}' | sed 's/[+-].*$//')
           docker build -f .github/scripts/chaos/juicefs.Dockerfile -t juicedata/mount:ce-v${version} .
           helm repo add juicefs https://juicedata.github.io/charts/
           helm repo update
@@ -100,7 +100,7 @@ jobs:
 
       - name: Mount Juicefs 
         run: |
-          version=`./juicefs version |awk '{print $3}' | cut -d '-' -f1`
+          version=$(./juicefs version | awk '{print $3}' | sed 's/[+-].*$//')
           sed -i "s/mount:ci/mount:ce-v$version/" .github/scripts/chaos/sc.yaml
           kubectl apply -f .github/scripts/chaos/sc.yaml
           kubectl apply -f .github/scripts/chaos/pvc.yaml

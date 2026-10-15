@@ -1060,6 +1060,43 @@ test_tier_truncate_and_append_after_set()
     cat /jfs/ta_case/file.bin > /dev/null
 }
 
+test_tier_kernel_writeback_cache_setattr()
+{
+    # With FUSE writeback_cache the kernel adds FATTR_CTIME (1<<10) to setattr requests
+    # on regular files, which shares its value with meta.SetAttrTier; such requests must
+    # not reset the tier.
+    setup_tier_volume
+    umount_jfs /jfs "$META_URL"
+    ./juicefs mount -d "$META_URL" /jfs --heartbeat 2s --log "${TIER_MOUNT_LOG:-/tmp/juicefs-tier-7697.log}" -o writeback_cache
+
+    mkdir -p /jfs/kwb_case
+    dd if=/dev/urandom of=/jfs/kwb_case/file.bin bs=1M count=4 status=none
+    tier_set_no_err "$META_URL" --tier 1 /kwb_case/file.bin
+    assert_tier_id /jfs/kwb_case/file.bin 1
+
+    chmod 600 /jfs/kwb_case/file.bin
+    assert_tier_id /jfs/kwb_case/file.bin 1
+    chown 1000:1000 /jfs/kwb_case/file.bin
+    assert_tier_id /jfs/kwb_case/file.bin 1
+    touch -m -d '2020-01-01 00:00:00' /jfs/kwb_case/file.bin
+    assert_tier_id /jfs/kwb_case/file.bin 1
+    touch /jfs/kwb_case/file.bin
+    assert_tier_id /jfs/kwb_case/file.bin 1
+    truncate -s 2M /jfs/kwb_case/file.bin
+    assert_tier_id /jfs/kwb_case/file.bin 1
+    # mtime/ctime of cached writes are flushed via setattr on close
+    dd if=/dev/urandom of=/jfs/kwb_case/file.bin bs=1M count=1 conv=notrunc status=none
+    assert_tier_id /jfs/kwb_case/file.bin 1
+    assert_tier_sc /jfs/kwb_case/file.bin STANDARD_IA
+
+    local actual_size
+    actual_size=$(stat -c%s /jfs/kwb_case/file.bin)
+    [[ "$actual_size" -eq $((2 * 1024 * 1024)) ]] || {
+        echo "<FATAL>: file size mismatch, expect=2097152 got=$actual_size"
+        exit 1
+    }
+}
+
 test_tier_mixed_tree_partial_overwrite()
 {
     setup_tier_volume

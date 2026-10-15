@@ -135,6 +135,8 @@ juicefs rmr .trash/2022-11-30-10/
 
 需要在挂载时启用`--enable-ioctl`选项，才能使用 chattr 命令修改文件属性。
 
+JuiceFS 遵循 Linux 内核对 chattr 的权限规则：只有文件属主才能修改其属性；其中's'属性属主即可设置，而'i'（immutable）和'a'（append-only）属性只有 root 才能设置或清除。
+
 ## 回收站和文件碎片 {#gc}
 
 在回收站里，除了因用户操作而产生的文件，还存在另一类对用户不可见的数据——覆写产生的文件碎片。关于文件碎片是怎么产生的，可以详细阅读[「JuiceFS 如何存储文件」](../introduction/architecture.md#how-juicefs-store-files)。总而言之，如果应用经常删除文件或者频繁覆盖写文件，会导致对象存储使用量远大于文件系统用量。

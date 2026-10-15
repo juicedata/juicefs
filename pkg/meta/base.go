@@ -273,12 +273,15 @@ type baseMeta struct {
 	sync.Mutex
 	addr string
 	conf *Config
-	fmt  *Format
+	// fmt is reloaded in the background while other goroutines read it, so it is
+	// only ever accessed through getFormat/setFormat
+	fmt atomic.Pointer[Format]
 
 	root         Ino
 	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict
 	subTrash     internalNode
 	sid          uint64
+	sessionJSON  atomic.Value // []byte
 	nextTxnId    uint64
 	of           *openfiles
 	removedFiles map[Ino]bool
@@ -707,10 +710,22 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
+var ErrNotFormatted = errors.New("database is not formatted, please run `juicefs format ...` first")
+
 func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
+	format, err := m.loadFormat(checkVersion)
+	if err != nil {
+		return nil, err
+	}
+	m.setFormat(format)
+	return format, nil
+}
+
+// loadFormat reads the stored format without publishing it.
+func (m *baseMeta) loadFormat(checkVersion bool) (*Format, error) {
 	body, err := m.en.doLoad()
 	if err == nil && len(body) == 0 {
-		err = fmt.Errorf("database is not formatted, please run `juicefs format ...` first")
+		err = ErrNotFormatted
 	}
 	if err != nil {
 		return nil, err
@@ -727,9 +742,6 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	if format.Tiers == nil {
 		format.Tiers = object.NewTiers(format.StorageClass)
 	}
-	m.Lock()
-	m.fmt = format
-	m.Unlock()
 	return format, nil
 }
 
@@ -761,7 +773,15 @@ func (m *baseMeta) newSessionInfo() []byte {
 	if err != nil {
 		panic(err) // marshal SessionInfo should never fail
 	}
+	m.sessionJSON.Store(buf) // keep session info unchanged throughout its lifecycle
 	return buf
+}
+
+func (m *baseMeta) currentSessionInfo() []byte {
+	if data := m.sessionJSON.Load(); data != nil {
+		return data.([]byte)
+	}
+	return m.newSessionInfo()
 }
 
 func (m *baseMeta) NewSession(record bool) error {
@@ -810,7 +830,7 @@ func (m *baseMeta) NewSession(record bool) error {
 		go m.cleanupSlices(ctx)
 		go m.cleanupTrash(ctx)
 		go m.symlinks.clean(ctx, &m.sessWG)
-		if m.fmt.ChangeLog {
+		if m.getFormat().ChangeLog {
 			m.sessWG.Add(1)
 			go m.cleanupChangelog(ctx)
 		}
@@ -880,6 +900,39 @@ func (m *baseMeta) OnReload(fn func(f *Format)) {
 
 const UmountCode = 11
 
+// reloadFormat reloads the stored format and republishes it.
+func (m *baseMeta) reloadFormat() {
+	old := m.getFormat()
+	format, err := m.loadFormat(false)
+	if err != nil {
+		if errors.Is(err, ErrNotFormatted) {
+			logger.Errorf("reload setting: %s", err)
+			os.Exit(UmountCode)
+		}
+		logger.Warnf("reload setting: %s", err)
+		return
+	}
+	if format.MetaVersion > MaxVersion {
+		logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
+		os.Exit(UmountCode)
+	}
+	if format.UUID != old.UUID {
+		logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
+		os.Exit(UmountCode)
+	}
+	if !reflect.DeepEqual(format, old) {
+		m.msgCallbacks.Lock()
+		cbs := m.reloadCb
+		m.msgCallbacks.Unlock()
+		// run the callbacks on a private copy; they may patch it with local overrides
+		patched := format.Clone()
+		for _, cb := range cbs {
+			cb(patched)
+		}
+	}
+	m.setFormat(format)
+}
+
 func (m *baseMeta) refresh(ctx Context) {
 	for {
 		if ctx.Canceled() {
@@ -902,27 +955,7 @@ func (m *baseMeta) refresh(ctx Context) {
 		}
 		m.sesMu.Unlock()
 
-		old := m.getFormat()
-		if format, err := m.Load(false); err != nil {
-			if strings.HasPrefix(err.Error(), "database is not formatted") {
-				logger.Errorf("reload setting: %s", err)
-				os.Exit(UmountCode)
-			}
-			logger.Warnf("reload setting: %s", err)
-		} else if format.MetaVersion > MaxVersion {
-			logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
-			os.Exit(UmountCode)
-		} else if format.UUID != old.UUID {
-			logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
-			os.Exit(UmountCode)
-		} else if !reflect.DeepEqual(format, old) {
-			m.msgCallbacks.Lock()
-			cbs := m.reloadCb
-			m.msgCallbacks.Unlock()
-			for _, cb := range cbs {
-				cb(format)
-			}
-		}
+		m.reloadFormat()
 
 		if v, err := m.en.getCounter(usedSpace); err == nil {
 			atomic.StoreInt64(&m.usedSpace, v)
@@ -1093,8 +1126,9 @@ func parseChangelogTime(entry string) (time.Time, error) {
 func (m *baseMeta) cleanupChangelog(ctx Context) {
 	defer m.sessWG.Done()
 	for {
-		maxAge := time.Duration(m.fmt.ChangeLogMaxAge) * time.Second
-		maxLines := m.fmt.ChangeLogMaxLines
+		format := m.getFormat()
+		maxAge := time.Duration(format.ChangeLogMaxAge) * time.Second
+		maxLines := format.ChangeLogMaxLines
 		interval := 5 * time.Minute
 		select {
 		case <-ctx.Done():
@@ -2763,13 +2797,15 @@ func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino, create bool) s
 }
 
 func (m *baseMeta) getFormat() *Format {
-	m.Lock()
-	defer m.Unlock()
-	return m.fmt
+	return m.fmt.Load()
+}
+
+func (m *baseMeta) setFormat(format *Format) {
+	m.fmt.Store(format)
 }
 
 func (m *baseMeta) GetFormat() Format {
-	return *m.getFormat()
+	return *m.getFormat().Clone()
 }
 
 func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
@@ -3117,6 +3153,21 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 	}
 }
 
+type ignoreAttrFlagsKey struct{}
+
+// A detached tree is unreachable, so it can only be removed by the cleanup of
+// detached nodes; immutable/append flags on the entries it contains (copied
+// from the source by clone) must not block that, or the tree would pin its
+// slices forever.
+func withIgnoredAttrFlags(ctx Context) Context {
+	return ctx.WithValue(ignoreAttrFlagsKey{}, true)
+}
+
+func ignoreAttrFlags(ctx Context) bool {
+	ignored, _ := ctx.Value(ignoreAttrFlagsKey{}).(bool)
+	return ignored
+}
+
 func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
 	for _, inode := range m.en.doFindDetachedNodes(edge) {
 		if eno := m.en.doCleanupDetachedNode(Background(), inode); eno != 0 {
@@ -3215,7 +3266,7 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 			logger.Warnf("bad entry as a subTrash: %s", entry.Name)
 			continue
 		}
-		if m.fmt.DirStats {
+		if m.getFormat().DirStats {
 			ds, st := m.GetDirStat(ctx, entry.Inode)
 			if st == 0 && ds != nil {
 				if _, err := scan(entry.Inode, uint64(ds.length), ts, ds.inodes); err != nil {
@@ -3617,6 +3668,25 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	}
 	if set&SetAttrFlag != 0 {
 		dirtyAttr.Flags = attr.Flags
+		changed = true
+	} else if set&SetAttrLinuxFlags != 0 {
+		const linuxFlags = FlagSkipTrash | FlagImmutable | FlagAppend
+		flags := cur.Flags&^linuxFlags | attr.Flags&linuxFlags
+		// The kernel may pass FS_IOC_SETFLAGS through unchecked (before 5.13, or
+		// for FS_IOC_SETFLAGS_32), so redo the checks of vfs_fileattr_set() here.
+		if ctx.Uid() != 0 {
+			if ctx.Uid() != cur.Uid { // inode_owner_or_capable()
+				return nil, syscall.EPERM
+			}
+			if (cur.Flags^flags)&(FlagImmutable|FlagAppend) != 0 { // CAP_LINUX_IMMUTABLE
+				return nil, syscall.EPERM
+			}
+		}
+		dirtyAttr.Flags = flags
+		changed = true
+	} else if set&SetAttrWindowsFlags != 0 {
+		const windowsFlags = FlagImmutable | FlagWindowsHidden | FlagWindowsSystem | FlagWindowsArchive
+		dirtyAttr.Flags = cur.Flags&^windowsFlags | attr.Flags&windowsFlags
 		changed = true
 	}
 	if set&SetAttrTier != 0 {

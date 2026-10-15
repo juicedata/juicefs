@@ -91,7 +91,9 @@ const (
 	SetAttrMtimeNow
 	SetAttrCtimeNow
 	SetAttrTier
-	SetAttrFlag = 1 << 15
+	SetAttrLinuxFlags   = 1 << 13
+	SetAttrWindowsFlags = 1 << 14
+	SetAttrFlag         = 1 << 15
 )
 
 const (

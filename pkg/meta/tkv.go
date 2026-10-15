@@ -137,7 +137,7 @@ func (m *kvMeta) Name() string {
 }
 
 func (m *kvMeta) doDeleteSlice(id uint64, size uint32) error {
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		return m.deleteKeys(m.sliceKey(id, size))
 	}
 	return m.txn(Background(), func(tx *kvTxn) error {
@@ -532,7 +532,9 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 				for _, key := range keys {
 					tx.delete(key)
 				}
-				m.genLog(tx, time.Now(), "INIT_ENABLE_DIRSTATS()")
+				if format.ChangeLog {
+					m.doGenLog(tx, time.Now(), "INIT_ENABLE_DIRSTATS()")
+				}
 				return nil
 			})
 			if err != nil {
@@ -546,7 +548,9 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 			err := m.txn(Background(), func(tx *kvTxn) error {
 				tx.deleteKeys(userPrefix)
 				tx.deleteKeys(groupPrefix)
-				m.genLog(tx, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
+				if format.ChangeLog {
+					m.doGenLog(tx, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
+				}
 				return nil
 			})
 			if err != nil {
@@ -563,7 +567,6 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.fmt = format
 	ts := time.Now().Unix()
 	attr := &Attr{
 		Typ:    TypeDirectory,
@@ -574,7 +577,7 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		Length: 4 << 10,
 		Parent: RootInode,
 	}
-	return m.txn(Background(), func(tx *kvTxn) error {
+	err = m.txn(Background(), func(tx *kvTxn) error {
 		if format.TrashDays > 0 {
 			buf := tx.get(m.inodeKey(TrashInode))
 			if buf == nil {
@@ -591,6 +594,11 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	m.setFormat(format)
+	return nil
 }
 
 func (m *kvMeta) cacheACLs(ctx Context) error {
@@ -643,7 +651,7 @@ func (m *kvMeta) doFlushStats() {
 }
 
 func (m *kvMeta) doNewSession(sinfo []byte, update bool) error {
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		if err := m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime())); err != nil {
 			return fmt.Errorf("new session: %s", err)
 		}
@@ -669,7 +677,7 @@ func (m *kvMeta) doRefreshSession() error {
 		buf := tx.get(m.sessionKey(m.sid))
 		if buf == nil {
 			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-			tx.set(m.sessionInfoKey(m.sid), m.newSessionInfo())
+			tx.set(m.sessionInfoKey(m.sid), m.currentSessionInfo())
 		}
 		expire := m.expireTime()
 		tx.set(m.sessionKey(m.sid), m.packInt64(expire))
@@ -751,7 +759,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 	if fail {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
-		if !m.fmt.ChangeLog {
+		if !m.getFormat().ChangeLog {
 			return m.deleteKeys(m.sessionKey(sid), m.legacySessionKey(sid), m.sessionInfoKey(sid))
 		}
 		return m.txn(ctx, func(tx *kvTxn) error {
@@ -909,9 +917,13 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 }
 
 func (m *kvMeta) genLog(tx *kvTxn, ts time.Time, op string, args ...any) {
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		return
 	}
+	m.doGenLog(tx, ts, op, args...)
+}
+
+func (m *kvMeta) doGenLog(tx *kvTxn, ts time.Time, op string, args ...any) {
 	id := tx.id()
 	if id == 0 {
 		return
@@ -1577,7 +1589,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	var inode Ino
 	var opened bool
 	var newSpace, newInode int64
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *kvTxn) error {
+		trash = requestedTrash
 		opened = false
 		*attr = Attr{}
 		newSpace, newInode = 0, 0
@@ -1742,6 +1756,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		opened bool
 		length uint64
 	}
+	skipFlags := ignoreAttrFlags(ctx)
 	for len(entries) > 0 {
 		batchSize := batchNum
 		if batchSize > len(entries) {
@@ -1781,7 +1796,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 				return st
 			}
-			if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			if !skipFlags && ((pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0) {
 				return syscall.EPERM
 			}
 
@@ -1848,7 +1863,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 						return syscall.EACCES
 					}
-					if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
+					if !skipFlags && ((attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0) {
 						return syscall.EPERM
 					}
 					if (attr.Flags & FlagSkipTrash) != 0 {
@@ -2031,7 +2046,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 			return st
 		}
 	}
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *kvTxn) error {
+		trash = requestedTrash
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parent, name); e != nil {
@@ -2061,7 +2078,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
-		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+		if !ignoreAttrFlags(ctx) && ((pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0) {
 			return syscall.EPERM
 		}
 		if tx.exist(m.entryKey(inode, "")) {
@@ -2148,7 +2165,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if !parentSrc.IsTrash() { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
 		parentLocks = append(parentLocks, parentSrc)
 	}
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *kvTxn) error {
+		trash = requestedTrash
 		opened = false
 		dino, dtyp = 0, 0
 		tattr = Attr{}
@@ -2252,6 +2271,8 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			} else if dino == ino {
 				return nil
+			} else if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
+				return syscall.EACCES
 			} else if typ == TypeDirectory && dtyp != TypeDirectory {
 				return syscall.ENOTDIR
 			} else if typ != TypeDirectory && dtyp == TypeDirectory {
@@ -4161,7 +4182,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	}
 
 	dm := DumpedMeta{
-		Setting: *m.getFormat(),
+		Setting: m.GetFormat(),
 		Counters: &DumpedCounters{
 			UsedSpace:     cs[0],
 			UsedInodes:    cs[1],
@@ -4354,9 +4375,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.Lock()
-	m.fmt = &dm.Setting
-	m.Unlock()
+	m.setFormat(&dm.Setting)
 
 	if err = m.loadDumpedACLs(Background()); err != nil {
 		return err
@@ -4536,7 +4555,7 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		return errno(err)
 	}
 	rmConcurrent := make(chan int, 10)
-	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
+	if eno := m.emptyDir(withIgnoredAttrFlags(ctx), ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}
 	m.updateStats(-align4K(0), -1)

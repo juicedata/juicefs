@@ -69,7 +69,8 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 		}
 		if now := time.Now(); now.Sub(last) >= interval {
 			var iused, dummy uint64
-			_ = m.StatFS(ctx, meta.RootInode, &dummy, &dummy, &iused, &dummy)
+			// Use inode 0 to count the whole volume even with --subdir.
+			_ = m.StatFS(ctx, 0, &dummy, &dummy, &iused, &dummy)
 			if interval <= time.Hour {
 				if iused > 1e6 {
 					logger.Warnf("backup metadata skipped because of too many inodes: %d %s; "+
@@ -136,7 +137,6 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 	if err != nil {
 		return "", err
 	}
-	osync.InitForCopyData()
 	_, err = osync.CopyData(disk, blob, fpath, size, true)
 	return blob.String() + fpath, err
 }

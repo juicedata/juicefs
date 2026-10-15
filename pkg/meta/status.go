@@ -49,10 +49,15 @@ type Sections struct {
 
 // Status retrieves the status of the filesystem
 func Status(ctx context.Context, m Meta, trash bool, sections *Sections) error {
-	format, err := m.Load(true)
-	if err != nil {
-		return fmt.Errorf("load setting: %v", err)
+	format := m.getBase().getFormat()
+	if format == nil {
+		var err error
+		format, err = m.Load(true)
+		if err != nil {
+			return fmt.Errorf("load setting: %v", err)
+		}
 	}
+	format = format.Clone()
 	format.RemoveSecret()
 
 	sessions, err := m.ListSessions()

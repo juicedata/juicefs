@@ -317,7 +317,7 @@ func (m *redisMeta) NewSession(record bool) error {
 
 func (m *redisMeta) doDeleteSlice(id uint64, size uint32) error {
 	ctx := Background()
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		return m.rdb.HDel(ctx, m.sliceRefs(), m.sliceKey(id, size)).Err()
 	}
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -348,7 +348,9 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 			// remove dir stats as they are outdated
 			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey())
-				m.genLog(ctx, pipe, time.Now(), "INIT_ENABLE_DIRSTATS()")
+				if format.ChangeLog {
+					m.doGenLog(ctx, pipe, time.Now(), "INIT_ENABLE_DIRSTATS()")
+				}
 				return nil
 			})
 			if err != nil {
@@ -360,7 +362,9 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Del(ctx, m.userQuotaKey(), m.userQuotaUsedSpaceKey(), m.userQuotaUsedInodesKey(),
 					m.groupQuotaKey(), m.groupQuotaUsedSpaceKey(), m.groupQuotaUsedInodesKey())
-				m.genLog(ctx, pipe, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
+				if format.ChangeLog {
+					m.doGenLog(ctx, pipe, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
+				}
 				return nil
 			})
 			if err != nil {
@@ -395,7 +399,7 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 	if err = m.rdb.Set(ctx, m.setting(), data, 0).Err(); err != nil {
 		return err
 	}
-	m.fmt = format
+	m.setFormat(format)
 	if body != nil {
 		return nil
 	}
@@ -445,15 +449,12 @@ func (m *redisMeta) doNewSession(sinfo []byte, update bool) error {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)
 	expire := m.expireTime()
-	err := m.txn(ctx, func(tx *redis.Tx) error {
-		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.ZAdd(ctx, m.allSessions(), redis.Z{Score: float64(expire), Member: ssid})
-			pipe.HSet(ctx, m.sessionInfos(), ssid, sinfo)
-			m.genLog(ctx, pipe, time.Now(), "NEWSESSION(%d,%d,%s)", m.sid, expire, logEncode(sinfo))
-			return nil
-		})
-		return err
-	}, m.allSessions(), m.sessionInfos())
+	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.ZAdd(ctx, m.allSessions(), redis.Z{Score: float64(expire), Member: ssid})
+		pipe.HSet(ctx, m.sessionInfos(), ssid, sinfo)
+		m.genLog(ctx, pipe, time.Now(), "NEWSESSION(%d,%d,%s)", m.sid, expire, logEncode(sinfo))
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("new session %d: %s", m.sid, err)
 	}
@@ -489,7 +490,7 @@ func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
 
 	var v int64
 	var err error
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		v, err = m.rdb.IncrBy(Background(), key, value).Result()
 	} else {
 		_, err = m.rdb.TxPipelined(Background(), func(pipe redis.Pipeliner) error {
@@ -1606,9 +1607,13 @@ func (m *redisMeta) txnLastLog() string {
 }
 
 func (m *redisMeta) genLog(ctx Context, pipe redis.Pipeliner, ts time.Time, op string, args ...any) {
-	if !m.fmt.ChangeLog {
+	if !m.getFormat().ChangeLog {
 		return
 	}
+	m.doGenLog(ctx, pipe, ts, op, args...)
+}
+
+func (m *redisMeta) doGenLog(ctx Context, pipe redis.Pipeliner, ts time.Time, op string, args ...any) {
 	op = fmt.Sprintf(op, args...)
 	ns := ts.UnixNano()
 	log := fmt.Sprintf("%d.%09d|%s|(%d,%d)", ns/1e9, ns%1e9, op, m.sid, m.getTxnId())
@@ -1764,7 +1769,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 	var _type uint8
 	var opened bool
 	var newSpace, newInode int64
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		trash = requestedTrash
 		opened = false
 		*attr = Attr{}
 		newSpace, newInode = 0, 0
@@ -1933,6 +1940,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 		opened bool
 		length uint64
 	}
+	skipFlags := ignoreAttrFlags(ctx)
 
 	// Each entry averages ~4 tx operations, so batch size should be 1000/4
 	batchSize := 1000 / 4
@@ -1976,7 +1984,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 				return st
 			}
-			if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			if !skipFlags && ((pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0) {
 				return syscall.EPERM
 			}
 
@@ -2053,7 +2061,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 					if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 						return syscall.EACCES
 					}
-					if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
+					if !skipFlags && ((attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0) {
 						return syscall.EPERM
 					}
 					if (attr.Flags & FlagSkipTrash) != 0 {
@@ -2304,7 +2312,9 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		}
 	}
 	var attr Attr
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		trash = requestedTrash
 		buf, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parent, name); e != nil {
@@ -2342,7 +2352,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
-		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+		if !ignoreAttrFlags(ctx) && ((pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0) {
 			return syscall.EPERM
 		}
 		now := time.Now()
@@ -2435,7 +2445,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return st
 		}
 	}
+	requestedTrash := trash
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		trash = requestedTrash
 		opened = false
 		dino, dtyp = 0, 0
 		tattr = Attr{}
@@ -2491,16 +2503,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if err := tx.Watch(ctx, keys...).Err(); err != nil {
 			return err
 		}
-		if dino > 0 {
-			if ino == dino {
-				return errno(nil)
-			}
-			if exchange {
-			} else if typ == TypeDirectory && dtyp != TypeDirectory {
-				return syscall.ENOTDIR
-			} else if typ != TypeDirectory && dtyp == TypeDirectory {
-				return syscall.EISDIR
-			}
+		if dino > 0 && ino == dino {
+			return errno(nil)
 		}
 
 		keys = []string{m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino)}
@@ -2543,6 +2547,15 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if parentSrc != parentDst && sattr.Mode&0o1000 != 0 && ctx.Uid() != 0 &&
 			ctx.Uid() != iattr.Uid && (ctx.Uid() != sattr.Uid || iattr.Typ == TypeDirectory) {
 			return syscall.EACCES
+		}
+		if dino > 0 && !exchange {
+			if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
+				return syscall.EACCES
+			} else if typ == TypeDirectory && dtyp != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if typ != TypeDirectory && dtyp == TypeDirectory {
+				return syscall.EISDIR
+			}
 		}
 
 		var supdate, dupdate bool
@@ -2968,15 +2981,12 @@ func (m *redisMeta) doCleanStaleSession(sid uint64) error {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
 		var removed *redis.IntCmd
-		if err := m.txn(ctx, func(tx *redis.Tx) error {
-			_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.HDel(ctx, m.sessionInfos(), ssid)
-				removed = pipe.ZRem(ctx, m.allSessions(), ssid)
-				m.genLog(ctx, pipe, time.Now(), "CLEANSESSION(%d)", sid)
-				return nil
-			})
-			return err
-		}, m.sessionInfos(), m.allSessions()); err != nil {
+		if _, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HDel(ctx, m.sessionInfos(), ssid)
+			removed = pipe.ZRem(ctx, m.allSessions(), ssid)
+			m.genLog(ctx, pipe, time.Now(), "CLEANSESSION(%d)", sid)
+			return nil
+		}); err != nil {
 			return err
 		}
 		if n, err := removed.Result(); err != nil {
@@ -3025,26 +3035,19 @@ func (m *redisMeta) doRefreshSession() error {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)
 	expire := m.expireTime()
-	return m.txn(ctx, func(tx *redis.Tx) error {
-		ok, err := tx.HExists(ctx, m.sessionInfos(), ssid).Result()
-		if err != nil {
-			return err
-		}
-		if !ok {
-			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-		}
-		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			if !ok {
-				pipe.HSet(ctx, m.sessionInfos(), ssid, m.newSessionInfo())
-			}
-			pipe.ZAdd(ctx, m.allSessions(), redis.Z{
-				Score:  float64(expire),
-				Member: ssid,
-			})
-			return nil
+	var created *redis.BoolCmd
+	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		created = pipe.HSetNX(ctx, m.sessionInfos(), ssid, m.currentSessionInfo())
+		pipe.ZAdd(ctx, m.allSessions(), redis.Z{
+			Score:  float64(expire),
+			Member: ssid,
 		})
-		return err
-	}, m.sessionInfos(), m.allSessions())
+		return nil
+	})
+	if err == nil && created.Val() {
+		logger.Warnf("Session %d was stale and cleaned up, but now I'm back again", m.sid)
+	}
+	return err
 }
 
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
@@ -4978,7 +4981,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	groupQuotas := m.loadQuotasForDump(ctx, m.groupQuotaKey())
 
 	dm := &DumpedMeta{
-		Setting: *m.getFormat(),
+		Setting: m.GetFormat(),
 		Counters: &DumpedCounters{
 			UsedSpace:     cs[0],
 			UsedInodes:    cs[1],
@@ -5186,9 +5189,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
-	m.Lock()
-	m.fmt = &dm.Setting
-	m.Unlock()
+	m.setFormat(&dm.Setting)
 	if err = m.loadDumpedACLs(ctx); err != nil {
 		return err
 	}
@@ -5737,7 +5738,7 @@ func (m *redisMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		return errno(err)
 	}
 	rmConcurrent := make(chan int, 10)
-	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
+	if eno := m.emptyDir(withIgnoredAttrFlags(ctx), ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}
 	m.updateStats(-align4K(0), -1)
