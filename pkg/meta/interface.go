@@ -91,7 +91,13 @@ const (
 	SetAttrMtimeNow
 	SetAttrCtimeNow
 	SetAttrTier
-	SetAttrFlag = 1 << 15
+	// SetAttrLinuxFlags and SetAttrWindowsFlags replace only the flags in
+	// LinuxFlagsMask and WindowsFlagsMask, merging them with the current flags
+	// inside the metadata transaction; SetAttrFlag replaces all the flags.
+	// 1<<11 is skipped since FUSE passes FATTR_* through as is.
+	SetAttrLinuxFlags   = 1 << 13
+	SetAttrWindowsFlags = 1 << 14
+	SetAttrFlag         = 1 << 15
 )
 
 const (
@@ -101,6 +107,14 @@ const (
 	FlagWindowsSystem
 	FlagWindowsArchive
 	FlagSkipTrash // skip moving to .trash - Mapped to 's' in chattr
+)
+
+const (
+	// LinuxFlagsMask holds the Linux inode flags (chattr, FS_IOC_SETFLAGS) that
+	// map to JuiceFS flags.
+	LinuxFlagsMask = FlagSkipTrash | FlagImmutable | FlagAppend
+	// WindowsFlagsMask holds the file attributes a Windows client can express.
+	WindowsFlagsMask = FlagImmutable | FlagWindowsHidden | FlagWindowsSystem | FlagWindowsArchive
 )
 
 const (

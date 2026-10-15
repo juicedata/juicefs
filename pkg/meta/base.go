@@ -3687,6 +3687,24 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	if set&SetAttrFlag != 0 {
 		dirtyAttr.Flags = attr.Flags
 		changed = true
+	} else if set&SetAttrLinuxFlags != 0 {
+		flags := cur.Flags&^LinuxFlagsMask | attr.Flags&LinuxFlagsMask
+		// The kernel may pass FS_IOC_SETFLAGS through unchecked (before 5.13, or
+		// for FS_IOC_SETFLAGS_32), so redo the checks of vfs_fileattr_set() here,
+		// against the flags read in this transaction rather than a cached copy.
+		if ctx.Uid() != 0 {
+			if ctx.Uid() != cur.Uid { // inode_owner_or_capable()
+				return nil, syscall.EPERM
+			}
+			if (cur.Flags^flags)&(FlagImmutable|FlagAppend) != 0 { // CAP_LINUX_IMMUTABLE
+				return nil, syscall.EPERM
+			}
+		}
+		dirtyAttr.Flags = flags
+		changed = true
+	} else if set&SetAttrWindowsFlags != 0 {
+		dirtyAttr.Flags = cur.Flags&^WindowsFlagsMask | attr.Flags&WindowsFlagsMask
+		changed = true
 	}
 	if set&SetAttrTier != 0 {
 		dirtyAttr.Tier = attr.Tier
