@@ -348,12 +348,23 @@ func (e *encrypted) Get(ctx context.Context, key string, off, limit int64, gette
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+func (e *encrypted) encrypt(in io.Reader) ([]byte, error) {
 	plain, err := io.ReadAll(in)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	ciphertext, err := e.enc.Encrypt(plain)
+	return e.enc.Encrypt(plain)
+}
+
+func (e *encrypted) ciphertextForPut(ctx context.Context, key string, in io.Reader) ([]byte, error) {
+	if state, ok := ctx.Value(putRequestKey).(*putRequestState); ok {
+		return state.ciphertextFor(e, key, in)
+	}
+	return e.encrypt(in)
+}
+
+func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+	ciphertext, err := e.ciphertextForPut(ctx, key, in)
 	if err != nil {
 		return err
 	}
