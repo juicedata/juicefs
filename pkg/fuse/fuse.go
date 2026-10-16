@@ -114,10 +114,21 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 	return 0
 }
 
+const fattrPassthrough = fuse.FATTR_MODE | fuse.FATTR_UID | fuse.FATTR_GID | fuse.FATTR_SIZE |
+	fuse.FATTR_ATIME | fuse.FATTR_MTIME | fuse.FATTR_ATIME_NOW | fuse.FATTR_MTIME_NOW
+
+func toSetAttrMask(valid uint32) int {
+	set := int(valid & fattrPassthrough)
+	if valid&fuse.FATTR_CTIME != 0 {
+		set |= meta.SetAttrCtime
+	}
+	return set
+}
+
 func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entry, err := fs.v.SetAttr(ctx, Ino(in.NodeId), int(in.Valid), in.Fh, in.Mode, in.Uid, in.Gid, int64(in.Atime), int64(in.Mtime), in.Atimensec, in.Mtimensec, in.Size)
+	entry, err := fs.v.SetAttr(ctx, Ino(in.NodeId), toSetAttrMask(in.Valid), in.Fh, in.Mode, in.Uid, in.Gid, int64(in.Atime), int64(in.Mtime), in.Atimensec, in.Mtimensec, in.Size)
 	if err != 0 {
 		return fuse.Status(err)
 	}

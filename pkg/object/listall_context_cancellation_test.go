@@ -202,9 +202,20 @@ func TestListAllNativeS3StopsCanceledRetry(t *testing.T) {
 
 func TestListAllNativeS3RetriesTransientError(t *testing.T) {
 	var nextCalls atomic.Int32
+	var lastCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("continuation-token") != "next" {
+		switch r.URL.Query().Get("continuation-token") {
+		case "":
 			writeNativeListPage(w, "a", "next")
+			return
+		case "last":
+			lastCalls.Add(1)
+			writeNativeListPage(w, "c", "")
+			return
+		case "next":
+		default:
+			t.Errorf("unexpected continuation token: %q", r.URL.Query().Get("continuation-token"))
+			http.Error(w, "unexpected continuation token", http.StatusBadRequest)
 			return
 		}
 		if nextCalls.Add(1) == 1 {
@@ -213,7 +224,7 @@ func TestListAllNativeS3RetriesTransientError(t *testing.T) {
 			fmt.Fprint(w, "<Error><Code>SlowDown</Code><Message>transient test failure</Message></Error>")
 			return
 		}
-		writeNativeListPage(w, "b", "")
+		writeNativeListPage(w, "b", "last")
 	}))
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -229,7 +240,7 @@ func TestListAllNativeS3RetriesTransientError(t *testing.T) {
 		}
 		keys = append(keys, item.Key())
 	}
-	if fmt.Sprint(keys) != "[a b]" || nextCalls.Load() != 2 {
-		t.Fatalf("keys %v, next-page requests %d", keys, nextCalls.Load())
+	if fmt.Sprint(keys) != "[a b c]" || nextCalls.Load() != 2 || lastCalls.Load() != 1 {
+		t.Fatalf("keys %v, next-page requests %d, last-page requests %d", keys, nextCalls.Load(), lastCalls.Load())
 	}
 }

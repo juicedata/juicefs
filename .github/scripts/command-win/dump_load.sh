@@ -14,7 +14,7 @@ trap "echo random seed is $SEED" EXIT
 test_dump_load_sustained_file(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs --trash-days 0
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     file_count=100
     for i in $(seq 1 $file_count); do
         touch /z/file$i
@@ -38,13 +38,13 @@ test_dump_load_sustained_file(){
     sleep 3
     prepare_win_test
     ./juicefs.exe load $META_URL dump.json $(get_load_option)
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
 }
 
 test_dump_load_with_copy_file_range(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     rm -rf /tmp/test
     dd if=/dev/zero of=/tmp/test bs=1M count=1024
     cp /tmp/test /z/test
@@ -54,14 +54,14 @@ test_dump_load_with_copy_file_range(){
     sleep 3
     redis-cli -h 127.0.0.1 -p 6379 -n 1 FLUSHDB
     ./juicefs.exe load $META_URL dump.json $(get_load_option)
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     compare_md5sum /tmp/test /z/test1
 }
 
 test_dump_load_with_quota(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs 
-    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL
+    ./juicefs.exe mount -d $META_URL z: --heartbeat $HEARTBEAT_INTERVAL --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     mkdir -p /z/d
     ./juicefs.exe quota set $META_URL --path //d --inodes 1000 --capacity 1
     ./juicefs.exe dump --log-level error $META_URL $(get_dump_option) > dump.json
@@ -69,7 +69,7 @@ test_dump_load_with_quota(){
     sleep 3
     redis-cli -h 127.0.0.1 -p 6379 -n 1 FLUSHDB
     ./juicefs.exe load $META_URL dump.json $(get_load_option)
-    ./juicefs.exe mount $META_URL z: -d --heartbeat $HEARTBEAT_INTERVAL
+    ./juicefs.exe mount $META_URL z: -d --heartbeat $HEARTBEAT_INTERVAL --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     ./juicefs.exe quota get $META_URL --path //d
     dd if=/dev/zero of=/z/d/test1 bs=1G count=1
     sleep $DIR_QUOTA_FLUSH_INTERVAL

@@ -42,6 +42,11 @@ func mountFlags() []cli.Flag {
 			Usage: "path of log file when running in background",
 		},
 		&cli.StringFlag{
+			Name:   "access-log",
+			Usage:  "path for JuiceFS access log",
+			Hidden: true,
+		},
+		&cli.StringFlag{
 			Name:    "fuse-access-log",
 			Aliases: []string{"fuse-trace-log"},
 			Usage:   "Fuse Layer access log file",

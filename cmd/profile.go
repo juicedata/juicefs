@@ -19,6 +19,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -440,15 +441,22 @@ func profile(ctx *cli.Context) error {
 	}
 
 	go prof.counter()
-	go prof.flusher()
-	var input string
+	go prof.handleInput(os.Stdin)
+	prof.flusher()
+	return nil
+}
+
+func (p *profiler) handleInput(in io.Reader) {
+	r := bufio.NewReader(in)
 	for {
-		_, _ = fmt.Scanln(&input)
-		if prof.colorful {
+		if _, err := r.ReadString('\n'); err != nil {
+			return // stdin is closed or unavailable, disable interactive control
+		}
+		if p.colorful {
 			fmt.Print("\033[1A\033[K") // move cursor back
 		}
-		if prof.replay {
-			prof.pause <- true // pause/continue
+		if p.replay {
+			p.pause <- true // pause/continue
 		}
 	}
 }

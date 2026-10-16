@@ -158,7 +158,7 @@ func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, fo
 					return
 				case <-time.After(time.Millisecond * 100):
 				}
-				objs, hasMore, nextToken, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
+				objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
 			}
 			nextToken = nextToken2
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))

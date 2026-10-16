@@ -38,6 +38,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -191,6 +192,7 @@ func testMeta(t *testing.T, m Meta) {
 	testCloseSession(t, m)
 	testConcurrentDir(t, m)
 	testAttrFlags(t, m)
+	testAttrFlagGroups(t, m)
 	testQuota(t, m)
 	testUserGroupQuota(t, m)
 	testAtime(t, m)
@@ -3170,6 +3172,80 @@ func testConcurrentDir(t *testing.T, m Meta) {
 	g.Wait()
 }
 
+func testAttrFlagGroups(t *testing.T, m Meta) {
+	root := Background()
+	owner := NewContext(10, 1, []uint32{2})
+	other := NewContext(11, 3, []uint32{4})
+	var inode Ino
+	if st := m.Create(root, 1, "flag-groups", 0644, 022, 0, &inode, nil); st != 0 {
+		t.Fatalf("create: %s", st)
+	}
+	defer m.Unlink(root, 1, "flag-groups")
+	if st := m.SetAttr(root, inode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: 1, Gid: 2}); st != 0 {
+		t.Fatalf("chown: %s", st)
+	}
+	setFlags := func(ctx Context, set uint16, flags uint8) (uint8, syscall.Errno) {
+		attr := &Attr{Flags: flags}
+		st := m.SetAttr(ctx, inode, set, 0, attr)
+		return attr.Flags, st
+	}
+	expect := func(want uint8) {
+		t.Helper()
+		var attr Attr
+		if st := m.GetAttr(root, inode, &attr); st != 0 {
+			t.Fatalf("getattr: %s", st)
+		}
+		if attr.Flags != want {
+			t.Fatalf("flags = %x, want %x", attr.Flags, want)
+		}
+	}
+
+	// each group only replaces its own flags, and the merged result is returned
+	if flags, st := setFlags(root, SetAttrWindowsFlags, FlagWindowsHidden|FlagAppend); st != 0 || flags != FlagWindowsHidden {
+		t.Fatalf("set windows flags: %s, flags %x", st, flags)
+	}
+	if flags, st := setFlags(root, SetAttrLinuxFlags, FlagAppend|FlagWindowsSystem); st != 0 || flags != FlagWindowsHidden|FlagAppend {
+		t.Fatalf("set ioctl flags: %s, flags %x", st, flags)
+	}
+	if flags, st := setFlags(root, SetAttrWindowsFlags, FlagImmutable); st != 0 || flags != FlagImmutable|FlagAppend {
+		t.Fatalf("set windows flags: %s, flags %x", st, flags)
+	}
+	if _, st := setFlags(root, SetAttrLinuxFlags, 0); st != 0 {
+		t.Fatalf("clear ioctl flags: %s", st)
+	}
+	expect(0)
+
+	// the ioctl group is checked against the flags in this transaction
+	if _, st := setFlags(other, SetAttrLinuxFlags, 0); st != syscall.EPERM {
+		t.Fatalf("non-owner setting ioctl flags should be EPERM, got %s", st)
+	}
+	if _, st := setFlags(owner, SetAttrLinuxFlags, FlagSkipTrash); st != 0 {
+		t.Fatalf("owner setting skip-trash: %s", st)
+	}
+	for _, flag := range []uint8{FlagImmutable, FlagAppend} {
+		if _, st := setFlags(owner, SetAttrLinuxFlags, FlagSkipTrash|flag); st != syscall.EPERM {
+			t.Fatalf("owner setting %x should be EPERM, got %s", flag, st)
+		}
+		if _, st := setFlags(root, SetAttrLinuxFlags, FlagSkipTrash|flag); st != 0 {
+			t.Fatalf("root setting %x: %s", flag, st)
+		}
+		if _, st := setFlags(owner, SetAttrLinuxFlags, FlagSkipTrash); st != syscall.EPERM {
+			t.Fatalf("owner clearing %x should be EPERM, got %s", flag, st)
+		}
+		if _, st := setFlags(owner, SetAttrLinuxFlags, flag); st != 0 {
+			t.Fatalf("owner keeping %x while clearing skip-trash: %s", flag, st)
+		}
+		expect(flag)
+		if _, st := setFlags(root, SetAttrLinuxFlags, FlagSkipTrash); st != 0 {
+			t.Fatalf("root clearing %x: %s", flag, st)
+		}
+		expect(FlagSkipTrash)
+	}
+	if _, st := setFlags(root, SetAttrFlag, 0); st != 0 {
+		t.Fatalf("reset flags: %s", st)
+	}
+}
+
 func testAttrFlags(t *testing.T, m Meta) {
 	ctx := Background()
 	var attr = &Attr{}
@@ -5011,6 +5087,41 @@ func testAtime(t *testing.T, m Meta) {
 			t.Fatalf("Test %s: expected %v, got %v", name, exp, ret)
 		}
 	}
+}
+
+// memkv seeds every client from settingPath and writes the setting back to it,
+// so a test must neither inherit one nor leave one behind.
+func newTestMemKV(t *testing.T, name string, format *Format) Meta {
+	t.Helper()
+	_ = os.Remove(settingPath)
+	t.Cleanup(func() { _ = os.Remove(settingPath) })
+	m, err := newKVMeta("memkv", name, testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init: %s", err)
+	}
+	return m
+}
+
+// The Format published by setFormat is shared with every reader that calls
+// getFormat, so a change has to be published as a new value: mutating the live
+// one races with those readers. The atomic pointer guards the pointer, not the
+// struct it points at.
+func TestPublishedFormatIsNotMutated(t *testing.T) {
+	// Tiers is a map, so a copy sharing it would let a caller patching its own
+	// copy (the .config handler does) write into the format every reader shares
+	t.Run("tiers are copied", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-tiers", &Format{Name: "test", Tiers: object.NewTiers("standard")})
+		base := m.getBase()
+
+		f := m.GetFormat()
+		f.Tiers[0] = object.Tier{ID: 0, Sc: "patched"}
+		if got := base.getFormat().Tiers[0].Sc; got == "patched" {
+			t.Fatalf("GetFormat shares Tiers with the published format: Sc=%q", got)
+		}
+	})
 }
 
 // TestQuotaEdgeCases

@@ -112,6 +112,18 @@ type Format struct {
 	KerbConf string `json:",omitempty"`
 }
 
+// Clone returns a deep copy of the format.
+func (f *Format) Clone() *Format {
+	c := *f
+	if f.Tiers != nil {
+		c.Tiers = make(object.Tiers, len(f.Tiers))
+		for id, t := range f.Tiers {
+			c.Tiers[id] = t
+		}
+	}
+	return &c
+}
+
 func (f *Format) update(old *Format, force bool) error {
 	if force {
 		logger.Warnf("Existing volume will be overwrited: %s", old)
@@ -161,7 +173,7 @@ func (f *Format) RemoveSecret() {
 }
 
 func (f *Format) String() string {
-	t := *f
+	t := f.Clone()
 	t.RemoveSecret()
 	s, _ := json.MarshalIndent(t, "", "  ")
 	return string(s)
