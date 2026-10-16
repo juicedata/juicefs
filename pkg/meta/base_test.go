@@ -3968,6 +3968,50 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		assertInodes(t, m, "Test 6 cleanup dir1", dir1, 0)
 		t.Logf("Test 6 passed: same-dir exchange rename")
 	}
+
+	// Test 7: Renaming between hard links of the same file is a no-op
+	assertInodes(t, m, "Test 7 pre-condition dir1", dir1, 0)
+	assertInodes(t, m, "Test 7 pre-condition dir2", dir2, 0)
+	{
+		if st := m.Create(ctx, dir1, "link1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create link1: %s", st)
+		}
+		if st := m.Link(ctx, file1Inode, dir2, "link2", &attr); st != 0 {
+			t.Fatalf("link link2: %s", st)
+		}
+		assertInodes(t, m, "Test 7 after link dir1", dir1, 1)
+		assertInodes(t, m, "Test 7 after link dir2", dir2, 1)
+		for _, flags := range []uint32{0, RenameExchange} {
+			var inode Ino
+			var rattr Attr
+			if st := m.Rename(ctx, dir1, "link1", dir2, "link2", flags, &inode, &rattr); st != 0 {
+				t.Fatalf("rename link1 to link2 (flags %d): %s", flags, st)
+			}
+			if inode != file1Inode || rattr.Typ != TypeFile || rattr.Nlink != 2 {
+				t.Fatalf("rename link1 to link2 (flags %d): inode=%d type=%d nlink=%d, want inode=%d type=%d nlink=2",
+					flags, inode, rattr.Typ, rattr.Nlink, file1Inode, TypeFile)
+			}
+			for _, e := range []struct {
+				parent Ino
+				name   string
+			}{{dir1, "link1"}, {dir2, "link2"}} {
+				if st := m.Lookup(ctx, e.parent, e.name, &inode, &rattr, false); st != 0 || inode != file1Inode {
+					t.Fatalf("lookup %s after rename (flags %d): inode=%d st=%s, want %d", e.name, flags, inode, st, file1Inode)
+				}
+			}
+			assertInodes(t, m, fmt.Sprintf("Test 7 dir1 after rename (flags %d)", flags), dir1, 1)
+			assertInodes(t, m, fmt.Sprintf("Test 7 dir2 after rename (flags %d)", flags), dir2, 1)
+		}
+		if st := m.Unlink(ctx, dir1, "link1"); st != 0 {
+			t.Fatalf("cleanup dir1/link1: %s", st)
+		}
+		if st := m.Unlink(ctx, dir2, "link2"); st != 0 {
+			t.Fatalf("cleanup dir2/link2: %s", st)
+		}
+		assertInodes(t, m, "Test 7 cleanup dir1", dir1, 0)
+		assertInodes(t, m, "Test 7 cleanup dir2", dir2, 0)
+		t.Logf("Test 7 passed: rename between hard links")
+	}
 }
 
 func testRenameDirStatWithTrash(t *testing.T, m Meta) {

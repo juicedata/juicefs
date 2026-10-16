@@ -2468,6 +2468,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	err := m.txn(func(s *xorm.Session) error {
 		opened = false
 		dino = 0
+		*tInode, *tAttr = 0, Attr{}
 		newSpace, newInode = 0, 0
 		trash = requestedTrash
 		var spn = node{Inode: parentSrc}
@@ -2585,6 +2586,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					}
 				}
 			} else if de.Inode == se.Inode {
+				if inode != nil {
+					*inode = se.Inode
+				}
+				m.parseAttr(&sn, attr)
+				*tInode = dino
 				return nil
 			} else if ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
 				return syscall.EACCES
