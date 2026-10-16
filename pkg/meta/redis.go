@@ -100,6 +100,8 @@ type redisMeta struct {
 var _ Meta = (*redisMeta)(nil)
 var _ engine = (*redisMeta)(nil)
 
+var incrCounterScript = redis.NewScript(scriptIncrCounter)
+
 func init() {
 	Register("redis", newRedisMeta)
 	Register("rediss", newRedisMeta)
@@ -493,13 +495,9 @@ func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
 	if !m.getFormat().ChangeLog {
 		v, err = m.rdb.IncrBy(Background(), key, value).Result()
 	} else {
-		_, err = m.rdb.TxPipelined(Background(), func(pipe redis.Pipeliner) error {
-			v, err = m.rdb.IncrBy(Background(), key, value).Result()
-			if err == nil {
-				m.genLog(Background(), pipe, time.Now(), "INCR_COUNTER(%s,%d)", logEncode2(name), value)
-			}
-			return err
-		})
+		log := m.makeTxnLog(time.Now(), "INCR_COUNTER(%s,%d)", logEncode2(name), value)
+		v, err = incrCounterScript.Run(Background(), m.rdb,
+			[]string{key, m.txnLogKey(), m.txnLastLog()}, value, log).Int64()
 	}
 
 	if name == "nextInode" || name == "nextChunk" {
@@ -1614,11 +1612,14 @@ func (m *redisMeta) genLog(ctx Context, pipe redis.Pipeliner, ts time.Time, op s
 }
 
 func (m *redisMeta) doGenLog(ctx Context, pipe redis.Pipeliner, ts time.Time, op string, args ...any) {
+	pipe.RPush(ctx, m.txnLogKey(), m.makeTxnLog(ts, op, args...))
+	pipe.Incr(ctx, m.txnLastLog())
+}
+
+func (m *redisMeta) makeTxnLog(ts time.Time, op string, args ...any) string {
 	op = fmt.Sprintf(op, args...)
 	ns := ts.UnixNano()
-	log := fmt.Sprintf("%d.%09d|%s|(%d,%d)", ns/1e9, ns%1e9, op, m.sid, m.getTxnId())
-	pipe.RPush(ctx, m.txnLogKey(), log)
-	pipe.Incr(ctx, m.txnLastLog())
+	return fmt.Sprintf("%d.%09d|%s|(%d,%d)", ns/1e9, ns%1e9, op, m.sid, m.getTxnId())
 }
 
 func (m *redisMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {

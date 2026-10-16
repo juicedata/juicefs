@@ -17,6 +17,14 @@
 // nolint
 package meta
 
+const scriptIncrCounter = `
+redis.call('INCRBY', KEYS[1], ARGV[1])
+redis.call('RPUSH', KEYS[2], ARGV[2])
+redis.call('INCR', KEYS[3])
+-- Return the stored decimal string, not Lua's rounded double-precision result.
+return redis.call('GET', KEYS[1])
+`
+
 const scriptLookup = `
 local buf = redis.call('HGET', KEYS[1], KEYS[2])
 if not buf then
