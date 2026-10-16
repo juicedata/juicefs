@@ -56,7 +56,14 @@ func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
-	uri, _ := url.ParseRequestURI(endpoint)
+	uri, err := url.ParseRequestURI(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
+	}
+	crcMode, err := parseChecksumMode(uri.Query())
+	if err != nil {
+		return nil, err
+	}
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
@@ -79,7 +86,7 @@ func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		}, addS3UserAgent)
 		options.RetryMaxAttempts = 1
 	})
-	return &space{s3client{bucket: bucket, s3: client, region: region}}, nil
+	return &space{s3client{bucket: bucket, s3: client, region: region, checksumMode: crcMode}}, nil
 }
 
 func init() {

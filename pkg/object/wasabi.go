@@ -55,6 +55,10 @@ func newWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, err
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 	}
+	crcMode, err := parseChecksumMode(uri.Query())
+	if err != nil {
+		return nil, err
+	}
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
@@ -77,7 +81,7 @@ func newWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, err
 		}, addS3UserAgent)
 		options.RetryMaxAttempts = 1
 	})
-	return &wasabi{s3client{bucket: bucket, s3: client, region: region}}, nil
+	return &wasabi{s3client{bucket: bucket, s3: client, region: region, checksumMode: crcMode}}, nil
 }
 
 func init() {

@@ -30,13 +30,11 @@ import (
 func TestChecksum(t *testing.T) {
 	b := []byte("hello")
 	expected := crc32.Update(0, crc32c, b)
-	actual := generateChecksum(bytes.NewReader(b))
-	if actual != strconv.Itoa(int(expected)) {
-		t.Errorf("expect %d but got %s", expected, actual)
-		t.FailNow()
+	metadata, err := generateChecksums(bytes.NewReader(b), checksumFull)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	actual = generateChecksum(bytes.NewReader(b))
+	actual := metadata[checksumAlgr]
 	if actual != strconv.Itoa(int(expected)) {
 		t.Errorf("expect %d but got %s", expected, actual)
 		t.FailNow()
@@ -47,12 +45,16 @@ func TestChecksumRead(t *testing.T) {
 	length := 10240
 	content := make([]byte, length)
 	utils.RandRead(content)
-	actual := generateChecksum(bytes.NewReader(content))
+	metadata, err := generateChecksums(bytes.NewReader(content), checksumFull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual := metadata[checksumAlgr]
 
 	// content length equal buff length case
 	lens := []int64{-1, int64(length)}
 	for _, contentLength := range lens {
-		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength, "test-key")
 		n, err := reader.Read(make([]byte, length))
 		if n != length || (err != nil && err != io.EOF) {
 			t.Fatalf("verify checksum should success")
@@ -61,7 +63,7 @@ func TestChecksumRead(t *testing.T) {
 
 	// verify success case
 	for _, contentLength := range lens {
-		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength, "test-key")
 		n, err := reader.Read(make([]byte, length+100))
 		if n != length || (err != nil && err != io.EOF) {
 			t.Fatalf("verify checksum should success")
@@ -72,7 +74,7 @@ func TestChecksumRead(t *testing.T) {
 	for _, contentLength := range lens {
 		corrupted := append([]byte(nil), content...)
 		corrupted[0] ^= 0xff
-		reader := verifyChecksum(io.NopCloser(bytes.NewReader(corrupted)), actual, contentLength)
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(corrupted)), actual, contentLength, "test-key")
 		n, err := reader.Read(make([]byte, length))
 		if contentLength == -1 && (err != nil && err != io.EOF || n != length) {
 			t.Fatalf("dont verify checksum when content length is -1")
@@ -84,7 +86,7 @@ func TestChecksumRead(t *testing.T) {
 
 	// verify read length less than content length case
 	for _, contentLength := range lens {
-		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength, "test-key")
 		n, err := reader.Read(make([]byte, length-100))
 		if err != nil || n != length-100 {
 			t.Fatalf("error should be nil and read length should be %d", length-100)
