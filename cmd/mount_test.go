@@ -29,6 +29,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -39,6 +40,7 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/redis/go-redis/v9"
@@ -118,6 +120,93 @@ func Test_exposeMetrics(t *testing.T) {
 
 func ResetHttp() {
 	http.DefaultServeMux = http.NewServeMux()
+}
+
+func TestReloadableStorageRetriesFailedReload(t *testing.T) {
+	const (
+		oldBucket = "reload-old"
+		newBucket = "reload-new"
+	)
+
+	oldStorage, err := object.CreateStorage("mem", oldBucket, "", "", "")
+	require.NoError(t, err)
+	newStorage, err := object.CreateStorage("mem", newBucket, "", "", "")
+	require.NoError(t, err)
+
+	storageName := fmt.Sprintf("reload-retry-%d", time.Now().UnixNano())
+	var calls atomic.Int32
+	var allowReload atomic.Bool
+	firstFailure := make(chan struct{}, 1)
+	object.Register(storageName, func(bucket, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+		calls.Add(1)
+		switch bucket {
+		case oldBucket:
+			return oldStorage, nil
+		case newBucket:
+			if !allowReload.Load() {
+				select {
+				case firstFailure <- struct{}{}:
+				default:
+				}
+				return nil, errors.New("temporary reload failure")
+			}
+			return newStorage, nil
+		default:
+			return nil, fmt.Errorf("unexpected bucket %q", bucket)
+		}
+	})
+
+	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "reload.db")
+	writer := meta.NewClient(metaURL, nil)
+	initial := &meta.Format{
+		Name:        "reload-test",
+		Storage:     storageName,
+		Bucket:      oldBucket,
+		BlockSize:   4096,
+		Compression: "none",
+		Tiers:       object.NewTiers(""),
+	}
+	require.NoError(t, writer.Init(initial, true))
+
+	conf := meta.DefaultConf()
+	conf.Heartbeat = time.Second
+	conf.NoBGJob = true
+	conf.MaxDeletes = 0
+	client := meta.NewClient(metaURL, conf)
+	format, err := client.Load(true)
+	require.NoError(t, err)
+	blob, err := NewReloadableStorage(format, client, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.NewSession(false))
+	defer func() {
+		require.NoError(t, client.CloseSession())
+		object.Shutdown(blob)
+	}()
+
+	updated := format.Clone()
+	updated.Bucket = newBucket
+	require.NoError(t, writer.Init(updated, false))
+
+	select {
+	case <-firstFailure:
+	case <-time.After(3 * time.Second):
+		t.Fatal("reload did not reach the injected createStorage failure")
+	}
+	allowReload.Store(true)
+
+	require.Eventually(t, func() bool {
+		return calls.Load() >= 3
+	}, 4*time.Second, 50*time.Millisecond,
+		"createStorage was called %d times; expected a heartbeat retry after the transient failure", calls.Load())
+
+	ctx := context.Background()
+	require.Eventually(t, func() bool {
+		if err := blob.Put(ctx, "retry-probe", strings.NewReader("ok")); err != nil {
+			return false
+		}
+		_, err := newStorage.Head(ctx, "reload-test/retry-probe")
+		return err == nil
+	}, time.Second, 20*time.Millisecond, "reloadable storage did not switch to the rebuilt storage")
 }
 
 func resetTestMeta() *redis.Client { // using Redis
