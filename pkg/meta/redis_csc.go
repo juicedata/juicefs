@@ -25,6 +25,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -257,8 +258,22 @@ func (c *redisCache) afterProcess(cmd redis.Cmder) {
 	}
 }
 
+// ProcessHook serves reads from the cache, except in transactions: a read after WATCH must see the
+// latest value, otherwise a transaction based on a stale value would succeed.
 func (c *redisCache) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	// go-redis builds a new chain of hooks for every transaction, so this is per transaction.
+	var inTx atomic.Bool
 	return func(ctx context.Context, cmd redis.Cmder) error {
+		if cmd.Name() == "watch" {
+			inTx.Store(true)
+		}
+		if inTx.Load() {
+			err := next(ctx, cmd)
+			if cmd.Name() != "get" {
+				c.afterProcess(cmd)
+			}
+			return err
+		}
 		if !c.beforeProcess(cmd, false) {
 			return nil
 		}
