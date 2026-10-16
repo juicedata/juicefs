@@ -1062,7 +1062,11 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	blen := parseObjOrigSize(key)
 	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
-		if store.isPendingValid(key) {
+		if os.IsNotExist(err) {
+			// uploaded and removed by another client using the same cache dir
+			store.removePending(key)
+			logger.Debugf("Staging file %s is gone, drop it", stagingPath)
+		} else if store.isPendingValid(key) {
 			logger.Errorf("Open staging file %s: %s", stagingPath, err)
 		} else {
 			logger.Debugf("Key %s is not needed, drop it", key)
@@ -1156,6 +1160,48 @@ func (store *cachedStore) scanDelayedStaging() {
 			store.pendingCh <- item
 		}
 		store.pendingMutex.Lock()
+	}
+}
+
+// FlushStaging uploads the blocks staged by this client without waiting for
+// the upload delay, and returns the number of blocks that are still staged
+// when ctx is done. It returns immediately outside of the upload hours.
+func (store *cachedStore) FlushStaging(ctx context.Context) int {
+	if !store.conf.Writeback {
+		return 0
+	}
+	ticker := time.NewTicker(time.Millisecond * 100)
+	defer ticker.Stop()
+	for {
+		store.pendingMutex.Lock()
+		left := len(store.pendingKeys)
+		items := make([]*pendingItem, 0, left)
+		for _, item := range store.pendingKeys {
+			items = append(items, item)
+		}
+		store.pendingMutex.Unlock()
+		if left == 0 || !store.canUpload() {
+			return left
+		}
+	enqueue:
+		for _, item := range items {
+			if item.uploading.CompareAndSwap(false, true) {
+				select {
+				case store.pendingCh <- item:
+				default: // full, try again in the next round
+					item.uploading.Store(false)
+					break enqueue
+				}
+			}
+		}
+		select {
+		case <-ctx.Done():
+			store.pendingMutex.Lock()
+			left = len(store.pendingKeys)
+			store.pendingMutex.Unlock()
+			return left
+		case <-ticker.C:
+		}
 	}
 }
 

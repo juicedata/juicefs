@@ -485,6 +485,11 @@ func mountFlags() []cli.Flag {
 			Name:  "hide-internal",
 			Usage: "hide all internal files (.accesslog, .stats, etc.)",
 		},
+		&cli.StringFlag{
+			Name:  "staging-flush-timeout",
+			Value: "0s",
+			Usage: "max time to wait for staged blocks to be uploaded after umount when writeback is enabled",
+		},
 	}
 	if runtime.GOOS == "linux" {
 		selfFlags = append(selfFlags, &cli.BoolFlag{
@@ -965,6 +970,9 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 			}
 			go func() {
 				time.Sleep(time.Second * 30)
+				if flushingStaging.Load() {
+					return // already unmounted, will exit after the staged blocks are uploaded
+				}
 				if err := v.FlushAll(""); err != nil {
 					logger.Errorf("flush all: %s", err)
 				}
