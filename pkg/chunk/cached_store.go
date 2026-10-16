@@ -1227,6 +1227,16 @@ func (store *cachedStore) FillCache(id uint64, size uint32, parts []Range) error
 			logger.Warnf("Invalid size: %s %d", k, size)
 			continue
 		}
+		if p, e := store.group.TryPiggyback(k); p != nil {
+			if e == nil {
+				// Cache outside singleflight so a full cache queue cannot block readers.
+				store.bcache.cache(k, p, true, !store.conf.OSCache)
+			}
+			p.Release()
+			if e == nil {
+				continue
+			}
+		}
 		p := NewOffPage(size)
 		if e := store.load(context.TODO(), k, p, true, true); e != nil {
 			logger.Warnf("Failed to load key: %s %s", k, e)

@@ -862,6 +862,8 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 
 Download data to local cache in advance, to achieve better performance on application's first read. You can specify a mount point path to recursively warm-up all files under this path. You can also specify a file through the `--file` option to only warm-up the files contained in it.
 
+Warmup can reuse a full-block download already in progress on the same client, reducing duplicate object storage requests while still filling the local cache. If the shared download fails, warmup downloads the block independently.
+
 If the files needing warming up resides in many different directories, you should specify their names in a text file, and pass to the `warmup` command using the `--file` option, allowing `juicefs warmup` to download concurrently, which is significantly faster than calling `juicefs warmup` multiple times, each with a single file.
 
 #### Synopsis
