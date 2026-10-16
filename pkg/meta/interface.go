@@ -551,6 +551,8 @@ type Meta interface {
 	Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno
 	// GetPaths returns all paths of an inode
 	GetPaths(ctx Context, inode Ino) []string
+	// IsUnderRoot reports whether an inode is the mounted root or inside it
+	IsUnderRoot(ctx Context, inode Ino) bool
 	// Check integrity of an absolute path and repair it if asked
 	Check(ctx Context, fpath string, opt *CheckOpt) error
 	// Change root to a directory specified by subdir
