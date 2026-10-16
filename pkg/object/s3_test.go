@@ -20,9 +20,13 @@
 package object
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_s3client_full_string(t *testing.T) {
@@ -95,6 +99,45 @@ func TestS3OCIRegion(t *testing.T) {
 			assert.Equal(t, tt.wantBucket, client.bucket)
 			assert.Equal(t, tt.wantRegion, client.region)
 			assert.Equal(t, tt.wantPathStyle, client.s3.Options().UsePathStyle)
+		})
+	}
+}
+
+func Test_s3client_copy_source_encoding(t *testing.T) {
+	got := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get("X-Amz-Copy-Source")
+		w.Header().Set("Content-Type", "application/xml")
+		if r.URL.Query().Get("uploadId") != "" {
+			_, _ = w.Write([]byte(`<CopyPartResult><ETag>"etag"</ETag></CopyPartResult>`))
+		} else {
+			_, _ = w.Write([]byte(`<CopyObjectResult><ETag>"etag"</ETag></CopyObjectResult>`))
+		}
+	}))
+	defer srv.Close()
+
+	stor, err := newS3(srv.URL+"/bucket", "ak", "sk", "")
+	require.NoError(t, err)
+	s3c := stor.(*s3client)
+	ctx := context.Background()
+
+	tests := []struct {
+		key  string
+		want string
+	}{
+		{key: "jfs/chunks/0/0/1_0_4194304", want: "bucket/jfs/chunks/0/0/1_0_4194304"},
+		{key: "dir/a-b_c.d~e", want: "bucket/dir/a-b_c.d~e"},
+		{key: "dir/a b+c%d?e#f&g=h", want: "bucket/dir/a%20b%2Bc%25d%3Fe%23f%26g%3Dh"},
+		{key: "dir/café.txt", want: "bucket/dir/caf%C3%A9.txt"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			require.NoError(t, s3c.Copy(ctx, "dst", tt.key))
+			assert.Equal(t, tt.want, <-got, "Copy")
+
+			_, err := s3c.UploadPartCopy(ctx, "dst", "upload", 1, tt.key, 0, 1)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, <-got, "UploadPartCopy")
 		})
 	}
 }
