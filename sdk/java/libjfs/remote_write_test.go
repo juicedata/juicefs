@@ -311,36 +311,56 @@ func TestRemoteWriter_Push(t *testing.T) {
 }
 
 func TestRemoteWriter_PushWithAuth(t *testing.T) {
-	var authHeader string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader = r.Header.Get("Authorization")
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	registry := prometheus.NewRegistry()
-	counter := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "test_metric",
-		Help: "A test metric",
-	})
-	counter.Add(1)
-	registry.MustRegister(counter)
-
-	rw, err := NewRemoteWriter(&RemoteWriteConfig{
-		URL:      server.URL,
-		Auth:     "testuser:testpass",
-		Gatherer: registry,
-	})
-	if err != nil {
-		t.Fatalf("NewRemoteWriter() error = %v", err)
+	tests := []struct {
+		name     string
+		auth     string
+		username string
+		password string
+		wantAuth bool
+	}{
+		{"ordinary", "testuser:testpass", "testuser", "testpass", true},
+		{"password colon", "testuser:pa:ss", "testuser", "pa:ss", true},
+		{"multiple colons", "testuser:pa::ss", "testuser", "pa::ss", true},
+		{"leading colon", "testuser::secret", "testuser", ":secret", true},
+		{"trailing colon", "testuser:secret:", "testuser", "secret:", true},
+		{"empty password", "testuser:", "testuser", "", true},
+		{"empty username", ":secret", "", "secret", true},
+		{"no auth", "", "", "", false},
+		{"missing separator", "testuser", "", "", false},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				username, password, ok := r.BasicAuth()
+				if ok != tt.wantAuth || username != tt.username || password != tt.password {
+					t.Errorf("BasicAuth() = (%q, %q, %v), want (%q, %q, %v)",
+						username, password, ok, tt.username, tt.password, tt.wantAuth)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
 
-	err = rw.Push()
-	if err != nil {
-		t.Errorf("Push() error = %v", err)
-	}
+			registry := prometheus.NewRegistry()
+			counter := prometheus.NewCounter(prometheus.CounterOpts{
+				Name: "test_metric",
+				Help: "A test metric",
+			})
+			counter.Add(1)
+			registry.MustRegister(counter)
 
-	if !strings.Contains(authHeader, "Basic") {
-		t.Errorf("Expected Basic auth header, got: %s", authHeader)
+			rw, err := NewRemoteWriter(&RemoteWriteConfig{
+				URL:      server.URL,
+				Auth:     tt.auth,
+				Gatherer: registry,
+			})
+			if err != nil {
+				t.Fatalf("NewRemoteWriter() error = %v", err)
+			}
+			if err := rw.Push(); err != nil {
+				t.Fatalf("Push() error = %v", err)
+			}
+		})
 	}
 }
