@@ -280,6 +280,78 @@ func TestSQLiteBatchUnlinkRetryDiscardsFailedAttemptDeletes(t *testing.T) {
 	}
 }
 
+func TestSQLiteRenameRetryResetsTarget(t *testing.T) {
+	metaClient, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-rename-retry.db")+"?_timeout=1", testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	m := metaClient.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+
+	ctx := Background()
+	var dir, src, dst Ino
+	var attr Attr
+	if st := m.Mkdir(ctx, RootInode, "dir", 0755, 022, 0, &dir, &attr); st != 0 {
+		t.Fatalf("mkdir dir: %s", st)
+	}
+	if st := m.Mknod(ctx, dir, "a", TypeFile, 0644, 022, 0, "", &src, &attr); st != 0 {
+		t.Fatalf("mknod a: %s", st)
+	}
+	if st := m.Mknod(ctx, dir, "c", TypeFile, 0644, 022, 0, "", &dst, &attr); st != 0 {
+		t.Fatalf("mknod c: %s", st)
+	}
+	m.dirStatsLock.Lock()
+	m.dirStats = make(map[Ino]dirStat)
+	m.dirStatsLock.Unlock()
+
+	// The first rename attempt chooses c as the target, then hits SQLITE_BUSY.
+	// Its retry sees c renamed to d by this transaction and replaces nothing.
+	writer := m.db.NewSession()
+	t.Cleanup(func() { _ = writer.Close() })
+	if err := writer.Begin(); err != nil {
+		t.Fatalf("begin concurrent writer: %s", err)
+	}
+	t.Cleanup(func() { _ = writer.Rollback() })
+	if n, err := writer.Cols("name").Update(&edge{Name: []byte("d")}, &edge{Parent: dir, Name: []byte("c")}); err != nil || n != 1 {
+		t.Fatalf("rename c to d concurrently: rows=%d err=%v", n, err)
+	}
+
+	retryLogger := &commitOnSQLiteBusyLogger{
+		ContextLogger: m.db.Logger(),
+		commit:        writer.Commit,
+	}
+	m.db.SetLogger(retryLogger)
+	m.db.ShowSQL(true)
+
+	var inode Ino
+	if st := m.Rename(ctx, dir, "a", dir, "c", 0, &inode, &attr); st != 0 {
+		t.Fatalf("rename a to c after retry: %s", st)
+	}
+	if !retryLogger.committed {
+		t.Fatal("expected SQLite BUSY retry was not triggered")
+	}
+	if retryLogger.commitErr != nil {
+		t.Fatalf("commit concurrent rename: %s", retryLogger.commitErr)
+	}
+
+	var got Ino
+	if st := m.Lookup(ctx, dir, "d", &got, &attr, false); st != 0 || got != dst {
+		t.Fatalf("lookup d: inode=%d st=%s, want %d", got, st, dst)
+	}
+	m.dirStatsLock.Lock()
+	stat := m.dirStats[dir]
+	m.dirStatsLock.Unlock()
+	if stat != (dirStat{}) {
+		t.Fatalf("dir stat changed by %+v although rename replaced nothing", stat)
+	}
+}
+
 func TestSQLiteUnlinkRetryResetsTrash(t *testing.T) {
 	metaClient, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unlink-trash-retry.db")+"?_timeout=1", testConfig())
 	if err != nil {

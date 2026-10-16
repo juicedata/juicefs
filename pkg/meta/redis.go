@@ -2458,6 +2458,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		opened = false
 		dino, dtyp = 0, 0
 		tattr = Attr{}
+		*tInode, *tAttr = 0, Attr{}
 		newSpace, newInode = 0, 0
 		buf, err := tx.HGet(ctx, m.entryKey(parentSrc), nameSrc).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
@@ -2510,9 +2511,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if err := tx.Watch(ctx, keys...).Err(); err != nil {
 			return err
 		}
-		if dino > 0 && ino == dino {
-			return errno(nil)
-		}
 
 		keys = []string{m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino)}
 		if dino > 0 {
@@ -2554,6 +2552,16 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if parentSrc != parentDst && sattr.Mode&0o1000 != 0 && ctx.Uid() != 0 &&
 			ctx.Uid() != iattr.Uid && (ctx.Uid() != sattr.Uid || iattr.Typ == TypeDirectory) {
 			return syscall.EACCES
+		}
+		if dino > 0 && ino == dino {
+			if inode != nil {
+				*inode = ino
+			}
+			if attr != nil {
+				*attr = iattr
+			}
+			*tInode = dino
+			return errno(nil)
 		}
 		if dino > 0 && !exchange {
 			if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {

@@ -1997,6 +1997,10 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	tinode := new(Ino)
 	tattr := new(Attr)
 	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, tinode, attr, tattr)
+	if st == 0 && *tinode != 0 && *tinode == *inode {
+		// both names refer to the same file: POSIX requires no other action
+		return 0
+	}
 	if st == 0 {
 		var diffLength uint64
 		if attr.Typ == TypeDirectory {

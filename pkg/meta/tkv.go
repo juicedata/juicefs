@@ -2196,6 +2196,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		opened = false
 		dino, dtyp = 0, 0
 		tattr = Attr{}
+		*tInode, *tAttr = 0, Attr{}
 		newSpace, newInode = 0, 0
 		buf := tx.get(m.entryKey(parentSrc, nameSrc))
 		if buf == nil && m.conf.CaseInsensi {
@@ -2298,6 +2299,13 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					}
 				}
 			} else if dino == ino {
+				if inode != nil {
+					*inode = ino
+				}
+				if attr != nil {
+					*attr = iattr
+				}
+				*tInode = dino
 				return nil
 			} else if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
 				return syscall.EACCES
