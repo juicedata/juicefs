@@ -33,10 +33,11 @@ import (
 	"github.com/redis/go-redis/v9/push"
 )
 
+// cachedEntry maps a name to an inode. Attributes of the inode are cached in inodeCache only,
+// where they are invalidated on change.
 type cachedEntry struct {
 	ino  Ino
 	term uint64
-	Attr
 }
 
 func (e *cachedEntry) isMark() bool {
@@ -341,7 +342,6 @@ func (m *redisMeta) preloadCache() {
 		m.cache.entryCache.Add(m.cache.entryName(m.root, string(entry.Name)), &cachedEntry{
 			ino:  entry.Inode,
 			term: term,
-			Attr: *entry.Attr,
 		})
 	}
 	logger.Infof("preload %d inodes in %v", m.cache.inodeCache.Len(), time.Since(start))

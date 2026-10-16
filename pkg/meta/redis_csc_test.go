@@ -5,9 +5,11 @@ package meta
 import (
 	"context"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/push"
 	"github.com/stretchr/testify/require"
 )
@@ -80,6 +82,29 @@ func TestRedisCache(t *testing.T) {
 		require.False(t, ok)
 	})
 
+	t.Run("cached lookup returns current attrs", func(t *testing.T) {
+		other := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: 10})
+		defer other.Close()
+		parent, ino := Ino(300), Ino(301)
+		require.NoError(t, other.Set(ctx, m.inodeKey(ino), m.marshal(&Attr{Typ: TypeFile, Mode: 0644, Length: 301}), 0).Err())
+		require.NoError(t, other.HSet(ctx, m.entryKey(parent), "f", m.packEntry(TypeFile, ino)).Err())
+		require.Eventually(t, func() bool { return m.cache.entryTerm(parent) > 0 }, 3*time.Second, 10*time.Millisecond)
+		var found Ino
+		var attr Attr
+		require.Equal(t, syscall.Errno(0), m.doLookup(Background(), parent, "f", &found, &attr))
+		require.Equal(t, uint64(301), attr.Length)
+		_, ok := m.cache.entryCache.Get(m.cache.entryName(parent, "f"))
+		require.True(t, ok)
+
+		// another client changes the file but not the directory
+		require.NoError(t, other.Set(ctx, m.inodeKey(ino), m.marshal(&Attr{Typ: TypeFile, Mode: 0600, Length: 1}), 0).Err())
+		require.Eventually(t, func() bool {
+			return m.doLookup(Background(), parent, "f", &found, &attr) == 0 && attr.Length == 1
+		}, 3*time.Second, 10*time.Millisecond)
+		require.Equal(t, ino, found)
+		require.Equal(t, uint16(0600), attr.Mode)
+	})
+
 	t.Run("entry hook", func(t *testing.T) {
 		cache := m.cache
 		ino := Ino(104)
@@ -112,7 +137,7 @@ func TestRedisCache(t *testing.T) {
 		parent := Ino(105)
 		name := cache.entryName(parent, "f")
 		gen := cache.entryTerm(parent)
-		cache.entryCache.Add(name, &cachedEntry{ino: 106, term: gen, Attr: Attr{Typ: TypeFile}})
+		cache.entryCache.Add(name, &cachedEntry{ino: 106, term: gen})
 
 		err := cache.HandlePushNotification(ctx, push.NotificationHandlerContext{}, []interface{}{"invalidate", []interface{}{m.entryKey(parent)}})
 		require.NoError(t, err)
@@ -181,7 +206,7 @@ func TestRedisCache(t *testing.T) {
 		cache := newRedisCache("jfs", 1000, 20*time.Millisecond, 0)
 		parent := Ino(110)
 		name := cache.entryName(parent, "f")
-		cache.entryCache.Add(name, &cachedEntry{ino: 111, term: cache.entryTerm(parent), Attr: Attr{Typ: TypeFile}})
+		cache.entryCache.Add(name, &cachedEntry{ino: 111, term: cache.entryTerm(parent)})
 
 		cache.bumpEntryTerm(parent)
 		entry, ok := cache.entryCache.Get(name)
@@ -193,7 +218,7 @@ func TestRedisCache(t *testing.T) {
 		cache := newRedisCache("jfs", 1000, 10*time.Millisecond, 0)
 		parent := Ino(112)
 		name := cache.entryName(parent, "f")
-		cache.entryCache.Add(name, &cachedEntry{ino: 113, term: cache.entryTerm(parent), Attr: Attr{Typ: TypeFile}})
+		cache.entryCache.Add(name, &cachedEntry{ino: 113, term: cache.entryTerm(parent)})
 		cache.bumpEntryTerm(parent)
 
 		time.Sleep(2 * cache.expiry)
@@ -206,7 +231,7 @@ func TestRedisCache(t *testing.T) {
 		cache := newRedisCache("jfs", 1000, 10*time.Millisecond, 0)
 		parent := Ino(114)
 		name := cache.entryName(parent, "f")
-		cache.entryCache.Add(name, &cachedEntry{ino: 115, term: cache.entryTerm(parent), Attr: Attr{Typ: TypeFile}})
+		cache.entryCache.Add(name, &cachedEntry{ino: 115, term: cache.entryTerm(parent)})
 		cache.bumpEntryTerm(parent)
 
 		for range 3 {

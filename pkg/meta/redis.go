@@ -981,11 +981,16 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 		entryTerm = m.cache.entryTerm(parent)
 		if entry, ok := m.cache.entryCache.Get(cacheKey); ok {
 			if entry.term >= entryTerm && !entry.isMark() {
-				*inode = entry.ino
-				if attr != nil {
-					*attr = entry.Attr
+				if attr == nil {
+					*inode = entry.ino
+					return 0
 				}
-				return 0
+				// served from the inode cache if possible
+				if buf, err := m.rdb.Get(ctx, m.inodeKey(entry.ino)).Bytes(); err == nil {
+					*inode = entry.ino
+					m.parseAttr(buf, attr)
+					return 0
+				}
 			}
 		}
 		m.cache.entryCache.AddIf(cacheKey, &cachedEntry{term: entryTerm}, func(oldEntry *cachedEntry, exists bool) bool {
@@ -1021,7 +1026,6 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 		m.of.Update(foundIno, attr)
 		if m.cache != nil {
 			ce := &cachedEntry{ino: foundIno, term: entryTerm}
-			m.parseAttr(encodedAttr, &ce.Attr)
 			_, _ = m.cache.entryCache.AddIf(cacheKey, ce, func(oldEntry *cachedEntry, exists bool) bool {
 				return exists && oldEntry.isMark() && oldEntry.term == entryTerm && m.cache.entryTerm(parent) == entryTerm
 			})
