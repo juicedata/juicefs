@@ -5124,6 +5124,110 @@ func TestPublishedFormatIsNotMutated(t *testing.T) {
 	})
 }
 
+// rootGetAttrEngine intercepts doGetAttr for the root and trash inodes.
+// A non-zero rootErr is returned for the root immediately. Otherwise delay is
+// applied to the root and trash, then the call is delegated.
+type rootGetAttrEngine struct {
+	engine
+	delay   time.Duration
+	rootErr syscall.Errno
+	wg      sync.WaitGroup
+}
+
+func (e *rootGetAttrEngine) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	e.wg.Add(1)
+	defer e.wg.Done()
+	if e.rootErr != 0 && inode == RootInode {
+		return e.rootErr
+	}
+	if e.delay > 0 && (inode == RootInode || inode == TrashInode) {
+		time.Sleep(e.delay)
+	}
+	return e.engine.doGetAttr(ctx, inode, attr)
+}
+
+// TestCheckRootGetAttrTimeout is a regression test for #7635. fsck must not
+// treat a timed-out or failed root getattr as nlink corruption.
+func TestCheckRootGetAttrTimeout(t *testing.T) {
+	m := newTestMemKV(t, "fsck-root-nlink", &Format{Name: "test"})
+	ctx := Background()
+	var child Ino
+	if st := m.Mkdir(ctx, RootInode, "d", 0755, 0, 0, &child, nil); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	if st := m.SetAttr(ctx, RootInode, SetAttrMode, 0, &Attr{Mode: 0755}); st != 0 {
+		t.Fatalf("setattr: %s", st)
+	}
+	base := m.getBase()
+	if base.conf.OpenCache != 0 {
+		t.Fatalf("OpenCache = %s, want 0", base.conf.OpenCache)
+	}
+	orig := base.en
+	defer func() { base.en = orig }()
+	readRoot := func() Attr {
+		t.Helper()
+		var attr Attr
+		if st := orig.doGetAttr(ctx, RootInode, &attr); st != 0 {
+			t.Fatalf("doGetAttr root: %s", st)
+		}
+		return attr
+	}
+	snap := readRoot()
+	if snap.Mode != 0755 || snap.Nlink != 3 {
+		t.Fatalf("root attr mode %o nlink %d", snap.Mode, snap.Nlink)
+	}
+	checkOpt := func(repair bool, mode uint16) *CheckOpt {
+		return &CheckOpt{
+			Repair:        repair,
+			Recursive:     false,
+			RepairDirMode: mode,
+			Slices:        map[Ino][]Slice{},
+		}
+	}
+	assertUnchanged := func() {
+		t.Helper()
+		if got := readRoot(); got != snap {
+			t.Fatalf("root attr changed: %+v -> %+v", snap, got)
+		}
+	}
+
+	if err := m.Check(ctx, "/", checkOpt(false, 0)); err != nil {
+		t.Fatalf("check healthy root: %s", err)
+	}
+	assertUnchanged()
+
+	slow := &rootGetAttrEngine{engine: orig, delay: 400 * time.Millisecond}
+	base.en = slow
+	if err := m.Check(ctx, "/", checkOpt(false, 0)); err != nil {
+		t.Fatalf("check slow root: %s", err)
+	}
+	assertUnchanged()
+	var fallback Attr
+	if st := m.GetAttr(ctx, RootInode, &fallback); st != 0 || fallback.Nlink != 2 || fallback.Mode != 0777 {
+		t.Fatalf("getattr fallback: st=%s mode=%o nlink=%d", st, fallback.Mode, fallback.Nlink)
+	}
+	base.en = orig
+	slow.wg.Wait()
+
+	base.en = &rootGetAttrEngine{engine: orig, rootErr: syscall.EIO}
+	if err := m.Check(ctx, "/", checkOpt(true, 0)); err == nil || !errors.Is(err, syscall.EIO) {
+		t.Fatalf("check root EIO: %v", err)
+	}
+	base.en = orig
+	assertUnchanged()
+
+	const repairedMode uint16 = 0750
+	base.en = &rootGetAttrEngine{engine: orig, rootErr: syscall.ENOENT}
+	if err := m.Check(ctx, "/", checkOpt(true, repairedMode)); err != nil {
+		t.Fatalf("missing root should stay repairable: %s", err)
+	}
+	base.en = orig
+	repaired := readRoot()
+	if repaired.Mode != repairedMode || repaired.Nlink != 3 || repaired.Atime == 0 || repaired.Mtime == 0 || repaired.Ctime == 0 {
+		t.Fatalf("repaired root mode %o nlink %d atime %d mtime %d ctime %d", repaired.Mode, repaired.Nlink, repaired.Atime, repaired.Mtime, repaired.Ctime)
+	}
+}
+
 // TestQuotaEdgeCases
 func TestQuotaEdgeCases(t *testing.T) {
 	m := &baseMeta{}
