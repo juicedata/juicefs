@@ -71,7 +71,109 @@ test_config_secret_key(){
     echo abc | tee /jfs/abc.txt && echo "write success"
     cat /jfs/abc.txt | grep abc && echo "read success"
 }
+
+test_reload_storage_after_transient_create_failure()
+{
+    if [[ "$META" != "redis" ]]; then
+        echo "skip reload retry regression for META=$META; redis coverage is sufficient"
+        return
+    fi
+
+    prepare_test
+    RELOAD_OLD_BUCKET="reload-old-$$"
+    RELOAD_NEW_BUCKET="reload-new-$$"
+    RELOAD_TLS_DIR=$(mktemp -d /tmp/jfs-reload-tls.XXXXXX)
+    RELOAD_STAGED_DIR="$RELOAD_TLS_DIR/staged"
+    RELOAD_LIVE_DIR="$RELOAD_TLS_DIR/live"
+    RELOAD_MOUNT_LOG="$RELOAD_TLS_DIR/mount.log"
+    mkdir -p "$RELOAD_STAGED_DIR" "$RELOAD_LIVE_DIR"
+
+    cleanup_reload_retry_test()
+    {
+        umount_jfs /jfs "$META_URL" || true
+        ./mc rb --force "myminio/$RELOAD_OLD_BUCKET" >/dev/null 2>&1 || true
+        ./mc rb --force "myminio/$RELOAD_NEW_BUCKET" >/dev/null 2>&1 || true
+        rm -rf "$RELOAD_TLS_DIR"
+    }
+    trap cleanup_reload_retry_test EXIT
+
+    ./mc alias set myminio http://127.0.0.1:9000 minioadmin minioadmin
+    ./mc mb --ignore-existing "myminio/$RELOAD_OLD_BUCKET"
+    ./mc mb --ignore-existing "myminio/$RELOAD_NEW_BUCKET"
+    openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
+        -keyout "$RELOAD_STAGED_DIR/client.key" -out "$RELOAD_STAGED_DIR/client.pem" >/dev/null 2>&1
+    cp "$RELOAD_STAGED_DIR/client.pem" "$RELOAD_STAGED_DIR/ca.pem"
+
+    ./juicefs format --storage minio \
+        --bucket "http://127.0.0.1:9000/$RELOAD_OLD_BUCKET" \
+        --access-key minioadmin --secret-key minioadmin \
+        "$META_URL" myjfs
+    ./juicefs mount -d "$META_URL" /jfs --heartbeat 1s --cache-size 0 \
+        --no-usage-report --log "$RELOAD_MOUNT_LOG"
+
+    for i in $(seq 1 20); do
+        is_mounted /jfs && break
+        if [[ "$i" -eq 20 ]]; then
+            cat "$RELOAD_MOUNT_LOG"
+            echo "<FATAL>: mount did not become ready"
+            exit 1
+        fi
+        sleep 1
+    done
+
+    dd if=/dev/urandom of=/jfs/before-reload bs=1M count=1 status=none
+    sync
+    for i in $(seq 1 20); do
+        if ./mc ls --recursive "myminio/$RELOAD_OLD_BUCKET" | grep -q .; then
+            break
+        fi
+        if [[ "$i" -eq 20 ]]; then
+            echo "<FATAL>: baseline write did not reach the original MinIO bucket"
+            exit 1
+        fi
+        sleep 1
+    done
+
+    local pending_bucket="http://127.0.0.1:9000/$RELOAD_NEW_BUCKET?ca-certs=$RELOAD_LIVE_DIR/ca.pem&ssl-cert=$RELOAD_LIVE_DIR/client.pem&ssl-key=$RELOAD_LIVE_DIR/client.key"
+    ./juicefs config "$META_URL" --force --yes --bucket "$pending_bucket"
+
+    for i in $(seq 1 10); do
+        if grep -Fq "error loading certificate and key file" "$RELOAD_MOUNT_LOG"; then
+            echo "observed reload createStorage failure"
+            break
+        fi
+        if [[ "$i" -eq 10 ]]; then
+            cat "$RELOAD_MOUNT_LOG"
+            echo "<FATAL>: reload did not hit the createStorage error path"
+            exit 1
+        fi
+        sleep 1
+    done
+
+    cp "$RELOAD_STAGED_DIR/ca.pem" "$RELOAD_LIVE_DIR/ca.pem"
+    cp "$RELOAD_STAGED_DIR/client.pem" "$RELOAD_LIVE_DIR/client.pem"
+    cp "$RELOAD_STAGED_DIR/client.key" "$RELOAD_LIVE_DIR/client.key"
+    echo "restored the exact storage configuration without publishing another format"
+
+    for i in $(seq 1 8); do
+        dd if=/dev/urandom of="/jfs/retry-probe-$i" bs=1M count=1 status=none
+        sync
+        if ./mc ls --recursive "myminio/$RELOAD_NEW_BUCKET" | grep -q .; then
+            echo "mount switched to the recovered MinIO bucket after $i heartbeat probes"
+            return
+        fi
+        echo "heartbeat probe $i still used the old storage"
+        sleep 1
+    done
+
+    echo "<FATAL>: mount never retried the failed storage reload"
+    echo "old bucket objects:"
+    ./mc ls --recursive "myminio/$RELOAD_OLD_BUCKET" || true
+    echo "new bucket objects:"
+    ./mc ls --recursive "myminio/$RELOAD_NEW_BUCKET" || true
+    cat "$RELOAD_MOUNT_LOG"
+    exit 1
+}
           
 
 source .github/scripts/common/run_test.sh && run_test $@
-
