@@ -305,6 +305,102 @@ func TestStoreAsync(t *testing.T) {
 	}
 }
 
+func TestRescanStaging(t *testing.T) {
+	newStore := func(t *testing.T, delay time.Duration) (*cachedStore, *diskCache, object.ObjectStorage) {
+		mem, err := object.CreateStorage("mem", "", "", "", "")
+		require.NoError(t, err)
+		conf := defaultConf
+		conf.CacheDir = t.TempDir()
+		conf.Writeback = true
+		conf.WritebackThresholdSize = conf.BlockSize + 1
+		conf.UploadDelay = delay
+		store := NewCachedStore(mem, conf, nil).(*cachedStore)
+		return store, store.bcache.(*cacheManager).stores[0], mem
+	}
+	// a block left in the staging dir by another client
+	orphan := func(t *testing.T, cache *diskCache, key string, age time.Duration) string {
+		p := cache.stagePath(key)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0744))
+		require.NoError(t, os.WriteFile(p, []byte("good"), 0600))
+		mtime := time.Now().Add(-age)
+		require.NoError(t, os.Chtimes(p, mtime, mtime))
+		return p
+	}
+	pending := func(store *cachedStore) int {
+		store.pendingMutex.Lock()
+		defer store.pendingMutex.Unlock()
+		return len(store.pendingKeys)
+	}
+	staged := func(cache *diskCache) (float64, float64) {
+		return toFloat64(cache.m.stageBlocks), toFloat64(cache.m.stageBlockBytes)
+	}
+	key := "chunks/0/0/123_0_4"
+
+	t.Run("upload an orphan", func(t *testing.T) {
+		store, cache, mem := newStore(t, 0)
+		p := orphan(t, cache, key, time.Hour)
+		cache.scanStaging(stagingOrphanAge)
+		require.Eventually(t, func() bool {
+			_, err := mem.Head(ctx, key)
+			return err == nil
+		}, time.Second*5, time.Millisecond*10)
+		require.Eventually(t, func() bool {
+			_, err := os.Stat(p)
+			return os.IsNotExist(err) && pending(store) == 0
+		}, time.Second*5, time.Millisecond*10)
+		blocks, bytes := staged(cache)
+		require.Zero(t, blocks)
+		require.Zero(t, bytes)
+	})
+
+	t.Run("leave a recent block to its owner", func(t *testing.T) {
+		store, cache, mem := newStore(t, 0)
+		p := orphan(t, cache, key, time.Minute)
+		cache.scanStaging(stagingOrphanAge)
+		require.Zero(t, pending(store))
+		blocks, _ := staged(cache)
+		require.Zero(t, blocks)
+		_, err := mem.Head(ctx, key)
+		require.Error(t, err)
+		_, err = os.Stat(p)
+		require.NoError(t, err)
+	})
+
+	t.Run("count a block only once", func(t *testing.T) {
+		store, cache, _ := newStore(t, time.Hour*24)
+		require.NoError(t, forgetSlice(store, 10, 1024))
+		own := cache.stagePath("chunks/0/0/10_0_1024")
+		old := time.Now().Add(-time.Hour)
+		require.NoError(t, os.Chtimes(own, old, old))
+		orphan(t, cache, key, time.Hour)
+		for i := 0; i < 3; i++ {
+			cache.scanStaging(stagingOrphanAge)
+		}
+		require.Equal(t, 2, pending(store))
+		blocks, bytes := staged(cache)
+		require.Equal(t, float64(2), blocks)
+		require.Equal(t, float64(1024+4), bytes)
+	})
+
+	t.Run("drop a block uploaded by another client", func(t *testing.T) {
+		store, cache, mem := newStore(t, time.Hour*24)
+		p := orphan(t, cache, key, time.Hour)
+		cache.scanStaging(stagingOrphanAge)
+		require.Equal(t, 1, pending(store))
+		blocks, _ := staged(cache)
+		require.Equal(t, float64(1), blocks)
+
+		require.NoError(t, os.Remove(p))
+		require.True(t, store.addDelayedStaging(key, p, time.Now(), true))
+		require.Eventually(t, func() bool {
+			blocks, bytes := staged(cache)
+			return pending(store) == 0 && blocks == 0 && bytes == 0
+		}, time.Second*5, time.Millisecond*10)
+		_, err := mem.Head(ctx, key)
+		require.Error(t, err)
+	})
+}
+
 func TestForceUpload(t *testing.T) {
 	blob, _ := object.CreateStorage("mem", "", "", "", "")
 	config := defaultConf
