@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/push"
 	"github.com/stretchr/testify/require"
 )
@@ -49,6 +50,30 @@ func TestRedisCache(t *testing.T) {
 		cache.entryCache.Add(cache.entryName(101, "file"), &cachedEntry{})
 		m.rdb.HSet(ctx, m.entryKey(100), "file", "content").Err()
 	})
+	t.Run("invalidations resume after the tracking connection reconnects", func(t *testing.T) {
+		other := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: 10})
+		defer other.Close()
+		ino := Ino(280)
+		require.NoError(t, other.Set(ctx, m.inodeKey(ino), m.marshal(&Attr{Typ: TypeFile}), 0).Err())
+		require.NoError(t, other.Do(ctx, "CLIENT", "KILL", "TYPE", "pubsub").Err())
+		require.Eventually(t, func() bool {
+			// cache the attr, then change it from another client
+			m.cache.inodeCache.Remove(ino)
+			if err := m.rdb.Get(ctx, m.inodeKey(ino)).Err(); err != nil {
+				return false
+			}
+			if _, ok := m.cache.inodeCache.Get(ino); !ok {
+				return false
+			}
+			if err := other.Set(ctx, m.inodeKey(ino), m.marshal(&Attr{Typ: TypeFile}), 0).Err(); err != nil {
+				return false
+			}
+			time.Sleep(200 * time.Millisecond)
+			_, ok := m.cache.inodeCache.Get(ino)
+			return !ok
+		}, 10*time.Second, 100*time.Millisecond)
+	})
+
 	t.Run("cache expiration", func(t *testing.T) {
 		shortExpiry := 50 * time.Millisecond
 		cache := newRedisCache("jfs", 1000, shortExpiry, 0)
