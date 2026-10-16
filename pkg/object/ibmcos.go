@@ -144,7 +144,7 @@ func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...A
 func (s *ibmcos) Copy(ctx context.Context, dst, src string) error {
 	t := s.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, DefaultStorageClass)
-	src = s.bucket + "/" + src
+	src = encodeCopySource(s.bucket, src)
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
 		Key:        &dst,

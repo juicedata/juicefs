@@ -144,7 +144,7 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 
 func (q *qingstor) Copy(ctx context.Context, dst, src string) error {
 	sc := getOrDefaultScValue(q.GetTier(ctx).Sc, DefaultStorageClass)
-	source := fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, src)
+	source := "/" + encodeCopySource(*q.bucket.Properties.BucketName, src)
 	input := &qs.PutObjectInput{
 		XQSCopySource:   &source,
 		XQSStorageClass: &sc,
@@ -245,7 +245,7 @@ func (q *qingstor) UploadPartCopy(ctx context.Context, key string, uploadID stri
 	input := &qs.UploadMultipartInput{
 		UploadID:      &uploadID,
 		PartNumber:    &num,
-		XQSCopySource: aws.String(fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, srcKey)),
+		XQSCopySource: aws.String("/" + encodeCopySource(*q.bucket.Properties.BucketName, srcKey)),
 		XQSCopyRange:  aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
 	}
 	r, err := q.bucket.UploadMultipartWithContext(ctx, key, input)
