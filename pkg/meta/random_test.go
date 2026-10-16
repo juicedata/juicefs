@@ -823,15 +823,6 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		if srcnode == nil {
 			return syscall.ENOENT
 		}
-		c := dst.children[dstname]
-		if c != nil {
-			if srcnode._type == TypeDirectory && c._type != TypeDirectory {
-				return syscall.ENOTDIR
-			} else if srcnode._type != TypeDirectory && c._type == TypeDirectory {
-				return syscall.EISDIR
-			}
-		}
-
 	}
 	src := m.nodes[srcparent]
 	if src == nil {
@@ -858,17 +849,6 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	srcnode := src.children[srcname]
 	if srcnode == nil {
 		return syscall.ENOENT
-	}
-
-	if metaType == "tkv" {
-		c := dst.children[dstname]
-		if c != nil {
-			if srcnode._type == TypeDirectory && c._type != TypeDirectory {
-				return syscall.ENOTDIR
-			} else if srcnode._type != TypeDirectory && c._type == TypeDirectory {
-				return syscall.EISDIR
-			}
-		}
 	}
 
 	if !src.stickyAccess(srcnode, m.ctx.Uid()) {

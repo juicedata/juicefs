@@ -346,19 +346,18 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		} else {
 			return syscall.EINVAL
 		}
-		if ctx.CheckPermission() && ctx.Uid() != 0 && iflag&(FS_IMMUTABLE_FL|FS_APPEND_FL) != 0 {
-			return syscall.EPERM
-		}
+		var flags uint8
 		if (iflag & FS_IMMUTABLE_FL) != 0 {
-			attr.Flags |= meta.FlagImmutable
+			flags |= meta.FlagImmutable
 		}
 		if (iflag & FS_APPEND_FL) != 0 {
-			attr.Flags |= meta.FlagAppend
+			flags |= meta.FlagAppend
 		}
 		if iflag &= ^uint64(FS_IMMUTABLE_FL | FS_APPEND_FL); iflag != 0 {
 			return syscall.ENOTSUP
 		}
-		return v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
+		attr.Flags = flags
+		return v.Meta.SetAttr(ctx, ino, meta.SetAttrLinuxFlags, 0, attr)
 	} else {
 		if err = v.Meta.GetAttr(ctx, ino, attr); err != 0 {
 			return

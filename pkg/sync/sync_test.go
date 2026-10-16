@@ -18,10 +18,12 @@ package sync
 import (
 	"bytes"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"math"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -794,5 +796,49 @@ func TestFilterSizeAndAge(t *testing.T) {
 
 	if filterKey(&mockObject{200, now.Add(-time.Hour * 2)}, now, nil, config) {
 		t.Fatalf("filterKey should fail")
+	}
+}
+
+func TestCopyDataWithoutProgress(t *testing.T) {
+	savedCopied, savedCopiedBytes := copied, copiedBytes
+	copied, copiedBytes = nil, nil
+	defer func() { copied, copiedBytes = savedCopied, savedCopiedBytes }()
+
+	src, err := object.CreateStorage("mem", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create src: %s", err)
+	}
+	dst, err := object.CreateStorage("mem", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create dst: %s", err)
+	}
+	data := bytes.Repeat([]byte("juicefs"), 50)
+	if err = src.Put("backup", bytes.NewReader(data)); err != nil {
+		t.Fatalf("put: %s", err)
+	}
+	wantChksum := crc32.Checksum(data, crc32.MakeTable(crc32.Castagnoli))
+
+	settleGoroutines := func() {
+		runtime.GC()
+		time.Sleep(300 * time.Millisecond)
+		runtime.GC()
+	}
+	settleGoroutines()
+	base := runtime.NumGoroutine()
+
+	const cycles = 50
+	for i := 0; i < cycles; i++ {
+		chksum, err := CopyData(src, dst, "backup", int64(len(data)), true)
+		if err != nil {
+			t.Fatalf("CopyData: %s", err)
+		}
+		if chksum != wantChksum {
+			t.Fatalf("checksum mismatch: got %d, want %d", chksum, wantChksum)
+		}
+	}
+
+	settleGoroutines()
+	if leaked := runtime.NumGoroutine() - base; leaked > cycles/10 {
+		t.Fatalf("leaked %d goroutines after %d CopyData calls", leaked, cycles)
 	}
 }

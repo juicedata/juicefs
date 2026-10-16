@@ -4,7 +4,7 @@ source .github/scripts/common/common_win.sh
 [[ -z "$META_URL" ]] && META_URL=redis://127.0.0.1:6379/1
 
 
-wget https://dl.min.io/client/mc/release/windows-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O mc.exe
+wget https://github.com/minio/mc/releases/download/RELEASE.2021-04-22T17-40-00Z/mc.windows-amd64.RELEASE.2021-04-22T17-40-00Z.exe -O mc.exe
 chmod +x mc.exe
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=admin123
