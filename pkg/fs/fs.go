@@ -448,6 +448,24 @@ func (fs *FileSystem) open(ctx meta.Context, path string, flags uint32, followLi
 	return
 }
 
+// OpenForRead is like Open with MODE_MASK_R but uses a shared per-inode
+// FileReader so that concurrent read-only openers of the same file share one
+// page-cache, avoiding redundant object-storage I/O and excess memory usage.
+func (fs *FileSystem) OpenForRead(ctx meta.Context, path string) (*File, syscall.Errno) {
+	f, err := fs.open(ctx, path, vfs.MODE_MASK_R, true)
+	if err != 0 || f == nil {
+		return f, err
+	}
+	// Pre-bind the shared read-only FileReader so pread() won't fall back to
+	// the per-fd reader.Open() path.
+	f.Lock()
+	if f.rdata == nil {
+		f.rdata = fs.reader.OpenReadOnly(f.inode, uint64(f.info.Size()))
+	}
+	f.Unlock()
+	return f, 0
+}
+
 func (fs *FileSystem) Access(ctx meta.Context, path string, flags int) (err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Access (%s): %s", path, errstr(err)) }()
