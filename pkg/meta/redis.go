@@ -493,13 +493,15 @@ func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
 	if !m.getFormat().ChangeLog {
 		v, err = m.rdb.IncrBy(Background(), key, value).Result()
 	} else {
+		var cmd *redis.IntCmd
 		_, err = m.rdb.TxPipelined(Background(), func(pipe redis.Pipeliner) error {
-			v, err = m.rdb.IncrBy(Background(), key, value).Result()
-			if err == nil {
-				m.genLog(Background(), pipe, time.Now(), "INCR_COUNTER(%s,%d)", logEncode2(name), value)
-			}
-			return err
+			cmd = pipe.IncrBy(Background(), key, value)
+			m.genLog(Background(), pipe, time.Now(), "INCR_COUNTER(%s,%d)", logEncode2(name), value)
+			return nil
 		})
+		if err == nil {
+			v = cmd.Val()
+		}
 	}
 
 	if name == "nextInode" || name == "nextChunk" {
