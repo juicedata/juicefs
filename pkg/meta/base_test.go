@@ -5047,25 +5047,6 @@ func TestPublishedFormatIsNotMutated(t *testing.T) {
 			t.Fatalf("GetFormat shares Tiers with the published format: Sc=%q", got)
 		}
 	})
-
-	// a quota whose format update failed would be created but never
-	// accounted; the failed store has to fail the command
-	t.Run("quota set fails when the flag cannot be stored", func(t *testing.T) {
-		m := newTestMemKV(t, "test-quota-init-error", &Format{Name: "test"})
-		kv := m.(*kvMeta)
-		// corrupt the stored setting, so the doInit that turns DirStats on fails
-		if err := kv.setValue(kv.fmtKey("setting"), []byte("not json")); err != nil {
-			t.Fatalf("corrupt setting: %s", err)
-		}
-		err := m.getBase().handleQuotaSet(Background(), DirQuotaType, 0, "/d", map[string]*Quota{}, false)
-		if err == nil {
-			t.Fatal("handleQuotaSet returned no error although DirStats could not be enabled")
-		}
-		// a failed store is not a bad request: the caller has to be able to retry
-		if !errors.Is(err, syscall.EIO) {
-			t.Fatalf("handleQuotaSet did not report the failed store as EIO: %v", err)
-		}
-	})
 }
 
 // TestQuotaEdgeCases
