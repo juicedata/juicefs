@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -1202,7 +1203,12 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, key string, cmd uint8, capac
 		if strings.HasPrefix(_err.Error(), "no quota for inode") {
 			return qs, 0
 		}
-		err = syscall.EINVAL
+		var eno syscall.Errno
+		if errors.As(_err, &eno) {
+			err = eno
+		} else {
+			err = syscall.EINVAL
+		}
 	}
 	return
 }
