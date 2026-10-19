@@ -531,8 +531,9 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	if err != nil {
 		return nil, fmt.Errorf("new session: %s", err)
 	}
-	metaCli.OnReload(func(fmt *meta.Format) {
+	metaCli.OnReload(func(fmt *meta.Format) error {
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		return nil
 	})
 
 	vfsConf := &vfs.Config{

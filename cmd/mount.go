@@ -472,7 +472,7 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 		ObjectStorage: blob,
 		fmt:           *format, // keep a copy to find the change
 	}
-	cli.OnReload(func(new *meta.Format) {
+	cli.OnReload(func(new *meta.Format) error {
 		if patch != nil {
 			patch(new)
 		}
@@ -481,12 +481,12 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 			logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q tiers=%v", new.Storage, new.Bucket, new.AccessKey, new.Tiers[0].Sc, new.Tiers)
 			newBlob, err := createStorage(*new)
 			if err != nil {
-				logger.Warnf("object storage: %s", err)
-				return
+				return fmt.Errorf("object storage: %w", err)
 			}
 			holder.ObjectStorage = newBlob
 			holder.fmt = *new
 		}
+		return nil
 	})
 	return holder, nil
 }
@@ -682,9 +682,10 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("new session: %s", err)
 	}
 
-	metaCli.OnReload(func(fmt *meta.Format) {
+	metaCli.OnReload(func(fmt *meta.Format) error {
 		updateFormat(c)(fmt)
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		return nil
 	})
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
 	installHandler(metaCli, mp, v, blob)

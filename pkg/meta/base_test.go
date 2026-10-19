@@ -5168,6 +5168,67 @@ func TestPublishedFormatIsNotMutated(t *testing.T) {
 	})
 }
 
+// A reload callback that fails (e.g. the object storage cannot be rebuilt yet)
+// must be retried on later reloads even if the stored format does not change again.
+func TestReloadRetriesFailedCallbacks(t *testing.T) {
+	m := newTestMemKV(t, "test-reload-retry", &Format{Name: "test", Tiers: object.NewTiers("")})
+	kv := m.(*kvMeta)
+	base := m.getBase()
+	base.reloadFormat() // sync the published format with the stored one
+
+	store := func(capacity uint64) {
+		f := m.GetFormat()
+		f.Capacity = capacity
+		data, err := json.Marshal(&f)
+		require.NoError(t, err)
+		require.NoError(t, kv.txn(Background(), func(tx *kvTxn) error {
+			tx.set(kv.fmtKey("setting"), data)
+			return nil
+		}))
+	}
+	var okCalls, flakyCalls int
+	failing := true
+	m.OnReload(func(*Format) error {
+		okCalls++
+		return nil
+	})
+	m.OnReload(func(*Format) error {
+		flakyCalls++
+		if failing {
+			return errors.New("transient failure")
+		}
+		return nil
+	})
+	expect := func(ok, flaky int) {
+		t.Helper()
+		require.Equal(t, ok, okCalls, "calls of the succeeding callback")
+		require.Equal(t, flaky, flakyCalls, "calls of the failing callback")
+	}
+
+	base.reloadFormat()
+	expect(0, 0)
+
+	store(1 << 30)
+	base.reloadFormat()
+	expect(1, 1)
+	published := base.getFormat()
+	require.Equal(t, uint64(1<<30), published.Capacity, "a changed format is published even if a callback fails")
+
+	base.reloadFormat()
+	expect(1, 2)
+	require.Same(t, published, base.getFormat(), "an unchanged format is not republished")
+
+	store(2 << 30)
+	base.reloadFormat()
+	expect(2, 3)
+
+	failing = false
+	base.reloadFormat()
+	expect(2, 4)
+	base.reloadFormat()
+	expect(2, 4)
+}
+
 // TestQuotaEdgeCases
 func TestQuotaEdgeCases(t *testing.T) {
 	m := &baseMeta{}

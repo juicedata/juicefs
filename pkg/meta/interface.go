@@ -563,7 +563,8 @@ type Meta interface {
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
 	// OnReload register a callback for any change founded after reloaded.
-	OnReload(func(new *Format))
+	// A callback returning an error is retried on later reloads until it succeeds.
+	OnReload(func(new *Format) error)
 
 	HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32, quotas map[string]*Quota, strict, repair bool, create bool) error
 	// Triggers a global user group quota scan
