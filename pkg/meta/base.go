@@ -292,7 +292,8 @@ type baseMeta struct {
 	dslices      chan Slice // slices to delete
 	symlinks     *symlinkCache
 	msgCallbacks *msgCallbacks
-	reloadCb     []func(*Format)
+	reloadCb     []func(*Format) error
+	reloadFailed []func(*Format) error // only accessed by the refresh goroutine
 	umounting    bool
 	sesMu        sync.Mutex
 	aclCache     aclAPI.Cache
@@ -902,7 +903,7 @@ func (m *baseMeta) expireTime() int64 {
 	}
 }
 
-func (m *baseMeta) OnReload(fn func(f *Format)) {
+func (m *baseMeta) OnReload(fn func(f *Format) error) {
 	m.msgCallbacks.Lock()
 	defer m.msgCallbacks.Unlock()
 	m.reloadCb = append(m.reloadCb, fn)
@@ -934,13 +935,23 @@ func (m *baseMeta) reloadFormat() {
 		m.msgCallbacks.Lock()
 		cbs := m.reloadCb
 		m.msgCallbacks.Unlock()
-		// run the callbacks on a private copy; they may patch it with local overrides
-		patched := format.Clone()
-		for _, cb := range cbs {
-			cb(patched)
+		m.reloadFailed = runReloadCbs(cbs, format)
+		m.setFormat(format)
+	} else if len(m.reloadFailed) > 0 {
+		m.reloadFailed = runReloadCbs(m.reloadFailed, old)
+	}
+}
+
+// runReloadCbs runs cbs on a private copy of format and returns those that failed.
+func runReloadCbs(cbs []func(*Format) error, format *Format) (failed []func(*Format) error) {
+	patched := format.Clone() // callbacks may patch it with local overrides
+	for _, cb := range cbs {
+		if err := cb(patched); err != nil {
+			logger.Warnf("reload setting: %s, will retry", err)
+			failed = append(failed, cb)
 		}
 	}
-	m.setFormat(format)
+	return
 }
 
 func (m *baseMeta) refresh(ctx Context) {

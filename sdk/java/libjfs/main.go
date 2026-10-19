@@ -434,9 +434,10 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf}
 	if formats[name] != nil && formats[name].KerbConf != "" {
 		if _, ok := superuserChangedCb[name]; !ok {
-			jfs.Meta().OnReload(func(format *meta.Format) {
+			jfs.Meta().OnReload(func(format *meta.Format) error {
 				kerb.loadConf(name, format.KerbConf, jfs)
 				updateAllCtx(name, user, groups)
+				return nil
 			})
 			superuserChangedCb[name] = struct{}{}
 		}
@@ -731,7 +732,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			logger.Errorf("new session: %s", err)
 			return nil
 		}
-		m.OnReload(func(fmt *meta.Format) {
+		m.OnReload(func(fmt *meta.Format) error {
 			if chunkConf.UploadLimit > 0 {
 				fmt.UploadLimit = chunkConf.UploadLimit
 			}
@@ -739,6 +740,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 				fmt.DownloadLimit = chunkConf.DownloadLimit
 			}
 			store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+			return nil
 		})
 
 		conf := &vfs.Config{
