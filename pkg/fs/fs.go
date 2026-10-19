@@ -1165,18 +1165,6 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, key string, cmd uint8, capac
 	if cmd == meta.QuotaSet && capacity == 0 && inodes == 0 {
 		return nil, syscall.EINVAL
 	}
-	qs = make(map[string]*meta.Quota)
-	if cmd == meta.QuotaSet {
-		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
-		if capacity > 0 {
-			q.MaxSpace = int64(capacity)
-		}
-		if inodes > 0 {
-			q.MaxInodes = int64(inodes)
-		}
-		qs[key] = q
-	}
-
 	var qtype uint32
 	var qkey string
 	if strings.HasPrefix(key, "uid:") {
@@ -1197,6 +1185,18 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, key string, cmd uint8, capac
 		} else {
 			return nil, syscall.EINVAL
 		}
+	}
+
+	qs = make(map[string]*meta.Quota)
+	if cmd == meta.QuotaSet {
+		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
+		if capacity > 0 {
+			q.MaxSpace = int64(capacity)
+		}
+		if inodes > 0 {
+			q.MaxInodes = int64(inodes)
+		}
+		qs[qkey] = q
 	}
 	if _err := fs.m.HandleQuota(meta.Background(), cmd, qkey, qtype, qs, strict, repair, create); _err != nil {
 		if strings.HasPrefix(_err.Error(), "no quota for inode") {

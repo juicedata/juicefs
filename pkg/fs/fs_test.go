@@ -273,6 +273,69 @@ func TestFileSystem(t *testing.T) {
 	}
 }
 
+func TestHandleQuota(t *testing.T) {
+	fs := createTestFS(t)
+	ctx := meta.NewContext(1, 0, []uint32{0})
+	if e := fs.Mkdir(ctx, "/d", 0777, 0); e != 0 {
+		t.Fatalf("mkdir /d: %s", e)
+	}
+
+	cases := []struct {
+		key, getKey, listKey string
+		capacity, inodes     uint64
+	}{
+		{"/d", "/d", "/d", 1 << 30, 50},
+		{"uid:1000", "1000", "uid:1000", 1 << 30, 100},
+		{"gid:2000", "2000", "gid:2000", 2 << 30, 200},
+	}
+	for _, c := range cases {
+		if _, e := fs.HandleQuota(ctx, c.key, meta.QuotaSet, c.capacity, c.inodes, false, false, false); e != 0 {
+			t.Fatalf("set quota %s: %s", c.key, e)
+		}
+	}
+	expect := func(qs map[string]*meta.Quota, key string, capacity, inodes uint64) {
+		t.Helper()
+		q := qs[key]
+		if q == nil {
+			t.Fatalf("quota %s not found in %v", key, qs)
+		}
+		if q.MaxSpace != int64(capacity) || q.MaxInodes != int64(inodes) {
+			t.Fatalf("quota %s: %+v", key, q)
+		}
+	}
+	for _, c := range cases {
+		qs, e := fs.HandleQuota(ctx, c.key, meta.QuotaGet, 0, 0, false, false, false)
+		if e != 0 {
+			t.Fatalf("get quota %s: %s", c.key, e)
+		}
+		expect(qs, c.getKey, c.capacity, c.inodes)
+	}
+	qs, e := fs.HandleQuota(ctx, "", meta.QuotaList, 0, 0, false, false, false)
+	if e != 0 || len(qs) != len(cases) {
+		t.Fatalf("list quota: %s %v", e, qs)
+	}
+	for _, c := range cases {
+		expect(qs, c.listKey, c.capacity, c.inodes)
+	}
+
+	for _, c := range cases {
+		if _, e := fs.HandleQuota(ctx, c.key, meta.QuotaDel, 0, 0, false, false, false); e != 0 {
+			t.Fatalf("delete quota %s: %s", c.key, e)
+		}
+		qs, e := fs.HandleQuota(ctx, c.key, meta.QuotaGet, 0, 0, false, false, false)
+		if e != 0 {
+			t.Fatalf("get quota %s after delete: %s", c.key, e)
+		}
+		// user/group quotas keep their usage and only drop the limits
+		if q := qs[c.getKey]; q != nil && (q.MaxSpace != -1 || q.MaxInodes != -1) {
+			t.Fatalf("quota %s after delete: %+v", c.key, q)
+		}
+	}
+	if qs, e := fs.HandleQuota(ctx, "", meta.QuotaList, 0, 0, false, false, false); e != 0 || len(qs) != 0 {
+		t.Fatalf("list quota after delete: %s %v", e, qs)
+	}
+}
+
 func TestBatchDeleteEntries(t *testing.T) {
 	jfs := createTestFS(t)
 	ctx := meta.NewContext(1, 1, []uint32{2})
