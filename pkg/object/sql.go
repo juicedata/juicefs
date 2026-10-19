@@ -204,6 +204,7 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	}
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	if err := engine.Sync2(new(blob)); err != nil {
+		_ = engine.Close()
 		return nil, fmt.Errorf("create table blob: %s", err)
 	}
 	return &sqlStore{DefaultObjectStorage{}, engine, addr}, nil

@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -1022,7 +1023,31 @@ func TestMarsharl(t *testing.T) {
 func TestSharding(t *testing.T) {
 	s, _ := NewSharded("mem", "%d", "", "", "", 10)
 	testStorage(t, s)
+
+	t.Run("shut down created shards on failure", func(t *testing.T) {
+		var shutdowns int
+		Register("shard-shutdown-test", func(endpoint, ak, sk, token string) (ObjectStorage, error) {
+			if endpoint == "2" {
+				return nil, errors.New("shard unavailable")
+			}
+			s, err := CreateStorage("mem", endpoint, ak, sk, token)
+			return &shutdownCounter{s, &shutdowns}, err
+		})
+		if _, err := NewSharded("shard-shutdown-test", "%d", "", "", "", 4); err == nil {
+			t.Fatal("expected an error from the failing shard")
+		}
+		if shutdowns != 2 {
+			t.Fatalf("shut down %d shards, expected 2", shutdowns)
+		}
+	})
 }
+
+type shutdownCounter struct {
+	ObjectStorage
+	shutdowns *int
+}
+
+func (s *shutdownCounter) Shutdown() { *s.shutdowns++ }
 
 // tokenPagedStore pages by continuation token only and treats startAfter as a
 // client-side filter, like qiniu; a continuation call fails once.
@@ -1087,6 +1112,23 @@ func TestSQLite(t *testing.T) {
 		t.Fatalf("create: %s", err)
 	}
 	testStorage(t, s)
+
+	t.Run("close engine on failure", func(t *testing.T) {
+		badPath := filepath.Join(t.TempDir(), "missing", "teststore.db")
+		before := runtime.NumGoroutine()
+		for i := 0; i < 20; i++ {
+			if _, err := newSQLStore("sqlite3", badPath, "", ""); err == nil {
+				t.Fatal("expected an error for an unreachable database")
+			}
+		}
+		deadline := time.Now().Add(time.Second)
+		for runtime.NumGoroutine() > before+5 && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if after := runtime.NumGoroutine(); after > before+5 {
+			t.Fatalf("goroutines grew from %d to %d after failed creations", before, after)
+		}
+	})
 }
 
 func TestListPrefixBoundary(t *testing.T) {

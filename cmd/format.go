@@ -276,19 +276,21 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		}
 	}
 
+	var raw object.ObjectStorage
 	if format.Shards > 1 {
-		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
+		raw, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
 	} else {
-		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken)
+		raw, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken)
 	}
 	if err != nil {
 		return nil, err
 	}
-	blob = object.WithPrefix(blob, format.Name+"/")
+	blob = object.WithPrefix(raw, format.Name+"/")
 	initStorageTiers(blob, format.Tiers)
 	if format.EncryptKey != "" {
 		privKey, err := object.ParsePrivateKeyFromPem([]byte(format.EncryptKey), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
 		if err != nil {
+			object.Shutdown(raw)
 			if errors.Is(err, object.ErrKeyNeedPasswd) {
 				return nil, fmt.Errorf("%w: please set the 'JFS_RSA_PASSPHRASE' environment variable", err)
 			}
@@ -296,6 +298,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		}
 		encryptor, err := object.NewDataEncryptor(object.NewKeyEncryptor(privKey), format.EncryptAlgo)
 		if err != nil {
+			object.Shutdown(raw)
 			return nil, err
 		}
 		blob = object.NewEncrypted(blob, encryptor)
