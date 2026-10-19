@@ -121,24 +121,20 @@ type Shutdownable interface {
 }
 
 func Shutdown(o ObjectStorage) {
-	fn := func(o ObjectStorage) {
+	switch o := o.(type) {
+	case *encrypted:
+		Shutdown(o.ObjectStorage)
+	case *chunkedEncrypted:
+		Shutdown(o.ObjectStorage)
+	case *withPrefix:
+		Shutdown(o.os)
+	case *sharded:
+		for _, s := range o.stores {
+			Shutdown(s)
+		}
+	default:
 		if s, ok := o.(Shutdownable); ok {
 			s.Shutdown()
 		}
-	}
-
-	switch o := o.(type) {
-	case *encrypted:
-		fn(o.ObjectStorage)
-	case *chunkedEncrypted:
-		fn(o.ObjectStorage)
-	case *withPrefix:
-		fn(o.os)
-	case *sharded:
-		for _, s := range o.stores {
-			fn(s)
-		}
-	default:
-		fn(o)
 	}
 }

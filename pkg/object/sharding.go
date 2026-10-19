@@ -240,6 +240,9 @@ func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage
 		}
 		stores[i], err = CreateStorage(name, ep, ak, sk, token)
 		if err != nil {
+			for _, s := range stores[:i] {
+				Shutdown(s)
+			}
 			return nil, err
 		}
 	}
