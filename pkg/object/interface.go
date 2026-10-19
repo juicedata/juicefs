@@ -120,7 +120,6 @@ type Shutdownable interface {
 	Shutdown()
 }
 
-// Shutdown releases the resources held by o, unwrapping the storage wrappers.
 func Shutdown(o ObjectStorage) {
 	switch o := o.(type) {
 	case *encrypted:
