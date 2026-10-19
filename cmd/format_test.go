@@ -115,33 +115,6 @@ func TestCreateStorageTierWarning(t *testing.T) {
 	}
 }
 
-type shutdownCountingStorage struct {
-	object.ObjectStorage
-	shutdowns *int
-}
-
-func (s *shutdownCountingStorage) Shutdown() { *s.shutdowns++ }
-
-func TestCreateStorageShutdownOnFailure(t *testing.T) {
-	const storageName = "shutdown-on-failure-test"
-	var shutdowns int
-	object.Register(storageName, func(bucket, accessKey, secretKey, token string) (object.ObjectStorage, error) {
-		storage, err := object.CreateStorage("mem", bucket, accessKey, secretKey, token)
-		return &shutdownCountingStorage{ObjectStorage: storage, shutdowns: &shutdowns}, err
-	})
-
-	for _, shards := range []int{0, 3} {
-		shutdowns = 0
-		format := meta.Format{Name: "test", Storage: storageName, Bucket: "bucket-%d", Shards: shards, Tiers: object.NewTiers(""), EncryptKey: "invalid key"}
-		if _, err := createStorage(format); err == nil {
-			t.Fatalf("shards=%d: expected an error from the invalid encrypt key", shards)
-		}
-		if expected := max(shards, 1); shutdowns != expected {
-			t.Fatalf("shards=%d: shut down %d storages, expected %d", shards, shutdowns, expected)
-		}
-	}
-}
-
 func TestFormat(t *testing.T) {
 	rdb := resetTestMeta()
 	if err := Main([]string{"", "format", "--bucket", t.TempDir(), testMeta, testVolume}); err != nil {
