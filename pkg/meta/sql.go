@@ -634,6 +634,9 @@ func (m *dbMeta) syncAllTables() error {
 }
 
 func (m *dbMeta) doInit(format *Format, force bool) error {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
 	if err := m.syncAllTables(); err != nil {
 		return err
 	}

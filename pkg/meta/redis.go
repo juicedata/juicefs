@@ -333,6 +333,9 @@ func (m *redisMeta) Name() string {
 }
 
 func (m *redisMeta) doInit(format *Format, force bool) error {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
 	ctx := Background()
 	body, err := m.rdb.Get(ctx, m.setting()).Bytes()
 	if err != nil && err != redis.Nil {

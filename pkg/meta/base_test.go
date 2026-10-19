@@ -3102,6 +3102,66 @@ func testReadOnly(t *testing.T, m Meta) {
 	if plocks, flocks, err := m.ListLocks(ctx, 1); err != nil || len(plocks) != 0 || len(flocks) != 0 {
 		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
 	}
+
+	// a read-only client must not enable dir stats or user/group quota
+	base := m.getBase()
+	base.conf.ReadOnly = false
+	origin := base.getFormat().Clone()
+	var dir Ino
+	if st := m.Mkdir(ctx, 1, "rostat", 0755, 022, 0, &dir, attr); st != 0 {
+		t.Fatalf("mkdir rostat: %s", st)
+	}
+	if st := m.Create(ctx, dir, "f", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create rostat/f: %s", st)
+	}
+	base.doFlushDirStat()
+	disabled := origin.Clone()
+	disabled.DirStats = false
+	disabled.UserGroupQuota = false
+	if err := m.Init(disabled, false); err != nil {
+		t.Fatalf("disable dir stats and user group quota: %s", err)
+	}
+	userQuota := &Quota{MaxSpace: 1 << 30, MaxInodes: 100, UsedSpace: 4096, UsedInodes: 1}
+	if _, err := base.en.doSetQuota(ctx, UserQuotaType, 1000, userQuota); err != nil {
+		t.Fatalf("set user quota: %s", err)
+	}
+	dirStat, st := base.en.doGetDirStat(ctx, dir, false)
+	if st != 0 || dirStat == nil || dirStat.inodes != 1 {
+		t.Fatalf("get dir stat of rostat: %+v %s", dirStat, st)
+	}
+	base.conf.ReadOnly = true
+
+	enabled := disabled.Clone()
+	enabled.DirStats = true
+	enabled.UserGroupQuota = true
+	if err := m.Init(enabled, false); !errors.Is(err, syscall.EROFS) {
+		t.Fatalf("init in read-only mode: %v", err)
+	}
+	if err := m.HandleQuota(ctx, QuotaSet, "/rostat", DirQuotaType, map[string]*Quota{"/rostat": {MaxSpace: 1 << 30, MaxInodes: -1}}, false, false, false); err == nil {
+		t.Fatalf("set dir quota in read-only mode should fail")
+	}
+	if err := m.HandleQuota(ctx, QuotaSet, "1000", UserQuotaType, map[string]*Quota{"1000": {MaxSpace: 1 << 30, MaxInodes: -1}}, false, false, false); err == nil {
+		t.Fatalf("set user quota in read-only mode should fail")
+	}
+	stored, err := base.loadFormat(false)
+	if err != nil {
+		t.Fatalf("load format: %s", err)
+	}
+	if stored.DirStats || stored.UserGroupQuota {
+		t.Fatalf("format is changed by read-only client: DirStats %v, UserGroupQuota %v", stored.DirStats, stored.UserGroupQuota)
+	}
+	if q, err := base.en.doGetQuota(ctx, UserQuotaType, 1000); err != nil || q == nil || *q != *userQuota {
+		t.Fatalf("user quota is changed by read-only client: %+v %v", q, err)
+	}
+	if s, st := base.en.doGetDirStat(ctx, dir, false); st != 0 || s == nil || *s != *dirStat {
+		t.Fatalf("dir stat is changed by read-only client: %+v %s", s, st)
+	}
+
+	base.conf.ReadOnly = false
+	if err := m.Init(origin, false); err != nil {
+		t.Fatalf("restore format: %s", err)
+	}
+	base.conf.ReadOnly = true
 }
 
 func testConcurrentDir(t *testing.T, m Meta) {

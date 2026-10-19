@@ -502,6 +502,9 @@ func (m *kvMeta) scan(startKey, endKey []byte, limit int, filter func(k, v []byt
 }
 
 func (m *kvMeta) doInit(format *Format, force bool) error {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
 	body, err := m.get(m.fmtKey("setting"))
 	if err != nil {
 		return err
