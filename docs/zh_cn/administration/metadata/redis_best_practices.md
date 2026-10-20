@@ -33,6 +33,8 @@ used_memory_dataset_perc: 70.12%
 
 当 Redis 内存用量达到 `maxmemory` 上限后，所有写操作都会被拒绝并返回 `OOM command not allowed when used memory > 'maxmemory'` 错误。此时即使想通过 [`juicefs rmr`](../../reference/command_reference.mdx#rmr) 删除文件、或者[彻底删除回收站中的文件](../../security/trash.md#purge)来释放空间也会失败，因为这些删除操作本身仍需要向 Redis 写入数据才能完成。
 
+JuiceFS 会将 Redis 的 `OOM` 错误转换为 `ENOSPC`（`No space left on device`），也支持经过包装的错误以及 Redis 兼容服务返回的 `ERR OOM`。如果事务只返回 `EXECABORT`，操作仍可能返回 `EIO`（`Input/output error`），因为这个错误无法确定事务失败的具体原因。
+
 要从这种状态中恢复，可以参考以下方案：
 
 - **临时调高内存上限**：先通过 [`CONFIG SET maxmemory <new-value>`](https://redis.io/commands/config-set) 临时提高 Redis 的内存上限，让写操作恢复可用，再执行 `juicefs rmr` 或清空回收站等删除操作来释放空间；处理完毕后再将 `maxmemory` 改回原值。如果删除已无法释放出足够空间，也可以利用临时调高上限的时间窗口对 Redis 进行扩容。

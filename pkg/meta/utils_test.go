@@ -18,9 +18,36 @@ package meta
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"syscall"
 	"testing"
 	"time"
 )
+
+func TestErrno(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want syscall.Errno
+	}{
+		{"nil", nil, 0},
+		{"errno", syscall.ENOSPC, syscall.ENOSPC},
+		{"canceled", context.Canceled, syscall.EINTR},
+		{"wrapped canceled", fmt.Errorf("operation: %w", context.Canceled), syscall.EINTR},
+		{"stringified canceled", errors.New("operation: context canceled"), syscall.EINTR},
+		{"deadline", context.DeadlineExceeded, syscall.ETIMEDOUT},
+		{"wrapped deadline", fmt.Errorf("operation: %w", context.DeadlineExceeded), syscall.ETIMEDOUT},
+		{"unknown", errors.New("unknown error"), syscall.EIO},
+		{"non-Redis OOM", errors.New("OOM from another engine"), syscall.EIO},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := errno(tc.err); got != tc.want {
+				t.Fatalf("errno(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
 
 func TestRelatimeNeedUpdate(t *testing.T) {
 	attr := &Attr{
