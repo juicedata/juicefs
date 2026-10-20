@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-func BenchmarkReplayContext(b *testing.B) {
+func BenchmarkReplayState(b *testing.B) {
 	b.Run("TimeNow", func(b *testing.B) {
 		var now time.Time
 		b.ReportAllocs()
@@ -35,11 +35,12 @@ func BenchmarkReplayContext(b *testing.B) {
 
 	b.Run("WithReplayState", func(b *testing.B) {
 		var state *replayState
-		ctx := Background().WithValue(replayStateKey{}, &replayState{Time: time.Now()})
+		m := &baseMeta{}
+		m.replay.Store(&replayState{Time: time.Now()})
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			state = replayStateOf(ctx)
+			state = m.replay.Load()
 			_ = state.Time
 		}
 		runtime.KeepAlive(state)

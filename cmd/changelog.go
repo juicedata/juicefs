@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os/signal"
-	"reflect"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -127,19 +126,11 @@ func changelogReplay(ctx *cli.Context) error {
 		return fmt.Errorf("changelog is not enabled on the source, use `juicefs config %s --changelog` to enable it", srcUri)
 	}
 	dryRun := ctx.Bool("dry-run")
-	conf := meta.DefaultConf()
-	conf.NoCompact = true
-	conf.NoBGJob = true
-	conf.MaxDeletes = 0
-	conf.ReadOnly = dryRun
-	dst := meta.NewClient(dstUri, conf)
-	dstFormat, err := dst.Load(true)
+	replayer, err := meta.NewReplayer(dstUri, srcFormat, dryRun)
 	if err != nil {
 		return err
 	}
-	if err := validateCompatibility(srcFormat, dstFormat); err != nil {
-		return err
-	}
+	defer replayer.Close()
 	opt := &meta.ChangelogScanOption{From: ctx.Int64("from"), Follow: ctx.Bool("follow")}
 	if path := ctx.String("backup"); path != "" {
 		format, err := func() (*meta.Format, error) {
@@ -169,12 +160,6 @@ func changelogReplay(ctx *cli.Context) error {
 
 	logger.Infof("Start changelog replay: from=%d follow=%t dry-run=%t", opt.From, opt.Follow, dryRun)
 	replayCtx := meta.WrapContext(signalCtx)
-	if !dryRun {
-		if err := dst.NewSession(false); err != nil {
-			return fmt.Errorf("initialize destination metadata client: %w", err)
-		}
-		defer dst.CloseSession()
-	}
 	lastVersion := opt.From
 	err = src.ScanChangelog(replayCtx, opt, func(ver int64, entry string) error {
 		if err := replayCtx.Err(); err != nil {
@@ -188,7 +173,7 @@ func changelogReplay(ctx *cli.Context) error {
 			err = e.Validate()
 		}
 		if err == nil && !dryRun {
-			err = meta.Replay(replayCtx, dst, e)
+			err = replayer.Replay(replayCtx, e)
 		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -210,24 +195,4 @@ func changelogReplay(ctx *cli.Context) error {
 		logger.Infof("Changelog replay finished: last processed version=%d", lastVersion)
 	}
 	return err
-}
-
-// validateCompatibility requires the destination to be a copy of the source.
-func validateCompatibility(src, dst *meta.Format) error {
-	s, d := *src, *dst
-	for _, f := range []*meta.Format{&s, &d} {
-		f.SecretKey, f.SessionToken = "", ""
-		if err := f.Decrypt(); err != nil {
-			return fmt.Errorf("decrypt volume encryption key: %w", err)
-		}
-		// Fields that may differ between a volume and its copy.
-		f.AccessKey = ""
-		f.UploadLimit, f.DownloadLimit = 0, 0
-		f.MinClientVersion, f.MaxClientVersion = "", ""
-		f.ChangeLog, f.ChangeLogMaxAge, f.ChangeLogMaxLines = false, 0, 0
-	}
-	if !reflect.DeepEqual(s, d) {
-		return fmt.Errorf("destination is not a copy of the source:\nsource: %s\ndestination: %s", &s, &d)
-	}
-	return nil
 }
