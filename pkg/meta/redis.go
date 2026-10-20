@@ -104,6 +104,17 @@ func init() {
 	Register("redis", newRedisMeta)
 	Register("rediss", newRedisMeta)
 	Register("unix", newRedisMeta)
+	registerErrorConverter(redisErrno)
+}
+
+func redisErrno(err error) (syscall.Errno, bool) {
+	if err == redis.Nil {
+		return syscall.ENOENT, true
+	}
+	if redis.HasErrorPrefix(err, "OOM ") {
+		return syscall.ENOSPC, true
+	}
+	return 0, false
 }
 
 // newRedisMeta return a meta store using Redis.
