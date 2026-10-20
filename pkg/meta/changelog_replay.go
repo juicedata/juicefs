@@ -24,9 +24,9 @@ import (
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 )
 
-type changelogApplyStateKey struct{}
+type replayStateKey struct{}
 
-type changelogApplyState struct {
+type replayState struct {
 	Time    time.Time
 	Inode   Ino
 	Inodes  []Ino        // Source inodes of a batch operation, consumed in order.
@@ -38,24 +38,47 @@ type changelogApplyState struct {
 	Opened  map[Ino]bool // Whether each inode was open on the source when removed.
 }
 
-func getChangelogApplyState(ctx Context) *changelogApplyState {
-	s, _ := ctx.Value(changelogApplyStateKey{}).(*changelogApplyState)
+// replayContext skips permission checks: the source already authorized every
+// recorded operation.
+type replayContext struct {
+	Context
+}
+
+func (c *replayContext) CheckPermission() bool {
+	return false
+}
+
+func (c *replayContext) WithValue(k, v interface{}) Context {
+	return &replayContext{c.Context.WithValue(k, v)}
+}
+
+// replayAs replays an operation as the given user without permission checks.
+func replayAs(ctx Context, uid uint32, gids []uint32) Context {
+	return &replayContext{&wrapContext{Context: ctx, pid: ctx.Pid(), uid: uid, gids: gids}}
+}
+
+func replayStateOf(ctx Context) *replayState {
+	s, _ := ctx.Value(replayStateKey{}).(*replayState)
 	return s
 }
 
-func isApplyMode(ctx Context) bool {
-	return getChangelogApplyState(ctx) != nil
+func isReplay(ctx Context) bool {
+	return replayStateOf(ctx) != nil
 }
 
-func operationTime(ctx Context) time.Time {
-	if s := getChangelogApplyState(ctx); s != nil {
+// The ctx* helpers use the source value recorded in ctx during changelog replay,
+// or the normal local value otherwise.
+
+func ctxTime(ctx Context) time.Time {
+	if s := replayStateOf(ctx); s != nil {
 		return s.Time
 	}
 	return time.Now()
 }
 
-func applyParent(ctx Context, parent Ino, update bool) bool {
-	if s := getChangelogApplyState(ctx); s != nil {
+// ctxUpdateParent reports whether the timestamps of parent should be updated.
+func ctxUpdateParent(ctx Context, parent Ino, update bool) bool {
+	if s := replayStateOf(ctx); s != nil {
 		if v, ok := s.Parents[parent]; ok {
 			return v
 		}
@@ -63,40 +86,39 @@ func applyParent(ctx Context, parent Ino, update bool) bool {
 	return update
 }
 
-// applyTokenId returns the token ID to reuse when replaying STORETOKEN, or 0.
-func applyTokenId(ctx Context) uint32 {
-	if s := getChangelogApplyState(ctx); s != nil {
+// ctxTokenId returns the token ID to reuse, or 0 to allocate a new one.
+func ctxTokenId(ctx Context) uint32 {
+	if s := replayStateOf(ctx); s != nil {
 		return s.TokenId
 	}
 	return 0
 }
 
-// applyMode returns the mode recorded by the source, so that umask, default ACL
-// inheritance and sgid clearing do not diverge on the destination.
-func applyMode(ctx Context, computed uint16) uint16 {
-	if s := getChangelogApplyState(ctx); s != nil && s.Mode != nil {
+// ctxMode returns the mode recorded by the source, or computed otherwise.
+func ctxMode(ctx Context, computed uint16) uint16 {
+	if s := replayStateOf(ctx); s != nil && s.Mode != nil {
 		return *s.Mode
 	}
 	return computed
 }
 
-func (m *baseMeta) sessionID(ctx Context) uint64 {
-	if s := getChangelogApplyState(ctx); s != nil {
+func (m *baseMeta) ctxSid(ctx Context) uint64 {
+	if s := replayStateOf(ctx); s != nil {
 		return s.Sid
 	}
 	return m.sid
 }
 
-func (m *baseMeta) isOpen(ctx Context, inode Ino) bool {
-	if s := getChangelogApplyState(ctx); s != nil {
+func (m *baseMeta) ctxOpened(ctx Context, inode Ino) bool {
+	if s := replayStateOf(ctx); s != nil {
 		return s.Opened[inode]
 	}
 	return m.of.IsOpen(inode)
 }
 
-// Apply applies a validated changelog entry to dst.
-func Apply(ctx Context, dst Meta, e *ChangeEntry) (err error) {
-	ctx = ctx.WithValue(changelogApplyStateKey{}, &changelogApplyState{Time: e.Time, Sid: e.Sid})
+// Replay replays a validated changelog entry on dst.
+func Replay(ctx Context, dst Meta, e *ChangeEntry) (err error) {
+	ctx = &replayContext{ctx.WithValue(replayStateKey{}, &replayState{Time: e.Time, Sid: e.Sid})}
 	var skipReason string
 	defer func() {
 		if err != nil {
@@ -105,29 +127,29 @@ func Apply(ctx Context, dst Meta, e *ChangeEntry) (err error) {
 		if skipReason != "" {
 			logger.Infof("Skipped changelog: version=%d operation=%s reason=%s", e.Ver, e.Op, skipReason)
 		} else {
-			logger.Infof("Applied changelog: version=%d operation=%s", e.Ver, e.Op)
+			logger.Infof("Replayed changelog: version=%d operation=%s", e.Ver, e.Op)
 		}
 	}()
 	defer dst.getBase().doFlushStats()
 	switch e.Op {
 	case OpCreate:
-		return applyCreate(ctx, dst, e)
+		return replayCreate(ctx, dst, e)
 	case OpLink:
-		return applyLink(ctx, dst, e)
+		return replayLink(ctx, dst, e)
 	case OpUnlink:
-		return applyUnlink(ctx, dst, e)
+		return replayUnlink(ctx, dst, e)
 	case OpUnlinkBatch:
-		return applyUnlinkBatch(ctx, dst, e)
+		return replayUnlinkBatch(ctx, dst, e)
 	case OpRmdir:
-		return applyRmdir(ctx, dst, e)
+		return replayRmdir(ctx, dst, e)
 	case OpMove:
-		return applyMove(ctx, dst, e)
+		return replayMove(ctx, dst, e)
 	case OpClone:
-		return applyClone(ctx, dst, e)
+		return replayClone(ctx, dst, e)
 	case OpCloneBatch:
-		return applyCloneBatch(ctx, dst, e)
+		return replayCloneBatch(ctx, dst, e)
 	case OpAttach:
-		return applyAttach(ctx, dst, e)
+		return replayAttach(ctx, dst, e)
 	case OpCleanup:
 		inode, err := e.Ino(0)
 		if err != nil {
@@ -135,21 +157,21 @@ func Apply(ctx Context, dst Meta, e *ChangeEntry) (err error) {
 		}
 		return changelogCall(e, dst.getBase().en.doCleanupDetachedNode(ctx, inode))
 	case OpSetXattr:
-		return applySetXattr(ctx, dst, e)
+		return replaySetXattr(ctx, dst, e)
 	case OpRemoveXattr:
-		return applyRemoveXattr(ctx, dst, e)
+		return replayRemoveXattr(ctx, dst, e)
 	case OpSetAttr:
-		return applySetAttr(ctx, dst, e)
+		return replaySetAttr(ctx, dst, e)
 	case OpTruncate:
-		return applyTruncate(ctx, dst, e)
+		return replayTruncate(ctx, dst, e)
 	case OpFallocate:
-		return applyFallocate(ctx, dst, e)
+		return replayFallocate(ctx, dst, e)
 	case OpCopyFileRange:
-		return applyCopyFileRange(ctx, dst, e)
+		return replayCopyFileRange(ctx, dst, e)
 	case OpWrite:
-		return applyWrite(ctx, dst, e)
+		return replayWrite(ctx, dst, e)
 	case OpCompactChunk:
-		return applyCompactChunk(ctx, dst, e)
+		return replayCompactChunk(ctx, dst, e)
 	case OpIncrCounter:
 		name := e.Args[0]
 		delta, err := e.Int64(1)
@@ -166,19 +188,19 @@ func Apply(ctx Context, dst Meta, e *ChangeEntry) (err error) {
 		}
 		return nil
 	case OpSetFacl:
-		return applySetFacl(ctx, dst, e)
+		return replaySetFacl(ctx, dst, e)
 	case OpSetQuota:
-		return applySetQuota(ctx, dst, e)
+		return replaySetQuota(ctx, dst, e)
 	case OpDelQuota:
-		return applyDelQuota(ctx, dst, e)
+		return replayDelQuota(ctx, dst, e)
 	case OpRepairDir:
-		return applyRepairDir(ctx, dst, e)
+		return replayRepairDir(ctx, dst, e)
 	case OpUpdateToken:
-		return applyUpdateToken(ctx, dst, e)
+		return replayUpdateToken(ctx, dst, e)
 	case OpStoreToken:
-		return applyStoreToken(ctx, dst, e)
+		return replayStoreToken(ctx, dst, e)
 	case OpDeleteTokens:
-		return applyDeleteTokens(ctx, dst, e)
+		return replayDeleteTokens(ctx, dst, e)
 	case OpAccess:
 		inode, err := e.Ino(0)
 		if err != nil {
@@ -205,22 +227,22 @@ func Apply(ctx Context, dst Meta, e *ChangeEntry) (err error) {
 		return nil
 
 	case OpNewSession, OpCleanSession:
-		skipReason = "source client sessions are not applied"
+		skipReason = "source client sessions are not replayed"
 		return nil
 	case OpFlock, OpSetlk:
-		skipReason = "source client locks are not applied"
+		skipReason = "source client locks are not replayed"
 		return nil
 	case OpInitDirStats, OpInitUserGroupQuota:
-		skipReason = "statistics initialization is not applied"
+		skipReason = "statistics initialization is not replayed"
 		return nil
 	case OpDelChunk, OpDeleteSlice, OpCleanupDelayedSlices, OpCleanupTrashSlices:
-		skipReason = "background cleanup is not applied"
+		skipReason = "background cleanup is not replayed"
 		return nil
 	case OpSet:
-		skipReason = "background job timestamps are not applied"
+		skipReason = "background job timestamps are not replayed"
 		return nil
 	default:
-		return fmt.Errorf("%s is validated but not implemented by apply", e.Op)
+		return fmt.Errorf("%s is validated but not implemented by replay", e.Op)
 	}
 }
 
@@ -242,7 +264,7 @@ func changelogVerifyIno(e *ChangeEntry, index int, actual Ino) error {
 	return nil
 }
 
-func applyCreate(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayCreate(ctx Context, dst Meta, e *ChangeEntry) error {
 	parent, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -277,30 +299,30 @@ func applyCreate(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	finalMode, err := e.Uint16(11)
+	srcMode, err := e.Uint16(11)
 	if err != nil {
 		return err
 	}
 	var inode Ino
-	state := getChangelogApplyState(ctx)
+	state := replayStateOf(ctx)
 	state.Inode = expected
-	state.Mode = &finalMode
+	state.Mode = &srcMode
 	updateParent, err := e.Bool(9)
 	if err != nil {
 		return err
 	}
 	state.Parents = map[Ino]bool{parent: updateParent}
-	ctx = &wrapContext{Context: ctx, pid: ctx.Pid(), uid: uid, gids: []uint32{gid}}
+	ctx = replayAs(ctx, uid, []uint32{gid})
 	ctx = ctx.WithValue(CtxKey("behavior"), e.Args[8])
 	// FIXME: CREATE does not record the ACL IDs inherited from the parent, so
-	// apply can allocate different ones.
+	// replay can allocate different ones.
 	if err := changelogCall(e, dst.Mknod(ctx, parent, name, typ, mode, cumask, rdev, path, &inode, nil)); err != nil {
 		return err
 	}
 	return changelogVerifyIno(e, 0, inode)
 }
 
-func applyLink(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayLink(ctx Context, dst Meta, e *ChangeEntry) error {
 	inode, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -314,7 +336,7 @@ func applyLink(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	getChangelogApplyState(ctx).Parents = map[Ino]bool{parent: updateParent}
+	replayStateOf(ctx).Parents = map[Ino]bool{parent: updateParent}
 	var attr Attr
 	if err := changelogCall(e, dst.Link(ctx, inode, parent, name, &attr)); err != nil {
 		return err
@@ -329,7 +351,7 @@ func applyLink(ctx Context, dst Meta, e *ChangeEntry) error {
 	return nil
 }
 
-func applyUnlink(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayUnlink(ctx Context, dst Meta, e *ChangeEntry) error {
 	parent, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -351,14 +373,14 @@ func applyUnlink(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	state := getChangelogApplyState(ctx)
+	state := replayStateOf(ctx)
 	state.Trash = Ino(trash)
 	state.Parents = map[Ino]bool{parent: updateParent}
 	state.Opened = map[Ino]bool{inode: opened}
 	return changelogCall(e, dst.Unlink(ctx, parent, name, trash == 0))
 }
 
-func applyRmdir(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayRmdir(ctx Context, dst Meta, e *ChangeEntry) error {
 	parent, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -368,13 +390,13 @@ func applyRmdir(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	getChangelogApplyState(ctx).Trash = Ino(trash)
+	replayStateOf(ctx).Trash = Ino(trash)
 	// FIXME: RMDIR lacks the source's parent-update decision; KV retry-based
-	// skipping can leave parent timestamps and nlink different after apply.
+	// skipping can leave parent timestamps and nlink different after replay.
 	return changelogCall(e, dst.Rmdir(ctx, parent, name, trash == 0))
 }
 
-func applyMove(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayMove(ctx Context, dst Meta, e *ChangeEntry) error {
 	parentSrc, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -401,7 +423,7 @@ func applyMove(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	state := getChangelogApplyState(ctx)
+	state := replayStateOf(ctx)
 	state.Trash = trash
 	state.Opened = map[Ino]bool{overwritten: opened}
 	var inode Ino
@@ -412,7 +434,7 @@ func applyMove(ctx Context, dst Meta, e *ChangeEntry) error {
 	return changelogVerifyIno(e, 0, inode)
 }
 
-func applyClone(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayClone(ctx Context, dst Meta, e *ChangeEntry) error {
 	srcIno, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -459,7 +481,7 @@ func applyClone(ctx Context, dst Meta, e *ChangeEntry) error {
 	return nil
 }
 
-func applyCloneBatch(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayCloneBatch(ctx Context, dst Meta, e *ChangeEntry) error {
 	dstParent, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -492,7 +514,7 @@ func applyCloneBatch(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	state := getChangelogApplyState(ctx)
+	state := replayStateOf(ctx)
 	state.Inodes = inodes
 	m := dst.getBase()
 	// The engines ignore srcParent; the changelog does not record it.
@@ -513,7 +535,7 @@ func applyCloneBatch(ctx Context, dst Meta, e *ChangeEntry) error {
 	return nil
 }
 
-func applyAttach(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayAttach(ctx Context, dst Meta, e *ChangeEntry) error {
 	dstIno, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -554,10 +576,10 @@ func changelogOwnerContext(ctx Context, e *ChangeEntry, uidIndex, gidsIndex int)
 	if len(gids) == 0 {
 		return nil, fmt.Errorf("%s: argument %d has no group", e.Op, gidsIndex)
 	}
-	return &wrapContext{Context: ctx, pid: ctx.Pid(), uid: uid, gids: gids}, nil
+	return replayAs(ctx, uid, gids), nil
 }
 
-func applySetXattr(ctx Context, dst Meta, e *ChangeEntry) error {
+func replaySetXattr(ctx Context, dst Meta, e *ChangeEntry) error {
 	inode, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -571,7 +593,7 @@ func applySetXattr(ctx Context, dst Meta, e *ChangeEntry) error {
 	return changelogCall(e, dst.SetXattr(ctx, inode, name, []byte(value), flags))
 }
 
-func applyRemoveXattr(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayRemoveXattr(ctx Context, dst Meta, e *ChangeEntry) error {
 	inode, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -580,7 +602,7 @@ func applyRemoveXattr(ctx Context, dst Meta, e *ChangeEntry) error {
 	return changelogCall(e, dst.RemoveXattr(ctx, inode, name))
 }
 
-func applySetAttr(ctx Context, dst Meta, e *ChangeEntry) error {
+func replaySetAttr(ctx Context, dst Meta, e *ChangeEntry) error {
 	inode, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -597,12 +619,12 @@ func applySetAttr(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	// FIXME: SETATTR records an ACL ID but not its rule; apply needs to preserve
+	// FIXME: SETATTR records an ACL ID but not its rule; replay needs to preserve
 	// the source's ACL mapping when allocating ACLs or changing modes.
 	return changelogCall(e, dst.SetAttr(ctx, inode, set, sgid, attr))
 }
 
-func applyWrite(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayWrite(ctx Context, dst Meta, e *ChangeEntry) error {
 	inode, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -635,7 +657,7 @@ func applyWrite(ctx Context, dst Meta, e *ChangeEntry) error {
 	return changelogCall(e, dst.Write(ctx, inode, indx, off, slice, time.Unix(mtime, int64(mtimensec))))
 }
 
-func applyCompactChunk(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayCompactChunk(ctx Context, dst Meta, e *ChangeEntry) error {
 	inode, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -664,11 +686,11 @@ func applyCompactChunk(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	return changelogCall(e, dst.getBase().applyCompactChunk(ctx, inode, indx, int(skipped), int(nslices), pos, id, size))
+	return changelogCall(e, dst.getBase().replayCompactChunk(ctx, inode, indx, int(skipped), int(nslices), pos, id, size))
 }
 
-// The source has written the merged slice; apply only updates metadata.
-func (m *baseMeta) applyCompactChunk(ctx Context, inode Ino, indx uint32, skipped, nslices int, pos uint32, id uint64, size uint32) syscall.Errno {
+// The source has written the merged slice; replay only updates metadata.
+func (m *baseMeta) replayCompactChunk(ctx Context, inode Ino, indx uint32, skipped, nslices int, pos uint32, id uint64, size uint32) syscall.Errno {
 	if skipped < 0 || nslices <= 0 {
 		return syscall.EINVAL
 	}
@@ -700,7 +722,7 @@ func (m *baseMeta) applyCompactChunk(ctx Context, inode Ino, indx uint32, skippe
 	return st
 }
 
-func applyTruncate(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayTruncate(ctx Context, dst Meta, e *ChangeEntry) error {
 	inode, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -718,7 +740,7 @@ func applyTruncate(ctx Context, dst Meta, e *ChangeEntry) error {
 	return changelogCall(e, dst.Truncate(ctx, inode, flags, length, &attr, true))
 }
 
-func applyFallocate(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayFallocate(ctx Context, dst Meta, e *ChangeEntry) error {
 	inode, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -739,7 +761,7 @@ func applyFallocate(ctx Context, dst Meta, e *ChangeEntry) error {
 	return changelogCall(e, dst.Fallocate(ctx, inode, mode, off, size, &length))
 }
 
-func applyCopyFileRange(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayCopyFileRange(ctx Context, dst Meta, e *ChangeEntry) error {
 	fin, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -775,7 +797,7 @@ func applyCopyFileRange(ctx Context, dst Meta, e *ChangeEntry) error {
 	return nil
 }
 
-func applyUnlinkBatch(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayUnlinkBatch(ctx Context, dst Meta, e *ChangeEntry) error {
 	parent, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -789,7 +811,7 @@ func applyUnlinkBatch(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	state := getChangelogApplyState(ctx)
+	state := replayStateOf(ctx)
 	state.Trash = Ino(trash)
 	state.Parents = map[Ino]bool{parent: updateParent}
 	state.Opened = make(map[Ino]bool, len(names))
@@ -818,7 +840,7 @@ func applyUnlinkBatch(ctx Context, dst Meta, e *ChangeEntry) error {
 	return changelogCall(e, dst.BatchUnlink(ctx, parent, entries, &count, trash == 0))
 }
 
-func applySetFacl(ctx Context, dst Meta, e *ChangeEntry) error {
+func replaySetFacl(ctx Context, dst Meta, e *ChangeEntry) error {
 	ino, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -834,14 +856,14 @@ func applySetFacl(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	getChangelogApplyState(ctx).Mode = &mode
-	// FIXME: SETFACL lacks the assigned ACL ID, so apply can allocate a different one.
+	replayStateOf(ctx).Mode = &mode
+	// FIXME: SETFACL lacks the assigned ACL ID, so replay can allocate a different one.
 	return changelogCall(e, dst.SetFacl(ctx, ino, aclType, rule))
 }
 
-// applyRepairDir rebuilds a directory inode; nlink is recounted on the
+// replayRepairDir rebuilds a directory inode; nlink is recounted on the
 // destination because the changelog does not record it.
-func applyRepairDir(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayRepairDir(ctx Context, dst Meta, e *ChangeEntry) error {
 	inode, err := e.Ino(0)
 	if err != nil {
 		return err
@@ -862,7 +884,7 @@ func applyRepairDir(ctx Context, dst Meta, e *ChangeEntry) error {
 	return changelogCall(e, dst.getBase().en.doRepair(ctx, inode, attr, false))
 }
 
-func applySetQuota(ctx Context, dst Meta, e *ChangeEntry) error {
+func replaySetQuota(ctx Context, dst Meta, e *ChangeEntry) error {
 	qtype, err := e.Uint32(0)
 	if err != nil {
 		return err
@@ -903,7 +925,7 @@ func applySetQuota(ctx Context, dst Meta, e *ChangeEntry) error {
 	return nil
 }
 
-func applyDelQuota(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayDelQuota(ctx Context, dst Meta, e *ChangeEntry) error {
 	qtype, err := e.Uint32(0)
 	if err != nil {
 		return err
@@ -915,7 +937,7 @@ func applyDelQuota(ctx Context, dst Meta, e *ChangeEntry) error {
 	return dst.getBase().en.doDelQuota(ctx, qtype, key)
 }
 
-func applyStoreToken(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayStoreToken(ctx Context, dst Meta, e *ChangeEntry) error {
 	id, err := e.Uint32(0)
 	if err != nil {
 		return err
@@ -923,7 +945,7 @@ func applyStoreToken(ctx Context, dst Meta, e *ChangeEntry) error {
 	if id == 0 {
 		return fmt.Errorf("%s: token ID must not be zero", e.Op)
 	}
-	getChangelogApplyState(ctx).TokenId = id
+	replayStateOf(ctx).TokenId = id
 	actual, st := dst.StoreToken(ctx, []byte(e.Args[1]))
 	if err := changelogCall(e, st); err != nil {
 		return err
@@ -934,7 +956,7 @@ func applyStoreToken(ctx Context, dst Meta, e *ChangeEntry) error {
 	return nil
 }
 
-func applyUpdateToken(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayUpdateToken(ctx Context, dst Meta, e *ChangeEntry) error {
 	id, err := e.Uint32(0)
 	if err != nil {
 		return err
@@ -943,7 +965,7 @@ func applyUpdateToken(ctx Context, dst Meta, e *ChangeEntry) error {
 	return changelogCall(e, dst.UpdateToken(ctx, id, token))
 }
 
-func applyDeleteTokens(ctx Context, dst Meta, e *ChangeEntry) error {
+func replayDeleteTokens(ctx Context, dst Meta, e *ChangeEntry) error {
 	ids := make([]uint32, len(e.Args))
 	for i := range e.Args {
 		id, err := e.Uint32(i)

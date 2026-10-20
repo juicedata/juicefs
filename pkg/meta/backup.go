@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -190,17 +191,17 @@ func readBackupSource(r io.Reader) (pb.Footer_Engine, error) {
 	return footer.Msg.Source, nil
 }
 
-// LoadBackup initializes the scan position and rewind deduplication from a metadata backup.
-func (opt *ChangelogScanOption) LoadBackup(r io.ReadSeeker) (*Format, error) {
-	if _, err := r.Seek(0, io.SeekStart); err != nil {
-		return nil, err
-	}
+// LoadChangelogBaseline reads the volume format, lastChangelog and the changelog
+// versions included in a JSON or binary metadata backup. A binary backup that is
+// not seekable is copied to a temporary file.
+func LoadChangelogBaseline(r io.Reader) (*Format, int64, map[uint64]struct{}, error) {
 	reader := bufio.NewReader(r)
 	var first byte
+
 	for {
 		prefix, err := reader.Peek(1)
 		if err != nil {
-			return nil, err
+			return nil, 0, nil, err
 		}
 		first = prefix[0]
 		if first != ' ' && first != '\t' && first != '\r' && first != '\n' {
@@ -211,126 +212,144 @@ func (opt *ChangelogScanOption) LoadBackup(r io.ReadSeeker) (*Format, error) {
 
 	var format Format
 	var from int64
+	var err error
 	seen := make(map[uint64]struct{})
 	if first == '{' {
-		dec := json.NewDecoder(reader)
-		dec.UseNumber()
-		if _, err := dec.Token(); err != nil {
-			return nil, err
-		}
-		for dec.More() {
-			name, err := dec.Token()
-			if err != nil {
-				return nil, err
-			}
-			switch name {
-			case "Setting":
-				err = dec.Decode(&format)
-			case "Counters":
-				var counters DumpedCounters
-				err = dec.Decode(&counters)
-				from = counters.LastChangelog
-			case "ChangeLog":
-				var logs []struct{ Version int64 }
-				err = dec.Decode(&logs)
-				for _, log := range logs {
-					seen[uint64(log.Version)] = struct{}{}
-				}
-			default:
-				// Skip file trees and other unused fields without retaining them in memory.
-				depth := 0
-				for {
-					var token json.Token
-					token, err = dec.Token()
-					if err != nil {
-						break
-					}
-					switch token {
-					case json.Delim('{'), json.Delim('['):
-						depth++
-					case json.Delim('}'), json.Delim(']'):
-						depth--
-					}
-					if depth == 0 {
-						break
-					}
-				}
-			}
-			if err != nil {
-				return nil, fmt.Errorf("read backup field %s: %w", name, err)
-			}
-		}
-		if _, err := dec.Token(); err != nil {
-			return nil, err
-		}
+		from, err = readJSONBaseline(reader, &format, seen)
 	} else {
-		end, err := r.Seek(-8, io.SeekEnd)
-		if err != nil {
-			return nil, err
-		}
-		var footerLen uint64
-		if err := binary.Read(r, binary.BigEndian, &footerLen); err != nil {
-			return nil, err
-		}
-		if footerLen == 0 || footerLen > uint64(end) {
-			return nil, fmt.Errorf("invalid binary backup footer length %d", footerLen)
-		}
-		bak := &BakFormat{}
-		footer, err := bak.ReadFooter(r)
-		if err != nil {
-			return nil, err
-		}
-		if footer.Msg.Version != BakVersion {
-			return nil, fmt.Errorf("unsupported backup version %d", footer.Msg.Version)
-		}
-		for _, name := range []string{"format", "counter", "changeLog"} {
-			info := footer.Msg.Infos[name]
-			if info == nil {
-				continue
+		rs, ok := r.(io.ReadSeeker)
+		if !ok {
+			fp, err := os.CreateTemp("", "juicefs-backup-*")
+			if err != nil {
+				return nil, 0, nil, err
 			}
-			for _, offset := range info.Offset {
-				if _, err := r.Seek(int64(offset), io.SeekStart); err != nil {
-					return nil, err
-				}
-				seg, err := bak.ReadSegment(r)
-				if err != nil {
-					return nil, err
-				}
-				if seg.Name() != name {
-					return nil, fmt.Errorf("expected backup segment %s, got %s", name, seg.Name())
-				}
-				switch seg.typ {
-				case segTypeFormat:
-					if err := json.Unmarshal(seg.val.(*pb.Format).Data, &format); err != nil {
-						return nil, err
-					}
-				case segTypeCounter:
-					for _, counter := range seg.val.(*pb.Batch).Counters {
-						if counter.Key == "lastChangelog" {
-							from = counter.Value
-						}
-					}
-				case segTypeChangeLog:
-					for _, log := range seg.val.(*pb.Batch).Changelogs {
-						seen[uint64(log.Version)] = struct{}{}
-					}
-				}
+			defer os.Remove(fp.Name())
+			defer fp.Close()
+			if _, err := io.Copy(fp, reader); err != nil {
+				return nil, 0, nil, fmt.Errorf("copy backup: %w", err)
 			}
+			rs = fp
 		}
+		from, err = readBinaryBaseline(rs, &format, seen)
+	}
+	if err != nil {
+		return nil, 0, nil, err
 	}
 	if format.UUID == "" {
-		return nil, fmt.Errorf("backup does not contain a volume UUID")
+		return nil, 0, nil, fmt.Errorf("backup does not contain a volume UUID")
 	}
 	if from <= 0 {
-		return nil, fmt.Errorf("backup does not contain a positive lastChangelog")
+		return nil, 0, nil, fmt.Errorf("backup does not contain a positive lastChangelog")
 	}
 	for id := range seen {
 		if id == 0 || id > uint64(from) {
-			return nil, fmt.Errorf("backup changelog %d is outside the baseline ending at %d", int64(id), from)
+			return nil, 0, nil, fmt.Errorf("backup changelog %d is outside the baseline ending at %d", int64(id), from)
 		}
 	}
-	opt.From, opt.Seen = from, seen
-	return &format, nil
+	return &format, from, seen, nil
+}
+
+func readJSONBaseline(r io.Reader, format *Format, seen map[uint64]struct{}) (int64, error) {
+	dec := json.NewDecoder(r)
+	dec.UseNumber()
+	if _, err := dec.Token(); err != nil {
+		return 0, err
+	}
+	var from int64
+	for dec.More() {
+		name, err := dec.Token()
+		if err != nil {
+			return 0, err
+		}
+		switch name {
+		case "Setting":
+			err = dec.Decode(format)
+		case "Counters":
+			var counters DumpedCounters
+			err = dec.Decode(&counters)
+			from = counters.LastChangelog
+		case "ChangeLog":
+			var logs []struct{ Version int64 }
+			err = dec.Decode(&logs)
+			for _, log := range logs {
+				seen[uint64(log.Version)] = struct{}{}
+			}
+		case "FSTree", "Trash":
+			// Dump writes the file trees after all other fields.
+			return from, nil
+		default:
+			err = skipJSONValue(dec)
+		}
+		if err != nil {
+			return 0, fmt.Errorf("read backup field %s: %w", name, err)
+		}
+	}
+	_, err := dec.Token()
+	return from, err
+}
+
+// skipJSONValue skips the next value without retaining it in memory.
+func skipJSONValue(dec *json.Decoder) error {
+	depth := 0
+	for {
+		token, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		switch token {
+		case json.Delim('{'), json.Delim('['):
+			depth++
+		case json.Delim('}'), json.Delim(']'):
+			depth--
+		}
+		if depth == 0 {
+			return nil
+		}
+	}
+}
+
+func readBinaryBaseline(r io.ReadSeeker, format *Format, seen map[uint64]struct{}) (int64, error) {
+	bak := &BakFormat{}
+	footer, err := bak.ReadFooter(r)
+	if err != nil {
+		return 0, err
+	}
+	var from int64
+	for _, name := range []string{"format", "counter", "changeLog"} {
+		info := footer.Msg.Infos[name]
+		if info == nil {
+			continue
+		}
+		for _, offset := range info.Offset {
+			if _, err := r.Seek(int64(offset), io.SeekStart); err != nil {
+				return 0, err
+			}
+			seg, err := bak.ReadSegment(r)
+			if err != nil {
+				return 0, err
+			}
+			if seg.Name() != name {
+				return 0, fmt.Errorf("expected backup segment %s, got %s", name, seg.Name())
+			}
+			switch seg.typ {
+			case segTypeFormat:
+				if err := json.Unmarshal(seg.val.(*pb.Format).Data, format); err != nil {
+					return 0, err
+				}
+			case segTypeCounter:
+				for _, counter := range seg.val.(*pb.Batch).Counters {
+					if counter.Key == "lastChangelog" {
+						from = counter.Value
+					}
+				}
+			case segTypeChangeLog:
+				for _, log := range seg.val.(*pb.Batch).Changelogs {
+					seen[uint64(log.Version)] = struct{}{}
+				}
+			}
+		}
+	}
+	return from, nil
 }
 
 type BakFooter struct {

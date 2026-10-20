@@ -620,7 +620,7 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 }
 
 func (m *baseMeta) atimeNeedsUpdate(ctx Context, attr *Attr, now time.Time) bool {
-	if isApplyMode(ctx) {
+	if isReplay(ctx) {
 		return true
 	}
 	return m.conf.AtimeMode != NoAtime && relatimeNeedUpdate(attr, now) ||

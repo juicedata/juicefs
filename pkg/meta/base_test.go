@@ -302,6 +302,34 @@ func (c *aclCacheWithMissCount) GetMissIds() []uint32 {
 	return c.Cache.GetMissIds()
 }
 
+func TestMergeFacl(t *testing.T) {
+	minimal := &aclAPI.Rule{Owner: 6, Group: 4, Mask: 0xFFFF, Other: 0}
+	extended := &aclAPI.Rule{Owner: 7, Group: 7, Mask: 5, Other: 1, NamedUsers: aclAPI.Entries{{Id: 1001, Perm: 4}}}
+	srcMode := uint16(0640)
+	replay := &replayContext{Background().WithValue(replayStateKey{}, &replayState{Mode: &srcMode})}
+	for _, c := range []struct {
+		name    string
+		ctx     Context
+		aclType uint8
+		rule    *aclAPI.Rule
+		mode    uint16
+		aclId   uint32
+	}{
+		{"non-member clears sgid", NewContext(1, 1000, []uint32{1000}), aclAPI.TypeAccess, minimal, 0640, aclAPI.None},
+		{"extended access uses mask", Background(), aclAPI.TypeAccess, extended, 02751, 7},
+		{"default keeps mode", Background(), aclAPI.TypeDefault, extended, 02755, 7},
+		{"replay keeps source mode", replay, aclAPI.TypeAccess, minimal, srcMode, aclAPI.None},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			attr := &Attr{Mode: 02755, Uid: 1000, Gid: 2000}
+			insert := func(*aclAPI.Rule) (uint32, error) { return 7, nil }
+			require.NoError(t, mergeFacl(c.ctx, attr, c.aclType, c.rule.Dup(), insert))
+			assert.Equal(t, c.mode, attr.Mode)
+			assert.Equal(t, c.aclId, getAttrACLId(attr, c.aclType))
+		})
+	}
+}
+
 func testACL(t *testing.T, m Meta) {
 	format := testFormat()
 	format.EnableACL = true

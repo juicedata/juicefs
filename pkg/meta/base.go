@@ -1418,7 +1418,7 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 	if ctx.Uid() == 0 {
 		return 0
 	}
-	if !ctx.CheckPermission() || isApplyMode(ctx) {
+	if !ctx.CheckPermission() {
 		return 0
 	}
 
@@ -1532,7 +1532,7 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 }
 
 func (m *baseMeta) nextInode(ctx Context) (Ino, error) {
-	if state := getChangelogApplyState(ctx); state != nil {
+	if state := replayStateOf(ctx); state != nil {
 		if state.Inode != 0 {
 			return state.Inode, nil
 		}
@@ -1596,7 +1596,7 @@ func (m *baseMeta) allocateInodes() (freeID, error) {
 }
 
 // clientBehavior reports the platform semantics of the client that issued the
-// operation; changelog apply replays the value recorded by the source.
+// operation.
 func clientBehavior(ctx Context) string {
 	if b, ok := ctx.Value(CtxKey("behavior")).(string); ok && b != "" {
 		return b
@@ -1617,6 +1617,9 @@ func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parent
 }
 
 func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, parentMode, childMode uint16) uint16 {
+	if s := replayStateOf(ctx); s != nil && s.Mode != nil {
+		return *s.Mode
+	}
 	if clientBehavior(ctx) != "linux" || parentMode&02000 == 0 {
 		return childMode
 	}
@@ -1634,7 +1637,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if _type < TypeFile || _type > TypeSocket {
 		return syscall.EINVAL
 	}
-	if parent.IsTrash() && !isApplyMode(ctx) {
+	if parent.IsTrash() && !isReplay(ctx) {
 		return syscall.EPERM
 	}
 	if parent == RootInode && name == TrashName {
@@ -1858,7 +1861,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == RootInode && name == TrashName || parent == TrashInode && !isApplyMode(ctx) || parent.IsTrash() && ctx.Uid() != 0 {
+	if parent == RootInode && name == TrashName || parent == TrashInode && !isReplay(ctx) || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -3072,7 +3075,7 @@ func (m *baseMeta) toTrash(parent Ino) bool {
 }
 
 func (m *baseMeta) checkTrash(ctx Context, parent Ino, trash *Ino) syscall.Errno {
-	if state := getChangelogApplyState(ctx); state != nil {
+	if state := replayStateOf(ctx); state != nil {
 		*trash = state.Trash
 		return 0
 	}
@@ -3757,6 +3760,34 @@ func (m *baseMeta) saveACL(rule *aclAPI.Rule, aclMaxId *uint32) uint32 {
 		m.aclCache.Put(id, rule)
 	}
 	return id
+}
+
+// mergeFacl sets rule on attr; the result is final and must be persisted as is.
+func mergeFacl(ctx Context, attr *Attr, aclType uint8, rule *aclAPI.Rule, insertACL func(*aclAPI.Rule) (uint32, error)) error {
+	// https://github.com/torvalds/linux/blob/480e035fc4c714fb5536e64ab9db04fedc89e910/fs/fuse/acl.c#L143-L151
+	// TODO: check linux capabilities
+	if ctx.Uid() != 0 && !inGroup(ctx, attr.Gid) {
+		attr.Mode &= 05777 // clear sgid
+	}
+	if rule.IsEmpty() {
+		setAttrACLId(attr, aclType, aclAPI.None)
+	} else if rule.IsMinimal() && aclType == aclAPI.TypeAccess {
+		setAttrACLId(attr, aclType, aclAPI.None)
+		attr.Mode = attr.Mode&07000 | rule.GetMode()
+	} else {
+		rule.InheritPerms(attr.Mode)
+		id, err := insertACL(rule)
+		if err != nil {
+			return err
+		}
+		setAttrACLId(attr, aclType, id)
+		if aclType == aclAPI.TypeAccess {
+			attr.Mode = attr.Mode&07000 | rule.GetMode()
+		}
+	}
+	// Keep last: replay pins the mode recorded by the source.
+	attr.Mode = ctxMode(ctx, attr.Mode)
+	return nil
 }
 
 func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {

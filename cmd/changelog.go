@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"os/signal"
 	"reflect"
 	"syscall"
@@ -49,38 +47,31 @@ $ juicefs changelog redis://localhost
 $ juicefs changelog redis://localhost --from 100
 
 # Validate that every entry can be parsed, without writing to the destination
-$ juicefs changelog apply redis://src redis://dst --dry-run`,
+$ juicefs changelog replay redis://src redis://dst --dry-run`,
 		Subcommands: []*cli.Command{
 			{
-				Name:      "apply",
-				Usage:     "Apply the changelog of a volume to another volume",
+				Name:      "replay",
+				Usage:     "Replay the changelog of a volume on another volume",
 				ArgsUsage: "SRC-META-URL DST-META-URL",
-				Action:    changelogApply,
+				Action:    changelogReplay,
 				Description: `
-Apply metadata changes recorded in the changelog of SRC-META-URL to DST-META-URL, to keep the
-latter as an incrementally synchronized copy of the former.
-
-The destination volume must be a copy of the source created with "juicefs dump" and
-"juicefs load", and both volumes must share the same object storage: the changelog only carries
-metadata, never file data.
-
-Use --backup to read lastChangelog and the rewind deduplication entries from the JSON or binary
-backup used to create the destination. When specified, its lastChangelog overrides --from.
-
-Only one apply process may write to the destination. Do not mount it for writes while applying.
-Apply does not persist a checkpoint; replaying entries against an already updated destination
-is not safe. --dry-run only checks parsing and log structure, not whether operations will succeed.
+Replay the changelog of SRC-META-URL on DST-META-URL.
 
 Examples:
-$ juicefs changelog apply redis://src redis://dst --backup /tmp/meta.bin
-$ juicefs changelog apply redis://src redis://dst --from 100
-$ juicefs changelog apply redis://src redis://dst --dry-run --from 100`,
+# Start from the backup used to create the destination
+$ juicefs changelog replay redis://src redis://dst --backup /tmp/meta.bin
+
+# Start from a specific version
+$ juicefs changelog replay redis://src redis://dst --from 100
+
+# Only parse and validate entries
+$ juicefs changelog replay redis://src redis://dst --dry-run --from 100`,
 			},
 		},
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "backup",
-				Usage: "apply: path to the baseline JSON or binary backup (overrides --from)",
+				Usage: "path to the baseline JSON or binary backup (overrides --from)",
 			},
 			&cli.Int64Flag{
 				Name:  "from",
@@ -93,7 +84,7 @@ $ juicefs changelog apply redis://src redis://dst --dry-run --from 100`,
 			},
 			&cli.BoolFlag{
 				Name:  "dry-run",
-				Usage: "apply: only parse and validate the changelog, do not write to the destination",
+				Usage: "only parse and validate the changelog, do not write to the destination",
 			},
 		},
 	}
@@ -118,7 +109,7 @@ func changelog(ctx *cli.Context) error {
 	})
 }
 
-func changelogApply(ctx *cli.Context) error {
+func changelogReplay(ctx *cli.Context) error {
 	setup(ctx, 2)
 	srcUri, dstUri := ctx.Args().Get(0), ctx.Args().Get(1)
 	removePassword(srcUri)
@@ -146,7 +137,7 @@ func changelogApply(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := checkChangelogApplyFormat(srcFormat, dstFormat); err != nil {
+	if err := validateCompatibility(srcFormat, dstFormat); err != nil {
 		return err
 	}
 	opt := &meta.ChangelogScanOption{From: ctx.Int64("from"), Follow: ctx.Bool("follow")}
@@ -157,20 +148,12 @@ func changelogApply(ctx *cli.Context) error {
 				return nil, err
 			}
 			defer r.Close()
-			backupReader, ok := r.(io.ReadSeeker)
-			if !ok {
-				fp, err := os.CreateTemp("", "juicefs-changelog-backup-*")
-				if err != nil {
-					return nil, err
-				}
-				defer os.Remove(fp.Name())
-				defer fp.Close()
-				if _, err := io.Copy(fp, r); err != nil {
-					return nil, fmt.Errorf("decompress backup: %w", err)
-				}
-				backupReader = fp
+			format, from, seen, err := meta.LoadChangelogBaseline(r)
+			if err != nil {
+				return nil, err
 			}
-			return opt.LoadBackup(backupReader)
+			opt.From, opt.Seen = from, seen
+			return format, nil
 		}()
 		if err != nil {
 			return fmt.Errorf("read changelog baseline from backup: %w", err)
@@ -184,8 +167,8 @@ func changelogApply(ctx *cli.Context) error {
 	signalCtx, stop := signal.NotifyContext(ctx.Context, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	logger.Infof("Start changelog apply: from=%d follow=%t dry-run=%t", opt.From, opt.Follow, dryRun)
-	applyCtx := meta.WrapContext(signalCtx)
+	logger.Infof("Start changelog replay: from=%d follow=%t dry-run=%t", opt.From, opt.Follow, dryRun)
+	replayCtx := meta.WrapContext(signalCtx)
 	if !dryRun {
 		if err := dst.NewSession(false); err != nil {
 			return fmt.Errorf("initialize destination metadata client: %w", err)
@@ -193,8 +176,8 @@ func changelogApply(ctx *cli.Context) error {
 		defer dst.CloseSession()
 	}
 	lastVersion := opt.From
-	err = src.ScanChangelog(applyCtx, opt, func(ver int64, entry string) error {
-		if err := applyCtx.Err(); err != nil {
+	err = src.ScanChangelog(replayCtx, opt, func(ver int64, entry string) error {
+		if err := replayCtx.Err(); err != nil {
 			return err
 		}
 		logger.Debugf("Changelog entry: version=%d entry=%q", ver, entry)
@@ -205,13 +188,13 @@ func changelogApply(ctx *cli.Context) error {
 			err = e.Validate()
 		}
 		if err == nil && !dryRun {
-			err = meta.Apply(applyCtx, dst, e)
+			err = meta.Replay(replayCtx, dst, e)
 		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				return err
 			}
-			logger.Errorf("Failed to apply changelog: version=%d operation=%s error=%s", ver, op, err)
+			logger.Errorf("Failed to replay changelog: version=%d operation=%s error=%s", ver, op, err)
 			return err
 		} else if dryRun {
 			logger.Infof("Validated changelog: version=%d operation=%s dry-run=true", ver, op)
@@ -220,58 +203,31 @@ func changelogApply(ctx *cli.Context) error {
 		return nil
 	})
 	if errors.Is(err, context.Canceled) {
-		logger.Infof("Changelog apply stopped: last processed version=%d", lastVersion)
+		logger.Infof("Changelog replay stopped: last processed version=%d", lastVersion)
 		return nil
 	}
 	if err == nil {
-		logger.Infof("Changelog apply finished: last processed version=%d", lastVersion)
+		logger.Infof("Changelog replay finished: last processed version=%d", lastVersion)
 	}
 	return err
 }
 
-func checkChangelogApplyFormat(src, dst *meta.Format) error {
-	if src.UUID == "" || dst.UUID == "" {
-		return fmt.Errorf("source and destination must have a volume UUID")
-	}
-	for _, f := range []struct {
-		name     string
-		src, dst interface{}
-	}{
-		{"volume UUID", src.UUID, dst.UUID},
-		{"volume name", src.Name, dst.Name},
-		{"storage", src.Storage, dst.Storage},
-		{"bucket", src.Bucket, dst.Bucket},
-		{"storage class", src.StorageClass, dst.StorageClass},
-		{"tiers", src.Tiers, dst.Tiers},
-		{"block size", src.BlockSize, dst.BlockSize},
-		{"compression", src.Compression, dst.Compression},
-		{"shards", src.Shards, dst.Shards},
-		{"hash prefix", src.HashPrefix, dst.HashPrefix},
-		{"meta version", src.MetaVersion, dst.MetaVersion},
-		{"encrypt algorithm", src.EncryptAlgo, dst.EncryptAlgo},
-		{"trash days", src.TrashDays, dst.TrashDays},
-		{"ACL", src.EnableACL, dst.EnableACL},
-		{"dir stats", src.DirStats, dst.DirStats},
-		{"user group quota", src.UserGroupQuota, dst.UserGroupQuota},
-		{"capacity", src.Capacity, dst.Capacity},
-		{"inodes", src.Inodes, dst.Inodes},
-	} {
-		if !reflect.DeepEqual(f.src, f.dst) {
-			return fmt.Errorf("%s of the destination (%v) does not match the source (%v)", f.name, f.dst, f.src)
-		}
-	}
-	srcCopy, dstCopy := *src, *dst
-	for _, format := range []*meta.Format{&srcCopy, &dstCopy} {
-		format.SecretKey, format.SessionToken = "", ""
-		if format.EncryptKey == "removed" {
-			return fmt.Errorf("volume encryption key was removed; restore it before applying changelogs")
-		}
-		if err := format.Decrypt(); err != nil {
+// validateCompatibility requires the destination to be a copy of the source.
+func validateCompatibility(src, dst *meta.Format) error {
+	s, d := *src, *dst
+	for _, f := range []*meta.Format{&s, &d} {
+		f.SecretKey, f.SessionToken = "", ""
+		if err := f.Decrypt(); err != nil {
 			return fmt.Errorf("decrypt volume encryption key: %w", err)
 		}
+		// Fields that may differ between a volume and its copy.
+		f.AccessKey = ""
+		f.UploadLimit, f.DownloadLimit = 0, 0
+		f.MinClientVersion, f.MaxClientVersion = "", ""
+		f.ChangeLog, f.ChangeLogMaxAge, f.ChangeLogMaxLines = false, 0, 0
 	}
-	if srcCopy.EncryptKey != dstCopy.EncryptKey {
-		return fmt.Errorf("encryption key of the destination does not match the source")
+	if !reflect.DeepEqual(s, d) {
+		return fmt.Errorf("destination is not a copy of the source:\nsource: %s\ndestination: %s", &s, &d)
 	}
 	return nil
 }
