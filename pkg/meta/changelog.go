@@ -123,17 +123,9 @@ var changelogOps = map[string]changelogOpSpec{
 	OpDeleteTokens:         {variadic, 0},
 }
 
-// match reports whether the counts fit the shape; a variadic argument count
-// still requires at least one argument.
+// match reports whether the counts fit the shape.
 func (s changelogOpSpec) match(args, results int) bool {
-	if s.args == variadic {
-		if args == 0 {
-			return false
-		}
-	} else if args != s.args {
-		return false
-	}
-	return s.results == variadic || results == s.results
+	return (s.args == variadic || args == s.args) && (s.results == variadic || results == s.results)
 }
 
 func (s changelogOpSpec) String() string {
