@@ -619,6 +619,10 @@ func replaySetAttr(ctx Context, dst Meta, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
+	if set&(SetAttrMode|SetAttrUID|SetAttrGID) != 0 {
+		mode := attr.Mode
+		replayStateOf(ctx).Mode = &mode
+	}
 	// FIXME: SETATTR records an ACL ID but not its rule; replay needs to preserve
 	// the source's ACL mapping when allocating ACLs or changing modes.
 	return changelogCall(e, dst.SetAttr(ctx, inode, set, sgid, attr))

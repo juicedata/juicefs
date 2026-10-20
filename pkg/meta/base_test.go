@@ -330,6 +330,30 @@ func TestMergeFacl(t *testing.T) {
 	}
 }
 
+func TestMergeAttrReplayMode(t *testing.T) {
+	srcMode := uint16(0640)
+	replay := &replayContext{Background().WithValue(replayStateKey{}, &replayState{Mode: &srcMode})}
+	for _, c := range []struct {
+		name string
+		ctx  Context
+		set  uint16
+		mode uint16
+	}{
+		{"root chgrp keeps sgid", Background(), SetAttrGID, 02644},
+		{"replay chgrp keeps source mode", replay, SetAttrGID, srcMode},
+		{"replay chown and chmod keep source mode", replay, SetAttrUID | SetAttrMode, srcMode},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			cur := &Attr{Typ: TypeFile, Mode: 02644, Uid: 1000, Gid: 1000}
+			attr := &Attr{Mode: srcMode, Uid: 1001, Gid: 1001}
+			dirty, st := (&baseMeta{}).mergeAttr(c.ctx, 2, c.set, cur, attr, time.Now(), nil)
+			require.Zero(t, st)
+			require.NotNil(t, dirty)
+			assert.Equal(t, c.mode, dirty.Mode)
+		})
+	}
+}
+
 func testACL(t *testing.T, m Meta) {
 	format := testFormat()
 	format.EnableACL = true

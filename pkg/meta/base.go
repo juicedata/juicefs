@@ -3687,6 +3687,8 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		*attr = *cur
 		return nil, 0
 	}
+	// Keep last: replay pins the mode recorded by the source.
+	dirtyAttr.Mode = ctxMode(ctx, dirtyAttr.Mode)
 	return &dirtyAttr, 0
 }
 
