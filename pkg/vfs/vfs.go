@@ -622,7 +622,10 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) 
 			err = syscall.EINTR
 			return
 		}
-		defer func(h *handle) { h.Wunlock() }(h)
+		defer func(h *handle) {
+			h.removeOp(ctx)
+			h.Wunlock()
+		}(h)
 	}
 	_ = v.writer.Flush(ctx, ino)
 	if fh == 0 {
