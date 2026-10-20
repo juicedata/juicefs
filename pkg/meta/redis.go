@@ -104,10 +104,10 @@ func init() {
 	Register("redis", newRedisMeta)
 	Register("rediss", newRedisMeta)
 	Register("unix", newRedisMeta)
-	registerErrorConverter(redisErrorToErrno)
+	registerErrorConverter(redisErrno)
 }
 
-func redisErrorToErrno(err error) (syscall.Errno, bool) {
+func redisErrno(err error) (syscall.Errno, bool) {
 	if err == redis.Nil {
 		return syscall.ENOENT, true
 	}
