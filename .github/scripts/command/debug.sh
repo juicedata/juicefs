@@ -30,6 +30,7 @@ check_debug_file(){
 }
 
 test_debug_juicefs(){
+    prepare_test
     ./juicefs format $META_URL myjfs 
     ./juicefs mount -d $META_URL /jfs
     dd if=/dev/urandom of=/jfs/bigfile bs=1M count=128
@@ -39,6 +40,7 @@ test_debug_juicefs(){
 }
 
 test_debug_abnormal_juicefs(){
+    prepare_test
     rm -rf debug | true
     ./juicefs format $META_URL myjfs 
     ./juicefs mount -d $META_URL /jfs

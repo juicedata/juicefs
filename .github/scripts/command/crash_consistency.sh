@@ -6,6 +6,19 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
+cleanup(){
+    local status=$?
+    trap - EXIT
+    set +e
+    ( umount_jfs /jfs "$META_URL" )
+    local cleanup_status=$?
+    if [[ $cleanup_status -ne 0 ]]; then
+        echo "<FATAL>: failed to clean up /jfs (exit $cleanup_status)"
+    fi
+    exit "$status"
+}
+trap cleanup EXIT
+
 MANIFEST=/tmp/jfs_crash_manifest.txt
 CACHE_DIR=/var/jfsCache-crash
 FILE_COUNT=100000
