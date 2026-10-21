@@ -41,6 +41,24 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | `juicefs_transaction_durations_histogram_seconds` | Transactions latency distributions         | second |
 | `juicefs_transaction_restart`                     | Number of times a transaction restarted |        |
 
+### SQL connection pool
+
+For MySQL, PostgreSQL, and SQLite metadata engines, the following metrics describe each client's connection pool. They use the Prometheus Go SQL collector and have the additional label `db_name="metadata"`. Scraping reads local pool statistics without querying the database. These are client-side statistics, not database server totals.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| `juicefs_go_sql_max_open_connections` | Gauge | Maximum number of open connections; 0 means unlimited |
+| `juicefs_go_sql_open_connections` | Gauge | Number of open connections, including in-use and idle connections |
+| `juicefs_go_sql_in_use_connections` | Gauge | Number of connections currently in use |
+| `juicefs_go_sql_idle_connections` | Gauge | Number of idle connections |
+| `juicefs_go_sql_wait_count_total` | Counter | Total number of waits for a connection |
+| `juicefs_go_sql_wait_duration_seconds_total` | Counter | Total time spent waiting for a connection, in seconds |
+| `juicefs_go_sql_max_idle_closed_total` | Counter | Total connections closed because of the idle connection limit |
+| `juicefs_go_sql_max_idle_time_closed_total` | Counter | Total connections closed because of the maximum idle time |
+| `juicefs_go_sql_max_lifetime_closed_total` | Counter | Total connections closed because of the maximum connection lifetime |
+
+The wait counters help identify pool contention when metadata operations slow down. Counters accumulate over the lifetime of the client's pool; use `rate()` or `increase()` to observe changes over a time window.
+
 ## FUSE {#fuse}
 
 ### Metrics
