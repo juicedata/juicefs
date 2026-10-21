@@ -2511,9 +2511,6 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	var parent = RootInode
 	attr.Typ = TypeDirectory
 	if fpath == "/" {
-		// GetAttr's 300ms fallback invents a directory (nlink 2, mode 0777).
-		// fsck must read the stored attr, or a stall looks like corruption.
-		// ENOENT still takes the missing-attribute path below.
 		inode = m.checkRoot(inode)
 		if st := m.en.doGetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
 			logger.Errorf("GetAttr inode %d: %s", inode, st)
