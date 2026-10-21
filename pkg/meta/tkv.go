@@ -2572,7 +2572,13 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			updateParent = true
 		}
 		oldParent := iattr.Parent
-		iattr.Parent = 0
+		// an open inode with no links left (O_TMPFILE) becomes a plain single-parent file
+		unlinked := iattr.Nlink == 0
+		if unlinked {
+			iattr.Parent = parent
+		} else {
+			iattr.Parent = 0
+		}
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
 		iattr.Nlink++
@@ -2581,10 +2587,14 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 		tx.set(m.inodeKey(inode), m.marshal(&iattr))
-		if oldParent > 0 {
-			tx.incrBy(m.parentKey(inode, oldParent), 1)
+		if unlinked {
+			tx.delete(m.sustainedKey(m.sid, inode))
+		} else {
+			if oldParent > 0 {
+				tx.incrBy(m.parentKey(inode, oldParent), 1)
+			}
+			tx.incrBy(m.parentKey(inode, parent), 1)
 		}
-		tx.incrBy(m.parentKey(inode, parent), 1)
 		if attr != nil {
 			*attr = iattr
 		}
@@ -2714,6 +2724,11 @@ func (m *kvMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) erro
 			return nil
 		}
 		m.parseAttr(a, &attr)
+		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold
+		if attr.Nlink > 0 {
+			tx.delete(m.sustainedKey(sid, inode))
+			return nil
+		}
 		newSpace = -align4K(attr.Length)
 		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(m.now().Unix()))
 		tx.delete(m.inodeKey(inode))
