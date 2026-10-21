@@ -8,12 +8,17 @@ META_URL=$(get_meta_url $META)
 
 cleanup(){
     local status=$?
+    local cleanup_status=0
     trap - EXIT
     set +e
-    ( umount_jfs /jfs "$META_URL" )
-    local cleanup_status=$?
+    ( umount_jfs /jfs "$META_URL" ) || cleanup_status=$?
+    if is_mounted /jfs; then
+        echo "<FATAL>: /jfs is still mounted after cleanup"
+        cleanup_status=1
+    fi
     if [[ $cleanup_status -ne 0 ]]; then
         echo "<FATAL>: failed to clean up /jfs (exit $cleanup_status)"
+        [[ $status -eq 0 ]] && status=$cleanup_status
     fi
     exit "$status"
 }
