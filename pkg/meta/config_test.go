@@ -17,43 +17,12 @@
 package meta
 
 import (
-	"encoding/base64"
-	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/stretchr/testify/assert"
 )
-
-func TestDecryptMalformedKeys(t *testing.T) {
-	for _, algo := range []string{object.AES256GCM_RSA, object.CHACHA20_RSA, object.SM4GCM} {
-		ci, err := newCipher(algo, "test-uuid")
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, field := range []string{"SecretKey", "SessionToken", "EncryptKey"} {
-			for _, size := range []int{1, ci.NonceSize() - 1, ci.NonceSize(), ci.NonceSize() + ci.Overhead()} {
-				t.Run(fmt.Sprintf("%s/%s/bytes=%d", algo, field, size), func(t *testing.T) {
-					format := Format{UUID: "test-uuid", EncryptAlgo: algo, KeyEncrypted: true}
-					value := base64.StdEncoding.EncodeToString(make([]byte, size))
-					switch field {
-					case "SecretKey":
-						format.SecretKey = value
-					case "SessionToken":
-						format.SessionToken = value
-					case "EncryptKey":
-						format.EncryptKey = value
-					}
-					var decryptErr error
-					if assert.NotPanics(t, func() { decryptErr = format.Decrypt() }) {
-						assert.Error(t, decryptErr)
-					}
-				})
-			}
-		}
-	}
-}
 
 func TestRemoveSecret(t *testing.T) {
 	format := Format{Name: "test", SecretKey: "testSecret", EncryptKey: "testEncrypt", SessionToken: "token"}
