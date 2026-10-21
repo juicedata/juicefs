@@ -66,8 +66,8 @@ def probe(mode, label, command, mountpoint):
         remaining = mounts(mountpoint)
         print(f"remaining_mounts={remaining}")
         results.append((mode, label, mountpoint, code, len(remaining)))
-        if label == "direct" and (code != 0 or remaining):
-            raise RuntimeError("direct lazy unmount did not detach the mount")
+        if (label == "direct" or mode == "allow-umount") and (code != 0 or remaining):
+            raise RuntimeError("expected unmount to detach the mount")
     finally:
         if mounts(mountpoint):
             run(["umount", "--internal-only", "--no-canonicalize", "--lazy",
@@ -92,6 +92,8 @@ if __name__ == "__main__":
             run([binary, "-V"])
 
     profile = Path("/etc/apparmor.d/fusermount3")
+    local_profile = Path("/etc/apparmor.d/local/fusermount3")
+    original_local = local_profile.read_text() if local_profile.exists() else ""
     profiles = Path("/sys/kernel/security/apparmor/profiles")
     loaded = profiles.read_text() if profiles.exists() else ""
     print(f"loaded_fuse_profiles={[line for line in loaded.splitlines() if 'fuse' in line]}")
@@ -105,21 +107,34 @@ if __name__ == "__main__":
     ]
     results = []
     changed_mode = False
+    changed_local = False
     try:
-        for mode in ("original", "complain"):
-            if mode == "complain":
+        for mode in ("original", "allow-umount", "complain"):
+            if mode != "original":
                 if not profile.exists() or "fusermount3 (enforce)" not in loaded:
-                    print("skip complain comparison: fusermount3 is not enforced")
+                    print("skip policy comparisons: fusermount3 is not enforced")
                     break
+            if mode == "allow-umount":
+                local_profile.parent.mkdir(exist_ok=True)
+                changed_local = True
+                local_profile.write_text(original_local + "\n# JuiceFS CI\numount,\n")
+                run(["apparmor_parser", "-r", str(profile)], check=True)
+                if "fusermount3 (enforce)" not in profiles.read_text():
+                    raise RuntimeError("fusermount3 profile is not enforced")
+                print("confirmed fusermount3 remains enforced with umount permission")
+            elif mode == "complain":
+                local_profile.write_text(original_local)
                 # Reload only this profile; restore enforcement in finally.
                 changed_mode = True
                 run(["apparmor_parser", "-C", "-r", str(profile)], check=True)
-            for mountpoint in ("/jfs", "/tmp/juicefs-stale-probe"):
+            for mountpoint in ("/jfs", "/tmp/juicefs-stale-probe", "/var/tmp/juicefs-stale-probe"):
                 for label, command in commands:
                     probe(mode, label, command, mountpoint)
     finally:
         try:
-            if changed_mode:
+            if changed_local:
+                local_profile.write_text(original_local)
+            if changed_local or changed_mode:
                 run(["apparmor_parser", "-r", str(profile)], check=True)
         finally:
             run(["journalctl", "-k", "--since", started_at, "--no-pager"])
