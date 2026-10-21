@@ -50,7 +50,7 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-24.04-4-cores
     strategy:
       fail-fast: false
       matrix:
