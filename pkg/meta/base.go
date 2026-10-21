@@ -2526,7 +2526,8 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	var parent = RootInode
 	attr.Typ = TypeDirectory
 	if fpath == "/" {
-		if st := m.GetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
+		inode = m.checkRoot(inode)
+		if st := m.en.doGetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
 			logger.Errorf("GetAttr inode %d: %s", inode, st)
 			return st
 		}
