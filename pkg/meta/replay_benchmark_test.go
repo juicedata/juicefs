@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-func BenchmarkApplyContext(b *testing.B) {
+func BenchmarkReplayState(b *testing.B) {
 	b.Run("TimeNow", func(b *testing.B) {
 		var now time.Time
 		b.ReportAllocs()
@@ -33,13 +33,14 @@ func BenchmarkApplyContext(b *testing.B) {
 		runtime.KeepAlive(now)
 	})
 
-	b.Run("WithChangelogApplyState", func(b *testing.B) {
-		var state *changelogApplyState
-		ctx := Background().WithValue(changelogApplyStateKey{}, &changelogApplyState{Time: time.Now()})
+	b.Run("WithReplayState", func(b *testing.B) {
+		var state *replayState
+		m := &baseMeta{}
+		m.replay.Store(&replayState{Time: time.Now()})
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			state = getChangelogApplyState(ctx)
+			state = m.replay.Load()
 			_ = state.Time
 		}
 		runtime.KeepAlive(state)

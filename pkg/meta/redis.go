@@ -34,7 +34,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -1275,7 +1274,7 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 		}
 		oldLength := t.Length
 		t.Length = length
-		now := operationTime(ctx)
+		now := m.now()
 		t.Mtime = now.Unix()
 		t.Mtimensec = uint32(now.Nanosecond())
 		t.Ctime = now.Unix()
@@ -1341,7 +1340,7 @@ func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, 
 			return err
 		}
 		t.Length = length
-		now := operationTime(ctx)
+		now := m.now()
 		t.Mtime = now.Unix()
 		t.Mtimensec = uint32(now.Nanosecond())
 		t.Ctime = now.Unix()
@@ -1390,7 +1389,7 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 		if cur.Parent > TrashInode {
 			return syscall.EPERM
 		}
-		now := operationTime(ctx)
+		now := m.now()
 
 		rule, err := m.getACL(ctx, tx, cur.AccessACL)
 		if err != nil {
@@ -1452,7 +1451,7 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 			return syscall.EIO
 		}
 		target = []byte(rs[1].(string))
-		if !m.atimeNeedsUpdate(ctx, attr, now) {
+		if !m.atimeNeedsUpdate(attr, now) {
 			atime = attr.Atime*int64(time.Second) + int64(attr.Atimensec)
 			return nil
 		}
@@ -1471,7 +1470,7 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 
 // A nonzero return value must be written to nextTrash in the creation pipeline.
 func (m *redisMeta) nextTrashInode(ctx Context, tx *redis.Tx, inode *Ino) (int64, error) {
-	if isApplyMode(ctx) {
+	if m.replay.Load() != nil {
 		current, err := tx.Get(ctx, m.nextTrashKey()).Int64()
 		if err != nil && err != redis.Nil {
 			return 0, err
@@ -1582,13 +1581,13 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		attr.Tier = pattr.Tier
 
 		var updateParent bool
-		now := operationTime(ctx)
+		now := m.now()
 		if parent != TrashInode {
 			if _type == TypeDirectory {
 				pattr.Nlink++
 				updateParent = true
 			}
-			if updateParent = applyParent(ctx, parent, updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime); updateParent {
+			if updateParent = m.shouldUpdateParent(parent, updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime); updateParent {
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -1625,11 +1624,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			pipe.Incr(ctx, m.totalInodesKey())
-			behavior := ctx.Value(CtxKey("behavior"))
-			if behavior == nil {
-				behavior = runtime.GOOS
-			}
-			m.genLog(ctx, pipe, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), behavior, updateParent, attr.Rdev, attr.Mode, *inode)
+			m.genLog(ctx, pipe, now, "CREATE(%d,%s,%d,%d,%d,%d,%d,%s,%s,%t,%d,%d):%d", parent, logEncode2(name), ctx.Uid(), ctx.Gid(), _type, mode, cumask, logEncode2(path), clientBehavior(ctx), updateParent, attr.Rdev, attr.Mode, *inode)
 			return nil
 		})
 		return err
@@ -1798,7 +1793,7 @@ func (m *redisMeta) doCleanupChangelog(ctx Context, maxAge time.Duration, maxLin
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash, inode Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
-		if st := m.checkTrash(ctx, parent, &trash); st != 0 {
+		if st := m.checkTrash(parent, &trash); st != 0 {
 			return st
 		}
 	}
@@ -1854,8 +1849,8 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			return syscall.EPERM
 		}
 		var updateParent bool
-		now := operationTime(ctx)
-		if updateParent = applyParent(ctx, parent, !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime); updateParent {
+		now := m.now()
+		if updateParent = m.shouldUpdateParent(parent, !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime); updateParent {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1882,8 +1877,8 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			attr.Ctimensec = uint32(now.Nanosecond())
 			if trash == 0 {
 				attr.Nlink--
-				if _type == TypeFile && attr.Nlink == 0 && m.sessionID(ctx) > 0 {
-					opened = m.isOpen(ctx, inode)
+				if _type == TypeFile && attr.Nlink == 0 && m.sessionID() > 0 {
+					opened = m.isOpen(inode)
 				}
 			} else if attr.Parent > 0 {
 				attr.Parent = trash
@@ -1918,7 +1913,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 				case TypeFile:
 					if opened {
 						pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
-						pipe.SAdd(ctx, m.sustained(m.sessionID(ctx)), strconv.Itoa(int(inode)))
+						pipe.SAdd(ctx, m.sustained(m.sessionID()), strconv.Itoa(int(inode)))
 					} else {
 						pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(now.Unix()), Member: m.toDelete(inode, attr.Length)})
 						pipe.Del(ctx, m.inodeKey(inode))
@@ -1994,7 +1989,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 		entries = entries[batchSize:]
 		var trash Ino
 		if len(skipCheckTrash) == 0 || !skipCheckTrash[0] {
-			if st := m.checkTrash(ctx, parent, &trash); st != 0 {
+			if st := m.checkTrash(parent, &trash); st != 0 {
 				return st
 			}
 		}
@@ -2032,7 +2027,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 
 			entryKey := m.entryKey(parent)
 			entryInfos = make([]*entryInfo, 0, len(batch))
-			now := operationTime(ctx)
+			now := m.now()
 			enames := make([]string, 0, len(batch))
 			for _, entry := range batch {
 				enames = append(enames, string(entry.Name))
@@ -2149,15 +2144,15 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 			for _, info := range entryInfos {
 				if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
 					opened := false
-					if m.sessionID(ctx) > 0 {
-						opened = m.isOpen(ctx, info.inode)
+					if m.sessionID() > 0 {
+						opened = m.isOpen(info.inode)
 					}
 					delNodes[info.inode] = &dNode{opened, info.attr.Length}
 				}
 			}
 
 			var updateParent bool
-			if updateParent = applyParent(ctx, parent, !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime); updateParent {
+			if updateParent = m.shouldUpdateParent(parent, !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime); updateParent {
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -2296,7 +2291,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 					pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 				}
 				if len(sustained) > 0 {
-					pipe.SAdd(ctx, m.sustained(m.sessionID(ctx)), sustained...)
+					pipe.SAdd(ctx, m.sustained(m.sessionID()), sustained...)
 				}
 				if len(delfiles) > 0 {
 					pipe.ZAdd(ctx, m.delfiles(), delfiles...)
@@ -2356,7 +2351,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
-		if st := m.checkTrash(ctx, parent, &trash); st != 0 {
+		if st := m.checkTrash(parent, &trash); st != 0 {
 			return st
 		}
 	}
@@ -2404,7 +2399,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		if !ignoreAttrFlags(ctx) && ((pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0) {
 			return syscall.EPERM
 		}
-		now := operationTime(ctx)
+		now := m.now()
 		pattr.Nlink--
 		pattr.Mtime = now.Unix()
 		pattr.Mtimensec = uint32(now.Nanosecond())
@@ -2490,7 +2485,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		keys[0], keys[2] = keys[2], keys[0]
 	}
 	if !exchange {
-		if st := m.checkTrash(ctx, parentDst, &trash); st != 0 {
+		if st := m.checkTrash(parentDst, &trash); st != 0 {
 			return st
 		}
 	}
@@ -2545,7 +2540,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				keys = append(keys, m.entryKey(dino))
 			}
 			if !exchange {
-				if st := m.checkTrash(ctx, parentDst, &trash); st != 0 {
+				if st := m.checkTrash(parentDst, &trash); st != 0 {
 					return st
 				}
 			}
@@ -2616,7 +2611,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		}
 
 		var supdate, dupdate bool
-		now := operationTime(ctx)
+		now := m.now()
 		if dino > 0 {
 			if rs[3] == nil {
 				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, nameDst)
@@ -2663,8 +2658,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				} else {
 					if trash == 0 {
 						tattr.Nlink--
-						if dtyp == TypeFile && tattr.Nlink == 0 && m.sessionID(ctx) > 0 {
-							opened = m.isOpen(ctx, dino)
+						if dtyp == TypeFile && tattr.Nlink == 0 && m.sessionID() > 0 {
+							opened = m.isOpen(dino)
 						}
 					} else if tattr.Parent > 0 {
 						tattr.Parent = trash
@@ -2753,7 +2748,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						if dtyp == TypeFile {
 							if opened {
 								pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
-								pipe.SAdd(ctx, m.sustained(m.sessionID(ctx)), strconv.Itoa(int(dino)))
+								pipe.SAdd(ctx, m.sustained(m.sessionID()), strconv.Itoa(int(dino)))
 							} else {
 								pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(now.Unix()), Member: m.toDelete(dino, tattr.Length)})
 								pipe.Del(ctx, m.inodeKey(dino))
@@ -2844,8 +2839,8 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 			return syscall.EPERM
 		}
 		var updateParent bool
-		now := operationTime(ctx)
-		if updateParent = applyParent(ctx, parent, now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime); updateParent {
+		now := m.now()
+		if updateParent = m.shouldUpdateParent(parent, now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime); updateParent {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -3126,12 +3121,12 @@ func (m *redisMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) e
 		m.parseAttr(a, &attr)
 		newSpace = -align4K(attr.Length)
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(operationTime(ctx).Unix()), Member: m.toDelete(inode, attr.Length)})
+			pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(m.now().Unix()), Member: m.toDelete(inode, attr.Length)})
 			pipe.Del(ctx, m.inodeKey(inode))
 			pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 			pipe.Decr(ctx, m.totalInodesKey())
 			pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
-			m.genLog(ctx, pipe, operationTime(ctx), "DELSUSTAINED(%d,%d)", sid, inode)
+			m.genLog(ctx, pipe, m.now(), "DELSUSTAINED(%d,%d)", sid, inode)
 			return nil
 		})
 		return err
@@ -3208,7 +3203,7 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 		if err := m.checkQuota(ctx, delta.space, 0, attr.Uid, attr.Gid, m.getParents(ctx, tx, inode, attr.Parent)...); err != 0 {
 			return err
 		}
-		now := operationTime(ctx)
+		now := m.now()
 		attr.Mtime = mtime.Unix()
 		attr.Mtimensec = uint32(mtime.Nanosecond())
 		attr.Ctime = now.Unix()
@@ -3285,7 +3280,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		if err := m.checkQuota(ctx, newSpace, 0, attr.Uid, attr.Gid, m.getParents(ctx, tx, fout, attr.Parent)...); err != 0 {
 			return err
 		}
-		now := operationTime(ctx)
+		now := m.now()
 		attr.Mtime = now.Unix()
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
@@ -5407,7 +5402,7 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 			return eno
 		}
 		attr.Parent = parent
-		now := time.Now()
+		now := m.now()
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			attr.Uid = ctx.Uid()
 			attr.Gid = ctx.Gid()
@@ -5459,7 +5454,7 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 				p.HMSet(ctx, m.xattrKey(ino), srcXattr)
 			}
 			if top && attr.Typ == TypeDirectory {
-				p.ZAdd(ctx, m.detachedNodes(), redis.Z{Member: ino.String(), Score: float64(time.Now().Unix())})
+				p.ZAdd(ctx, m.detachedNodes(), redis.Z{Member: ino.String(), Score: float64(now.Unix())})
 			} else {
 				p.HSet(ctx, m.entryKey(parent), name, m.packEntry(attr.Typ, ino))
 				if top {
@@ -5571,7 +5566,7 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 				continue
 			}
 			nameSet[name] = struct{}{}
-			dstIno, err := m.nextInode(ctx)
+			dstIno, err := m.nextInode()
 			if err != nil {
 				return errno(err)
 			}
@@ -5595,7 +5590,7 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 
 		var batchResult batchCloneResult
 		err := m.txn(ctx, func(tx *redis.Tx) error {
-			now := time.Now()
+			now := m.now()
 			var pattr Attr
 			pval, err := tx.Get(ctx, m.inodeKey(dstParent)).Bytes()
 			if err == redis.Nil {
@@ -5919,7 +5914,7 @@ func (m *redisMeta) doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name st
 		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
 			p.HSet(ctx, m.entryKey(parent), name, m.packEntry(TypeDirectory, dstIno))
 			pattr.Nlink++
-			now := time.Now()
+			now := m.now()
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -5941,7 +5936,7 @@ func (m *redisMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Ti
 			return err
 		}
 		m.parseAttr(a, attr)
-		if !m.atimeNeedsUpdate(ctx, attr, now) {
+		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()
@@ -5976,41 +5971,13 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 		}
 
 		oriACL, oriMode := getAttrACLId(attr, aclType), attr.Mode
-
-		// https://github.com/torvalds/linux/blob/480e035fc4c714fb5536e64ab9db04fedc89e910/fs/fuse/acl.c#L143-L151
-		// TODO: check linux capabilities
-		if ctx.Uid() != 0 && !inGroup(ctx, attr.Gid) {
-			// clear sgid
-			attr.Mode &= 05777
+		if err := m.mergeFacl(ctx, attr, aclType, rule, func(r *aclAPI.Rule) (uint32, error) {
+			return m.insertACL(ctx, tx, r)
+		}); err != nil {
+			return err
 		}
-
-		if rule.IsEmpty() {
-			// remove acl
-			setAttrACLId(attr, aclType, aclAPI.None)
-		} else if rule.IsMinimal() && aclType == aclAPI.TypeAccess {
-			// remove acl
-			setAttrACLId(attr, aclType, aclAPI.None)
-			// set mode
-			attr.Mode &= 07000
-			attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Group & 7) << 3) | (rule.Other & 7)
-		} else {
-			rule.InheritPerms(attr.Mode)
-			aclId, err := m.insertACL(ctx, tx, rule)
-			if err != nil {
-				return err
-			}
-			setAttrACLId(attr, aclType, aclId)
-
-			// set mode
-			if aclType == aclAPI.TypeAccess {
-				attr.Mode &= 07000
-				attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Mask & 7) << 3) | (rule.Other & 7)
-			}
-		}
-
-		// update attr
 		if oriACL != getAttrACLId(attr, aclType) || oriMode != attr.Mode {
-			now := operationTime(ctx)
+			now := m.now()
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -6156,13 +6123,17 @@ func (m *redisMeta) loadDumpedACLs(ctx Context) error {
 
 func (m *redisMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
 	err := m.txn(ctx, func(tx *redis.Tx) error {
-		newId, err := m.incrCounter(krbTokenCounter, 1)
-		if err != nil {
-			return err
+		newId := m.tokenID()
+		if newId == 0 {
+			v, err := m.incrCounter(krbTokenCounter, 1)
+			if err != nil {
+				return err
+			}
+			newId = uint32(v)
 		}
-		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, m.krbTokenKey(), strconv.FormatUint(uint64(newId), 10), token)
-			id = uint32(newId)
+			id = newId
 			m.genLog(ctx, pipe, time.Now(), "STORETOKEN(%d,%s)", id, logEncode(token))
 			return nil
 		})
