@@ -626,8 +626,8 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 	return 0
 }
 
-func (m *baseMeta) atimeNeedsUpdate(ctx Context, attr *Attr, now time.Time) bool {
-	if isApplyMode(ctx) {
+func (m *baseMeta) atimeNeedsUpdate(attr *Attr, now time.Time) bool {
+	if m.replay.Load() != nil {
 		return true
 	}
 	return m.conf.AtimeMode != NoAtime && relatimeNeedUpdate(attr, now) ||
