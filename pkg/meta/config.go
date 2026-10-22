@@ -294,6 +294,10 @@ func (f *Format) Decrypt() error {
 			err = fmt.Errorf("decode key: %s", e)
 			return
 		}
+		if len(buf) < ci.NonceSize() {
+			err = fmt.Errorf("open cipher: encrypted key is shorter than nonce")
+			return
+		}
 		plaintext, e := ci.Open(nil, buf[:ci.NonceSize()], buf[ci.NonceSize():], nil)
 		if e != nil {
 			err = fmt.Errorf("open cipher: %s", e)
