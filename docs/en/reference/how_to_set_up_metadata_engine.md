@@ -200,6 +200,10 @@ For example:
 juicefs format badger://$HOME/badger-data?sync=true myjfs
 ```
 
+:::note
+The default configuration does not sync metadata to disk on every commit. A power failure or system crash may cause recently committed metadata changes to be lost even after an application's call to `fsync()` on a JuiceFS file succeeds.
+:::
+
 #### Create a file system
 
 You only need to create a file system for use, and there is no need to create a BadgerDB database in advance.
@@ -737,6 +741,19 @@ One can also add driver supported [PRAGMA Statements](https://www.sqlite.org/pra
 ```shell
 "sqlite3://my-jfs.db?cache=shared&_busy_timeout=5000"
 ```
+
+You can use `_sync` (an alias for `_synchronous`) to configure synchronization behavior at commit time. JuiceFS uses WAL mode by default, with `_sync` set to `NORMAL`. Setting `_sync=FULL` synchronizes the WAL at each transaction commit, but increases write overhead. For example:
+
+```shell
+juicefs format "sqlite3://my-jfs.db?_sync=FULL" pics
+juicefs mount -d "sqlite3://my-jfs.db?_sync=FULL" /mnt/jfs
+```
+
+Specify this parameter each time you mount the file system.
+
+:::note
+The default configuration does not sync metadata to disk on every commit. A power failure or system crash may cause recently committed metadata changes to be lost even after an application's call to `fsync()` on a JuiceFS file succeeds.
+:::
 
 For more examples of SQLite database address format, please refer to [Go-SQLite3 Driver](https://github.com/mattn/go-sqlite3#connection-string).
 
