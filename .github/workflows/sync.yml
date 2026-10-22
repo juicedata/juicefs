@@ -112,17 +112,6 @@ jobs:
             exit 1
           fi
 
-      - name: Print MinIO checkpoint logs
-        if: failure() && matrix.type == 'sync_minio'
-        run: |
-          for log in sync-minio-debug/*/sync*.log; do
-            if [ -f "$log" ]; then
-              echo "::group::$log"
-              tail -n 200 "$log"
-              echo "::endgroup::"
-            fi
-          done
-
       - name: Upload MinIO checkpoint logs
         if: failure() && matrix.type == 'sync_minio'
         uses: actions/upload-artifact@v4
