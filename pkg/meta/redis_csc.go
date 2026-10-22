@@ -87,6 +87,10 @@ func (c *redisCache) init(cli redis.UniversalClient) error {
 	// purges the cache and enables tracking.
 	opt := *c.cli.Options()
 	opt.OnConnect = c.onInvalidateConnect
+	opt.PushNotificationProcessor = nil
+	opt.PoolSize = 1
+	opt.MinIdleConns = 0
+	opt.MaxIdleConns = 0
 	c.tracker = redis.NewClient(&opt)
 	// handle PUSH notifications for invalidation in c.HandlePushNotification
 	if err = c.tracker.RegisterPushNotificationHandler("invalidate", c, true); err != nil {
