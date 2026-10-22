@@ -257,13 +257,23 @@ func (c *redisCache) afterProcess(cmd redis.Cmder) {
 	}
 }
 
+// ProcessHook serves reads from the cache, except in transactions: a read after WATCH must see the
+// latest value, otherwise a transaction based on a stale value would succeed.
 func (c *redisCache) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	var inTx bool
 	return func(ctx context.Context, cmd redis.Cmder) error {
-		if !c.beforeProcess(cmd, false) {
+		name := cmd.Name()
+		if name == "watch" {
+			inTx = true
+		}
+		if !inTx && !c.beforeProcess(cmd, false) {
 			return nil
 		}
+
 		err := next(ctx, cmd)
-		c.afterProcess(cmd)
+		if !inTx || name != "get" {
+			c.afterProcess(cmd)
+		}
 		return err
 	}
 }
