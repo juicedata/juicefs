@@ -268,7 +268,7 @@ func initForSvc(c *cli.Context, mp string, svcType, metaUrl, listenAddr string) 
 	}
 	logger.Infof("Data use %s", blob)
 
-	chunkConf := newClientChunkConf(c, format)
+	chunkConf := getChunkConf(c, format)
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 

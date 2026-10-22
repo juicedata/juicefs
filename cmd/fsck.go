@@ -124,7 +124,8 @@ func fsck(ctx *cli.Context) error {
 	}
 	sliceCSpin.Done()
 
-	chunkConf := *newToolChunkConf(format)
+	chunkConf := *getDefaultChunkConf(format)
+	chunkConf.CacheDir = "memory"
 
 	blob, err := createStorage(*format)
 	if err != nil {

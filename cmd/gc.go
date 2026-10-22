@@ -99,7 +99,8 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("create session: %v", err)
 	}
 
-	chunkConf := *newToolChunkConf(format)
+	chunkConf := *getDefaultChunkConf(format)
+	chunkConf.CacheDir = "memory"
 
 	blob, err := createStorage(*format)
 	if err != nil {

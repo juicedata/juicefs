@@ -215,7 +215,7 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	}
 	logger.Infof("Data use %s", blob)
 
-	chunkConf := newClientChunkConf(c, format)
+	chunkConf := getChunkConf(c, format)
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(m, store, chunkConf)
 
