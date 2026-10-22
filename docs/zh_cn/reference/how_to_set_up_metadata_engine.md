@@ -177,24 +177,19 @@ KeyDB 的 Active Replication 功能是异步复制的，可能会导致一致性
 
 使用 BadgerDB 作为 JuiceFS 元数据存储引擎时，使用 `badger://` 协议头指定数据库路径。
 
-#### 持久化配置 {#badgerdb-durability}
+可以在 BadgerDB 元数据 URL 中追加 query 参数：
 
-可以在 BadgerDB 元数据 URL 中追加 `sync=true|false`，控制是否开启提交时同步（[`SyncWrites`](https://pkg.go.dev/github.com/dgraph-io/badger/v4#Options.WithSyncWrites)）。默认值为 `false`，以获得更好的写入性能。
+`sync=true|false`：控制 BadgerDB 是否开启提交时同步（`SyncWrites`），默认值是 `false`，以获得更好的写入性能。
 
-:::caution 注意
-默认配置不会在每次提交时同步元数据到磁盘。即使应用对 JuiceFS 文件调用 `fsync()` 成功，掉电或系统崩溃仍可能导致最近已提交的元数据变更丢失。仅客户端进程异常退出与掉电不同，前者不会丢弃操作系统缓存。
-:::
-
-如果需要在提交时同步元数据，请使用 `sync=true`：
+例如：
 
 ```shell
-juicefs format "badger://$HOME/badger-data?sync=true" myjfs
-juicefs mount -d "badger://$HOME/badger-data?sync=true" /mnt/jfs
+juicefs format badger://$HOME/badger-data?sync=true myjfs
 ```
 
-`sync` 是客户端连接选项，不会保存在卷配置中。每次挂载及运行其他会写入元数据的命令时都需要携带该参数；只在 `format` 时设置不会让后续挂载自动启用同步写入。已有卷可以在卸载后使用带参数的 URL 重新挂载，无需重新格式化。
-
-同步写入会增加磁盘同步开销，可能提高写入延迟、降低元数据写入吞吐，实际影响需要在目标存储设备和负载下评估。该选项仅控制元数据持久化，文件数据的安全性还取决于底层数据存储及[客户端写缓存](../guide/cache.md#client-write-cache)配置。
+:::note 注意
+默认配置不会在每次提交时同步元数据到磁盘。即使应用对 JuiceFS 文件调用 `fsync()` 成功，掉电或系统崩溃仍可能导致最近已提交的元数据变更丢失。
+:::
 
 #### 创建文件系统
 
@@ -710,31 +705,21 @@ juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 "sqlite3://my-jfs.db?cache=shared&_busy_timeout=5000"
 ```
 
-更多 SQLite 数据库的地址格式示例，请参考 [Go-SQLite3 Driver](https://github.com/mattn/go-sqlite3#connection-string)。
-
-:::note 注意
-由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，只有数据库所在的主机可以访问它。对于多台服务器共享同一文件系统的情况，需要使用 Redis 或 MySQL 等数据库。
-:::
-
-#### 持久化配置 {#sqlite-durability}
-
-JuiceFS 默认使用 SQLite 的 WAL 日志模式，驱动默认设置为 `synchronous=NORMAL`。按照 [SQLite 的持久化语义](https://www.sqlite.org/pragma.html#pragma_synchronous)，该配置可以从客户端进程崩溃中恢复，但不保证掉电或系统崩溃后保留最近提交的事务。
-
-:::caution 注意
-默认配置下，即使应用对 JuiceFS 文件调用 `fsync()` 成功，元数据也不一定已经同步到磁盘。掉电或系统崩溃可能导致最近创建的文件、文件长度、重命名等元数据变更回滚。
-:::
-
-如果需要在每次事务提交时同步元数据，请在元数据 URL 中设置 `_sync=FULL`（也可使用别名 `_synchronous=FULL`）：
+也可以通过 `_sync`（别名 `_synchronous`）配置提交时的同步方式。JuiceFS 默认使用 WAL 模式，`_sync` 默认值是 `NORMAL`；设置为 `FULL` 可在每次事务提交时同步 WAL，但会增加写入开销。例如：
 
 ```shell
 juicefs format "sqlite3://my-jfs.db?_sync=FULL" pics
 juicefs mount -d "sqlite3://my-jfs.db?_sync=FULL" /mnt/jfs
 ```
 
-如果 URL 已经包含其他参数，用 `&` 连接，例如 `"sqlite3://my-jfs.db?_busy_timeout=5000&_sync=FULL"`。
+该参数需要在每次挂载时指定。
 
-`_sync` 是客户端连接选项，不会保存在卷配置中。每次挂载及运行其他会写入元数据的命令时都需要携带该参数；只在 `format` 时设置不会让后续挂载自动使用 `FULL`。已有卷可以在卸载后使用带参数的 URL 重新挂载，无需重新格式化。
+:::note 注意
+默认配置不会在每次提交时同步元数据到磁盘。即使应用对 JuiceFS 文件调用 `fsync()` 成功，掉电或系统崩溃仍可能导致最近已提交的元数据变更丢失。
+:::
 
-在 WAL 模式下，`FULL` 会在每次事务提交时额外同步 WAL，因此可能提高写入延迟、降低元数据写入吞吐，尤其是在频繁小写入或元数据操作场景中。实际影响取决于存储设备、文件系统和负载，应在目标环境评估。
+更多 SQLite 数据库的地址格式示例，请参考 [Go-SQLite3 Driver](https://github.com/mattn/go-sqlite3#connection-string)。
 
-持久化还依赖操作系统、文件系统和存储设备正确执行同步请求。在 macOS 上，`_sync=FULL` 不会自动开启 SQLite 独立的 [`fullfsync`](https://www.sqlite.org/pragma.html#pragma_fullfsync) 选项。上述配置仅控制元数据；本地 `file` 数据存储不会主动同步文件数据到磁盘，不能仅凭该参数保证整个文件系统的掉电持久性。
+:::note 注意
+由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，只有数据库所在的主机可以访问它。对于多台服务器共享同一文件系统的情况，需要使用 Redis 或 MySQL 等数据库。
+:::
