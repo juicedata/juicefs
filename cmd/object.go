@@ -484,15 +484,17 @@ func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID stri
 
 func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
-		BlockSize:   format.BlockSize * 1024,
-		Compress:    format.Compression,
-		HashPrefix:  format.HashPrefix,
-		GetTimeout:  time.Minute,
-		PutTimeout:  time.Minute,
-		MaxUpload:   50,
-		MaxDownload: 200,
-		MaxRetries:  10,
-		BufferSize:  300 << 20,
+		BlockSize:     format.BlockSize * 1024,
+		Compress:      format.Compression,
+		HashPrefix:    format.HashPrefix,
+		GetTimeout:    time.Minute,
+		PutTimeout:    time.Minute,
+		MaxUpload:     50,
+		MaxDownload:   200,
+		MaxRetries:    10,
+		BufferSize:    300 << 20,
+		UploadLimit:   format.UploadLimit * 1e6 / 8,
+		DownloadLimit: format.DownloadLimit * 1e6 / 8,
 	}
 	chunkConf.SelfCheck(format.UUID)
 	return chunkConf
