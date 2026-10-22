@@ -752,7 +752,7 @@ juicefs mount -d "sqlite3://my-jfs.db?_sync=FULL" /mnt/jfs
 Include this parameter on every mount.
 
 :::note
-The default configuration does not sync metadata to disk on every commit. A power loss or system crash may cause recently committed metadata changes to be lost even after an application's `fsync()` on a JuiceFS file succeeds.
+The default configuration does not sync metadata to disk on every commit. A power failure or system crash may cause recently committed metadata changes to be lost even after an application's call to `fsync()` on a JuiceFS file succeeds.
 :::
 
 For more examples of SQLite database address format, please refer to [Go-SQLite3 Driver](https://github.com/mattn/go-sqlite3#connection-string).
