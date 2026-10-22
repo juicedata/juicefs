@@ -112,6 +112,14 @@ jobs:
             exit 1
           fi
 
+      - name: Upload MinIO checkpoint logs
+        if: failure() && matrix.type == 'sync_minio'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-minio-debug-${{ github.run_attempt }}
+          path: sync-minio-debug/
+          retention-days: 7
+
       - name: upload coverage report
         timeout-minutes: 5
         continue-on-error: true
