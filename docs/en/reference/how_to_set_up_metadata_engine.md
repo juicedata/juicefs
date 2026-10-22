@@ -749,7 +749,7 @@ juicefs format "sqlite3://my-jfs.db?_sync=FULL" pics
 juicefs mount -d "sqlite3://my-jfs.db?_sync=FULL" /mnt/jfs
 ```
 
-Include this parameter on every mount.
+Specify this parameter each time you mount the file system.
 
 :::note
 The default configuration does not sync metadata to disk on every commit. A power failure or system crash may cause recently committed metadata changes to be lost even after an application's call to `fsync()` on a JuiceFS file succeeds.
