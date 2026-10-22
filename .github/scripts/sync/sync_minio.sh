@@ -579,16 +579,19 @@ test_checkpoint_minio_big_file_resume(){
 test_checkpoint_minio_multipart_resume(){
     # Test: multipart upload checkpoint should persist upload state and resume for >4GiB objects
     prepare_test
+    set -x
+    local log_dir=sync-minio-debug/multipart-resume
+    mkdir -p "$log_dir"
     local key="multipart-checkpoint.bin"
     local size=$((5 * 1024 * 1024 * 1024 + 17 * 1024 * 1024))
-    local checkpoint_json=/tmp/minio-multipart-checkpoint.json
+    local checkpoint_json="$log_dir/checkpoint-before-resume.json"
     rm -f "$checkpoint_json"
     create_sparse_marker_file "/jfs/$key" "$size"
 
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
         --threads 1 --list-threads 1 --debug \
         --enable-checkpoint --checkpoint-interval 60s \
-        >sync1.log 2>&1 &
+        >"$log_dir/sync1.log" 2>&1 &
     sync_pid=$!
     sleep 4
     kill -INT $sync_pid || true
@@ -597,7 +600,7 @@ test_checkpoint_minio_multipart_resume(){
     checkpoint_file=$(./mc find myminio/myjfs/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
     if [ -z "$checkpoint_file" ]; then
         echo "checkpoint file should exist after interrupted multipart minio sync"
-        cat sync1.log
+        cat "$log_dir/sync1.log"
         exit 1
     fi
 
@@ -608,12 +611,12 @@ test_checkpoint_minio_multipart_resume(){
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
         --threads 1 --list-threads 1 --debug \
         --enable-checkpoint --checkpoint-interval 2s \
-        >sync2.log 2>&1
+        >"$log_dir/sync2.log" 2>&1
 
     checkpoint_count=$(./mc find myminio/myjfs/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | wc -l)
     if [ "$checkpoint_count" -ne 0 ]; then
         echo "checkpoint file should be deleted after multipart minio sync resumes successfully"
-        cat sync2.log
+        cat "$log_dir/sync2.log"
         exit 1
     fi
 
@@ -623,18 +626,21 @@ test_checkpoint_minio_multipart_resume(){
         exit 1
     fi
 
-    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+    grep "panic:\|<FATAL>" "$log_dir/sync2.log" && echo "panic or fatal in sync2.log" && exit 1 || true
 }
 
 test_checkpoint_minio_signal_save(){
     # Test: SIGINT saves checkpoint for minio sync
     prepare_test
+    set -x
+    local log_dir=sync-minio-debug/signal-save
+    mkdir -p "$log_dir"
     ./juicefs mdtest $META_URL /test --dirs 10 --depth 3 --files 10 --threads 10
     # Start sync in background
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
-        --list-threads 100 --list-depth 10 \
+        --list-threads 100 --list-depth 10 --debug \
         --enable-checkpoint --checkpoint-interval 60s \
-        >sync1.log 2>&1 &
+        >"$log_dir/sync1.log" 2>&1 &
     sync_pid=$!
     sleep 3
     kill -INT $sync_pid || true
@@ -645,11 +651,13 @@ test_checkpoint_minio_signal_save(){
         echo "checkpoint file should exist after SIGINT"
         exit 1
     fi
+    checkpoint_file=$(./mc find myminio/myjfs/ --name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
+    ./mc cat "$checkpoint_file" > "$log_dir/checkpoint-before-resume.json"
     # Resume should work
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
-        --list-threads 100 --list-depth 10 \
+        --list-threads 100 --list-depth 10 --debug \
         --enable-checkpoint --checkpoint-interval 2s \
-        >sync2.log 2>&1
+        >"$log_dir/sync2.log" 2>&1
     count1=$(./mc ls -r juicegw/myjfs/ | grep -v ".juicefs-sync-checkpoint" | wc -l)
     count2=$(./mc ls -r myminio/myjfs/ | grep -v ".juicefs-sync-checkpoint" | wc -l)
     [ $count1 -eq $count2 ] || (echo "file count mismatch after resume: $count1 vs $count2" && exit 1)
