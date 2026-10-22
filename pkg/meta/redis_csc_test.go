@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/push"
 	"github.com/stretchr/testify/require"
 )
@@ -105,6 +106,31 @@ func TestRedisCache(t *testing.T) {
 		require.False(t, ok)
 		_, ok = cache.entryCache.Get(name2)
 		require.False(t, ok)
+	})
+
+	t.Run("reads in transactions bypass the cache", func(t *testing.T) {
+		ino := Ino(340)
+		fresh, stale := m.marshal(&Attr{Typ: TypeFile, Length: 2}), m.marshal(&Attr{Typ: TypeFile, Length: 1})
+		require.NoError(t, m.rdb.Set(ctx, m.inodeKey(ino), fresh, 0).Err())
+		time.Sleep(100 * time.Millisecond) // let the invalidation pass
+		// an invalidation that has not arrived yet
+		m.cache.inodeCache.Add(ino, stale)
+		v, err := m.rdb.Get(ctx, m.inodeKey(ino)).Bytes()
+		require.NoError(t, err)
+		require.Equal(t, stale, v)
+
+		err = m.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			v, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
+			require.NoError(t, err)
+			require.Equal(t, fresh, v)
+			return nil
+		}, m.inodeKey(ino))
+		require.NoError(t, err)
+
+		// The transaction must not disable caching on the parent client.
+		v, err = m.rdb.Get(ctx, m.inodeKey(ino)).Bytes()
+		require.NoError(t, err)
+		require.Equal(t, stale, v)
 	})
 
 	t.Run("entry generation invalidation", func(t *testing.T) {
