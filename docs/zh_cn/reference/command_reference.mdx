@@ -355,7 +355,7 @@ juicefs gc redis://localhost --delete
 
 |项 | 说明|
 |-|-|
-|`--compact`|对所有文件执行碎片合并。|
+|`--compact`|对所有文件执行碎片合并，读写数据时受 `juicefs config --upload-limit/--download-limit` 设置的卷带宽限制。|
 |`--delete`|删除泄漏的对象，以及因不完整的 `clone` 命令而产生泄漏的元数据。|
 |`--threads=10`|并发线程数，默认为 10。|
 

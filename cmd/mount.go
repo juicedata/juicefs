@@ -368,62 +368,6 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	return conf
 }
 
-func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
-	cm, err := strconv.ParseUint(c.String("cache-mode"), 8, 32)
-	if err != nil {
-		logger.Warnf("Invalid cache-mode %q, using default value 0600", c.String("cache-mode"))
-		cm = 0600
-	}
-	chunkConf := &chunk.Config{
-		BlockSize:  format.BlockSize * 1024,
-		Compress:   format.Compression,
-		HashPrefix: format.HashPrefix,
-
-		GetTimeout:             utils.Duration(c.String("get-timeout")),
-		PutTimeout:             utils.Duration(c.String("put-timeout")),
-		MaxUpload:              c.Int("max-uploads"),
-		MaxDownload:            c.Int("max-downloads"),
-		MaxStageWrite:          c.Int("max-stage-write"),
-		MaxRetries:             c.Int("io-retries"),
-		Writeback:              c.Bool("writeback"),
-		WritebackThresholdSize: int(utils.ParseBytes(c, "writeback-threshold-size", 'B')),
-		Prefetch:               c.Int("prefetch"),
-		BufferSize:             utils.ParseBytes(c, "buffer-size", 'M'),
-		UploadLimit:            utils.ParseMbps(c, "upload-limit") * 1e6 / 8,
-		DownloadLimit:          utils.ParseMbps(c, "download-limit") * 1e6 / 8,
-		UploadDelay:            utils.Duration(c.String("upload-delay")),
-		UploadHours:            c.String("upload-hours"),
-
-		CacheDir:          c.String("cache-dir"),
-		CacheSize:         utils.ParseBytes(c, "cache-size", 'M'),
-		CacheItems:        c.Int64("cache-items"),
-		FreeSpace:         float32(c.Float64("free-space-ratio")),
-		CacheMode:         os.FileMode(cm),
-		CacheFullBlock:    !c.Bool("cache-partial-only"),
-		CacheLargeWrite:   c.Bool("cache-large-write"),
-		CacheChecksum:     c.String("verify-cache-checksum"),
-		CacheEviction:     c.String("cache-eviction"),
-		CacheScanInterval: utils.Duration(c.String("cache-scan-interval")),
-		CacheExpire:       utils.Duration(c.String("cache-expire")),
-		OSCache:           os.Getenv("JFS_DROP_OSCACHE") == "",
-		AutoCreate:        true,
-	}
-	if c.IsSet("max-readahead") {
-		chunkConf.Readahead = int(utils.ParseBytes(c, "max-readahead", 'M'))
-	} else {
-		chunkConf.Readahead = 8 * chunkConf.BlockSize
-	}
-
-	if !c.IsSet("upload-limit") {
-		chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
-	}
-	if !c.IsSet("download-limit") {
-		chunkConf.DownloadLimit = format.DownloadLimit * 1e6 / 8
-	}
-	chunkConf.SelfCheck(format.UUID)
-	return chunkConf
-}
-
 func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Config, m meta.Meta, blob object.ObjectStorage, registerer prometheus.Registerer, registry *prometheus.Registry) {
 	metricsAddr := exposeMetrics(c, registerer, registry)
 	m.InitMetrics(registerer)
@@ -610,7 +554,7 @@ func mount(c *cli.Context) error {
 		}
 	}
 
-	chunkConf := getChunkConf(c, format)
+	chunkConf := newClientChunkConf(c, format)
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
 	setFuseOption(c, format, vfsConf)
 	if stage == 0 || stage == 3 {

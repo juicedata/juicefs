@@ -482,22 +482,6 @@ func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID stri
 	return toError(eno)
 }
 
-func getDefaultChunkConf(format *meta.Format) *chunk.Config {
-	chunkConf := &chunk.Config{
-		BlockSize:   format.BlockSize * 1024,
-		Compress:    format.Compression,
-		HashPrefix:  format.HashPrefix,
-		GetTimeout:  time.Minute,
-		PutTimeout:  time.Minute,
-		MaxUpload:   50,
-		MaxDownload: 200,
-		MaxRetries:  10,
-		BufferSize:  300 << 20,
-	}
-	chunkConf.SelfCheck(format.UUID)
-	return chunkConf
-}
-
 func (j *juiceFS) Shutdown() {
 	_ = j.jfs.Meta().CloseSession()
 }
@@ -524,7 +508,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	if err != nil {
 		return nil, fmt.Errorf("object storage: %s", err)
 	}
-	chunkConf := getDefaultChunkConf(format)
+	chunkConf := newToolChunkConf(format)
 	store := chunk.NewCachedStore(blob, *chunkConf, nil)
 	registerMetaMsg(metaCli, store, chunkConf)
 	err = metaCli.NewSession(false)
