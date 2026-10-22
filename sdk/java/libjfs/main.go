@@ -680,6 +680,8 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 		if jConf.FreeSpace != "" {
 			freeSpaceRatio, _ = strconv.ParseFloat(jConf.FreeSpace, 64)
 		}
+		uploadLimit := utils.ParseMbpsStr("upload-limit", jConf.UploadLimit)
+		downloadLimit := utils.ParseMbpsStr("download-limit", jConf.DownloadLimit)
 		chunkConf := chunk.Config{
 			BlockSize:         format.BlockSize * 1024,
 			Compress:          format.Compression,
@@ -698,8 +700,8 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			MaxUpload:         jConf.MaxUploads,
 			MaxDownload:       jConf.MaxDownloads,
 			MaxRetries:        jConf.IORetries,
-			UploadLimit:       utils.ParseMbpsStr("upload-limit", jConf.UploadLimit) * 1e6 / 8,
-			DownloadLimit:     utils.ParseMbpsStr("download-limit", jConf.DownloadLimit) * 1e6 / 8,
+			UploadLimit:       uploadLimit * 1e6 / 8,
+			DownloadLimit:     downloadLimit * 1e6 / 8,
 			Prefetch:          jConf.Prefetch,
 			Writeback:         jConf.Writeback,
 			HashPrefix:        format.HashPrefix,
@@ -732,14 +734,15 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			logger.Errorf("new session: %s", err)
 			return nil
 		}
-		m.OnReload(func(fmt *meta.Format) error {
-			if chunkConf.UploadLimit > 0 {
-				fmt.UploadLimit = chunkConf.UploadLimit
+		m.OnReload(func(format *meta.Format) error {
+			upload, download := format.UploadLimit, format.DownloadLimit
+			if uploadLimit > 0 {
+				upload = uploadLimit
 			}
-			if chunkConf.DownloadLimit > 0 {
-				fmt.DownloadLimit = chunkConf.DownloadLimit
+			if downloadLimit > 0 {
+				download = downloadLimit
 			}
-			store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+			store.UpdateLimit(upload, download)
 			return nil
 		})
 
