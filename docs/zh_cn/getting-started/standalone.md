@@ -7,10 +7,6 @@ pagination_next: getting-started/for_distributed
 
 JuiceFS 文件系统由[「对象存储」](../reference/how_to_set_up_object_storage.md)和[「数据库」](../reference/how_to_set_up_metadata_engine.md)共同驱动。除了对象存储，还支持使用本地磁盘、WebDAV 和 HDFS 等作为底层存储。因此，可以使用本地磁盘和 SQLite 数据库快速创建一个单机文件系统用以了解和体验 JuiceFS。
 
-:::caution 持久化
-SQLite 默认配置下，即使应用调用 `fsync()` 成功，掉电或系统崩溃仍可能导致最近的元数据变更丢失。如需在每次事务提交时同步元数据，请在每次挂载的元数据 URL 中添加 `?_sync=FULL`，参见 [SQLite 持久化配置](../reference/how_to_set_up_metadata_engine.md#sqlite-durability)。该参数仅影响元数据；本地 `file` 数据存储不会主动同步文件数据到磁盘，不能仅凭该参数保证整个文件系统的掉电持久性。
-:::
-
 ## 安装客户端
 
 对于 Linux 发行版和 macOS 系统用户，可以使用一键安装脚本快速安装 JuiceFS 客户端：
