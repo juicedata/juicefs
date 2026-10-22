@@ -742,7 +742,7 @@ One can also add driver supported [PRAGMA Statements](https://www.sqlite.org/pra
 "sqlite3://my-jfs.db?cache=shared&_busy_timeout=5000"
 ```
 
-`_sync` (alias `_synchronous`) controls synchronization on commit. JuiceFS uses WAL mode by default, with `_sync=NORMAL`. Set `_sync=FULL` to sync the WAL on every transaction commit, at the cost of additional write overhead. For example:
+You can use `_sync` (an alias for `_synchronous`) to configure synchronization behavior at commit time. JuiceFS uses WAL mode by default, with `_sync` set to `NORMAL`. Setting `_sync=FULL` synchronizes the WAL at each transaction commit, but increases write overhead. For example:
 
 ```shell
 juicefs format "sqlite3://my-jfs.db?_sync=FULL" pics
