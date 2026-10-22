@@ -262,20 +262,16 @@ func (c *redisCache) afterProcess(cmd redis.Cmder) {
 // latest value, otherwise a transaction based on a stale value would succeed.
 func (c *redisCache) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	// go-redis builds a new chain of hooks for every transaction, so this is per transaction.
-	var inTx atomic.Bool
+	var inTx bool
 	return func(ctx context.Context, cmd redis.Cmder) error {
 		if cmd.Name() == "watch" {
-			inTx.Store(true)
+			inTx = true
 		}
-		if inTx.Load() {
-			err := next(ctx, cmd)
-			if cmd.Name() != "get" {
-				c.afterProcess(cmd)
-			}
-			return err
-		}
-		if !c.beforeProcess(cmd, false) {
+		if !inTx && !c.beforeProcess(cmd, false) {
 			return nil
+		}
+		if inTx && cmd.Name() == "get" {
+			return next(ctx, cmd)
 		}
 		err := next(ctx, cmd)
 		c.afterProcess(cmd)
