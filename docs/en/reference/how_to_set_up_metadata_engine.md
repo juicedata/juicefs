@@ -190,15 +190,24 @@ When being used as the metadata storage engine for JuiceFS, KeyDB functions the 
 
 When using BadgerDB as the JuiceFS metadata storage engine, use `badger://` to specify the database path.
 
-You can append query options to the BadgerDB metadata URL:
+#### Durability settings {#badgerdb-durability}
 
-`sync=true|false`: controls whether BadgerDB enables `SyncWrites` (sync on commit). The default is `false` for better write performance.
+Append `sync=true|false` to the BadgerDB metadata URL to control sync on commit ([`SyncWrites`](https://pkg.go.dev/github.com/dgraph-io/badger/v4#Options.WithSyncWrites)). The default is `false` for better write performance.
 
-For example:
+:::caution
+The default configuration does not sync metadata to disk on every commit. A power loss or system crash can lose recently committed metadata changes even after an application's `fsync()` on a JuiceFS file succeeds. A client process crash is different from a power loss because it does not discard the operating system's cache.
+:::
+
+To sync metadata on commit, use `sync=true`:
 
 ```shell
-juicefs format badger://$HOME/badger-data?sync=true myjfs
+juicefs format "badger://$HOME/badger-data?sync=true" myjfs
+juicefs mount -d "badger://$HOME/badger-data?sync=true" /mnt/jfs
 ```
+
+`sync` is a client connection option and is not saved in the volume configuration. Include it on every mount and in other commands that write metadata; setting it only during `format` does not enable synchronous writes on subsequent mounts. For an existing volume, unmount and remount with the parameter; reformatting is not required.
+
+Synchronous writes add disk synchronization overhead and can increase write latency and reduce metadata write throughput. Measure the impact with your storage device and workload. This option only controls metadata durability; file data safety also depends on the underlying data storage and [client write cache](../guide/cache.md#client-write-cache) settings.
 
 #### Create a file system
 
@@ -743,3 +752,26 @@ For more examples of SQLite database address format, please refer to [Go-SQLite3
 :::note
 Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for standalone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
 :::
+
+#### Durability settings {#sqlite-durability}
+
+JuiceFS uses SQLite's WAL journal mode by default, and the driver defaults to `synchronous=NORMAL`. Under [SQLite's durability semantics](https://www.sqlite.org/pragma.html#pragma_synchronous), this configuration can recover from a client process crash, but recently committed transactions may be lost after a power loss or system crash.
+
+:::caution
+With the default configuration, metadata may not have been synced to disk even after an application's `fsync()` on a JuiceFS file succeeds. A power loss or system crash can roll back recent metadata changes, including file creation, file lengths, and renames.
+:::
+
+To sync metadata on every transaction commit, set `_sync=FULL` in the metadata URL (the alias `_synchronous=FULL` is also supported):
+
+```shell
+juicefs format "sqlite3://my-jfs.db?_sync=FULL" pics
+juicefs mount -d "sqlite3://my-jfs.db?_sync=FULL" /mnt/jfs
+```
+
+If the URL already contains parameters, append it with `&`, for example, `"sqlite3://my-jfs.db?_busy_timeout=5000&_sync=FULL"`.
+
+`_sync` is a client connection option and is not saved in the volume configuration. Include it on every mount and in other commands that write metadata; setting it only during `format` does not make subsequent mounts use `FULL`. For an existing volume, unmount and remount with the parameter; reformatting is not required.
+
+In WAL mode, `FULL` adds a WAL sync on every transaction commit. This can increase write latency and reduce metadata write throughput, especially for frequent small writes or metadata operations. Measure the impact with your storage device, file system, and workload.
+
+Durability also depends on the operating system, file system, and storage device correctly honoring synchronization requests. On macOS, `_sync=FULL` does not automatically enable SQLite's separate [`fullfsync`](https://www.sqlite.org/pragma.html#pragma_fullfsync) option. These settings only control metadata; the local `file` data storage backend does not explicitly sync file data to disk, so this parameter alone does not provide end-to-end power-loss durability.

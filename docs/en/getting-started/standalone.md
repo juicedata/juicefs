@@ -8,6 +8,10 @@ description: Learn how to use JuiceFS in standalone mode, combining object stora
 
 The JuiceFS file system is driven by both ["Object Storage"](../reference/how_to_set_up_object_storage.md) and ["Database"](../reference/how_to_set_up_metadata_engine.md). In addition to object storage, it also supports using local disks, WebDAV, and HDFS as underlying storage options. Therefore, you can create a standalone file system using local disks and SQLite database to get a quick overview of how JuiceFS works.
 
+:::caution Durability
+With SQLite's default settings, a power loss or system crash can lose recent metadata changes even after an application's `fsync()` succeeds. To sync metadata on every transaction commit, add `?_sync=FULL` to the metadata URL on every mount; see [SQLite durability settings](../reference/how_to_set_up_metadata_engine.md#sqlite-durability). This parameter only affects metadata: the local `file` data storage backend does not explicitly sync file data to disk, so this parameter alone does not provide end-to-end power-loss durability.
+:::
+
 ## Install the client
 
 For Linux distributions and macOS users, you can quickly install the JuiceFS client using a one-click installation script:
