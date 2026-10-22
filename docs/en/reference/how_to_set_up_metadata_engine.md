@@ -201,7 +201,7 @@ juicefs format badger://$HOME/badger-data?sync=true myjfs
 ```
 
 :::note
-The default configuration does not sync metadata to disk on every commit. A power loss or system crash may cause recently committed metadata changes to be lost even after an application's `fsync()` on a JuiceFS file succeeds.
+The default configuration does not sync metadata to disk on every commit. A power failure or system crash may cause recently committed metadata changes to be lost even after an application's call to `fsync()` on a JuiceFS file succeeds.
 :::
 
 #### Create a file system
