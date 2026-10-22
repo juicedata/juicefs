@@ -4956,6 +4956,16 @@ func (m *kvMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, ru
 	}, 0))
 }
 
+func (m *kvMeta) doInsertACL(ctx Context, rule *aclAPI.Rule) (uint32, error) {
+	var id uint32
+	err := m.txn(ctx, func(tx *kvTxn) error {
+		var err error
+		id, err = m.insertACL(tx, rule)
+		return err
+	})
+	return id, err
+}
+
 func (m *kvMeta) insertACL(tx *kvTxn, rule *aclAPI.Rule) (uint32, error) {
 	if rule == nil || rule.IsEmpty() {
 		return aclAPI.None, nil

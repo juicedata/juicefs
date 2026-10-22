@@ -39,11 +39,13 @@ type replayState struct {
 
 // Replayer exclusively owns a metadata client for sequential changelog replay.
 type Replayer struct {
-	dst Meta
-	m   *baseMeta
+	src    *baseMeta
+	dst    Meta
+	m      *baseMeta
+	aclIDs map[uint32]uint32
 }
 
-func NewReplayer(uri string, src *Format, dryRun bool) (*Replayer, error) {
+func NewReplayer(uri string, src Meta, dryRun bool) (*Replayer, error) {
 	conf := DefaultConf()
 	conf.NoCompact = true
 	conf.NoBGJob = true
@@ -53,14 +55,26 @@ func NewReplayer(uri string, src *Format, dryRun bool) (*Replayer, error) {
 	if _, err := dst.Load(true); err != nil {
 		return nil, err
 	}
-	r := &Replayer{dst: dst, m: dst.getBase()}
-	if err := r.Validate(src); err != nil {
+	r := &Replayer{src: src.getBase(), dst: dst, m: dst.getBase(), aclIDs: map[uint32]uint32{aclAPI.None: aclAPI.None}}
+	if err := r.Validate(r.src.getFormat()); err != nil {
 		return nil, err
 	}
-	if !dryRun {
+	if err := r.src.en.cacheACLs(Background()); err != nil {
+		return nil, fmt.Errorf("load source ACLs: %w", err)
+	}
+	if dryRun {
+		if err := r.m.en.cacheACLs(Background()); err != nil {
+			return nil, fmt.Errorf("load destination ACLs: %w", err)
+		}
+	} else {
 		if err := dst.NewSession(false); err != nil {
 			_ = dst.CloseSession()
 			return nil, fmt.Errorf("initialize destination metadata client: %w", err)
+		}
+	}
+	for id, rule := range r.src.aclCache.GetAll() {
+		if dstID := r.m.aclCache.GetId(rule); dstID != aclAPI.None {
+			r.aclIDs[id] = dstID
 		}
 	}
 	return r, nil
@@ -91,6 +105,29 @@ func (r *Replayer) Close() error {
 		return nil
 	}
 	return r.dst.CloseSession()
+}
+
+func (r *Replayer) mapACL(ctx Context, id uint32) (uint32, error) {
+	if dstID, ok := r.aclIDs[id]; ok {
+		return dstID, nil
+	}
+	rule := r.src.aclCache.Get(id)
+	if rule == nil {
+		rule = &aclAPI.Rule{}
+		if st := r.src.en.doGetFacl(ctx, RootInode, aclAPI.TypeAccess, id, rule); st != 0 {
+			return 0, fmt.Errorf("read source ACL %d: %w", id, st)
+		}
+	}
+	dstID := r.m.aclCache.GetId(rule)
+	if dstID == aclAPI.None {
+		var err error
+		dstID, err = r.m.en.doInsertACL(ctx, rule)
+		if err != nil {
+			return 0, fmt.Errorf("map source ACL %d: %w", id, err)
+		}
+	}
+	r.aclIDs[id] = dstID
+	return dstID, nil
 }
 
 // These helpers supply client-side inputs to metadata operations, using the
@@ -211,6 +248,10 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) (err error) {
 		if name == usedSpace || name == totalInodes {
 			// FIXME: the loaded baseline must account for usage not flushed before dump.
 			skipReason = fmt.Sprintf("%s is updated by metadata operations", name)
+			return nil
+		}
+		if name == aclCounter {
+			skipReason = "ACL IDs are allocated by the destination"
 			return nil
 		}
 		if _, err := r.m.en.incrCounter(name, delta); err != nil {
@@ -344,8 +385,6 @@ func (r *Replayer) create(ctx Context, e *ChangeEntry) error {
 	state.Parents = map[Ino]bool{parent: updateParent}
 	ctx = WrapWithoutCancel(ctx, ctx.Pid(), uid, []uint32{gid})
 	ctx = ctx.WithValue(CtxKey("behavior"), e.Args[8])
-	// FIXME: CREATE does not record the ACL IDs inherited from the parent, so
-	// replay can allocate different ones.
 	if err := changelogCall(e, r.dst.Mknod(ctx, parent, name, typ, mode, cumask, rdev, path, &inode, nil)); err != nil {
 		return err
 	}
@@ -653,8 +692,6 @@ func (r *Replayer) setAttr(ctx Context, e *ChangeEntry) error {
 		mode := attr.Mode
 		r.m.replay.Load().Mode = &mode
 	}
-	// FIXME: SETATTR records an ACL ID but not its rule; replay needs to preserve
-	// the source's ACL mapping when allocating ACLs or changing modes.
 	return changelogCall(e, r.dst.SetAttr(ctx, inode, set, sgid, attr))
 }
 
@@ -892,7 +929,6 @@ func (r *Replayer) setFacl(ctx Context, e *ChangeEntry) error {
 		return err
 	}
 	r.m.replay.Load().Mode = &mode
-	// FIXME: SETFACL lacks the assigned ACL ID, so replay can allocate a different one.
 	return changelogCall(e, r.dst.SetFacl(ctx, ino, aclType, rule))
 }
 
@@ -909,6 +945,10 @@ func (r *Replayer) repairDir(ctx Context, e *ChangeEntry) error {
 	}
 	var current Attr
 	if err := changelogCall(e, r.dst.GetAttr(ctx, inode, &current)); err != nil {
+		return err
+	}
+	attr.AccessACL, err = r.mapACL(ctx, attr.AccessACL)
+	if err != nil {
 		return err
 	}
 	attr.Parent = current.Parent
