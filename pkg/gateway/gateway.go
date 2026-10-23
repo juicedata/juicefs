@@ -817,6 +817,9 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		return
 	}
 	fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
+	if eno == syscall.ENOTDIR {
+		return objInfo, minio.ObjectNotFound{Bucket: bucket, Object: object}
+	}
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket, object)
 		return
