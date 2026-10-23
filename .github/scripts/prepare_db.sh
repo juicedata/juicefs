@@ -51,11 +51,10 @@ install_etcd() {
 }
 
 install_keydb() {
-    echo "deb https://download.keydb.dev/open-source-dist $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/keydb.list
-    sudo wget -O /etc/apt/trusted.gpg.d/keydb.gpg https://download.keydb.dev/open-source-dist/keyring.gpg
-    sudo .github/scripts/apt_install.sh keydb
-    keydb-server --storage-provider flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
-    keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
+    docker run -d --name keydb-flash --network host eqalpha/keydb:x86_64_v6.3.4 \
+        keydb-server --storage-provider flash /tmp/ --port 6378 --bind 127.0.0.1
+    docker run -d --name keydb --network host eqalpha/keydb:x86_64_v6.3.4 \
+        keydb-server --port 6377 --bind 127.0.0.1
     check_port 6377
     check_port 6378
 }
