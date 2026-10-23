@@ -17,6 +17,7 @@ package sync
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -96,6 +97,255 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 func deepEqualWithOutMtime(a, b object.Object) bool {
 	return a.IsDir() == b.IsDir() && a.Key() == b.Key() && a.Size() == b.Size() &&
 		math.Abs(a.Mtime().Sub(b.Mtime()).Seconds()) < 1
+}
+
+type failedInitialList struct {
+	object.ObjectStorage
+	err error
+}
+
+func (s failedInitialList) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan object.Object, error) {
+	if prefix == "" {
+		return nil, s.err
+	}
+	return s.ObjectStorage.ListAll(ctx, prefix, marker, followLink)
+}
+
+func (s failedInitialList) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
+	if prefix == "" && delimiter != "" {
+		return nil, false, "", s.err
+	}
+	return s.ObjectStorage.List(ctx, prefix, marker, token, delimiter, limit, followLink)
+}
+
+func countSyncWorkerStacks() int {
+	buf := make([]byte, 1<<20)
+	n := runtime.Stack(buf, true)
+	return strings.Count(string(buf[:n]), "github.com/juicedata/juicefs/pkg/sync.worker(")
+}
+
+func TestSyncStopsWorkersOnInitialListError(t *testing.T) {
+	for _, side := range []string{"source", "destination"} {
+		t.Run(side, func(t *testing.T) {
+			src, err := object.CreateStorage("mem", "list-error-src-"+side, "", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			dst, err := object.CreateStorage("mem", "list-error-dst-"+side, "", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			injected := errors.New("injected initial listing failure")
+			if side == "source" {
+				src = failedInitialList{src, injected}
+			} else {
+				dst = failedInitialList{dst, injected}
+			}
+			before := countSyncWorkerStacks()
+			config := &Config{Threads: 4, ListThreads: 1, MaxSize: math.MaxInt64, Limit: -1, Quiet: true}
+			if err := Sync(src, dst, config); err == nil || !strings.Contains(err.Error(), injected.Error()) {
+				t.Fatalf("listing failure lost: %v", err)
+			}
+			deadline := time.Now().Add(time.Second)
+			for countSyncWorkerStacks() > before && time.Now().Before(deadline) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			if after := countSyncWorkerStacks(); after != before {
+				t.Fatalf("workers survive failed Sync: before=%d after=%d", before, after)
+			}
+			goodSrc, err := object.CreateStorage("mem", "recovery-src-"+side, "", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := goodSrc.Put(ctx, "recovered", bytes.NewReader([]byte("data"))); err != nil {
+				t.Fatal(err)
+			}
+			goodDst, err := object.CreateStorage("mem", "recovery-dst-"+side, "", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := Sync(goodSrc, goodDst, config); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := goodDst.Head(ctx, "recovered"); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestSyncJoinsRecursiveProducerOnListError(t *testing.T) {
+	src, err := object.CreateStorage("mem", "recursive-error-src", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst, err := object.CreateStorage("mem", "recursive-error-dst", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const files = 1002 // More child prefixes than the listing channel buffers.
+	for i := 0; i < files; i++ {
+		if err := src.Put(ctx, fmt.Sprintf("dir%04d/file", i), bytes.NewReader([]byte("data"))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := countSyncWorkerStacks()
+	injected := errors.New("injected root delimiter listing failure")
+	config := &Config{Threads: 4, ListThreads: 2, ListDepth: 1, MaxSize: math.MaxInt64, Limit: -1, Quiet: true}
+	if err := Sync(src, failedInitialList{dst, injected}, config); err == nil || !strings.Contains(err.Error(), injected.Error()) {
+		t.Fatalf("listing failure lost: %v", err)
+	}
+	if after := countSyncWorkerStacks(); after != before {
+		t.Fatalf("workers survive failed Sync: before=%d after=%d", before, after)
+	}
+	// Child producers already discovered from the source must finish before return.
+	if copied.Current() != files {
+		t.Fatalf("pending copies not joined: got %d want %d", copied.Current(), files)
+	}
+	for i := 0; i < files; i++ {
+		key := fmt.Sprintf("dir%04d/file", i)
+		if _, err := dst.Head(ctx, key); err != nil {
+			t.Fatalf("pending copy %s: %v", key, err)
+		}
+	}
+}
+
+type testListStream struct {
+	object.ObjectStorage
+	objects []object.Object
+	fail    bool
+	done    chan struct{}
+}
+
+type pausedListStream struct {
+	object.ObjectStorage
+	objects []object.Object
+	resume  <-chan struct{}
+}
+
+func (s pausedListStream) ListAll(context.Context, string, string, bool) (<-chan object.Object, error) {
+	ch := make(chan object.Object)
+	go func() {
+		defer close(ch)
+		for _, obj := range s.objects {
+			ch <- obj
+		}
+		<-s.resume
+	}()
+	return ch, nil
+}
+
+func TestSyncReturnsAtLimitWithoutWaitingForListingEOF(t *testing.T) {
+	src, err := object.CreateStorage("mem", "limit-pause-src", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst, err := object.CreateStorage("mem", "limit-pause-dst", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var objects []object.Object
+	for _, key := range []string{"first", "second"} {
+		if err := src.Put(ctx, key, bytes.NewReader([]byte("data"))); err != nil {
+			t.Fatal(err)
+		}
+		obj, err := src.Head(ctx, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		objects = append(objects, obj)
+	}
+	resume := make(chan struct{})
+	result := make(chan error, 1)
+	config := &Config{Threads: 1, ListThreads: 1, MaxSize: math.MaxInt64, Limit: 1, Quiet: true}
+	go func() { result <- Sync(pausedListStream{src, objects, resume}, dst, config) }()
+	select {
+	case err := <-result:
+		close(resume)
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		// Always release our fixture and join Sync, even for the bad implementation.
+		close(resume)
+		<-result
+		t.Fatal("Sync waited for listing EOF after reaching its copy limit")
+	}
+	if _, err := dst.Head(ctx, "first"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dst.Head(ctx, "second"); err == nil {
+		t.Fatal("copied beyond limit")
+	}
+}
+
+func (s testListStream) ListAll(context.Context, string, string, bool) (<-chan object.Object, error) {
+	ch := make(chan object.Object)
+	go func() {
+		defer close(ch)
+		defer close(s.done)
+		for _, obj := range s.objects {
+			ch <- obj
+		}
+		if s.fail {
+			ch <- nil
+		}
+	}()
+	return ch, nil
+}
+
+func TestSyncDrainsListingStreamsOnError(t *testing.T) {
+	src, err := object.CreateStorage("mem", "stream-error-src", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst, err := object.CreateStorage("mem", "stream-error-dst", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := src.Put(ctx, "first", bytes.NewReader([]byte("data"))); err != nil {
+		t.Fatal(err)
+	}
+	first, err := src.Head(ctx, "first")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var destinationObjects []object.Object
+	for i := 0; i < 2000; i++ {
+		key := fmt.Sprintf("z%04d", i)
+		if err := dst.Put(ctx, key, bytes.NewReader([]byte("data"))); err != nil {
+			t.Fatal(err)
+		}
+		obj, err := dst.Head(ctx, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		destinationObjects = append(destinationObjects, obj)
+	}
+	sourceDone, destinationDone := make(chan struct{}), make(chan struct{})
+	before := countSyncWorkerStacks()
+	config := &Config{Threads: 4, ListThreads: 1, MaxSize: math.MaxInt64, Limit: -1, Quiet: true}
+	err = Sync(testListStream{src, []object.Object{first}, true, sourceDone},
+		testListStream{dst, destinationObjects, false, destinationDone}, config)
+	if err == nil || !strings.Contains(err.Error(), "listing failed") {
+		t.Fatalf("listing failure lost: %v", err)
+	}
+	for name, done := range map[string]<-chan struct{}{"source": sourceDone, "destination": destinationDone} {
+		select {
+		case <-done:
+		default:
+			t.Fatalf("%s listing stream survives Sync", name)
+		}
+	}
+	if after := countSyncWorkerStacks(); after != before {
+		t.Fatalf("workers survive failed Sync: before=%d after=%d", before, after)
+	}
+	if copied.Current() != 1 {
+		t.Fatalf("pending copy not joined: got %d", copied.Current())
+	}
+	if _, err := dst.Head(ctx, "first"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // nolint:errcheck
