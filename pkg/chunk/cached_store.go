@@ -1227,15 +1227,17 @@ func (store *cachedStore) FillCache(id uint64, size uint32, parts []Range) error
 			logger.Warnf("Invalid size: %s %d", k, size)
 			continue
 		}
-		if p, e := store.group.TryPiggyback(k); p != nil {
+		if shared, e := store.group.TryPiggyback(k); shared != nil {
 			if e == nil {
-				// Cache outside singleflight so a full cache queue cannot block readers.
+				// The shared page may be owned by a reader that reuses it, so cache a private copy.
+				p := NewOffPage(size)
+				copy(p.Data, shared.Data)
+				shared.Release()
 				store.bcache.cache(k, p, true, !store.conf.OSCache)
-			}
-			p.Release()
-			if e == nil {
+				p.Release()
 				continue
 			}
+			shared.Release()
 		}
 		p := NewOffPage(size)
 		if e := store.load(context.TODO(), k, p, true, true); e != nil {
