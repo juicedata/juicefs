@@ -45,11 +45,7 @@ When client-side caching is enabled and `client-cache-preload` is set, JuiceFS w
 2. Reduce latency for initial file system operations
 3. Provide better performance from the moment the file system is mounted
 
-The preloading process intelligently prioritizes the most important inodes by:
-
-1. Starting with the root directory
-2. Loading the most frequently accessed top-level directories and files
-3. Recursively exploring important subdirectories
+Preloading scans up to `client-cache-preload` entries directly under the root directory and fetches each inode's attributes individually through the client-side cache. A larger preload limit increases background Redis requests when attributes are not already cached.
 
 The preloading process runs in a background goroutine with fail-safe mechanisms and won't block or affect normal file system operations.
 

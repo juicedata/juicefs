@@ -316,6 +316,25 @@ func testACL(t *testing.T, m Meta) {
 
 	defer m.getBase().aclCache.Clear()
 
+	t.Run("lookup replaces ACLs on reused attributes", func(t *testing.T) {
+		ctx := Background()
+		var parent, child, found Ino
+		require.Zero(t, m.Mkdir(ctx, RootInode, "acl-lookup", 0770, 0, 0, &parent, &Attr{}))
+		defer m.Rmdir(ctx, RootInode, "acl-lookup")
+		require.Zero(t, m.Mknod(ctx, parent, "f", TypeFile, 0770, 0, 0, "", &child, &Attr{}))
+		defer m.Unlink(ctx, parent, "f")
+		rule := &aclAPI.Rule{Owner: 7, Group: 7, Mask: 7, NamedUsers: aclAPI.Entries{{Id: 200, Perm: 7}}}
+		require.Zero(t, m.SetFacl(ctx, parent, aclAPI.TypeAccess, rule))
+		var attr Attr
+		require.Zero(t, m.Lookup(ctx, RootInode, "acl-lookup", &found, &attr, false))
+		require.NotZero(t, attr.AccessACL)
+		require.Zero(t, m.Lookup(ctx, parent, "f", &found, &attr, false))
+		require.Equal(t, child, found)
+		require.Zero(t, attr.AccessACL)
+		require.Zero(t, attr.DefaultACL)
+		require.Equal(t, syscall.EACCES, m.Access(NewContext(1, 200, []uint32{200}), child, MODE_MASK_R, &attr))
+	})
+
 	ctx := Background()
 	testDir := "test_dir"
 	var testDirIno Ino
@@ -388,11 +407,11 @@ func testACL(t *testing.T, m Meta) {
 	st := m.GetFacl(ctx, testDirIno, aclAPI.TypeAccess, nil)
 	assert.Equal(t, ENOATTR, st)
 
-	attr2 = &Attr{}
 	if st := m.GetAttr(ctx, testDirIno, attr2); st != 0 {
 		t.Fatalf("getattr error: %s", st)
 	}
 	assert.Equal(t, uint16(0575), attr2.Mode)
+	assert.Zero(t, attr2.AccessACL)
 
 	// case: set normal default acl
 	if st := m.SetFacl(ctx, testDirIno, aclAPI.TypeDefault, rule); st != 0 {
@@ -5012,6 +5031,23 @@ func testAtime(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx, RootInode, "atime", 0755, 0, 0, &parent, &attr); st != 0 {
 		t.Fatalf("Mkdir atime: %s", st)
 	}
+	t.Run("open preserves KeepCache when atime is already current", func(t *testing.T) {
+		var ino Ino
+		var a Attr
+		require.Zero(t, m.Mknod(ctx, parent, "keep-cache", TypeFile, 0644, 0, 0, "", &ino, &a))
+		defer m.Unlink(ctx, parent, "keep-cache")
+		a.Atime = time.Now().Add(time.Hour).Unix()
+		require.Zero(t, m.SetAttr(ctx, ino, SetAttrAtime, 0, &a))
+		a.Atime, a.KeepCache = 1, true // stale atime in the caller's attributes
+		conf := m.getBase().conf
+		oldAtime, oldOpenCache := conf.AtimeMode, conf.OpenCache
+		conf.AtimeMode, conf.OpenCache = RelAtime, 0
+		defer func() { conf.AtimeMode, conf.OpenCache = oldAtime, oldOpenCache }()
+		require.Zero(t, m.Open(ctx, ino, syscall.O_RDONLY, &a))
+		defer m.Close(ctx, ino)
+		require.True(t, a.KeepCache)
+		require.Greater(t, a.Atime, time.Now().Unix())
+	})
 
 	// open, read, read atime < mtime, read recent, readdir, readlink, link
 	testFn := func(name string) (ret [7]bool) {

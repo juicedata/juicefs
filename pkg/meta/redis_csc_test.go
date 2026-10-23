@@ -4,6 +4,7 @@ package meta
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"syscall"
 	"testing"
@@ -121,12 +122,15 @@ func TestRedisCache(t *testing.T) {
 		require.True(t, ok)
 
 		// another client changes the file but not the directory
+		attr.AccessACL, attr.DefaultACL = 7, 8
 		require.NoError(t, other.Set(ctx, m.inodeKey(ino), m.marshal(&Attr{Typ: TypeFile, Mode: 0600, Length: 1}), 0).Err())
 		require.Eventually(t, func() bool {
 			return m.doLookup(Background(), parent, "f", &found, &attr) == 0 && attr.Length == 1
 		}, 3*time.Second, 10*time.Millisecond)
 		require.Equal(t, ino, found)
 		require.Equal(t, uint16(0600), attr.Mode)
+		require.Zero(t, attr.AccessACL)
+		require.Zero(t, attr.DefaultACL)
 	})
 
 	t.Run("entry hook", func(t *testing.T) {
@@ -321,4 +325,107 @@ func TestRedisCache(t *testing.T) {
 		require.True(t, entry.isMark())
 		require.Equal(t, newTerm, entry.term)
 	})
+}
+
+type redisCacheTestHook struct {
+	process func(context.Context, redis.Cmder, redis.ProcessHook) error
+}
+
+func (h redisCacheTestHook) DialHook(next redis.DialHook) redis.DialHook { return nil }
+func (h redisCacheTestHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return nil
+}
+func (h redisCacheTestHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error { return h.process(ctx, cmd, next) }
+}
+
+func TestRedisCachePreload(t *testing.T) {
+	for i, name := range []string{"warm attributes", "invalidated during GET", "directory changed", "missing inode", "read error"} {
+		t.Run(name, func(t *testing.T) {
+			m := mockRedisCSCMeta(t)
+			defer m.Shutdown()
+			other := redis.NewClient(m.cache.cli.Options())
+			defer other.Close()
+			ctx := Background()
+			parent, ino := Ino(400+i*3), Ino(401+i*3)
+			m.root, m.cache.preload = parent, 10
+			want := Attr{Typ: TypeFile, Mode: 0644, Length: 11, Mtime: 2}
+			require.NoError(t, other.Set(ctx, m.inodeKey(parent), (&Attr{Typ: TypeDirectory}).Marshal(), 0).Err())
+			if name != "missing inode" {
+				require.NoError(t, other.Set(ctx, m.inodeKey(ino), want.Marshal(), 0).Err())
+			} else {
+				require.NoError(t, other.Del(ctx, m.inodeKey(ino)).Err())
+			}
+			require.NoError(t, other.HSet(ctx, m.entryKey(parent), "f", m.packEntry(TypeFile, ino)).Err())
+			require.Eventually(t, func() bool { return m.cache.entryTerm(parent) > 0 }, 3*time.Second, time.Millisecond)
+			term := m.cache.entryTerm(parent)
+			m.of.Open(ino, &Attr{Typ: TypeFile, Mtime: 1})
+			defer m.of.Close(ino)
+			m.of.CacheChunk(ino, 0, []Slice{{Id: 1}})
+
+			gets := 0
+			intercept := true
+			m.rdb.AddHook(redisCacheTestHook{process: func(ctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error {
+				if cmd.Name() != "get" {
+					return next(ctx, cmd)
+				}
+				gets++
+				if !intercept || cmd.Args()[1] != m.inodeKey(ino) {
+					return next(ctx, cmd)
+				}
+				intercept = false
+				if name == "read error" {
+					err := errors.New("preload read failed")
+					cmd.SetErr(err)
+					return err
+				}
+				err := next(ctx, cmd)
+				switch name {
+				case "invalidated during GET":
+					want.Length = 12
+					require.NoError(t, other.Set(ctx, m.inodeKey(ino), want.Marshal(), 0).Err())
+					require.NoError(t, m.cache.HandlePushNotification(ctx, push.NotificationHandlerContext{}, []interface{}{"invalidate", []interface{}{m.inodeKey(ino)}}))
+				case "directory changed":
+					require.NoError(t, other.Set(ctx, m.inodeKey(ino+1), want.Marshal(), 0).Err())
+					require.NoError(t, other.HSet(ctx, m.entryKey(parent), "f", m.packEntry(TypeFile, ino+1)).Err())
+					require.NoError(t, m.cache.HandlePushNotification(ctx, push.NotificationHandlerContext{}, []interface{}{"invalidate", []interface{}{m.entryKey(parent)}}))
+				}
+				return err
+			}})
+
+			m.preloadCache()
+			entry, ok := m.cache.entryCache.Get(m.cache.entryName(parent, "f"))
+			if name == "missing inode" || name == "read error" {
+				require.False(t, ok)
+				return
+			}
+			require.True(t, ok)
+			require.Equal(t, term, entry.term)
+			var found Ino
+			var attr Attr
+			switch name {
+			case "warm attributes":
+				data, ok := m.cache.inodeCache.Get(ino)
+				require.True(t, ok)
+				require.Equal(t, want.Marshal(), data)
+				_, cached := m.of.ReadChunk(ino, 0)
+				require.False(t, cached, "preload must invalidate old chunk mappings")
+				before := gets
+				require.Zero(t, m.doLookup(ctx, parent, "f", &found, &attr))
+				require.Equal(t, before, gets, "preloaded lookup must not issue GET")
+				want.Length = 12
+				require.NoError(t, other.Set(ctx, m.inodeKey(ino), want.Marshal(), 0).Err())
+				require.Eventually(t, func() bool { _, ok := m.cache.inodeCache.Get(ino); return !ok }, 3*time.Second, time.Millisecond)
+			case "invalidated during GET":
+				_, ok := m.cache.inodeCache.Get(ino)
+				require.False(t, ok, "invalidated response must not refill the cache")
+			case "directory changed":
+				require.Greater(t, m.cache.entryTerm(parent), entry.term)
+				ino++
+			}
+			require.Zero(t, m.doLookup(ctx, parent, "f", &found, &attr))
+			require.Equal(t, ino, found)
+			require.Equal(t, want.Length, attr.Length)
+		})
+	}
 }

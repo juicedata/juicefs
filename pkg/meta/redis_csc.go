@@ -25,6 +25,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -353,11 +354,20 @@ func (m *redisMeta) preloadCache() {
 
 	term := m.cache.entryTerm(m.root)
 	var entries []*Entry
-	if eno := m.doReaddir(ctx, m.root, 1, &entries, m.cache.preload); eno != 0 {
+	if eno := m.doReaddir(ctx, m.root, 0, &entries, m.cache.preload); eno != 0 {
 		logger.Warnf("failed to read root %d directory: %d", m.root, eno)
 		return
 	}
 	for _, entry := range entries {
+		// GET populates the inode cache through its invalidation-aware hook.
+		if eno := m.doGetAttr(ctx, entry.Inode, entry.Attr); eno != 0 {
+			if eno == syscall.ENOENT {
+				continue
+			}
+			logger.Warnf("failed to preload inode %d attribute: %s", entry.Inode, eno)
+			return
+		}
+		m.of.Update(entry.Inode, entry.Attr)
 		m.cache.entryCache.Add(m.cache.entryName(m.root, string(entry.Name)), &cachedEntry{
 			ino:  entry.Inode,
 			term: term,

@@ -245,11 +245,16 @@ func (attr *Attr) Unmarshal(buf []byte) {
 	attr.Rdev = rb.Get32()
 	if rb.Left() >= 8 {
 		attr.Parent = Ino(rb.Get64())
+	} else {
+		attr.Parent = 0
 	}
 	attr.Full = true
 	if rb.Left() >= 8 {
 		attr.AccessACL = rb.Get32()
 		attr.DefaultACL = rb.Get32()
+	} else {
+		attr.AccessACL = 0
+		attr.DefaultACL = 0
 	}
 	if rb.Left() >= 1 {
 		attr.Tier = rb.Get8()

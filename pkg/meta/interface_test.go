@@ -297,3 +297,62 @@ func Test_readPasswordFromFile(t *testing.T) {
 		})
 	}
 }
+
+func TestAttrUnmarshal(t *testing.T) {
+	source := Attr{
+		Flags: 1, Typ: TypeFile, Mode: 0640, Uid: 100, Gid: 200,
+		Atime: 1, Atimensec: 2, Mtime: 3, Mtimensec: 4, Ctime: 5, Ctimensec: 6,
+		Nlink: 1, Length: 4096, Rdev: 7, Parent: 8,
+	}
+	for _, tc := range []struct {
+		name       string
+		accessACL  uint32
+		defaultACL uint32
+		tier       uint8
+		length     int
+	}{
+		{name: "without optional fields"},
+		{name: "access ACL", accessACL: 9},
+		{name: "default ACL", defaultACL: 10},
+		{name: "tier", tier: 2},
+		{name: "ACLs and tier", accessACL: 9, defaultACL: 10, tier: 2},
+		{name: "legacy without parent", length: 63},
+		{name: "legacy without ACLs or tier", length: 71},
+		{name: "legacy ACLs without tier", accessACL: 9, defaultACL: 10, length: 79},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := source
+			want.AccessACL, want.DefaultACL, want.Tier = tc.accessACL, tc.defaultACL, tc.tier
+			data := want.Marshal()
+			if tc.length != 0 {
+				data = data[:tc.length]
+			}
+			if tc.length == 63 {
+				want.Parent = 0
+			}
+			want.Full = true
+			for _, keepCache := range []bool{false, true} {
+				got := Attr{Parent: 99, AccessACL: 98, DefaultACL: 97, Tier: 96, KeepCache: keepCache}
+				want.KeepCache = keepCache
+				got.Unmarshal(data)
+				if got != want {
+					t.Fatalf("got %+v, want %+v", got, want)
+				}
+			}
+		})
+	}
+
+	t.Run("empty input preserves fallback attributes", func(t *testing.T) {
+		want := Attr{Typ: TypeDirectory, Nlink: 2, Parent: 3, AccessACL: 4, DefaultACL: 5, Tier: 6, Full: true, KeepCache: true}
+		for _, data := range [][]byte{nil, {}} {
+			got := want
+			got.Unmarshal(data)
+			if got != want {
+				t.Fatalf("got %+v, want %+v", got, want)
+			}
+		}
+		var attr *Attr
+		attr.Unmarshal(nil)
+		attr.Unmarshal(source.Marshal())
+	})
+}

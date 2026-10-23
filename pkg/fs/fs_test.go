@@ -25,10 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/stretchr/testify/require"
 )
 
 // mutate_test_job_number: 5
@@ -440,6 +442,26 @@ func TestResolveRelativeSymlinkAfterRedirection(t *testing.T) {
 	if err := fs.Close(); err != nil {
 		t.Fatalf("close: %s", err)
 	}
+}
+
+func TestAccessDoesNotReuseParentACL(t *testing.T) {
+	fs := createTestFS(t)
+	fs.conf.FastResolve = false
+	fs.conf.DirEntryTimeout, fs.conf.EntryTimeout, fs.conf.AttrTimeout = 0, 0, 0
+	format := fs.m.GetFormat()
+	format.EnableACL = true
+	require.NoError(t, fs.m.Init(&format, false))
+	ctx := meta.Background()
+	var parent, child meta.Ino
+	require.Zero(t, fs.m.Mkdir(ctx, meta.RootInode, "acl-parent", 0770, 0, 0, &parent, &meta.Attr{}))
+	defer fs.m.Rmdir(ctx, meta.RootInode, "acl-parent")
+	require.Zero(t, fs.m.Mknod(ctx, parent, "f", meta.TypeFile, 0770, 0, 0, "", &child, &meta.Attr{}))
+	defer fs.m.Unlink(ctx, parent, "f")
+	rule := &acl.Rule{Owner: 7, Group: 7, Mask: 7, NamedUsers: acl.Entries{{Id: 200, Perm: 7}}}
+	require.Zero(t, fs.m.SetFacl(ctx, parent, acl.TypeAccess, rule))
+	user := meta.NewContext(1, 200, []uint32{200})
+	require.Zero(t, fs.Access(user, "/acl-parent", meta.MODE_MASK_X))
+	require.Equal(t, syscall.EACCES, fs.Access(user, "/acl-parent/f", meta.MODE_MASK_R))
 }
 
 func createTestFS(t testing.TB) *FileSystem {
