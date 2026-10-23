@@ -632,3 +632,33 @@ func TestReadAtNeverReportsSuccessWithUnfilledBuffer(t *testing.T) {
 	t.Logf("reads: ok=%d failed=%d CORRUPT=%d", ok.Load(), failed.Load(), bad.Load())
 	require.Zero(t, bad.Load(), "ReadAt reported success but delivered another block's bytes")
 }
+
+// Regression: a full-block read used to cache the caller's page. The caller (e.g. vfs
+// sliceReader) may reuse that buffer, which silently changed the cached immutable block.
+func TestReadAtDoesNotCacheCallerPage(t *testing.T) {
+	const bs = 4096
+	want := bytes.Repeat([]byte{'a'}, bs)
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
+	conf := defaultConf
+	conf.BlockSize = bs
+	conf.CacheDir = "memory"
+	conf.CacheFullBlock = true
+	store := NewCachedStore(mem, conf, nil).(*cachedStore)
+	key := sliceForRead(1, bs, store).key(0)
+	require.NoError(t, mem.Put(context.Background(), key, bytes.NewReader(want)))
+
+	page := NewOffPage(bs)
+	defer page.Release()
+	n, err := store.NewReader(1, bs).ReadAt(context.Background(), page, 0)
+	require.NoError(t, err)
+	require.Equal(t, want, page.Data[:n])
+	copy(page.Data, bytes.Repeat([]byte{'b'}, bs)) // caller reuses its buffer
+
+	r, err := store.bcache.load(key)
+	require.NoError(t, err)
+	defer r.Close()
+	got := make([]byte, bs)
+	_, err = r.ReadAt(got, 0)
+	require.NoError(t, err)
+	require.Equal(t, want, got, "cached block must not alias the caller's page")
+}
