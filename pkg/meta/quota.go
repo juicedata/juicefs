@@ -195,12 +195,13 @@ func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int
 	}
 }
 
-func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, space int64) {
+func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, nlink uint32, length, space int64) {
 	if length == 0 && space == 0 {
 		return
 	}
 	m.en.updateStats(space, 0)
-	if !m.getFormat().DirStats {
+	// an open file without links belongs to no directory until Link charges its full length
+	if !m.getFormat().DirStats || nlink == 0 {
 		return
 	}
 	if parent > 0 {

@@ -2834,7 +2834,13 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 			return syscall.EPERM
 		}
 		oldParent := iattr.Parent
-		iattr.Parent = 0
+		// an open inode with no links left (O_TMPFILE) becomes a plain single-parent file
+		unlinked := iattr.Nlink == 0
+		if unlinked {
+			iattr.Parent = parent
+		} else {
+			iattr.Parent = 0
+		}
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
 		iattr.Nlink++
@@ -2854,10 +2860,14 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&iattr), 0)
-			if oldParent > 0 {
-				pipe.HIncrBy(ctx, m.parentKey(inode), oldParent.String(), 1)
+			if unlinked {
+				pipe.SRem(ctx, m.sustained(m.sid), strconv.Itoa(int(inode)))
+			} else {
+				if oldParent > 0 {
+					pipe.HIncrBy(ctx, m.parentKey(inode), oldParent.String(), 1)
+				}
+				pipe.HIncrBy(ctx, m.parentKey(inode), parent.String(), 1)
 			}
-			pipe.HIncrBy(ctx, m.parentKey(inode), parent.String(), 1)
 			m.genLog(ctx, pipe, now, "LINK(%d,%d,%s,%t):%d", inode, parent, logEncode2(name), updateParent, iattr.Nlink)
 			return nil
 		})
@@ -3099,6 +3109,14 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 			return err
 		}
 		m.parseAttr(a, &attr)
+		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold
+		if attr.Nlink > 0 {
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
+				return nil
+			})
+			return err
+		}
 		newSpace = -align4K(attr.Length)
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(time.Now().Unix()), Member: m.toDelete(inode, attr.Length)})
@@ -3342,7 +3360,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		return err
 	}, m.inodeKey(fout), m.inodeKey(fin))
 	if err == nil {
-		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
+		m.updateParentStat(ctx, fout, attr.Parent, attr.Nlink, newLength, newSpace)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, 0)
 	}
 	return errno(err)
