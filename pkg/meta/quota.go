@@ -239,6 +239,10 @@ func (m *baseMeta) doFlushDirStat() {
 	if !m.getFormat().DirStats {
 		return
 	}
+	// Hold it until the stats are written, so that a flush returns only after the changes taken
+	// by a flush in progress are written too (Clone copies the dir stats from the engine).
+	m.dirStatsFlushLock.Lock()
+	defer m.dirStatsFlushLock.Unlock()
 	m.dirStatsLock.Lock()
 	if len(m.dirStats) == 0 {
 		m.dirStatsLock.Unlock()
