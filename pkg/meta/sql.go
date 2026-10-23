@@ -41,6 +41,8 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
@@ -563,6 +565,15 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	m.en = m
 	return m, nil
+}
+
+func (m *dbMeta) InitMetrics(reg prometheus.Registerer) {
+	m.baseMeta.InitMetrics(reg)
+	if reg != nil {
+		if err := reg.Register(collectors.NewDBStatsCollector(m.db.DB().DB, "metadata")); err != nil {
+			logger.Warnf("Register SQL connection pool metrics: %s", err)
+		}
+	}
 }
 
 func (m *dbMeta) Shutdown() error {
