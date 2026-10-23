@@ -475,17 +475,6 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Coun
 			c.NextTrash = max(c.NextTrash, int64(Ino(inode)-TrashInode))
 		}
 	}
-	getQuota := func(typ uint32, key uint64) *DumpedQuota {
-		if c.quotas[typ] == nil {
-			c.quotas[typ] = make(map[uint64]*DumpedQuota)
-		}
-		q := c.quotas[typ][key]
-		if q == nil {
-			q = &DumpedQuota{MaxSpace: -1, MaxInodes: -1}
-			c.quotas[typ][key] = q
-		}
-		return q
-	}
 	switch seg.typ {
 	case segTypeFormat:
 		var format Format
@@ -521,14 +510,8 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Coun
 				c.dirs[Ino(node.Inode)] = struct{}{}
 			}
 			if Ino(node.Inode) != RootInode && Ino(node.Inode) != TrashInode {
-				space := align4K(attr.Length)
-				c.UsedSpace += space
+				c.UsedSpace += align4K(attr.Length)
 				c.UsedInodes++
-				for i, id := range []uint64{uint64(attr.Uid), uint64(attr.Gid)} {
-					q := getQuota(uint32(UserQuotaType+i), id)
-					q.UsedSpace += space
-					q.UsedInodes++
-				}
 			}
 		}
 	case segTypeChunk:
@@ -565,8 +548,10 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Coun
 					logger.Warnf("unknown quota type: %d", qtype)
 					continue
 				}
-				quota := getQuota(qtype, q.Key)
-				quota.MaxSpace, quota.MaxInodes = q.MaxSpace, q.MaxInodes
+				if c.quotas[qtype] == nil {
+					c.quotas[qtype] = make(map[uint64]*DumpedQuota)
+				}
+				c.quotas[qtype][q.Key] = &DumpedQuota{MaxSpace: q.MaxSpace, MaxInodes: q.MaxInodes}
 				if qtype != DirQuotaType {
 					c.userGroupQuota = true
 				}
@@ -617,6 +602,29 @@ func (c *DumpedCounters) rebuildStats(ctx Context, m *baseMeta, store func(int, 
 	if len(batch.Dirstats) > 0 {
 		if err := store(segTypeStat, batch); err != nil {
 			return err
+		}
+	}
+	if c.userGroupQuota {
+		if _, err := m.Load(false); err != nil {
+			return err
+		}
+		users, groups, err := m.scanGlobalUserGroupUsage(ctx)
+		if err != nil {
+			return err
+		}
+		for i, usage := range []map[uint64]*Summary{users, groups} {
+			typ := UserQuotaType + i
+			if c.quotas[typ] == nil {
+				c.quotas[typ] = make(map[uint64]*DumpedQuota)
+			}
+			for id, sum := range usage {
+				q := c.quotas[typ][id]
+				if q == nil {
+					q = &DumpedQuota{MaxSpace: -1, MaxInodes: -1}
+					c.quotas[typ][id] = q
+				}
+				q.UsedSpace, q.UsedInodes = int64(sum.Size), int64(sum.Files)
+			}
 		}
 	}
 	batch = &pb.Batch{}

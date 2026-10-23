@@ -5359,15 +5359,9 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uin
 		}
 	} else if n.Type == TypeDirectory {
 		n.Length = 4 << 10
-		stat := &dirStats{Inode: inode}
+		var stat dirStat
 		for name, c := range e.Entries {
-			length := uint64(0)
-			if typeFromString(c.Attr.Type) == TypeFile {
-				length = c.Attr.Length
-			}
-			stat.DataLength += int64(length)
-			stat.UsedSpace += align4K(length)
-			stat.UsedInodes++
+			stat.add(typeFromString(c.Attr.Type), c.Attr.Length)
 
 			chs[1] <- &edge{
 				Parent: inode,
@@ -5376,7 +5370,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uin
 				Type:   typeFromString(c.Attr.Type),
 			}
 		}
-		chs[5] <- stat
+		chs[5] <- &dirStats{Inode: inode, DataLength: stat.length, UsedSpace: stat.space, UsedInodes: stat.inodes}
 	} else if n.Type == TypeSymlink {
 		symL := unescape(e.Symlink)
 		n.Length = uint64(len(symL))
@@ -5522,8 +5516,10 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		}
 		return nil
 	})
-	m.loadDumpedQuotas(Background(), dm)
-	return err
+	if err != nil {
+		return err
+	}
+	return m.loadDumpedQuotas(Background(), dm)
 }
 
 type checkDupError func(error) bool
