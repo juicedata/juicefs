@@ -422,10 +422,13 @@ func (f *fileReader) checkReadahead(block *frange) int {
 	seqdata := ses.total
 	readahead := ses.readahead
 	used := uint64(readBufferUsed.Load())
-	if readahead == 0 && f.r.blockSize <= f.r.readAheadMax && (block.off == 0 || seqdata > block.len) { // begin with read-ahead turned on
-		ses.readahead = f.r.blockSize
+	if readahead == 0 && f.r.initReadAhead <= f.r.readAheadMax && (block.off == 0 || seqdata > block.len) { // begin with read-ahead turned on
+		ses.readahead = f.r.initReadAhead
 	} else if readahead < f.r.readAheadMax && seqdata >= readahead && f.r.readAheadTotal > used+readahead*4 {
 		ses.readahead *= 2
+		if ses.readahead > f.r.readAheadMax {
+			ses.readahead = f.r.readAheadMax
+		}
 	} else if readahead >= f.r.blockSize && (f.r.readAheadTotal < used+readahead/2 || seqdata < readahead/4) {
 		ses.readahead /= 2
 	}
@@ -700,6 +703,7 @@ type dataReader struct {
 	files          map[Ino]*fileReader
 	blockSize      uint64
 	bufferSize     int64
+	initReadAhead  uint64
 	readAheadMax   uint64
 	readAheadTotal uint64
 	maxRequests    int
@@ -712,12 +716,20 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 		readAheadTotal = int(conf.Chunk.BufferSize / 10 * 8) // 80% of total buffer
 	}
 	readAheadMax := min(conf.Chunk.Readahead, readAheadTotal)
+	initReadAhead := conf.Chunk.InitReadahead
+	if initReadAhead <= 0 {
+		initReadAhead = conf.Chunk.BlockSize // default: slow-start with one block
+	}
+	if initReadAhead > readAheadMax {
+		initReadAhead = readAheadMax
+	}
 	r := &dataReader{
 		m:              m,
 		store:          store,
 		files:          make(map[Ino]*fileReader),
 		blockSize:      uint64(conf.Chunk.BlockSize),
 		bufferSize:     int64(conf.Chunk.BufferSize),
+		initReadAhead:  uint64(initReadAhead),
 		readAheadTotal: uint64(readAheadTotal),
 		readAheadMax:   uint64(readAheadMax),
 		maxRequests:    readAheadMax/conf.Chunk.BlockSize*readSessions + 1,
