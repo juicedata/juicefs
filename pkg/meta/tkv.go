@@ -4341,13 +4341,7 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair, aclMaxId *uint32) {
 		attr.Length = 4 << 10
 		var stat dirStat
 		for name, c := range e.Entries {
-			length := uint64(0)
-			if typeFromString(c.Attr.Type) == TypeFile {
-				length = c.Attr.Length
-			}
-			stat.length += int64(length)
-			stat.space += align4K(length)
-			stat.inodes++
+			stat.add(typeFromString(c.Attr.Type), c.Attr.Length)
 
 			kv <- &pair{m.entryKey(inode, string(unescape(name))), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)}
 		}
@@ -4475,8 +4469,10 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		}
 		return nil
 	})
-	m.loadDumpedQuotas(Background(), dm)
-	return err
+	if err != nil {
+		return err
+	}
+	return m.loadDumpedQuotas(Background(), dm)
 }
 
 func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, originAttr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {

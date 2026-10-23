@@ -467,7 +467,7 @@ func (opt *LoadOption) check() {
 	}
 }
 
-func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Counter) bool {
+func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Counter) (bool, error) {
 	recordInode := func(inode uint64) {
 		if Ino(inode) < TrashInode {
 			c.NextInode = max(c.NextInode, int64(inode)+1)
@@ -476,6 +476,12 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Coun
 		}
 	}
 	switch seg.typ {
+	case segTypeFormat:
+		var format Format
+		if err := json.Unmarshal(seg.val.(*pb.Format).Data, &format); err != nil {
+			return false, err
+		}
+		c.userGroupQuota = c.userGroupQuota || format.UserGroupQuota
 	case segTypeCounter:
 		batch := seg.val.(*pb.Batch)
 		*counters = append(*counters, batch.Counters...)
@@ -491,13 +497,19 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Coun
 				c.NextTrash = max(c.NextTrash, counter.Value)
 			}
 		}
-		return true
+		return true, nil
 	case segTypeNode:
 		var attr Attr
 		for _, node := range seg.val.(*pb.Batch).Nodes {
 			recordInode(node.Inode)
+			attr.Unmarshal(node.Data)
+			if attr.Typ == TypeDirectory {
+				if c.dirs == nil {
+					c.dirs = make(map[Ino]struct{})
+				}
+				c.dirs[Ino(node.Inode)] = struct{}{}
+			}
 			if Ino(node.Inode) != RootInode && Ino(node.Inode) != TrashInode {
-				attr.Unmarshal(node.Data)
 				c.UsedSpace += align4K(attr.Length)
 				c.UsedInodes++
 			}
@@ -524,8 +536,32 @@ func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Coun
 		for _, file := range seg.val.(*pb.Batch).Delfiles {
 			recordInode(file.Inode)
 		}
+	case segTypeQuota:
+		batch := seg.val.(*pb.Batch)
+		for typ, quotas := range [][]*pb.Quota{batch.Quotas, batch.UserQuotas, batch.GroupQuotas} {
+			for _, q := range quotas {
+				qtype := q.Type
+				if typ != DirQuotaType {
+					qtype = uint32(typ)
+				}
+				if qtype >= AllQuotaType {
+					logger.Warnf("unknown quota type: %d", qtype)
+					continue
+				}
+				if c.quotas[qtype] == nil {
+					c.quotas[qtype] = make(map[uint64]*DumpedQuota)
+				}
+				c.quotas[qtype][q.Key] = &DumpedQuota{MaxSpace: q.MaxSpace, MaxInodes: q.MaxInodes}
+				if qtype != DirQuotaType {
+					c.userGroupQuota = true
+				}
+			}
+		}
+		return true, nil
+	case segTypeStat:
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
 func (c *DumpedCounters) toBatch(counters []*pb.Counter) *pb.Batch {
@@ -545,6 +581,80 @@ func (c *DumpedCounters) toBatch(counters []*pb.Counter) *pb.Batch {
 		&pb.Counter{Key: "nextSession", Value: c.NextSession},
 		&pb.Counter{Key: "nextTrash", Value: c.NextTrash},
 	)}
+}
+
+func (c *DumpedCounters) rebuildStats(ctx Context, m *baseMeta, store func(int, *pb.Batch) error) error {
+	logger.Infof("Rebuilding directory statistics and quota usage")
+	batch := &pb.Batch{}
+	for ino := range c.dirs {
+		stat, st := m.calcDirStat(ctx, ino)
+		if st != 0 {
+			return fmt.Errorf("rebuild directory statistics for inode %d: %w", ino, st)
+		}
+		batch.Dirstats = append(batch.Dirstats, &pb.Stat{Inode: uint64(ino), DataLength: stat.length, UsedSpace: stat.space, UsedInodes: stat.inodes})
+		if len(batch.Dirstats) == 1000 {
+			if err := store(segTypeStat, batch); err != nil {
+				return err
+			}
+			batch = &pb.Batch{}
+		}
+	}
+	if len(batch.Dirstats) > 0 {
+		if err := store(segTypeStat, batch); err != nil {
+			return err
+		}
+	}
+	if c.userGroupQuota {
+		if _, err := m.Load(false); err != nil {
+			return err
+		}
+		users, groups, err := m.scanGlobalUserGroupUsage(ctx)
+		if err != nil {
+			return err
+		}
+		for i, usage := range []map[uint64]*Summary{users, groups} {
+			typ := UserQuotaType + i
+			if c.quotas[typ] == nil {
+				c.quotas[typ] = make(map[uint64]*DumpedQuota)
+			}
+			for id, sum := range usage {
+				q := c.quotas[typ][id]
+				if q == nil {
+					q = &DumpedQuota{MaxSpace: -1, MaxInodes: -1}
+					c.quotas[typ][id] = q
+				}
+				q.UsedSpace, q.UsedInodes = int64(sum.Size), int64(sum.Files)
+			}
+		}
+	}
+	batch = &pb.Batch{}
+	for typ, quotas := range c.quotas {
+		if typ != DirQuotaType && !c.userGroupQuota {
+			continue
+		}
+		for id, q := range quotas {
+			if typ == DirQuotaType {
+				var summary Summary
+				if st := m.GetSummary(ctx, Ino(id), &summary, true, true); st != 0 {
+					return fmt.Errorf("rebuild directory quota for inode %d: %w", id, st)
+				}
+				q.UsedSpace = int64(summary.Size) - align4K(0)
+				q.UsedInodes = int64(summary.Dirs+summary.Files) - 1
+			}
+			batch.Quotas = append(batch.Quotas, &pb.Quota{Type: uint32(typ), Key: id,
+				MaxSpace: q.MaxSpace, MaxInodes: q.MaxInodes, UsedSpace: q.UsedSpace, UsedInodes: q.UsedInodes})
+			if len(batch.Quotas) == 1000 {
+				if err := store(segTypeQuota, batch); err != nil {
+					return err
+				}
+				batch = &pb.Batch{}
+			}
+		}
+	}
+	if len(batch.Quotas) > 0 {
+		return store(segTypeQuota, batch)
+	}
+	return ctx.Err()
 }
 
 // transaction

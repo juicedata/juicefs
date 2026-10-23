@@ -810,15 +810,36 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			wg.Wait()
 			return err
 		}
-		if loaded.updateFromSegment(seg, &counters) {
+		if skip, err := loaded.updateFromSegment(seg, &counters); err != nil {
+			ctx.Cancel()
+			wg.Wait()
+			return err
+		} else if skip {
 			continue
 		}
-
 		if !sendTask(&task{int(seg.typ), seg.val}, seg.Name(), int(seg.num())) {
 			wg.Wait()
 			return ctx.Err()
 		}
 	}
 	wg.Wait()
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return loaded.rebuildStats(ctx, m.baseMeta, func(typ int, batch *pb.Batch) error {
+		var pairs []*pair
+		if typ == segTypeStat {
+			m.loadDirStats(ctx, batch, &pairs)
+		} else {
+			m.loadQuota(ctx, batch, &pairs)
+		}
+		if err := m.insertKVs(ctx, pairs, opt.Threads); err != nil {
+			return err
+		}
+		if opt.Progress != nil {
+			seg := newBakSegment(batch)
+			opt.Progress(seg.Name(), int(seg.num()))
+		}
+		return nil
+	})
 }

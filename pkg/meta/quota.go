@@ -36,6 +36,15 @@ type dirStat struct {
 	inodes int64
 }
 
+func (s *dirStat) add(typ uint8, length uint64) {
+	if typ != TypeFile {
+		length = 0
+	}
+	s.length += int64(length)
+	s.space += align4K(length)
+	s.inodes++
+}
+
 const (
 	DirQuotaType = iota
 	UserQuotaType
@@ -149,13 +158,7 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 		if ctx.Canceled() {
 			return nil, syscall.EINTR
 		}
-		stat.inodes += 1
-		var l uint64
-		if e.Attr.Typ == TypeFile {
-			l = e.Attr.Length
-		}
-		stat.length += int64(l)
-		stat.space += align4K(l)
+		stat.add(e.Attr.Typ, e.Attr.Length)
 	}
 	return stat, 0
 }
@@ -700,7 +703,7 @@ func (m *baseMeta) calcDirQuotaUsage(ctx Context, ino Ino, dpath string, strict 
 func (m *baseMeta) ScanUserGroupUsage(ctx Context) error {
 	userUsage, groupUsage, err := m.scanGlobalUserGroupUsage(ctx)
 	if err != nil {
-		return fmt.Errorf("scan global user group usage: %v", err)
+		return fmt.Errorf("scan global user group usage: %w", err)
 	}
 
 	var userQuotasSnapshot map[uint64]*Quota
@@ -751,14 +754,14 @@ func (m *baseMeta) ScanUserGroupUsage(ctx Context) error {
 	for uid, quota := range userQuotasSnapshot {
 		_, err := m.en.doSetQuota(ctx, UserQuotaType, uid, quota)
 		if err != nil {
-			logger.Warnf("Failed to save user quota for uid %d: %v", uid, err)
+			return fmt.Errorf("save user quota for uid %d: %w", uid, err)
 		}
 	}
 
 	for gid, quota := range groupQuotasSnapshot {
 		_, err := m.en.doSetQuota(ctx, GroupQuotaType, gid, quota)
 		if err != nil {
-			logger.Warnf("Failed to save group quota for gid %d: %v", gid, err)
+			return fmt.Errorf("save group quota for gid %d: %w", gid, err)
 		}
 	}
 
@@ -777,19 +780,26 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 		var trashAttr Attr
 		if st := m.en.doGetAttr(ctx, TrashInode, &trashAttr); st == 0 {
 			dirQueue = append(dirQueue, TrashInode)
+		} else if st != syscall.ENOENT {
+			return nil, nil, fmt.Errorf("get trash attribute: %w", st)
 		}
 	}
 
 	for len(dirQueue) > 0 {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
 		currentDir := dirQueue[0]
 		dirQueue = dirQueue[1:]
 
 		var entries []*Entry
 		visitedDirs[currentDir] = true
 		err := m.en.doReaddir(ctx, currentDir, 1, &entries, -1)
-		if err != 0 {
-			logger.Warnf("readdir %d: %s", currentDir, err)
+		if err == syscall.ENOENT {
 			continue
+		}
+		if err != 0 {
+			return nil, nil, fmt.Errorf("readdir %d: %w", currentDir, err)
 		}
 
 		for _, e := range entries {
@@ -806,36 +816,24 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 				groupUsage[gid] = &Summary{}
 			}
 
-			var space int64
-			var inodes int64
-			if e.Attr.Typ == TypeFile {
-				if e.Attr.Nlink > 1 {
-					if processedFiles[e.Inode] {
-						space = 0
-						inodes = 0
-					} else {
-						space = align4K(e.Attr.Length)
-						inodes = 1
-						processedFiles[e.Inode] = true
-					}
-				} else {
-					space = align4K(e.Attr.Length)
-					inodes = 1
-				}
-			} else if e.Attr.Typ == TypeDirectory {
-				space = align4K(0)
-				inodes = 1
+			if e.Attr.Typ == TypeDirectory {
 				userUsage[uid].Dirs++
 				groupUsage[gid].Dirs++
 				if !visitedDirs[e.Inode] {
 					dirQueue = append(dirQueue, e.Inode)
 				}
+			} else if e.Attr.Nlink > 1 {
+				if processedFiles[e.Inode] {
+					continue
+				}
+				processedFiles[e.Inode] = true
 			}
 
+			space := align4K(e.Attr.Length)
 			userUsage[uid].Size += uint64(space)
-			userUsage[uid].Files += uint64(inodes)
+			userUsage[uid].Files++
 			groupUsage[gid].Size += uint64(space)
-			groupUsage[gid].Files += uint64(inodes)
+			groupUsage[gid].Files++
 
 		}
 	}
@@ -855,10 +853,10 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 		groupUsage[g].Files++
 		return nil
 	}); err != nil {
-		logger.Warnf("scan sustained inodes for user/group quota: %v", err)
+		return nil, nil, fmt.Errorf("scan sustained inodes for user/group quota: %w", err)
 	}
 
-	return userUsage, groupUsage, nil
+	return userUsage, groupUsage, ctx.Err()
 }
 
 func (m *baseMeta) handleQuotaGet(ctx Context, qtype uint32, key uint64, dpath string, quotas map[string]*Quota) error {

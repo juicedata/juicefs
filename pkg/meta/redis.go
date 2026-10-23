@@ -5188,13 +5188,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(),
 		dentries := make(map[string]interface{}, batch)
 		var stat dirStat
 		for name, c := range e.Entries {
-			length := uint64(0)
-			if typeFromString(c.Attr.Type) == TypeFile {
-				length = c.Attr.Length
-			}
-			stat.length += int64(length)
-			stat.space += align4K(length)
-			stat.inodes++
+			stat.add(typeFromString(c.Attr.Type), c.Attr.Length)
 
 			dentries[string(unescape(name))] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
 			if len(dentries) >= batch {
@@ -5350,8 +5344,10 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 		}
 	}
 	_, err = p.Exec(ctx)
-	m.loadDumpedQuotas(ctx, dm)
-	return err
+	if err != nil {
+		return err
+	}
+	return m.loadDumpedQuotas(ctx, dm)
 }
 
 func (m *redisMeta) loadQuotasForDump(ctx Context, quotaKey string) map[uint64]*DumpedQuota {
