@@ -212,6 +212,7 @@ func testMeta(t *testing.T, m Meta) {
 	testClone(t, m)
 	testCleanupDetachedNodes(t, m)
 	testBatchClone(t, m)
+	testCloneDirStats(t, m)
 	testACL(t, m)
 	testKerberosToken(t, m)
 	base.conf.ReadOnly = true
@@ -4696,6 +4697,132 @@ func testClone(t *testing.T, m Meta) {
 	}
 	if eno := m.Clone(Background(), TrashInode+1, 1000, cloneDir, "xxx", 0, 022, 4, &count, &total); !errors.Is(eno, syscall.EPERM) {
 		t.Fatalf("cloning files in the trash is not supported")
+	}
+}
+
+// testCloneDirStats checks the dir stats after cloning a directory: the cloned directories
+// have the same stats as the source, including a change that was not yet flushed when the
+// clone started, and the parent counts the cloned directory like mkdir, without length.
+func testCloneDirStats(t *testing.T, m Meta) {
+	// keep the change below pending in this client until the clone starts
+	period := m.getBase().conf.DirStatFlushPeriod
+	m.getBase().conf.DirStatFlushPeriod = time.Hour
+	defer func() { m.getBase().conf.DirStatFlushPeriod = period }()
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+	ctx := Background()
+	_ = m.Remove(ctx, RootInode, "cloneDirStatSrc", true, 10, nil)
+	_ = m.Remove(ctx, RootInode, "cloneDirStatDst", true, 10, nil)
+
+	// $ tree cloneDirStatSrc
+	// .
+	// ├── f2     (1 MiB, then 2 MiB right before the clone, then 3 MiB before the second one)
+	// └── sub
+	//     └── f1 (1 MiB)
+	var attr Attr
+	var src, sub, f1, f2, dst Ino
+	if st := m.Mkdir(ctx, RootInode, "cloneDirStatSrc", 0755, 0, 0, &src, &attr); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	if st := m.Mkdir(ctx, src, "sub", 0755, 0, 0, &sub, &attr); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	for _, e := range []struct {
+		parent Ino
+		name   string
+		ino    *Ino
+	}{{sub, "f1", &f1}, {src, "f2", &f2}} {
+		if st := m.Create(ctx, e.parent, e.name, 0644, 0, 0, e.ino, &attr); st != 0 {
+			t.Fatalf("create %s: %s", e.name, st)
+		}
+		if st := m.Truncate(ctx, *e.ino, 0, 1<<20, &attr, false); st != 0 {
+			t.Fatalf("truncate %s: %s", e.name, st)
+		}
+	}
+	if st := m.Mkdir(ctx, RootInode, "cloneDirStatDst", 0755, 0, 0, &dst, &attr); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	m.FlushSession()
+	if st := m.Truncate(ctx, f2, 0, 2<<20, &attr, false); st != 0 {
+		t.Fatalf("truncate f2: %s", st)
+	}
+
+	var count, total uint64
+	if st := m.Clone(ctx, RootInode, src, dst, "c", 0, 0, CLONE_DEFAULT_CONCURRENCY, &count, &total); st != 0 {
+		t.Fatalf("clone: %s", st)
+	}
+	m.FlushSession()
+	checkClone := func(name string) {
+		var c, csub Ino
+		if st := m.Lookup(ctx, dst, name, &c, &attr, false); st != 0 {
+			t.Fatalf("lookup %s: %s", name, st)
+		}
+		if st := m.Lookup(ctx, c, "sub", &csub, &attr, false); st != 0 {
+			t.Fatalf("lookup %s/sub: %s", name, st)
+		}
+		for _, pair := range [][2]Ino{{src, c}, {sub, csub}} {
+			want, st := m.GetDirStat(ctx, pair[0])
+			if st != 0 {
+				t.Fatalf("dir stat of %d: %s", pair[0], st)
+			}
+			got, st := m.GetDirStat(ctx, pair[1])
+			if st != 0 {
+				t.Fatalf("dir stat of %d: %s", pair[1], st)
+			}
+			if *got != *want {
+				t.Fatalf("dir stat of the clone %d: %+v, expect %+v as the source %d", pair[1], *got, *want, pair[0])
+			}
+		}
+	}
+	checkClone("c")
+	if err := waitCheckResult(m, dirStat{0, align4K(0), 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(ctx, dst)
+	}); err != nil {
+		t.Fatalf("dir stat of the parent of the clone: %v", err)
+	}
+
+	// A flush in progress (here, this test) has taken the pending change of f2 but has not
+	// written it yet: the clone must wait for that flush.
+	if st := m.Truncate(ctx, f2, 0, 3<<20, &attr, false); st != 0 {
+		t.Fatalf("truncate f2: %s", st)
+	}
+	base := m.getBase()
+	base.dirStatsFlushLock.Lock()
+	base.dirStatsLock.Lock()
+	taken := base.dirStats
+	base.dirStats = make(map[Ino]dirStat)
+	base.dirStatsLock.Unlock()
+	done := make(chan syscall.Errno, 1)
+	go func() {
+		var count, total uint64
+		done <- m.Clone(ctx, RootInode, src, dst, "c2", 0, 0, CLONE_DEFAULT_CONCURRENCY, &count, &total)
+	}()
+	var cloneSt syscall.Errno
+	cloned := false
+	select {
+	case cloneSt = <-done:
+		cloned = true
+	case <-time.After(500 * time.Millisecond):
+	}
+	if err := base.en.doUpdateDirStat(ctx, taken); err != nil {
+		t.Fatalf("update dir stat: %s", err)
+	}
+	base.dirStatsFlushLock.Unlock()
+	if !cloned {
+		cloneSt = <-done
+	}
+	if cloneSt != 0 {
+		t.Fatalf("clone c2: %s", cloneSt)
+	}
+	m.FlushSession()
+	checkClone("c2")
+	if st := m.Remove(ctx, RootInode, "cloneDirStatDst", true, 10, nil); st != 0 {
+		t.Fatalf("remove: %s", st)
+	}
+	if st := m.Remove(ctx, RootInode, "cloneDirStatSrc", true, 10, nil); st != 0 {
+		t.Fatalf("remove: %s", st)
 	}
 }
 

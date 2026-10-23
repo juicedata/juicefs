@@ -304,8 +304,9 @@ type baseMeta struct {
 	dSliceMu sync.Mutex
 	dSliceWG sync.WaitGroup
 
-	dirStatsLock sync.RWMutex
-	dirStats     map[Ino]dirStat
+	dirStatsLock      sync.RWMutex
+	dirStats          map[Ino]dirStat
+	dirStatsFlushLock sync.Mutex // prevent concurrent doFlushDirStat
 
 	fsStatsLock sync.Mutex
 	*fsStat
@@ -3469,6 +3470,9 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	}
 	concurrent := make(chan struct{}, concurrency)
 	if attr.Typ == TypeDirectory {
+		// The cloned directories copy the stats of the source directories from the metadata
+		// engine, so write the changes that are still pending in this client first.
+		m.doFlushDirStat()
 		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
 		if eno == 0 {
 			eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
@@ -3482,7 +3486,12 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent)
 	}
 	if eno == 0 {
-		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
+		// The length in the dir stats only counts regular files, as in Mknod and Rename.
+		var length int64
+		if attr.Typ == TypeFile {
+			length = int64(attr.Length)
+		}
+		m.updateDirStat(ctx, parent, length, align4K(attr.Length), 1)
 		m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
 	}
 	return eno
