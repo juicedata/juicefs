@@ -39,6 +39,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+	"github.com/aws/smithy-go/encoding/httpbinding"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
@@ -194,14 +195,18 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return err
 }
 
+// copySource returns the URL-encoded x-amz-copy-source value, which the SDK sends as is.
+func (s *s3client) copySource(key string) string {
+	return httpbinding.EscapePath(s.bucket+"/"+key, false)
+}
+
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
 	t := s.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, string(types.StorageClassStandard))
-	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,
 		Key:          &dst,
-		CopySource:   &src,
+		CopySource:   aws.String(s.copySource(src)),
 		StorageClass: types.StorageClass(sc),
 	}
 	if t.encodedTag != "" {
@@ -329,7 +334,7 @@ func (s *s3client) UploadPart(ctx context.Context, key string, uploadID string, 
 func (s *s3client) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.s3.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),
-		CopySource:      aws.String(s.bucket + "/" + srcKey),
+		CopySource:      aws.String(s.copySource(srcKey)),
 		CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
 		Key:             aws.String(key),
 		PartNumber:      aws.Int32(int32(num)),
