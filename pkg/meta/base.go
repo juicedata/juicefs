@@ -4156,6 +4156,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	}
 
 	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
+	stats := newLoadedStats()
 	var counters []*pb.Counter
 	bak := &BakFormat{}
 
@@ -4196,6 +4197,13 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			return err
 		}
 
+		if skip, err := stats.updateFromSegment(seg); err != nil {
+			ctx.Cancel()
+			wg.Wait()
+			return err
+		} else if skip {
+			continue
+		}
 		if loaded.updateFromSegment(seg, &counters) {
 			continue
 		}
@@ -4206,5 +4214,17 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		}
 	}
 	wg.Wait()
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return stats.rebuild(ctx, m, func(typ int, batch *pb.Batch) error {
+		if err := m.en.load(ctx, typ, opt, batch); err != nil {
+			return err
+		}
+		if opt.Progress != nil {
+			seg := newBakSegment(batch)
+			opt.Progress(seg.Name(), int(seg.num()))
+		}
+		return nil
+	})
 }

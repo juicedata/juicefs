@@ -547,6 +547,143 @@ func (c *DumpedCounters) toBatch(counters []*pb.Counter) *pb.Batch {
 	)}
 }
 
+type loadedQuotaNode struct {
+	uid, gid  uint32
+	space     int64
+	duplicate bool
+}
+
+type loadedStats struct {
+	dirs           map[Ino]struct{}
+	nodes          map[Ino]loadedQuotaNode
+	quotas         [AllQuotaType]map[uint64]*pb.Quota
+	userGroupQuota bool
+}
+
+func newLoadedStats() *loadedStats {
+	s := &loadedStats{dirs: make(map[Ino]struct{}), nodes: make(map[Ino]loadedQuotaNode)}
+	for typ := range s.quotas {
+		s.quotas[typ] = make(map[uint64]*pb.Quota)
+	}
+	return s
+}
+
+func (s *loadedStats) updateFromSegment(seg *BakSegment) (bool, error) {
+	switch seg.typ {
+	case segTypeFormat:
+		var format Format
+		if err := json.Unmarshal(seg.val.(*pb.Format).Data, &format); err != nil {
+			return false, err
+		}
+		s.userGroupQuota = format.UserGroupQuota
+	case segTypeNode:
+		var attr Attr
+		for _, node := range seg.val.(*pb.Batch).Nodes {
+			ino := Ino(node.Inode)
+			attr.Unmarshal(node.Data)
+			if attr.Typ == TypeDirectory {
+				s.dirs[ino] = struct{}{}
+			}
+			if ino != RootInode && ino != TrashInode {
+				_, duplicate := s.nodes[ino]
+				s.nodes[ino] = loadedQuotaNode{attr.Uid, attr.Gid, align4K(attr.Length), duplicate}
+			}
+		}
+	case segTypeQuota:
+		batch := seg.val.(*pb.Batch)
+		for typ, quotas := range [][]*pb.Quota{batch.Quotas, batch.UserQuotas, batch.GroupQuotas} {
+			for _, q := range quotas {
+				qtype := q.Type
+				if typ != DirQuotaType {
+					qtype = uint32(typ)
+				}
+				if qtype >= AllQuotaType {
+					logger.Warnf("unknown quota type: %d", qtype)
+					continue
+				}
+				s.quotas[qtype][q.Key] = &pb.Quota{Type: qtype, Key: q.Key, MaxSpace: q.MaxSpace, MaxInodes: q.MaxInodes}
+			}
+		}
+		return true, nil
+	case segTypeStat:
+		return true, nil
+	}
+	return false, nil
+}
+
+func (s *loadedStats) rebuild(ctx Context, m *baseMeta, store func(int, *pb.Batch) error) error {
+	logger.Infof("Rebuilding directory statistics and quota usage")
+	batch := &pb.Batch{}
+	for ino := range s.dirs {
+		stat, st := m.calcDirStat(ctx, ino)
+		if st != 0 {
+			return fmt.Errorf("rebuild directory statistics for inode %d: %w", ino, st)
+		}
+		batch.Dirstats = append(batch.Dirstats, &pb.Stat{Inode: uint64(ino), DataLength: stat.length, UsedSpace: stat.space, UsedInodes: stat.inodes})
+		if len(batch.Dirstats) == 1000 {
+			if err := store(segTypeStat, batch); err != nil {
+				return err
+			}
+			batch = &pb.Batch{}
+		}
+	}
+	if len(batch.Dirstats) > 0 {
+		if err := store(segTypeStat, batch); err != nil {
+			return err
+		}
+	}
+	if !s.userGroupQuota && len(s.quotas[UserQuotaType]) == 0 && len(s.quotas[GroupQuotaType]) == 0 {
+		s.nodes = nil
+	}
+	for ino, node := range s.nodes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if node.duplicate {
+			// Duplicate records may differ; use the attribute retained by the target engine.
+			var attr Attr
+			if st := m.en.doGetAttr(ctx, ino, &attr); st != 0 {
+				return fmt.Errorf("rebuild user/group quota for inode %d: %w", ino, st)
+			}
+			node.uid, node.gid, node.space = attr.Uid, attr.Gid, align4K(attr.Length)
+		}
+		for i, id := range []uint64{uint64(node.uid), uint64(node.gid)} {
+			typ := uint32(UserQuotaType + i)
+			q := s.quotas[typ][id]
+			if q == nil {
+				q = &pb.Quota{Type: typ, Key: id, MaxSpace: -1, MaxInodes: -1}
+				s.quotas[typ][id] = q
+			}
+			q.UsedSpace += node.space
+			q.UsedInodes++
+		}
+	}
+	batch = &pb.Batch{}
+	for typ, quotas := range s.quotas {
+		for id, q := range quotas {
+			if typ == DirQuotaType {
+				var summary Summary
+				if st := m.GetSummary(ctx, Ino(id), &summary, true, true); st != 0 {
+					return fmt.Errorf("rebuild directory quota for inode %d: %w", id, st)
+				}
+				q.UsedSpace = int64(summary.Size) - align4K(0)
+				q.UsedInodes = int64(summary.Dirs+summary.Files) - 1
+			}
+			batch.Quotas = append(batch.Quotas, q)
+			if len(batch.Quotas) == 1000 {
+				if err := store(segTypeQuota, batch); err != nil {
+					return err
+				}
+				batch = &pb.Batch{}
+			}
+		}
+	}
+	if len(batch.Quotas) > 0 {
+		return store(segTypeQuota, batch)
+	}
+	return ctx.Err()
+}
+
 // transaction
 
 type txSessionKey struct{}

@@ -771,6 +771,7 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	go workerFunc(ctx, taskCh)
 
 	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
+	stats := newLoadedStats()
 	var counters []*pb.Counter
 	bak := &BakFormat{}
 
@@ -810,6 +811,13 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			wg.Wait()
 			return err
 		}
+		if skip, err := stats.updateFromSegment(seg); err != nil {
+			ctx.Cancel()
+			wg.Wait()
+			return err
+		} else if skip {
+			continue
+		}
 		if loaded.updateFromSegment(seg, &counters) {
 			continue
 		}
@@ -820,5 +828,23 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		}
 	}
 	wg.Wait()
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return stats.rebuild(ctx, m.baseMeta, func(typ int, batch *pb.Batch) error {
+		var pairs []*pair
+		if typ == segTypeStat {
+			m.loadDirStats(ctx, batch, &pairs)
+		} else {
+			m.loadQuota(ctx, batch, &pairs)
+		}
+		if err := m.insertKVs(ctx, pairs, opt.Threads); err != nil {
+			return err
+		}
+		if opt.Progress != nil {
+			seg := newBakSegment(batch)
+			opt.Progress(seg.Name(), int(seg.num()))
+		}
+		return nil
+	})
 }
