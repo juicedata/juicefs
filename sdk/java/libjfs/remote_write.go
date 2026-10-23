@@ -176,7 +176,7 @@ func (rw *RemoteWriter) Push() error {
 
 	if rw.auth != "" {
 		if strings.Contains(rw.auth, ":") {
-			parts := strings.Split(rw.auth, ":")
+			parts := strings.SplitN(rw.auth, ":", 2)
 			req.SetBasicAuth(parts[0], parts[1])
 		}
 	}

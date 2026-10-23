@@ -478,7 +478,7 @@ func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, 
 	}
 	if pushAuth != "" {
 		if strings.Contains(pushAuth, ":") {
-			parts := strings.Split(pushAuth, ":")
+			parts := strings.SplitN(pushAuth, ":", 2)
 			pusher.BasicAuth(parts[0], parts[1])
 		}
 	}
