@@ -3,7 +3,9 @@
 package meta
 
 import (
+	"bytes"
 	"context"
+	"net"
 	"sync"
 	"syscall"
 	"testing"
@@ -13,6 +15,16 @@ import (
 	"github.com/redis/go-redis/v9/push"
 	"github.com/stretchr/testify/require"
 )
+
+type writeHookConn struct {
+	net.Conn
+	onWrite func([]byte)
+}
+
+func (c *writeHookConn) Write(b []byte) (int, error) {
+	c.onWrite(b)
+	return c.Conn.Write(b)
+}
 
 func mockRedisCSCMeta(t *testing.T) *redisMeta {
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10?client-cache=true", testConfig())
@@ -50,6 +62,32 @@ func TestRedisCache(t *testing.T) {
 
 		cache.entryCache.Add(cache.entryName(101, "file"), &cachedEntry{})
 		m.rdb.HSet(ctx, m.entryKey(100), "file", "content").Err()
+	})
+	t.Run("cache is purged after tracking is enabled on a new connection", func(t *testing.T) {
+		cache := newRedisCache("", 1000, time.Minute, 0)
+		ino := Ino(290)
+		var d net.Dialer
+		cli := redis.NewClient(&redis.Options{
+			Addr: "127.0.0.1:6379",
+			DB:   10,
+			Dialer: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				cn, err := d.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+				return &writeHookConn{Conn: cn, onWrite: func(b []byte) {
+					// cached right before tracking takes effect, so it may have missed invalidations
+					if bytes.Contains(b, []byte("BCAST")) {
+						cache.inodeCache.Add(ino, []byte("stale"))
+					}
+				}}, nil
+			},
+		})
+		defer cli.Close()
+		require.NoError(t, cache.init(cli))
+		defer cache.close()
+		_, ok := cache.inodeCache.Get(ino)
+		require.False(t, ok, "entries cached before tracking is enabled must be purged")
 	})
 	t.Run("invalidations resume after the tracking connection reconnects", func(t *testing.T) {
 		other := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: 10})

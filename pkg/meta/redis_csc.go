@@ -323,17 +323,18 @@ func (c *redisCache) close() {
 }
 
 func (c *redisCache) onInvalidateConnect(ctx context.Context, cn *redis.Conn) error {
-	// clear all caches on reconnect
+	// use the pubsub connection to handle tracking and invalidate
+	_ = cn.Do(ctx, "CLIENT", "TRACKING", "OFF").Err()
+	err := cn.Do(ctx, "CLIENT", "TRACKING", "ON", "BCAST", "PREFIX", c.prefix+"i", "PREFIX", c.prefix+"d").Err()
+	// Purge only after tracking is on: anything cached before may have missed invalidations,
+	// while changes made after are notified on this connection.
 	c.inodeCache.Purge()
 	c.entryCache.Purge()
 	c.entryTerms.Purge()
-	// use the pubsub connection to handle tracking and invalidate
-	_ = cn.Do(ctx, "CLIENT", "TRACKING", "OFF").Err()
-	if err := cn.Do(ctx, "CLIENT", "TRACKING", "ON", "BCAST", "PREFIX", c.prefix+"i", "PREFIX", c.prefix+"d").Err(); err != nil {
+	if err != nil {
 		logger.Warnf("Failed to enable Redis client-side caching on new connection: %v", err)
-		return err
 	}
-	return nil
+	return err
 }
 
 func (m *redisMeta) preloadCache() {
