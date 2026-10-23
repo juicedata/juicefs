@@ -39,8 +39,6 @@ When client-side caching is enabled, JuiceFS caches:
 
 ### Preloading Cache
 
-Attributes are fetched in batches of up to 4096 inodes to reduce Redis round trips. Attributes invalidated while a batch is being read are not added to the cache; subsequent access fetches them as needed.
-
 When client-side caching is enabled and `client-cache-preload` is set, JuiceFS will preload the file-object attributes and entries under the root directory after mounting. This lazy preloading happens in the background and helps to:
 
 1. Warm up the cache for common operations

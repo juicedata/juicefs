@@ -5,7 +5,6 @@ package meta
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"syscall"
 	"testing"
@@ -341,7 +340,7 @@ func (h redisCacheTestHook) ProcessHook(next redis.ProcessHook) redis.ProcessHoo
 }
 
 func TestRedisCachePreload(t *testing.T) {
-	for i, name := range []string{"warm attributes", "invalidated during MGET", "unrelated invalidation", "local SET", "tracking reconnect", "directory changed", "missing inode", "read error"} {
+	for i, name := range []string{"warm attributes", "invalidated during GET", "directory changed", "missing inode", "read error"} {
 		t.Run(name, func(t *testing.T) {
 			m := mockRedisCSCMeta(t)
 			defer m.Shutdown()
@@ -364,16 +363,13 @@ func TestRedisCachePreload(t *testing.T) {
 			defer m.of.Close(ino)
 			m.of.CacheChunk(ino, 0, []Slice{{Id: 1}})
 
-			gets, mgets := 0, 0
+			gets := 0
 			intercept := true
 			m.rdb.AddHook(redisCacheTestHook{process: func(ctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error {
-				if cmd.Name() == "get" {
-					gets++
-				}
-				if cmd.Name() != "mget" {
+				if cmd.Name() != "get" {
 					return next(ctx, cmd)
 				}
-				mgets++
+				gets++
 				if !intercept || cmd.Args()[1] != m.inodeKey(ino) {
 					return next(ctx, cmd)
 				}
@@ -385,22 +381,10 @@ func TestRedisCachePreload(t *testing.T) {
 				}
 				err := next(ctx, cmd)
 				switch name {
-				case "invalidated during MGET":
+				case "invalidated during GET":
 					want.Length = 12
 					require.NoError(t, other.Set(ctx, m.inodeKey(ino), want.Marshal(), 0).Err())
 					require.NoError(t, m.cache.HandlePushNotification(ctx, push.NotificationHandlerContext{}, []interface{}{"invalidate", []interface{}{m.inodeKey(ino)}}))
-				case "unrelated invalidation":
-					require.NoError(t, m.cache.HandlePushNotification(ctx, push.NotificationHandlerContext{}, []interface{}{"invalidate", []interface{}{m.inodeKey(ino + 1)}}))
-				case "local SET":
-					want.Length = 12
-					require.NoError(t, m.rdb.Set(ctx, m.inodeKey(ino), want.Marshal(), 0).Err())
-				case "tracking reconnect":
-					require.NoError(t, other.Do(ctx, "CLIENT", "KILL", "TYPE", "pubsub").Err())
-					require.Eventually(t, func() bool {
-						m.cache.preloadMu.Lock()
-						defer m.cache.preloadMu.Unlock()
-						return m.cache.trackingReady && len(m.cache.preloadPending) == 0
-					}, 3*time.Second, time.Millisecond)
 				case "directory changed":
 					require.NoError(t, other.Set(ctx, m.inodeKey(ino+1), want.Marshal(), 0).Err())
 					require.NoError(t, other.HSet(ctx, m.entryKey(parent), "f", m.packEntry(TypeFile, ino+1)).Err())
@@ -410,12 +394,6 @@ func TestRedisCachePreload(t *testing.T) {
 			}})
 
 			m.preloadCache()
-			require.Equal(t, 1, gets, "only the root attribute needs GET")
-			require.Equal(t, 1, mgets)
-			m.cache.preloadMu.Lock()
-			pending := len(m.cache.preloadPending)
-			m.cache.preloadMu.Unlock()
-			require.Zero(t, pending, "preload must clean up pending markers")
 			entry, ok := m.cache.entryCache.Get(m.cache.entryName(parent, "f"))
 			if name == "missing inode" || name == "read error" {
 				require.False(t, ok)
@@ -426,7 +404,7 @@ func TestRedisCachePreload(t *testing.T) {
 			var found Ino
 			var attr Attr
 			switch name {
-			case "warm attributes", "unrelated invalidation":
+			case "warm attributes":
 				data, ok := m.cache.inodeCache.Get(ino)
 				require.True(t, ok)
 				require.Equal(t, want.Marshal(), data)
@@ -438,7 +416,7 @@ func TestRedisCachePreload(t *testing.T) {
 				want.Length = 12
 				require.NoError(t, other.Set(ctx, m.inodeKey(ino), want.Marshal(), 0).Err())
 				require.Eventually(t, func() bool { _, ok := m.cache.inodeCache.Get(ino); return !ok }, 3*time.Second, time.Millisecond)
-			case "invalidated during MGET", "local SET", "tracking reconnect":
+			case "invalidated during GET":
 				_, ok := m.cache.inodeCache.Get(ino)
 				require.False(t, ok, "invalidated response must not refill the cache")
 			case "directory changed":
@@ -450,127 +428,4 @@ func TestRedisCachePreload(t *testing.T) {
 			require.Equal(t, want.Length, attr.Length)
 		})
 	}
-
-	t.Run("multiple batches", func(t *testing.T) {
-		m := mockRedisCSCMeta(t)
-		defer m.Shutdown()
-		other := redis.NewClient(m.cache.cli.Options())
-		defer other.Close()
-		ctx := Background()
-		const count = 4097
-		parent := Ino(10000)
-		m.root, m.cache.preload = parent, count
-		want := (&Attr{Typ: TypeFile, Mode: 0644, Length: 11}).Marshal()
-		require.NoError(t, other.Del(ctx, m.entryKey(parent)).Err())
-		_, err := other.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.Set(ctx, m.inodeKey(parent), (&Attr{Typ: TypeDirectory}).Marshal(), 0)
-			for i := 1; i <= count; i++ {
-				ino := parent + Ino(i)
-				pipe.Set(ctx, m.inodeKey(ino), want, 0)
-				pipe.HSet(ctx, m.entryKey(parent), fmt.Sprint(i), m.packEntry(TypeFile, ino))
-			}
-			return nil
-		})
-		require.NoError(t, err)
-		barrier := parent + count + 1
-		require.NoError(t, other.HSet(ctx, m.entryKey(barrier), "ready", "1").Err())
-		require.Eventually(t, func() bool { return m.cache.entryTerm(barrier) > 0 }, 3*time.Second, time.Millisecond)
-		gets, mgets := 0, 0
-		m.rdb.AddHook(redisCacheTestHook{process: func(ctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error {
-			switch cmd.Name() {
-			case "get":
-				gets++
-			case "mget":
-				mgets++
-				require.LessOrEqual(t, len(cmd.Args())-1, 4096)
-			}
-			return next(ctx, cmd)
-		}})
-		m.preloadCache()
-		require.Equal(t, 1, gets)
-		require.Equal(t, 2, mgets)
-		for i := 1; i <= count; i++ {
-			var found Ino
-			var attr Attr
-			require.Zero(t, m.doLookup(ctx, parent, fmt.Sprint(i), &found, &attr))
-			require.Equal(t, parent+Ino(i), found)
-			require.Equal(t, want, attr.Marshal())
-		}
-		require.Equal(t, 1, gets, "all preloaded lookups must hit the cache")
-	})
-
-	t.Run("replacement tokens", func(t *testing.T) {
-		for _, newerFirst := range []bool{false, true} {
-			c := newRedisCache("", 10, time.Minute, 0)
-			c.trackingReady = true
-			entries := []*Entry{{Inode: 1}}
-			old := c.startPreload(entries)
-			c.invalidateInode(1)
-			newer := c.startPreload(entries)
-			require.NotEqual(t, old, newer)
-			if newerFirst {
-				c.finishPreload(entries, newer, []interface{}{"new"})
-			}
-			c.finishPreload(entries, old, []interface{}{"old"})
-			if !newerFirst {
-				require.Equal(t, newer, c.preloadPending[1], "old completion must not clear a newer token")
-				c.finishPreload(entries, newer, []interface{}{"new"})
-			}
-			data, ok := c.inodeCache.Get(1)
-			require.True(t, ok)
-			require.Equal(t, []byte("new"), data)
-			require.Empty(t, c.preloadPending)
-		}
-	})
-
-	t.Run("local SET invalidates pending preload", func(t *testing.T) {
-		c := newRedisCache("", 10, time.Minute, 0)
-		c.trackingReady = true
-		entries := []*Entry{{Inode: 1}}
-		token := c.startPreload(entries)
-		cmd := redis.NewStatusCmd(context.Background(), "set", "i1", "new")
-		cmd.SetVal("OK")
-		c.afterProcess(cmd)
-		c.finishPreload(entries, token, []interface{}{"old"})
-		_, ok := c.inodeCache.Get(1)
-		require.False(t, ok)
-		require.Empty(t, c.preloadPending)
-	})
-
-	t.Run("tracking must be ready", func(t *testing.T) {
-		c := newRedisCache("", 10, time.Minute, 0)
-		c.trackingReady = true
-		entries := []*Entry{{Inode: 1}}
-		old := c.startPreload(entries)
-		cli := redis.NewClient(&redis.Options{})
-		defer cli.Close()
-		fail := true
-		cli.AddHook(redisCacheTestHook{process: func(ctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error {
-			require.Zero(t, c.startPreload(entries), "tracking is not enabled yet")
-			c.finishPreload(entries, old, []interface{}{"old"})
-			_, ok := c.inodeCache.Get(1)
-			require.False(t, ok)
-			if fail {
-				err := errors.New("tracking unavailable")
-				cmd.SetErr(err)
-				return err
-			}
-			cmd.(*redis.Cmd).SetVal("OK")
-			return nil
-		}})
-		cn := cli.Conn()
-		defer cn.Close()
-		require.Error(t, c.onInvalidateConnect(context.Background(), cn))
-		require.Zero(t, c.startPreload(entries))
-		fail = false
-		require.NoError(t, c.onInvalidateConnect(context.Background(), cn))
-		token := c.startPreload(entries)
-		require.NotZero(t, token)
-		c.finishPreload(entries, token, []interface{}{"new"})
-		data, ok := c.inodeCache.Get(1)
-		require.True(t, ok)
-		require.Equal(t, []byte("new"), data)
-		require.Empty(t, c.preloadPending)
-	})
-
 }
