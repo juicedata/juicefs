@@ -33,8 +33,6 @@ import (
 	"github.com/redis/go-redis/v9/push"
 )
 
-// cachedEntry maps a name to an inode. Attributes of the inode are cached in inodeCache only,
-// where they are invalidated on change.
 type cachedEntry struct {
 	ino  Ino
 	term uint64
