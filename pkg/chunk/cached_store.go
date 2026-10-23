@@ -147,23 +147,18 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		}
 	}
 
+	// Always load into a private page: the block may be kept by the cache and shared with
+	// other waiters, so it must not alias the caller's buffer, which may be reused.
 	block, err := s.store.group.Execute(key, func() (*Page, error) {
-		tmp := page
-		if boff > 0 || len(p) < blockSize {
-			tmp = NewOffPage(blockSize)
-		} else {
-			tmp.Acquire()
-		}
-		err = s.store.load(ctx, key, tmp, s.store.shouldCache(blockSize), false)
+		tmp := NewOffPage(blockSize)
+		err := s.store.load(ctx, key, tmp, s.store.shouldCache(blockSize), false)
 		return tmp, err
 	})
 	defer block.Release()
 	if err != nil {
 		return 0, err
 	}
-	if block != page {
-		copy(p, block.Data[boff:])
-	}
+	copy(p, block.Data[boff:])
 	return len(p), nil
 }
 
