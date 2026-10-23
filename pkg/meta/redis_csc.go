@@ -25,7 +25,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -57,18 +57,25 @@ type redisCache struct {
 	inodeCache *expirable.LRU[Ino, []byte]
 	entryCache *expirable.LRU[string, *cachedEntry]
 	entryTerms *expirable.LRU[Ino, uint64]
+
+	// Serialize batch refill with invalidation; tokens distinguish overlapping reads.
+	preloadMu      sync.Mutex
+	preloadToken   uint64
+	preloadPending map[Ino]uint64
+	trackingReady  bool
 }
 
 func newRedisCache(prefix string, cap int, expiry time.Duration, preload int) *redisCache {
 	logger.Infof("Initializing Redis client-side cache with size %d and expiry %+v", cap, expiry)
 	return &redisCache{
-		prefix:     prefix,
-		cap:        cap,
-		expiry:     expiry,
-		preload:    preload,
-		inodeCache: expirable.NewLRU[Ino, []byte](cap, nil, expiry),
-		entryCache: expirable.NewLRU[string, *cachedEntry](cap, nil, expiry),
-		entryTerms: expirable.NewLRU[Ino, uint64](0, nil, 10*expiry), // no size limit, cleanup only based on expiry
+		prefix:         prefix,
+		cap:            cap,
+		expiry:         expiry,
+		preload:        preload,
+		inodeCache:     expirable.NewLRU[Ino, []byte](cap, nil, expiry),
+		entryCache:     expirable.NewLRU[string, *cachedEntry](cap, nil, expiry),
+		entryTerms:     expirable.NewLRU[Ino, uint64](0, nil, 10*expiry), // no size limit, cleanup only based on expiry
+		preloadPending: make(map[Ino]uint64),
 	}
 }
 
@@ -168,7 +175,7 @@ func (c *redisCache) HandlePushNotification(ctx context.Context, handlerCtx push
 			inodeStr := key[len(c.prefix)+1:]
 			inode, err := strconv.ParseUint(inodeStr, 10, 64)
 			if err == nil {
-				c.inodeCache.Remove(Ino(inode))
+				c.invalidateInode(Ino(inode))
 			}
 		case keyTypEntry:
 			parentStr := key[len(c.prefix)+1:]
@@ -182,6 +189,45 @@ func (c *redisCache) HandlePushNotification(ctx context.Context, handlerCtx push
 }
 
 func (c *redisCache) DialHook(next redis.DialHook) redis.DialHook { return nil }
+
+func (c *redisCache) invalidateInode(inode Ino) {
+	c.preloadMu.Lock()
+	defer c.preloadMu.Unlock()
+	delete(c.preloadPending, inode)
+	c.inodeCache.Remove(inode)
+}
+
+func (c *redisCache) startPreload(entries []*Entry) uint64 {
+	c.preloadMu.Lock()
+	defer c.preloadMu.Unlock()
+	if !c.trackingReady {
+		return 0
+	}
+	c.preloadToken++
+	for _, entry := range entries {
+		c.preloadPending[entry.Inode] = c.preloadToken
+	}
+	return c.preloadToken
+}
+
+func (c *redisCache) finishPreload(entries []*Entry, token uint64, values []interface{}) {
+	if token == 0 {
+		return
+	}
+	c.preloadMu.Lock()
+	defer c.preloadMu.Unlock()
+	for i, entry := range entries {
+		if c.preloadPending[entry.Inode] != token {
+			continue
+		}
+		delete(c.preloadPending, entry.Inode)
+		if i < len(values) {
+			if data, ok := values[i].(string); ok {
+				c.inodeCache.Add(entry.Inode, []byte(data))
+			}
+		}
+	}
+}
 
 var inodeMark []byte
 
@@ -247,7 +293,7 @@ func (c *redisCache) afterProcess(cmd redis.Cmder) {
 		if typ == keyTypInode {
 			if cmd.(*redis.StatusCmd).Err() == nil {
 				if num, err := strconv.ParseUint(key[len(c.prefix)+1:], 10, 64); err == nil {
-					_ = c.inodeCache.Remove(Ino(num))
+					c.invalidateInode(Ino(num))
 				}
 			}
 		}
@@ -308,6 +354,10 @@ func (c *redisCache) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.P
 }
 
 func (c *redisCache) close() {
+	c.preloadMu.Lock()
+	c.trackingReady = false
+	clear(c.preloadPending)
+	c.preloadMu.Unlock()
 	if c.subscription != nil {
 		if err := c.subscription.Close(); err != nil {
 			logger.Warnf("failed closing Redis cache subscription: %v", err)
@@ -325,14 +375,42 @@ func (c *redisCache) close() {
 
 func (c *redisCache) onInvalidateConnect(ctx context.Context, cn *redis.Conn) error {
 	// clear all caches on reconnect
+	c.preloadMu.Lock()
+	c.trackingReady = false
+	clear(c.preloadPending)
 	c.inodeCache.Purge()
 	c.entryCache.Purge()
 	c.entryTerms.Purge()
+	c.preloadMu.Unlock()
 	// use the pubsub connection to handle tracking and invalidate
 	_ = cn.Do(ctx, "CLIENT", "TRACKING", "OFF").Err()
 	if err := cn.Do(ctx, "CLIENT", "TRACKING", "ON", "BCAST", "PREFIX", c.prefix+"i", "PREFIX", c.prefix+"d").Err(); err != nil {
 		logger.Warnf("Failed to enable Redis client-side caching on new connection: %v", err)
 		return err
+	}
+	c.preloadMu.Lock()
+	c.trackingReady = true
+	c.preloadMu.Unlock()
+	return nil
+}
+
+func (m *redisMeta) preloadAttrs(ctx Context, entries []*Entry) error {
+	keys := make([]string, len(entries))
+	for i, entry := range entries {
+		keys[i] = m.inodeKey(entry.Inode)
+	}
+	token := m.cache.startPreload(entries)
+	values, err := m.rdb.MGet(ctx, keys...).Result()
+	if err != nil {
+		m.cache.finishPreload(entries, token, nil)
+		return err
+	}
+	m.cache.finishPreload(entries, token, values)
+	for i, value := range values {
+		if data, ok := value.(string); ok {
+			m.parseAttr([]byte(data), entries[i].Attr)
+			m.of.Update(entries[i].Inode, entries[i].Attr)
+		}
 	}
 	return nil
 }
@@ -358,20 +436,21 @@ func (m *redisMeta) preloadCache() {
 		logger.Warnf("failed to read root %d directory: %d", m.root, eno)
 		return
 	}
-	for _, entry := range entries {
-		// GET populates the inode cache through its invalidation-aware hook.
-		if eno := m.doGetAttr(ctx, entry.Inode, entry.Attr); eno != 0 {
-			if eno == syscall.ENOENT {
-				continue
-			}
-			logger.Warnf("failed to preload inode %d attribute: %s", entry.Inode, eno)
+	const batchSize = 4096
+	for i := 0; i < len(entries); i += batchSize {
+		batch := entries[i:min(i+batchSize, len(entries))]
+		if err := m.preloadAttrs(ctx, batch); err != nil {
+			logger.Warnf("failed to preload inode attributes: %s", err)
 			return
 		}
-		m.of.Update(entry.Inode, entry.Attr)
-		m.cache.entryCache.Add(m.cache.entryName(m.root, string(entry.Name)), &cachedEntry{
-			ino:  entry.Inode,
-			term: term,
-		})
+		for _, entry := range batch {
+			if entry.Attr.Full {
+				m.cache.entryCache.Add(m.cache.entryName(m.root, string(entry.Name)), &cachedEntry{
+					ino:  entry.Inode,
+					term: term,
+				})
+			}
+		}
 	}
 	logger.Infof("preload %d inodes in %v", m.cache.inodeCache.Len(), time.Since(start))
 }
