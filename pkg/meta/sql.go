@@ -570,7 +570,9 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 func (m *dbMeta) InitMetrics(reg prometheus.Registerer) {
 	m.baseMeta.InitMetrics(reg)
 	if reg != nil {
-		reg.MustRegister(collectors.NewDBStatsCollector(m.db.DB().DB, "metadata"))
+		if err := reg.Register(collectors.NewDBStatsCollector(m.db.DB().DB, "metadata")); err != nil {
+			logger.Warnf("Register SQL connection pool metrics: %s", err)
+		}
 	}
 }
 
