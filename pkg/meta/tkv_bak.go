@@ -771,7 +771,6 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	go workerFunc(ctx, taskCh)
 
 	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
-	stats := newLoadedStats()
 	var counters []*pb.Counter
 	bak := &BakFormat{}
 
@@ -811,17 +810,13 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			wg.Wait()
 			return err
 		}
-		if skip, err := stats.updateFromSegment(seg); err != nil {
+		if skip, err := loaded.updateFromSegment(seg, &counters); err != nil {
 			ctx.Cancel()
 			wg.Wait()
 			return err
 		} else if skip {
 			continue
 		}
-		if loaded.updateFromSegment(seg, &counters) {
-			continue
-		}
-
 		if !sendTask(&task{int(seg.typ), seg.val}, seg.Name(), int(seg.num())) {
 			wg.Wait()
 			return ctx.Err()
@@ -831,7 +826,7 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return stats.rebuild(ctx, m.baseMeta, func(typ int, batch *pb.Batch) error {
+	return loaded.rebuildStats(ctx, m.baseMeta, func(typ int, batch *pb.Batch) error {
 		var pairs []*pair
 		if typ == segTypeStat {
 			m.loadDirStats(ctx, batch, &pairs)

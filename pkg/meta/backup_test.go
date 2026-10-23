@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
@@ -170,6 +171,108 @@ func TestLoadMetaV2CountersBySource(t *testing.T) {
 							}
 						})
 					}
+				})
+			}
+		})
+	}
+}
+
+func TestLoadMetaV2RebuildStats(t *testing.T) {
+	for _, engine := range []string{"redis", "sqlite3", "badger"} {
+		t.Run(engine, func(t *testing.T) {
+			for _, operation := range []string{"create_before_flush", "unlink_before_flush"} {
+				t.Run(operation, func(t *testing.T) {
+					ctx := Background()
+					quotas := []struct {
+						typ  uint32
+						key  uint64
+						path string
+					}{
+						{DirQuotaType, uint64(RootInode), "/"},
+						{UserQuotaType, 0, "0"},
+						{GroupQuotaType, 0, "0"},
+					}
+					checkUsage := func(m Meta, files int64) {
+						t.Helper()
+						want := dirStat{length: files * 4096, space: files * 4096, inodes: files}
+						stat, st := m.getBase().en.doGetDirStat(ctx, RootInode, false)
+						if st != 0 || stat == nil || *stat != want {
+							t.Errorf("persisted directory statistics: got %+v (errno %s), want %+v", stat, st, want)
+						}
+						for _, quota := range quotas {
+							got, err := m.getBase().en.doGetQuota(ctx, quota.typ, quota.key)
+							want := Quota{MaxSpace: 1 << 20, MaxInodes: 100, UsedSpace: files * 4096, UsedInodes: files}
+							if err != nil || got == nil || *got != want {
+								t.Errorf("persisted quota type %d: got %+v (err %v), want %+v", quota.typ, got, err, want)
+							}
+						}
+					}
+					createFile := func(m Meta, name string) {
+						t.Helper()
+						var inode Ino
+						if st := m.Create(ctx, RootInode, name, 0644, 0, 0, &inode, nil); st != 0 {
+							t.Fatal(st)
+						}
+						if st := m.Truncate(ctx, inode, 0, 4096, nil, false); st != 0 {
+							t.Fatal(st)
+						}
+						if st := m.Close(ctx, inode); st != 0 {
+							t.Fatal(st)
+						}
+					}
+
+					// Without a session, only explicit flushes can persist the pending statistics.
+					source := newBackupTestMeta(t, engine)
+					if err := source.Init(&Format{Name: "test", DirStats: true, UserGroupQuota: true}, true); err != nil {
+						t.Fatal(err)
+					}
+					if _, st := source.getBase().en.doSyncDirStat(ctx, RootInode); st != 0 {
+						t.Fatal(st)
+					}
+					for _, quota := range quotas {
+						if err := source.HandleQuota(ctx, QuotaSet, quota.path, quota.typ,
+							map[string]*Quota{quota.path: {MaxSpace: 1 << 20, MaxInodes: 100}}, true, false, false); err != nil {
+							t.Fatal(err)
+						}
+					}
+					source.getBase().loadQuotas()
+					createFile(source, "before-backup")
+					var persistedFiles int64
+					files := int64(1)
+					if operation == "unlink_before_flush" {
+						source.FlushSession()
+						if st := source.Unlink(ctx, RootInode, "before-backup", true); st != 0 {
+							t.Fatal(st)
+						}
+						persistedFiles, files = 1, 0
+					}
+					checkUsage(source, persistedFiles)
+					if t.Failed() {
+						t.Fatal("source statistics did not retain the expected unflushed state")
+					}
+					var backup bytes.Buffer
+					if err := source.DumpMetaV2(ctx, &backup, &DumpOption{Threads: 1}); err != nil {
+						t.Fatal(err)
+					}
+
+					restored := newBackupTestMeta(t, engine)
+					if err := restored.LoadMetaV2(ctx, &backup, &LoadOption{Threads: 2}); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := restored.Load(false); err != nil {
+						t.Fatal(err)
+					}
+					restored.getBase().loadQuotas()
+					var inode Ino
+					var attr Attr
+					st := restored.Lookup(ctx, RootInode, "before-backup", &inode, &attr, false)
+					if files == 1 && (st != 0 || attr.Length != 4096) || files == 0 && st != syscall.ENOENT {
+						t.Fatalf("restored file: errno %s, length %d, expected file count %d", st, attr.Length, files)
+					}
+					checkUsage(restored, files)
+					createFile(restored, "after-load")
+					restored.FlushSession()
+					checkUsage(restored, files+1)
 				})
 			}
 		})

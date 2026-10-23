@@ -44,6 +44,10 @@ type DumpedCounters struct {
 	NextTrash         int64 `json:"nextTrash"`
 	NextCleanupSlices int64 `json:"nextCleanupSlices,omitempty"` // deprecated, always 0
 	LastChangelog     int64 `json:"lastChangelog,omitempty"`
+
+	dirs           map[Ino]struct{}
+	quotas         [AllQuotaType]map[uint64]*DumpedQuota
+	userGroupQuota bool
 }
 
 type DumpedDelFile struct {
