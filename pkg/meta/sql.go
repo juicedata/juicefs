@@ -4405,6 +4405,10 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr, trustNlink bool) s
 					"atime", "mtime", "ctime",
 					"atimensec", "mtimensec", "ctimensec",
 				}
+				if m.replay.Load() != nil {
+					n.AccessACLId = attr.AccessACL
+					updateColumns = append(updateColumns, "access_acl_id")
+				}
 				_, err = s.Cols(updateColumns...).Update(n, &node{Inode: inode})
 			} else {
 				err = mustInsert(s, n)
@@ -6045,6 +6049,16 @@ func (m *dbMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 		return err
 	}, inode)
 	return updated, err
+}
+
+func (m *dbMeta) doInsertACL(ctx Context, rule *aclAPI.Rule) (uint32, error) {
+	var id uint32
+	err := m.txn(func(s *xorm.Session) error {
+		var err error
+		id, err = m.insertACL(s, rule)
+		return err
+	})
+	return id, err
 }
 
 func (m *dbMeta) insertACL(s *xorm.Session, rule *aclAPI.Rule) (uint32, error) {

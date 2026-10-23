@@ -126,7 +126,7 @@ func changelogReplay(ctx *cli.Context) error {
 		return fmt.Errorf("changelog is not enabled on the source, use `juicefs config %s --changelog` to enable it", srcUri)
 	}
 	dryRun := ctx.Bool("dry-run")
-	replayer, err := meta.NewReplayer(dstUri, srcFormat, dryRun)
+	replayer, err := meta.NewReplayer(dstUri, src, dryRun)
 	if err != nil {
 		return err
 	}
