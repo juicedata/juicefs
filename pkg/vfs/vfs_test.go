@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -52,7 +53,11 @@ func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config), metaUri st
 	if metaUri == "" {
 		metaUri = "memkv://"
 	}
-	m := meta.NewClient(metaUri, metaConf)
+	return newTestVFS(meta.NewClient(metaUri, metaConf), metaConf)
+}
+
+func newTestVFS(m meta.Meta, metaConf *meta.Config) (*VFS, object.ObjectStorage) {
+	mp := metaConf.MountPoint
 	format := &meta.Format{
 		Name:        "test",
 		UUID:        uuid.New().String(),
@@ -687,6 +692,70 @@ func TestVFSFenceLockedHandles(t *testing.T) {
 		t.Fatalf("flush after reopen: %s", e)
 	}
 	v.Release(ctx, fe.Inode, fh)
+}
+
+// lostSessionMeta finds the session lost on the next CheckSession, like a client that
+// resumes and commits buffered data before its next heartbeat.
+type lostSessionMeta struct {
+	meta.Meta
+	onLost func()
+	lost   atomic.Bool
+}
+
+func (m *lostSessionMeta) OnSessionLost(cb func()) {
+	m.onLost = cb
+	m.Meta.OnSessionLost(cb)
+}
+
+func (m *lostSessionMeta) CheckSession() {
+	if m.lost.CompareAndSwap(true, false) {
+		m.onLost()
+	}
+}
+
+func TestVFSFenceBeforeCommit(t *testing.T) {
+	metaConf := meta.DefaultConf()
+	metaConf.MountPoint = "/jfs"
+	m := &lostSessionMeta{Meta: meta.NewClient("memkv://", metaConf)}
+	v, _ := newTestVFS(m, metaConf)
+	ctx := NewLogContext(meta.Background())
+	fe, fh, e := v.Create(ctx, 1, "locked", 0644, 0, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("create locked: %s", e)
+	}
+	oe, ofh, e := v.Create(ctx, 1, "unlocked", 0644, 0, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("create unlocked: %s", e)
+	}
+	if e = v.Setlk(ctx, fe.Inode, fh, 1, 0, 100, syscall.F_WRLCK, 1, false); e != 0 {
+		t.Fatalf("setlk: %s", e)
+	}
+	if e = v.Write(ctx, fe.Inode, []byte("hello"), 0, fh); e != 0 {
+		t.Fatalf("write locked: %s", e)
+	}
+	if e = v.Write(ctx, oe.Inode, []byte("hello"), 0, ofh); e != 0 {
+		t.Fatalf("write unlocked: %s", e)
+	}
+
+	m.lost.Store(true) // no heartbeat ran since the session was cleaned up
+	if e = v.Flush(ctx, oe.Inode, ofh, 0); e != 0 {
+		t.Fatalf("flush unlocked: %s", e)
+	}
+	if m.lost.Load() {
+		t.Fatalf("session is not checked before commit")
+	}
+	if e = v.Flush(ctx, fe.Inode, fh, 1); e != syscall.EIO {
+		t.Fatalf("flush locked: %s", e)
+	}
+	var attr meta.Attr
+	if e = v.Meta.GetAttr(ctx, fe.Inode, &attr); e != 0 || attr.Length != 0 {
+		t.Fatalf("buffered data of locked file should be dropped: %s, length %d", e, attr.Length)
+	}
+	if e = v.Meta.GetAttr(ctx, oe.Inode, &attr); e != 0 || attr.Length != 5 {
+		t.Fatalf("data of unlocked file should be committed: %s, length %d", e, attr.Length)
+	}
+	v.Release(ctx, fe.Inode, fh)
+	v.Release(ctx, oe.Inode, ofh)
 }
 
 func TestInternalFile(t *testing.T) {
