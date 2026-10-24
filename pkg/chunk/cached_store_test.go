@@ -520,8 +520,11 @@ func TestFillCacheConcurrentRead(t *testing.T) {
 		compress       string
 		prefetch       bool
 		cacheFullBlock bool
+		reuseReadPage  bool
 	}{
 		{name: "read-read"},
+		{name: "read-shared-page-reused", reuseReadPage: true},
+		{name: "read-shared-page-reused-cache-full-block", reuseReadPage: true, cacheFullBlock: true},
 		{name: "read-warmup", warmup: true},
 		{name: "read-warmup-error", warmup: true, firstErr: errors.New("injected GET failure")},
 		{name: "read-warmup-canceled", warmup: true, cancelRead: true},
@@ -579,6 +582,7 @@ func TestFillCacheConcurrentRead(t *testing.T) {
 			cacheRelease := make(chan struct{})
 			var cacheOnce sync.Once
 			unblockCache := func() { cacheOnce.Do(func() { close(cacheRelease) }) }
+			callerReused := make(chan struct{}, 1)
 			blockedCache := &fillCacheBlockingCache{CacheManager: store.bcache, entered: make(chan [2]bool, 1), release: cacheRelease}
 			if tc.blockCache {
 				store.bcache = blockedCache
@@ -587,6 +591,7 @@ func TestFillCacheConcurrentRead(t *testing.T) {
 			t.Cleanup(func() {
 				unblock()
 				unblockCache()
+				close(callerReused)
 				cancel()
 				workers.Wait()
 				_ = store.EvictCache(10, blockSize, nil)
@@ -634,11 +639,29 @@ func TestFillCacheConcurrentRead(t *testing.T) {
 				t.Fatal("first read did not enter GET")
 			}
 			var firstPage *Page
+			var firstData []byte
 			if !tc.prefetch {
 				firstPage = <-pages
+				firstData = firstPage.Data
 			}
 			if tc.warmup {
 				start(func() error { return store.FillCache(10, blockSize, nil) }, true)
+			} else if tc.reuseReadPage {
+				start(func() error {
+					shared, err := store.group.TryPiggyback(key)
+					if shared == nil {
+						return errors.New("no in-flight download")
+					}
+					defer shared.Release()
+					if err != nil {
+						return err
+					}
+					<-callerReused
+					if !bytes.Equal(shared.Data, data) {
+						return errors.New("shared download changed after caller buffer reuse")
+					}
+					return nil
+				}, false)
 			} else {
 				start(func() error { return read(context.Background()) }, false)
 			}
@@ -690,6 +713,12 @@ func TestFillCacheConcurrentRead(t *testing.T) {
 				remaining--
 			}
 			unblock()
+			if tc.reuseReadPage {
+				waitResult()
+				clear(firstData)
+				callerReused <- struct{}{}
+				remaining--
+			}
 			if tc.blockCache {
 				select {
 				case flags := <-blockedCache.entered:
@@ -699,7 +728,7 @@ func TestFillCacheConcurrentRead(t *testing.T) {
 				}
 				res := waitResult()
 				require.False(t, res.warmup, "foreground read must finish while cache admission is blocked")
-				require.Equal(t, int32(1), atomic.LoadInt32(&firstPage.refs), "warmup must retain the shared page")
+				require.Zero(t, atomic.LoadInt32(&firstPage.refs), "warmup must not retain the caller's page")
 				remaining--
 				unblockCache()
 			}
@@ -709,7 +738,7 @@ func TestFillCacheConcurrentRead(t *testing.T) {
 			workers.Wait()
 			require.True(t, joined, "second operation must reuse the in-flight full-block download")
 			var cachedPage *Page
-			if tc.warmup {
+			if tc.warmup || tc.cacheFullBlock {
 				_, exists := store.bcache.exist(key)
 				require.True(t, exists, "warmup must cache the block")
 				require.NoError(t, read(context.Background()))
