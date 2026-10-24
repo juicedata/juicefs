@@ -673,10 +673,12 @@ func (m *kvMeta) doNewSession(sinfo []byte, update bool) error {
 	return nil
 }
 
-func (m *kvMeta) doRefreshSession() error {
-	return m.txn(Background(), func(tx *kvTxn) error {
+func (m *kvMeta) doRefreshSession() (bool, error) {
+	var lost bool
+	err := m.txn(Background(), func(tx *kvTxn) error {
 		buf := tx.get(m.sessionKey(m.sid))
-		if buf == nil {
+		lost = buf == nil
+		if lost {
 			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
 			tx.set(m.sessionInfoKey(m.sid), m.currentSessionInfo())
 		}
@@ -684,6 +686,7 @@ func (m *kvMeta) doRefreshSession() error {
 		tx.set(m.sessionKey(m.sid), m.packInt64(expire))
 		return nil
 	})
+	return lost && err == nil, err
 }
 
 func (m *kvMeta) doCleanStaleSession(sid uint64) error {

@@ -43,6 +43,10 @@ Result: PASS
 POSIX 记录锁分为**传统锁**和 **OFD 锁**（Open file description locks）两类，它们的加锁操作命令分别为 `F_SETLK` 和 `F_OFD_SETLK`。受限于 FUSE 内核模块的实现，目前 JuiceFS 只支持传统类型的记录锁。更多细节可参见：[https://man7.org/linux/man-pages/man2/fcntl.2.html](https://man7.org/linux/man-pages/man2/fcntl.2.html)。
 :::
 
+:::note 注意
+锁与客户端会话绑定。如果一个客户端大约 5 倍 `--heartbeat` 间隔没有发出心跳（例如进程或所在主机被冻结），其他客户端会认为它的会话已失效，并释放它持有的所有锁。这样的客户端恢复之后，它曾持有锁的文件，后续的写入、`fsync` 和 `close` 都会返回 `EIO`，尚未持久化的数据会被丢弃，因为此时这些锁可能已经被其他客户端持有。重新打开文件即可继续使用。没有加锁的文件不受影响。
+:::
+
 ## LTP
 
 [LTP](https://github.com/linux-test-project/ltp)（Linux Test Project）是一个由 IBM，Cisco 等多家公司联合开发维护的项目，旨在为开源社区提供一个验证 Linux 可靠性和稳定性的测试集。LTP 中包含了各种工具来检验 Linux 内核和相关特性；JuiceFS 通过了其中与文件系统相关的大部分测试例。

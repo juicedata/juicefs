@@ -650,11 +650,29 @@ func testMetaClient(t *testing.T, m Meta) {
 	if base.sid != ses[0].Sid {
 		t.Fatalf("my sid %d != registered sid %d", base.sid, ses[0].Sid)
 	}
+	var lostCnt int
+	m.OnSessionLost(func() { lostCnt++ })
+	base.CheckSession() // the lease is fresh, nothing to do
+	if lost, err := base.en.doRefreshSession(); err != nil || lost {
+		t.Fatalf("refresh live session: lost %t, err %v", lost, err)
+	}
 	if err = base.en.doCleanStaleSession(base.sid); err != nil {
 		t.Fatalf("clean session: %s", err)
 	}
-	if err = base.en.doRefreshSession(); err != nil {
-		t.Fatalf("refresh session: %s", err)
+	if lostCnt != 0 {
+		t.Fatalf("session lost callback is called %d times before refresh", lostCnt)
+	}
+	stale := time.Now().Add(-base.conf.Heartbeat * 5)
+	base.lastRefresh.Store(&stale) // pretend that this client was frozen
+	base.CheckSession()
+	if lostCnt != 1 {
+		t.Fatalf("session lost callback is called %d times, expect 1", lostCnt)
+	}
+	if base.sinceLastRefresh() > time.Minute {
+		t.Fatalf("last refresh time is not updated")
+	}
+	if lost, err := base.en.doRefreshSession(); err != nil || lost {
+		t.Fatalf("refresh restored session: lost %t, err %v", lost, err)
 	}
 	restored, err := m.GetSession(base.sid, false)
 	if err != nil {
