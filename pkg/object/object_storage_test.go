@@ -1080,6 +1080,112 @@ func TestShardingListRetryKeepsToken(t *testing.T) {
 	}
 }
 
+// flakyListStore wraps a storage whose ListAll is notSupported (like S3),
+// forcing ListAll onto the manual List path, and injects failures into
+// List calls: failFirst for the first page (marker == ""), failLater for
+// continuation pages, or failAll for every call.
+type flakyListStore struct {
+	ObjectStorage
+	pageLimit int64
+
+	mu        sync.Mutex
+	failFirst int
+	failLater int
+	failAll   bool
+}
+
+func (s *flakyListStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	s.mu.Lock()
+	fail := s.failAll
+	if marker == "" && s.failFirst > 0 {
+		s.failFirst--
+		fail = true
+	}
+	if marker != "" && s.failLater > 0 {
+		s.failLater--
+		fail = true
+	}
+	s.mu.Unlock()
+	if fail {
+		return nil, false, "", errors.New("injected: timeout awaiting response headers")
+	}
+	if s.pageLimit > 0 {
+		limit = s.pageLimit
+	}
+	return s.ObjectStorage.List(ctx, prefix, marker, token, delimiter, limit, followLink)
+}
+
+func newFlakyListStore(t *testing.T, keys ...string) *flakyListStore {
+	t.Helper()
+	base, _ := newMem("flaky", "", "", "")
+	for _, key := range keys {
+		if err := base.Put(context.Background(), key, bytes.NewReader([]byte("data"))); err != nil {
+			t.Fatalf("put %s: %s", key, err)
+		}
+	}
+	return &flakyListStore{ObjectStorage: base}
+}
+
+func drainListAll(t *testing.T, ch <-chan Object) []string {
+	t.Helper()
+	var keys []string
+	for obj := range ch {
+		if obj == nil {
+			t.Fatal("ListAll sent nil object (mid-stream failure)")
+		}
+		keys = append(keys, obj.Key())
+	}
+	return keys
+}
+
+func TestListAllFirstPageFailure(t *testing.T) {
+	store := newFlakyListStore(t, "p/a", "p/b", "p/c")
+	store.failFirst = 2
+	ch, err := ListAll(context.Background(), store, "p/", "", true, false)
+	if err != nil {
+		t.Fatalf("list all: %s", err)
+	}
+	if got := drainListAll(t, ch); !reflect.DeepEqual(got, []string{"p/a", "p/b", "p/c"}) {
+		t.Fatalf("unexpected keys: got %v", got)
+	}
+}
+
+func TestListAllLaterPageFailure(t *testing.T) {
+	store := newFlakyListStore(t, "p/a", "p/b", "p/c")
+	store.pageLimit = 2 // force a continuation page
+	store.failLater = 2
+	ch, err := ListAll(context.Background(), store, "p/", "", true, false)
+	if err != nil {
+		t.Fatalf("list all: %s", err)
+	}
+	if got := drainListAll(t, ch); !reflect.DeepEqual(got, []string{"p/a", "p/b", "p/c"}) {
+		t.Fatalf("unexpected keys: got %v", got)
+	}
+}
+
+func TestListAllFirstPageFailureRespectsContext(t *testing.T) {
+	store := newFlakyListStore(t, "p/a")
+	store.failAll = true
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(350 * time.Millisecond)
+		cancel()
+	}()
+	done := make(chan error, 1)
+	go func() {
+		_, err := ListAll(ctx, store, "p/", "", true, false)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected error after context cancellation")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("ListAll did not return after context cancellation")
+	}
+}
+
 func TestSQLite(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "teststore.db")
 	s, err := newSQLStore("sqlite3", dbPath, "", "")

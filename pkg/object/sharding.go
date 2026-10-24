@@ -110,13 +110,25 @@ func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, fo
 	startTime := time.Now()
 	out := make(chan Object, maxResults)
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, hasMore, nextToken, err := store.List(ctx, prefix, marker, "", "", maxResults, followLink)
-	if errors.Is(err, notSupported) {
-		return ListAllWithDelimiter(ctx, store, prefix, marker, "", followLink)
-	}
-	if err != nil {
-		logger.Errorf("Can't list %s: %s", store, err.Error())
-		return nil, err
+	var objs []Object
+	var hasMore bool
+	var nextToken string
+	var err error
+	for {
+		objs, hasMore, nextToken, err = store.List(ctx, prefix, marker, "", "", maxResults, followLink)
+		if errors.Is(err, notSupported) {
+			return ListAllWithDelimiter(ctx, store, prefix, marker, "", followLink)
+		}
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil {
+			logger.Errorf("Can't list %s: %s", store, err.Error())
+			return nil, err
+		}
+		logger.Warnf("Fail to list: %s, retry again", err.Error())
+		// slow down
+		time.Sleep(time.Millisecond * 100)
 	}
 	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 	go func() {
