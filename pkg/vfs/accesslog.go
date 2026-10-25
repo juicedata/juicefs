@@ -91,7 +91,7 @@ func logit(ctx Context, method string, err syscall.Errno, format string, args ..
 	if ctx.Pid() != 0 && used >= time.Second*10 {
 		logger.Infof("slow operation: %s", cmd)
 	}
-	line := []byte(fmt.Sprintf("%s [uid:%d,gid:%d,pid:%d] %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), cmd))
+	line := fmt.Appendf(nil, "%s [uid:%d,gid:%d,pid:%d] %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), cmd)
 
 	for _, r := range readers {
 		select {

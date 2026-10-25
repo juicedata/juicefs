@@ -117,7 +117,9 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 		atimeStr = strconv.FormatInt(atime, 10)
 	}
 	if atimeStr != "" {
-		sb.WriteString("atime=" + atimeStr + ",")
+		sb.WriteString("atime=")
+		sb.WriteString(atimeStr)
+		sb.WriteString(",")
 	}
 
 	var mtimeStr string
@@ -127,12 +129,16 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 		mtimeStr = strconv.FormatInt(mtime, 10)
 	}
 	if mtimeStr != "" {
-		sb.WriteString("mtime=" + mtimeStr + ",")
+		sb.WriteString("mtime=")
+		sb.WriteString(mtimeStr)
+		sb.WriteString(",")
 	}
 
 	if set&meta.SetAttrSize != 0 {
 		sizeStr := strconv.FormatUint(size, 10)
-		sb.WriteString("size=" + sizeStr + ",")
+		sb.WriteString("size=")
+		sb.WriteString(sizeStr)
+		sb.WriteString(",")
 	}
 	r := sb.String()
 	if len(r) > 1 {
