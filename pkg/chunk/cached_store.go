@@ -748,7 +748,9 @@ func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page,
 	store.objectDataBytes.WithLabelValues("GET", res.sc).Add(float64(res.n))
 	store.objectReqsHistogram.WithLabelValues("GET", res.sc).Observe(used.Seconds())
 	if err == nil {
-		store.fetcher.fetch(key)
+		if store.fetcher != nil {
+			store.fetcher.fetch(key)
+		}
 		return res.n, nil
 	}
 	store.objectReqErrors.Add(1)
@@ -899,23 +901,25 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	if !config.CacheEnabled() {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
 	}
-	store.fetcher = newPrefetcher(config.Prefetch, func(key string) {
-		size := parseObjOrigSize(key)
-		if size == 0 || size > store.conf.BlockSize {
-			return
-		}
-		p := NewOffPage(size)
-		defer p.Release()
-		block, err := store.group.Execute(key, func() (*Page, error) { // dedup requests with full read
-			p.Acquire()
-			err := store.load(context.TODO(), key, p, false, false) // delay writing cache until singleflight ends to prevent blocking waiters
-			return p, err
+	if config.Prefetch > 0 {
+		store.fetcher = newPrefetcher(config.Prefetch, func(key string) {
+			size := parseObjOrigSize(key)
+			if size == 0 || size > store.conf.BlockSize {
+				return
+			}
+			p := NewOffPage(size)
+			defer p.Release()
+			block, err := store.group.Execute(key, func() (*Page, error) { // dedup requests with full read
+				p.Acquire()
+				err := store.load(context.TODO(), key, p, false, false) // delay writing cache until singleflight ends to prevent blocking waiters
+				return p, err
+			})
+			defer block.Release()
+			if err == nil && block == p {
+				store.bcache.cache(key, block, true, !store.conf.OSCache)
+			}
 		})
-		defer block.Release()
-		if err == nil && block == p {
-			store.bcache.cache(key, block, true, !store.conf.OSCache)
-		}
-	})
+	}
 
 	if store.conf.Writeback {
 		for i := 0; i < store.conf.MaxUpload; i++ {

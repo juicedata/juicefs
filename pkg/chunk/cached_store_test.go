@@ -512,6 +512,22 @@ func TestStoreRetry(t *testing.T) {
 	require.Equal(t, int32(1), s.cnt)
 }
 
+func TestPrefetcherDisabled(t *testing.T) {
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
+	conf := defaultConf
+	conf.CacheDir = "memory"
+	store := NewCachedStore(mem, conf, nil)
+	require.Nil(t, store.(*cachedStore).fetcher) // Prefetch is 0 by default
+
+	conf.Prefetch = 1
+	store = NewCachedStore(mem, conf, nil)
+	require.NotNil(t, store.(*cachedStore).fetcher)
+
+	conf.CacheSize = 0 // cache disabled forces Prefetch to 0
+	store = NewCachedStore(mem, conf, nil)
+	require.Nil(t, store.(*cachedStore).fetcher)
+}
+
 func TestBlockIndexes(t *testing.T) {
 	conf := defaultConf
 	conf.BlockSize = 1 << 20 // 1MiB
