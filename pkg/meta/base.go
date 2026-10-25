@@ -522,7 +522,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 
 		bgjobDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name:    "juicefs_bgjob_duration_seconds",
+				Name:    "bgjob_duration_seconds",
 				Help:    "Background job duration in seconds.",
 				Buckets: prometheus.ExponentialBuckets(1, 2, 13),
 			},
@@ -530,7 +530,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		),
 		bgjobDels: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "juicefs_bgjob_deletions_total",
+				Name: "bgjob_deletions_total",
 				Help: "Number of deletions (files or slices) by background jobs.",
 			},
 			[]string{"job"},

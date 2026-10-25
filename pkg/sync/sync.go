@@ -2549,7 +2549,7 @@ func initSyncMetrics(config *Config) {
 		}
 		if listedPrefix != nil {
 			config.Registerer.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
-				Name: "Prefix",
+				Name: "listed_prefix",
 				Help: "listed prefix",
 			}, func() float64 {
 				return float64(listedPrefix.Current())

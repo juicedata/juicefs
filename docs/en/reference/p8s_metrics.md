@@ -20,7 +20,9 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | Name                          | Description                            | Unit |
 |-------------------------------|----------------------------------------|------|
 | `juicefs_used_space`          | Total used space                       | byte |
-| `juicefs_used_inodes`         | Total number of inodes                 |      |
+| `juicefs_used_inodes`         | Total number of used inodes            |      |
+| `juicefs_total_space`         | Total space of the volume              | byte |
+| `juicefs_total_inodes`        | Total number of inodes                 |      |
 
 ## Operating system {#operating-system}
 
@@ -34,14 +36,51 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 
 ## Metadata engine {#metadata-engine}
 
+### Labels
+
+| Name     | Description                                  |
+| ----     | -----------                                  |
+| `method` | Metadata engine operation (e.g. getattr, setattr, lookup) |
+
 ### Metrics
 
 | Name                                              | Description                                | Unit   |
 | ----                                              | -----------                                | ----   |
 | `juicefs_transaction_durations_histogram_seconds` | Transactions latency distributions         | second |
-| `juicefs_transaction_restart`                     | Number of times a transaction restarted |        |
+| `juicefs_transaction_restart`                     | Number of times a transaction restarted    |        |
+| `juicefs_meta_ops_durations_histogram_seconds`    | Metadata engine operations latency distributions | second |
+| `juicefs_meta_ops_total`                          | Number of metadata engine operations       |        |
+| `juicefs_meta_ops_duration_seconds`               | Accumulated time of metadata engine operations | second |
+
+## Quota {#quota}
+
+### Metrics
+
+Directory quotas carry an `inode` label, user quotas a `uid` label, and group quotas a `gid` label.
+
+| Name                                        | Description                                   | Unit |
+|---------------------------------------------|-----------------------------------------------|------|
+| `juicefs_dir_quota_max_space_bytes`         | Directory quota maximum space                 | byte |
+| `juicefs_dir_quota_max_inodes`              | Directory quota maximum number of inodes      |      |
+| `juicefs_dir_quota_used_space_bytes`        | Directory quota used space                    | byte |
+| `juicefs_dir_quota_used_inodes`             | Directory quota used number of inodes         |      |
+| `juicefs_user_quota_max_space_bytes`        | User quota maximum space                      | byte |
+| `juicefs_user_quota_max_inodes`             | User quota maximum number of inodes           |      |
+| `juicefs_user_quota_used_space_bytes`       | User quota used space                         | byte |
+| `juicefs_user_quota_used_inodes`            | User quota used number of inodes              |      |
+| `juicefs_group_quota_max_space_bytes`       | Group quota maximum space                     | byte |
+| `juicefs_group_quota_max_inodes`            | Group quota maximum number of inodes          |      |
+| `juicefs_group_quota_used_space_bytes`      | Group quota used space                        | byte |
+| `juicefs_group_quota_used_inodes`           | Group quota used number of inodes             |      |
 
 ## FUSE {#fuse}
+
+### Labels
+
+| Name     | Description                             |
+| ----     | -----------                             |
+| `method` | FUSE operation (e.g. read, write, lookup) |
+| `errno`  | Error name of failed operations (e.g. EIO, ENOENT) |
 
 ### Metrics
 
@@ -50,6 +89,9 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | `juicefs_fuse_read_size_bytes`                 | Size distributions of read request   | byte   |
 | `juicefs_fuse_written_size_bytes`              | Size distributions of write request  | byte   |
 | `juicefs_fuse_ops_durations_histogram_seconds` | Operations latency distributions     | second |
+| `juicefs_fuse_ops_total`                       | Number of operations                 |        |
+| `juicefs_fuse_ops_durations_seconds`           | Accumulated time of operations       | second |
+| `juicefs_fuse_ops_io_errors`                   | Number of I/O errors                 |        |
 | `juicefs_fuse_open_handlers`                   | Number of open files and directories |        |
 
 ## SDK {#sdk}
@@ -60,7 +102,7 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | ----                                          | -----------                         | ----   |
 | `juicefs_sdk_read_size_bytes`                 | Size distributions of read request  | byte   |
 | `juicefs_sdk_written_size_bytes`              | Size distributions of write request | byte   |
-| `juicefs_sdk_ops_durations_histogram_seconds` | Operations latency distributions    | second |
+| `juicefs_sdk_ops_durations_histogram_seconds` | Latency distributions of internal SDK operations (one request may issue many) | second |
 
 ## Cache {#cache}
 
@@ -74,7 +116,7 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | `juicefs_blockcache_miss`               | Count of cached block miss                  |        |
 | `juicefs_blockcache_writes`             | Count of cached block writes                |        |
 | `juicefs_blockcache_drops`              | Count of cached block drops                 |        |
-| `juicefs_blockcache_evicts`             | Count of cached block evicts                |        |
+| `juicefs_blockcache_evicts`             | Count of cached block evicts               |        |
 | `juicefs_blockcache_hit_bytes`          | Size of cached block hits                   | byte   |
 | `juicefs_blockcache_miss_bytes`         | Size of cached block miss                   | byte   |
 | `juicefs_blockcache_write_bytes`        | Size of cached block writes                 | byte   |
@@ -83,14 +125,18 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | `juicefs_staging_blocks`                | Number of blocks in the staging path        |        |
 | `juicefs_staging_block_bytes`           | Total bytes of blocks in the staging path   | byte   |
 | `juicefs_staging_block_delay_seconds`   | Total seconds of delay for staging blocks   | second |
+| `juicefs_staging_block_errors`          | Count of errors when staging blocks         |        |
+| `juicefs_staging_write_bytes`           | Total bytes written to the staging path     | byte   |
+| `juicefs_staging_writing_blocks`        | Number of blocks being written to the staging path | |
 
 ## Object storage {#object-storage}
 
 ### Labels
 
-| Name     | Description                                                    |
-| ----     | -----------                                                    |
-| `method` | Method to request object storage (e.g. GET, PUT, HEAD, DELETE) |
+| Name            | Description                                                    |
+| ----            | -----------                                                    |
+| `method`        | Method to request object storage (e.g. GET, PUT, HEAD, DELETE) |
+| `storage_class` | Storage class of the requested objects, when configured        |
 
 ### Metrics
 
@@ -99,6 +145,7 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | `juicefs_object_request_durations_histogram_seconds` | Object storage request latency distributions | second |
 | `juicefs_object_request_errors`                      | Count of failed requests to object storage   |        |
 | `juicefs_object_request_data_bytes`                  | Size of requests to object storage           | byte   |
+| `juicefs_object_request_uploading`                   | Number of on-going upload requests           |        |
 
 ## Internal {#internal}
 
@@ -107,7 +154,11 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | Name                                   | Description                          | Unit |
 |----------------------------------------| -----------                          | ---- |
 | `juicefs_compact_size_histogram_bytes` | Size distributions of compacted data | byte |
-| `juicefs_used_read_buffer_size_bytes`  | size of currently used buffer for read |      |
+| `juicefs_used_read_buffer_size_bytes`  | Size of currently used buffer for read | byte |
+| `juicefs_used_buffer_size_bytes`       | Size of currently used buffer for write | byte |
+| `juicefs_store_cache_size_bytes`       | Size of in-memory store cache        | byte |
+| `juicefs_last_successful_backup`       | Unix timestamp of the last successful metadata backup (only exported when `--backup-meta` is enabled) | second |
+| `juicefs_last_backup_duration`         | Duration of the last metadata backup (only exported when `--backup-meta` is enabled) | second |
 | `juicefs_bgjob_duration_seconds` | Duration of background cleanup jobs (labels: `job`, `status`) | second |
 | `juicefs_bgjob_deletions_total` | Total number of deletions performed by background jobs (label: `job`) | |
 
@@ -117,7 +168,7 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 
 | Name | Description | Unit |
 |-|-|-|
-| `subdir_info` | Indicates the subdir configuration for the current mount (label: `subdir`, value is always `1`) | |
+| `juicefs_subdir_info` | Indicates the subdir configuration for the current mount (label: `subdir`, value is always `1`) | |
 
 The `subdir` label contains the mounted subdirectory path. An empty string indicates a root mount.
 
@@ -133,7 +184,13 @@ The `subdir` label contains the mounted subdirectory path. An empty string indic
 | `juicefs_sync_copied` | Number of objects that have been synchronized | |
 | `juicefs_sync_copied_bytes` | Total size of data that has been synchronized | byte |
 | `juicefs_sync_skipped` | Number of objects that skipped during synchronization | |
+| `juicefs_sync_skipped_bytes` | Total size of data that skipped during synchronization | byte |
+| `juicefs_sync_excluded` | Number of objects excluded by rules during synchronization | |
+| `juicefs_sync_excluded_bytes` | Total size of objects excluded by rules during synchronization | byte |
+| `juicefs_sync_extra` | Number of extra objects found in the destination | |
+| `juicefs_sync_extra_bytes` | Total size of extra objects found in the destination | byte |
 | `juicefs_sync_failed` | Number of objects that failed during synchronization | |
 | `juicefs_sync_deleted` | Number of objects that deleted during synchronization | |
 | `juicefs_sync_checked` | Number of objects that have been verified by checksum during synchronization | |
 | `juicefs_sync_checked_bytes` | Total size of data that has been verified by checksum during synchronization | byte |
+| `juicefs_sync_listed_prefix` | Number of listed prefixes during synchronization | |
