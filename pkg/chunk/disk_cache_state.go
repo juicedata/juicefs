@@ -26,19 +26,25 @@ import (
 )
 
 var (
-	numIOErrToUnstable         uint32  = 3                // from normal to unstable
-	minIOSuccToNormal          uint32  = 60               // from unstable to normal
-	maxIOErrPercentageToNormal float64 = 0                // from unstable to normal
-	maxDurToDown                       = 30 * time.Minute // from unstable to down
-	maxConcurrencyForUnstable  int64   = 10
-	tickDurForNormal                   = 1 * time.Minute
-	tickDurForUnstable                 = 1 * time.Minute
+	numIOErrToUnstable         uint32        = 3 // from normal to unstable
+	minIOSuccToNormal          atomic.Uint32     // from unstable to normal
+	maxIOErrPercentageToNormal float64       = 0 // from unstable to normal
+	maxDurToDown               atomic.Int64      // from unstable to down
+	maxConcurrencyForUnstable  int64         = 10
+	tickDurForNormal                         = 1 * time.Minute
+	tickDurForUnstable         atomic.Int64
 
 	probeDur  = 500 * time.Millisecond
 	probeDir  = "probe"
 	probeData = []byte{1, 2, 3}
 	probeBuff = make([]byte, 3)
 )
+
+func init() {
+	minIOSuccToNormal.Store(60)
+	maxDurToDown.Store(int64(30 * time.Minute))
+	tickDurForUnstable.Store(int64(1 * time.Minute))
+}
 
 var (
 	errCacheDown       = errors.New("cache down")
@@ -189,7 +195,7 @@ func probeCacheKey(id, size int) string {
 func (dc *unstableDC) tick() {
 	go dc.probe()
 	go func() {
-		ticker := time.NewTicker(tickDurForUnstable)
+		ticker := time.NewTicker(time.Duration(tickDurForUnstable.Load()))
 		defer ticker.Stop()
 
 		for {
@@ -198,9 +204,9 @@ func (dc *unstableDC) tick() {
 				return
 			case <-ticker.C:
 				errCnt, ioCnt := atomic.LoadUint32(&dc.ioErrCnt), atomic.LoadUint32(&dc.ioCnt)
-				if ioCnt >= minIOSuccToNormal && float64(errCnt)/float64(ioCnt) <= maxIOErrPercentageToNormal {
+				if ioCnt >= minIOSuccToNormal.Load() && float64(errCnt)/float64(ioCnt) <= maxIOErrPercentageToNormal {
 					dc.cache.event(eventToNormal)
-				} else if time.Since(dc.startTime) >= maxDurToDown {
+				} else if time.Since(dc.startTime) >= time.Duration(maxDurToDown.Load()) {
 					dc.cache.event(eventToDown)
 				} else {
 					atomic.StoreUint32(&dc.ioErrCnt, 0)
@@ -307,9 +313,9 @@ func getEnvs() {
 		if err != nil {
 			logger.Errorf("parse JFS_MAX_DURATION_TO_DOWN error: %v", err)
 		} else {
-			maxDurToDown = dur
+			maxDurToDown.Store(int64(dur))
 		}
-		logger.Infof("set maxDurToDown to %v", maxDurToDown)
+		logger.Infof("set maxDurToDown to %v", time.Duration(maxDurToDown.Load()))
 	}
 	if os.Getenv("JFS_MAX_CONCURRENCY_FOR_UNSTABLE") != "" {
 		co, err := strconv.ParseInt(os.Getenv("JFS_MAX_CONCURRENCY_FOR_UNSTABLE"), 10, 64)

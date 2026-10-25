@@ -34,9 +34,11 @@ func setState(s *diskCache, state int) {
 }
 
 func testDiskCacheState(t *testing.T, cacheNum int) {
-	oriTickDurForUnstable, oriMinIOSuccToNormal, oriMaxDurToDown := tickDurForUnstable, minIOSuccToNormal, maxDurToDown
+	oriTickDurForUnstable, oriMinIOSuccToNormal, oriMaxDurToDown := tickDurForUnstable.Load(), minIOSuccToNormal.Load(), maxDurToDown.Load()
 	defer func() {
-		tickDurForUnstable, minIOSuccToNormal, maxDurToDown = oriTickDurForUnstable, oriMinIOSuccToNormal, oriMaxDurToDown
+		tickDurForUnstable.Store(oriTickDurForUnstable)
+		minIOSuccToNormal.Store(oriMinIOSuccToNormal)
+		maxDurToDown.Store(oriMaxDurToDown)
 	}()
 
 	genDirs := func(num int) []string {
@@ -70,39 +72,39 @@ func testDiskCacheState(t *testing.T, cacheNum int) {
 	// case: normal -> unstable
 	s1 := m.getStore(k1)
 	for i := 0; i <= int(numIOErrToUnstable); i++ {
-		s1.state.onIOErr()
+		s1.getState().onIOErr()
 	}
-	require.Equal(t, dcUnstable, s1.state.state())
+	require.Equal(t, dcUnstable, s1.getState().state())
 
 	// case: probe in unstable
 	time.Sleep(time.Second)
-	require.GreaterOrEqual(t, atomic.LoadUint32(&s1.state.(*unstableDC).ioCnt), uint32(1))
+	require.GreaterOrEqual(t, atomic.LoadUint32(&s1.getState().(*unstableDC).ioCnt), uint32(1))
 
 	// case: unstable concurrency limit
 	for i := 0; i < int(maxConcurrencyForUnstable); i++ {
-		s1.state.beforeCacheOp()
+		s1.getState().beforeCacheOp()
 	}
 	_, err := m.load(k1)
 	assert.Equal(t, errUnstableCoLimit, err)
 	for i := 0; i < int(maxConcurrencyForUnstable); i++ {
-		s1.state.afterCacheOp()
+		s1.getState().afterCacheOp()
 	}
 
 	// case: unstable -> normal
-	tickDurForUnstable = time.Second
-	minIOSuccToNormal = 1
+	tickDurForUnstable.Store(int64(time.Second))
+	minIOSuccToNormal.Store(1)
 	setState(s1, dcUnstable)
-	s1.state.(*unstableDC).doProbe(k1, page)
+	s1.getState().(*unstableDC).doProbe(k1, page)
 	time.Sleep(2 * time.Second)
-	require.Equal(t, dcNormal, s1.state.state())
+	require.Equal(t, dcNormal, s1.getState().state())
 
 	// case: unstable -> down
-	tickDurForUnstable = time.Second
-	maxDurToDown = 1
-	minIOSuccToNormal = 5 * 60
+	tickDurForUnstable.Store(int64(time.Second))
+	maxDurToDown.Store(1)
+	minIOSuccToNormal.Store(5 * 60)
 	setState(s1, dcUnstable)
 	time.Sleep(2 * time.Second)
-	require.Equal(t, dcDown, s1.state.state())
+	require.Equal(t, dcDown, s1.getState().state())
 }
 
 func TestDiskCacheState(t *testing.T) {

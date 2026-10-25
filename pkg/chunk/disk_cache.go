@@ -82,8 +82,8 @@ type diskCache struct {
 	used      int64
 	keys      KeyIndex
 	scanned   bool
-	stageFull bool
-	rawFull   bool
+	stageFull atomic.Bool
+	rawFull   atomic.Bool
 	checksum  string // checksum level
 	uploader  func(key, path string, force bool) bool
 
@@ -230,7 +230,13 @@ func (cache *diskCache) checkLockFile() {
 }
 
 func (c *diskCache) available() bool {
-	return c.state.state() != dcDown
+	return c.getState().state() != dcDown
+}
+
+func (c *diskCache) getState() dcState {
+	c.stateLock.Lock()
+	defer c.stateLock.Unlock()
+	return c.state
 }
 
 func (c *diskCache) enabled() bool {
@@ -245,9 +251,10 @@ func (cache *diskCache) checkErr(f func() error) error {
 	if !cache.available() {
 		return errCacheDown
 	}
-	cache.state.beforeCacheOp()
-	defer cache.state.afterCacheOp()
-	if err := cache.state.checkCacheOp(); err != nil {
+	st := cache.getState()
+	st.beforeCacheOp()
+	defer st.afterCacheOp()
+	if err := st.checkCacheOp(); err != nil {
 		return err
 	}
 
@@ -263,10 +270,10 @@ func (cache *diskCache) checkErr(f func() error) error {
 	if err != nil {
 		if errors.Is(err, syscall.EIO) || errors.Is(err, utils.ErrFuncTimeout) {
 			logger.Errorf("cache store is unavailable: %s", err)
-			cache.state.onIOErr()
+			st.onIOErr()
 		}
 	} else {
-		cache.state.onIOSucc()
+		st.onIOSucc()
 	}
 	return err
 }
@@ -283,7 +290,7 @@ func (c *diskCache) checkTimeout() {
 		for ts := range c.opTs {
 			if ts < cutOff {
 				logger.Warnf("IO operation %s on %s is timeout after %s, ", getFunctionName(c.opTs[ts]), c.dir, now-ts)
-				c.state.onIOErr()
+				c.getState().onIOErr()
 				delete(c.opTs, ts)
 			}
 		}
@@ -344,17 +351,17 @@ func (cache *diskCache) isFull(usage DiskFreeRatio, stage bool) bool {
 func (cache *diskCache) checkFreeSpace() {
 	for cache.available() {
 		usage := cache.curFreeRatio()
-		cache.stageFull = cache.isFull(usage, true)
-		cache.rawFull = cache.isFull(usage, false)
-		if cache.rawFull && cache.keys.name() != EvictionNone {
+		cache.stageFull.Store(cache.isFull(usage, true))
+		cache.rawFull.Store(cache.isFull(usage, false))
+		if cache.rawFull.Load() && cache.keys.name() != EvictionNone {
 			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(usage.br*100), int(usage.fr*100))
 			cache.Lock()
 			cache.cleanupFull()
 			cache.Unlock()
 			usage = cache.curFreeRatio()
-			cache.rawFull = cache.isFull(usage, false)
+			cache.rawFull.Store(cache.isFull(usage, false))
 		}
-		if cache.rawFull {
+		if cache.rawFull.Load() {
 			cache.uploadStaging()
 		}
 		time.Sleep(time.Second)
@@ -436,7 +443,7 @@ func (cache *diskCache) cache(key string, p *Page, force, dropCache bool) {
 	if !cache.enabled() {
 		return
 	}
-	if cache.rawFull && cache.keys.name() == EvictionNone {
+	if cache.rawFull.Load() && cache.keys.name() == EvictionNone {
 		logger.Debugf("Caching directory is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
 		cache.m.cacheDrops.Add(1)
 		return
@@ -773,7 +780,7 @@ func (cache *diskCache) add(key string, size int32, atime uint32) {
 
 func (cache *diskCache) stage(key string, data []byte, tierID uint8) (string, error) {
 	stagingPath := cache.stagePath(key)
-	if cache.stageFull {
+	if cache.stageFull.Load() {
 		return stagingPath, errStageFull
 	}
 	if cache.maxStageWrite != 0 && stagingBlocks.Load() > int64(cache.maxStageWrite) {
