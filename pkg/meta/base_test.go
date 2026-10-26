@@ -4412,6 +4412,73 @@ func testBatchClone(t *testing.T, m Meta) {
 		}
 	}
 
+	// --- test 8: directory clone quota accounting and cleanup ---
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+	var subDir, subFile, quotaDst Ino
+	var attr Attr
+	if st := m.Mkdir(ctx, srcDir, "sub", 0755, 022, 0, &subDir, nil); st != 0 {
+		t.Fatalf("mkdir sub: %s", st)
+	}
+	if st := m.Create(ctx, subDir, "file3", 0644, 022, 0, &subFile, &attr); st != 0 {
+		t.Fatalf("create file3: %s", st)
+	}
+	if st := m.Truncate(ctx, subFile, 0, 1<<20, &attr, false); st != 0 {
+		t.Fatalf("truncate file3: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "batchQuotaDst", 0755, 022, 0, &quotaDst, nil); st != 0 {
+		t.Fatalf("mkdir batchQuotaDst: %s", st)
+	}
+	p := "/batchQuotaDst"
+	if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set %s: %s", p, err)
+	}
+	m.getBase().loadQuotas()
+	checkUsage := func(what string, space, inodes int64) {
+		t.Helper()
+		m.FlushSession()
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, p, DirQuotaType, qs, false, false, false); err != nil {
+			t.Fatalf("HandleQuota get %s: %s", p, err)
+		}
+		if q := qs[p]; q.UsedSpace != space || q.UsedInodes != inodes {
+			t.Fatalf("quota of %s %s: used %d bytes and %d inodes, expect %d and %d", p, what, q.UsedSpace, q.UsedInodes, space, inodes)
+		}
+	}
+
+	count = 0
+	var total uint64
+	if st := m.Clone(ctx, RootInode, srcDir, quotaDst, "c", 0, 022, CLONE_DEFAULT_CONCURRENCY, &count, &total); st != 0 {
+		t.Fatalf("clone: %s", st)
+	}
+	var cloned Ino
+	if st := m.Lookup(ctx, quotaDst, "c", &cloned, &attr, false); st != 0 {
+		t.Fatalf("lookup c: %s", st)
+	}
+	var sum Summary
+	if st := m.GetSummary(ctx, cloned, &sum, true, true); st != 0 {
+		t.Fatalf("summary of c: %s", st)
+	}
+	checkUsage("after the clone", int64(sum.Size), int64(sum.Dirs+sum.Files))
+	if st := m.Remove(ctx, quotaDst, "c", true, RmrDefaultThreads, nil); st != 0 {
+		t.Fatalf("remove c: %s", st)
+	}
+	checkUsage("after removing the clone", 0, 0)
+
+	// An interrupted clone leaves the copied tree detached from its parent.
+	count = 0
+	var detached Ino
+	if st := m.getBase().cloneEntry(ctx, srcDir, quotaDst, "d", &detached, 0, 022, &count, true, make(chan struct{}, 4)); st != 0 {
+		t.Fatalf("clone entry: %s", st)
+	}
+	m.CleanupDetachedNodesBefore(ctx, time.Now().Add(time.Minute), nil)
+	checkUsage("after removing the detached tree", 0, 0)
+	if st := m.Remove(ctx, RootInode, "batchQuotaDst", true, RmrDefaultThreads, nil); st != 0 {
+		t.Fatalf("remove batchQuotaDst: %s", st)
+	}
+
 	// cleanup
 	m.Remove(ctx, RootInode, "batchSrc", false, RmrDefaultThreads, nil)
 	m.Remove(ctx, RootInode, "batchDst", false, RmrDefaultThreads, nil)

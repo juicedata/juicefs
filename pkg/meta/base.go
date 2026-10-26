@@ -3484,7 +3484,12 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	}
 	if eno == 0 {
 		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
-		m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
+		if attr.Typ == TypeDirectory {
+			// the entries inside were counted while they were cloned
+			m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
+		} else {
+			m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
+		}
 	}
 	return eno
 }
@@ -3505,6 +3510,10 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	m.en.updateStats(align4K(attr.Length), 1)
 	atomic.AddUint64(count, 1)
 	m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
+	if attr.Typ == TypeDirectory && !top {
+		// Count subdirectories now so failed-clone cleanup balances quota usage.
+		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
+	}
 	if attr.Typ != TypeDirectory {
 		return 0
 	}
