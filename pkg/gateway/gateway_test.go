@@ -888,6 +888,35 @@ func TestGetObjectInfo(t *testing.T) {
 }
 
 func TestDeleteObjects(t *testing.T) {
+	for _, location := range []string{"volume-root", "subdir-root", "subdir-child"} {
+		t.Run(location, func(t *testing.T) {
+			jfsObj, jfs, bucket := newTestGateway(t, Config{})
+			defer jfs.Close()
+			if location != "volume-root" {
+				if eno := jfs.Meta().Chroot(mctx, "/delete-subdir"); eno != 0 {
+					t.Fatalf("chroot: %s", eno)
+				}
+			}
+			key := "object"
+			if location == "subdir-child" {
+				key = "child/object"
+				if eno := jfs.Mkdir(mctx, "/child", 0755, 0); eno != 0 {
+					t.Fatalf("mkdir child: %s", eno)
+				}
+			}
+			createTestFile(t, jfs, "/"+key)
+			createTestFile(t, jfs, "/"+key+"-keep")
+			_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+				[]minio.ObjectToDelete{{ObjectName: key}}, minio.ObjectOptions{})
+			for _, err := range errs {
+				if err != nil {
+					t.Fatalf("delete object: %s", err)
+				}
+			}
+			assertHeadObject(t, jfsObj, bucket, key, false)
+			assertHeadObject(t, jfsObj, bucket, key+"-keep", true)
+		})
+	}
 	t.Run("keep sibling object named as bucket", func(t *testing.T) {
 		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
 		bucket := "jmrq"
