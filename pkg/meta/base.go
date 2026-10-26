@@ -1730,7 +1730,7 @@ func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 	st := m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 	if st == 0 {
 		m.parentMu.Lock()
-		m.dirParents[*inode] = parent
+		m.dirParents[*inode] = m.checkRoot(parent)
 		m.parentMu.Unlock()
 	}
 	return st
