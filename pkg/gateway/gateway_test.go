@@ -848,6 +848,7 @@ func TestGetObjectInfo(t *testing.T) {
 
 		assertHeadObject(t, jfsObj, bucket, "file", true)
 		assertHeadObject(t, jfsObj, bucket, "file/", false)
+		assertHeadObject(t, jfsObj, bucket, "file/child", false)
 	})
 
 	t.Run("put file under implicit directory", func(t *testing.T) {
@@ -860,6 +861,8 @@ func TestGetObjectInfo(t *testing.T) {
 		assertHeadObject(t, jfsObj, bucket, "dir1", false)
 		assertHeadObject(t, jfsObj, bucket, "dir1/", false)
 		assertHeadObject(t, jfsObj, bucket, "dir1/key1", true)
+		assertHeadObject(t, jfsObj, bucket, "dir1/key1/", false)
+		assertHeadObject(t, jfsObj, bucket, "dir1/key1/child", false)
 	})
 
 	t.Run("put explicit directory object", func(t *testing.T) {
