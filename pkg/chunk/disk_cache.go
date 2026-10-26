@@ -64,7 +64,7 @@ type pendingFile struct {
 
 type diskCache struct {
 	id         string
-	totalPages int64
+	totalPages atomic.Int64
 	sync.Mutex
 	dir           string
 	mode          os.FileMode
@@ -325,7 +325,7 @@ func (cache *diskCache) closeFile(f *os.File) error {
 }
 
 func (cache *diskCache) usedMemory() int64 {
-	return atomic.LoadInt64(&cache.totalPages)
+	return cache.totalPages.Load()
 }
 
 func (cache *diskCache) stats() (int64, int64) {
@@ -452,7 +452,7 @@ func (cache *diskCache) cache(key string, p *Page, force, dropCache bool) {
 	}
 	p.Acquire()
 	cache.pages[key] = p
-	atomic.AddInt64(&cache.totalPages, int64(cap(p.Data)))
+	cache.totalPages.Add(int64(cap(p.Data)))
 	select {
 	case cache.pending <- pendingFile{key, p, dropCache}:
 	default:
@@ -465,7 +465,7 @@ func (cache *diskCache) cache(key string, p *Page, force, dropCache bool) {
 			logger.Debugf("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
 			cache.m.cacheDrops.Add(1)
 			delete(cache.pages, key)
-			atomic.AddInt64(&cache.totalPages, -int64(cap(p.Data)))
+			cache.totalPages.Add(-int64(cap(p.Data)))
 			p.Release()
 		}
 	}
@@ -735,7 +735,7 @@ func (cache *diskCache) flush() {
 		cache.Lock()
 		_, ok := cache.pages[w.key]
 		delete(cache.pages, w.key)
-		atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
+		cache.totalPages.Add(-int64(cap(w.page.Data)))
 		cache.Unlock()
 		w.page.Release()
 		if !ok {

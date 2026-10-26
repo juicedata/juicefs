@@ -500,8 +500,8 @@ func testTKV(t *testing.T, c tkvClient) {
 	for i := 0; i < 1000; i++ {
 		txn(func(kt *kvTxn) {
 			for j := 0; j < 100; j++ {
-				k := []byte(fmt.Sprintf("Key_%d_%d", i, j))
-				v := []byte(fmt.Sprintf("Value_%d_%d", i, j))
+				k := fmt.Appendf(nil, "Key_%d_%d", i, j)
+				v := fmt.Appendf(nil, "Value_%d_%d", i, j)
 				kt.set(k, v)
 				keys = append(keys, k)
 			}
@@ -516,7 +516,7 @@ func testTKV(t *testing.T, c tkvClient) {
 	})
 	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i], keys[j]) < 0 })
 	for i, k := range keys {
-		if !bytes.Equal(k, kvs[i*2]) || !bytes.Equal([]byte(fmt.Sprintf("Value%s", k[3:])), kvs[i*2+1]) {
+		if !bytes.Equal(k, kvs[i*2]) || !bytes.Equal(fmt.Appendf(nil, "Value%s", k[3:]), kvs[i*2+1]) {
 			t.Fatalf("expect %s but got %s, %s", k, keys[i*2], keys[i*2+1])
 		}
 	}
@@ -679,7 +679,7 @@ func TestBadgerDeleteTxnTooBig(t *testing.T) {
 	const numKeys = 5000
 	wb := db.NewWriteBatch()
 	for i := 0; i < numKeys; i++ {
-		if err := wb.Set([]byte(fmt.Sprintf("txbig_%05d", i)), []byte("v")); err != nil {
+		if err := wb.Set(fmt.Appendf(nil, "txbig_%05d", i), []byte("v")); err != nil {
 			t.Fatal(err)
 		}
 	}

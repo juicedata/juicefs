@@ -659,7 +659,7 @@ func checkSQLIgnoredRows(t *testing.T, m *dbMeta) {
 				Nlink: 2, Length: 1 << 33, Rdev: 17, Parent: 1, AccessACLId: 7, DefaultACLId: 8, Tier: 2}
 		}},
 		{"edge", func(ino Ino) interface{} {
-			return &edge{Parent: 1, Name: []byte(fmt.Sprintf("file-%d\xff\n", ino)), Inode: ino, Type: TypeFile}
+			return &edge{Parent: 1, Name: fmt.Appendf(nil, "file-%d\xff\n", ino), Inode: ino, Type: TypeFile}
 		}},
 		{"chunk", func(ino Ino) interface{} {
 			return &chunk{Inode: ino, Indx: 2, Slices: marshalSlice(0, 11, 4096, 0, 4096)}

@@ -5345,7 +5345,7 @@ func TestSymlinkCache(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for ino := range job {
-				cache.Store(ino, []byte(fmt.Sprintf("file%d", ino)))
+				cache.Store(ino, fmt.Appendf(nil, "file%d", ino))
 			}
 		}()
 	}
