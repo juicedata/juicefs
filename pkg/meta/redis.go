@@ -4400,8 +4400,7 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	inodeKey := m.inodeKey(inode)
 	xattrKey := m.xattrKey(inode)
-	var n int64
-	err := m.txn(ctx, func(tx *redis.Tx) error {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		exists, err := tx.Exists(ctx, inodeKey).Result()
 		if err != nil {
 			return err
@@ -4409,25 +4408,20 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 		if exists == 0 {
 			return syscall.ENOENT
 		}
-		cmd, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		ok, err := tx.HExists(ctx, xattrKey, name).Result()
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ENOATTR
+		}
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, xattrKey, name)
 			m.genLog(ctx, pipe, time.Now(), "REMOVEXATTR(%d,%s)", inode, logEncode2(name))
 			return nil
 		})
-		if err == nil && len(cmd) > 0 {
-			if delCmd, ok := cmd[0].(*redis.IntCmd); ok {
-				n, _ = delCmd.Result()
-			}
-		}
 		return err
-	}, inodeKey, xattrKey)
-	if err != nil {
-		return errno(err)
-	} else if n == 0 {
-		return ENOATTR
-	} else {
-		return 0
-	}
+	}, inodeKey, xattrKey))
 }
 
 type quotaKeys struct {
