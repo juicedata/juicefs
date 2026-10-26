@@ -173,6 +173,7 @@ func testMeta(t *testing.T, m Meta) {
 	}
 
 	testMetaClient(t, m)
+	testSubdirOperations(t, m)
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)
 	testRenameOverRelinkedHardlink(t, m)
@@ -1659,70 +1660,6 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Remove(ctx, 1, "d", false, RmrDefaultThreads, nil); st != 0 {
 		t.Fatalf("rmr d: %s", st)
 	}
-
-	t.Run("BatchUnlinkRoots", func(t *testing.T) {
-		for _, location := range []string{"volume-root", "subdir-root", "subdir-child"} {
-			t.Run(location, func(t *testing.T) {
-				base := m.getBase()
-				root := base.root
-				name := "batch-unlink-" + location
-				var dir Ino
-				require.Zero(t, m.Mkdir(ctx, RootInode, name, 0755, 0, 0, &dir, nil))
-				defer func() {
-					base.chroot(root)
-					for _, name := range []string{"batch-plain", "batch-distinct", "batch-shared"} {
-						_ = m.Unlink(ctx, RootInode, name, true)
-					}
-					require.Zero(t, m.Remove(ctx, RootInode, name, true, RmrDefaultThreads, nil))
-				}()
-
-				parent, realParent, otherParent := RootInode, RootInode, dir
-				if location != "volume-root" {
-					realParent, otherParent = dir, RootInode
-					if location == "subdir-child" {
-						require.Zero(t, m.Mkdir(ctx, dir, "child", 0755, 0, 0, &realParent, nil))
-						parent = realParent
-					}
-				}
-				var entries []*Entry
-				for _, name := range []string{"batch-plain", "batch-distinct", "batch-shared"} {
-					var inode Ino
-					attr := &Attr{}
-					require.Zero(t, m.Mknod(ctx, realParent, name, TypeFile, 0644, 0, 0, "", &inode, attr))
-					entries = append(entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
-				}
-				var distinct Ino
-				require.Zero(t, m.Mknod(ctx, otherParent, "batch-distinct", TypeFile, 0644, 0, 0, "", &distinct, nil))
-				require.Zero(t, m.Link(ctx, entries[2].Inode, otherParent, "batch-shared", nil))
-				base.doFlushDirStat()
-				before, st := m.GetDirStat(ctx, realParent)
-				require.Zero(t, st)
-				if location != "volume-root" {
-					require.Zero(t, m.Chroot(ctx, name))
-				}
-
-				require.Zero(t, m.BatchUnlink(ctx, parent, entries, nil, true))
-				base.doFlushDirStat()
-				after, st := m.GetDirStat(ctx, realParent)
-				require.Zero(t, st)
-				assert.Equal(t, before.inodes-3, after.inodes, "target directory inode count")
-				assert.Equal(t, before.space-3*align4K(0), after.space, "target directory space")
-				// Read the real directories directly so the assertions do not repeat root translation.
-				for _, entry := range entries {
-					var inode Ino
-					var attr Attr
-					assert.Equal(t, syscall.ENOENT, base.en.doLookup(ctx, realParent, string(entry.Name), &inode, &attr),
-						"target %s must be removed", entry.Name)
-				}
-				for name, want := range map[string]Ino{"batch-distinct": distinct, "batch-shared": entries[2].Inode} {
-					var inode Ino
-					var attr Attr
-					assert.Zero(t, base.en.doLookup(ctx, otherParent, name, &inode, &attr), "other directory's %s must remain", name)
-					assert.Equal(t, want, inode, "other directory's %s inode", name)
-				}
-			})
-		}
-	})
 }
 
 func testCaseIncensi(t *testing.T, m Meta) {
