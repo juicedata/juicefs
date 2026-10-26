@@ -5003,6 +5003,42 @@ func testQuota(t *testing.T, m Meta) {
 	if st := m.Create(ctx, parent, "f4", 0644, 0, 0, nil, &attr); st != syscall.EDQUOT {
 		t.Fatalf("Create quota/d22/f4: %s", st)
 	}
+
+	t.Run("SubdirQuota", func(t *testing.T) {
+		const path = "/quota-subdir"
+		var parent, inode Ino
+		if st := m.Mkdir(ctx, RootInode, "quota-subdir", 0755, 0, 0, &parent, nil); st != 0 {
+			t.Fatalf("Mkdir quota-subdir: %s", st)
+		}
+		if err := m.HandleQuota(ctx, QuotaSet, path, DirQuotaType, map[string]*Quota{path: {MaxInodes: 2}}, false, false, false); err != nil {
+			t.Fatalf("Set quota: %s", err)
+		}
+		defer m.HandleQuota(ctx, QuotaDel, path, DirQuotaType, nil, false, false, false)
+		base := m.getBase()
+		base.loadQuotas()
+		defer base.chroot(base.root)
+		if st := m.Chroot(ctx, path); st != 0 {
+			t.Fatalf("Chroot: %s", st)
+		}
+
+		if st := m.Mkdir(ctx, RootInode, "d", 0755, 0, 0, &inode, nil); st != 0 {
+			t.Fatalf("Mkdir d: %s", st)
+		}
+		if st := m.Create(ctx, inode, "f", 0644, 0, 0, nil, nil); st != 0 {
+			t.Fatalf("Create d/f: %s", st)
+		}
+		base.doFlushQuotas()
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, path, DirQuotaType, qs, false, false, false); err != nil {
+			t.Fatalf("Get quota: %s", err)
+		}
+		if q := qs[path]; q.UsedInodes != 2 || q.UsedSpace != 2*4<<10 {
+			t.Errorf("Subdir quota: got %+v, want 2 inodes and 8192 bytes", q)
+		}
+		if st := m.Create(ctx, inode, "overflow", 0644, 0, 0, nil, nil); st != syscall.EDQUOT {
+			t.Errorf("Create d/overflow: got %s, want %s", st, syscall.EDQUOT)
+		}
+	})
 }
 
 func testAtime(t *testing.T, m Meta) {
