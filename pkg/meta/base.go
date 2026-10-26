@@ -3748,7 +3748,6 @@ func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) s
 var errACLNotInCache = errors.New("acl not in cache")
 
 func (m *baseMeta) getFaclFromCache(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) error {
-	ino = m.checkRoot(ino)
 	cAttr := &Attr{}
 	if m.conf.OpenCache > 0 && m.of.Check(ino, cAttr) {
 		aclId := getAttrACLId(cAttr, aclType)
@@ -3815,6 +3814,7 @@ func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 	if !ino.IsNormal() {
 		return syscall.EPERM
 	}
+	ino = m.checkRoot(ino)
 
 	now := time.Now()
 	defer func() {
@@ -3826,6 +3826,7 @@ func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 }
 
 func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	ino = m.checkRoot(ino)
 	var err error
 	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
 		return 0
