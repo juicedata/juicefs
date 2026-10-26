@@ -1904,6 +1904,7 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 	if len(entries) == 0 {
 		return 0
 	}
+	parent = m.checkRoot(parent)
 	var delta dirStat
 	st := m.en.doBatchUnlink(ctx, parent, entries, &delta, skipCheckTrash)
 	if st == 0 {
