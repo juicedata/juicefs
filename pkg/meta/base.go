@@ -3510,9 +3510,7 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	atomic.AddUint64(count, 1)
 	m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
 	if attr.Typ == TypeDirectory && !top {
-		// The entries inside a cloned tree are counted in the directory quotas as they are
-		// cloned (the files by BatchClone), like the user and group quotas, so that removing
-		// the detached tree of a failed clone gives back exactly what was counted.
+		// Count subdirectories now so failed-clone cleanup balances quota usage.
 		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
 	}
 	if attr.Typ != TypeDirectory {
