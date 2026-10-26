@@ -173,6 +173,7 @@ func testMeta(t *testing.T, m Meta) {
 	}
 
 	testMetaClient(t, m)
+	testSubdirOperations(t, m)
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)
 	testRenameOverRelinkedHardlink(t, m)
