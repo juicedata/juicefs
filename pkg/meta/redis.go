@@ -6043,6 +6043,16 @@ func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32) (*aclAPI.Rule, 
 	return rule, nil
 }
 
+func (m *redisMeta) doInsertACL(ctx Context, rule *aclAPI.Rule) (uint32, error) {
+	var id uint32
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		var err error
+		id, err = m.insertACL(ctx, tx, rule)
+		return err
+	}, m.aclKey())
+	return id, err
+}
+
 func (m *redisMeta) insertACL(ctx Context, tx *redis.Tx, rule *aclAPI.Rule) (uint32, error) {
 	if rule == nil || rule.IsEmpty() {
 		return aclAPI.None, nil

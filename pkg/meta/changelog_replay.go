@@ -39,11 +39,12 @@ type replayState struct {
 
 // Replayer exclusively owns a metadata client for sequential changelog replay.
 type Replayer struct {
-	dst Meta
-	m   *baseMeta
+	src    Meta
+	dst    Meta
+	aclIDs map[uint32]uint32
 }
 
-func NewReplayer(uri string, src *Format, dryRun bool) (*Replayer, error) {
+func NewReplayer(uri string, src Meta, dryRun bool) (*Replayer, error) {
 	conf := DefaultConf()
 	conf.NoCompact = true
 	conf.NoBGJob = true
@@ -53,14 +54,27 @@ func NewReplayer(uri string, src *Format, dryRun bool) (*Replayer, error) {
 	if _, err := dst.Load(true); err != nil {
 		return nil, err
 	}
-	r := &Replayer{dst: dst, m: dst.getBase()}
-	if err := r.Validate(src); err != nil {
+	r := &Replayer{src: src, dst: dst, aclIDs: map[uint32]uint32{aclAPI.None: aclAPI.None}}
+	srcBase, dstBase := src.getBase(), dst.getBase()
+	if err := r.Validate(srcBase.getFormat()); err != nil {
 		return nil, err
 	}
-	if !dryRun {
+	if err := srcBase.en.cacheACLs(Background()); err != nil {
+		return nil, fmt.Errorf("load source ACLs: %w", err)
+	}
+	if dryRun {
+		if err := dstBase.en.cacheACLs(Background()); err != nil {
+			return nil, fmt.Errorf("load destination ACLs: %w", err)
+		}
+	} else {
 		if err := dst.NewSession(false); err != nil {
 			_ = dst.CloseSession()
 			return nil, fmt.Errorf("initialize destination metadata client: %w", err)
+		}
+	}
+	for id, rule := range srcBase.aclCache.GetAll() {
+		if dstID := dstBase.aclCache.GetId(rule); dstID != aclAPI.None {
+			r.aclIDs[id] = dstID
 		}
 	}
 	return r, nil
@@ -68,7 +82,7 @@ func NewReplayer(uri string, src *Format, dryRun bool) (*Replayer, error) {
 
 // Validate requires the destination to be a copy of the source.
 func (r *Replayer) Validate(src *Format) error {
-	s, d := *src, *r.m.getFormat()
+	s, d := *src, *r.dst.getBase().getFormat()
 	for _, f := range []*Format{&s, &d} {
 		f.SecretKey, f.SessionToken = "", ""
 		if err := f.Decrypt(); err != nil {
@@ -87,10 +101,34 @@ func (r *Replayer) Validate(src *Format) error {
 }
 
 func (r *Replayer) Close() error {
-	if r.m.conf.ReadOnly {
+	if r.dst.getBase().conf.ReadOnly {
 		return nil
 	}
 	return r.dst.CloseSession()
+}
+
+func (r *Replayer) mapACL(ctx Context, id uint32) (uint32, error) {
+	if dstID, ok := r.aclIDs[id]; ok {
+		return dstID, nil
+	}
+	src, dst := r.src.getBase(), r.dst.getBase()
+	rule := src.aclCache.Get(id)
+	if rule == nil {
+		rule = &aclAPI.Rule{}
+		if st := src.en.doGetFacl(ctx, RootInode, aclAPI.TypeAccess, id, rule); st != 0 {
+			return 0, fmt.Errorf("read source ACL %d: %w", id, st)
+		}
+	}
+	dstID := dst.aclCache.GetId(rule)
+	if dstID == aclAPI.None {
+		var err error
+		dstID, err = dst.en.doInsertACL(ctx, rule)
+		if err != nil {
+			return 0, fmt.Errorf("map source ACL %d: %w", id, err)
+		}
+	}
+	r.aclIDs[id] = dstID
+	return dstID, nil
 }
 
 // These helpers supply client-side inputs to metadata operations, using the
@@ -147,8 +185,9 @@ func (m *baseMeta) checkPermission(ctx Context) bool {
 
 // Replay replays a validated changelog entry. Calls must be serialized.
 func (r *Replayer) Replay(ctx Context, e *ChangeEntry) (err error) {
-	r.m.replay.Store(&replayState{Time: e.Time, Sid: e.Sid})
-	defer r.m.replay.Store(nil)
+	dst := r.dst.getBase()
+	dst.replay.Store(&replayState{Time: e.Time, Sid: e.Sid})
+	defer dst.replay.Store(nil)
 	var skipReason string
 	defer func() {
 		if err != nil {
@@ -160,7 +199,7 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) (err error) {
 			logger.Infof("Replayed changelog: version=%d operation=%s", e.Ver, e.Op)
 		}
 	}()
-	defer r.m.doFlushStats()
+	defer dst.doFlushStats()
 	switch e.Op {
 	case OpCreate:
 		return r.create(ctx, e)
@@ -185,7 +224,7 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) (err error) {
 		if err != nil {
 			return err
 		}
-		return changelogCall(e, r.m.en.doCleanupDetachedNode(ctx, inode))
+		return changelogCall(e, dst.en.doCleanupDetachedNode(ctx, inode))
 	case OpSetXattr:
 		return r.setXattr(ctx, e)
 	case OpRemoveXattr:
@@ -213,7 +252,11 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) (err error) {
 			skipReason = fmt.Sprintf("%s is updated by metadata operations", name)
 			return nil
 		}
-		if _, err := r.m.en.incrCounter(name, delta); err != nil {
+		if name == aclCounter {
+			skipReason = "ACL IDs are allocated by the destination"
+			return nil
+		}
+		if _, err := dst.en.incrCounter(name, delta); err != nil {
 			return fmt.Errorf("%s %s: %w", e.Op, name, err)
 		}
 		return nil
@@ -236,7 +279,7 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) (err error) {
 		if err != nil {
 			return err
 		}
-		_, err = r.m.en.doTouchAtime(ctx, inode, &Attr{}, e.Time)
+		_, err = dst.en.doTouchAtime(ctx, inode, &Attr{}, e.Time)
 		return err
 	case OpDelSustained:
 		sid, err := e.Uint64(0)
@@ -247,13 +290,12 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) (err error) {
 		if err != nil {
 			return err
 		}
-		m := r.m
-		if err := m.en.doDeleteSustainedInode(ctx, sid, inode); err != nil {
+		if err := dst.en.doDeleteSustainedInode(ctx, sid, inode); err != nil {
 			return err
 		}
-		m.Lock()
-		delete(m.removedFiles, inode)
-		m.Unlock()
+		dst.Lock()
+		delete(dst.removedFiles, inode)
+		dst.Unlock()
 		return nil
 
 	case OpNewSession, OpCleanSession:
@@ -334,7 +376,7 @@ func (r *Replayer) create(ctx Context, e *ChangeEntry) error {
 		return err
 	}
 	var inode Ino
-	state := r.m.replay.Load()
+	state := r.dst.getBase().replay.Load()
 	state.Inode = expected
 	state.Mode = &srcMode
 	updateParent, err := e.Bool(9)
@@ -344,8 +386,6 @@ func (r *Replayer) create(ctx Context, e *ChangeEntry) error {
 	state.Parents = map[Ino]bool{parent: updateParent}
 	ctx = WrapWithoutCancel(ctx, ctx.Pid(), uid, []uint32{gid})
 	ctx = ctx.WithValue(CtxKey("behavior"), e.Args[8])
-	// FIXME: CREATE does not record the ACL IDs inherited from the parent, so
-	// replay can allocate different ones.
 	if err := changelogCall(e, r.dst.Mknod(ctx, parent, name, typ, mode, cumask, rdev, path, &inode, nil)); err != nil {
 		return err
 	}
@@ -366,7 +406,7 @@ func (r *Replayer) link(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	r.m.replay.Load().Parents = map[Ino]bool{parent: updateParent}
+	r.dst.getBase().replay.Load().Parents = map[Ino]bool{parent: updateParent}
 	var attr Attr
 	if err := changelogCall(e, r.dst.Link(ctx, inode, parent, name, &attr)); err != nil {
 		return err
@@ -403,7 +443,7 @@ func (r *Replayer) unlink(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	state := r.m.replay.Load()
+	state := r.dst.getBase().replay.Load()
 	state.Trash = Ino(trash)
 	state.Parents = map[Ino]bool{parent: updateParent}
 	state.Opened = map[Ino]bool{inode: opened}
@@ -420,7 +460,7 @@ func (r *Replayer) rmdir(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	r.m.replay.Load().Trash = Ino(trash)
+	r.dst.getBase().replay.Load().Trash = Ino(trash)
 	// FIXME: RMDIR lacks the source's parent-update decision; KV retry-based
 	// skipping can leave parent timestamps and nlink different after replay.
 	return changelogCall(e, r.dst.Rmdir(ctx, parent, name, trash == 0))
@@ -453,7 +493,7 @@ func (r *Replayer) move(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	state := r.m.replay.Load()
+	state := r.dst.getBase().replay.Load()
 	state.Trash = trash
 	state.Opened = map[Ino]bool{overwritten: opened}
 	var inode Ino
@@ -496,7 +536,7 @@ func (r *Replayer) clone(ctx Context, e *ChangeEntry) error {
 	if ctx, err = changelogOwnerContext(ctx, e, 7, 8); err != nil {
 		return err
 	}
-	m := r.m
+	m := r.dst.getBase()
 	var attr Attr
 	if err := changelogCall(e, m.en.doCloneEntry(ctx, srcIno, parent, name, ino, &attr, cmode, cumask, top)); err != nil {
 		return err
@@ -544,9 +584,9 @@ func (r *Replayer) cloneBatch(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	state := r.m.replay.Load()
+	m := r.dst.getBase()
+	state := m.replay.Load()
 	state.Inodes = inodes
-	m := r.m
 	// The engines ignore srcParent; the changelog does not record it.
 	if err := changelogCall(e, m.BatchClone(ctx, 0, dstParent, entries, cmode, cumask, nil)); err != nil {
 		return err
@@ -584,7 +624,7 @@ func (r *Replayer) attach(ctx Context, e *ChangeEntry) error {
 	if err := changelogCall(e, r.dst.GetSummary(ctx, dstIno, &sum, true, false)); err != nil {
 		return err
 	}
-	m := r.m
+	m := r.dst.getBase()
 	if err := changelogCall(e, m.en.doAttachDirNode(ctx, parent, dstIno, name)); err != nil {
 		return err
 	}
@@ -651,10 +691,8 @@ func (r *Replayer) setAttr(ctx Context, e *ChangeEntry) error {
 	}
 	if set&(SetAttrMode|SetAttrUID|SetAttrGID) != 0 {
 		mode := attr.Mode
-		r.m.replay.Load().Mode = &mode
+		r.dst.getBase().replay.Load().Mode = &mode
 	}
-	// FIXME: SETATTR records an ACL ID but not its rule; replay needs to preserve
-	// the source's ACL mapping when allocating ACLs or changing modes.
 	return changelogCall(e, r.dst.SetAttr(ctx, inode, set, sgid, attr))
 }
 
@@ -725,7 +763,7 @@ func (r *Replayer) compactChunk(ctx Context, e *ChangeEntry) error {
 
 // The source has written the merged slice; replay only updates metadata.
 func (r *Replayer) applyCompactChunk(ctx Context, inode Ino, indx uint32, skipped, nslices int, pos uint32, id uint64, size uint32) syscall.Errno {
-	m := r.m
+	m := r.dst.getBase()
 	if skipped < 0 || nslices <= 0 {
 		return syscall.EINVAL
 	}
@@ -846,7 +884,7 @@ func (r *Replayer) unlinkBatch(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	state := r.m.replay.Load()
+	state := r.dst.getBase().replay.Load()
 	state.Trash = Ino(trash)
 	state.Parents = map[Ino]bool{parent: updateParent}
 	state.Opened = make(map[Ino]bool, len(names))
@@ -891,8 +929,7 @@ func (r *Replayer) setFacl(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	r.m.replay.Load().Mode = &mode
-	// FIXME: SETFACL lacks the assigned ACL ID, so replay can allocate a different one.
+	r.dst.getBase().replay.Load().Mode = &mode
 	return changelogCall(e, r.dst.SetFacl(ctx, ino, aclType, rule))
 }
 
@@ -911,12 +948,16 @@ func (r *Replayer) repairDir(ctx Context, e *ChangeEntry) error {
 	if err := changelogCall(e, r.dst.GetAttr(ctx, inode, &current)); err != nil {
 		return err
 	}
+	attr.AccessACL, err = r.mapACL(ctx, attr.AccessACL)
+	if err != nil {
+		return err
+	}
 	attr.Parent = current.Parent
 	attr.DefaultACL = current.DefaultACL
 	attr.Typ = TypeDirectory
 	attr.Length = 4 << 10
 	attr.Full = true
-	return changelogCall(e, r.m.en.doRepair(ctx, inode, attr, false))
+	return changelogCall(e, r.dst.getBase().en.doRepair(ctx, inode, attr, false))
 }
 
 func (r *Replayer) setQuota(ctx Context, e *ChangeEntry) error {
@@ -944,7 +985,7 @@ func (r *Replayer) setQuota(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	m := r.m
+	m := r.dst.getBase()
 	created, err := m.en.doSetQuota(ctx, qtype, key, &Quota{
 		MaxSpace:   maxSpace,
 		MaxInodes:  maxInodes,
@@ -969,7 +1010,7 @@ func (r *Replayer) delQuota(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	return r.m.en.doDelQuota(ctx, qtype, key)
+	return r.dst.getBase().en.doDelQuota(ctx, qtype, key)
 }
 
 func (r *Replayer) storeToken(ctx Context, e *ChangeEntry) error {
@@ -980,7 +1021,7 @@ func (r *Replayer) storeToken(ctx Context, e *ChangeEntry) error {
 	if id == 0 {
 		return fmt.Errorf("%s: token ID must not be zero", e.Op)
 	}
-	r.m.replay.Load().TokenId = id
+	r.dst.getBase().replay.Load().TokenId = id
 	actual, st := r.dst.StoreToken(ctx, []byte(e.Args[1]))
 	if err := changelogCall(e, st); err != nil {
 		return err

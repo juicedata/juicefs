@@ -152,6 +152,7 @@ type engine interface {
 
 	doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
+	doInsertACL(ctx Context, rule *aclAPI.Rule) (uint32, error)
 	cacheACLs(ctx Context) error
 
 	// kerberos delegation token
