@@ -2750,7 +2750,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return err
 		}
 
-		if parentDst != parentSrc && !parentSrc.IsTrash() && supdate {
+		supdate = parentSrc != parentDst && !parentSrc.IsTrash() && supdate
+		// dupdate is cleared if the destination parent is updated first.
+		updateDstParent := dupdate
+		if supdate {
 			if dupdate && dpn.Inode < spn.Inode {
 				if _n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || _n == 0 {
 					if err == nil {
@@ -2798,7 +2801,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			}
 		}
-		m.genLog(ctx, s, now, "MOVE(%d,%s,%d,%s,%d,%d,%d,%t):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, opened, se.Inode)
+		m.genLog(ctx, s, now, "MOVE(%d,%s,%d,%s,%d,%d,%d,%t,%t,%t):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, opened, supdate, updateDstParent, se.Inode)
 		return err
 	}, parentLocks...)
 	if err == nil && !exchange && dino > 0 {
