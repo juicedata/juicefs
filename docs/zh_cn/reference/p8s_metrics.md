@@ -20,7 +20,9 @@ sidebar_position: 4
 | 名称                            | 描述            | 单位 |
 |-------------------------------|---------------|----|
 | `juicefs_used_space`          | 总使用空间         | 字节 |
-| `juicefs_used_inodes`         | 总 inodes 数量   |    |
+| `juicefs_used_inodes`         | 已使用的 inodes 数量 |    |
+| `juicefs_total_space`         | 文件系统总容量       | 字节 |
+| `juicefs_total_inodes`        | 总 inodes 数量   |    |
 
 ## 操作系统 {#operating-system}
 
@@ -34,14 +36,51 @@ sidebar_position: 4
 
 ## 元数据引擎 {#metadata-engine}
 
+### 标签
+
+| 名称     | 描述                                  |
+| ----     | -----------                           |
+| `method` | 元数据引擎操作（例如 getattr、setattr、lookup） |
+
 ### 指标
 
 | 名称                                              | 描述           | 单位 |
 | ----                                              | -----------    | ---- |
 | `juicefs_transaction_durations_histogram_seconds` | 事务的延时分布 | 秒   |
 | `juicefs_transaction_restart`                     | 事务重启的次数 |      |
+| `juicefs_meta_ops_durations_histogram_seconds`    | 元数据引擎操作的延时分布 | 秒 |
+| `juicefs_meta_ops_total`                          | 元数据引擎操作的次数 |    |
+| `juicefs_meta_ops_duration_seconds`               | 元数据引擎操作的累计耗时 | 秒 |
+
+## 配额 {#quota}
+
+### 指标
+
+目录配额带有 `inode` 标签，用户配额带有 `uid` 标签，组配额带有 `gid` 标签。
+
+| 名称                                        | 描述                       | 单位 |
+|---------------------------------------------|---------------------------|------|
+| `juicefs_dir_quota_max_space_bytes`         | 目录配额的空间上限          | 字节 |
+| `juicefs_dir_quota_max_inodes`              | 目录配额的 inodes 上限     |      |
+| `juicefs_dir_quota_used_space_bytes`        | 目录配额已使用的空间        | 字节 |
+| `juicefs_dir_quota_used_inodes`             | 目录配额已使用的 inodes 数量 |     |
+| `juicefs_user_quota_max_space_bytes`        | 用户配额的空间上限          | 字节 |
+| `juicefs_user_quota_max_inodes`             | 用户配额的 inodes 上限     |      |
+| `juicefs_user_quota_used_space_bytes`       | 用户配额已使用的空间        | 字节 |
+| `juicefs_user_quota_used_inodes`            | 用户配额已使用的 inodes 数量 |     |
+| `juicefs_group_quota_max_space_bytes`       | 组配额的空间上限            | 字节 |
+| `juicefs_group_quota_max_inodes`            | 组配额的 inodes 上限       |      |
+| `juicefs_group_quota_used_space_bytes`      | 组配额已使用的空间          | 字节 |
+| `juicefs_group_quota_used_inodes`           | 组配额已使用的 inodes 数量  |     |
 
 ## FUSE {#fuse}
+
+### 标签
+
+| 名称     | 描述                            |
+| ----     | -----------                     |
+| `method` | FUSE 操作（例如 read、write、lookup） |
+| `errno`  | 失败操作的错误名（例如 EIO、ENOENT） |
 
 ### 指标
 
@@ -50,6 +89,9 @@ sidebar_position: 4
 | `juicefs_fuse_read_size_bytes`                 | 读请求的大小分布     | 字节 |
 | `juicefs_fuse_written_size_bytes`              | 写请求的大小分布     | 字节 |
 | `juicefs_fuse_ops_durations_histogram_seconds` | 所有请求的延时分布   | 秒   |
+| `juicefs_fuse_ops_total`                       | 操作的次数           |      |
+| `juicefs_fuse_ops_durations_seconds`           | 操作的累计耗时       | 秒   |
+| `juicefs_fuse_ops_io_errors`                   | IO 错误的次数        |      |
 | `juicefs_fuse_open_handlers`                   | 打开的文件和目录数量 |      |
 
 ## SDK {#sdk}
@@ -60,7 +102,7 @@ sidebar_position: 4
 | ----                                          | -----------        | ---- |
 | `juicefs_sdk_read_size_bytes`                 | 读请求的大小分布   | 字节 |
 | `juicefs_sdk_written_size_bytes`              | 写请求的大小分布   | 字节 |
-| `juicefs_sdk_ops_durations_histogram_seconds` | 所有请求的延时分布 | 秒   |
+| `juicefs_sdk_ops_durations_histogram_seconds` | SDK 内部操作的延时分布（一次请求可能产生多次操作） | 秒   |
 
 ## 缓存 {#cache}
 
@@ -81,16 +123,20 @@ sidebar_position: 4
 | `juicefs_blockcache_read_hist_seconds`  | 读缓存块的延时分布   | 秒  |
 | `juicefs_blockcache_write_hist_seconds` | 写缓存块的延时分布   | 秒  |
 | `juicefs_staging_blocks`                | 暂存路径中的块数    |    |
-| `juicefs_staging_block_bytes`           | 暂存路径中块的总字节数 | 秒  |
+| `juicefs_staging_block_bytes`           | 暂存路径中块的总字节数 | 字节 |
 | `juicefs_staging_block_delay_seconds`   | 暂存块延迟的总秒数 | 秒  |
+| `juicefs_staging_block_errors`          | 暂存块出错的次数 |    |
+| `juicefs_staging_write_bytes`           | 写入暂存路径的总字节数 | 字节 |
+| `juicefs_staging_writing_blocks`        | 正在写入暂存路径的块数 |    |
 
 ## 对象存储 {#object-storage}
 
 ### 标签
 
-| 名称     | 描述                                              |
-| ----     | -----------                                       |
-| `method` | 请求对象存储的方法（例如 GET、PUT、HEAD、DELETE） |
+| 名称            | 描述                                              |
+| ----            | -----------                                       |
+| `method`        | 请求对象存储的方法（例如 GET、PUT、HEAD、DELETE） |
+| `storage_class` | 请求对象所属的存储类型（配置了存储类型时存在）     |
 
 ### 指标
 
@@ -99,6 +145,7 @@ sidebar_position: 4
 | `juicefs_object_request_durations_histogram_seconds` | 请求对象存储的延时分布   | 秒   |
 | `juicefs_object_request_errors`                      | 请求失败的总次数         |      |
 | `juicefs_object_request_data_bytes`                  | 请求对象存储的总数据大小 | 字节 |
+| `juicefs_object_request_uploading`                   | 正在进行中的上传请求数   |      |
 
 ## 内部特性 {#internal}
 
@@ -107,7 +154,11 @@ sidebar_position: 4
 | 名称                                     | 描述               | 单位 |
 |----------------------------------------| -----------        | ---- |
 | `juicefs_compact_size_histogram_bytes` | 合并数据的大小分布 | 字节 |
-| `juicefs_used_read_buffer_size_bytes`  | 当前用于读取的缓冲区的大小 |    |
+| `juicefs_used_read_buffer_size_bytes`  | 当前用于读取的缓冲区的大小 | 字节 |
+| `juicefs_used_buffer_size_bytes`       | 当前用于写入的缓冲区的大小 | 字节 |
+| `juicefs_store_cache_size_bytes`       | 内存中的数据缓存大小 | 字节 |
+| `juicefs_last_successful_backup`       | 上次成功备份元数据的时间戳（仅在启用 `--backup-meta` 时导出） | 秒 |
+| `juicefs_last_backup_duration`         | 上次备份元数据的耗时（仅在启用 `--backup-meta` 时导出） | 秒 |
 | `juicefs_bgjob_duration_seconds` | 后台清理任务耗时（标签：`job`、`status`） | 秒 |
 | `juicefs_bgjob_deletions_total` | 后台任务执行的删除总数（标签：`job`） | |
 
@@ -117,7 +168,7 @@ sidebar_position: 4
 
 | 名称 | 描述 | 单位 |
 |-|-|-|
-| `subdir_info` | 当前挂载的子目录配置信息（标签：`subdir`，值恒为 `1`） | |
+| `juicefs_subdir_info` | 当前挂载的子目录配置信息（标签：`subdir`，值恒为 `1`） | |
 
 `subdir` 标签包含挂载的子目录路径，空字符串表示根挂载。
 
@@ -133,7 +184,13 @@ sidebar_position: 4
 | `juicefs_sync_copied` | 已经同步过的对象数量 | |
 | `juicefs_sync_copied_bytes` | 已经同步过的数据总大小 | 字节 |
 | `juicefs_sync_skipped` | 同步时被跳过的对象数量 | |
+| `juicefs_sync_skipped_bytes` | 同步时被跳过的数据总大小 | 字节 |
+| `juicefs_sync_excluded` | 同步时被规则排除的对象数量 | |
+| `juicefs_sync_excluded_bytes` | 同步时被规则排除的数据总大小 | 字节 |
+| `juicefs_sync_extra` | 目标端多出的对象数量 | |
+| `juicefs_sync_extra_bytes` | 目标端多出的数据总大小 | 字节 |
 | `juicefs_sync_failed` | 同步时失败的对象数量 | |
 | `juicefs_sync_deleted` | 同步时被删除的对象数量 | |
 | `juicefs_sync_checked` | 同步时校验过 checksum 的对象数量 | |
 | `juicefs_sync_checked_bytes` | 同步时校验过 checksum 的数据总大小 | 字节 |
+| `juicefs_sync_listed_prefix` | 同步时列出的前缀数量 | |

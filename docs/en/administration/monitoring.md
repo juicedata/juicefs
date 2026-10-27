@@ -83,6 +83,25 @@ Here's what the official JuiceFS Grafana dashboard might look like:
 
 ![Grafana Monitoring Dashboard](../images/grafana_dashboard.png)
 
+For other deployment forms, the repository also provides dashboard templates that can be imported as JSON files:
+
+- [S3 gateway](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_gateway.json): tracks the file system SDK layer beneath the S3 API (`juicefs_sdk_*`; one S3 request may issue many SDK operations) in addition to the shared object storage, cache and metadata panels.
+- [`juicefs sync`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_sync.json): tracks the progress and throughput of a running `juicefs sync` job (requires `--metrics` to be configured).
+
+:::note
+These dashboards identify each client process by the Prometheus `instance` label (the scrape target address). If two different processes share the same `instance` value — for example pods with the same IP from different clusters scraped by one Prometheus — their series are merged and double-counted. In that case make `instance` globally unique by relabeling, e.g. `cluster-a/10.0.0.5:9567`:
+
+```yaml
+relabel_configs:
+  - target_label: cluster
+    replacement: cluster-a
+  - source_labels: [cluster, __address__]
+    separator: /
+    target_label: instance
+```
+
+:::
+
 ## Collecting metrics data {#collect-metrics}
 
 For different types of JuiceFS Client, metrics data is handled slightly differently.
