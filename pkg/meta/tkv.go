@@ -2388,6 +2388,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			*tAttr = tattr
 		}
 
+		supdate = parentSrc != parentDst && !parentSrc.IsTrash() && supdate
 		if exchange { // dino > 0
 			tx.set(m.entryKey(parentSrc, nameSrc), dbuf)
 			tx.set(m.inodeKey(dino), m.marshal(&tattr))
@@ -2444,7 +2445,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 		}
 		if parentDst != parentSrc {
-			if !parentSrc.IsTrash() && supdate {
+			if supdate {
 				tx.set(m.inodeKey(parentSrc), m.marshal(&sattr))
 			}
 			if iattr.Parent == 0 {
@@ -2457,7 +2458,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if dupdate {
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		}
-		m.genLog(tx, now, "MOVE(%d,%s,%d,%s,%d,%d,%d,%t):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, opened, ino)
+		m.genLog(tx, now, "MOVE(%d,%s,%d,%s,%d,%d,%d,%t,%t,%t):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, opened, supdate, dupdate, ino)
 		return nil
 	}, parentLocks...)
 

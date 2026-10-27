@@ -2696,6 +2696,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			*tAttr = tattr
 		}
 
+		supdate = parentSrc != parentDst && !parentSrc.IsTrash() && supdate
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			if exchange { // dbuf, tattr are valid
 				pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
@@ -2758,7 +2759,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				}
 			}
 			if parentDst != parentSrc {
-				if !parentSrc.IsTrash() && supdate {
+				if supdate {
 					pipe.Set(ctx, m.inodeKey(parentSrc), m.marshal(&sattr), 0)
 				}
 				if iattr.Parent == 0 {
@@ -2771,7 +2772,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			if dupdate {
 				pipe.Set(ctx, m.inodeKey(parentDst), m.marshal(&dattr), 0)
 			}
-			m.genLog(ctx, pipe, now, "MOVE(%d,%s,%d,%s,%d,%d,%d,%t):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, opened, ino)
+			m.genLog(ctx, pipe, now, "MOVE(%d,%s,%d,%s,%d,%d,%d,%t,%t,%t):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, opened, supdate, dupdate, ino)
 			return nil
 		})
 		return err
