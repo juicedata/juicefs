@@ -2675,12 +2675,12 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				sn.Parent = parentDst
 			}
 		}
-		if supdate || time.Duration(now-spn.getMtime()) >= m.conf.SkipDirMtime {
+		if supdate = m.shouldUpdateParent(parentSrc, supdate || time.Duration(now-spn.getMtime()) >= m.conf.SkipDirMtime); supdate {
 			spn.setMtime(now)
 			spn.setCtime(now)
 			supdate = true
 		}
-		if dupdate || time.Duration(now-dpn.getMtime()) >= m.conf.SkipDirMtime {
+		if dupdate = m.shouldUpdateParent(parentDst, dupdate || time.Duration(now-dpn.getMtime()) >= m.conf.SkipDirMtime); dupdate {
 			dpn.setMtime(now)
 			dpn.setCtime(now)
 			dupdate = true

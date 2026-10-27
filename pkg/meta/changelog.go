@@ -84,7 +84,7 @@ var changelogOps = map[string]changelogOpSpec{
 	OpUnlink:               {5, 1},
 	OpUnlinkBatch:          {variadic, variadic},
 	OpRmdir:                {3, 1},
-	OpMove:                 {8, 1},
+	OpMove:                 {10, 1},
 	OpLink:                 {4, 1},
 	OpSetAttr:              {15, 0},
 	OpTruncate:             {4, 0},

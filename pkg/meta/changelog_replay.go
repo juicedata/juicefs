@@ -493,11 +493,19 @@ func (r *Replayer) move(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
+	updateSrc, err := e.Bool(8)
+	if err != nil {
+		return err
+	}
+	updateDst, err := e.Bool(9)
+	if err != nil {
+		return err
+	}
 	state := r.dst.getBase().replay.Load()
 	state.Trash = trash
 	state.Opened = map[Ino]bool{overwritten: opened}
+	state.Parents = map[Ino]bool{parentSrc: updateSrc, parentDst: updateDst}
 	var inode Ino
-	// FIXME: MOVE lacks parent-update decisions; parent timestamps can diverge.
 	if err := changelogCall(e, r.dst.Rename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, &inode, nil)); err != nil {
 		return err
 	}
