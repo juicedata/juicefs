@@ -213,6 +213,7 @@ func testMeta(t *testing.T, m Meta) {
 	testClone(t, m)
 	testCleanupDetachedNodes(t, m)
 	testBatchClone(t, m)
+	testCloneDirStats(t, m)
 	testACL(t, m)
 	testKerberosToken(t, m)
 	base.conf.ReadOnly = true
@@ -4470,11 +4471,51 @@ func testBatchClone(t *testing.T, m Meta) {
 	// An interrupted clone leaves the copied tree detached from its parent.
 	count = 0
 	var detached Ino
-	if st := m.getBase().cloneEntry(ctx, srcDir, quotaDst, "d", &detached, 0, 022, &count, true, make(chan struct{}, 4)); st != 0 {
+	if st := m.getBase().cloneEntry(ctx, srcDir, quotaDst, "d", &detached, 0, 022, &count, true, make(chan struct{}, 4), nil); st != 0 {
 		t.Fatalf("clone entry: %s", st)
 	}
 	m.CleanupDetachedNodesBefore(ctx, time.Now().Add(time.Minute), nil)
 	checkUsage("after removing the detached tree", 0, 0)
+
+	// A rolled-back batch must not report entries for public accounting.
+	if st := m.Create(ctx, quotaDst, "taken", 0644, 022, 0, nil, nil); st != 0 {
+		t.Fatalf("create taken: %s", st)
+	}
+	checkUsage("before the rolled-back batch", align4K(0), 1)
+	before, st := m.getBase().en.doGetDirStat(ctx, quotaDst, false)
+	if st != 0 {
+		t.Fatalf("get dir stat: %s", st)
+	}
+	batch := []*Entry{
+		{Inode: nonDirEntries[0].Inode, Name: []byte("rolled-back"), Attr: nonDirEntries[0].Attr},
+		{Inode: nonDirEntries[0].Inode, Name: []byte("taken"), Attr: nonDirEntries[0].Attr},
+	}
+	result := batchCloneResult{length: 1, space: 1, inodes: 1}
+	if st := m.getBase().en.doBatchClone(ctx, srcDir, quotaDst, batch, 0, 022, &result); st != syscall.EEXIST {
+		t.Fatalf("batch clone conflict: %s", st)
+	}
+	if result.length != 0 || result.space != 0 || result.inodes != 0 || len(result.deltas) != 0 {
+		t.Fatalf("rolled-back batch reported committed entries: %+v", result)
+	}
+	count = 0
+	if st := m.getBase().BatchClone(ctx, srcDir, quotaDst, batch, 0, 022, &count); st != syscall.EEXIST {
+		t.Fatalf("public batch clone conflict: %s", st)
+	}
+	if count != 0 {
+		t.Fatalf("rolled-back batch count: %d", count)
+	}
+	if st := m.Lookup(ctx, quotaDst, "rolled-back", &cloned, &attr, false); st != syscall.ENOENT {
+		t.Fatalf("rolled-back entry exists: %s", st)
+	}
+	after, st := m.getBase().en.doGetDirStat(ctx, quotaDst, false)
+	if st != 0 || before == nil || after == nil || *after != *before {
+		t.Fatalf("rolled-back batch changed dir stats: before=%+v after=%+v status=%s", before, after, st)
+	}
+	checkUsage("after the rolled-back batch", align4K(0), 1)
+	if st := m.Unlink(ctx, quotaDst, "taken", true); st != 0 {
+		t.Fatalf("unlink taken: %s", st)
+	}
+	checkUsage("after rollback cleanup", 0, 0)
 	if st := m.Remove(ctx, RootInode, "batchQuotaDst", true, RmrDefaultThreads, nil); st != 0 {
 		t.Fatalf("remove batchQuotaDst: %s", st)
 	}
@@ -4767,6 +4808,197 @@ func testClone(t *testing.T, m Meta) {
 	}
 }
 
+// newCloneTestClient shares the metadata connection, but has independent client caches
+// and pending statistics. It must not close the shared engine on cleanup.
+func newCloneTestClient(t *testing.T, m Meta) Meta {
+	t.Helper()
+	conf := *m.getBase().conf
+	conf.OpenCache = 0
+	base := newBaseMeta(m.getBase().addr, &conf)
+	base.setFormat(m.getBase().getFormat().Clone())
+	t.Cleanup(base.of.close)
+	var client Meta
+	switch m := m.(type) {
+	case *redisMeta:
+		copy := *m
+		copy.baseMeta = base
+		base.en = &copy
+		client = &copy
+	case *dbMeta:
+		copy := &dbMeta{baseMeta: base, db: m.db, spool: m.spool, statement: m.statement, tablePrefix: m.tablePrefix}
+		base.en = copy
+		client = copy
+	case *kvMeta:
+		copy := *m
+		copy.baseMeta = base
+		base.en = &copy
+		client = &copy
+	default:
+		t.Fatalf("unsupported clone test client: %T", m)
+	}
+	base.loadQuotas()
+	return client
+}
+
+type cloneAttrChangeEngine struct {
+	engine
+	beforeClone func()
+}
+
+func (e *cloneAttrChangeEngine) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, attr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
+	e.beforeClone()
+	return e.engine.doCloneEntry(ctx, srcIno, parent, name, ino, attr, cmode, cumask, top)
+}
+
+func testCloneDirStats(t *testing.T, m Meta) {
+	ctx := Background()
+	must := func(st syscall.Errno) {
+		t.Helper()
+		if st != 0 {
+			t.Fatal(st)
+		}
+	}
+	period := m.getBase().conf.DirStatFlushPeriod
+	m.getBase().conf.DirStatFlushPeriod = time.Hour
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer func() {
+		_ = m.CloseSession()
+		m.getBase().conf.DirStatFlushPeriod = period
+	}()
+	var src, dst, sub, empty, file, other, zero, sym Ino
+	var attr Attr
+	must(m.Mkdir(ctx, RootInode, "cloneStatSrc", 0755, 022, 0, &src, &attr))
+	must(m.Mkdir(ctx, RootInode, "cloneStatDst", 0755, 022, 0, &dst, &attr))
+	must(m.Mkdir(ctx, src, "sub", 0755, 022, 0, &sub, &attr))
+	must(m.Mkdir(ctx, src, "empty", 0755, 022, 0, &empty, &attr))
+	must(m.Create(ctx, src, "file", 0644, 022, 0, &file, &attr))
+	must(m.Truncate(ctx, file, 0, 1<<20, &attr, false))
+	must(m.Create(ctx, sub, "other", 0644, 022, 0, &other, &attr))
+	must(m.Truncate(ctx, other, 0, 4097, &attr, false))
+	must(m.Link(ctx, other, src, "hardlink", &attr))
+	must(m.Create(ctx, src, "zero", 0644, 022, 0, &zero, &attr))
+	must(m.Symlink(ctx, src, "symlink", "file", &sym, &attr))
+	m.FlushSession()
+	must(m.Truncate(ctx, file, 0, 2<<20, &attr, false))
+	m.getBase().dirStatsLock.RLock()
+	pending := m.getBase().dirStats[src]
+	m.getBase().dirStatsLock.RUnlock()
+	if pending.length != 1<<20 {
+		t.Fatalf("expected pending source length, got %+v", pending)
+	}
+
+	cloner := newCloneTestClient(t, m)
+	base := cloner.getBase()
+	checkTree := func(root Ino) {
+		t.Helper()
+		dirs := []Ino{root}
+		for len(dirs) > 0 {
+			ino := dirs[len(dirs)-1]
+			dirs = dirs[:len(dirs)-1]
+			got, st := base.en.doGetDirStat(ctx, ino, false)
+			must(st)
+			want, st := base.calcDirStat(ctx, ino)
+			must(st)
+			if got == nil || *got != *want {
+				t.Fatalf("clone inode %d raw stat=%+v, actual=%+v", ino, got, want)
+			}
+			var entries []*Entry
+			must(base.en.doReaddir(ctx, ino, 1, &entries, -1))
+			for _, e := range entries {
+				if e.Attr.Typ == TypeDirectory {
+					dirs = append(dirs, e.Inode)
+				}
+			}
+		}
+		var fast, strict Summary
+		must(cloner.GetSummary(ctx, root, &fast, true, false))
+		must(cloner.GetSummary(ctx, root, &strict, true, true))
+		if fast != strict {
+			t.Fatalf("clone summary: fast=%+v, strict=%+v", fast, strict)
+		}
+	}
+	for _, name := range []string{"pending", "corrupt"} {
+		if name == "corrupt" {
+			// A clone must not inherit even an already-persisted source error.
+			if err := m.getBase().en.doUpdateDirStat(ctx, map[Ino]dirStat{src: {length: 123, space: 4096, inodes: 2}}); err != nil {
+				t.Fatalf("change source stats: %s", err)
+			}
+		}
+		var count, total uint64
+		must(cloner.Clone(ctx, RootInode, src, dst, name, 0, 022, 4, &count, &total))
+		var clone Ino
+		must(cloner.Lookup(ctx, dst, name, &clone, &attr, false))
+		checkTree(clone)
+		base.doFlushDirStat()
+		got, st := base.en.doGetDirStat(ctx, dst, false)
+		must(st)
+		if got == nil || *got != (dirStat{space: 4096, inodes: 1}) {
+			t.Fatalf("parent of directory clone: %+v", got)
+		}
+		must(cloner.Remove(ctx, dst, name, true, RmrDefaultThreads, nil))
+		base.doFlushDirStat()
+		got, st = base.en.doGetDirStat(ctx, dst, false)
+		must(st)
+		if got == nil || *got != (dirStat{}) {
+			t.Fatalf("empty parent after removing clone: %+v", got)
+		}
+		m.getBase().dirStatsLock.RLock()
+		gotPending := m.getBase().dirStats[src]
+		m.getBase().dirStatsLock.RUnlock()
+		if gotPending != pending {
+			t.Fatalf("clone changed source pending stats: before=%+v after=%+v", pending, gotPending)
+		}
+	}
+
+	// The top-level parent must use the committed clone attribute, even when the
+	// source changes after Clone reads its initial attribute and summary.
+	must(m.Truncate(ctx, file, 0, 1<<20, &attr, false))
+	realEngine := base.en
+	base.en = &cloneAttrChangeEngine{engine: realEngine, beforeClone: func() {
+		must(m.Truncate(ctx, file, 0, 3<<20, &attr, false))
+	}}
+	var count, total uint64
+	st := cloner.Clone(ctx, src, file, dst, "file", 0, 022, 1, &count, &total)
+	base.en = realEngine
+	must(st)
+	base.doFlushDirStat()
+	got, st := base.en.doGetDirStat(ctx, dst, false)
+	must(st)
+	if got == nil || *got != (dirStat{length: 3 << 20, space: 3 << 20, inodes: 1}) {
+		t.Fatalf("parent of changed file clone: %+v", got)
+	}
+	must(cloner.Remove(ctx, dst, "file", true, RmrDefaultThreads, nil))
+	must(cloner.Clone(ctx, src, sym, dst, "symlink", 0, 022, 1, &count, &total))
+	base.doFlushDirStat()
+	got, st = base.en.doGetDirStat(ctx, dst, false)
+	must(st)
+	if got == nil || *got != (dirStat{space: 4096, inodes: 1}) {
+		t.Fatalf("parent of symlink clone: %+v", got)
+	}
+	must(cloner.Remove(ctx, dst, "symlink", true, RmrDefaultThreads, nil))
+	base.FlushSession()
+
+	format := base.getFormat()
+	disabled := format.Clone()
+	disabled.DirStats = false
+	base.setFormat(disabled)
+	must(cloner.Clone(ctx, RootInode, src, dst, "disabled", 0, 022, 4, &count, &total))
+	var clone Ino
+	must(cloner.Lookup(ctx, dst, "disabled", &clone, &attr, false))
+	var fast, strict Summary
+	must(cloner.GetSummary(ctx, clone, &fast, true, false))
+	must(cloner.GetSummary(ctx, clone, &strict, true, true))
+	if fast != strict {
+		t.Fatalf("disabled dir stats summary: fast=%+v, strict=%+v", fast, strict)
+	}
+	must(cloner.Remove(ctx, dst, "disabled", true, RmrDefaultThreads, nil))
+	base.setFormat(format)
+	must(m.Remove(ctx, RootInode, "cloneStatDst", true, RmrDefaultThreads, nil))
+	must(m.Remove(ctx, RootInode, "cloneStatSrc", true, RmrDefaultThreads, nil))
+}
+
 func testCleanupDetachedNodes(t *testing.T, m Meta) {
 	ctx := Background()
 	var srcDir, srcSub, srcFile Ino
@@ -4790,7 +5022,7 @@ func testCleanupDetachedNodes(t *testing.T, m Meta) {
 	// but the top directory is never attached to its parent
 	var dstIno Ino
 	var count uint64
-	if eno := m.getBase().cloneEntry(ctx, srcDir, RootInode, "detachedDst", &dstIno, CLONE_MODE_PRESERVE_ATTR, 022, &count, true, make(chan struct{}, 4)); eno != 0 {
+	if eno := m.getBase().cloneEntry(ctx, srcDir, RootInode, "detachedDst", &dstIno, CLONE_MODE_PRESERVE_ATTR, 022, &count, true, make(chan struct{}, 4), nil); eno != 0 {
 		t.Fatalf("clone entry: %s", eno)
 	}
 	var dstSub, dstFile Ino

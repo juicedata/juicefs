@@ -5398,10 +5398,23 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 		if attr.Typ == TypeFile && attr.Nlink > 1 {
 			attr.Nlink = 1
 		}
-		srcXattr, err := tx.HGetAll(ctx, m.xattrKey(srcIno)).Result()
-		if err != nil {
+		readPipe := tx.Pipeline()
+		xattrCmd := readPipe.HGetAll(ctx, m.xattrKey(srcIno))
+		var statChecks []*redis.BoolCmd
+		if attr.Typ == TypeDirectory && !top && m.getFormat().DirStats {
+			for _, key := range []string{m.dirDataLengthKey(), m.dirUsedSpaceKey(), m.dirUsedInodesKey()} {
+				statChecks = append(statChecks, readPipe.HExists(ctx, key, parent.String()))
+			}
+		}
+		if _, err := readPipe.Exec(ctx); err != nil {
 			return err
 		}
+		for _, cmd := range statChecks {
+			if !cmd.Val() {
+				return syscall.EIO
+			}
+		}
+		srcXattr := xattrCmd.Val()
 
 		var pattr Attr
 		if top {
@@ -5448,12 +5461,15 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 
 			switch attr.Typ {
 			case TypeDirectory:
-				sfield := srcIno.String()
-				field := ino.String()
-				if v, err := tx.HGet(ctx, m.dirUsedInodesKey(), sfield).Result(); err == nil {
-					p.HSet(ctx, m.dirUsedInodesKey(), field, v)
-					p.HSet(ctx, m.dirDataLengthKey(), field, tx.HGet(ctx, m.dirDataLengthKey(), sfield).Val())
-					p.HSet(ctx, m.dirUsedSpaceKey(), field, tx.HGet(ctx, m.dirUsedSpaceKey(), sfield).Val())
+				if m.getFormat().DirStats {
+					field := ino.String()
+					p.HSet(ctx, m.dirDataLengthKey(), field, 0)
+					p.HSet(ctx, m.dirUsedSpaceKey(), field, 0)
+					p.HSet(ctx, m.dirUsedInodesKey(), field, 0)
+					if !top {
+						p.HIncrBy(ctx, m.dirUsedSpaceKey(), parent.String(), align4K(0))
+						p.HIncrBy(ctx, m.dirUsedInodesKey(), parent.String(), 1)
+					}
 				}
 			case TypeFile:
 				// copy chunks
@@ -5520,11 +5536,11 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 		chunks []chunkData
 	}
 
-	if len(entries) == 0 {
-		return 0
-	}
 	if result != nil {
 		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
+	}
+	if len(entries) == 0 {
+		return 0
 	}
 
 	const batchSize = 1000
@@ -5591,12 +5607,23 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 			}
 
 			existsPipe := tx.Pipeline()
+			var statChecks []*redis.BoolCmd
+			if m.getFormat().DirStats {
+				for _, key := range []string{m.dirDataLengthKey(), m.dirUsedSpaceKey(), m.dirUsedInodesKey()} {
+					statChecks = append(statChecks, existsPipe.HExists(ctx, key, dstParent.String()))
+				}
+			}
 			existsCmds := make([]*redis.BoolCmd, 0, len(infos))
 			for _, info := range infos {
 				existsCmds = append(existsCmds, existsPipe.HExists(ctx, m.entryKey(dstParent), string(info.entry.Name)))
 			}
 			if _, err := existsPipe.Exec(ctx); err != nil {
 				return err
+			}
+			for _, cmd := range statChecks {
+				if !cmd.Val() {
+					return syscall.EIO
+				}
 			}
 			for _, cmd := range existsCmds {
 				exist, err := cmd.Result()
@@ -5787,6 +5814,12 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 					case TypeSymlink:
 						p.Set(ctx, m.symKey(info.dstIno), sd.sym, 0)
 					}
+				}
+				if m.getFormat().DirStats && batchResult.inodes != 0 {
+					field := dstParent.String()
+					p.HIncrBy(ctx, m.dirDataLengthKey(), field, batchResult.length)
+					p.HIncrBy(ctx, m.dirUsedSpaceKey(), field, batchResult.space)
+					p.HIncrBy(ctx, m.dirUsedInodesKey(), field, batchResult.inodes)
 				}
 				if batchResult.space != 0 {
 					p.IncrBy(ctx, m.usedSpaceKey(), batchResult.space)

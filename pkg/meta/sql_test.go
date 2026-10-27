@@ -207,6 +207,117 @@ func (l *commitOnSQLiteBusyLogger) AfterSQL(ctx xormlog.LogContext) {
 	}
 }
 
+type canceledBatchCloneEngine struct{ engine }
+
+func (e *canceledBatchCloneEngine) doBatchClone(ctx Context, srcParent, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno {
+	if st := e.engine.doBatchClone(ctx, srcParent, dstParent, entries, cmode, cumask, result); st != 0 {
+		return st
+	}
+	ctx.Cancel()
+	return syscall.EINTR
+}
+
+func TestSQLiteBatchCloneCanceled(t *testing.T) {
+	raw, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "clone-canceled.db"), testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := raw.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatal(err)
+	}
+	ctx := Background()
+	must := func(st syscall.Errno) {
+		t.Helper()
+		if st != 0 {
+			t.Fatal(st)
+		}
+	}
+	var parent, dst, file Ino
+	var attr Attr
+	must(m.Mkdir(ctx, RootInode, "quota", 0755, 0, 0, &parent, nil))
+	must(m.Mkdir(ctx, parent, "dst", 0755, 0, 0, &dst, nil))
+	must(m.Create(ctx, RootInode, "file", 0644, 0, 0, &file, &attr))
+	must(m.Truncate(ctx, file, 0, 4097, &attr, false))
+	quota := &Quota{MaxSpace: 1 << 30, MaxInodes: 100}
+	m.dirQuotas[uint64(parent)] = quota
+	m.dirParents = make(map[Ino]Ino)
+	m.en = &canceledBatchCloneEngine{engine: m}
+	var count uint64
+	entries := []*Entry{{Inode: file, Name: []byte("copy"), Attr: &attr}}
+	if st := m.BatchClone(ctx, RootInode, dst, entries, 0, 0, &count); st != syscall.EINTR {
+		t.Fatalf("clone after cancellation: got %s, want EINTR", st)
+	}
+	if count != 1 || !ctx.Canceled() {
+		t.Fatalf("committed count=%d, canceled=%v", count, ctx.Canceled())
+	}
+	if got := quota.snap(); got.newSpace != 8192 || got.newInodes != 1 {
+		t.Fatalf("committed quota after cancellation: %+v", got)
+	}
+	must(m.emptyDir(Background(), dst, true, nil, make(chan int, 1)))
+	if got := quota.snap(); got.newSpace != 0 || got.newInodes != 0 {
+		t.Fatalf("quota after cleanup: %+v", got)
+	}
+}
+
+func TestSQLiteBatchCloneRetry(t *testing.T) {
+	raw, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "clone-retry.db")+"?_timeout=1", testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := raw.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatal(err)
+	}
+	ctx := Background()
+	var src, dst, file Ino
+	var attr Attr
+	if st := m.Mkdir(ctx, RootInode, "src", 0755, 0, 0, &src, nil); st != 0 {
+		t.Fatal(st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "dst", 0755, 0, 0, &dst, nil); st != 0 {
+		t.Fatal(st)
+	}
+	if st := m.Create(ctx, src, "file", 0644, 0, 0, &file, &attr); st != 0 {
+		t.Fatal(st)
+	}
+	if st := m.Truncate(ctx, file, 0, 4097, &attr, false); st != 0 {
+		t.Fatal(st)
+	}
+
+	writer := m.db.NewSession()
+	defer writer.Close()
+	if err := writer.Begin(); err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Rollback()
+	if _, err := writer.Insert(&xattr{Inode: file, Name: "retry", Value: []byte("committed")}); err != nil {
+		t.Fatal(err)
+	}
+	retryLogger := &commitOnSQLiteBusyLogger{ContextLogger: m.db.Logger(), commit: writer.Commit}
+	m.db.SetLogger(retryLogger)
+	m.db.ShowSQL(true)
+
+	var result batchCloneResult
+	entries := []*Entry{{Inode: file, Name: []byte("copy"), Attr: &attr}}
+	if st := m.doBatchClone(ctx, src, dst, entries, 0, 0, &result); st != 0 {
+		t.Fatalf("clone after retry: %s", st)
+	}
+	if !retryLogger.committed || retryLogger.commitErr != nil {
+		t.Fatalf("concurrent writer: committed=%v, error=%v", retryLogger.committed, retryLogger.commitErr)
+	}
+	want := dirStat{4097, 8192, 1}
+	if got := (dirStat{result.length, result.space, result.inodes}); got != want {
+		t.Fatalf("committed result: got %+v, want %+v", got, want)
+	}
+	stat, st := m.doGetDirStat(ctx, dst, false)
+	if st != 0 || stat == nil || *stat != want {
+		t.Fatalf("cloned dir stat: got %+v (%s), want %+v", stat, st, want)
+	}
+}
+
 func TestSQLiteBatchUnlinkRetryDiscardsFailedAttemptDeletes(t *testing.T) {
 	metaClient, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-batch-unlink-retry.db")+"?_timeout=1", testConfig())
 	if err != nil {

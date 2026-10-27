@@ -121,6 +121,98 @@ func TestKVTxnOnCommit(t *testing.T) {
 	}
 }
 
+func TestKVBatchCloneTransactionRollback(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		retry    bool
+		internal bool
+	}{{"retry", true, false}, {"driver_retry", true, true}, {"abort", false, false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := newKVMeta("badger", t.TempDir(), testConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := raw.(*kvMeta)
+			t.Cleanup(func() { _ = m.Shutdown() })
+			if err := m.Init(testFormat(), true); err != nil {
+				t.Fatal(err)
+			}
+			ctx := Background()
+			var src, dst, file, sym Ino
+			if st := m.Mkdir(ctx, RootInode, "src", 0755, 0, 0, &src, nil); st != 0 {
+				t.Fatal(st)
+			}
+			if st := m.Mkdir(ctx, RootInode, "dst", 0755, 0, 0, &dst, nil); st != 0 {
+				t.Fatal(st)
+			}
+			var attr Attr
+			if st := m.Create(ctx, src, "file", 0644, 0, 0, &file, &attr); st != 0 {
+				t.Fatal(st)
+			}
+			const fileLength = uint64(4097)
+			if st := m.Truncate(ctx, file, 0, fileLength, &attr, false); st != 0 {
+				t.Fatal(st)
+			}
+			if st := m.Symlink(ctx, src, "sym", "target", &sym, nil); st != 0 {
+				t.Fatal(st)
+			}
+			entries := []*Entry{{Inode: file, Name: []byte("file")}, {Inode: sym, Name: []byte("sym")}}
+			failure := error(syscall.EIO)
+			if tc.retry {
+				failure = badger.ErrConflict
+			}
+			client := &aclRollbackClient{tkvClient: m.client, childKey: m.entryKey(dst, "file"), err: failure, retryInternally: tc.internal}
+			want := dirStat{int64(fileLength), align4K(fileLength) + align4K(0), 2}
+			var result batchCloneResult
+			var staged dirStat
+			published := false
+			client.onRollback = func(tx *kvTxn) {
+				staged = *m.parseDirStat(tx.get(m.dirStatKey(dst)))
+				published = result.length != 0 || result.space != 0 || result.inodes != 0 || len(result.deltas) != 0
+			}
+			m.client = client
+			st := m.doBatchClone(ctx, src, dst, entries, 0, 0, &result)
+			if !client.injected || staged != want {
+				t.Fatalf("rollback injection: injected=%v, staged=%+v, want %+v", client.injected, staged, want)
+			}
+			if published {
+				t.Fatal("batch result was published before commit")
+			}
+			var wantResult dirStat
+			if tc.retry {
+				if st != 0 {
+					t.Fatalf("batch clone retry: %s", st)
+				}
+				wantResult = want
+				q := result.deltas[ugKey(ctx.Uid(), ctx.Gid())]
+				if len(result.deltas) != 1 || q == nil || q.Space != want.space || q.Inodes != want.inodes {
+					t.Fatalf("committed quota deltas: %+v", result.deltas)
+				}
+			} else {
+				if st != syscall.EIO {
+					t.Fatalf("aborted batch clone: got %s, want EIO", st)
+				}
+				if len(result.deltas) != 0 {
+					t.Fatalf("aborted batch published quota deltas: %+v", result.deltas)
+				}
+			}
+			if got := (dirStat{result.length, result.space, result.inodes}); got != wantResult {
+				t.Fatalf("batch result: got %+v, want %+v", got, wantResult)
+			}
+			stat, st := m.doGetDirStat(ctx, dst, false)
+			if st != 0 || stat == nil || *stat != wantResult {
+				t.Fatalf("persisted dir stat: got %+v (%s), want %+v", stat, st, wantResult)
+			}
+			for _, e := range entries {
+				value, err := m.get(m.entryKey(dst, string(e.Name)))
+				if err != nil || (value != nil) != tc.retry {
+					t.Fatalf("destination entry %s: value=%x, error=%v", e.Name, value, err)
+				}
+			}
+		})
+	}
+}
+
 func TestKVACLTransactionRollback(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

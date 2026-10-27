@@ -4550,7 +4550,14 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 
 		switch attr.Typ {
 		case TypeDirectory:
-			tx.set(m.dirStatKey(ino), tx.get(m.dirStatKey(srcIno)))
+			if m.getFormat().DirStats {
+				tx.set(m.dirStatKey(ino), m.packDirStat(&dirStat{}))
+				if !top {
+					if err := m.incrCloneDirStat(tx, parent, 0, align4K(0), 1); err != nil {
+						return err
+					}
+				}
+			}
 		case TypeFile:
 			if attr.Length != 0 {
 				vals := make(map[string][]byte)
@@ -4621,7 +4628,22 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 	}, ino))
 }
 
+func (m *kvMeta) incrCloneDirStat(tx *kvTxn, ino Ino, length, space, inodes int64) error {
+	key := m.dirStatKey(ino)
+	value := tx.get(key)
+	if value == nil {
+		return fmt.Errorf("missing dir stat of cloned directory %d", ino)
+	}
+	stat := m.parseDirStat(value)
+	stat.length += length
+	stat.space += space
+	stat.inodes += inodes
+	tx.set(key, m.packDirStat(stat))
+	return nil
+}
+
 func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno {
+	*result = batchCloneResult{}
 	if len(entries) == 0 {
 		return 0
 	}
@@ -4647,9 +4669,10 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		}
 	}
 
-	return errno(m.txn(ctx, func(tx *kvTxn) error {
+	var batchResult batchCloneResult
+	err := m.txn(ctx, func(tx *kvTxn) error {
 		now := time.Now()
-		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
+		batchResult = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
 		// validate destination parent
 		pa := tx.get(m.inodeKey(dstParent))
@@ -4756,11 +4779,11 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 
 			entrySpace := align4K(attr.Length)
 			if attr.Typ == TypeFile {
-				result.length += int64(attr.Length)
+				batchResult.length += int64(attr.Length)
 			}
-			result.space += entrySpace
-			result.inodes++
-			result.deltas.add(&ugQuotaDelta{
+			batchResult.space += entrySpace
+			batchResult.inodes++
+			batchResult.deltas.add(&ugQuotaDelta{
 				Uid:    attr.Uid,
 				Gid:    attr.Gid,
 				Space:  entrySpace,
@@ -4803,6 +4826,11 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			}
 			tx.set(m.symKey(sc.dstIno), target)
 		}
+		if m.getFormat().DirStats {
+			if err := m.incrCloneDirStat(tx, dstParent, batchResult.length, batchResult.space, batchResult.inodes); err != nil {
+				return err
+			}
+		}
 		if m.getFormat().ChangeLog {
 			args := make([]string, 0, 2*len(cloneInfos))
 			inodes := make([]string, 0, len(cloneInfos))
@@ -4814,7 +4842,12 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		}
 
 		return nil
-	}, dstParent))
+	}, dstParent)
+	if err != nil {
+		return errno(err)
+	}
+	*result = batchResult
+	return 0
 }
 
 func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string) syscall.Errno {

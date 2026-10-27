@@ -218,6 +218,7 @@ func (ds ugQuotaDeltas) add(delta *ugQuotaDelta) {
 	}
 }
 
+// batchCloneResult contains only committed entries, including partial success.
 type batchCloneResult struct {
 	length int64
 	space  int64
@@ -1925,9 +1926,11 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	}
 	var r batchCloneResult
 	st := m.en.doBatchClone(ctx, srcParent, dstParent, entries, cmode, cumask, &r)
-	if st == 0 {
+	if r.inodes > 0 {
 		m.en.updateStats(r.space, r.inodes)
-		m.updateDirQuota(ctx, dstParent, r.space, r.inodes)
+		// Committed entries must be accounted for even if a later batch was canceled.
+		accountCtx := WrapWithoutCancel(context.WithoutCancel(ctx), ctx.Pid(), ctx.Uid(), ctx.Gids())
+		m.updateDirQuota(accountCtx, dstParent, r.space, r.inodes)
 		for _, q := range r.deltas {
 			m.updateUserGroupStat(ctx, q.Uid, q.Gid, q.Space, q.Inodes)
 		}
@@ -3457,7 +3460,8 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 		return eno
 	}
 	var sum Summary
-	eno = m.GetSummary(ctx, srcIno, &sum, true, false)
+	// Preflight must not depend on pending or stale directory statistics.
+	eno = m.GetSummary(ctx, srcIno, &sum, true, true)
 	if eno != 0 {
 		return eno
 	}
@@ -3470,7 +3474,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	}
 	concurrent := make(chan struct{}, concurrency)
 	if attr.Typ == TypeDirectory {
-		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
+		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent, &attr)
 		if eno == 0 {
 			eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
 		}
@@ -3480,21 +3484,22 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 			}
 		}
 	} else {
-		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent)
+		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent, &attr)
 	}
 	if eno == 0 {
-		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
-		if attr.Typ == TypeDirectory {
-			// the entries inside were counted while they were cloned
-			m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
-		} else {
-			m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
+		var length int64
+		if attr.Typ == TypeFile {
+			length = int64(attr.Length)
 		}
+		m.updateDirStat(ctx, parent, length, align4K(attr.Length), 1)
+		// Descendants were counted when their clone transactions committed.
+		accountCtx := WrapWithoutCancel(context.WithoutCancel(ctx), ctx.Pid(), ctx.Uid(), ctx.Gids())
+		m.updateDirQuota(accountCtx, parent, align4K(attr.Length), 1)
 	}
 	return eno
 }
 
-func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, dstIno *Ino, cmode uint8, cumask uint16, count *uint64, top bool, concurrent chan struct{}) syscall.Errno {
+func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, dstIno *Ino, cmode uint8, cumask uint16, count *uint64, top bool, concurrent chan struct{}, clonedAttr *Attr) syscall.Errno {
 	ino, err := m.nextInode()
 	if err != nil {
 		return errno(err)
@@ -3507,12 +3512,16 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	if eno != 0 {
 		return eno
 	}
+	if clonedAttr != nil {
+		*clonedAttr = attr
+	}
 	m.en.updateStats(align4K(attr.Length), 1)
 	atomic.AddUint64(count, 1)
 	m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
 	if attr.Typ == TypeDirectory && !top {
 		// Count subdirectories now so failed-clone cleanup balances quota usage.
-		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
+		accountCtx := WrapWithoutCancel(context.WithoutCancel(ctx), ctx.Pid(), ctx.Uid(), ctx.Gids())
+		m.updateDirQuota(accountCtx, parent, align4K(attr.Length), 1)
 	}
 	if attr.Typ != TypeDirectory {
 		return 0
@@ -3534,7 +3543,7 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	nlink := uint32(2)
 
 	cloneChild := func(e *Entry) syscall.Errno {
-		childEno := m.cloneEntry(cloneCtx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrent)
+		childEno := m.cloneEntry(cloneCtx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrent, nil)
 		if childEno == syscall.ENOENT {
 			logger.Warnf("ignore deleted %s in dir %d", string(e.Name), srcIno)
 			return 0

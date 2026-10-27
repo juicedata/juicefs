@@ -527,6 +527,74 @@ func TestRedisBatchCloneSkipsDeletedSource(t *testing.T) {
 }
 
 func TestRedisBatchClonePartialFailureLeavesState(t *testing.T) {
+	t.Run("committed batches", func(t *testing.T) {
+		m := newTestRedisMeta(t, 15)
+		ctx := Background()
+		var srcDir, dstDir, srcFile Ino
+		if st := m.Mkdir(ctx, RootInode, "src_committed", 0755, 0, 0, &srcDir, nil); st != 0 {
+			t.Fatalf("mkdir source: %s", st)
+		}
+		if st := m.Mkdir(ctx, RootInode, "dst_committed", 0755, 0, 0, &dstDir, nil); st != 0 {
+			t.Fatalf("mkdir destination: %s", st)
+		}
+		var attr Attr
+		if st := m.Create(ctx, srcDir, "file", 0644, 0, 0, &srcFile, &attr); st != 0 {
+			t.Fatalf("create source file: %s", st)
+		}
+		const fileLength = uint64(4097)
+		if st := m.Truncate(ctx, srcFile, 0, fileLength, &attr, false); st != 0 {
+			t.Fatalf("truncate source file: %s", st)
+		}
+		const quotaPath = "/dst_committed"
+		if err := m.HandleQuota(ctx, QuotaSet, quotaPath, DirQuotaType, map[string]*Quota{
+			quotaPath: {MaxSpace: 1 << 30, MaxInodes: 2000},
+		}, false, false, false); err != nil {
+			t.Fatalf("set quota: %v", err)
+		}
+		m.loadQuotas()
+		m.FlushSession()
+
+		const committed = 1000
+		entries := make([]*Entry, 0, committed+1)
+		for i := 0; i < committed; i++ {
+			entries = append(entries, &Entry{Inode: srcFile, Name: []byte(fmt.Sprintf("copy-%d", i)), Attr: &attr})
+		}
+		// The second transaction collides with an entry committed by the first one.
+		entries = append(entries, entries[0])
+		var count uint64
+		if st := m.BatchClone(ctx, srcDir, dstDir, entries, 0, 0, &count); st != syscall.EEXIST {
+			t.Fatalf("batch clone: got %s, want EEXIST", st)
+		}
+		if count != committed {
+			t.Fatalf("committed count: got %d, want %d", count, committed)
+		}
+		want := dirStat{int64(fileLength) * committed, align4K(fileLength) * committed, committed}
+		stat, st := m.doGetDirStat(ctx, dstDir, false)
+		if st != 0 || stat == nil || *stat != want {
+			t.Fatalf("committed dir stat: got %+v (%s), want %+v", stat, st, want)
+		}
+		checkUsage := func(space, inodes int64) {
+			t.Helper()
+			m.FlushSession()
+			q, err := m.doGetQuota(ctx, DirQuotaType, uint64(dstDir))
+			if err != nil || q == nil {
+				t.Fatalf("get quota: %+v, %v", q, err)
+			}
+			if q.UsedSpace != space || q.UsedInodes != inodes {
+				t.Fatalf("quota usage: got (%d, %d), want (%d, %d)", q.UsedSpace, q.UsedInodes, space, inodes)
+			}
+		}
+		checkUsage(want.space, want.inodes)
+		if st := m.emptyDir(ctx, dstDir, true, nil, make(chan int, 4)); st != 0 {
+			t.Fatalf("clean up partial clone: %s", st)
+		}
+		checkUsage(0, 0)
+		stat, st = m.doGetDirStat(ctx, dstDir, false)
+		if st != 0 || stat == nil || *stat != (dirStat{}) {
+			t.Fatalf("dir stat after cleanup: got %+v (%s), want zero", stat, st)
+		}
+	})
+
 	m := newTestRedisMeta(t, 15)
 	ctx := Background()
 	var srcDir, dstDir Ino

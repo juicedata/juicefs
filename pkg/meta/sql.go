@@ -5634,13 +5634,14 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		}
 		switch n.Type {
 		case TypeDirectory:
-			var st = dirStats{Inode: srcIno}
-			if exist, err := s.Get(&st); err != nil {
-				return err
-			} else if exist {
-				st.Inode = ino
-				if err := mustInsert(s, &st); err != nil {
+			if m.getFormat().DirStats {
+				if err := mustInsert(s, &dirStats{Inode: ino}); err != nil {
 					return err
+				}
+				if !top {
+					if err := m.incrCloneDirStat(s, parent, 0, align4K(0), 1); err != nil {
+						return err
+					}
 				}
 			}
 		case TypeFile:
@@ -5688,7 +5689,16 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	}, srcIno))
 }
 
+func (m *dbMeta) incrCloneDirStat(s *xorm.Session, ino Ino, length, space, inodes int64) error {
+	n, err := s.ID(ino).Incr("data_length", length).Incr("used_space", space).Incr("used_inodes", inodes).Update(&dirStats{})
+	if err == nil && n != 1 {
+		err = fmt.Errorf("update dir stat of cloned directory %d: %d rows affected", ino, n)
+	}
+	return err
+}
+
 func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno {
+	*result = batchCloneResult{}
 	if len(entries) == 0 {
 		return 0
 	}
@@ -5718,9 +5728,10 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		}
 	}
 
+	var batchResult batchCloneResult
 	err := m.txn(func(s *xorm.Session) error {
 		nowNano := time.Now().UnixNano()
-		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
+		batchResult = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
 		if _, err := m.validateCloneTarget(ctx, s, dstParent); err != nil {
 			return err
@@ -5789,11 +5800,11 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 
 			entrySpace := align4K(sn.Length)
 			if sn.Type == TypeFile {
-				result.length += int64(sn.Length)
+				batchResult.length += int64(sn.Length)
 			}
-			result.space += entrySpace
-			result.inodes++
-			result.deltas.add(&ugQuotaDelta{
+			batchResult.space += entrySpace
+			batchResult.inodes++
+			batchResult.deltas.add(&ugQuotaDelta{
 				Uid:    info.dstNode.Uid,
 				Gid:    info.dstNode.Gid,
 				Space:  entrySpace,
@@ -5884,6 +5895,11 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		if err := m.batchUpdateChunkRefs(s, chunkRefCounts); err != nil {
 			return err
 		}
+		if m.getFormat().DirStats {
+			if err := m.incrCloneDirStat(s, dstParent, batchResult.length, batchResult.space, batchResult.inodes); err != nil {
+				return err
+			}
+		}
 		if m.getFormat().ChangeLog {
 			// Keep encoded names and inode IDs within MySQL's 64 KiB TEXT limit.
 			const logBatchSize = 64
@@ -5904,6 +5920,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	if err != nil {
 		return errno(err)
 	}
+	*result = batchResult
 	return 0
 }
 
