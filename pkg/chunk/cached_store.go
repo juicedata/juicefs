@@ -1229,12 +1229,8 @@ func (store *cachedStore) FillCache(id uint64, size uint32, parts []Range) error
 		}
 		if shared, e := store.group.TryPiggyback(k); shared != nil {
 			if e == nil {
-				// The shared page may be owned by a reader that reuses it, so cache a private copy.
-				p := NewOffPage(size)
-				copy(p.Data, shared.Data)
+				store.bcache.cache(k, shared, true, !store.conf.OSCache)
 				shared.Release()
-				store.bcache.cache(k, p, true, !store.conf.OSCache)
-				p.Release()
 				continue
 			}
 			shared.Release()
