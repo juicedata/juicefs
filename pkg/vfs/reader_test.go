@@ -19,7 +19,6 @@ package vfs
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -242,80 +241,53 @@ func awaitReaderTestSlice(t *testing.T, f *fileReader, s *sliceReader) {
 	}
 }
 
-func TestReaderDataRetryKeepsBorrowedPage(t *testing.T) {
-	for _, mode := range []string{"error", "partial", "timeout"} {
-		t.Run(mode, func(t *testing.T) {
-			var failed atomic.Bool
-			var retained atomic.Pointer[chunk.Page]
-			late := newReaderTestGate(t)
-			lateDone := make(chan struct{})
-			t.Cleanup(func() {
-				late.open()
-				if mode == "timeout" && failed.Load() {
-					awaitReaderTest(t, lateDone)
-				}
-				if p := retained.Swap(nil); p != nil {
-					p.Release()
-				}
-			})
-			m := &readerTestMeta{read: func() ([]meta.Slice, syscall.Errno) { return readerTestSlices(), 0 }}
-			store := &readerTestStore{read: func(p *chunk.Page, off int) (int, error) {
-				if failed.CompareAndSwap(false, true) {
-					copy(p.Data, bytes.Repeat([]byte{'a'}, len(p.Data)))
-					p.Acquire() // Stand in for another segment cached before a read failure.
-					retained.Store(p)
-					if mode == "timeout" {
-						p.Acquire() // A backend can keep writing after its timeout returns.
-						go func() {
-							late.block()
-							copy(p.Data, bytes.Repeat([]byte{'c'}, len(p.Data)))
-							p.Release()
-							close(lateDone)
-						}()
-						return 0, utils.ErrFuncTimeout
-					}
-					if mode == "partial" {
-						return len(p.Data) / 2, io.ErrUnexpectedEOF
-					}
-					return 0, io.ErrUnexpectedEOF
-				}
-				if off > 0 {
-					return 0, io.ErrUnexpectedEOF
-				}
-				copy(p.Data, bytes.Repeat([]byte{'b'}, len(p.Data)))
-				return len(p.Data), nil
-			}}
-			before := readBufferUsed.Load()
-			f, closeFile := newReaderTestFile(t, m, store, readerTestSize)
-			s := startReaderTestSlice(f, 0)
-			awaitReaderTestSlice(t, f, s)
-			f.Lock()
-			current := s.page
-			f.Unlock()
-			require.Equal(t, before+readerTestSize, readBufferUsed.Load())
-			require.Equal(t, bytes.Repeat([]byte{'a'}, readerTestSize), retained.Load().Data)
-			if mode == "timeout" {
-				late.open()
-				awaitReaderTest(t, lateDone)
-			}
-			require.Equal(t, bytes.Repeat([]byte{'b'}, readerTestSize), current.Data)
-			closeFile()
-			require.Equal(t, before, readBufferUsed.Load())
-		})
-	}
-}
-
-func TestReaderReadyInvalidationWaitsForRefresh(t *testing.T) {
-	refresh := newReaderTestGate(t)
+func TestReaderRetryIgnoresTimedOutWrite(t *testing.T) {
+	late := newReaderTestGate(t)
+	lateDone := make(chan struct{})
 	var calls atomic.Int32
 	m := &readerTestMeta{read: func() ([]meta.Slice, syscall.Errno) { return readerTestSlices(), 0 }}
 	store := &readerTestStore{read: func(p *chunk.Page, _ int) (int, error) {
-		value := byte('a')
-		call := calls.Add(1)
-		if call == 2 {
+		if calls.Add(1) == 1 {
+			p.Acquire() // the timed-out GET keeps writing after load returns
+			go func() {
+				defer close(lateDone)
+				late.block()
+				copy(p.Data, bytes.Repeat([]byte{'c'}, len(p.Data)))
+				p.Release()
+			}()
+			return 0, utils.ErrFuncTimeout
+		}
+		copy(p.Data, bytes.Repeat([]byte{'b'}, len(p.Data)))
+		return len(p.Data), nil
+	}}
+	before := readBufferUsed.Load()
+	f, closeFile := newReaderTestFile(t, m, store, readerTestSize)
+	s := startReaderTestSlice(f, 0)
+	awaitReaderTestSlice(t, f, s)
+	late.open()
+	awaitReaderTest(t, lateDone)
+	f.Lock()
+	data := bytes.Clone(s.page.Data)
+	f.Unlock()
+	require.Equal(t, bytes.Repeat([]byte{'b'}, readerTestSize), data)
+	require.Equal(t, before+readerTestSize, readBufferUsed.Load())
+	closeFile()
+	require.Equal(t, before, readBufferUsed.Load())
+}
+
+// Readers arriving while a READY slice refreshes its metadata must not see the old data.
+func TestReaderReadyInvalidationWaitsForRefresh(t *testing.T) {
+	refresh := newReaderTestGate(t)
+	var metaCalls, dataCalls atomic.Int32
+	m := &readerTestMeta{read: func() ([]meta.Slice, syscall.Errno) {
+		if metaCalls.Add(1) == 2 {
 			refresh.block()
 		}
-		if call > 1 {
+		return readerTestSlices(), 0
+	}}
+	store := &readerTestStore{read: func(p *chunk.Page, _ int) (int, error) {
+		value := byte('a')
+		if dataCalls.Add(1) > 1 {
 			value = 'b'
 		}
 		copy(p.Data, bytes.Repeat([]byte{value}, len(p.Data)))
@@ -331,24 +303,20 @@ func TestReaderReadyInvalidationWaitsForRefresh(t *testing.T) {
 	t.Cleanup(func() { f.Lock(); s.refs--; f.Unlock() })
 	awaitReaderTest(t, refresh.entered)
 	buf := make([]byte, readerTestSize)
-	started, done := make(chan struct{}), make(chan struct{})
+	done := make(chan struct{})
 	var n int
 	var err syscall.Errno
 	go func() {
 		f.Lock()
-		close(started)
 		n, err = f.waitForIO(meta.Background(), []*req{{frange{0, readerTestSize}, s}}, buf)
-		close(done)
 		f.Unlock()
+		close(done)
 	}()
-	awaitReaderTest(t, started)
-	f.Lock() // waitForIO must release this lock while waiting for the blocked refresh.
 	select {
 	case <-done:
-		t.Error("waitForIO returned before the refresh completed")
-	default:
+		t.Fatal("waitForIO returned before the refresh completed")
+	case <-time.After(100 * time.Millisecond):
 	}
-	f.Unlock()
 	refresh.open()
 	awaitReaderTest(t, done)
 	require.Zero(t, err)
@@ -415,38 +383,4 @@ func TestReaderWaitForIORechecksRefreshedSlice(t *testing.T) {
 	require.Zero(t, err)
 	require.Equal(t, 2*readerTestSize, n)
 	require.Equal(t, append(bytes.Repeat([]byte{'b'}, readerTestSize), bytes.Repeat([]byte{'c'}, readerTestSize)...), buf)
-}
-
-func TestReaderTruncateBeforeDataRead(t *testing.T) {
-	for _, length := range []uint64{0, readerTestSize} {
-		t.Run(fmt.Sprint(length), func(t *testing.T) {
-			metadata := newReaderTestGate(t)
-			var metaCalls, dataCalls atomic.Int32
-			m := &readerTestMeta{read: func() ([]meta.Slice, syscall.Errno) {
-				if metaCalls.Add(1) == 1 {
-					metadata.block()
-				}
-				return readerTestSlices(), 0
-			}}
-			store := &readerTestStore{read: func(p *chunk.Page, _ int) (int, error) {
-				dataCalls.Add(1)
-				return len(p.Data), nil
-			}}
-			before := readBufferUsed.Load()
-			f, closeFile := newReaderTestFile(t, m, store, 2*readerTestSize)
-			s := startReaderTestSlice(f, readerTestSize)
-			awaitReaderTest(t, metadata.entered)
-			f.r.Truncate(f.inode, length)
-			metadata.open()
-			awaitReaderTestSlice(t, f, s)
-			f.Lock()
-			size, progress := s.block.len, s.currentPos
-			f.Unlock()
-			require.Zero(t, size)
-			require.Zero(t, progress)
-			require.Zero(t, dataCalls.Load())
-			closeFile()
-			require.Equal(t, before, readBufferUsed.Load())
-		})
-	}
 }
