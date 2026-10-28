@@ -17,8 +17,13 @@
 package meta
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -335,6 +340,141 @@ func TestChangeEntryAttrFields(t *testing.T) {
 	}
 	if _, err := e.AttrFields(4); err == nil {
 		t.Fatal("a truncated attribute tail should fail")
+	}
+}
+
+func TestLoadProgress(t *testing.T) {
+	t.Setenv("JFS_TKV_REWIND", "3")
+	src := &kvMeta{baseMeta: &baseMeta{}, client: &memKV{}}
+	src.en = src
+	skipped := "Skipped changelog: version=4\n" +
+		"Skipped changelog: version=2\n" +
+		"Skipped changelog: version=5\n"
+	replayed := skipped + "Replayed changelog: version=8 operation=CREATE\n" +
+		"Replayed changelog: version=8 operation=CREATE\n" +
+		"Skipped changelog: version=6 operation=SET reason=background job timestamps are not replayed\n"
+	wantSkipped := &ReplayProgress{Version: 5, Seen: map[uint64]struct{}{2: {}, 4: {}, 5: {}}}
+	wantReplayed := &ReplayProgress{Version: 8, Seen: map[uint64]struct{}{5: {}, 6: {}, 8: {}}}
+	var largeProgressLog strings.Builder
+	for id := 1; id <= 1002; id++ {
+		fmt.Fprintf(&largeProgressLog, "Skipped changelog: version=%d\n", id)
+	}
+	for id := 1003; id <= 2005; id++ {
+		fmt.Fprintf(&largeProgressLog, "Replayed changelog: version=%d operation=CREATE\n", id)
+	}
+
+	for _, tc := range []struct {
+		name            string
+		progressLog     string
+		want            *ReplayProgress
+		wantErr         string
+		truncate        bool
+		wantProgressLog string
+		cancel          bool
+		noRewind        bool
+	}{
+		{name: "empty"},
+		{name: "skipped records", progressLog: skipped, want: wantSkipped},
+		{name: "replayed and skipped out of order", progressLog: replayed, want: wantReplayed},
+		{
+			name: "without rewind", progressLog: replayed, noRewind: true,
+			want: &ReplayProgress{Version: 8, Seen: map[uint64]struct{}{}},
+		},
+		{
+			name: "multiple batches", progressLog: largeProgressLog.String(),
+			want: &ReplayProgress{Version: 2005, Seen: map[uint64]struct{}{2002: {}, 2003: {}, 2004: {}, 2005: {}}},
+		},
+		{
+			name: "incomplete last record", progressLog: replayed + "Replayed changelog: version=9 operation=CRE",
+			want: wantReplayed, truncate: true, wantProgressLog: replayed,
+		},
+		{
+			name: "last record without newline", progressLog: skipped + "Replayed changelog: version=8 operation=CREATE",
+			want: wantSkipped, truncate: true, wantProgressLog: skipped,
+		},
+		{
+			name:        "incomplete first record",
+			progressLog: "Skipped changelog: version=5",
+			truncate:    true,
+		},
+		{
+			name: "replayed record only", progressLog: "Replayed changelog: version=8 operation=CREATE\n",
+			want: &ReplayProgress{Version: 8, Seen: map[uint64]struct{}{8: {}}},
+		},
+		{
+			name: "skipped record without reason", progressLog: "Skipped changelog: version=5\n",
+			want: &ReplayProgress{Version: 5, Seen: map[uint64]struct{}{5: {}}},
+		},
+		{
+			name: "skipped after replay", progressLog: replayed + "Skipped changelog: version=7 reason=already applied\n",
+			want: &ReplayProgress{Version: 8, Seen: map[uint64]struct{}{5: {}, 6: {}, 7: {}, 8: {}}},
+		},
+		{
+			name: "malformed record", progressLog: skipped + "not a progress log record\n",
+			wantErr: "invalid replay progress log record at line 4",
+		},
+		{
+			name: "invalid version", progressLog: skipped + "Replayed changelog: version=0 operation=CREATE\n",
+			wantErr: "invalid replay progress log record at line 4",
+		},
+		{
+			name: "operation does not affect progress", progressLog: skipped + "Replayed changelog: version=8 operation=UNKNOWN\n",
+			want: &ReplayProgress{Version: 8, Seen: map[uint64]struct{}{5: {}, 8: {}}},
+		},
+		{
+			name: "invalid status", progressLog: skipped + "Failed changelog: version=8 operation=CREATE\n",
+			wantErr: "invalid replay progress log record at line 4",
+		},
+		{
+			name: "canceled", progressLog: skipped, cancel: true,
+			wantErr: context.Canceled.Error(),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "replay.log")
+			if err := os.WriteFile(path, []byte(tc.progressLog), 0600); err != nil {
+				t.Fatal(err)
+			}
+			r := &Replayer{src: src}
+			if tc.noRewind {
+				m := &redisMeta{baseMeta: &baseMeta{}}
+				m.en = m
+				r.src = m
+			}
+			ctx := Background()
+			defer ctx.Cancel()
+			if tc.cancel {
+				ctx.Cancel()
+			}
+			got, err := r.LoadProgress(ctx, path)
+			if r.progressLog != nil {
+				defer r.progressLog.Close()
+			}
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("LoadProgress error = %v, want %q", err, tc.wantErr)
+			}
+			if tc.cancel && !errors.Is(err, context.Canceled) {
+				t.Fatalf("LoadProgress error = %v, want context.Canceled", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("LoadProgress = %+v, want %+v", got, tc.want)
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantProgressLog := tc.progressLog
+			if tc.truncate {
+				wantProgressLog = tc.wantProgressLog
+			}
+			if string(data) != wantProgressLog {
+				t.Fatalf("progress log = %q, want %q", data, wantProgressLog)
+			}
+		})
 	}
 }
 

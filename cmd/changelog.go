@@ -18,9 +18,11 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -60,7 +62,13 @@ Examples:
 # Start from the backup used to create the destination
 $ juicefs changelog replay redis://src redis://dst --backup /tmp/meta.bin
 
-# Start from a specific version
+# Resume from the replay progress log in the current directory
+$ juicefs changelog replay redis://src redis://dst
+
+# Store the replay progress log in a custom directory
+$ juicefs changelog replay redis://src redis://dst --log-dir /tmp --backup /tmp/meta.bin
+
+# Start from a specific version when no progress has been saved
 $ juicefs changelog replay redis://src redis://dst --from 100
 
 # Only parse and validate entries
@@ -68,6 +76,11 @@ $ juicefs changelog replay redis://src redis://dst --dry-run --from 100`,
 			},
 		},
 		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "log-dir",
+				Value: ".",
+				Usage: "directory for replay progress log files named changelog-replay-<volume UUID/destination hash>.log",
+			},
 			&cli.StringFlag{
 				Name:  "backup",
 				Usage: "path to the baseline JSON or binary backup (overrides --from)",
@@ -108,7 +121,7 @@ func changelog(ctx *cli.Context) error {
 	})
 }
 
-func changelogReplay(ctx *cli.Context) error {
+func changelogReplay(ctx *cli.Context) (err error) {
 	setup(ctx, 2)
 	srcUri, dstUri := ctx.Args().Get(0), ctx.Args().Get(1)
 	removePassword(srcUri)
@@ -126,13 +139,46 @@ func changelogReplay(ctx *cli.Context) error {
 		return fmt.Errorf("changelog is not enabled on the source, use `juicefs config %s --changelog` to enable it", srcUri)
 	}
 	dryRun := ctx.Bool("dry-run")
-	replayer, err := meta.NewReplayer(dstUri, src, dryRun)
-	if err != nil {
-		return err
+	signalCtx, stop := signal.NotifyContext(ctx.Context, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	replayCtx := meta.WrapContext(signalCtx)
+	defer replayCtx.Cancel()
+	var replayer *meta.Replayer
+	var progress *meta.ReplayProgress
+	var logPath string
+	if !dryRun {
+		replayHash := fmt.Sprintf("%x", sha256.Sum256([]byte(srcFormat.UUID+"\x00"+dstUri)))
+		logPath = filepath.Join(ctx.String("log-dir"), "changelog-replay-"+replayHash+".log")
+		replayer, err = meta.NewReplayer(dstUri, src)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if closeErr := replayer.Close(); closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close replayer: %w", closeErr))
+			}
+		}()
+		progress, err = replayer.LoadProgress(replayCtx, logPath)
+		if errors.Is(err, context.Canceled) {
+			logger.Infof("Changelog replay stopped while loading progress")
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("load replay progress log %q: %w", logPath, err)
+		}
+		if progress != nil {
+			logger.Infof("Read replay progress log %s at version %d with %d rewind entries", logPath, progress.Version, len(progress.Seen))
+		}
 	}
-	defer replayer.Close()
-	opt := &meta.ChangelogScanOption{From: ctx.Int64("from"), Follow: ctx.Bool("follow")}
-	if path := ctx.String("backup"); path != "" {
+	opt := &meta.ChangelogScanOption{From: ctx.Int64("from"), Follow: ctx.Bool("follow"), Seen: make(map[uint64]struct{})}
+	if progress != nil {
+		opt.From, opt.Seen = progress.Version, progress.Seen
+		for _, flag := range []string{"from", "backup"} {
+			if ctx.IsSet(flag) {
+				logger.Warnf("Ignoring --%s because replay progress is already saved at version %d", flag, progress.Version)
+			}
+		}
+	} else if path := ctx.String("backup"); path != "" {
 		format, err := func() (*meta.Format, error) {
 			r, err := open(path, "", "")
 			if err != nil {
@@ -144,6 +190,7 @@ func changelogReplay(ctx *cli.Context) error {
 				return nil, err
 			}
 			opt.From, opt.Seen = from, seen
+			logger.Infof("Read backup lastChangelog %d with %d rewind entries", from, len(seen))
 			return format, nil
 		}()
 		if err != nil {
@@ -152,15 +199,21 @@ func changelogReplay(ctx *cli.Context) error {
 		if format.UUID != srcFormat.UUID {
 			return fmt.Errorf("backup volume UUID %q does not match the source %q", format.UUID, srcFormat.UUID)
 		}
-		logger.Infof("Start from backup lastChangelog %d with %d rewind entries", opt.From, len(opt.Seen))
 	}
-
-	signalCtx, stop := signal.NotifyContext(ctx.Context, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+	if opt.From <= 0 {
+		return fmt.Errorf("provide the backup used to create the destination with --backup, or an explicit positive --from")
+	}
+	if progress == nil && !dryRun {
+		if err := replayer.InitProgressLog(logPath, opt.From, opt.Seen); err != nil {
+			return fmt.Errorf("initialize replay progress log: %w", err)
+		}
+	}
+	opt.Seen[uint64(opt.From)] = struct{}{}
 
 	logger.Infof("Start changelog replay: from=%d follow=%t dry-run=%t", opt.From, opt.Follow, dryRun)
-	replayCtx := meta.WrapContext(signalCtx)
 	lastVersion := opt.From
+	applyCtx := meta.WrapContext(context.WithoutCancel(signalCtx))
+	defer applyCtx.Cancel()
 	err = src.ScanChangelog(replayCtx, opt, func(ver int64, entry string) error {
 		if err := replayCtx.Err(); err != nil {
 			return err
@@ -173,7 +226,7 @@ func changelogReplay(ctx *cli.Context) error {
 			err = e.Validate()
 		}
 		if err == nil && !dryRun {
-			err = replayer.Replay(replayCtx, e)
+			err = replayer.Replay(applyCtx, e)
 		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -184,7 +237,7 @@ func changelogReplay(ctx *cli.Context) error {
 		} else if dryRun {
 			logger.Infof("Validated changelog: version=%d operation=%s dry-run=true", ver, op)
 		}
-		lastVersion = ver
+		lastVersion = max(lastVersion, ver)
 		return nil
 	})
 	if errors.Is(err, context.Canceled) {

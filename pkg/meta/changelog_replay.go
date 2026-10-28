@@ -17,7 +17,12 @@
 package meta
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"syscall"
 	"time"
@@ -39,17 +44,122 @@ type replayState struct {
 
 // Replayer exclusively owns a metadata client for sequential changelog replay.
 type Replayer struct {
-	src    Meta
-	dst    Meta
-	aclIDs map[uint32]uint32
+	src         Meta
+	dst         Meta
+	aclIDs      map[uint32]uint32
+	progressLog *os.File
 }
 
-func NewReplayer(uri string, src Meta, dryRun bool) (*Replayer, error) {
+type ReplayProgress struct {
+	Version int64
+	Seen    map[uint64]struct{}
+}
+
+func (r *Replayer) LoadProgress(ctx Context, path string) (*ReplayProgress, error) {
+	progressLog, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND, 0600)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	r.progressLog = progressLog
+	reader := bufio.NewReader(r.progressLog)
+	progress := ReplayProgress{Seen: make(map[uint64]struct{})}
+	var offset int64
+	for number := 1; ; number++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		line, err := reader.ReadString('\n')
+		if err == io.EOF {
+			if len(line) > 0 {
+				logger.Warnf("Ignoring incomplete replay progress log record at offset %d", offset)
+				if err := r.progressLog.Truncate(offset); err != nil {
+					return nil, err
+				}
+			}
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		var status string
+		var version int64
+		_, err = fmt.Sscanf(line, "%s changelog: version=%d", &status, &version)
+		if err != nil || version <= 0 || (status != "Replayed" && status != "Skipped") {
+			return nil, fmt.Errorf("invalid replay progress log record at line %d: %q", number, line)
+		}
+		progress.Version = max(progress.Version, version)
+		progress.Seen[uint64(version)] = struct{}{}
+		offset += int64(len(line))
+		start := r.src.getBase().en.changelogWindowStart(progress.Version)
+		for id := range progress.Seen {
+			if id < start {
+				delete(progress.Seen, id)
+			}
+		}
+	}
+	if progress.Version == 0 {
+		return nil, nil
+	}
+	return &progress, nil
+}
+
+func (r *Replayer) InitProgressLog(path string, from int64, seen map[uint64]struct{}) error {
+	start := r.src.getBase().en.changelogWindowStart(from)
+	if start <= uint64(from) {
+		if _, ok := seen[uint64(from)]; !ok {
+			return fmt.Errorf("rewind entries are required to initialize replay at version %d", from)
+		}
+	}
+	for id := range seen {
+		if id < start {
+			delete(seen, id)
+		}
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+	for id := range seen {
+		if id == uint64(from) {
+			continue
+		}
+		if _, err := fmt.Fprintf(f, "Skipped changelog: version=%d\n", id); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintf(f, "Skipped changelog: version=%d\n", from); err != nil {
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(f.Name(), path); err != nil {
+		return err
+	}
+	progressLog, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND, 0600)
+	if err != nil {
+		return err
+	}
+	if r.progressLog != nil {
+		err = r.progressLog.Close()
+	}
+	r.progressLog = progressLog
+	return err
+}
+
+func NewReplayer(uri string, src Meta) (*Replayer, error) {
 	conf := DefaultConf()
 	conf.NoCompact = true
 	conf.NoBGJob = true
 	conf.MaxDeletes = 0
-	conf.ReadOnly = dryRun
 	dst := NewClient(uri, conf)
 	if _, err := dst.Load(true); err != nil {
 		return nil, err
@@ -62,15 +172,9 @@ func NewReplayer(uri string, src Meta, dryRun bool) (*Replayer, error) {
 	if err := srcBase.en.cacheACLs(Background()); err != nil {
 		return nil, fmt.Errorf("load source ACLs: %w", err)
 	}
-	if dryRun {
-		if err := dstBase.en.cacheACLs(Background()); err != nil {
-			return nil, fmt.Errorf("load destination ACLs: %w", err)
-		}
-	} else {
-		if err := dst.NewSession(false); err != nil {
-			_ = dst.CloseSession()
-			return nil, fmt.Errorf("initialize destination metadata client: %w", err)
-		}
+	if err := dst.NewSession(false); err != nil {
+		_ = dst.CloseSession()
+		return nil, fmt.Errorf("initialize destination metadata client: %w", err)
 	}
 	for id, rule := range srcBase.aclCache.GetAll() {
 		if dstID := dstBase.aclCache.GetId(rule); dstID != aclAPI.None {
@@ -101,10 +205,10 @@ func (r *Replayer) Validate(src *Format) error {
 }
 
 func (r *Replayer) Close() error {
-	if r.dst.getBase().conf.ReadOnly {
-		return nil
+	if r.progressLog == nil {
+		return r.dst.CloseSession()
 	}
-	return r.dst.CloseSession()
+	return errors.Join(r.progressLog.Sync(), r.progressLog.Close(), r.dst.CloseSession())
 }
 
 func (r *Replayer) mapACL(ctx Context, id uint32) (uint32, error) {
@@ -184,138 +288,144 @@ func (m *baseMeta) checkPermission(ctx Context) bool {
 }
 
 // Replay replays a validated changelog entry. Calls must be serialized.
-func (r *Replayer) Replay(ctx Context, e *ChangeEntry) (err error) {
+func (r *Replayer) Replay(ctx Context, e *ChangeEntry) error {
 	dst := r.dst.getBase()
 	dst.replay.Store(&replayState{Time: e.Time, Sid: e.Sid})
 	defer dst.replay.Store(nil)
 	var skipReason string
-	defer func() {
-		if err != nil {
-			return
-		}
-		if skipReason != "" {
-			logger.Infof("Skipped changelog: version=%d operation=%s reason=%s", e.Ver, e.Op, skipReason)
-		} else {
-			logger.Infof("Replayed changelog: version=%d operation=%s", e.Ver, e.Op)
+	err := func() error {
+		defer dst.doFlushStats()
+		switch e.Op {
+		case OpCreate:
+			return r.create(ctx, e)
+		case OpLink:
+			return r.link(ctx, e)
+		case OpUnlink:
+			return r.unlink(ctx, e)
+		case OpUnlinkBatch:
+			return r.unlinkBatch(ctx, e)
+		case OpRmdir:
+			return r.rmdir(ctx, e)
+		case OpMove:
+			return r.move(ctx, e)
+		case OpClone:
+			return r.clone(ctx, e)
+		case OpCloneBatch:
+			return r.cloneBatch(ctx, e)
+		case OpAttach:
+			return r.attach(ctx, e)
+		case OpCleanup:
+			inode, err := e.Ino(0)
+			if err != nil {
+				return err
+			}
+			return changelogCall(e, dst.en.doCleanupDetachedNode(ctx, inode))
+		case OpSetXattr:
+			return r.setXattr(ctx, e)
+		case OpRemoveXattr:
+			return r.removeXattr(ctx, e)
+		case OpSetAttr:
+			return r.setAttr(ctx, e)
+		case OpTruncate:
+			return r.truncate(ctx, e)
+		case OpFallocate:
+			return r.fallocate(ctx, e)
+		case OpCopyFileRange:
+			return r.copyFileRange(ctx, e)
+		case OpWrite:
+			return r.write(ctx, e)
+		case OpCompactChunk:
+			return r.compactChunk(ctx, e)
+		case OpIncrCounter:
+			name := e.Args[0]
+			delta, err := e.Int64(1)
+			if err != nil {
+				return err
+			}
+			if name == usedSpace || name == totalInodes {
+				// FIXME: the loaded baseline must account for usage not flushed before dump.
+				skipReason = fmt.Sprintf("%s is updated by metadata operations", name)
+				return nil
+			}
+			if name == aclCounter {
+				skipReason = "ACL IDs are allocated by the destination"
+				return nil
+			}
+			if _, err := dst.en.incrCounter(name, delta); err != nil {
+				return fmt.Errorf("%s %s: %w", e.Op, name, err)
+			}
+			return nil
+		case OpSetFacl:
+			return r.setFacl(ctx, e)
+		case OpSetQuota:
+			return r.setQuota(ctx, e)
+		case OpDelQuota:
+			return r.delQuota(ctx, e)
+		case OpRepairDir:
+			return r.repairDir(ctx, e)
+		case OpUpdateToken:
+			return r.updateToken(ctx, e)
+		case OpStoreToken:
+			return r.storeToken(ctx, e)
+		case OpDeleteTokens:
+			return r.deleteTokens(ctx, e)
+		case OpAccess:
+			inode, err := e.Ino(0)
+			if err != nil {
+				return err
+			}
+			_, err = dst.en.doTouchAtime(ctx, inode, &Attr{}, e.Time)
+			return err
+		case OpDelSustained:
+			sid, err := e.Uint64(0)
+			if err != nil {
+				return err
+			}
+			inode, err := e.Ino(1)
+			if err != nil {
+				return err
+			}
+			if err := dst.en.doDeleteSustainedInode(ctx, sid, inode); err != nil {
+				return err
+			}
+			dst.Lock()
+			delete(dst.removedFiles, inode)
+			dst.Unlock()
+			return nil
+
+		case OpNewSession, OpCleanSession:
+			skipReason = "source client sessions are not replayed"
+			return nil
+		case OpFlock, OpSetlk:
+			skipReason = "source client locks are not replayed"
+			return nil
+		case OpInitDirStats, OpInitUserGroupQuota:
+			skipReason = "statistics initialization is not replayed"
+			return nil
+		case OpDelChunk, OpDeleteSlice, OpCleanupDelayedSlices, OpCleanupTrashSlices:
+			skipReason = "background cleanup is not replayed"
+			return nil
+		case OpSet:
+			skipReason = "background job timestamps are not replayed"
+			return nil
+		default:
+			return fmt.Errorf("%s is validated but not implemented by replay", e.Op)
 		}
 	}()
-	defer dst.doFlushStats()
-	switch e.Op {
-	case OpCreate:
-		return r.create(ctx, e)
-	case OpLink:
-		return r.link(ctx, e)
-	case OpUnlink:
-		return r.unlink(ctx, e)
-	case OpUnlinkBatch:
-		return r.unlinkBatch(ctx, e)
-	case OpRmdir:
-		return r.rmdir(ctx, e)
-	case OpMove:
-		return r.move(ctx, e)
-	case OpClone:
-		return r.clone(ctx, e)
-	case OpCloneBatch:
-		return r.cloneBatch(ctx, e)
-	case OpAttach:
-		return r.attach(ctx, e)
-	case OpCleanup:
-		inode, err := e.Ino(0)
-		if err != nil {
-			return err
-		}
-		return changelogCall(e, dst.en.doCleanupDetachedNode(ctx, inode))
-	case OpSetXattr:
-		return r.setXattr(ctx, e)
-	case OpRemoveXattr:
-		return r.removeXattr(ctx, e)
-	case OpSetAttr:
-		return r.setAttr(ctx, e)
-	case OpTruncate:
-		return r.truncate(ctx, e)
-	case OpFallocate:
-		return r.fallocate(ctx, e)
-	case OpCopyFileRange:
-		return r.copyFileRange(ctx, e)
-	case OpWrite:
-		return r.write(ctx, e)
-	case OpCompactChunk:
-		return r.compactChunk(ctx, e)
-	case OpIncrCounter:
-		name := e.Args[0]
-		delta, err := e.Int64(1)
-		if err != nil {
-			return err
-		}
-		if name == usedSpace || name == totalInodes {
-			// FIXME: the loaded baseline must account for usage not flushed before dump.
-			skipReason = fmt.Sprintf("%s is updated by metadata operations", name)
-			return nil
-		}
-		if name == aclCounter {
-			skipReason = "ACL IDs are allocated by the destination"
-			return nil
-		}
-		if _, err := dst.en.incrCounter(name, delta); err != nil {
-			return fmt.Errorf("%s %s: %w", e.Op, name, err)
-		}
-		return nil
-	case OpSetFacl:
-		return r.setFacl(ctx, e)
-	case OpSetQuota:
-		return r.setQuota(ctx, e)
-	case OpDelQuota:
-		return r.delQuota(ctx, e)
-	case OpRepairDir:
-		return r.repairDir(ctx, e)
-	case OpUpdateToken:
-		return r.updateToken(ctx, e)
-	case OpStoreToken:
-		return r.storeToken(ctx, e)
-	case OpDeleteTokens:
-		return r.deleteTokens(ctx, e)
-	case OpAccess:
-		inode, err := e.Ino(0)
-		if err != nil {
-			return err
-		}
-		_, err = dst.en.doTouchAtime(ctx, inode, &Attr{}, e.Time)
+	if err != nil {
 		return err
-	case OpDelSustained:
-		sid, err := e.Uint64(0)
-		if err != nil {
-			return err
-		}
-		inode, err := e.Ino(1)
-		if err != nil {
-			return err
-		}
-		if err := dst.en.doDeleteSustainedInode(ctx, sid, inode); err != nil {
-			return err
-		}
-		dst.Lock()
-		delete(dst.removedFiles, inode)
-		dst.Unlock()
-		return nil
-
-	case OpNewSession, OpCleanSession:
-		skipReason = "source client sessions are not replayed"
-		return nil
-	case OpFlock, OpSetlk:
-		skipReason = "source client locks are not replayed"
-		return nil
-	case OpInitDirStats, OpInitUserGroupQuota:
-		skipReason = "statistics initialization is not replayed"
-		return nil
-	case OpDelChunk, OpDeleteSlice, OpCleanupDelayedSlices, OpCleanupTrashSlices:
-		skipReason = "background cleanup is not replayed"
-		return nil
-	case OpSet:
-		skipReason = "background job timestamps are not replayed"
-		return nil
-	default:
-		return fmt.Errorf("%s is validated but not implemented by replay", e.Op)
 	}
+	var message string
+	if skipReason != "" {
+		message = fmt.Sprintf("Skipped changelog: version=%d operation=%s reason=%s", e.Ver, e.Op, skipReason)
+	} else {
+		message = fmt.Sprintf("Replayed changelog: version=%d operation=%s", e.Ver, e.Op)
+	}
+	if _, err := r.progressLog.WriteString(message + "\n"); err != nil {
+		return fmt.Errorf("changelog version %d was applied but could not be written to replay progress log: %w", e.Ver, err)
+	}
+	logger.Info(message)
+	return nil
 }
 
 func changelogCall(e *ChangeEntry, st syscall.Errno) error {

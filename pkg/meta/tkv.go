@@ -966,6 +966,10 @@ func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
 	return scanRange(0, ^uint64(0))
 }
 
+func (m *kvMeta) changelogWindowStart(version int64) uint64 {
+	return m.client.rewind(uint64(version), 1)
+}
+
 func (m *kvMeta) ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error {
 	last := opt.From
 	if last == 0 {

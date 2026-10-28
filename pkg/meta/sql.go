@@ -1150,6 +1150,10 @@ func (m *dbMeta) sqlChangelogRewind() int {
 	return rewind
 }
 
+func (m *dbMeta) changelogWindowStart(version int64) uint64 {
+	return uint64(max(int64(0), version-int64(m.sqlChangelogRewind()))) + 1
+}
+
 func (m *dbMeta) ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error {
 	const batchSize = 1000
 	rewind := m.sqlChangelogRewind()
