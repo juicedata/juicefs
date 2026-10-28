@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
@@ -548,6 +549,243 @@ func TestResolveDotDot(t *testing.T) {
 	if fi, err := fs.Stat(ctx, "/g/root-link"); err != 0 || fi.Inode() != meta.RootInode || fi.Name() != "root-link" {
 		t.Errorf("Stat symlink to root: %+v, %s", fi, err)
 	}
+	if err := fs.Rmr(ctx, "/f/x", false, 1); err != syscall.ENOTDIR {
+		t.Errorf("Rmr under file: %s", err)
+	}
+	if err := fs.Rmr(ctx, "/f/..", false, 1); err != syscall.ENOTDIR {
+		t.Errorf("Rmr file/..: %s", err)
+	}
+	if err := fs.Rmr(ctx, "/x/.", false, 1); err != syscall.EINVAL {
+		t.Errorf("Rmr dir/.: %s", err)
+	}
+	if err := fs.Rmr(ctx, "/x/..", false, 1); err != syscall.ENOTEMPTY {
+		t.Errorf("Rmr dir/..: %s", err)
+	}
+	if _, err := fs.Stat(ctx, "/x/new"); err != 0 {
+		t.Errorf("Rmr dir/. or dir/.. must not remove entries: %s", err)
+	}
+	if err := fs.Rmr(ctx, "/", false, 1); err != syscall.EBUSY {
+		t.Errorf("Rmr /: %s", err)
+	}
+	if err := fs.Rmdir(ctx, "/"); err != syscall.EBUSY {
+		t.Errorf("Rmdir /: %s", err)
+	}
+	if err := fs.Delete(ctx, "/"); err != syscall.EBUSY {
+		t.Errorf("Delete /: %s", err)
+	}
+	if err := fs.Rename(ctx, "/f", "/f/x", 0); err != syscall.ENOTDIR {
+		t.Errorf("Rename(f, f/x): %s", err)
+	}
+	if err := fs.Rename(ctx, "/g", "/g/self/sub", 0); err != syscall.EINVAL {
+		t.Errorf("Rename into symlinked self: %s", err)
+	}
+	if err := fs.Rename(ctx, "/g/.", "/z", 0); err != syscall.EBUSY {
+		t.Errorf("Rename dir/.: %s", err)
+	}
+	if err := fs.Rename(ctx, "/f/", "/z", 0); err != syscall.ENOTDIR {
+		t.Errorf("Rename f/: %s", err)
+	}
+	if err := fs.Rename(ctx, "/f", "/z/", 0); err != syscall.ENOTDIR {
+		t.Errorf("Rename to z/: %s", err)
+	}
+	if err := fs.Mkdir(ctx, "/exdir", 0777, 0); err != 0 {
+		t.Fatal(err)
+	}
+	if err := fs.Rename(ctx, "/f", "/exdir/", 0); err != syscall.ENOTDIR {
+		t.Errorf("Rename(file, dir/, 0): %s", err)
+	}
+	if err := fs.Rename(ctx, "/exdir", "/f/", meta.RenameNoReplace); err != syscall.EEXIST {
+		t.Errorf("Rename(dir, file/, NoReplace): %s", err)
+	}
+	if err := fs.Rename(ctx, "/f/", "/missing", meta.RenameExchange); err != syscall.ENOENT {
+		t.Errorf("Rename(file/, missing, Exchange): %s", err)
+	}
+	if err := fs.Rename(ctx, "/f", "/exdir/", meta.RenameExchange); err != 0 {
+		t.Errorf("RenameExchange(file, dir/): %s", err)
+	}
+	if err := fs.Rename(ctx, "/exdir", "/f/", meta.RenameExchange); err != 0 {
+		t.Errorf("RenameExchange back: %s", err)
+	}
+	if err := fs.Mkdir(ctx, "/locked", 0700, 0); err != 0 {
+		t.Fatal(err)
+	}
+	if f, err := fs.Create(ctx, "/locked/present", 0666, 0); err != 0 {
+		t.Fatal(err)
+	} else {
+		_ = f.Close(ctx)
+	}
+	userCtx := meta.NewContext(2, 2, []uint32{3})
+	for _, dst := range []string{"/locked/present/", "/locked/missing/"} {
+		if err := fs.Link(userCtx, "/f", dst); err != syscall.EACCES {
+			t.Errorf("Link(%s) without search perm: got %s, want EACCES", dst, err)
+		}
+		if err := fs.Symlink(userCtx, "x", dst); err != syscall.EACCES {
+			t.Errorf("Symlink(%s) without search perm: got %s, want EACCES", dst, err)
+		}
+		if err := fs.Rename(userCtx, dst, "/z", 0); err != syscall.EACCES {
+			t.Errorf("Rename(%s) without search perm: got %s, want EACCES", dst, err)
+		}
+	}
+	rootFile, err := fs.Open(ctx, "/", 0)
+	if err != 0 {
+		t.Fatal(err)
+	}
+	if err := rootFile.Chmod(ctx, 0700); err != 0 {
+		t.Fatal(err)
+	}
+	for _, dst := range []string{"/f/", "/missing/"} {
+		if err := fs.Link(userCtx, "/f", dst); err != syscall.EACCES {
+			t.Errorf("Link(%s) on 0700 root: got %s, want EACCES", dst, err)
+		}
+		if err := fs.Symlink(userCtx, "x", dst); err != syscall.EACCES {
+			t.Errorf("Symlink(%s) on 0700 root: got %s, want EACCES", dst, err)
+		}
+	}
+	if err := rootFile.Chmod(ctx, 0755); err != 0 {
+		t.Fatal(err)
+	}
+	_ = rootFile.Close(ctx)
+	if err := fs.Link(ctx, "/f", "/z/"); err != syscall.ENOENT {
+		t.Errorf("Link to z/: %s", err)
+	}
+	if err := fs.Symlink(ctx, "x", "/z/"); err != syscall.ENOENT {
+		t.Errorf("Symlink to z/: %s", err)
+	}
+	if err := fs.Symlink(ctx, "x", "/f/"); err != syscall.EEXIST {
+		t.Errorf("Symlink to f/: %s", err)
+	}
+	if _, err := fs.Stat(ctx, ""); err != syscall.ENOENT {
+		t.Errorf("Stat empty: %s", err)
+	}
+	if err := fs.Rename(ctx, "/f", "", 0); err != syscall.ENOENT {
+		t.Errorf("Rename to empty: %s", err)
+	}
+	if rf, err := fs.Open(ctx, "/f", 0); err != 0 {
+		t.Fatal(err)
+	} else {
+		if _, err := rf.Readdir(ctx, 0); err != syscall.ENOTDIR {
+			t.Errorf("Readdir file: %s", err)
+		}
+		if _, err := rf.ReaddirPlus(ctx, 0); err != syscall.ENOTDIR {
+			t.Errorf("ReaddirPlus file: %s", err)
+		}
+		_ = rf.Close(ctx)
+	}
+
+	// ReadOnly client Mkdir("/") -> EEXIST and MkdirAll("/") -> 0.
+	fs.conf.Meta.ReadOnly = true
+	if err := fs.Mkdir(ctx, "/", 0755, 0); err != syscall.EEXIST {
+		t.Errorf("ReadOnly Mkdir(/): got %s, want EEXIST", err)
+	}
+	if err := fs.MkdirAll(ctx, "/", 0755, 0); err != 0 {
+		t.Errorf("ReadOnly MkdirAll(/): got %s, want 0", err)
+	}
+	fs.conf.Meta.ReadOnly = false
+
+	// SetFacl after caching 0700 directory must take effect immediately for Mkdir.
+	format := fs.Meta().GetFormat()
+	format.EnableACL = true
+	if err := fs.Meta().Init(&format, false); err != nil {
+		t.Fatal(err)
+	}
+	fs.conf.FastResolve = false
+	fs.conf.DirEntryTimeout = time.Minute
+	fs.conf.AttrTimeout = time.Minute
+	if err := fs.Mkdir(ctx, "/acldir", 0700, 0); err != 0 {
+		t.Fatal(err)
+	}
+	aclInfo, err := fs.Stat(ctx, "/acldir")
+	if err != 0 {
+		t.Fatal(err)
+	}
+	rule := &acl.Rule{
+		Owner:      7,
+		Group:      0,
+		Mask:       7,
+		Other:      0,
+		NamedUsers: acl.Entries{{Id: 2, Perm: 7}},
+	}
+	if err := fs.SetFacl(ctx, "/acldir", acl.TypeAccess, rule); err != 0 {
+		t.Fatalf("SetFacl(/acldir): %s", err)
+	}
+	if err := fs.Mkdir(userCtx, "/acldir/sub", 0755, 0); err != 0 {
+		t.Errorf("Mkdir after SetFacl on cached 0700 dir: got %s, want 0", err)
+	}
+	// Also verify cross-client ACL grant when local fs.attrs cache still holds stale 0700 attr.
+	if err := fs.Mkdir(ctx, "/acldir2", 0700, 0); err != 0 {
+		t.Fatal(err)
+	}
+	aclInfo2, err := fs.Stat(ctx, "/acldir2")
+	if err != 0 {
+		t.Fatal(err)
+	}
+	if err := fs.m.SetFacl(ctx, aclInfo2.Inode(), acl.TypeAccess, rule); err != 0 {
+		t.Fatalf("remote SetFacl(/acldir2): %s", err)
+	}
+	if err := fs.Mkdir(userCtx, "/acldir2/sub", 0755, 0); err != 0 {
+		t.Errorf("Mkdir after remote SetFacl on cached 0700 dir: got %s, want 0", err)
+	}
+	_ = aclInfo
+
+	// Cached 0700 parent directory removed and recreated with 0777 by another client
+	// must be re-resolved on Mkdir / Create / deep Mkdir (both without and with trash).
+	fs.rotateAccessLog = 300 << 20
+	for _, trashDays := range []int{0, 1} {
+		format := fs.Meta().GetFormat()
+		format.TrashDays = trashDays
+		if err := fs.Meta().Init(&format, false); err != nil {
+			t.Fatal(err)
+		}
+		if err := fs.Mkdir(ctx, "/recreated", 0700, 0); err != 0 {
+			t.Fatal(err)
+		}
+		if _, err := fs.Stat(ctx, "/recreated"); err != 0 {
+			t.Fatal(err)
+		}
+		if err := fs.m.Rmdir(ctx, meta.RootInode, "recreated"); err != 0 {
+			t.Fatal(err)
+		}
+		var newParentIno, newSubIno Ino
+		if err := fs.m.Mkdir(ctx, meta.RootInode, "recreated", 0777, 0, 0, &newParentIno, nil); err != 0 {
+			t.Fatal(err)
+		}
+		if err := fs.m.Mkdir(ctx, newParentIno, "sub", 0777, 0, 0, &newSubIno, nil); err != 0 {
+			t.Fatal(err)
+		}
+		if err := fs.Mkdir(userCtx, "/recreated/newdir", 0755, 0); err != 0 {
+			t.Errorf("Mkdir(/recreated/newdir) with trashDays=%d: got %s, want 0", trashDays, err)
+		}
+		if cf, err := fs.Create(userCtx, "/recreated/newfile", 0644, 0); err != 0 {
+			t.Errorf("Create(/recreated/newfile) with trashDays=%d: got %s, want 0", trashDays, err)
+		} else {
+			_ = cf.Close(userCtx)
+		}
+		// Reset cache to stale 0700 parent to also test intermediate traversal (/recreated/sub/deep).
+		if err := fs.Rmr(ctx, "/recreated", true, 1); err != 0 {
+			t.Fatal(err)
+		}
+		if err := fs.Mkdir(ctx, "/recreated", 0700, 0); err != 0 {
+			t.Fatal(err)
+		}
+		if _, err := fs.Stat(ctx, "/recreated"); err != 0 {
+			t.Fatal(err)
+		}
+		if err := fs.m.Rmdir(ctx, meta.RootInode, "recreated"); err != 0 {
+			t.Fatal(err)
+		}
+		if err := fs.m.Mkdir(ctx, meta.RootInode, "recreated", 0777, 0, 0, &newParentIno, nil); err != 0 {
+			t.Fatal(err)
+		}
+		if err := fs.m.Mkdir(ctx, newParentIno, "sub", 0777, 0, 0, &newSubIno, nil); err != 0 {
+			t.Fatal(err)
+		}
+		if err := fs.Mkdir(userCtx, "/recreated/sub/deep", 0755, 0); err != 0 {
+			t.Errorf("Mkdir(/recreated/sub/deep) with trashDays=%d: got %s, want 0", trashDays, err)
+		}
+		if err := fs.Rmr(ctx, "/recreated", true, 1); err != 0 {
+			t.Fatal(err)
+		}
+	}
 }
 
 func TestResolveSubdir(t *testing.T) {
@@ -596,6 +834,12 @@ func TestResolveSubdir(t *testing.T) {
 		if err := fs.Mkdir(ctx, "/data/out/new", 0777, 0); err != syscall.EACCES {
 			t.Errorf("Mkdir outside subdir: %s", err)
 		}
+		if err := fs.Mkdir(ctx, "/data/..", 0777, 0); err != syscall.EACCES {
+			t.Errorf("Mkdir /data/.. outside subdir: %s", err)
+		}
+		if err := fs.Rmr(ctx, "/data/..", false, 1); err != syscall.EACCES {
+			t.Errorf("Rmr /data/.. outside subdir: %s", err)
+		}
 	}
 	fs.subdirPrefixes = []string{"/data/a"}
 	if _, err := fs.Stat(ctx, "/data/a/b"); err != 0 {
@@ -635,8 +879,178 @@ func TestResolveSubdir(t *testing.T) {
 	}
 }
 
+type fastResolveMeta struct {
+	meta.Meta
+	conf *meta.Config
+}
+
+func (m fastResolveMeta) Resolve(ctx meta.Context, parent Ino, p string, inode *Ino, attr *Attr, _ bool) syscall.Errno {
+	if m.conf != nil && m.conf.CaseInsensi {
+		return syscall.ENOTSUP
+	}
+	if p == "/" {
+		*inode = meta.RootInode
+		return m.Meta.GetAttr(ctx, meta.RootInode, attr)
+	}
+	return m.Meta.Resolve(ctx, parent, p, inode, attr, true)
+}
+
+type lookupErrMeta struct {
+	meta.Meta
+	name string
+	err  syscall.Errno
+}
+
+func (m lookupErrMeta) Lookup(ctx meta.Context, parent Ino, name string, inode *Ino, attr *Attr, checkPerm bool) syscall.Errno {
+	if name == m.name {
+		return m.err
+	}
+	return m.Meta.Lookup(ctx, parent, name, inode, attr, checkPerm)
+}
+
+func TestFastResolveRenameIntoSubdir(t *testing.T) {
+	fs := createTestFS(t)
+	fs.m = fastResolveMeta{Meta: fs.m, conf: fs.conf.Meta}
+	fs.conf.FastResolve = true
+	ctx := meta.Background()
+	if err := fs.MkdirAll(ctx, "/a/b/c/d", 0777, 0); err != 0 {
+		t.Fatal(err)
+	}
+	if err := fs.Rename(ctx, "/a", "/a/b/c/d/moved", 0); err != syscall.EINVAL {
+		t.Fatalf("Rename(/a, /a/b/c/d/moved): got %s, want EINVAL", err)
+	}
+	if err := fs.Rename(ctx, "/a/b/c/d", "/a", meta.RenameExchange); err != syscall.EINVAL {
+		t.Fatalf("RenameExchange(/a/b/c/d, /a): got %s, want EINVAL", err)
+	}
+	if _, err := fs.Stat(ctx, "/a/b/c/d"); err != 0 {
+		t.Fatalf("/a/b/c/d should remain intact: %s", err)
+	}
+
+	if err := fs.Symlink(ctx, "../A/b/c/d", "/a/link"); err != 0 {
+		t.Fatal(err)
+	}
+	fs.conf.Meta.CaseInsensi = true
+	if err := fs.Rename(ctx, "/a", "/a/link/moved", 0); err != syscall.EINVAL {
+		t.Fatalf("case-insensitive Rename(/a, /a/link/moved): got %s, want EINVAL", err)
+	}
+	if err := fs.Rename(ctx, "/a/link", "/a", meta.RenameExchange); err != syscall.EINVAL {
+		t.Fatalf("case-insensitive RenameExchange(/a/link, /a): got %s, want EINVAL", err)
+	}
+	if _, err := fs.Stat(ctx, "/a/b/c/d"); err != 0 {
+		t.Fatalf("/a/b/c/d should remain intact after case-insensitive rename: %s", err)
+	}
+	fs.InvalidateEntry(meta.RootInode, "a")
+	fs.InvalidateEntry(meta.RootInode, "A")
+
+	// Stale cached source inode replaced by another client must not bypass loop check.
+	fs.conf.FastResolve = false
+	fs.conf.DirEntryTimeout = time.Minute
+	fs.conf.EntryTimeout = time.Minute
+	if _, err := fs.Lstat(ctx, "/a/link"); err != 0 {
+		t.Fatalf("cache /a and /a/link: %s", err)
+	}
+	if err := fs.m.Rename(ctx, meta.RootInode, "a", meta.RootInode, "old", 0, nil, nil); err != 0 {
+		t.Fatalf("client2 rename /a -> /old: %s", err)
+	}
+	var newA, newB, newC, newD Ino
+	if err := fs.m.Mkdir(ctx, meta.RootInode, "a", 0777, 0, 0, &newA, nil); err != 0 {
+		t.Fatal(err)
+	}
+	if err := fs.m.Mkdir(ctx, newA, "b", 0777, 0, 0, &newB, nil); err != 0 {
+		t.Fatal(err)
+	}
+	if err := fs.m.Mkdir(ctx, newB, "c", 0777, 0, 0, &newC, nil); err != 0 {
+		t.Fatal(err)
+	}
+	if err := fs.m.Mkdir(ctx, newC, "d", 0777, 0, 0, &newD, nil); err != 0 {
+		t.Fatal(err)
+	}
+	if err := fs.Rename(ctx, "/a", "/a/link/moved", 0); err != syscall.EINVAL {
+		t.Fatalf("client1 Rename(/a, /a/link/moved) with stale cached /a: got %s, want EINVAL", err)
+	}
+	fs.InvalidateEntry(meta.RootInode, "a")
+	fs.InvalidateEntry(meta.RootInode, "A")
+	if _, err := fs.Stat(ctx, "/a/b/c/d"); err != 0 {
+		t.Fatalf("new /a/b/c/d should remain intact: %s", err)
+	}
+	fs.conf.DirEntryTimeout = time.Millisecond * 100
+	fs.conf.EntryTimeout = time.Millisecond * 100
+	fs.conf.FastResolve = true
+
+	// Distinct Unicode names under meta.CaseInsensi ("/i" vs "/İ" U+0130) must not collide in entry cache.
+	fi1, err := fs.Create(ctx, "/i", 0666, 0)
+	if err != 0 {
+		t.Fatalf("Create(/i): %s", err)
+	}
+	_ = fi1.Close(ctx)
+	fi2, err := fs.Create(ctx, "/\u0130", 0666, 0)
+	if err != 0 {
+		t.Fatalf("Create(/İ): %s", err)
+	}
+	_ = fi2.Close(ctx)
+	if _, err := fs.Stat(ctx, "/i"); err != 0 {
+		t.Fatalf("Stat(/i): %s", err)
+	}
+	wf, err := fs.Open(ctx, "/\u0130", vfs.MODE_MASK_W)
+	if err != 0 {
+		t.Fatalf("Open(/İ): %s", err)
+	}
+	if _, err := wf.Write(ctx, []byte("x")); err != 0 {
+		t.Fatalf("Write(/İ): %s", err)
+	}
+	if err := wf.Close(ctx); err != 0 {
+		t.Fatalf("Close(/İ): %s", err)
+	}
+	if st1, err := fs.Stat(ctx, "/i"); err != 0 || st1.Size() != 0 {
+		t.Fatalf("/i size should remain 0, got %v, err=%s", st1, err)
+	}
+	if st2, err := fs.Stat(ctx, "/\u0130"); err != 0 || st2.Size() != 1 {
+		t.Fatalf("/İ size should be 1, got %v, err=%s", st2, err)
+	}
+	fs.conf.Meta.CaseInsensi = false
+
+	// Deep directory hierarchy (> 1024 levels) must still reject moving an ancestor into its descendant.
+	deep := "/deep"
+	if err := fs.Mkdir(ctx, deep, 0777, 0); err != 0 {
+		t.Fatal(err)
+	}
+	curInfo, err := fs.Stat(ctx, deep)
+	if err != 0 {
+		t.Fatal(err)
+	}
+	curIno := curInfo.Inode()
+	for i := 0; i < 1025; i++ {
+		var childIno Ino
+		if err := fs.m.Mkdir(ctx, curIno, "d", 0777, 0, 0, &childIno, nil); err != 0 {
+			t.Fatalf("mkdir level %d: %s", i, err)
+		}
+		curIno = childIno
+		deep += "/d"
+	}
+	if err := fs.Rename(ctx, "/deep", deep+"/moved", 0); err != syscall.EINVAL {
+		t.Fatalf("Rename(/deep, <1025 levels>/moved): got %s, want EINVAL", err)
+	}
+	if _, err := fs.Stat(ctx, "/deep/d"); err != 0 {
+		t.Fatalf("/deep/d should remain intact: %s", err)
+	}
+
+	f, err := fs.Create(ctx, "/f", 0666, 0)
+	if err != 0 {
+		t.Fatal(err)
+	}
+	_ = f.Close(ctx)
+	fs.m = lookupErrMeta{Meta: fs.m, name: "ioerr", err: syscall.EIO}
+	if err := fs.Link(ctx, "/f", "/ioerr/"); err != syscall.EIO {
+		t.Fatalf("Link(/f, /ioerr/): got %s, want EIO", err)
+	}
+	if err := fs.Symlink(ctx, "x", "/ioerr/"); err != syscall.EIO {
+		t.Fatalf("Symlink(x, /ioerr/): got %s, want EIO", err)
+	}
+}
+
 func createTestFS(t testing.TB) *FileSystem {
-	m := meta.NewClient("memkv://", nil)
+	metaConf := meta.DefaultConf()
+	m := meta.NewClient("memkv://", metaConf)
 	format := &meta.Format{
 		Name:      "test",
 		BlockSize: 4096,
@@ -645,7 +1059,7 @@ func createTestFS(t testing.TB) *FileSystem {
 	}
 	_ = m.Init(format, true)
 	var conf = vfs.Config{
-		Meta: meta.DefaultConf(),
+		Meta: metaConf,
 		Chunk: &chunk.Config{
 			BlockSize:   format.BlockSize << 10,
 			MaxUpload:   1,

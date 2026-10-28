@@ -1657,11 +1657,11 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if parent == RootInode && name == TrashName {
 		return syscall.EPERM
 	}
-	if m.conf.ReadOnly {
-		return syscall.EROFS
-	}
 	if name == "." || name == ".." {
 		return syscall.EEXIST
+	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
 	}
 	if errno := checkInodeName(name); errno != 0 {
 		return errno
@@ -1756,14 +1756,14 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if parent == RootInode && name == TrashName {
 		return syscall.EPERM
 	}
+	if name == "." || name == ".." {
+		return syscall.EEXIST
+	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
 	if errno := checkInodeName(name); errno != 0 {
 		return errno
-	}
-	if name == "." || name == ".." {
-		return syscall.EEXIST
 	}
 
 	defer m.timeit("Link", time.Now())
