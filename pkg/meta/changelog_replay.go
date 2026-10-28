@@ -361,6 +361,15 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) error {
 			return r.setQuota(ctx, e)
 		case OpDelQuota:
 			return r.delQuota(ctx, e)
+    case OpDirStat:
+      // FIXME: backup/load must restore an accurate directory-stat baseline.
+      // FIXME: coordinate pending and in-flight dir-stat updates with this resync to avoid double-counting.
+      inode, err := e.Ino(0)
+      if err != nil {
+        return err
+      }
+      _, st := dst.en.doSyncDirStat(ctx, inode)
+      return changelogCall(e, st)
 		case OpRepairDir:
 			return r.repairDir(ctx, e)
 		case OpUpdateToken:
