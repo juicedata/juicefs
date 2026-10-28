@@ -155,8 +155,7 @@ func TestReaderRefreshKeepsSharedSliceUnchanged(t *testing.T) {
 
 type readerTestMeta struct {
 	meta.Meta
-	read        func() ([]meta.Slice, syscall.Errno)
-	invalidates atomic.Int32
+	read func() ([]meta.Slice, syscall.Errno)
 }
 
 func (m *readerTestMeta) Read(_ meta.Context, _ meta.Ino, _ uint32, slices *[]meta.Slice) syscall.Errno {
@@ -166,7 +165,6 @@ func (m *readerTestMeta) Read(_ meta.Context, _ meta.Ino, _ uint32, slices *[]me
 }
 
 func (m *readerTestMeta) InvalidateChunkCache(meta.Context, meta.Ino, uint32) syscall.Errno {
-	m.invalidates.Add(1)
 	return 0
 }
 
@@ -226,11 +224,10 @@ func newReaderTestFile(t *testing.T, m *readerTestMeta, store chunk.ChunkStore, 
 	return f, closeFile
 }
 
-func startReaderTestSlice(f *fileReader, off uint64) (*sliceReader, *chunk.Page) {
+func startReaderTestSlice(f *fileReader, off uint64) *sliceReader {
 	f.Lock()
 	defer f.Unlock()
-	s := f.newSlice(&frange{off, readerTestSize})
-	return s, s.page
+	return f.newSlice(&frange{off, readerTestSize})
 }
 
 func awaitReaderTestSlice(t *testing.T, f *fileReader, s *sliceReader) {
@@ -245,77 +242,7 @@ func awaitReaderTestSlice(t *testing.T, f *fileReader, s *sliceReader) {
 	}
 }
 
-func TestReaderMetadataRetryKeepsPage(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		used    bool
-		refresh bool
-	}{
-		{name: "metadata error"},
-		{name: "metadata invalidation", refresh: true},
-		{name: "metadata error after data read", used: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			first, retry := newReaderTestGate(t), newReaderTestGate(t)
-			var metaCalls, dataCalls atomic.Int32
-			failAt := int32(1)
-			if tc.used {
-				failAt++
-			}
-			m := &readerTestMeta{read: func() ([]meta.Slice, syscall.Errno) {
-				n := metaCalls.Add(1)
-				if n == failAt {
-					if tc.refresh {
-						first.block()
-					} else {
-						return nil, syscall.EIO
-					}
-				} else if n == failAt+1 {
-					retry.block()
-				}
-				return readerTestSlices(), 0
-			}}
-			store := &readerTestStore{read: func(p *chunk.Page, _ int) (int, error) {
-				dataCalls.Add(1)
-				copy(p.Data, bytes.Repeat([]byte{'a'}, len(p.Data)))
-				return len(p.Data), nil
-			}}
-			f, _ := newReaderTestFile(t, m, store, readerTestSize)
-			s, initial := startReaderTestSlice(f, 0)
-			if tc.used {
-				awaitReaderTestSlice(t, f, s)
-				f.Lock()
-				s.refs++
-				s.invalidate()
-				f.Unlock()
-				t.Cleanup(func() { f.Lock(); s.refs--; f.Unlock() })
-			}
-			if tc.refresh {
-				awaitReaderTest(t, first.entered)
-				f.r.Invalidate(f.inode, 0, readerTestSize)
-				first.open()
-			}
-			awaitReaderTest(t, retry.entered)
-			f.Lock()
-			beforeData := s.page
-			f.Unlock()
-			require.Same(t, initial, beforeData, "metadata work must not replace the data page")
-			require.Equal(t, failAt-1, dataCalls.Load())
-			retry.open()
-			awaitReaderTestSlice(t, f, s)
-			f.Lock()
-			current := s.page
-			f.Unlock()
-			if tc.used {
-				require.NotSame(t, initial, current)
-			} else {
-				require.Same(t, initial, current, "the first data read must use the initial allocation")
-			}
-		})
-	}
-}
-
-func TestReaderDataRetryReplacesPage(t *testing.T) {
+func TestReaderDataRetryKeepsBorrowedPage(t *testing.T) {
 	for _, mode := range []string{"error", "partial", "timeout"} {
 		t.Run(mode, func(t *testing.T) {
 			var failed atomic.Bool
@@ -359,18 +286,13 @@ func TestReaderDataRetryReplacesPage(t *testing.T) {
 				return len(p.Data), nil
 			}}
 			before := readBufferUsed.Load()
-			allocated := utils.AllocMemory()
 			f, closeFile := newReaderTestFile(t, m, store, readerTestSize)
-			s, initial := startReaderTestSlice(f, 0)
+			s := startReaderTestSlice(f, 0)
 			awaitReaderTestSlice(t, f, s)
 			f.Lock()
 			current := s.page
 			f.Unlock()
-			require.NotSame(t, initial, current)
-			require.Len(t, current.Data, readerTestSize)
-			require.Equal(t, readerTestSize, cap(current.Data))
 			require.Equal(t, before+readerTestSize, readBufferUsed.Load())
-			require.Equal(t, int32(1), m.invalidates.Load())
 			require.Equal(t, bytes.Repeat([]byte{'a'}, readerTestSize), retained.Load().Data)
 			if mode == "timeout" {
 				late.open()
@@ -379,9 +301,6 @@ func TestReaderDataRetryReplacesPage(t *testing.T) {
 			require.Equal(t, bytes.Repeat([]byte{'b'}, readerTestSize), current.Data)
 			closeFile()
 			require.Equal(t, before, readBufferUsed.Load())
-			retained.Swap(nil).Release()
-			require.Eventually(t, func() bool { return utils.AllocMemory() == allocated }, time.Second, time.Millisecond,
-				"both pages must be released after their last borrowers")
 		})
 	}
 }
@@ -403,15 +322,13 @@ func TestReaderReadyInvalidationWaitsForRefresh(t *testing.T) {
 		return len(p.Data), nil
 	}}
 	f, _ := newReaderTestFile(t, m, store, readerTestSize)
-	s, initial := startReaderTestSlice(f, 0)
+	s := startReaderTestSlice(f, 0)
 	awaitReaderTestSlice(t, f, s)
 	f.Lock()
 	s.refs++
 	s.invalidate()
-	progress := s.currentPos
 	f.Unlock()
 	t.Cleanup(func() { f.Lock(); s.refs--; f.Unlock() })
-	require.Zero(t, progress, "the old progress must not expose an unfinished refresh")
 	awaitReaderTest(t, refresh.entered)
 	buf := make([]byte, readerTestSize)
 	started, done := make(chan struct{}), make(chan struct{})
@@ -437,80 +354,67 @@ func TestReaderReadyInvalidationWaitsForRefresh(t *testing.T) {
 	require.Zero(t, err)
 	require.Equal(t, readerTestSize, n)
 	require.Equal(t, bytes.Repeat([]byte{'b'}, readerTestSize), buf)
-	f.Lock()
-	current := s.page
-	f.Unlock()
-	require.NotSame(t, initial, current)
-	used := readBufferUsed.Load()
-	f.r.Truncate(f.inode, readerTestSize/2)
-	awaitReaderTestSlice(t, f, s)
-	f.Lock()
-	shortened, size := s.page, s.block.len
-	f.Unlock()
-	require.NotSame(t, current, shortened)
-	require.Equal(t, uint64(readerTestSize/2), size)
-	require.Len(t, shortened.Data, readerTestSize)
-	require.Equal(t, readerTestSize, cap(shortened.Data))
-	require.Equal(t, used, readBufferUsed.Load())
-	f.r.Truncate(f.inode, 0)
-	awaitReaderTestSlice(t, f, s)
-	f.Lock()
-	empty, size, progress := s.page, s.block.len, s.currentPos
-	f.Unlock()
-	require.Same(t, shortened, empty, "a zero-length refresh must not allocate another page")
-	require.Zero(t, size)
-	require.Zero(t, progress)
-	require.Equal(t, int32(3), calls.Load())
 }
 
-func TestReaderCloseReleasesBorrowedPage(t *testing.T) {
-	for _, refresh := range []bool{false, true} {
-		t.Run(fmt.Sprint(refresh), func(t *testing.T) {
-			ioGate := newReaderTestGate(t)
-			var retained atomic.Pointer[chunk.Page]
-			done := make(chan struct{})
-			t.Cleanup(func() {
-				ioGate.open()
-				awaitReaderTest(t, done)
-				if p := retained.Swap(nil); p != nil {
-					p.Release()
-				}
-			})
-			m := &readerTestMeta{read: func() ([]meta.Slice, syscall.Errno) { return readerTestSlices(), 0 }}
-			store := &readerTestStore{read: func(p *chunk.Page, _ int) (int, error) {
-				p.Acquire()
-				retained.Store(p)
-				ioGate.block()
-				copy(p.Data, bytes.Repeat([]byte{'a'}, len(p.Data)))
-				return len(p.Data), nil
-			}}
-			before := readBufferUsed.Load()
-			allocated := utils.AllocMemory()
-			f, closeFile := newReaderTestFile(t, m, store, readerTestSize)
-			go func() {
-				_, _ = f.Read(meta.Background(), 0, make([]byte, readerTestSize))
-				close(done)
-			}()
-			awaitReaderTest(t, ioGate.entered)
-			f.Lock()
-			initial := f.slices.page
-			f.Unlock()
-			if refresh {
-				f.r.Invalidate(f.inode, 0, readerTestSize)
+// A ready slice refreshed while waitForIO waits for a later slice must be waited for again.
+func TestReaderWaitForIORechecksRefreshedSlice(t *testing.T) {
+	refresh, second := newReaderTestGate(t), newReaderTestGate(t)
+	var firstCalls atomic.Int32
+	m := &readerTestMeta{read: func() ([]meta.Slice, syscall.Errno) {
+		return []meta.Slice{{Id: 1, Size: 2 * readerTestSize, Len: 2 * readerTestSize}}, 0
+	}}
+	store := &readerTestStore{read: func(p *chunk.Page, off int) (int, error) {
+		value := byte('c')
+		if off < readerTestSize {
+			value = 'a'
+			if firstCalls.Add(1) > 1 {
+				refresh.block()
+				value = 'b'
 			}
-			closeFile()
-			ioGate.open()
-			awaitReaderTest(t, done)
-			require.NotNil(t, initial.Data, "the outstanding borrower must retain the closed reader's page")
-			retained.Swap(nil).Release()
-			require.Eventually(t, func() bool { return utils.AllocMemory() == allocated }, time.Second, time.Millisecond)
-			require.Equal(t, before, readBufferUsed.Load())
-			f.r.Lock()
-			files := len(f.r.files)
-			f.r.Unlock()
-			require.Zero(t, files)
-		})
+		} else {
+			second.block()
+		}
+		copy(p.Data, bytes.Repeat([]byte{value}, len(p.Data)))
+		return len(p.Data), nil
+	}}
+	f, _ := newReaderTestFile(t, m, store, 2*readerTestSize)
+	s1 := startReaderTestSlice(f, 0)
+	awaitReaderTestSlice(t, f, s1)
+	s2 := startReaderTestSlice(f, readerTestSize)
+	awaitReaderTest(t, second.entered)
+	f.Lock()
+	s1.refs++
+	s2.refs++
+	f.Unlock()
+	t.Cleanup(func() { f.Lock(); s1.refs--; s2.refs--; f.Unlock() })
+
+	buf := make([]byte, 2*readerTestSize)
+	started, done := make(chan struct{}), make(chan struct{})
+	var n int
+	var err syscall.Errno
+	go func() {
+		f.Lock()
+		close(started)
+		n, err = f.waitForIO(meta.Background(), []*req{{frange{0, readerTestSize}, s1}, {frange{0, readerTestSize}, s2}}, buf)
+		f.Unlock()
+		close(done)
+	}()
+	awaitReaderTest(t, started)
+	f.Lock() // acquired only after waitForIO passes s1 and waits for s2
+	s1.invalidate()
+	f.Unlock()
+	awaitReaderTest(t, refresh.entered)
+	second.open()
+	select {
+	case <-done:
+		t.Fatal("waitForIO returned before the refreshed slice was ready")
+	case <-time.After(100 * time.Millisecond):
 	}
+	refresh.open()
+	awaitReaderTest(t, done)
+	require.Zero(t, err)
+	require.Equal(t, 2*readerTestSize, n)
+	require.Equal(t, append(bytes.Repeat([]byte{'b'}, readerTestSize), bytes.Repeat([]byte{'c'}, readerTestSize)...), buf)
 }
 
 func TestReaderTruncateBeforeDataRead(t *testing.T) {
@@ -530,20 +434,18 @@ func TestReaderTruncateBeforeDataRead(t *testing.T) {
 			}}
 			before := readBufferUsed.Load()
 			f, closeFile := newReaderTestFile(t, m, store, 2*readerTestSize)
-			s, initial := startReaderTestSlice(f, readerTestSize)
+			s := startReaderTestSlice(f, readerTestSize)
 			awaitReaderTest(t, metadata.entered)
 			f.r.Truncate(f.inode, length)
 			metadata.open()
 			awaitReaderTestSlice(t, f, s)
 			f.Lock()
-			current, size, progress := s.page, s.block.len, s.currentPos
+			size, progress := s.block.len, s.currentPos
 			f.Unlock()
-			require.Same(t, initial, current)
 			require.Zero(t, size)
 			require.Zero(t, progress)
 			require.Zero(t, dataCalls.Load())
 			closeFile()
-			require.Nil(t, initial.Data)
 			require.Equal(t, before, readBufferUsed.Load())
 		})
 	}

@@ -602,17 +602,22 @@ func (f *fileReader) shouldStop() bool {
 
 func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, syscall.Errno) {
 	start := time.Now()
-	for _, req := range reqs {
-		s := req.s
-		for s.state != READY && uint64(s.currentPos) < s.block.len {
-			if s.cond.WaitWithTimeout(time.Second) {
-				if ctx.Canceled() {
-					logger.Warnf("read %d interrupted after %s", f.inode, time.Since(start))
-					return 0, syscall.EINTR
+	// Recheck all requests after any wait: a ready slice may be refreshed while the lock is released.
+	for waited := true; waited; {
+		waited = false
+		for _, req := range reqs {
+			s := req.s
+			for s.state != READY && uint64(s.currentPos) < s.block.len {
+				waited = true
+				if s.cond.WaitWithTimeout(time.Second) {
+					if ctx.Canceled() {
+						logger.Warnf("read %d interrupted after %s", f.inode, time.Since(start))
+						return 0, syscall.EINTR
+					}
 				}
-			}
-			if f.shouldStop() {
-				return 0, f.err
+				if f.shouldStop() {
+					return 0, f.err
+				}
 			}
 		}
 	}
