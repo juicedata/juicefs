@@ -97,6 +97,7 @@ type sliceReader struct {
 	block      *frange
 	state      sstate
 	page       *chunk.Page
+	pageUsed   bool
 	indx       uint32
 	currentPos uint32
 	lastAccess time.Time
@@ -193,15 +194,24 @@ func (s *sliceReader) run() {
 	s.currentPos = 0
 	if s.block.off > length {
 		s.block.len = 0
-		s.state = READY
-		s.done(0, 0)
 	} else if s.block.end() > length {
 		s.block.len = length - s.block.off
 	}
 	need := s.block.len
-	f.Unlock()
+	if need == 0 {
+		s.state = READY
+		s.done(0, 0)
+	}
+	if s.pageUsed {
+		// The previous page may still be held by the cache or an unfinished read.
+		old := s.page
+		s.page = chunk.NewOffPage(len(old.Data))
+		old.Release()
+	}
 
 	p := s.page.Slice(0, int(need))
+	s.pageUsed = true
+	f.Unlock()
 	defer p.Release()
 	var n int
 
@@ -239,6 +249,7 @@ func (s *sliceReader) invalidate() {
 		// TODO cancel ongoing read
 	case READY:
 		if s.refs > 0 {
+			s.currentPos = 0
 			s.state = NEW
 			go s.run()
 		} else {
