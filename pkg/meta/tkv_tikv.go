@@ -124,11 +124,8 @@ func (c *tikvClient) initMetrics(reg prometheus.Registerer) {
 	if reg == nil {
 		return
 	}
-	reg = prometheus.WrapRegistererWith(prometheus.Labels{"metrics_scope": "process"}, reg)
 	for _, collector := range []prometheus.Collector{
 		tikvmetrics.TiKVSendReqHistogram,
-		tikvmetrics.TiKVBackoffHistogram,
-		tikvmetrics.TiKVRPCErrorCounter,
 		tikvmetrics.TiKVBatchPendingRequests,
 		tikvmetrics.TiKVBatchClientWaitEstablish,
 		tikvmetrics.TiKVNoAvailableConnectionCounter,

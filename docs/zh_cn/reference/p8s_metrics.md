@@ -54,15 +54,13 @@ sidebar_position: 4
 
 ### TiKV 客户端
 
-使用 TiKV 元数据引擎时，以下指标反映 TiKV Go 客户端的 RPC、重试和请求排队情况。它们带有额外标签 `metrics_scope="process"`，采集只读取进程内统计，不向 TiKV 发起查询。
+使用 TiKV 元数据引擎时，以下指标反映 TiKV Go 客户端的 RPC 和请求排队情况。采集只读取进程内统计，不向 TiKV 发起查询。
 
 这些 collector 由进程中的全部 TiKV 客户端共享。Java 或 Python SDK 在同一进程中打开多个卷时，各卷的指标会重复导出相同的进程总量。此时 `vol_name` 和 `mp` 标签标识指标的导出上下文，而非这些统计的归属；不要对同一进程中不同卷的这些指标求和。
 
 | 名称 | 类型 | 描述 |
 | ---- | ---- | ---- |
 | `juicefs_tikv_client_go_request_seconds` | Histogram | RPC 请求耗时，单位为秒；标签：`type`、`store`、`stale_read`、`scope` |
-| `juicefs_tikv_client_go_backoff_seconds` | Histogram | 每次退避 sleep 的耗时分布，单位为秒；标签：`type` |
-| `juicefs_tikv_client_go_rpc_err_total` | Counter | RPC 错误次数；标签：`type`、`store` |
 | `juicefs_tikv_client_go_batch_pending_requests` | Histogram | batch 通道中的排队请求数；标签：`store` |
 | `juicefs_tikv_client_go_batch_client_wait_connection_establish` | Histogram | 等待 batch 连接建立的时间，单位为秒 |
 | `juicefs_tikv_client_go_batch_client_no_available_connection_total` | Counter | 无可用 batch 客户端发送请求的次数 |

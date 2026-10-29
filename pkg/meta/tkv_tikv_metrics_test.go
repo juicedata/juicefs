@@ -20,14 +20,24 @@
 package meta
 
 import (
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/push"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 	tikvmetrics "github.com/tikv/client-go/v2/metrics"
 	"google.golang.org/protobuf/proto"
 )
+
+type metricsPushClient func(*http.Request) (*http.Response, error)
+
+func (f metricsPushClient) Do(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func TestTiKVClientMetrics(t *testing.T) {
 	// Use distinct children so real TiKV client tests do not affect these samples.
@@ -44,8 +54,6 @@ func TestTiKVClientMetrics(t *testing.T) {
 
 	expected := map[string]dto.MetricType{
 		"juicefs_tikv_client_go_request_seconds":                            dto.MetricType_HISTOGRAM,
-		"juicefs_tikv_client_go_backoff_seconds":                            dto.MetricType_HISTOGRAM,
-		"juicefs_tikv_client_go_rpc_err_total":                              dto.MetricType_COUNTER,
 		"juicefs_tikv_client_go_batch_pending_requests":                     dto.MetricType_HISTOGRAM,
 		"juicefs_tikv_client_go_batch_client_wait_connection_establish":     dto.MetricType_HISTOGRAM,
 		"juicefs_tikv_client_go_batch_client_no_available_connection_total": dto.MetricType_COUNTER,
@@ -68,6 +76,12 @@ func TestTiKVClientMetrics(t *testing.T) {
 		}
 		if result["juicefs_transaction_durations_histogram_seconds"] == nil {
 			t.Error("common metadata metrics were not registered")
+		}
+		if result["juicefs_tikv_client_go_backoff_seconds"] != nil {
+			t.Error("TiKV backoff metrics should not be registered")
+		}
+		if result["juicefs_tikv_client_go_rpc_err_total"] != nil {
+			t.Error("TiKV RPC error metrics should not be registered")
 		}
 		return result
 	}
@@ -95,7 +109,7 @@ func TestTiKVClientMetrics(t *testing.T) {
 					for _, label := range metric.Label {
 						labels[label.GetName()] = label.GetValue()
 					}
-					if labels["metrics_scope"] != "process" || labels["custom"] != "value" {
+					if _, ok := labels["metrics_scope"]; ok || labels["custom"] != "value" {
 						t.Errorf("metric %s has unexpected labels: %v", name, labels)
 					}
 					if labels["type"] == "metrics-test" || labels["store"] == "metrics-test" {
@@ -109,8 +123,8 @@ func TestTiKVClientMetrics(t *testing.T) {
 			if count != len(expected) {
 				t.Errorf("got %d TiKV metric families, want %d", count, len(expected))
 			}
-			if len(first) != 4 {
-				t.Errorf("got %d fixture samples, want 4", len(first))
+			if len(first) != 2 {
+				t.Errorf("got %d fixture samples, want 2", len(first))
 			}
 			// Retrying backend registration must not panic or replace collectors.
 			m.client.(tkvMetricsClient).initMetrics(reg)
@@ -123,14 +137,67 @@ func TestTiKVClientMetrics(t *testing.T) {
 		(&tikvClient{}).initMetrics(nil)
 	})
 
-	t.Run("conflicting scope label", func(t *testing.T) {
+	t.Run("SDK PushGateway custom scope label", func(t *testing.T) {
+		registry := prometheus.NewPedanticRegistry()
+		newMeta("sdk-push-labels").InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", registry))
+		pusher := push.New("http://pushgateway", "juicefs").Gatherer(registry)
+		commonLabels := prometheus.Labels{"vol_name": "sdk-push-labels", "mp": "sdk-test", "metrics_scope": "custom"}
+		for name, value := range commonLabels {
+			pusher.Grouping(name, value)
+		}
+		pushed := make(map[string]*dto.MetricFamily)
+		pusher.Client(metricsPushClient(func(req *http.Request) (*http.Response, error) {
+			defer req.Body.Close()
+			if !strings.Contains(req.URL.Path, "/metrics_scope/custom") {
+				t.Errorf("custom scope grouping label was lost: %s", req.URL.Path)
+			}
+			decoder := expfmt.NewDecoder(req.Body, expfmt.FmtProtoDelim)
+			for {
+				family := new(dto.MetricFamily)
+				if err := decoder.Decode(family); err == io.EOF {
+					break
+				} else if err != nil {
+					t.Fatalf("decode pushed metrics: %v", err)
+				}
+				pushed[family.GetName()] = family
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(""))}, nil
+		}))
+		if err := pusher.Push(); err != nil {
+			t.Fatalf("push SDK metrics with custom scope label: %v", err)
+		}
+		if pushed["juicefs_transaction_durations_histogram_seconds"] == nil {
+			t.Error("common metadata metrics were not pushed")
+		}
+		for name, typ := range expected {
+			if family := pushed[name]; family == nil || family.GetType() != typ {
+				t.Errorf("TiKV metric %s was not pushed", name)
+			}
+		}
+	})
+
+	t.Run("custom scope label", func(t *testing.T) {
 		registry := prometheus.NewPedanticRegistry()
 		reg := prometheus.WrapRegistererWithPrefix("juicefs_",
 			prometheus.WrapRegistererWith(prometheus.Labels{"metrics_scope": "custom"}, registry))
-		newMeta("conflicting-label").InitMetrics(reg)
-		for name := range gather(t, registry) {
-			if strings.HasPrefix(name, "juicefs_tikv_client_go_") {
-				t.Errorf("conflicting metric %s was registered", name)
+		newMeta("custom-label").InitMetrics(reg)
+		families := gather(t, registry)
+		for name, typ := range expected {
+			family := families[name]
+			if family == nil || family.GetType() != typ {
+				t.Errorf("TiKV metric %s was lost", name)
+				continue
+			}
+			for _, metric := range family.Metric {
+				found := false
+				for _, label := range metric.Label {
+					if label.GetName() == "metrics_scope" && label.GetValue() == "custom" {
+						found = true
+					}
+				}
+				if !found {
+					t.Errorf("TiKV metric %s lost custom scope label", name)
+				}
 			}
 		}
 	})
@@ -139,13 +206,13 @@ func TestTiKVClientMetrics(t *testing.T) {
 		registry := prometheus.NewPedanticRegistry()
 		reg := prometheus.WrapRegistererWithPrefix("juicefs_", registry)
 		reg.MustRegister(prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "tikv_client_go_rpc_err_total",
+			Name: "tikv_client_go_batch_client_no_available_connection_total",
 			Help: "Conflicting metric for testing.",
 		}))
 		newMeta("conflicting-collector").InitMetrics(reg)
 		families := gather(t, registry)
 		for name, typ := range expected {
-			if name == "juicefs_tikv_client_go_rpc_err_total" {
+			if name == "juicefs_tikv_client_go_batch_client_no_available_connection_total" {
 				typ = dto.MetricType_GAUGE
 			}
 			if family := families[name]; family == nil || family.GetType() != typ {

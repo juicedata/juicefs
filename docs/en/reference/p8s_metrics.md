@@ -54,15 +54,13 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 
 ### TiKV client
 
-For the TiKV metadata engine, the following metrics expose TiKV Go client's RPC, retry, and request queue activity. They have the additional label `metrics_scope="process"` and read in-process statistics without querying TiKV.
+For the TiKV metadata engine, the following metrics expose TiKV Go client's RPC and request queue activity. They read in-process statistics without querying TiKV.
 
 These collectors are shared by all TiKV clients in the process. When the Java or Python SDK opens multiple volumes, each volume's metrics export the same process totals. The `vol_name` and `mp` labels identify the exporter context, not the owner of these statistics; do not sum these metrics across volumes in the same process.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | `juicefs_tikv_client_go_request_seconds` | Histogram | RPC request duration in seconds; labels: `type`, `store`, `stale_read`, `scope` |
-| `juicefs_tikv_client_go_backoff_seconds` | Histogram | Duration of each backoff sleep in seconds; label: `type` |
-| `juicefs_tikv_client_go_rpc_err_total` | Counter | RPC errors; labels: `type`, `store` |
 | `juicefs_tikv_client_go_batch_pending_requests` | Histogram | Number of requests pending in the batch channel; label: `store` |
 | `juicefs_tikv_client_go_batch_client_wait_connection_establish` | Histogram | Time spent waiting for a batch connection to be established, in seconds |
 | `juicefs_tikv_client_go_batch_client_no_available_connection_total` | Counter | Number of times no batch client is available to send requests |
