@@ -4570,6 +4570,41 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("hardlink: %s", eno)
 	}
 
+	t.Run("CloneParentDirStat", func(t *testing.T) {
+		m.FlushSession()
+		for _, tc := range []struct {
+			name   string
+			parent Ino
+			inode  Ino
+			length int64
+			space  int64
+		}{
+			{"directory", cloneDir, dir1, 0, align4K(0)},
+			{"file", dir1, file1, 67108864, align4K(67108864)},
+			{"symlink", dir1, file1Symlink, 0, align4K(0)},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				var count, total uint64
+				if st := m.Clone(Background(), tc.parent, tc.inode, dir, tc.name, 0, 022, 4, &count, &total); st != 0 {
+					t.Fatalf("clone: %s", st)
+				}
+				if err := waitCheckResult(m, dirStat{tc.length, tc.space, 1}, func() (*dirStat, syscall.Errno) {
+					return m.GetDirStat(Background(), dir)
+				}); err != nil {
+					t.Errorf("parent stat after clone: %s", err)
+				}
+				if st := m.Remove(Background(), dir, tc.name, true, RmrDefaultThreads, nil); st != 0 {
+					t.Fatalf("remove clone: %s", st)
+				}
+				if err := waitCheckResult(m, dirStat{}, func() (*dirStat, syscall.Errno) {
+					return m.GetDirStat(Background(), dir)
+				}); err != nil {
+					t.Errorf("parent stat after removing clone: %s", err)
+				}
+			})
+		}
+	})
+
 	var attr Attr
 	attr.Mtime = 1
 	m.SetAttr(Background(), cloneDir, SetAttrMtime, 0, &attr)
