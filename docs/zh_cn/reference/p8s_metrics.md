@@ -73,6 +73,24 @@ sidebar_position: 4
 | `juicefs_group_quota_used_space_bytes`      | 组配额已使用的空间          | 字节 |
 | `juicefs_group_quota_used_inodes`           | 组配额已使用的 inodes 数量  |     |
 
+### SQL 连接池
+
+使用 MySQL、PostgreSQL 或 SQLite 元数据引擎时，以下指标反映各客户端的连接池状态。它们由 Prometheus Go SQL collector 提供，带有额外标签 `db_name="metadata"`。采集只读取本地连接池统计，不向数据库发起查询。这些是客户端统计，而非数据库服务端的总量。
+
+| 名称 | 类型 | 描述 |
+| ---- | ---- | ---- |
+| `juicefs_go_sql_max_open_connections` | Gauge | 最大连接数，0 表示不限制 |
+| `juicefs_go_sql_open_connections` | Gauge | 已打开的连接数，包括使用中和空闲连接 |
+| `juicefs_go_sql_in_use_connections` | Gauge | 正在使用的连接数 |
+| `juicefs_go_sql_idle_connections` | Gauge | 空闲连接数 |
+| `juicefs_go_sql_wait_count_total` | Counter | 等待获取连接的累计次数 |
+| `juicefs_go_sql_wait_duration_seconds_total` | Counter | 等待获取连接的累计时间，单位为秒 |
+| `juicefs_go_sql_max_idle_closed_total` | Counter | 因空闲连接数限制而关闭的连接总数 |
+| `juicefs_go_sql_max_idle_time_closed_total` | Counter | 因达到最大空闲时间而关闭的连接总数 |
+| `juicefs_go_sql_max_lifetime_closed_total` | Counter | 因达到最大连接生命周期而关闭的连接总数 |
+
+元数据操作变慢时，等待指标可用于判断是否存在连接池争用。Counter 在客户端连接池的生命周期内累计，可用 `rate()` 或 `increase()` 查看指定时间窗口内的变化。
+
 ## FUSE {#fuse}
 
 ### 标签
