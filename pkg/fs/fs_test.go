@@ -17,14 +17,17 @@
 package fs
 
 import (
+	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
@@ -256,7 +259,7 @@ func TestFileSystem(t *testing.T) {
 	if _, err := fs.Create(ctx, "/ddd/ddd", 0777, 000); err != 0 {
 		t.Fatalf("create /ddd/ddd: %s", err)
 	}
-	if _, err := fs.Create(ctx, "/ddd/fff/", 0777, 000); err != syscall.EINVAL {
+	if _, err := fs.Create(ctx, "/ddd/fff/", 0777, 000); err != syscall.EISDIR {
 		t.Fatalf("create /ddd/fff/: %s", err)
 	}
 	if err := fs.Delete(ctx, "/ddd/"); err != syscall.ENOTEMPTY {
@@ -596,6 +599,9 @@ func TestResolveSubdir(t *testing.T) {
 		if err := fs.Mkdir(ctx, "/data/out/new", 0777, 0); err != syscall.EACCES {
 			t.Errorf("Mkdir outside subdir: %s", err)
 		}
+		if err := fs.Clone(ctx, "/data/..", "/data/copy", false); err != syscall.EACCES {
+			t.Errorf("Clone outside subdir: %s", err)
+		}
 	}
 	fs.subdirPrefixes = []string{"/data/a"}
 	if _, err := fs.Stat(ctx, "/data/a/b"); err != 0 {
@@ -684,6 +690,365 @@ func TestErrnoOrder(t *testing.T) {
 		}
 		if _, err := fs.Stat(root, "/f"); err != 0 {
 			t.Fatalf("uid %d: /f should remain: %s", ctx.Uid(), err)
+		}
+	}
+}
+
+func TestLastComponent(t *testing.T) {
+	fs := createTestFS(t)
+	fs.rotateAccessLog = 1 << 30 // avoid rotating access log during TempDir cleanup
+	root := meta.NewContext(1, 0, []uint32{0})
+	owner := meta.NewContext(1, 1, []uint32{2})
+	other := meta.NewContext(1, 2, []uint32{3})
+	for _, d := range []string{"/d/sub", "/e", "/nox/sub", "/now"} {
+		if err := fs.MkdirAll(owner, d, 0777, 0); err != 0 {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range []string{"/f", "/d/keep", "/d/sub/keep"} {
+		f, err := fs.Create(owner, p, 0644, 0)
+		if err != 0 {
+			t.Fatal(err)
+		}
+		_ = f.Close(owner)
+	}
+	for link, target := range map[string]string{"/lnd": "d", "/dang": "missing"} {
+		if err := fs.Symlink(owner, target, link); err != 0 {
+			t.Fatal(err)
+		}
+	}
+	for p, mode := range map[string]uint16{"/nox": 0700, "/now": 0555} {
+		f, err := fs.Open(owner, p, 0)
+		if err != 0 {
+			t.Fatal(err)
+		}
+		if err = f.Chmod(owner, mode); err != 0 {
+			t.Fatal(err)
+		}
+		_ = f.Close(owner)
+	}
+	var tree func(p string) string
+	tree = func(p string) string {
+		f, err := fs.Lopen(root, p, 0)
+		if err != 0 {
+			t.Fatal(err)
+		}
+		defer f.Close(root)
+		es, _ := f.ReaddirPlus(root, 0)
+		sort.Slice(es, func(i, j int) bool { return string(es[i].Name) < string(es[j].Name) })
+		s := ""
+		for _, e := range es {
+			name := path.Join(p, string(e.Name))
+			s += fmt.Sprintf("%s:%d ", name, e.Inode)
+			if e.Attr.Typ == meta.TypeDirectory {
+				s += tree(name)
+			}
+		}
+		return s
+	}
+	before := tree("/")
+
+	type op func(ctx meta.Context) syscall.Errno
+	rmr := func(p string) op {
+		return func(ctx meta.Context) syscall.Errno { return fs.Rmr(ctx, p, false, meta.RmrDefaultThreads) }
+	}
+	rmdir := func(p string) op { return func(ctx meta.Context) syscall.Errno { return fs.Rmdir(ctx, p) } }
+	del := func(p string) op { return func(ctx meta.Context) syscall.Errno { return fs.Delete(ctx, p) } }
+	unlink := func(p string) op { return func(ctx meta.Context) syscall.Errno { return fs.Unlink(ctx, p) } }
+	mkdir := func(p string) op { return func(ctx meta.Context) syscall.Errno { return fs.Mkdir(ctx, p, 0777, 0) } }
+	mkdirAll := func(p string) op { return func(ctx meta.Context) syscall.Errno { return fs.MkdirAll(ctx, p, 0777, 0) } }
+	create := func(p string) op {
+		return func(ctx meta.Context) syscall.Errno { _, err := fs.Create(ctx, p, 0644, 0); return err }
+	}
+	stat := func(p string) op {
+		return func(ctx meta.Context) syscall.Errno { _, err := fs.Stat(ctx, p); return err }
+	}
+	link := func(src, dst string) op {
+		return func(ctx meta.Context) syscall.Errno { return fs.Link(ctx, src, dst) }
+	}
+	symlink := func(dst string) op { return func(ctx meta.Context) syscall.Errno { return fs.Symlink(ctx, "x", dst) } }
+	rename := func(src, dst string, flags uint32) op {
+		return func(ctx meta.Context) syscall.Errno { return fs.Rename(ctx, src, dst, flags) }
+	}
+	clone := func(src, dst string) op {
+		return func(ctx meta.Context) syscall.Errno { return fs.Clone(ctx, src, dst, false) }
+	}
+
+	cases := []struct {
+		desc string
+		op   op
+		want syscall.Errno
+	}{
+		// empty path
+		{`Stat("")`, stat(""), syscall.ENOENT},
+		{`Mkdir("")`, mkdir(""), syscall.ENOENT},
+		{`MkdirAll("")`, mkdirAll(""), syscall.ENOENT},
+		{`Rename(f, "")`, rename("/f", "", 0), syscall.ENOENT},
+		{`Rename("", g)`, rename("", "/g", 0), syscall.ENOENT},
+		{`Clone(f, "")`, clone("/f", ""), syscall.ENOENT},
+		// root
+		{`Mkdir(/)`, mkdir("/"), syscall.EEXIST},
+		{`MkdirAll(/)`, mkdirAll("/"), 0},
+		{`Create(/)`, create("/"), syscall.EEXIST},
+		{`Rmdir(/)`, rmdir("/"), syscall.EBUSY},
+		{`Delete(/)`, del("/"), syscall.EBUSY},
+		{`Rmr(/)`, rmr("/"), syscall.EBUSY},
+		{`Unlink(/)`, unlink("/"), syscall.EISDIR},
+		{`Rename(/, g)`, rename("/", "/g", 0), syscall.EBUSY},
+		{`Rename(f, /)`, rename("/f", "/", 0), syscall.EBUSY},
+		{`Clone(/, g)`, clone("/", "/g"), syscall.EINVAL},
+		// "." and ".."
+		{`Rmr(d/.)`, rmr("/d/."), syscall.EINVAL},
+		{`Rmr(d/sub/..)`, rmr("/d/sub/.."), syscall.ENOTEMPTY},
+		{`Rmr(d/sub/../)`, rmr("/d/sub/../"), syscall.ENOTEMPTY},
+		{`Rmdir(d/.)`, rmdir("/d/."), syscall.EINVAL},
+		{`Rmdir(d/sub/..)`, rmdir("/d/sub/.."), syscall.ENOTEMPTY},
+		{`Delete(d/.)`, del("/d/."), syscall.EINVAL},
+		{`Unlink(d/.)`, unlink("/d/."), syscall.EISDIR},
+		{`Unlink(d/..)`, unlink("/d/.."), syscall.EISDIR},
+		{`Mkdir(d/.)`, mkdir("/d/."), syscall.EEXIST},
+		{`Create(d/.)`, create("/d/."), syscall.EEXIST},
+		{`Link(f, d/..)`, link("/f", "/d/.."), syscall.EEXIST},
+		{`Rename(e/., g)`, rename("/e/.", "/g", 0), syscall.EBUSY},
+		{`Rename(d/sub/.., g)`, rename("/d/sub/..", "/g", 0), syscall.EBUSY},
+		{`Rename(f, e/.)`, rename("/f", "/e/.", 0), syscall.EBUSY},
+		{`Rename(f, e/., NOREPLACE)`, rename("/f", "/e/.", meta.RenameNoReplace), syscall.EEXIST},
+		{`Clone(d/.., g)`, clone("/d/..", "/g"), syscall.EINVAL},
+		{`Clone(f, e/.)`, clone("/f", "/e/."), syscall.EEXIST},
+		// file as parent
+		{`Rmr(f/x)`, rmr("/f/x"), syscall.ENOTDIR},
+		{`Rmr(f/..)`, rmr("/f/.."), syscall.ENOTDIR},
+		{`Rmdir(f/..)`, rmdir("/f/.."), syscall.ENOTDIR},
+		{`Mkdir(f/.)`, mkdir("/f/."), syscall.ENOTDIR},
+		{`Mkdir(f/..)`, mkdir("/f/.."), syscall.ENOTDIR},
+		{`Link(f, f/.)`, link("/f", "/f/."), syscall.ENOTDIR},
+		{`Symlink(x, f/.)`, symlink("/f/."), syscall.ENOTDIR},
+		{`Create(f/x/)`, create("/f/x/"), syscall.ENOTDIR},
+		{`Rename(f, f/x)`, rename("/f", "/f/x", 0), syscall.ENOTDIR},
+		{`Rename(f/.., g)`, rename("/f/..", "/g", 0), syscall.ENOTDIR},
+		// trailing slash
+		{`Rmr(f/)`, rmr("/f/"), syscall.ENOTDIR},
+		{`Rmr(lnd/)`, rmr("/lnd/"), syscall.ENOTDIR},
+		{`Rename(f/, g)`, rename("/f/", "/g", 0), syscall.ENOTDIR},
+		{`Rename(f, g/)`, rename("/f", "/g/", 0), syscall.ENOTDIR},
+		{`Rename(lnd/, g)`, rename("/lnd/", "/g", 0), syscall.ENOTDIR},
+		{`Rename(lnd, g/)`, rename("/lnd", "/g/", 0), syscall.ENOTDIR},
+		{`Rename(f, d/sub/g/)`, rename("/f", "/d/sub/g/", 0), syscall.ENOTDIR},
+		{`Rename(missing/, g)`, rename("/missing/", "/g", 0), syscall.ENOENT},
+		{`Rename(f, e/, NOREPLACE)`, rename("/f", "/e/", meta.RenameNoReplace), syscall.EEXIST},
+		{`Rename(f/, e, EXCHANGE)`, rename("/f/", "/e", meta.RenameExchange), syscall.ENOTDIR},
+		{`Rename(e, f/, EXCHANGE)`, rename("/e", "/f/", meta.RenameExchange), syscall.ENOTDIR},
+		{`Rename(e, g/, EXCHANGE)`, rename("/e", "/g/", meta.RenameExchange), syscall.ENOENT},
+		{`Link(f, g/)`, link("/f", "/g/"), syscall.ENOENT},
+		{`Link(f, e/)`, link("/f", "/e/"), syscall.EEXIST},
+		{`Symlink(x, g/)`, symlink("/g/"), syscall.ENOENT},
+		{`Symlink(x, e/)`, symlink("/e/"), syscall.EEXIST},
+		{`Symlink(x, f/)`, symlink("/f/"), syscall.EEXIST},
+		{`Symlink(x, dang/)`, symlink("/dang/"), syscall.EEXIST},
+		{`Create(g/)`, create("/g/"), syscall.EISDIR},
+		{`Create(f/)`, create("/f/"), syscall.EISDIR},
+		{`Create(d/)`, create("/d/"), syscall.EISDIR},
+		{`Create(missing/x/)`, create("/missing/x/"), syscall.ENOENT},
+		{`Clone(f, g/)`, clone("/f", "/g/"), syscall.ENOENT},
+		{`Clone(f/, g)`, clone("/f/", "/g"), syscall.ENOTDIR},
+		{`Clone(d, e/)`, clone("/d", "/e/"), syscall.EEXIST},
+		// an empty symlink target is rejected before the link is resolved
+		{`Symlink("", f/.)`, func(ctx meta.Context) syscall.Errno { return fs.Symlink(ctx, "", "/f/.") }, syscall.ENOENT},
+		// moving a directory under itself
+		{`Rename(d, d/x)`, rename("/d", "/d/x", 0), syscall.EINVAL},
+		{`Rename(d, d/sub/x)`, rename("/d", "/d/sub/x", 0), syscall.EINVAL},
+		{`Rename(d, lnd/sub/x)`, rename("/d", "/lnd/sub/x", 0), syscall.EINVAL},
+		{`Rename(d, d/sub/../x)`, rename("/d", "/d/sub/../x", 0), syscall.EINVAL},
+		{`Rename(d/sub, d, EXCHANGE)`, rename("/d/sub", "/d", meta.RenameExchange), syscall.EINVAL},
+		{`Rename(d, d/sub, EXCHANGE)`, rename("/d", "/d/sub", meta.RenameExchange), syscall.EINVAL},
+	}
+	for _, ctx := range []meta.Context{root, owner} {
+		for _, c := range cases {
+			if got := c.op(ctx); got != c.want {
+				t.Errorf("uid %d: %s: got %s, want %s", ctx.Uid(), c.desc, got, c.want)
+			}
+			if after := tree("/"); after != before {
+				t.Fatalf("uid %d: %s changed the tree:\n%s\n%s", ctx.Uid(), c.desc, before, after)
+			}
+		}
+	}
+
+	// search permission on the parent comes first, write permission after the last component
+	for _, c := range []struct {
+		desc string
+		op   op
+		want syscall.Errno
+	}{
+		{`Mkdir(nox/.)`, mkdir("/nox/."), syscall.EACCES},
+		{`Mkdir(nox/..)`, mkdir("/nox/.."), syscall.EACCES},
+		{`Rmdir(nox/.)`, rmdir("/nox/."), syscall.EACCES},
+		{`Rmr(nox/.)`, rmr("/nox/."), syscall.EACCES},
+		{`Unlink(nox/.)`, unlink("/nox/."), syscall.EACCES},
+		{`Rename(nox/., g)`, rename("/nox/.", "/g", 0), syscall.EACCES},
+		{`Create(nox/x/)`, create("/nox/x/"), syscall.EACCES},
+		{`Mkdir(now/.)`, mkdir("/now/."), syscall.EEXIST},
+		{`Rmdir(now/.)`, rmdir("/now/."), syscall.EINVAL},
+		{`Mkdir(now/new)`, mkdir("/now/new"), syscall.EACCES},
+		{`Rmr(f/x)`, rmr("/f/x"), syscall.ENOTDIR},
+		{`Rmr(f/..)`, rmr("/f/.."), syscall.ENOTDIR},
+	} {
+		if got := c.op(other); got != c.want {
+			t.Errorf("uid 2: %s: got %s, want %s", c.desc, got, c.want)
+		}
+	}
+
+	// the root is searched as well before the last component is interpreted
+	rootDir, err := fs.Open(root, "/", 0)
+	if err != 0 {
+		t.Fatal(err)
+	}
+	defer rootDir.Close(root)
+	rootMode := rootDir.info.attr.Mode
+	if err = rootDir.Chmod(root, 0700); err != 0 {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		desc string
+		op   op
+		want syscall.Errno
+	}{
+		{`Link(f, e/)`, link("/f", "/e/"), syscall.EACCES},
+		{`Link(f, g/)`, link("/f", "/g/"), syscall.EACCES},
+		{`Symlink(x, e/)`, symlink("/e/"), syscall.EACCES},
+		{`Symlink(x, g/)`, symlink("/g/"), syscall.EACCES},
+		{`Create(g/)`, create("/g/"), syscall.EACCES},
+		{`Mkdir(/.)`, mkdir("/."), syscall.EACCES},
+		{`Mkdir(/)`, mkdir("/"), syscall.EEXIST},
+	} {
+		if got := c.op(other); got != c.want {
+			t.Errorf("uid 2, root 0700: %s: got %s, want %s", c.desc, got, c.want)
+		}
+	}
+	if err = rootDir.Chmod(root, rootMode); err != 0 {
+		t.Fatal(err)
+	}
+	if after := tree("/"); after != before {
+		t.Fatalf("tree changed:\n%s\n%s", before, after)
+	}
+
+	// an ACL granted just now must be honored by the search permission check
+	rule := &acl.Rule{Owner: 7, Mask: 7, NamedUsers: acl.Entries{{Id: 2, Perm: 7}}}
+	if err := fs.SetFacl(owner, "/nox", acl.TypeAccess, rule); err != 0 {
+		t.Fatal(err)
+	}
+	if err := fs.Mkdir(other, "/nox/new", 0777, 0); err != 0 {
+		t.Fatalf("mkdir after granting ACL: %s", err)
+	}
+}
+
+// The source of Clone is looked up as an existing object, and the destination
+// is created as a directory if the source is one.
+func TestClone(t *testing.T) {
+	fs := createTestFS(t)
+	fs.rotateAccessLog = 1 << 30 // avoid rotating access log during TempDir cleanup
+	ctx := meta.Background()
+	if err := fs.MkdirAll(ctx, "/d/sub", 0777, 0); err != 0 {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"/f", "/d/keep", "/d/sub/keep"} {
+		f, err := fs.Create(ctx, p, 0644, 0)
+		if err != 0 {
+			t.Fatal(err)
+		}
+		_ = f.Close(ctx)
+	}
+	if err := fs.Symlink(ctx, "d", "/lnd"); err != 0 {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		src, dst string
+		typ      uint8
+	}{
+		{"/f", "/c1", meta.TypeFile},
+		{"/lnd", "/c2", meta.TypeSymlink},
+		{"/d/.", "/c3", meta.TypeDirectory},
+		{"/d/sub/..", "/c4", meta.TypeDirectory},
+		{"/lnd/", "/c5", meta.TypeDirectory},
+		{"/d", "/c6/", meta.TypeDirectory},
+	} {
+		if err := fs.Clone(ctx, c.src, c.dst, false); err != 0 {
+			t.Errorf("Clone(%s, %s): %s", c.src, c.dst, err)
+			continue
+		}
+		fi, err := fs.Lstat(ctx, c.dst)
+		if err != 0 || fi.attr.Typ != c.typ {
+			t.Errorf("Clone(%s, %s): %+v, %s", c.src, c.dst, fi, err)
+			continue
+		}
+		if c.typ == meta.TypeDirectory {
+			if _, err := fs.Stat(ctx, c.dst+"/sub/keep"); err != 0 {
+				t.Errorf("Clone(%s, %s) should copy the content of d: %s", c.src, c.dst, err)
+			}
+		}
+	}
+}
+
+// Changes made by other clients are simulated by the metadata engine directly.
+func TestRevalidateStaleCache(t *testing.T) {
+	fs := createTestFS(t)
+	fs.rotateAccessLog = 1 << 30 // avoid rotating access log during TempDir cleanup
+	fs.conf.DirEntryTimeout, fs.conf.EntryTimeout, fs.conf.AttrTimeout = time.Hour, time.Hour, time.Hour
+	root := meta.NewContext(1, 0, []uint32{0})
+	other := meta.NewContext(1, 2, []uint32{3})
+	changes := map[string]func(name string){
+		"grant ACL": func(name string) {
+			var inode Ino
+			if err := fs.m.Lookup(root, meta.RootInode, name, &inode, &Attr{}, false); err != 0 {
+				t.Fatal(err)
+			}
+			rule := &acl.Rule{Owner: 7, Mask: 7, NamedUsers: acl.Entries{{Id: 2, Perm: 7}}}
+			if err := fs.m.SetFacl(root, inode, acl.TypeAccess, rule); err != 0 {
+				t.Fatal(err)
+			}
+		},
+		"recreate": func(name string) {
+			var inode Ino
+			if err := fs.m.Remove(root, meta.RootInode, name, true, meta.RmrDefaultThreads, nil); err != 0 {
+				t.Fatal(err)
+			}
+			if err := fs.m.Mkdir(root, meta.RootInode, name, 0777, 0, 0, &inode, nil); err != 0 {
+				t.Fatal(err)
+			}
+			if err := fs.m.Mkdir(root, inode, "sub", 0777, 0, 0, &inode, nil); err != 0 {
+				t.Fatal(err)
+			}
+		},
+	}
+	ops := map[string]func(p string) syscall.Errno{
+		"Mkdir": func(p string) syscall.Errno { return fs.Mkdir(other, p, 0777, 0) },
+		"Create": func(p string) syscall.Errno {
+			f, err := fs.Create(other, p, 0644, 0)
+			if err == 0 {
+				_ = f.Close(other)
+			}
+			return err
+		},
+	}
+	var i int
+	for cname, change := range changes {
+		for oname, op := range ops {
+			for _, sub := range []string{"new", "sub/new"} {
+				i++
+				dir := fmt.Sprintf("/d%d", i)
+				if err := fs.Mkdir(root, dir, 0700, 0); err != 0 {
+					t.Fatal(err)
+				}
+				if err := fs.Mkdir(root, dir+"/sub", 0777, 0); err != 0 {
+					t.Fatal(err)
+				}
+				if err := op(dir + "/x"); err != syscall.EACCES {
+					t.Fatalf("%s %s/x: %s", oname, dir, err)
+				}
+				change(dir[1:])
+				if err := op(dir + "/" + sub); err != 0 {
+					t.Errorf("%s %s/%s after %s: %s", oname, dir, sub, cname, err)
+				}
+			}
 		}
 	}
 }
