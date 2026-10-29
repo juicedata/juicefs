@@ -20,6 +20,7 @@
 package meta
 
 import (
+	"maps"
 	"sync"
 	"weak"
 
@@ -60,6 +61,14 @@ func (m *redisPoolMetrics) track(node string, client *redis.Client) {
 	m.clients[node] = weak.Make(client)
 }
 
+func (m *redisPoolMetrics) untrack(node string, ref weak.Pointer[redis.Client]) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.clients[node] == ref {
+		delete(m.clients, node)
+	}
+}
+
 func (m *redisPoolMetrics) Describe(ch chan<- *prometheus.Desc) {
 	for _, desc := range m.descs {
 		ch <- desc
@@ -70,16 +79,15 @@ func (m *redisPoolMetrics) Collect(ch chan<- prometheus.Metric) {
 	// Read individual pools: ClusterClient.PoolStats omits wait statistics and
 	// can refresh cluster topology. Weak pointers avoid retaining retired nodes.
 	m.mu.Lock()
-	stats := make(map[string]*redis.PoolStats, len(m.clients))
-	for node, ref := range m.clients {
-		if client := ref.Value(); client != nil {
-			stats[node] = client.PoolStats()
-		} else {
-			delete(m.clients, node)
-		}
-	}
+	clients := maps.Clone(m.clients)
 	m.mu.Unlock()
-	for node, stat := range stats {
+	for node, ref := range clients {
+		client := ref.Value()
+		if client == nil {
+			m.untrack(node, ref)
+			continue
+		}
+		stat := client.PoolStats()
 		values := [6]float64{
 			float64(stat.TotalConns), float64(stat.IdleConns), float64(stat.PendingRequests),
 			float64(stat.WaitCount), float64(stat.WaitDurationNs) / 1e9, float64(stat.Timeouts),

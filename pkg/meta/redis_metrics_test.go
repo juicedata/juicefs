@@ -396,7 +396,84 @@ func TestRedisPoolMetricsRegistration(t *testing.T) {
 	}
 }
 
+type redisMetricsBlockingCloseConn struct {
+	net.Conn
+	closing chan struct{}
+	release <-chan struct{}
+	once    sync.Once
+}
+
+func (c *redisMetricsBlockingCloseConn) Close() error {
+	c.once.Do(func() {
+		close(c.closing)
+		<-c.release
+	})
+	return c.Conn.Close()
+}
+
 func TestRedisPoolMetricsLifecycle(t *testing.T) {
+	t.Run("slow pool does not block tracking", func(t *testing.T) {
+		closing := make(chan struct{})
+		release := make(chan struct{})
+		var releaseOnce sync.Once
+		unblock := func() { releaseOnce.Do(func() { close(release) }) }
+		defer unblock()
+		dialer, _ := redisMetricsDialer()
+		client := redis.NewClient(&redis.Options{
+			Addr: "unused:6379", Protocol: 2, MaxRetries: -1, DisableIdentity: true,
+			Dialer: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				conn, err := dialer(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+				return &redisMetricsBlockingCloseConn{Conn: conn, closing: closing, release: release}, nil
+			},
+			MaintNotificationsConfig: &maintnotifications.Config{Mode: maintnotifications.ModeDisabled},
+		})
+		t.Cleanup(func() { _ = client.Close() })
+		if err := client.Ping(context.Background()).Err(); err != nil {
+			t.Fatal(err)
+		}
+		metrics := newRedisPoolMetrics()
+		metrics.track("slow:6379", client)
+		closed := make(chan struct{})
+		go func() {
+			defer close(closed)
+			_ = client.Close()
+		}()
+		defer func() {
+			unblock()
+			<-closed
+		}()
+		// Closing a connection holds the pool mutex, so PoolStats must wait.
+		<-closing
+		collected := make(chan struct{})
+		go func() {
+			defer close(collected)
+			metrics.Collect(make(chan prometheus.Metric, 6))
+		}()
+		defer func() {
+			unblock()
+			<-collected
+		}()
+		waitRedisMetrics(t, func() bool {
+			stacks := make([]byte, 1<<20)
+			n := runtime.Stack(stacks, true)
+			for _, stack := range strings.Split(string(stacks[:n]), "\n\n") {
+				if strings.Contains(stack, "(*redisPoolMetrics).Collect") && strings.Contains(stack, "(*Client).PoolStats") {
+					return true
+				}
+			}
+			return false
+		})
+		if !metrics.mu.TryLock() {
+			t.Fatal("collecting a blocked pool holds the tracking mutex")
+		}
+		metrics.mu.Unlock()
+		replacement, _ := newRedisMetricsTestClient(t)
+		metrics.track("new:6379", replacement)
+	})
+
 	metrics := newRedisPoolMetrics()
 	registry := redisMetricsRegistry(t, metrics)
 	oldClient, _ := newRedisMetricsTestClient(t)
@@ -406,6 +483,8 @@ func TestRedisPoolMetricsLifecycle(t *testing.T) {
 	}
 	replacement, _ := newRedisMetricsTestClient(t)
 	metrics.track("node:6379", replacement)
+	// A stale collection snapshot must not remove a replacement for this node.
+	metrics.untrack("node:6379", weak.Make(oldClient))
 	values := gatherRedisPoolMetrics(t, registry)
 	if len(values["juicefs_redis_pool_connections"]) != 1 || values["juicefs_redis_pool_connections"]["node:6379"] != 0 {
 		t.Fatalf("replaced node was retained: %v", values)
