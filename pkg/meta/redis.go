@@ -49,6 +49,8 @@ import (
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/redis/go-redis/extra/redisprometheus/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/maintnotifications"
 	"golang.org/x/sync/errgroup"
@@ -304,6 +306,15 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	m.en = m
 	m.checkServerConfig()
 	return m, nil
+}
+
+func (m *redisMeta) InitMetrics(reg prometheus.Registerer) {
+	m.baseMeta.InitMetrics(reg)
+	if client, ok := m.rdb.(*redis.Client); ok && reg != nil {
+		if err := reg.Register(redisprometheus.NewCollector("", "redis", client)); err != nil {
+			logger.Warnf("Register Redis connection pool metrics: %s", err)
+		}
+	}
 }
 
 func (m *redisMeta) Shutdown() error {
