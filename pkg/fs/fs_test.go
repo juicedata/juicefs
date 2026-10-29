@@ -635,6 +635,59 @@ func TestResolveSubdir(t *testing.T) {
 	}
 }
 
+// Errors that Linux reports before resolving the path or checking permissions.
+func TestErrnoOrder(t *testing.T) {
+	fs := createTestFS(t)
+	fs.rotateAccessLog = 1 << 30 // avoid rotating access log during TempDir cleanup
+	root := meta.NewContext(1, 0, []uint32{0})
+	other := meta.NewContext(1, 2, []uint32{3})
+	if err := fs.Mkdir(root, "/d", 0777, 0); err != 0 {
+		t.Fatal(err)
+	}
+	f, err := fs.Create(root, "/f", 0600, 0)
+	if err != 0 {
+		t.Fatal(err)
+	}
+	_ = f.Close(root)
+
+	for _, ctx := range []meta.Context{root, other} {
+		f, err := fs.Open(ctx, "/f", 0)
+		if err != 0 {
+			t.Fatal(err)
+		}
+		if _, err = f.Readdir(ctx, 0); err != syscall.ENOTDIR {
+			t.Errorf("uid %d: Readdir(f): got %s, want ENOTDIR", ctx.Uid(), err)
+		}
+		if _, err = f.ReaddirPlus(ctx, 0); err != syscall.ENOTDIR {
+			t.Errorf("uid %d: ReaddirPlus(f): got %s, want ENOTDIR", ctx.Uid(), err)
+		}
+		_ = f.Close(ctx)
+
+		for _, link := range []string{"/g", "/g/", "/f/x", "/missing/x"} {
+			if err := fs.Symlink(ctx, "", link); err != syscall.ENOENT {
+				t.Errorf("uid %d: Symlink(\"\", %s): got %s, want ENOENT", ctx.Uid(), link, err)
+			}
+		}
+
+		for _, c := range []struct {
+			src, dst string
+			flags    uint32
+		}{
+			{"/missing/x", "/g", meta.RenameExchange | meta.RenameNoReplace},
+			{"/f", "/d/x", meta.RenameExchange | meta.RenameWhiteout},
+			{"/f/", "/g", 1 << 10},
+			{"/f", "/d/x", meta.RenameNoReplace | meta.RenameRestore},
+		} {
+			if err := fs.Rename(ctx, c.src, c.dst, c.flags); err != syscall.EINVAL {
+				t.Errorf("uid %d: Rename(%s, %s, %#x): got %s, want EINVAL", ctx.Uid(), c.src, c.dst, c.flags, err)
+			}
+		}
+		if _, err := fs.Stat(root, "/f"); err != 0 {
+			t.Fatalf("uid %d: /f should remain: %s", ctx.Uid(), err)
+		}
+	}
+}
+
 func createTestFS(t testing.TB) *FileSystem {
 	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
