@@ -2257,8 +2257,10 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				}
 				newSpace, newInode = -align4K(0), -1
 			}
-			if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
-				return err
+			if e.Type != TypeFile || !opened { // an open file keeps its xattrs until doDeleteSustainedInode
+				if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
+					return err
+				}
 			}
 		}
 		if updateParent {
@@ -2728,8 +2730,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						}
 						newSpace, newInode = -align4K(0), -1
 					}
-					if _, err := s.Delete(&xattr{Inode: dino}); err != nil {
-						return err
+					if de.Type != TypeFile || !opened {
+						if _, err := s.Delete(&xattr{Inode: dino}); err != nil {
+							return err
+						}
 					}
 				}
 				if err := deleteEdge(s, &de); err != nil {
@@ -3186,7 +3190,9 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 								})
 							}
 						}
-						xattrsDel = append(xattrsDel, info.e.Inode)
+						if dnode, ok := batchDelNodes[info.n.Inode]; info.n.Type != TypeFile || !ok || !dnode.opened {
+							xattrsDel = append(xattrsDel, info.e.Inode)
+						}
 					}
 					invalidatedInodes[info.e.Inode] = struct{}{}
 				}
@@ -3471,6 +3477,9 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		}
 		_, err = s.Delete(&sustained{Sid: sid, Inode: inode})
 		if err != nil {
+			return err
+		}
+		if _, err = s.Delete(&xattr{Inode: inode}); err != nil {
 			return err
 		}
 		_, err = s.Delete(&node{Inode: inode})

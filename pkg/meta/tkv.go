@@ -1720,7 +1720,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				tx.delete(m.inodeKey(inode))
 				newSpace, newInode = -align4K(0), -1
 			}
-			tx.deleteKeys(m.xattrKey(inode, ""))
+			if _type != TypeFile || !opened { // an open file keeps its xattrs until doDeleteSustainedInode
+				tx.deleteKeys(m.xattrKey(inode, ""))
+			}
 			if attr.Parent == 0 {
 				tx.deleteKeys(m.fmtKey("A", inode, "P"))
 			}
@@ -1988,7 +1990,9 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 							})
 						}
 						// Delete xattrs and parent keys
-						tx.deleteKeys(m.xattrKey(info.inode, ""))
+						if dnode, ok := delNodes[info.inode]; info.typ != TypeFile || !ok || !dnode.opened {
+							tx.deleteKeys(m.xattrKey(info.inode, ""))
+						}
 						if info.attr.Parent == 0 {
 							tx.deleteKeys(m.fmtKey("A", info.inode, "P"))
 						}
@@ -2432,7 +2436,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tx.delete(m.inodeKey(dino))
 						newSpace, newInode = -align4K(0), -1
 					}
-					tx.deleteKeys(m.xattrKey(dino, ""))
+					if dtyp != TypeFile || !opened {
+						tx.deleteKeys(m.xattrKey(dino, ""))
+					}
 					if tattr.Parent == 0 {
 						tx.deleteKeys(m.fmtKey("A", dino, "P"))
 					}
@@ -2667,6 +2673,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		newSpace = -align4K(attr.Length)
 		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(time.Now().Unix()))
 		tx.delete(m.inodeKey(inode))
+		tx.deleteKeys(m.xattrKey(inode, ""))
 		tx.delete(m.sustainedKey(sid, inode))
 		m.genLog(tx, time.Now(), "DELSUSTAINED(%d,%d)", sid, inode)
 		return nil
