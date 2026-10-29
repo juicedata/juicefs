@@ -52,6 +52,21 @@ sidebar_position: 4
 | `juicefs_meta_ops_total`                          | 元数据引擎操作的次数 |    |
 | `juicefs_meta_ops_duration_seconds`               | 元数据引擎操作的累计耗时 | 秒 |
 
+### Redis 连接池
+
+使用 Redis 或 KeyDB 元数据引擎时，以下客户端统计反映主命令连接池的状态。单机和 Sentinel 客户端的 `node` 标签为空，Redis Cluster 的 `node` 标签为节点地址。不包含 Sentinel 控制连接和 Pub/Sub 连接池。采集只读取各连接池的本地统计，不发送 Redis 命令或刷新集群拓扑。
+
+| 名称 | 类型 | 描述 |
+| ---- | ---- | ---- |
+| `juicefs_redis_pool_connections` | Gauge | 命令连接池的连接数 |
+| `juicefs_redis_pool_idle_connections` | Gauge | 命令连接池的空闲连接数 |
+| `juicefs_redis_pool_pending_requests` | Gauge | 正在获取命令连接的请求数 |
+| `juicefs_redis_pool_waits_total` | Counter | 等待后取得命令连接池许可的累计次数 |
+| `juicefs_redis_pool_wait_duration_seconds_total` | Counter | 等待取得命令连接池许可的累计时间，单位为秒 |
+| `juicefs_redis_pool_timeouts_total` | Counter | 等待命令连接超时的累计次数 |
+
+Redis 的等待次数和时间在请求等待后取得连接池许可时累计，不计入超时或取消的等待；已计数的等待仍可能在后续建连时失败。连接池超时单独计数。连接池重建时 Counter 可能重置，包括 Cluster 拓扑变更的场景。跨节点聚合应先计算 `rate()`，例如 `sum by (instance, mp, vol_name) (rate(juicefs_redis_pool_timeouts_total[5m]))`。连接池关闭后连接数归零，其客户端被垃圾回收后，对应时间序列在后续采集中消失。自定义 `node` 标签冲突时，该 collector 注册失败并记录警告，公共元数据指标仍可使用。
+
 ## 配额 {#quota}
 
 ### 指标

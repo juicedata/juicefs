@@ -52,6 +52,21 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | `juicefs_meta_ops_total`                          | Number of metadata engine operations       |        |
 | `juicefs_meta_ops_duration_seconds`               | Accumulated time of metadata engine operations | second |
 
+### Redis connection pool
+
+For Redis and KeyDB metadata engines, these client-side statistics describe the main command connection pool. The `node` label is empty for standalone and Sentinel clients and contains the node address for Redis Cluster. Sentinel control connections and Pub/Sub pools are excluded. Scraping reads local statistics from individual pools without sending Redis commands or refreshing cluster topology.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| `juicefs_redis_pool_connections` | Gauge | Number of connections in the command pool |
+| `juicefs_redis_pool_idle_connections` | Gauge | Number of idle connections in the command pool |
+| `juicefs_redis_pool_pending_requests` | Gauge | Number of requests currently acquiring a command connection |
+| `juicefs_redis_pool_waits_total` | Counter | Number of waits that acquired a command pool permit |
+| `juicefs_redis_pool_wait_duration_seconds_total` | Counter | Time spent waiting to acquire a command pool permit, in seconds |
+| `juicefs_redis_pool_timeouts_total` | Counter | Number of connection pool wait timeouts |
+
+Redis wait counts and durations are recorded when a waiting request acquires a pool permit. Timed-out or canceled waits are excluded; connection creation can still fail after a counted wait. Pool timeouts are counted separately. Counters can reset when a pool is recreated, including during Cluster topology changes. Apply `rate()` before aggregating nodes, for example `sum by (instance, mp, vol_name) (rate(juicefs_redis_pool_timeouts_total[5m]))`. Closed pools report zero connections; their series disappear on a subsequent scrape after their client is garbage collected. A conflicting custom `node` label prevents this collector from registering and logs a warning; common metadata metrics remain available.
+
 ## Quota {#quota}
 
 ### Metrics

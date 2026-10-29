@@ -90,11 +90,12 @@ import (
 
 type redisMeta struct {
 	*baseMeta
-	rdb        redis.UniversalClient
-	prefix     string
-	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
-	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
-	cache      *redisCache
+	rdb         redis.UniversalClient
+	prefix      string
+	shaLookup   string // The SHA returned by Redis for the loaded `scriptLookup`
+	shaResolve  string // The SHA returned by Redis for the loaded `scriptResolve`
+	cache       *redisCache
+	poolMetrics *redisPoolMetrics
 }
 
 var _ Meta = (*redisMeta)(nil)
@@ -198,6 +199,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	opt.MaintNotificationsConfig = &maintnotifications.Config{Mode: maintnotifications.ModeDisabled}
 	var prefix string
 	var rdb redis.UniversalClient
+	poolMetrics := newRedisPoolMetrics()
 
 	if strings.Contains(hosts, ",") && strings.Index(hosts, ",") < strings.Index(hosts, ":") {
 		var fopt redis.FailoverOptions
@@ -284,15 +286,21 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 					// route to primary
 				}
 			}
-			rdb = redis.NewClusterClient(&copt)
+			client := redis.NewClusterClient(&copt)
+			client.OnNewNode(func(node *redis.Client) { poolMetrics.track(node.Options().Addr, node) })
+			rdb = client
 			prefix = fmt.Sprintf("{%d}", opt.DB)
 		}
 	}
 
+	if client, ok := rdb.(*redis.Client); ok {
+		poolMetrics.track("", client)
+	}
 	m := &redisMeta{
-		baseMeta: newBaseMeta(addr, conf),
-		rdb:      rdb,
-		prefix:   prefix,
+		baseMeta:    newBaseMeta(addr, conf),
+		rdb:         rdb,
+		prefix:      prefix,
+		poolMetrics: poolMetrics,
 	}
 	if clientCache {
 		m.cache = newRedisCache(prefix, clientCacheSize, clientCacheExpiry, clientCachePreload)
