@@ -4994,6 +4994,13 @@ func testQuotaFlushAfterRmdir(t *testing.T, m Meta) {
 	} else if q != nil {
 		t.Fatalf("quota of removed dir is recreated by flush: %+v", q)
 	}
+	if r, ok := m.(*redisMeta); ok {
+		for _, key := range []string{r.dirQuotaKey(), r.dirQuotaUsedSpaceKey(), r.dirQuotaUsedInodesKey()} {
+			if found, err := r.rdb.HExists(ctx, key, inode.String()).Result(); err != nil || found {
+				t.Fatalf("field %s of removed dir in %s: found %t, err %v", inode, key, found, err)
+			}
+		}
+	}
 	qs := make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, "/qrmdir", DirQuotaType, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get /qrmdir: %s", err)
