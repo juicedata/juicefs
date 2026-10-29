@@ -54,18 +54,18 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 
 ### Redis connection pool
 
-For Redis and KeyDB metadata engines, these client-side statistics describe the main command connection pool. The `node` label is empty for standalone and Sentinel clients and contains the node address for Redis Cluster. Sentinel control connections and Pub/Sub pools are excluded. Scraping reads local statistics from individual pools without sending Redis commands or refreshing cluster topology.
+For Redis and KeyDB metadata engines, these client-side statistics describe the main command connection pool of standalone and Sentinel clients. Redis Cluster pool metrics are not collected. The metrics use the official go-redis Prometheus collector and have no additional labels. Sentinel control connections and Pub/Sub pools are excluded. Scraping reads local pool statistics without sending Redis commands.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| `juicefs_redis_pool_connections` | Gauge | Number of connections in the command pool |
-| `juicefs_redis_pool_idle_connections` | Gauge | Number of idle connections in the command pool |
-| `juicefs_redis_pool_pending_requests` | Gauge | Number of requests currently acquiring a command connection |
-| `juicefs_redis_pool_waits_total` | Counter | Number of waits that acquired a command pool permit |
-| `juicefs_redis_pool_wait_duration_seconds_total` | Counter | Time spent waiting to acquire a command pool permit, in seconds |
-| `juicefs_redis_pool_timeouts_total` | Counter | Number of connection pool wait timeouts |
+| `juicefs_redis_pool_hit_total` | Counter | Number of times an idle connection was reused from the pool |
+| `juicefs_redis_pool_miss_total` | Counter | Number of times no reusable idle connection was found in the pool |
+| `juicefs_redis_pool_timeout_total` | Counter | Number of timeouts acquiring a connection from the pool |
+| `juicefs_redis_pool_conn_total_current` | Gauge | Current number of connections in the command pool |
+| `juicefs_redis_pool_conn_idle_current` | Gauge | Current number of idle connections in the command pool |
+| `juicefs_redis_pool_conn_stale_total` | Counter | Number of stale connections removed from the pool |
 
-Redis wait counts and durations are recorded when a waiting request acquires a pool permit. Timed-out or canceled waits are excluded; connection creation can still fail after a counted wait. Pool timeouts are counted separately. Counters can reset when a pool is recreated, including during Cluster topology changes. Apply `rate()` before aggregating nodes, for example `sum by (instance, mp, vol_name) (rate(juicefs_redis_pool_timeouts_total[5m]))`. Closed pools report zero connections; their series disappear on a subsequent scrape after their client is garbage collected. A conflicting custom `node` label prevents this collector from registering and logs a warning; common metadata metrics remain available.
+A pool miss triggers an attempt to create a new connection. Counters accumulate over the lifetime of the client's pool and can reset when the pool is recreated. Use `rate()` or `increase()` to observe changes over a time window.
 
 ## Quota {#quota}
 

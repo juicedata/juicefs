@@ -160,7 +160,6 @@ func TestRedisCluster(t *testing.T) { // skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	testRedisClusterPoolMetrics(t, "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2")
 	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", testConfig())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)

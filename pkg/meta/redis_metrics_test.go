@@ -25,17 +25,17 @@ import (
 	"errors"
 	"io"
 	"net"
-	"runtime"
+	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
-	"weak"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/push"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/redis/go-redis/extra/redisprometheus/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/maintnotifications"
 )
@@ -103,204 +103,171 @@ func redisMetricsDialer() (func(context.Context, string, string) (net.Conn, erro
 	}, activity
 }
 
-func newRedisMetricsTestClient(t *testing.T) (*redis.Client, *redisMetricsActivity) {
+func newRedisMetricsTestClient(t *testing.T, mode string) (*redis.Client, *redisMetricsActivity) {
 	t.Helper()
-	dialer, dials := redisMetricsDialer()
-	c := redis.NewClient(&redis.Options{
-		Addr: "unused:6379", Protocol: 2, MaxRetries: -1,
-		PoolSize: 1, MaxActiveConns: 1, PoolTimeout: time.Second,
-		Dialer: dialer, DisableIdentity: true,
-		MaintNotificationsConfig: &maintnotifications.Config{Mode: maintnotifications.ModeDisabled},
-	})
-	t.Cleanup(func() { _ = c.Close() })
-	return c, dials
+	dialer, activity := redisMetricsDialer()
+	var client *redis.Client
+	if mode == "sentinel" {
+		client = redis.NewFailoverClient(&redis.FailoverOptions{
+			MasterName: "metadata", SentinelAddrs: []string{"unused:26379"},
+			Protocol: 2, MaxRetries: -1, PoolSize: 1, MaxActiveConns: 1,
+			PoolTimeout: 20 * time.Millisecond, Dialer: dialer, DisableIdentity: true,
+		})
+	} else {
+		client = redis.NewClient(&redis.Options{
+			Addr: "unused:6379", Protocol: 2, MaxRetries: -1,
+			PoolSize: 1, MaxActiveConns: 1, PoolTimeout: 20 * time.Millisecond,
+			Dialer: dialer, DisableIdentity: true,
+			MaintNotificationsConfig: &maintnotifications.Config{Mode: maintnotifications.ModeDisabled},
+		})
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	return client, activity
 }
 
-func gatherRedisPoolMetrics(t *testing.T, registry *prometheus.Registry) map[string]map[string]float64 {
+func gatherRedisPoolMetrics(t *testing.T, registry *prometheus.Registry) map[string]*dto.MetricFamily {
 	t.Helper()
 	families, err := registry.Gather()
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedTypes := map[string]dto.MetricType{
-		"juicefs_redis_pool_connections":                 dto.MetricType_GAUGE,
-		"juicefs_redis_pool_idle_connections":            dto.MetricType_GAUGE,
-		"juicefs_redis_pool_pending_requests":            dto.MetricType_GAUGE,
-		"juicefs_redis_pool_waits_total":                 dto.MetricType_COUNTER,
-		"juicefs_redis_pool_wait_duration_seconds_total": dto.MetricType_COUNTER,
-		"juicefs_redis_pool_timeouts_total":              dto.MetricType_COUNTER,
-	}
-	result := make(map[string]map[string]float64)
+	pools := make(map[string]*dto.MetricFamily)
+	common := false
 	for _, family := range families {
-		if !strings.HasPrefix(family.GetName(), "juicefs_redis_pool_") {
-			continue
+		if strings.HasPrefix(family.GetName(), "juicefs_redis_pool_") {
+			pools[family.GetName()] = family
 		}
-		if want, ok := expectedTypes[family.GetName()]; !ok || family.GetType() != want {
-			t.Fatalf("unexpected pool metric name/type: %s %s", family.GetName(), family.GetType())
+		if family.GetName() == "juicefs_transaction_durations_histogram_seconds" {
+			common = true
 		}
-		values := make(map[string]float64)
-		for _, metric := range family.Metric {
-			node := ""
-			foundNode := false
-			for _, label := range metric.Label {
-				if label.GetName() == "node" {
-					node = label.GetValue()
-					foundNode = true
-				}
-			}
-			if !foundNode {
-				t.Fatalf("missing node label on %s", family.GetName())
-			}
-			switch family.GetType() {
-			case dto.MetricType_GAUGE:
-				values[node] = metric.GetGauge().GetValue()
-			case dto.MetricType_COUNTER:
-				values[node] = metric.GetCounter().GetValue()
-			default:
-				t.Fatalf("unexpected metric type: %s", family.GetType())
-			}
-		}
-		result[family.GetName()] = values
 	}
-	return result
-}
-
-func redisMetricsRegistry(t *testing.T, m *redisPoolMetrics) *prometheus.Registry {
-	t.Helper()
-	registry := prometheus.NewPedanticRegistry()
-	if err := prometheus.WrapRegistererWithPrefix("juicefs_", registry).Register(m); err != nil {
-		t.Fatal(err)
+	if !common {
+		t.Fatal("common metadata metrics missing")
 	}
-	return registry
-}
-
-func waitRedisMetrics(t *testing.T, condition func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !condition() {
-		if time.Now().After(deadline) {
-			t.Fatal("timed out waiting for connection pool stats")
-		}
-		time.Sleep(time.Millisecond)
-	}
-}
-
-func testRedisPoolContention(t *testing.T, client *redis.Client, registry *prometheus.Registry, node string) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	conn := client.Conn()
-	defer conn.Close()
-	if err := conn.Ping(ctx).Err(); err != nil {
-		t.Fatal(err)
-	}
-	done := make(chan error, 1)
-	go func() { done <- client.Ping(ctx).Err() }()
-	waitRedisMetrics(t, func() bool { return client.PoolStats().PendingRequests > 0 })
-	values := gatherRedisPoolMetrics(t, registry)
-	if values["juicefs_redis_pool_connections"][node] != 1 || values["juicefs_redis_pool_idle_connections"][node] != 0 || values["juicefs_redis_pool_pending_requests"][node] != 1 {
-		t.Fatalf("unexpected occupied pool metrics: %v", values)
-	}
-	if err := conn.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := <-done; err != nil {
-		t.Fatal(err)
-	}
-	values = gatherRedisPoolMetrics(t, registry)
-	if values["juicefs_redis_pool_waits_total"][node] < 1 || values["juicefs_redis_pool_wait_duration_seconds_total"][node] <= 0 || values["juicefs_redis_pool_pending_requests"][node] != 0 {
-		t.Fatalf("successful wait not exported: %v", values)
-	}
-	conn = client.Conn()
-	defer conn.Close()
-	if err := conn.Ping(ctx).Err(); err != nil {
-		t.Fatal(err)
-	}
-	before := client.PoolStats()
-	if err := client.Ping(ctx).Err(); err != redis.ErrPoolTimeout {
-		t.Fatalf("expected pool timeout, got %v", err)
-	}
-	after := client.PoolStats()
-	values = gatherRedisPoolMetrics(t, registry)
-	if after.WaitCount != before.WaitCount || after.WaitDurationNs != before.WaitDurationNs || values["juicefs_redis_pool_timeouts_total"][node] <= 0 {
-		t.Fatalf("pool timeout was not counted separately from successful waits: %v", values)
-	}
+	return pools
 }
 
 func TestRedisPoolMetrics(t *testing.T) {
-	client, dials := newRedisMetricsTestClient(t)
-	metrics := newRedisPoolMetrics()
-	metrics.track("", client)
-	registry := redisMetricsRegistry(t, metrics)
-	testRedisPoolContention(t, client, registry, "")
-	values := gatherRedisPoolMetrics(t, registry)
-	if len(values) != 6 {
-		t.Fatalf("expected six metric families, got %v", values)
+	for _, mode := range []string{"standalone", "sentinel"} {
+		t.Run(mode, func(t *testing.T) {
+			client, activity := newRedisMetricsTestClient(t, mode)
+			m := &redisMeta{baseMeta: newBaseMeta("metrics-test", testConfig()), rdb: client}
+			m.InitMetrics(nil)
+			registry := prometheus.NewPedanticRegistry()
+			m.InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.WrapRegistererWith(prometheus.Labels{"node": "custom"}, registry)))
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := client.Ping(ctx).Err(); err != nil {
+				t.Fatal(err)
+			}
+			conn := client.Conn()
+			defer conn.Close()
+			if err := conn.Ping(ctx).Err(); err != nil {
+				t.Fatal(err)
+			}
+			if err := client.Ping(ctx).Err(); err != redis.ErrPoolTimeout {
+				t.Fatalf("expected pool timeout, got %v", err)
+			}
+			if err := conn.Close(); err != nil {
+				t.Fatal(err)
+			}
+			stats := client.PoolStats()
+			pools := gatherRedisPoolMetrics(t, registry)
+			expected := []struct {
+				name  string
+				typ   dto.MetricType
+				value float64
+			}{
+				{"juicefs_redis_pool_hit_total", dto.MetricType_COUNTER, float64(stats.Hits)},
+				{"juicefs_redis_pool_miss_total", dto.MetricType_COUNTER, float64(stats.Misses)},
+				{"juicefs_redis_pool_timeout_total", dto.MetricType_COUNTER, float64(stats.Timeouts)},
+				{"juicefs_redis_pool_conn_total_current", dto.MetricType_GAUGE, 1},
+				{"juicefs_redis_pool_conn_idle_current", dto.MetricType_GAUGE, 1},
+				{"juicefs_redis_pool_conn_stale_total", dto.MetricType_COUNTER, float64(stats.StaleConns)},
+			}
+			if len(pools) != len(expected) {
+				t.Fatalf("unexpected pool metrics: %v", pools)
+			}
+			if stats.Hits == 0 || stats.Misses == 0 || stats.Timeouts == 0 {
+				t.Fatalf("expected pool reuse, creation and timeout: %+v", stats)
+			}
+			for _, want := range expected {
+				family := pools[want.name]
+				if family == nil || family.GetType() != want.typ || len(family.Metric) != 1 {
+					t.Fatalf("unexpected metric family %s: %v", want.name, family)
+				}
+				metric := family.Metric[0]
+				value := metric.GetCounter().GetValue()
+				if want.typ == dto.MetricType_GAUGE {
+					value = metric.GetGauge().GetValue()
+				}
+				if value != want.value {
+					t.Errorf("%s: got %v, want %v", want.name, value, want.value)
+				}
+				if len(metric.Label) != 1 || metric.Label[0].GetName() != "node" || metric.Label[0].GetValue() != "custom" {
+					t.Errorf("custom node label missing on %s: %v", want.name, metric.Label)
+				}
+			}
+			if mode == "standalone" {
+				beforeDials, beforeCommands := activity.dials.Load(), activity.commands.Load()
+				for range 3 {
+					_ = gatherRedisPoolMetrics(t, registry)
+				}
+				if activity.dials.Load() != beforeDials || activity.commands.Load() != beforeCommands {
+					t.Fatal("collecting metrics performed Redis I/O")
+				}
+			}
+		})
 	}
-	beforeDials, beforeCommands := dials.dials.Load(), dials.commands.Load()
-	for range 3 {
-		_ = gatherRedisPoolMetrics(t, registry)
+}
+
+type redisMetricsPushClient struct {
+	requests int
+}
+
+func (c *redisMetricsPushClient) Do(*http.Request) (*http.Response, error) {
+	c.requests++
+	return &http.Response{StatusCode: http.StatusAccepted, Body: io.NopCloser(strings.NewReader(""))}, nil
+}
+
+func TestRedisPoolMetricsPushLabels(t *testing.T) {
+	client, _ := newRedisMetricsTestClient(t, "standalone")
+	m := &redisMeta{baseMeta: newBaseMeta("metrics-test", testConfig()), rdb: client}
+	registry := prometheus.NewPedanticRegistry()
+	m.InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", registry))
+	if pools := gatherRedisPoolMetrics(t, registry); len(pools) != 6 {
+		t.Fatal(pools)
 	}
-	if dials.dials.Load() != beforeDials || dials.commands.Load() != beforeCommands {
-		t.Fatal("collecting metrics performed Redis I/O")
+	httpClient := &redisMetricsPushClient{}
+	err := push.New("http://unused.invalid", "juicefs").Gatherer(registry).
+		Grouping("node", "sdk-host").Client(httpClient).Push()
+	if err != nil {
+		t.Fatalf("push with custom node label: %v", err)
 	}
-	if err := client.Close(); err != nil {
-		t.Fatal(err)
-	}
-	values = gatherRedisPoolMetrics(t, registry)
-	if values["juicefs_redis_pool_connections"][""] != 0 || values["juicefs_redis_pool_idle_connections"][""] != 0 {
-		t.Fatalf("closed pool connections not zero: %v", values)
+	if httpClient.requests != 1 {
+		t.Fatalf("expected one push, got %d", httpClient.requests)
 	}
 }
 
 func TestRedisPoolMetricsCluster(t *testing.T) {
-	dialer, dials := redisMetricsDialer()
-	var address atomic.Value
-	address.Store("node-a:6379")
+	dialer, activity := redisMetricsDialer()
 	var loads atomic.Int64
 	client := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: []string{"seed:6379"}, Protocol: 2, MaxRetries: -1,
-		PoolSize: 1, MaxActiveConns: 1, PoolTimeout: time.Second,
-		Dialer: dialer, DisableIdentity: true,
-		MaintNotificationsConfig: &maintnotifications.Config{Mode: maintnotifications.ModeDisabled},
+		Addrs: []string{"unused:6379"}, Dialer: dialer,
 		ClusterSlots: func(context.Context) ([]redis.ClusterSlot, error) {
 			loads.Add(1)
-			return []redis.ClusterSlot{{Start: 0, End: 16383, Nodes: []redis.ClusterNode{{Addr: address.Load().(string)}}}}, nil
+			return nil, errors.New("unexpected topology load")
 		},
 	})
 	defer client.Close()
-	metrics := newRedisPoolMetrics()
-	client.OnNewNode(func(node *redis.Client) { metrics.track(node.Options().Addr, node) })
-	registry := redisMetricsRegistry(t, metrics)
-	if values := gatherRedisPoolMetrics(t, registry); len(values) != 0 {
-		t.Fatal(values)
+	m := &redisMeta{baseMeta: newBaseMeta("metrics-test", testConfig()), rdb: client}
+	registry := prometheus.NewPedanticRegistry()
+	m.InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", registry))
+	if pools := gatherRedisPoolMetrics(t, registry); len(pools) != 0 {
+		t.Fatal(pools)
 	}
-	if loads.Load() != 0 || dials.dials.Load() != 0 {
-		t.Fatal("collect loaded cluster topology")
-	}
-	if err := client.Ping(context.Background()).Err(); err != nil {
-		t.Fatal(err)
-	}
-	var first *redis.Client
-	if err := client.ForEachMaster(context.Background(), func(_ context.Context, child *redis.Client) error { first = child; return nil }); err != nil {
-		t.Fatal(err)
-	}
-	testRedisPoolContention(t, first, registry, "node-a:6379")
-	beforeLoads, beforeDials, beforeCommands := loads.Load(), dials.dials.Load(), dials.commands.Load()
-	_ = gatherRedisPoolMetrics(t, registry)
-	if loads.Load() != beforeLoads || dials.dials.Load() != beforeDials || dials.commands.Load() != beforeCommands {
-		t.Fatal("collect performed network/topology work")
-	}
-	address.Store("node-b:6379")
-	if err := client.ForEachMaster(context.Background(), func(ctx context.Context, child *redis.Client) error { return child.Ping(ctx).Err() }); err != nil {
-		t.Fatal(err)
-	}
-	values := gatherRedisPoolMetrics(t, registry)
-	if _, ok := values["juicefs_redis_pool_connections"]["node-b:6379"]; !ok {
-		t.Fatalf("new cluster node missing: %v", values)
-	}
-	if values["juicefs_redis_pool_waits_total"]["node-b:6379"] != 0 {
-		t.Fatal("new node inherited another node's counters")
+	if loads.Load() != 0 || activity.dials.Load() != 0 {
+		t.Fatal("collecting metrics loaded cluster topology")
 	}
 }
 
@@ -309,254 +276,18 @@ type redisMetricsRejectRegisterer struct {
 }
 
 func (r redisMetricsRejectRegisterer) Register(collector prometheus.Collector) error {
-	if _, ok := collector.(*redisPoolMetrics); ok {
+	if _, ok := collector.(*redisprometheus.Collector); ok {
 		return errors.New("test registration failure")
 	}
 	return r.Registerer.Register(collector)
 }
 
 func TestRedisPoolMetricsRegistration(t *testing.T) {
-	for _, mode := range []string{"standalone", "sentinel"} {
-		t.Run(mode, func(t *testing.T) {
-			var client *redis.Client
-			if mode == "sentinel" {
-				dialer, _ := redisMetricsDialer()
-				client = redis.NewFailoverClient(&redis.FailoverOptions{
-					MasterName: "metadata", SentinelAddrs: []string{"unused:26379"},
-					Protocol: 2, MaxRetries: -1, PoolSize: 1, MaxActiveConns: 1,
-					PoolTimeout: time.Second, Dialer: dialer, DisableIdentity: true,
-				})
-			} else {
-				client, _ = newRedisMetricsTestClient(t)
-			}
-			defer client.Close()
-			metrics := newRedisPoolMetrics()
-			metrics.track("", client)
-			m := &redisMeta{baseMeta: newBaseMeta("metrics-test", testConfig()), rdb: client, poolMetrics: metrics}
-			m.InitMetrics(nil)
-			registry := prometheus.NewPedanticRegistry()
-			m.InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.WrapRegistererWith(prometheus.Labels{"test_label": "value"}, registry)))
-			if values := gatherRedisPoolMetrics(t, registry); len(values) != 6 {
-				t.Fatalf("missing pools: %v", values)
-			}
-			families, err := registry.Gather()
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, family := range families {
-				if !strings.HasPrefix(family.GetName(), "juicefs_redis_pool_") {
-					continue
-				}
-				for _, metric := range family.Metric {
-					found := false
-					for _, label := range metric.Label {
-						if label.GetName() == "test_label" && label.GetValue() == "value" {
-							found = true
-						}
-					}
-					if !found {
-						t.Fatalf("custom label missing from %s", family.GetName())
-					}
-				}
-			}
-			testRedisPoolContention(t, client, registry, "")
-		})
-	}
-	for _, label := range []string{"custom", "", "registration error"} {
-		t.Run("registration failure/node="+label, func(t *testing.T) {
-			client, _ := newRedisMetricsTestClient(t)
-			metrics := newRedisPoolMetrics()
-			metrics.track("", client)
-			m := &redisMeta{baseMeta: newBaseMeta("metrics-test", testConfig()), rdb: client, poolMetrics: metrics}
-			registry := prometheus.NewPedanticRegistry()
-			var registerer prometheus.Registerer
-			if label == "registration error" {
-				registerer = redisMetricsRejectRegisterer{Registerer: prometheus.WrapRegistererWithPrefix("juicefs_", registry)}
-			} else {
-				registerer = prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.WrapRegistererWith(prometheus.Labels{"node": label}, registry))
-			}
-			m.InitMetrics(registerer)
-			if values := gatherRedisPoolMetrics(t, registry); len(values) != 0 {
-				t.Fatalf("conflicting collector was registered: %v", values)
-			}
-			families, err := registry.Gather()
-			if err != nil {
-				t.Fatal(err)
-			}
-			found := false
-			for _, family := range families {
-				if family.GetName() == "juicefs_transaction_durations_histogram_seconds" {
-					found = true
-				}
-			}
-			if !found {
-				t.Fatal("common metadata metrics missing after pool collector failure")
-			}
-		})
-	}
-}
-
-type redisMetricsBlockingCloseConn struct {
-	net.Conn
-	closing chan struct{}
-	release <-chan struct{}
-	once    sync.Once
-}
-
-func (c *redisMetricsBlockingCloseConn) Close() error {
-	c.once.Do(func() {
-		close(c.closing)
-		<-c.release
-	})
-	return c.Conn.Close()
-}
-
-func TestRedisPoolMetricsLifecycle(t *testing.T) {
-	t.Run("slow pool does not block tracking", func(t *testing.T) {
-		closing := make(chan struct{})
-		release := make(chan struct{})
-		var releaseOnce sync.Once
-		unblock := func() { releaseOnce.Do(func() { close(release) }) }
-		defer unblock()
-		dialer, _ := redisMetricsDialer()
-		client := redis.NewClient(&redis.Options{
-			Addr: "unused:6379", Protocol: 2, MaxRetries: -1, DisableIdentity: true,
-			Dialer: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				conn, err := dialer(ctx, network, addr)
-				if err != nil {
-					return nil, err
-				}
-				return &redisMetricsBlockingCloseConn{Conn: conn, closing: closing, release: release}, nil
-			},
-			MaintNotificationsConfig: &maintnotifications.Config{Mode: maintnotifications.ModeDisabled},
-		})
-		t.Cleanup(func() { _ = client.Close() })
-		if err := client.Ping(context.Background()).Err(); err != nil {
-			t.Fatal(err)
-		}
-		metrics := newRedisPoolMetrics()
-		metrics.track("slow:6379", client)
-		closed := make(chan struct{})
-		go func() {
-			defer close(closed)
-			_ = client.Close()
-		}()
-		defer func() {
-			unblock()
-			<-closed
-		}()
-		// Closing a connection holds the pool mutex, so PoolStats must wait.
-		<-closing
-		collected := make(chan struct{})
-		go func() {
-			defer close(collected)
-			metrics.Collect(make(chan prometheus.Metric, 6))
-		}()
-		defer func() {
-			unblock()
-			<-collected
-		}()
-		waitRedisMetrics(t, func() bool {
-			stacks := make([]byte, 1<<20)
-			n := runtime.Stack(stacks, true)
-			for _, stack := range strings.Split(string(stacks[:n]), "\n\n") {
-				if strings.Contains(stack, "(*redisPoolMetrics).Collect") && strings.Contains(stack, "(*Client).PoolStats") {
-					return true
-				}
-			}
-			return false
-		})
-		if !metrics.mu.TryLock() {
-			t.Fatal("collecting a blocked pool holds the tracking mutex")
-		}
-		metrics.mu.Unlock()
-		replacement, _ := newRedisMetricsTestClient(t)
-		metrics.track("new:6379", replacement)
-	})
-
-	metrics := newRedisPoolMetrics()
-	registry := redisMetricsRegistry(t, metrics)
-	oldClient, _ := newRedisMetricsTestClient(t)
-	metrics.track("node:6379", oldClient)
-	if err := oldClient.Ping(context.Background()).Err(); err != nil {
-		t.Fatal(err)
-	}
-	replacement, _ := newRedisMetricsTestClient(t)
-	metrics.track("node:6379", replacement)
-	// A stale collection snapshot must not remove a replacement for this node.
-	metrics.untrack("node:6379", weak.Make(oldClient))
-	values := gatherRedisPoolMetrics(t, registry)
-	if len(values["juicefs_redis_pool_connections"]) != 1 || values["juicefs_redis_pool_connections"]["node:6379"] != 0 {
-		t.Fatalf("replaced node was retained: %v", values)
-	}
-	metrics.mu.Lock()
-	metrics.clients["collected:6379"] = weak.Pointer[redis.Client]{}
-	metrics.mu.Unlock()
-	_ = gatherRedisPoolMetrics(t, registry)
-	metrics.mu.Lock()
-	_, exists := metrics.clients["collected:6379"]
-	metrics.mu.Unlock()
-	if exists {
-		t.Fatal("collected client was not pruned")
-	}
-	metrics.mu.Lock()
-	metrics.clients["retired:6379"] = weak.Pointer[redis.Client]{}
-	metrics.mu.Unlock()
-	// Adding another node prunes dead entries even if nobody scrapes metrics.
-	metrics.track("node:6379", replacement)
-	metrics.mu.Lock()
-	_, exists = metrics.clients["retired:6379"]
-	metrics.mu.Unlock()
-	if exists {
-		t.Fatal("adding a node retained a collected client")
-	}
-	var wg sync.WaitGroup
-	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for range 20 {
-				metrics.track("node:6379", replacement)
-				if _, err := registry.Gather(); err != nil {
-					t.Error(err)
-				}
-			}
-		}()
-	}
-	wg.Wait()
-	runtime.KeepAlive(oldClient)
-	runtime.KeepAlive(replacement)
-}
-
-// Called by the existing real Cluster integration test as well as the offline
-// tests above, so pool waits are covered by test.meta.non-core.
-func testRedisClusterPoolMetrics(t *testing.T, addr string) {
-	t.Helper()
-	conf := testConfig()
-	conf.Retries = 0
-	raw, err := newRedisMeta("redis", addr+"?pool_size=1&max_active_conns=1&pool_timeout=1s", conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	m := raw.(*redisMeta)
-	defer m.Shutdown()
+	client, _ := newRedisMetricsTestClient(t, "standalone")
+	m := &redisMeta{baseMeta: newBaseMeta("metrics-test", testConfig()), rdb: client}
 	registry := prometheus.NewPedanticRegistry()
-	m.InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", registry))
-	children := make(chan *redis.Client, 1)
-	if err := m.rdb.(*redis.ClusterClient).ForEachMaster(context.Background(), func(_ context.Context, node *redis.Client) error {
-		select {
-		case children <- node:
-		default:
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
+	m.InitMetrics(redisMetricsRejectRegisterer{prometheus.WrapRegistererWithPrefix("juicefs_", registry)})
+	if pools := gatherRedisPoolMetrics(t, registry); len(pools) != 0 {
+		t.Fatal(pools)
 	}
-	var child *redis.Client
-	select {
-	case child = <-children:
-	default:
-		t.Fatal("no cluster master found")
-	}
-	testRedisPoolContention(t, child, registry, child.Options().Addr)
 }
