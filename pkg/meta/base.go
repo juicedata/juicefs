@@ -3483,7 +3483,11 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent)
 	}
 	if eno == 0 {
-		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
+		var length uint64
+		if attr.Typ == TypeFile {
+			length = attr.Length
+		}
+		m.updateDirStat(ctx, parent, int64(length), align4K(attr.Length), 1)
 		if attr.Typ == TypeDirectory {
 			// the entries inside were counted while they were cloned
 			m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
