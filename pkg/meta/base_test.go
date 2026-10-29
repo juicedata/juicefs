@@ -903,6 +903,11 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "d", 1, "f", 0, &inode, attr); st != syscall.ENOTDIR {
 		t.Fatalf("rename d -> f: %s", st)
 	}
+	for _, names := range [][2]string{{".", "f3"}, {"..", "f3"}, {"f", "."}, {"f", ".."}} {
+		if st := m.Rename(ctx, 1, names[0], 1, names[1], 0, &inode, attr); st != syscall.EBUSY {
+			t.Fatalf("rename %s -> %s: %s", names[0], names[1], st)
+		}
+	}
 	if st := m.GetAttr(ctx, 1, attr); st != 0 {
 		t.Fatalf("getattr f: %s", st)
 	}
@@ -1639,6 +1644,15 @@ func testRemove(t *testing.T, m Meta) {
 	}
 	if st := m.Create(ctx, parent, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create d/f: %s", st)
+	}
+	if st := m.Remove(ctx, parent, ".", false, RmrDefaultThreads, nil); st != syscall.EINVAL {
+		t.Fatalf("rmr d/.: %s", st)
+	}
+	if st := m.Remove(ctx, parent, "..", false, RmrDefaultThreads, nil); st != syscall.ENOTEMPTY {
+		t.Fatalf("rmr d/..: %s", st)
+	}
+	if st := m.Lookup(ctx, parent, "f", &inode, attr, false); st != 0 {
+		t.Fatalf("d/f should remain: %s", st)
 	}
 	if ps := m.GetPaths(ctx, parent); len(ps) == 0 || ps[0] != "/d" {
 		t.Fatalf("get path /d: %v", ps)
