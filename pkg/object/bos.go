@@ -110,9 +110,9 @@ func (q *bosclient) Get(ctx context.Context, key string, off, limit int64, gette
 	}
 	if needCheck {
 		if r.UserMeta[checksumAlgr] != "" {
-			resp = verifyChecksum(r.Body, r.UserMeta[checksumAlgr], r.ContentLength)
+			resp = verifyChecksum(r.Body, r.UserMeta[checksumAlgr], r.ContentLength, key)
 		} else {
-			resp = verifyChecksum0(r.Body, r.ContentCrc32, r.ContentLength, crc32.IEEETable)
+			resp = verifyChecksum0(r.Body, r.ContentCrc32, r.ContentLength, crc32.IEEETable, key)
 		}
 	} else {
 		resp = r.Body

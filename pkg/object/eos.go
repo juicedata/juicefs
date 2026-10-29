@@ -59,6 +59,10 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if err != nil {
 		return nil, fmt.Errorf("invalid endpoint %s: %s", endpoint, err)
 	}
+	crcMode, err := parseChecksumMode(uri.Query())
+	if err != nil {
+		return nil, err
+	}
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
@@ -91,7 +95,7 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		options.RetryMaxAttempts = 1
 	})
 
-	return &eos{s3client{bucket: bucket, s3: client, region: region}}, nil
+	return &eos{s3client{bucket: bucket, s3: client, region: region, checksumMode: crcMode}}, nil
 }
 
 func init() {
