@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type prefixTxn struct {
@@ -92,6 +94,12 @@ func (tx *prefixTxn) delete(key []byte) {
 type prefixClient struct {
 	tkvClient
 	prefix []byte
+}
+
+func (c *prefixClient) initMetrics(reg prometheus.Registerer) {
+	if client, ok := c.tkvClient.(tkvMetricsClient); ok {
+		client.initMetrics(reg)
+	}
 }
 
 func (c *prefixClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {

@@ -33,9 +33,11 @@ import (
 
 	plog "github.com/pingcap/log"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"github.com/tikv/client-go/v2/config"
 	tikverr "github.com/tikv/client-go/v2/error"
+	tikvmetrics "github.com/tikv/client-go/v2/metrics"
 	"github.com/tikv/client-go/v2/oracle"
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
@@ -116,6 +118,25 @@ func newTikvClient(addr string) (tkvClient, error) {
 
 	prefix := strings.TrimLeft(tUrl.Path, "/")
 	return withPrefix(&tikvClient{client: client.KVStore, gcInterval: interval, changeLogShards: tiKVChangeLogShards(), volume: prefix}, append([]byte(prefix), 0xFD)), nil
+}
+
+func (c *tikvClient) initMetrics(reg prometheus.Registerer) {
+	if reg == nil {
+		return
+	}
+	reg = prometheus.WrapRegistererWith(prometheus.Labels{"metrics_scope": "process"}, reg)
+	for _, collector := range []prometheus.Collector{
+		tikvmetrics.TiKVSendReqHistogram,
+		tikvmetrics.TiKVBackoffHistogram,
+		tikvmetrics.TiKVRPCErrorCounter,
+		tikvmetrics.TiKVBatchPendingRequests,
+		tikvmetrics.TiKVBatchClientWaitEstablish,
+		tikvmetrics.TiKVNoAvailableConnectionCounter,
+	} {
+		if err := reg.Register(collector); err != nil {
+			logger.Warnf("Register TiKV client metrics: %s", err)
+		}
+	}
 }
 
 type tikvTxn struct {
