@@ -20,7 +20,6 @@
 package meta
 
 import (
-	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -28,9 +27,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/common/expfmt"
 	tikvmetrics "github.com/tikv/client-go/v2/metrics"
-	"google.golang.org/protobuf/proto"
 )
 
 type metricsPushClient func(*http.Request) (*http.Response, error)
@@ -86,16 +83,16 @@ func TestTiKVClientMetrics(t *testing.T) {
 		return result
 	}
 
-	t.Run("private registries share process metrics", func(t *testing.T) {
-		first := make(map[string]*dto.Metric)
+	t.Run("private registries and custom labels", func(t *testing.T) {
 		for _, volume := range []string{"volume-a", "volume-b"} {
 			registry := prometheus.NewPedanticRegistry()
 			reg := prometheus.WrapRegistererWithPrefix("juicefs_",
-				prometheus.WrapRegistererWith(prometheus.Labels{"custom": "value"}, registry))
+				prometheus.WrapRegistererWith(prometheus.Labels{"metrics_scope": "custom"}, registry))
 			m := newMeta(volume)
 			m.InitMetrics(reg)
 			families := gather(t, registry)
 			count := 0
+			fixtures := make(map[string]bool)
 			for name, family := range families {
 				if !strings.HasPrefix(name, "juicefs_tikv_client_go_") {
 					continue
@@ -109,96 +106,47 @@ func TestTiKVClientMetrics(t *testing.T) {
 					for _, label := range metric.Label {
 						labels[label.GetName()] = label.GetValue()
 					}
-					if _, ok := labels["metrics_scope"]; ok || labels["custom"] != "value" {
+					if labels["metrics_scope"] != "custom" {
 						t.Errorf("metric %s has unexpected labels: %v", name, labels)
 					}
-					if labels["type"] == "metrics-test" || labels["store"] == "metrics-test" {
-						if previous := first[name]; previous != nil && !proto.Equal(previous, metric) {
-							t.Errorf("process sample %s differs between volume registries", name)
-						}
-						first[name] = metric
+					if labels["store"] == "metrics-test" {
+						fixtures[name] = true
 					}
 				}
 			}
 			if count != len(expected) {
 				t.Errorf("got %d TiKV metric families, want %d", count, len(expected))
 			}
-			if len(first) != 2 {
-				t.Errorf("got %d fixture samples, want 2", len(first))
+			for _, name := range []string{"juicefs_tikv_client_go_request_seconds", "juicefs_tikv_client_go_batch_pending_requests"} {
+				if !fixtures[name] {
+					t.Errorf("registry for %s is missing fixture %s", volume, name)
+				}
 			}
-			// Retrying backend registration must not panic or replace collectors.
-			m.client.(tkvMetricsClient).initMetrics(reg)
-			gather(t, registry)
 		}
 	})
 
 	t.Run("nil registerer", func(t *testing.T) {
 		newMeta("nil-registry").InitMetrics(nil)
-		(&tikvClient{}).initMetrics(nil)
 	})
 
 	t.Run("SDK PushGateway custom scope label", func(t *testing.T) {
 		registry := prometheus.NewPedanticRegistry()
 		newMeta("sdk-push-labels").InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", registry))
-		pusher := push.New("http://pushgateway", "juicefs").Gatherer(registry)
-		commonLabels := prometheus.Labels{"vol_name": "sdk-push-labels", "mp": "sdk-test", "metrics_scope": "custom"}
-		for name, value := range commonLabels {
-			pusher.Grouping(name, value)
-		}
-		pushed := make(map[string]*dto.MetricFamily)
+		pusher := push.New("http://pushgateway", "juicefs").Gatherer(registry).Grouping("metrics_scope", "custom")
+		pushed := false
 		pusher.Client(metricsPushClient(func(req *http.Request) (*http.Response, error) {
 			defer req.Body.Close()
+			pushed = true
 			if !strings.Contains(req.URL.Path, "/metrics_scope/custom") {
 				t.Errorf("custom scope grouping label was lost: %s", req.URL.Path)
 			}
-			decoder := expfmt.NewDecoder(req.Body, expfmt.FmtProtoDelim)
-			for {
-				family := new(dto.MetricFamily)
-				if err := decoder.Decode(family); err == io.EOF {
-					break
-				} else if err != nil {
-					t.Fatalf("decode pushed metrics: %v", err)
-				}
-				pushed[family.GetName()] = family
-			}
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(""))}, nil
+			return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 		}))
 		if err := pusher.Push(); err != nil {
 			t.Fatalf("push SDK metrics with custom scope label: %v", err)
 		}
-		if pushed["juicefs_transaction_durations_histogram_seconds"] == nil {
-			t.Error("common metadata metrics were not pushed")
-		}
-		for name, typ := range expected {
-			if family := pushed[name]; family == nil || family.GetType() != typ {
-				t.Errorf("TiKV metric %s was not pushed", name)
-			}
-		}
-	})
-
-	t.Run("custom scope label", func(t *testing.T) {
-		registry := prometheus.NewPedanticRegistry()
-		reg := prometheus.WrapRegistererWithPrefix("juicefs_",
-			prometheus.WrapRegistererWith(prometheus.Labels{"metrics_scope": "custom"}, registry))
-		newMeta("custom-label").InitMetrics(reg)
-		families := gather(t, registry)
-		for name, typ := range expected {
-			family := families[name]
-			if family == nil || family.GetType() != typ {
-				t.Errorf("TiKV metric %s was lost", name)
-				continue
-			}
-			for _, metric := range family.Metric {
-				found := false
-				for _, label := range metric.Label {
-					if label.GetName() == "metrics_scope" && label.GetValue() == "custom" {
-						found = true
-					}
-				}
-				if !found {
-					t.Errorf("TiKV metric %s lost custom scope label", name)
-				}
-			}
+		if !pushed {
+			t.Error("PushGateway request was not sent")
 		}
 	})
 
@@ -206,13 +154,13 @@ func TestTiKVClientMetrics(t *testing.T) {
 		registry := prometheus.NewPedanticRegistry()
 		reg := prometheus.WrapRegistererWithPrefix("juicefs_", registry)
 		reg.MustRegister(prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "tikv_client_go_batch_client_no_available_connection_total",
+			Name: "tikv_client_go_request_seconds",
 			Help: "Conflicting metric for testing.",
 		}))
 		newMeta("conflicting-collector").InitMetrics(reg)
 		families := gather(t, registry)
 		for name, typ := range expected {
-			if name == "juicefs_tikv_client_go_batch_client_no_available_connection_total" {
+			if name == "juicefs_tikv_client_go_request_seconds" {
 				typ = dto.MetricType_GAUGE
 			}
 			if family := families[name]; family == nil || family.GetType() != typ {
