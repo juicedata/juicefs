@@ -1945,6 +1945,9 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if parentDst.IsTrash() || parentSrc.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
+	if nameSrc == "." || nameSrc == ".." || nameDst == "." || nameDst == ".." {
+		return syscall.EBUSY
+	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
