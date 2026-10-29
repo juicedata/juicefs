@@ -676,6 +676,11 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 	defer trace.StartRegion(context.TODO(), "fs.Rename").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Rename (%s,%s,%d): %s", oldpath, newpath, flags, errstr(err)) }()
+	// generic checks of renameat2(2), whether the flags are supported is up to the metadata engine
+	if flags&^(meta.RenameNoReplace|meta.RenameExchange|meta.RenameWhiteout) != 0 ||
+		flags&meta.RenameExchange != 0 && flags&(meta.RenameNoReplace|meta.RenameWhiteout) != 0 {
+		return syscall.EINVAL
+	}
 	oldfi, err := fs.resolve(ctx, parentDir(oldpath), true)
 	if err != 0 {
 		return
@@ -715,6 +720,9 @@ func (fs *FileSystem) Symlink(ctx meta.Context, target string, link string) (err
 	defer trace.StartRegion(context.TODO(), "fs.Symlink").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Symlink (%s,%s): %s", target, link, errstr(err)) }()
+	if target == "" {
+		return syscall.ENOENT // as getname() in Linux, before the link is resolved
+	}
 	if strings.HasSuffix(link, "/") {
 		return syscall.EINVAL
 	}
@@ -1516,6 +1524,9 @@ func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 func (f *File) Readdir(ctx meta.Context, count int) (fi []os.FileInfo, err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Readdir (%s,%d): (%s,%d)", f.path, count, errstr(err), len(fi)) }()
+	if !f.info.IsDir() {
+		return nil, syscall.ENOTDIR
+	}
 	f.Lock()
 	defer f.Unlock()
 	fi = f.dircache
@@ -1553,6 +1564,9 @@ func (f *File) Readdir(ctx meta.Context, count int) (fi []os.FileInfo, err sysca
 func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry, err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "ReaddirPlus (%s,%d): (%s,%d)", f.path, offset, errstr(err), len(entries)) }()
+	if !f.info.IsDir() {
+		return nil, syscall.ENOTDIR
+	}
 	f.Lock()
 	defer f.Unlock()
 	if f.entries == nil {
