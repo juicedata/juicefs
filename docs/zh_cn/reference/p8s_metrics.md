@@ -54,7 +54,7 @@ sidebar_position: 4
 
 ### Redis 连接池
 
-使用 Redis 或 KeyDB 元数据引擎时，以下客户端统计反映单机和 Sentinel 客户端的主命令连接池状态，不采集 Redis Cluster 的连接池指标。这些指标由 go-redis 官方 Prometheus collector 提供，不带额外标签。不包含 Sentinel 控制连接和 Pub/Sub 连接池。采集只读取本地连接池统计，不发送 Redis 命令。
+使用 Redis 或 KeyDB 元数据引擎时，以下客户端统计反映单机和 Sentinel 客户端的主命令连接池状态，不采集 Redis Cluster 的连接池指标。这些指标由 `go-redis` 官方 Prometheus collector 提供，不带额外标签。不包含 Sentinel 控制连接和 Pub/Sub 连接池。采集只读取本地连接池统计，不发送 Redis 命令。
 
 | 名称 | 类型 | 描述 |
 | ---- | ---- | ---- |
