@@ -44,10 +44,11 @@ type replayState struct {
 
 // Replayer exclusively owns a metadata client for sequential changelog replay.
 type Replayer struct {
-	src         Meta
-	dst         Meta
-	aclIDs      map[uint32]uint32
-	progressLog *os.File
+	src          Meta
+	dst          Meta
+	aclIDs       map[uint32]uint32
+	progressLog  *os.File
+	syncProgress bool
 }
 
 type ReplayProgress struct {
@@ -93,7 +94,7 @@ func (r *Replayer) LoadProgress(ctx Context, path string) (*ReplayProgress, erro
 		progress.Version = max(progress.Version, version)
 		progress.Seen[uint64(version)] = struct{}{}
 		offset += int64(len(line))
-		start := r.src.getBase().en.changelogWindowStart(progress.Version)
+		start := r.src.getBase().en.changelogScanStart(progress.Version)
 		for id := range progress.Seen {
 			if id < start {
 				delete(progress.Seen, id)
@@ -107,7 +108,7 @@ func (r *Replayer) LoadProgress(ctx Context, path string) (*ReplayProgress, erro
 }
 
 func (r *Replayer) InitProgressLog(path string, from int64, seen map[uint64]struct{}) error {
-	start := r.src.getBase().en.changelogWindowStart(from)
+	start := r.src.getBase().en.changelogScanStart(from)
 	if start <= uint64(from) {
 		if _, ok := seen[uint64(from)]; !ok {
 			return fmt.Errorf("rewind entries are required to initialize replay at version %d", from)
@@ -155,7 +156,7 @@ func (r *Replayer) InitProgressLog(path string, from int64, seen map[uint64]stru
 	return err
 }
 
-func NewReplayer(uri string, src Meta) (*Replayer, error) {
+func NewReplayer(uri string, src Meta, syncProgress bool) (*Replayer, error) {
 	conf := DefaultConf()
 	conf.NoCompact = true
 	conf.NoBGJob = true
@@ -164,7 +165,7 @@ func NewReplayer(uri string, src Meta) (*Replayer, error) {
 	if _, err := dst.Load(true); err != nil {
 		return nil, err
 	}
-	r := &Replayer{src: src, dst: dst, aclIDs: map[uint32]uint32{aclAPI.None: aclAPI.None}}
+	r := &Replayer{src: src, dst: dst, aclIDs: map[uint32]uint32{aclAPI.None: aclAPI.None}, syncProgress: syncProgress}
 	srcBase, dstBase := src.getBase(), dst.getBase()
 	if err := r.Validate(srcBase.getFormat()); err != nil {
 		return nil, err
@@ -432,6 +433,11 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) error {
 	}
 	if _, err := r.progressLog.WriteString(message + "\n"); err != nil {
 		return fmt.Errorf("changelog version %d was applied but could not be written to replay progress log: %w", e.Ver, err)
+	}
+	if r.syncProgress {
+		if err := r.progressLog.Sync(); err != nil {
+			return fmt.Errorf("changelog version %d was applied but could not sync replay progress log: %w", e.Ver, err)
+		}
 	}
 	logger.Info(message)
 	return nil

@@ -1150,7 +1150,7 @@ func (m *dbMeta) sqlChangelogRewind() int {
 	return rewind
 }
 
-func (m *dbMeta) changelogWindowStart(version int64) uint64 {
+func (m *dbMeta) changelogScanStart(version int64) uint64 {
 	return uint64(max(int64(0), version-int64(m.sqlChangelogRewind()))) + 1
 }
 

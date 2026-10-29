@@ -966,7 +966,7 @@ func (m *kvMeta) findLastLogKey(tx *kvTxn) uint64 {
 	return scanRange(0, ^uint64(0))
 }
 
-func (m *kvMeta) changelogWindowStart(version int64) uint64 {
+func (m *kvMeta) changelogScanStart(version int64) uint64 {
 	return m.client.rewind(uint64(version), 1)
 }
 

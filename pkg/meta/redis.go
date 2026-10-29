@@ -1654,7 +1654,7 @@ func (m *redisMeta) doGenLog(ctx Context, pipe redis.Pipeliner, ts time.Time, op
 	pipe.Incr(ctx, m.txnLastLog())
 }
 
-func (m *redisMeta) changelogWindowStart(version int64) uint64 {
+func (m *redisMeta) changelogScanStart(version int64) uint64 {
 	return uint64(version) + 1
 }
 

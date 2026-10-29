@@ -163,7 +163,7 @@ type engine interface {
 	doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 
 	doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines int64) error
-	changelogWindowStart(version int64) uint64
+	changelogScanStart(version int64) uint64
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 

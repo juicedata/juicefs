@@ -141,15 +141,15 @@ func changelogReplay(ctx *cli.Context) (err error) {
 	dryRun := ctx.Bool("dry-run")
 	signalCtx, stop := signal.NotifyContext(ctx.Context, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	replayCtx := meta.WrapContext(signalCtx)
-	defer replayCtx.Cancel()
+	scanCtx := meta.WrapContext(signalCtx)
+	defer scanCtx.Cancel()
 	var replayer *meta.Replayer
 	var progress *meta.ReplayProgress
 	var logPath string
 	if !dryRun {
 		replayHash := fmt.Sprintf("%x", sha256.Sum256([]byte(srcFormat.UUID+"\x00"+dstUri)))
 		logPath = filepath.Join(ctx.String("log-dir"), "changelog-replay-"+replayHash+".log")
-		replayer, err = meta.NewReplayer(dstUri, src)
+		replayer, err = meta.NewReplayer(dstUri, src, !ctx.Bool("follow"))
 		if err != nil {
 			return err
 		}
@@ -158,7 +158,7 @@ func changelogReplay(ctx *cli.Context) (err error) {
 				err = errors.Join(err, fmt.Errorf("close replayer: %w", closeErr))
 			}
 		}()
-		progress, err = replayer.LoadProgress(replayCtx, logPath)
+		progress, err = replayer.LoadProgress(scanCtx, logPath)
 		if errors.Is(err, context.Canceled) {
 			logger.Infof("Changelog replay stopped while loading progress")
 			return nil
@@ -212,10 +212,10 @@ func changelogReplay(ctx *cli.Context) (err error) {
 
 	logger.Infof("Start changelog replay: from=%d follow=%t dry-run=%t", opt.From, opt.Follow, dryRun)
 	lastVersion := opt.From
-	applyCtx := meta.WrapContext(context.WithoutCancel(signalCtx))
-	defer applyCtx.Cancel()
-	err = src.ScanChangelog(replayCtx, opt, func(ver int64, entry string) error {
-		if err := replayCtx.Err(); err != nil {
+	replayCtx := meta.WrapContext(context.WithoutCancel(signalCtx))
+	defer replayCtx.Cancel()
+	err = src.ScanChangelog(scanCtx, opt, func(ver int64, entry string) error {
+		if err := scanCtx.Err(); err != nil {
 			return err
 		}
 		logger.Debugf("Changelog entry: version=%d entry=%q", ver, entry)
@@ -226,7 +226,7 @@ func changelogReplay(ctx *cli.Context) (err error) {
 			err = e.Validate()
 		}
 		if err == nil && !dryRun {
-			err = replayer.Replay(applyCtx, e)
+			err = replayer.Replay(replayCtx, e)
 		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
