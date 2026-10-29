@@ -61,7 +61,7 @@ These collectors are shared by all TiKV clients in the process. When the Java or
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | `juicefs_tikv_client_go_request_seconds` | Histogram | RPC request duration in seconds; labels: `type`, `store`, `stale_read`, `scope` |
-| `juicefs_tikv_client_go_backoff_seconds` | Histogram | Total backoff duration per backoffer in seconds; label: `type` |
+| `juicefs_tikv_client_go_backoff_seconds` | Histogram | Duration of each backoff sleep in seconds; label: `type` |
 | `juicefs_tikv_client_go_rpc_err_total` | Counter | RPC errors; labels: `type`, `store` |
 | `juicefs_tikv_client_go_batch_pending_requests` | Histogram | Number of requests pending in the batch channel; label: `store` |
 | `juicefs_tikv_client_go_batch_client_wait_connection_establish` | Histogram | Time spent waiting for a batch connection to be established, in seconds |

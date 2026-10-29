@@ -61,7 +61,7 @@ sidebar_position: 4
 | 名称 | 类型 | 描述 |
 | ---- | ---- | ---- |
 | `juicefs_tikv_client_go_request_seconds` | Histogram | RPC 请求耗时，单位为秒；标签：`type`、`store`、`stale_read`、`scope` |
-| `juicefs_tikv_client_go_backoff_seconds` | Histogram | 每个 backoffer 的累计退避时间，单位为秒；标签：`type` |
+| `juicefs_tikv_client_go_backoff_seconds` | Histogram | 每次退避 sleep 的耗时分布，单位为秒；标签：`type` |
 | `juicefs_tikv_client_go_rpc_err_total` | Counter | RPC 错误次数；标签：`type`、`store` |
 | `juicefs_tikv_client_go_batch_pending_requests` | Histogram | batch 通道中的排队请求数；标签：`store` |
 | `juicefs_tikv_client_go_batch_client_wait_connection_establish` | Histogram | 等待 batch 连接建立的时间，单位为秒 |
