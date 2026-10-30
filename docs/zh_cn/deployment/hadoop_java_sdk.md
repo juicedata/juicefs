@@ -1013,6 +1013,8 @@ kerbero 配置文件
 {VOL_NAME}.proxy.client.hosts=*
 ```
 
+规则替换在首次匹配和 `g`（全部匹配）模式下均与 Hadoop（Java `Matcher`）的替换语法一致。例如，`RULE:[1:$1]s/(alice)/local_$1/` 将 `alice-alice@EXAMPLE.COM` 映射为 `local_alice-alice`；添加 `g` 后则映射为 `local_alice-local_alice`。`$1_x` 表示第 1 个捕获组后接 `_x`，`\$` 表示字面量 `$`。
+
 core-site 配置
 
 ```

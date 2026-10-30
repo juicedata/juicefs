@@ -30,7 +30,7 @@ start_two_gateway()
 {
     prepare_test
     ./juicefs.exe format $META_URL myjfs  --trash-days 0
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     export MINIO_ROOT_USER=admin
     export MINIO_ROOT_PASSWORD=admin123
     nohup ./juicefs.exe gateway $META_URL 127.0.0.1:9001 --multi-buckets --keep-etag --object-tag --log=gateway1.log &

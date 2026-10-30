@@ -50,7 +50,7 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-24.04-4-cores
     strategy:
       fail-fast: false
       matrix:
@@ -111,6 +111,14 @@ jobs:
             echo "Unknown type: ${{matrix.type}}"
             exit 1
           fi
+
+      - name: Upload MinIO checkpoint logs
+        if: failure() && matrix.type == 'sync_minio'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-minio-debug-${{ github.run_attempt }}
+          path: sync-minio-debug/
+          retention-days: 7
 
       - name: upload coverage report
         timeout-minutes: 5

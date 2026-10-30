@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -135,6 +134,15 @@ func (qm *queryMap) pop(key string) string {
 	return qm.Get(key)
 }
 
+type errorConverter func(error) (syscall.Errno, bool)
+
+var errorConverters []errorConverter
+
+// registerErrorConverter must only be called during init.
+func registerErrorConverter(convert errorConverter) {
+	errorConverters = append(errorConverters, convert)
+}
+
 func errno(err error) syscall.Errno {
 	if err == nil {
 		return 0
@@ -148,11 +156,10 @@ func errno(err error) syscall.Errno {
 	if eno, ok := err.(syscall.Errno); ok {
 		return eno
 	}
-	if err == redis.Nil {
-		return syscall.ENOENT
-	}
-	if strings.HasPrefix(err.Error(), "OOM") {
-		return syscall.ENOSPC
+	for _, convert := range errorConverters {
+		if eno, ok := convert(err); ok {
+			return eno
+		}
 	}
 	logger.Errorf("error: %s\n%s", err, debug.Stack())
 	return syscall.EIO
@@ -620,6 +627,9 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 }
 
 func (m *baseMeta) atimeNeedsUpdate(attr *Attr, now time.Time) bool {
+	if m.replay.Load() != nil {
+		return true
+	}
 	return m.conf.AtimeMode != NoAtime && relatimeNeedUpdate(attr, now) ||
 		// update atime only for > 1 second accesses
 		m.conf.AtimeMode == StrictAtime && now.Sub(time.Unix(attr.Atime, int64(attr.Atimensec))) > time.Second

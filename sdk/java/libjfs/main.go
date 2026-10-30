@@ -434,9 +434,10 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf}
 	if formats[name] != nil && formats[name].KerbConf != "" {
 		if _, ok := superuserChangedCb[name]; !ok {
-			jfs.Meta().OnReload(func(format *meta.Format) {
+			jfs.Meta().OnReload(func(format *meta.Format) error {
 				kerb.loadConf(name, format.KerbConf, jfs)
 				updateAllCtx(name, user, groups)
+				return nil
 			})
 			superuserChangedCb[name] = struct{}{}
 		}
@@ -470,6 +471,16 @@ func updateAllCtx(name string, user, groups string) {
 	}
 }
 
+type pushLabelsRegisterer struct {
+	prometheus.Registerer
+	labels prometheus.Labels
+}
+
+// PushLabels reports exporter labels without adding them to collected metrics.
+func (r pushLabelsRegisterer) PushLabels() prometheus.Labels {
+	return r.labels
+}
+
 func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
 	pusher := push.New(pushGatewayAddr, "juicefs").Gatherer(registry)
 	for k, v := range commonLabels {
@@ -477,7 +488,7 @@ func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, 
 	}
 	if pushAuth != "" {
 		if strings.Contains(pushAuth, ":") {
-			parts := strings.Split(pushAuth, ":")
+			parts := strings.SplitN(pushAuth, ":", 2)
 			pusher.BasicAuth(parts[0], parts[1])
 		}
 	}
@@ -653,7 +664,11 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			if jConf.PushRemoteWrite != "" {
 				push2RemoteWrite(jConf.PushRemoteWrite, jConf.PushRemoteWriteAuth, interval, registry, commonLabels)
 			}
-			m.InitMetrics(registerer)
+			metaRegisterer := registerer
+			if jConf.PushGateway != "" || jConf.PushGraphite != "" || jConf.PushRemoteWrite != "" {
+				metaRegisterer = pushLabelsRegisterer{Registerer: registerer, labels: commonLabels}
+			}
+			m.InitMetrics(metaRegisterer)
 			vfs.InitMetrics(registerer)
 			go metric.UpdateMetrics(registerer)
 		}
@@ -679,6 +694,8 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 		if jConf.FreeSpace != "" {
 			freeSpaceRatio, _ = strconv.ParseFloat(jConf.FreeSpace, 64)
 		}
+		uploadLimit := utils.ParseMbpsStr("upload-limit", jConf.UploadLimit)
+		downloadLimit := utils.ParseMbpsStr("download-limit", jConf.DownloadLimit)
 		chunkConf := chunk.Config{
 			BlockSize:         format.BlockSize * 1024,
 			Compress:          format.Compression,
@@ -697,8 +714,8 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			MaxUpload:         jConf.MaxUploads,
 			MaxDownload:       jConf.MaxDownloads,
 			MaxRetries:        jConf.IORetries,
-			UploadLimit:       utils.ParseMbpsStr("upload-limit", jConf.UploadLimit) * 1e6 / 8,
-			DownloadLimit:     utils.ParseMbpsStr("download-limit", jConf.DownloadLimit) * 1e6 / 8,
+			UploadLimit:       uploadLimit * 1e6 / 8,
+			DownloadLimit:     downloadLimit * 1e6 / 8,
 			Prefetch:          jConf.Prefetch,
 			Writeback:         jConf.Writeback,
 			HashPrefix:        format.HashPrefix,
@@ -731,14 +748,16 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			logger.Errorf("new session: %s", err)
 			return nil
 		}
-		m.OnReload(func(fmt *meta.Format) {
-			if chunkConf.UploadLimit > 0 {
-				fmt.UploadLimit = chunkConf.UploadLimit
+		m.OnReload(func(format *meta.Format) error {
+			upload, download := format.UploadLimit, format.DownloadLimit
+			if uploadLimit > 0 {
+				upload = uploadLimit
 			}
-			if chunkConf.DownloadLimit > 0 {
-				fmt.DownloadLimit = chunkConf.DownloadLimit
+			if downloadLimit > 0 {
+				download = downloadLimit
 			}
-			store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+			store.UpdateLimit(upload, download)
+			return nil
 		})
 
 		conf := &vfs.Config{

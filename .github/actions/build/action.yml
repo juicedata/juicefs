@@ -34,6 +34,16 @@ runs:
         ln -sf "$fusermount_bin" "$helper_dir/fusermount3"
         echo "$helper_dir" >> "$GITHUB_PATH"
 
+    - name: Allow FUSE unmounts in AppArmor
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        if [[ -f /etc/apparmor.d/fusermount3 ]]; then
+          sudo mkdir -p /etc/apparmor.d/local
+          echo 'umount,' | sudo tee -a /etc/apparmor.d/local/fusermount3 >/dev/null
+          sudo apparmor_parser -r /etc/apparmor.d/fusermount3
+        fi
+
     - name: Change go version for root user
       shell: bash
       run: |

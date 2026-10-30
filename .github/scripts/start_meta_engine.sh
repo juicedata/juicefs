@@ -237,7 +237,7 @@ wait_mysql_ready() {
         docker ps -a --filter name=^/mdb$ || true
         docker logs --tail 50 mdb || true
     else
-        sudo /etc/init.d/mysql status 2>/dev/null || true
+        sudo systemctl status mysql.service --no-pager 2>/dev/null || true
         sudo journalctl -u mysql --no-pager -n 20 2>/dev/null || true
     fi
     return 1
@@ -247,7 +247,7 @@ start_meta_engine(){
     meta=$1
     storage=$2
     if [ "$meta" == "mysql" ]; then
-        sudo /etc/init.d/mysql start || return 1
+        sudo systemctl start mysql.service || return 1
         wait_mysql_ready mysql root root 127.0.0.1 3306 || return 1
     elif [ "$meta" == "redis" ]; then
         sudo .github/scripts/apt_install.sh  redis-tools redis-server
@@ -348,7 +348,7 @@ start_meta_engine(){
         fi
     elif [ "$meta" != "mysql" ] && [ "$storage" == "mysql" ]; then
         echo "start mysql"
-        sudo /etc/init.d/mysql start || return 1
+        sudo systemctl start mysql.service || return 1
         wait_mysql_ready mysql root root 127.0.0.1 3306 || return 1
     fi
 }

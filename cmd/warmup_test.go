@@ -108,7 +108,7 @@ func TestWarmupWithRangeFile(t *testing.T) {
 
 	// Create a file list with path only (backward compatible)
 	fileList := filepath.Join(t.TempDir(), "filelist.txt")
-	if err := os.WriteFile(fileList, []byte(fmt.Sprintf("%s/f1.txt\n", testMountPoint)), 0644); err != nil {
+	if err := os.WriteFile(fileList, fmt.Appendf(nil, "%s/f1.txt\n", testMountPoint), 0644); err != nil {
 		t.Fatalf("write filelist: %s", err)
 	}
 
@@ -119,7 +119,7 @@ func TestWarmupWithRangeFile(t *testing.T) {
 
 	// Create a file list with ranges
 	fileList2 := filepath.Join(t.TempDir(), "filelist2.txt")
-	if err := os.WriteFile(fileList2, []byte(fmt.Sprintf("%s/f1.txt [0-5]\n", testMountPoint)), 0644); err != nil {
+	if err := os.WriteFile(fileList2, fmt.Appendf(nil, "%s/f1.txt [0-5]\n", testMountPoint), 0644); err != nil {
 		t.Fatalf("write filelist2: %s", err)
 	}
 

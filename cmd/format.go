@@ -289,6 +289,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	if format.EncryptKey != "" {
 		privKey, err := object.ParsePrivateKeyFromPem([]byte(format.EncryptKey), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
 		if err != nil {
+			object.Shutdown(blob)
 			if errors.Is(err, object.ErrKeyNeedPasswd) {
 				return nil, fmt.Errorf("%w: please set the 'JFS_RSA_PASSPHRASE' environment variable", err)
 			}
@@ -296,6 +297,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		}
 		encryptor, err := object.NewDataEncryptor(object.NewKeyEncryptor(privKey), format.EncryptAlgo)
 		if err != nil {
+			object.Shutdown(blob)
 			return nil, err
 		}
 		blob = object.NewEncrypted(blob, encryptor)
@@ -521,7 +523,7 @@ func format(c *cli.Context) error {
 				format.KerbConf = readKerbConf(c.String(flag))
 			}
 		}
-	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
+	} else if errors.Is(err, meta.ErrNotFormatted) {
 		create = true
 		format = &meta.Format{
 			Name:             name,

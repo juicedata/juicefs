@@ -42,6 +42,7 @@ type Config struct {
 	CaseInsensi        bool
 	ReadOnly           bool
 	NoBGJob            bool // disable background jobs like clean-up, backup, etc.
+	NoCompact          bool // disable compaction initiated by this client.
 	OpenCache          time.Duration
 	OpenCacheLimit     uint64 // max number of files to cache (soft limit)
 	Heartbeat          time.Duration
@@ -71,6 +72,10 @@ func (c *Config) SelfCheck() {
 	if c.Heartbeat > time.Minute*10 {
 		logger.Warnf("heartbeat should not be greater than 10 minutes")
 		c.Heartbeat = time.Minute * 10
+	}
+	if c.ReadOnly {
+		logger.Warnf("Read-only mode enabled, background compaction will be disabled")
+		c.NoCompact = true
 	}
 }
 
@@ -110,6 +115,18 @@ type Format struct {
 
 	//kerberos
 	KerbConf string `json:",omitempty"`
+}
+
+// Clone returns a deep copy of the format.
+func (f *Format) Clone() *Format {
+	c := *f
+	if f.Tiers != nil {
+		c.Tiers = make(object.Tiers, len(f.Tiers))
+		for id, t := range f.Tiers {
+			c.Tiers[id] = t
+		}
+	}
+	return &c
 }
 
 func (f *Format) update(old *Format, force bool) error {
@@ -161,7 +178,7 @@ func (f *Format) RemoveSecret() {
 }
 
 func (f *Format) String() string {
-	t := *f
+	t := f.Clone()
 	t.RemoveSecret()
 	s, _ := json.MarshalIndent(t, "", "  ")
 	return string(s)
@@ -280,6 +297,10 @@ func (f *Format) Decrypt() error {
 		buf, e := base64.StdEncoding.DecodeString(*k)
 		if e != nil {
 			err = fmt.Errorf("decode key: %s", e)
+			return
+		}
+		if len(buf) < ci.NonceSize() {
+			err = fmt.Errorf("open cipher: encrypted key is shorter than nonce")
 			return
 		}
 		plaintext, e := ci.Open(nil, buf[:ci.NonceSize()], buf[ci.NonceSize():], nil)

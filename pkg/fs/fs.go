@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -477,9 +478,14 @@ func (fs *FileSystem) Lstat(ctx meta.Context, path string) (fi *FileStat, err sy
 	return fs.resolve(ctx, path, false)
 }
 
-// parentDir returns parent of /foo/bar/ as /foo
+// parentDir preserves dot components so the parent can be resolved in order.
 func parentDir(p string) string {
-	return path.Dir(strings.TrimRight(p, "/"))
+	dir, _ := path.Split(strings.TrimRight(p, "/"))
+	dir = strings.TrimRight(dir, "/")
+	if dir == "" {
+		return "/"
+	}
+	return dir
 }
 
 func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint16) (err syscall.Errno) {
@@ -670,6 +676,11 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 	defer trace.StartRegion(context.TODO(), "fs.Rename").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Rename (%s,%s,%d): %s", oldpath, newpath, flags, errstr(err)) }()
+	// generic checks of renameat2(2), whether the flags are supported is up to the metadata engine
+	if flags&^(meta.RenameNoReplace|meta.RenameExchange|meta.RenameWhiteout) != 0 ||
+		flags&meta.RenameExchange != 0 && flags&(meta.RenameNoReplace|meta.RenameWhiteout) != 0 {
+		return syscall.EINVAL
+	}
 	oldfi, err := fs.resolve(ctx, parentDir(oldpath), true)
 	if err != 0 {
 		return
@@ -709,6 +720,9 @@ func (fs *FileSystem) Symlink(ctx meta.Context, target string, link string) (err
 	defer trace.StartRegion(context.TODO(), "fs.Symlink").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Symlink (%s,%s): %s", target, link, errstr(err)) }()
+	if target == "" {
+		return syscall.ENOENT // as getname() in Linux, before the link is resolved
+	}
 	if strings.HasSuffix(link, "/") {
 		return syscall.EINVAL
 	}
@@ -915,37 +929,28 @@ func (fs *FileSystem) lookup(ctx meta.Context, parent Ino, name string, inode *I
 }
 
 func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
-	return fs.doResolve(ctx, p, followLastSymlink, make(map[Ino]struct{}))
+	return fs.doResolve(ctx, p, followLastSymlink)
 }
 
-func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bool, visited map[Ino]struct{}) (fi *FileStat, err syscall.Errno) {
-	p = path.Clean(p)
-
-	// Check if path is allowed by any of the configured subdirs
-	if len(fs.subdirPrefixes) > 0 {
-		allowed := false
-		plen := len(p)
-		for _, prefix := range fs.subdirPrefixes {
-			prefixLen := len(prefix)
-			// Fast path: check length first to avoid string comparison if possible
-			if prefixLen > plen {
-				continue
-			}
-			// Check if path starts with prefix and is either the prefix itself or has '/' after prefix
-			// This prevents matching "/test" with "/testfile" (should match "/test" or "/test/...")
-			if strings.HasPrefix(p, prefix) && (prefixLen == plen || p[prefixLen] == '/') {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return nil, syscall.EACCES
+func (fs *FileSystem) allowedSubdir(p string, allowAncestor bool) bool {
+	if len(fs.subdirPrefixes) == 0 {
+		return true
+	}
+	for _, prefix := range fs.subdirPrefixes {
+		prefix = strings.TrimRight(prefix, "/")
+		if p == prefix || strings.HasPrefix(p, prefix+"/") ||
+			allowAncestor && (p == "/" || strings.HasPrefix(prefix, p+"/")) {
+			return true
 		}
 	}
+	return false
+}
+
+func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
 	var inode Ino
 	var attr = &Attr{}
 
-	if fs.conf.FastResolve {
+	if fs.conf.FastResolve && len(fs.subdirPrefixes) == 0 && strings.HasPrefix(p, "/") && path.Clean(p) == p {
 		err = fs.m.Resolve(ctx, 1, p, &inode, attr, false)
 		if err == 0 {
 			fi = AttrToFileInfo(inode, attr)
@@ -964,41 +969,60 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 
 	// Fallback to the default implementation that calls `fs.m.Lookup` for each directory along the path.
 	// It might be slower for deep directories, but it works for every meta that implements `Lookup`.
+	type dirStep struct {
+		ino  Ino
+		attr Attr
+		path string
+	}
+	var stack []dirStep
 	parent := Ino(1)
+	resolvedPath := "/"
+	symlinks := 0
 	ss := strings.Split(p, "/")
-	for i, name := range ss {
+	for i := 0; i < len(ss); i++ {
+		name := ss[i]
+		isLastComponent := i == len(ss)-1
+		if parent > 1 && attr.Typ != meta.TypeDirectory {
+			return nil, syscall.ENOTDIR
+		}
 		if len(name) == 0 {
 			continue
 		}
-		if parent == meta.RootInode && i == len(ss)-1 && vfs.IsSpecialName(name) {
-			inode, attr := vfs.GetInternalNodeByName(name)
-			fi = AttrToFileInfo(inode, attr)
-			parent = inode
+		if parent == meta.RootInode && isLastComponent && vfs.IsSpecialName(name) {
+			inode, pattr := vfs.GetInternalNodeByName(name)
+			parent, *attr = inode, *pattr
+			resolvedPath = "/" + name
 			break
 		}
 		if parent > 1 {
-			if (name == "." || name == "..") && attr.Typ != meta.TypeDirectory {
-				return nil, syscall.ENOTDIR
-			}
 			if err := fs.m.Access(ctx, parent, meta.MODE_MASK_X, attr); err != 0 {
 				return nil, err
 			}
 		}
+		if name == "." {
+			continue
+		}
+		if name == ".." {
+			if n := len(stack); n > 0 {
+				top := stack[n-1]
+				stack = stack[:n-1]
+				parent, *attr, resolvedPath = top.ino, top.attr, top.path
+			}
+			continue
+		}
 
-		var inode Ino
-		isLastComponent := i == len(ss)-1
-
+		nextPath := path.Join(resolvedPath, name)
+		if !fs.allowedSubdir(nextPath, true) {
+			return nil, syscall.EACCES
+		}
+		parentAttr := *attr
 		err = fs.lookup(ctx, parent, name, &inode, attr)
 		if err != 0 {
 			return
 		}
-		fi = AttrToFileInfo(inode, attr)
-		if (!isLastComponent || followLastSymlink) && fi.IsSymlink() {
-			if _, ok := visited[inode]; ok {
-				logger.Errorf("find a loop symlink: %d", inode)
+		if (!isLastComponent || followLastSymlink) && attr.Typ == meta.TypeSymlink {
+			if symlinks++; symlinks > 40 {
 				return nil, syscall.ELOOP
-			} else {
-				visited[inode] = struct{}{}
 			}
 			var buf []byte
 			err = fs.m.ReadLink(ctx, inode, &buf)
@@ -1016,36 +1040,36 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 				}
 				if strings.HasPrefix(target, mp) {
 					target = target[len(mp):]
+					parent, *attr, resolvedPath, stack = meta.RootInode, Attr{}, "/", stack[:0]
 				} else {
+					fi = AttrToFileInfo(inode, attr)
 					fi.name = "file:" + target
-					linkPath := strings.Join(ss[:i+1], "/")
-					if linkPath == "" {
-						linkPath = "/"
-					}
-					logger.Warnf("external link: %s -> %s (while resolving %s)", linkPath, target, p)
+					logger.Errorf("external link: %s -> %s", p, target)
 					return fi, utils.ErrExtlink
 				}
 			} else {
-				target = path.Join(strings.Join(ss[:i], "/"), target)
+				*attr = parentAttr
 			}
-			if !isLastComponent {
-				target += "/" + strings.Join(ss[i+1:], "/")
-			}
-			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
-			if err == 0 && isLastComponent {
-				fi.name = name
-			}
-			return
+			ss = append(strings.Split(target, "/"), ss[i+1:]...)
+			i = -1
+			continue
 		}
-		fi.name = name
+		stack = append(stack, dirStep{parent, parentAttr, resolvedPath})
 		parent = inode
+		resolvedPath = nextPath
+	}
+	if !fs.allowedSubdir(resolvedPath, false) {
+		return nil, syscall.EACCES
 	}
 	if parent == meta.RootInode {
 		err = fs.m.GetAttr(ctx, parent, attr)
 		if err != 0 {
 			return
 		}
-		fi = AttrToFileInfo(1, attr)
+	}
+	fi = AttrToFileInfo(parent, attr)
+	if base := path.Base(p); base != "/" {
+		fi.name = base
 	}
 	return fi, 0
 }
@@ -1165,18 +1189,6 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, key string, cmd uint8, capac
 	if cmd == meta.QuotaSet && capacity == 0 && inodes == 0 {
 		return nil, syscall.EINVAL
 	}
-	qs = make(map[string]*meta.Quota)
-	if cmd == meta.QuotaSet {
-		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
-		if capacity > 0 {
-			q.MaxSpace = int64(capacity)
-		}
-		if inodes > 0 {
-			q.MaxInodes = int64(inodes)
-		}
-		qs[key] = q
-	}
-
 	var qtype uint32
 	var qkey string
 	if strings.HasPrefix(key, "uid:") {
@@ -1198,11 +1210,28 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, key string, cmd uint8, capac
 			return nil, syscall.EINVAL
 		}
 	}
+
+	qs = make(map[string]*meta.Quota)
+	if cmd == meta.QuotaSet {
+		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
+		if capacity > 0 {
+			q.MaxSpace = int64(capacity)
+		}
+		if inodes > 0 {
+			q.MaxInodes = int64(inodes)
+		}
+		qs[qkey] = q
+	}
 	if _err := fs.m.HandleQuota(meta.Background(), cmd, qkey, qtype, qs, strict, repair, create); _err != nil {
 		if strings.HasPrefix(_err.Error(), "no quota for inode") {
 			return qs, 0
 		}
-		err = syscall.EINVAL
+		var eno syscall.Errno
+		if errors.As(_err, &eno) {
+			err = eno
+		} else {
+			err = syscall.EINVAL
+		}
 	}
 	return
 }
@@ -1495,6 +1524,9 @@ func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 func (f *File) Readdir(ctx meta.Context, count int) (fi []os.FileInfo, err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Readdir (%s,%d): (%s,%d)", f.path, count, errstr(err), len(fi)) }()
+	if !f.info.IsDir() {
+		return nil, syscall.ENOTDIR
+	}
 	f.Lock()
 	defer f.Unlock()
 	fi = f.dircache
@@ -1532,6 +1564,9 @@ func (f *File) Readdir(ctx meta.Context, count int) (fi []os.FileInfo, err sysca
 func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry, err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "ReaddirPlus (%s,%d): (%s,%d)", f.path, offset, errstr(err), len(entries)) }()
+	if !f.info.IsDir() {
+		return nil, syscall.ENOTDIR
+	}
 	f.Lock()
 	defer f.Unlock()
 	if f.entries == nil {

@@ -38,6 +38,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -172,6 +173,7 @@ func testMeta(t *testing.T, m Meta) {
 	}
 
 	testMetaClient(t, m)
+	testSubdirOperations(t, m)
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)
 	testRenameOverRelinkedHardlink(t, m)
@@ -191,6 +193,7 @@ func testMeta(t *testing.T, m Meta) {
 	testCloseSession(t, m)
 	testConcurrentDir(t, m)
 	testAttrFlags(t, m)
+	testAttrFlagGroups(t, m)
 	testQuota(t, m)
 	testUserGroupQuota(t, m)
 	testAtime(t, m)
@@ -302,6 +305,64 @@ type aclCacheWithMissCount struct {
 func (c *aclCacheWithMissCount) GetMissIds() []uint32 {
 	c.missCalls++
 	return c.Cache.GetMissIds()
+}
+
+func TestMergeFacl(t *testing.T) {
+	minimal := &aclAPI.Rule{Owner: 6, Group: 4, Mask: 0xFFFF, Other: 0}
+	extended := &aclAPI.Rule{Owner: 7, Group: 7, Mask: 5, Other: 1, NamedUsers: aclAPI.Entries{{Id: 1001, Perm: 4}}}
+	srcMode := uint16(0640)
+	replay := &replayState{Mode: &srcMode}
+	for _, c := range []struct {
+		name    string
+		ctx     Context
+		state   *replayState
+		aclType uint8
+		rule    *aclAPI.Rule
+		mode    uint16
+		aclId   uint32
+	}{
+		{"non-member clears sgid", NewContext(1, 1000, []uint32{1000}), nil, aclAPI.TypeAccess, minimal, 0640, aclAPI.None},
+		{"extended access uses mask", Background(), nil, aclAPI.TypeAccess, extended, 02751, 7},
+		{"default keeps mode", Background(), nil, aclAPI.TypeDefault, extended, 02755, 7},
+		{"replay keeps source mode", Background(), replay, aclAPI.TypeAccess, minimal, srcMode, aclAPI.None},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			attr := &Attr{Mode: 02755, Uid: 1000, Gid: 2000}
+			insert := func(*aclAPI.Rule) (uint32, error) { return 7, nil }
+			m := &baseMeta{}
+			m.replay.Store(c.state)
+			require.NoError(t, m.mergeFacl(c.ctx, attr, c.aclType, c.rule.Dup(), insert))
+			assert.Equal(t, c.mode, attr.Mode)
+			assert.Equal(t, c.aclId, getAttrACLId(attr, c.aclType))
+		})
+	}
+}
+
+func TestMergeAttrReplayMode(t *testing.T) {
+	srcMode := uint16(0640)
+	replay := &replayState{Mode: &srcMode}
+	for _, c := range []struct {
+		name  string
+		ctx   Context
+		state *replayState
+		set   uint16
+		mode  uint16
+	}{
+		{"root chgrp keeps sgid", Background(), nil, SetAttrGID, 02644},
+		{"replay chgrp keeps source mode", Background(), replay, SetAttrGID, srcMode},
+		{"replay chown and chmod keep source mode", Background(), replay, SetAttrUID | SetAttrMode, srcMode},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			cur := &Attr{Typ: TypeFile, Mode: 02644, Uid: 1000, Gid: 1000}
+			attr := &Attr{Mode: srcMode, Uid: 1001, Gid: 1001}
+			m := &baseMeta{}
+			m.replay.Store(c.state)
+			dirty, st := m.mergeAttr(c.ctx, 2, c.set, cur, attr, time.Now(), nil)
+			require.Zero(t, st)
+			require.NotNil(t, dirty)
+			assert.Equal(t, c.mode, dirty.Mode)
+		})
+	}
 }
 
 func testACL(t *testing.T, m Meta) {
@@ -3170,6 +3231,80 @@ func testConcurrentDir(t *testing.T, m Meta) {
 	g.Wait()
 }
 
+func testAttrFlagGroups(t *testing.T, m Meta) {
+	root := Background()
+	owner := NewContext(10, 1, []uint32{2})
+	other := NewContext(11, 3, []uint32{4})
+	var inode Ino
+	if st := m.Create(root, 1, "flag-groups", 0644, 022, 0, &inode, nil); st != 0 {
+		t.Fatalf("create: %s", st)
+	}
+	defer m.Unlink(root, 1, "flag-groups")
+	if st := m.SetAttr(root, inode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: 1, Gid: 2}); st != 0 {
+		t.Fatalf("chown: %s", st)
+	}
+	setFlags := func(ctx Context, set uint16, flags uint8) (uint8, syscall.Errno) {
+		attr := &Attr{Flags: flags}
+		st := m.SetAttr(ctx, inode, set, 0, attr)
+		return attr.Flags, st
+	}
+	expect := func(want uint8) {
+		t.Helper()
+		var attr Attr
+		if st := m.GetAttr(root, inode, &attr); st != 0 {
+			t.Fatalf("getattr: %s", st)
+		}
+		if attr.Flags != want {
+			t.Fatalf("flags = %x, want %x", attr.Flags, want)
+		}
+	}
+
+	// each group only replaces its own flags, and the merged result is returned
+	if flags, st := setFlags(root, SetAttrWindowsFlags, FlagWindowsHidden|FlagAppend); st != 0 || flags != FlagWindowsHidden {
+		t.Fatalf("set windows flags: %s, flags %x", st, flags)
+	}
+	if flags, st := setFlags(root, SetAttrLinuxFlags, FlagAppend|FlagWindowsSystem); st != 0 || flags != FlagWindowsHidden|FlagAppend {
+		t.Fatalf("set ioctl flags: %s, flags %x", st, flags)
+	}
+	if flags, st := setFlags(root, SetAttrWindowsFlags, FlagImmutable); st != 0 || flags != FlagImmutable|FlagAppend {
+		t.Fatalf("set windows flags: %s, flags %x", st, flags)
+	}
+	if _, st := setFlags(root, SetAttrLinuxFlags, 0); st != 0 {
+		t.Fatalf("clear ioctl flags: %s", st)
+	}
+	expect(0)
+
+	// the ioctl group is checked against the flags in this transaction
+	if _, st := setFlags(other, SetAttrLinuxFlags, 0); st != syscall.EPERM {
+		t.Fatalf("non-owner setting ioctl flags should be EPERM, got %s", st)
+	}
+	if _, st := setFlags(owner, SetAttrLinuxFlags, FlagSkipTrash); st != 0 {
+		t.Fatalf("owner setting skip-trash: %s", st)
+	}
+	for _, flag := range []uint8{FlagImmutable, FlagAppend} {
+		if _, st := setFlags(owner, SetAttrLinuxFlags, FlagSkipTrash|flag); st != syscall.EPERM {
+			t.Fatalf("owner setting %x should be EPERM, got %s", flag, st)
+		}
+		if _, st := setFlags(root, SetAttrLinuxFlags, FlagSkipTrash|flag); st != 0 {
+			t.Fatalf("root setting %x: %s", flag, st)
+		}
+		if _, st := setFlags(owner, SetAttrLinuxFlags, FlagSkipTrash); st != syscall.EPERM {
+			t.Fatalf("owner clearing %x should be EPERM, got %s", flag, st)
+		}
+		if _, st := setFlags(owner, SetAttrLinuxFlags, flag); st != 0 {
+			t.Fatalf("owner keeping %x while clearing skip-trash: %s", flag, st)
+		}
+		expect(flag)
+		if _, st := setFlags(root, SetAttrLinuxFlags, FlagSkipTrash); st != 0 {
+			t.Fatalf("root clearing %x: %s", flag, st)
+		}
+		expect(FlagSkipTrash)
+	}
+	if _, st := setFlags(root, SetAttrFlag, 0); st != 0 {
+		t.Fatalf("reset flags: %s", st)
+	}
+}
+
 func testAttrFlags(t *testing.T, m Meta) {
 	ctx := Background()
 	var attr = &Attr{}
@@ -3562,6 +3697,10 @@ func testDirStat(t *testing.T, m Meta) {
 	}); err != nil {
 		t.Fatalf("test dir usage fallocate: %v", err)
 	}
+	// resyncing rewrites a row that already exists
+	if stat, st := m.getBase().en.doSyncDirStat(Background(), testInode); st != 0 || *stat != (dirStat{4097, align4K(4097), 1}) {
+		t.Fatalf("sync an existing dir stat: %+v %s", stat, st)
+	}
 
 	// test dir with file and truncate
 	if st := m.Truncate(Background(), fileInode, 0, 0, nil, false); st != 0 {
@@ -3887,6 +4026,50 @@ func testRenameDirStat(t *testing.T, m Meta) {
 		}
 		assertInodes(t, m, "Test 6 cleanup dir1", dir1, 0)
 		t.Logf("Test 6 passed: same-dir exchange rename")
+	}
+
+	// Test 7: Renaming between hard links of the same file is a no-op
+	assertInodes(t, m, "Test 7 pre-condition dir1", dir1, 0)
+	assertInodes(t, m, "Test 7 pre-condition dir2", dir2, 0)
+	{
+		if st := m.Create(ctx, dir1, "link1", 0644, 022, 0, &file1Inode, &attr); st != 0 {
+			t.Fatalf("create link1: %s", st)
+		}
+		if st := m.Link(ctx, file1Inode, dir2, "link2", &attr); st != 0 {
+			t.Fatalf("link link2: %s", st)
+		}
+		assertInodes(t, m, "Test 7 after link dir1", dir1, 1)
+		assertInodes(t, m, "Test 7 after link dir2", dir2, 1)
+		for _, flags := range []uint32{0, RenameExchange} {
+			var inode Ino
+			var rattr Attr
+			if st := m.Rename(ctx, dir1, "link1", dir2, "link2", flags, &inode, &rattr); st != 0 {
+				t.Fatalf("rename link1 to link2 (flags %d): %s", flags, st)
+			}
+			if inode != file1Inode || rattr.Typ != TypeFile || rattr.Nlink != 2 {
+				t.Fatalf("rename link1 to link2 (flags %d): inode=%d type=%d nlink=%d, want inode=%d type=%d nlink=2",
+					flags, inode, rattr.Typ, rattr.Nlink, file1Inode, TypeFile)
+			}
+			for _, e := range []struct {
+				parent Ino
+				name   string
+			}{{dir1, "link1"}, {dir2, "link2"}} {
+				if st := m.Lookup(ctx, e.parent, e.name, &inode, &rattr, false); st != 0 || inode != file1Inode {
+					t.Fatalf("lookup %s after rename (flags %d): inode=%d st=%s, want %d", e.name, flags, inode, st, file1Inode)
+				}
+			}
+			assertInodes(t, m, fmt.Sprintf("Test 7 dir1 after rename (flags %d)", flags), dir1, 1)
+			assertInodes(t, m, fmt.Sprintf("Test 7 dir2 after rename (flags %d)", flags), dir2, 1)
+		}
+		if st := m.Unlink(ctx, dir1, "link1"); st != 0 {
+			t.Fatalf("cleanup dir1/link1: %s", st)
+		}
+		if st := m.Unlink(ctx, dir2, "link2"); st != 0 {
+			t.Fatalf("cleanup dir2/link2: %s", st)
+		}
+		assertInodes(t, m, "Test 7 cleanup dir1", dir1, 0)
+		assertInodes(t, m, "Test 7 cleanup dir2", dir2, 0)
+		t.Logf("Test 7 passed: rename between hard links")
 	}
 }
 
@@ -4287,6 +4470,73 @@ func testBatchClone(t *testing.T, m Meta) {
 		}
 	}
 
+	// --- test 8: directory clone quota accounting and cleanup ---
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+	var subDir, subFile, quotaDst Ino
+	var attr Attr
+	if st := m.Mkdir(ctx, srcDir, "sub", 0755, 022, 0, &subDir, nil); st != 0 {
+		t.Fatalf("mkdir sub: %s", st)
+	}
+	if st := m.Create(ctx, subDir, "file3", 0644, 022, 0, &subFile, &attr); st != 0 {
+		t.Fatalf("create file3: %s", st)
+	}
+	if st := m.Truncate(ctx, subFile, 0, 1<<20, &attr, false); st != 0 {
+		t.Fatalf("truncate file3: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "batchQuotaDst", 0755, 022, 0, &quotaDst, nil); st != 0 {
+		t.Fatalf("mkdir batchQuotaDst: %s", st)
+	}
+	p := "/batchQuotaDst"
+	if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set %s: %s", p, err)
+	}
+	m.getBase().loadQuotas()
+	checkUsage := func(what string, space, inodes int64) {
+		t.Helper()
+		m.FlushSession()
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, p, DirQuotaType, qs, false, false, false); err != nil {
+			t.Fatalf("HandleQuota get %s: %s", p, err)
+		}
+		if q := qs[p]; q.UsedSpace != space || q.UsedInodes != inodes {
+			t.Fatalf("quota of %s %s: used %d bytes and %d inodes, expect %d and %d", p, what, q.UsedSpace, q.UsedInodes, space, inodes)
+		}
+	}
+
+	count = 0
+	var total uint64
+	if st := m.Clone(ctx, RootInode, srcDir, quotaDst, "c", 0, 022, CLONE_DEFAULT_CONCURRENCY, &count, &total); st != 0 {
+		t.Fatalf("clone: %s", st)
+	}
+	var cloned Ino
+	if st := m.Lookup(ctx, quotaDst, "c", &cloned, &attr, false); st != 0 {
+		t.Fatalf("lookup c: %s", st)
+	}
+	var sum Summary
+	if st := m.GetSummary(ctx, cloned, &sum, true, true); st != 0 {
+		t.Fatalf("summary of c: %s", st)
+	}
+	checkUsage("after the clone", int64(sum.Size), int64(sum.Dirs+sum.Files))
+	if st := m.Remove(ctx, quotaDst, "c", true, RmrDefaultThreads, nil); st != 0 {
+		t.Fatalf("remove c: %s", st)
+	}
+	checkUsage("after removing the clone", 0, 0)
+
+	// An interrupted clone leaves the copied tree detached from its parent.
+	count = 0
+	var detached Ino
+	if st := m.getBase().cloneEntry(ctx, srcDir, quotaDst, "d", &detached, 0, 022, &count, true, make(chan struct{}, 4)); st != 0 {
+		t.Fatalf("clone entry: %s", st)
+	}
+	m.CleanupDetachedNodesBefore(ctx, time.Now().Add(time.Minute), nil)
+	checkUsage("after removing the detached tree", 0, 0)
+	if st := m.Remove(ctx, RootInode, "batchQuotaDst", true, RmrDefaultThreads, nil); st != 0 {
+		t.Fatalf("remove batchQuotaDst: %s", st)
+	}
+
 	// cleanup
 	m.Remove(ctx, RootInode, "batchSrc", false, RmrDefaultThreads, nil)
 	m.Remove(ctx, RootInode, "batchDst", false, RmrDefaultThreads, nil)
@@ -4377,6 +4627,41 @@ func testClone(t *testing.T, m Meta) {
 	if eno := m.Link(Background(), file2, dir2, "file2Hardlink", nil); eno != 0 {
 		t.Fatalf("hardlink: %s", eno)
 	}
+
+	t.Run("CloneParentDirStat", func(t *testing.T) {
+		m.FlushSession()
+		for _, tc := range []struct {
+			name   string
+			parent Ino
+			inode  Ino
+			length int64
+			space  int64
+		}{
+			{"directory", cloneDir, dir1, 0, align4K(0)},
+			{"file", dir1, file1, 67108864, align4K(67108864)},
+			{"symlink", dir1, file1Symlink, 0, align4K(0)},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				var count, total uint64
+				if st := m.Clone(Background(), tc.parent, tc.inode, dir, tc.name, 0, 022, 4, &count, &total); st != 0 {
+					t.Fatalf("clone: %s", st)
+				}
+				if err := waitCheckResult(m, dirStat{tc.length, tc.space, 1}, func() (*dirStat, syscall.Errno) {
+					return m.GetDirStat(Background(), dir)
+				}); err != nil {
+					t.Errorf("parent stat after clone: %s", err)
+				}
+				if st := m.Remove(Background(), dir, tc.name, true, RmrDefaultThreads, nil); st != 0 {
+					t.Fatalf("remove clone: %s", st)
+				}
+				if err := waitCheckResult(m, dirStat{}, func() (*dirStat, syscall.Errno) {
+					return m.GetDirStat(Background(), dir)
+				}); err != nil {
+					t.Errorf("parent stat after removing clone: %s", err)
+				}
+			})
+		}
+	})
 
 	var attr Attr
 	attr.Mtime = 1
@@ -4879,6 +5164,99 @@ func testQuota(t *testing.T, m Meta) {
 	if st := m.Create(ctx, parent, "f4", 0644, 0, 0, nil, &attr); st != syscall.EDQUOT {
 		t.Fatalf("Create quota/d22/f4: %s", st)
 	}
+
+	t.Run("SubdirQuota", func(t *testing.T) {
+		const path = "/quota-subdir"
+		var parent, inode Ino
+		if st := m.Mkdir(ctx, RootInode, "quota-subdir", 0755, 0, 0, &parent, nil); st != 0 {
+			t.Fatalf("Mkdir quota-subdir: %s", st)
+		}
+		if err := m.HandleQuota(ctx, QuotaSet, path, DirQuotaType, map[string]*Quota{path: {MaxInodes: 2}}, false, false, false); err != nil {
+			t.Fatalf("Set quota: %s", err)
+		}
+		defer m.HandleQuota(ctx, QuotaDel, path, DirQuotaType, nil, false, false, false)
+		base := m.getBase()
+		base.loadQuotas()
+		defer base.chroot(base.root)
+		if st := m.Chroot(ctx, path); st != 0 {
+			t.Fatalf("Chroot: %s", st)
+		}
+
+		if st := m.Mkdir(ctx, RootInode, "d", 0755, 0, 0, &inode, nil); st != 0 {
+			t.Fatalf("Mkdir d: %s", st)
+		}
+		if st := m.Create(ctx, inode, "f", 0644, 0, 0, nil, nil); st != 0 {
+			t.Fatalf("Create d/f: %s", st)
+		}
+		base.doFlushQuotas()
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, path, DirQuotaType, qs, false, false, false); err != nil {
+			t.Fatalf("Get quota: %s", err)
+		}
+		if q := qs[path]; q.UsedInodes != 2 || q.UsedSpace != 2*4<<10 {
+			t.Errorf("Subdir quota: got %+v, want 2 inodes and 8192 bytes", q)
+		}
+		if st := m.Create(ctx, inode, "overflow", 0644, 0, 0, nil, nil); st != syscall.EDQUOT {
+			t.Errorf("Create d/overflow: got %s, want %s", st, syscall.EDQUOT)
+		}
+	})
+
+	t.Run("FlushAfterRmdir", func(t *testing.T) {
+		var parent, inode Ino
+		var attr Attr
+
+		_ = m.Remove(ctx, RootInode, "qrmdir", true, 10, nil)
+		if st := m.Mkdir(ctx, RootInode, "qrmdir", 0755, 0, 0, &parent, &attr); st != 0 {
+			t.Fatalf("Mkdir qrmdir: %s", st)
+		}
+		if st := m.Mkdir(ctx, parent, "d", 0755, 0, 0, &inode, &attr); st != 0 {
+			t.Fatalf("Mkdir qrmdir/d: %s", st)
+		}
+		for _, p := range []string{"/qrmdir", "/qrmdir/d"} {
+			if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 100}}, false, false, false); err != nil {
+				t.Fatalf("HandleQuota set %s: %s", p, err)
+			}
+		}
+		m.getBase().loadQuotas()
+		for i := 0; i < 3; i++ {
+			if st := m.Create(ctx, inode, fmt.Sprintf("f%d", i), 0644, 0, 0, nil, &attr); st != 0 {
+				t.Fatalf("Create qrmdir/d/f%d: %s", i, st)
+			}
+		}
+		m.getBase().doFlushQuotas()
+
+		// The unlinks leave negative usage of d pending until the next flush.
+		var count uint64
+		if st := m.Remove(ctx, parent, "d", true, 10, &count); st != 0 {
+			t.Fatalf("Remove qrmdir/d: %s", st)
+		}
+		m.getBase().doFlushQuotas()
+
+		if q, err := m.getBase().en.doGetQuota(ctx, DirQuotaType, uint64(inode)); err != nil {
+			t.Fatalf("get quota of removed dir: %s", err)
+		} else if q != nil {
+			t.Fatalf("quota of removed dir is recreated by flush: %+v", q)
+		}
+		if r, ok := m.(*redisMeta); ok {
+			for _, key := range []string{r.dirQuotaKey(), r.dirQuotaUsedSpaceKey(), r.dirQuotaUsedInodesKey()} {
+				if found, err := r.rdb.HExists(ctx, key, inode.String()).Result(); err != nil || found {
+					t.Fatalf("field %s of removed dir in %s: found %t, err %v", inode, key, found, err)
+				}
+			}
+		}
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, "/qrmdir", DirQuotaType, qs, false, false, false); err != nil {
+			t.Fatalf("HandleQuota get /qrmdir: %s", err)
+		} else if q := qs["/qrmdir"]; q.UsedSpace != 0 || q.UsedInodes != 0 {
+			t.Fatalf("usage of /qrmdir after removing d: %+v", q)
+		}
+		if err := m.HandleQuota(ctx, QuotaDel, "/qrmdir", DirQuotaType, nil, false, false, false); err != nil {
+			t.Fatalf("HandleQuota del /qrmdir: %s", err)
+		}
+		if st := m.Rmdir(ctx, RootInode, "qrmdir"); st != 0 {
+			t.Fatalf("Rmdir qrmdir: %s", st)
+		}
+	})
 }
 
 func testAtime(t *testing.T, m Meta) {
@@ -5009,6 +5387,102 @@ func testAtime(t *testing.T, m Meta) {
 	}
 }
 
+// memkv seeds every client from settingPath and writes the setting back to it,
+// so a test must neither inherit one nor leave one behind.
+func newTestMemKV(t *testing.T, name string, format *Format) Meta {
+	t.Helper()
+	_ = os.Remove(settingPath)
+	t.Cleanup(func() { _ = os.Remove(settingPath) })
+	m, err := newKVMeta("memkv", name, testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init: %s", err)
+	}
+	return m
+}
+
+// The Format published by setFormat is shared with every reader that calls
+// getFormat, so a change has to be published as a new value: mutating the live
+// one races with those readers. The atomic pointer guards the pointer, not the
+// struct it points at.
+func TestPublishedFormatIsNotMutated(t *testing.T) {
+	// Tiers is a map, so a copy sharing it would let a caller patching its own
+	// copy (the .config handler does) write into the format every reader shares
+	t.Run("tiers are copied", func(t *testing.T) {
+		m := newTestMemKV(t, "test-format-tiers", &Format{Name: "test", Tiers: object.NewTiers("standard")})
+		base := m.getBase()
+
+		f := m.GetFormat()
+		f.Tiers[0] = object.Tier{ID: 0, Sc: "patched"}
+		if got := base.getFormat().Tiers[0].Sc; got == "patched" {
+			t.Fatalf("GetFormat shares Tiers with the published format: Sc=%q", got)
+		}
+	})
+}
+
+// A reload callback that fails (e.g. the object storage cannot be rebuilt yet)
+// must be retried on later reloads even if the stored format does not change again.
+func TestReloadRetriesFailedCallbacks(t *testing.T) {
+	m := newTestMemKV(t, "test-reload-retry", &Format{Name: "test", Tiers: object.NewTiers("")})
+	kv := m.(*kvMeta)
+	base := m.getBase()
+	base.reloadFormat() // sync the published format with the stored one
+
+	store := func(capacity uint64) {
+		f := m.GetFormat()
+		f.Capacity = capacity
+		data, err := json.Marshal(&f)
+		require.NoError(t, err)
+		require.NoError(t, kv.txn(Background(), func(tx *kvTxn) error {
+			tx.set(kv.fmtKey("setting"), data)
+			return nil
+		}))
+	}
+	var okCalls, flakyCalls int
+	failing := true
+	m.OnReload(func(*Format) error {
+		okCalls++
+		return nil
+	})
+	m.OnReload(func(*Format) error {
+		flakyCalls++
+		if failing {
+			return errors.New("transient failure")
+		}
+		return nil
+	})
+	expect := func(ok, flaky int) {
+		t.Helper()
+		require.Equal(t, ok, okCalls, "calls of the succeeding callback")
+		require.Equal(t, flaky, flakyCalls, "calls of the failing callback")
+	}
+
+	base.reloadFormat()
+	expect(0, 0)
+
+	store(1 << 30)
+	base.reloadFormat()
+	expect(1, 1)
+	published := base.getFormat()
+	require.Equal(t, uint64(1<<30), published.Capacity, "a changed format is published even if a callback fails")
+
+	base.reloadFormat()
+	expect(1, 2)
+	require.Same(t, published, base.getFormat(), "an unchanged format is not republished")
+
+	store(2 << 30)
+	base.reloadFormat()
+	expect(2, 3)
+
+	failing = false
+	base.reloadFormat()
+	expect(2, 4)
+	base.reloadFormat()
+	expect(2, 4)
+}
+
 // TestQuotaEdgeCases
 func TestQuotaEdgeCases(t *testing.T) {
 	m := &baseMeta{}
@@ -5125,7 +5599,7 @@ func TestSymlinkCache(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for ino := range job {
-				cache.Store(ino, []byte(fmt.Sprintf("file%d", ino)))
+				cache.Store(ino, fmt.Appendf(nil, "file%d", ino))
 			}
 		}()
 	}

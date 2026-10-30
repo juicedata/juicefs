@@ -129,6 +129,8 @@ func (g *gs) Get(ctx context.Context, key string, off, limit int64, getters ...A
 
 func (g *gs) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
 	t := g.GetTier(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	writer := g.getClient().Bucket(g.bucket).Object(key).NewWriter(ctx)
 	writer.StorageClass = t.Sc
 	// If you upload small objects (< 16MiB), you should set ChunkSize

@@ -305,7 +305,7 @@ func buildTlsConfig(u *url.URL) (*tls.Config, error) {
 	tsinfo.KeyFile = q.Get("key")
 	tsinfo.ServerName = q.Get("server-name")
 	tsinfo.InsecureSkipVerify = q.Get("insecure-skip-verify") != ""
-	if tsinfo.CAFile != "" || tsinfo.CertFile != "" || tsinfo.KeyFile != "" || tsinfo.ServerName != "" {
+	if tsinfo.CAFile != "" || tsinfo.CertFile != "" || tsinfo.KeyFile != "" || tsinfo.ServerName != "" || tsinfo.InsecureSkipVerify {
 		return tsinfo.ClientConfig()
 	}
 	return nil, nil

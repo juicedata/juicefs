@@ -18,9 +18,11 @@ package vfs
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 )
 
@@ -80,5 +82,46 @@ func TestBackup(t *testing.T) {
 	}
 	if len(keys) < 1 {
 		t.Fatalf("there should be at least 1 backup file")
+	}
+}
+
+func TestUsedInodesWithSubdir(t *testing.T) {
+	v, _ := createTestVFS(nil, "")
+	m := v.Meta
+	ctx := meta.Background()
+	var inode meta.Ino
+	var attr meta.Attr
+	if st := m.Mkdir(ctx, meta.RootInode, "sub", 0755, 0, 0, &inode, &attr); st != 0 {
+		t.Fatalf("mkdir sub: %s", st)
+	}
+	for i := 0; i < 5; i++ {
+		if st := m.Create(ctx, meta.RootInode, fmt.Sprintf("f%d", i), 0644, 0, 0, &inode, &attr); st != 0 {
+			t.Fatalf("create f%d: %s", i, st)
+		}
+	}
+	quotas := map[string]*meta.Quota{"/sub": {MaxSpace: 1 << 30, MaxInodes: -1}}
+	if err := m.HandleQuota(ctx, meta.QuotaSet, "/sub", meta.DirQuotaType, quotas, false, false, false); err != nil {
+		t.Fatalf("set quota: %s", err)
+	}
+	// quotas are loaded into the client cache with a new session
+	if err := m.NewSession(false); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	var dummy, want uint64
+	_ = m.StatFS(ctx, 0, &dummy, &dummy, &want, &dummy)
+	if st := m.Chroot(ctx, "sub"); st != 0 {
+		t.Fatalf("chroot sub: %s", st)
+	}
+	var subUsed uint64
+	_ = m.StatFS(ctx, meta.RootInode, &dummy, &dummy, &subUsed, &dummy)
+	if subUsed >= want {
+		t.Fatalf("used inodes of the subdir quota = %d, want less than %d (the whole volume)", subUsed, want)
+	}
+	var got uint64
+	_ = m.StatFS(ctx, 0, &dummy, &dummy, &got, &dummy)
+	if got != want {
+		t.Fatalf("used inodes with subdir = %d, want %d (the whole volume)", got, want)
 	}
 }

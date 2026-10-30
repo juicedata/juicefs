@@ -36,7 +36,6 @@ import (
 type cachedEntry struct {
 	ino  Ino
 	term uint64
-	Attr
 }
 
 func (e *cachedEntry) isMark() bool {
@@ -47,6 +46,7 @@ func (e *cachedEntry) isMark() bool {
 // cache attrs and entries only, chunks are already cached in OpenCache
 type redisCache struct {
 	cli          *redis.Client
+	tracker      *redis.Client // dedicated client for the tracking connection
 	prefix       string
 	cap          int
 	expiry       time.Duration
@@ -72,7 +72,7 @@ func newRedisCache(prefix string, cap int, expiry time.Duration, preload int) *r
 }
 
 func (c *redisCache) init(cli redis.UniversalClient) error {
-	ctx := context.WithValue(context.Background(), invalidConnKey{}, true)
+	ctx := context.Background()
 	var err error
 	if rc, ok := cli.(*redis.Client); ok {
 		c.cli = rc
@@ -82,16 +82,28 @@ func (c *redisCache) init(cli redis.UniversalClient) error {
 			return err
 		}
 	}
-	c.cli.Options().OnConnect = c.onInvalidateConnect
-	// under the RESP3 protocol, "__redis__:invalidate" actually has no effect.
-	// we use Pubsub channel to simplify connection management and receiving PUSH messages.
-	c.subscription = c.cli.Subscribe(ctx, "__redis__:invalidate")
-	_ = c.subscription.Channel()
+	// A dedicated client, so that every connection it makes (including reconnects inside PubSub)
+	// purges the cache and enables tracking.
+	opt := *c.cli.Options()
+	opt.OnConnect = c.onInvalidateConnect
+	opt.PushNotificationProcessor = nil
+	opt.PoolSize = 1
+	opt.MinIdleConns = 0
+	opt.MaxIdleConns = 0
+	c.tracker = redis.NewClient(&opt)
 	// handle PUSH notifications for invalidation in c.HandlePushNotification
-	if err = c.cli.RegisterPushNotificationHandler("invalidate", c, true); err != nil {
+	if err = c.tracker.RegisterPushNotificationHandler("invalidate", c, true); err != nil {
 		c.close()
 		return err
 	}
+	// under the RESP3 protocol, "__redis__:invalidate" actually has no effect.
+	// we use Pubsub channel to simplify connection management and receiving PUSH messages.
+	c.subscription = c.tracker.Subscribe(ctx)
+	if err = c.subscription.Subscribe(ctx, "__redis__:invalidate"); err != nil {
+		c.close()
+		return err
+	}
+	_ = c.subscription.Channel()
 	// handle client cmd to avoid race conditions
 	c.cli.AddHook(c)
 	return nil
@@ -257,13 +269,23 @@ func (c *redisCache) afterProcess(cmd redis.Cmder) {
 	}
 }
 
+// ProcessHook serves reads from the cache, except in transactions: a read after WATCH must see the
+// latest value, otherwise a transaction based on a stale value would succeed.
 func (c *redisCache) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	var inTx bool
 	return func(ctx context.Context, cmd redis.Cmder) error {
-		if !c.beforeProcess(cmd, false) {
+		name := cmd.Name()
+		if name == "watch" {
+			inTx = true
+		}
+		if !inTx && !c.beforeProcess(cmd, false) {
 			return nil
 		}
+
 		err := next(ctx, cmd)
-		c.afterProcess(cmd)
+		if !inTx || name != "get" {
+			c.afterProcess(cmd)
+		}
 		return err
 	}
 }
@@ -291,29 +313,28 @@ func (c *redisCache) close() {
 		}
 		c.subscription = nil
 	}
-	if c.cli != nil {
-		c.cli.Options().OnConnect = nil
+	if c.tracker != nil {
+		if err := c.tracker.Close(); err != nil {
+			logger.Warnf("failed closing Redis cache tracking client: %v", err)
+		}
+		c.tracker = nil
 	}
 	c.cli = nil
 }
 
-type invalidConnKey struct{}
-
 func (c *redisCache) onInvalidateConnect(ctx context.Context, cn *redis.Conn) error {
-	if ctx.Value(invalidConnKey{}) == nil {
-		return nil
-	}
-	// clear all caches on reconnect
+	// use the pubsub connection to handle tracking and invalidate
+	_ = cn.Do(ctx, "CLIENT", "TRACKING", "OFF").Err()
+	err := cn.Do(ctx, "CLIENT", "TRACKING", "ON", "BCAST", "PREFIX", c.prefix+"i", "PREFIX", c.prefix+"d").Err()
+	// Purge only after tracking is on: anything cached before may have missed invalidations,
+	// while changes made after are notified on this connection.
 	c.inodeCache.Purge()
 	c.entryCache.Purge()
 	c.entryTerms.Purge()
-	// use the pubsub connection to handle tracking and invalidate
-	_ = cn.Do(ctx, "CLIENT", "TRACKING", "OFF").Err()
-	if err := cn.Do(ctx, "CLIENT", "TRACKING", "ON", "BCAST", "PREFIX", c.prefix+"i", "PREFIX", c.prefix+"d").Err(); err != nil {
+	if err != nil {
 		logger.Warnf("Failed to enable Redis client-side caching on new connection: %v", err)
-		return err
 	}
-	return nil
+	return err
 }
 
 func (m *redisMeta) preloadCache() {
@@ -341,7 +362,6 @@ func (m *redisMeta) preloadCache() {
 		m.cache.entryCache.Add(m.cache.entryName(m.root, string(entry.Name)), &cachedEntry{
 			ino:  entry.Inode,
 			term: term,
-			Attr: *entry.Attr,
 		})
 	}
 	logger.Infof("preload %d inodes in %v", m.cache.inodeCache.Len(), time.Since(start))

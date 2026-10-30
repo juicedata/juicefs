@@ -254,7 +254,7 @@ func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter str
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
-	} else if marker == "" {
+	} else if marker == "" || marker < prefix {
 		obj, err := j.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -263,6 +263,9 @@ func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter str
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return objs, true, obj.Key(), nil
+		}
 	}
 	entries, err := j.readDirSorted(dir, followLink)
 	if err != 0 {
@@ -481,15 +484,17 @@ func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID stri
 
 func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
-		BlockSize:   format.BlockSize * 1024,
-		Compress:    format.Compression,
-		HashPrefix:  format.HashPrefix,
-		GetTimeout:  time.Minute,
-		PutTimeout:  time.Minute,
-		MaxUpload:   50,
-		MaxDownload: 200,
-		MaxRetries:  10,
-		BufferSize:  300 << 20,
+		BlockSize:     format.BlockSize * 1024,
+		Compress:      format.Compression,
+		HashPrefix:    format.HashPrefix,
+		GetTimeout:    time.Minute,
+		PutTimeout:    time.Minute,
+		MaxUpload:     50,
+		MaxDownload:   200,
+		MaxRetries:    10,
+		BufferSize:    300 << 20,
+		UploadLimit:   format.UploadLimit * 1e6 / 8,
+		DownloadLimit: format.DownloadLimit * 1e6 / 8,
 	}
 	chunkConf.SelfCheck(format.UUID)
 	return chunkConf
@@ -528,8 +533,9 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	if err != nil {
 		return nil, fmt.Errorf("new session: %s", err)
 	}
-	metaCli.OnReload(func(fmt *meta.Format) {
+	metaCli.OnReload(func(fmt *meta.Format) error {
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		return nil
 	})
 
 	vfsConf := &vfs.Config{

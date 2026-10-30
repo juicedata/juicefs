@@ -92,7 +92,7 @@ type engine interface {
 	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
-	doDeleteSustainedInode(sid uint64, inode Ino) error
+	doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices(ctx Context, count *uint64) error
@@ -152,6 +152,7 @@ type engine interface {
 
 	doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
+	doInsertACL(ctx Context, rule *aclAPI.Rule) (uint32, error)
 	cacheACLs(ctx Context) error
 
 	// kerberos delegation token
@@ -162,6 +163,7 @@ type engine interface {
 	doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 
 	doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines int64) error
+	changelogScanStart(version int64) uint64
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
@@ -286,13 +288,15 @@ type baseMeta struct {
 	sessionJSON  atomic.Value // []byte
 	nextTxnId    uint64
 	of           *openfiles
+	replay       atomic.Pointer[replayState]
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
 	maxDeleting  chan struct{}
 	dslices      chan Slice // slices to delete
 	symlinks     *symlinkCache
 	msgCallbacks *msgCallbacks
-	reloadCb     []func(*Format)
+	reloadCb     []func(*Format) error
+	reloadFailed []func(*Format) error // only accessed by the refresh goroutine
 	umounting    bool
 	sesMu        sync.Mutex
 	aclCache     aclAPI.Cache
@@ -521,7 +525,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 
 		bgjobDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name:    "juicefs_bgjob_duration_seconds",
+				Name:    "bgjob_duration_seconds",
 				Help:    "Background job duration in seconds.",
 				Buckets: prometheus.ExponentialBuckets(1, 2, 13),
 			},
@@ -529,7 +533,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		),
 		bgjobDels: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "juicefs_bgjob_deletions_total",
+				Name: "bgjob_deletions_total",
 				Help: "Number of deletions (files or slices) by background jobs.",
 			},
 			[]string{"job"},
@@ -720,10 +724,22 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
+var ErrNotFormatted = errors.New("database is not formatted, please run `juicefs format ...` first")
+
 func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
+	format, err := m.loadFormat(checkVersion)
+	if err != nil {
+		return nil, err
+	}
+	m.setFormat(format)
+	return format, nil
+}
+
+// loadFormat reads the stored format without publishing it.
+func (m *baseMeta) loadFormat(checkVersion bool) (*Format, error) {
 	body, err := m.en.doLoad()
 	if err == nil && len(body) == 0 {
-		err = fmt.Errorf("database is not formatted, please run `juicefs format ...` first")
+		err = ErrNotFormatted
 	}
 	if err != nil {
 		return nil, err
@@ -740,7 +756,6 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	if format.Tiers == nil {
 		format.Tiers = object.NewTiers(format.StorageClass)
 	}
-	m.setFormat(format)
 	return format, nil
 }
 
@@ -891,13 +906,56 @@ func (m *baseMeta) expireTime() int64 {
 	}
 }
 
-func (m *baseMeta) OnReload(fn func(f *Format)) {
+func (m *baseMeta) OnReload(fn func(f *Format) error) {
 	m.msgCallbacks.Lock()
 	defer m.msgCallbacks.Unlock()
 	m.reloadCb = append(m.reloadCb, fn)
 }
 
 const UmountCode = 11
+
+// reloadFormat reloads the stored format and republishes it.
+func (m *baseMeta) reloadFormat() {
+	old := m.getFormat()
+	format, err := m.loadFormat(false)
+	if err != nil {
+		if errors.Is(err, ErrNotFormatted) {
+			logger.Errorf("reload setting: %s", err)
+			os.Exit(UmountCode)
+		}
+		logger.Warnf("reload setting: %s", err)
+		return
+	}
+	if format.MetaVersion > MaxVersion {
+		logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
+		os.Exit(UmountCode)
+	}
+	if format.UUID != old.UUID {
+		logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
+		os.Exit(UmountCode)
+	}
+	if !reflect.DeepEqual(format, old) {
+		m.msgCallbacks.Lock()
+		cbs := m.reloadCb
+		m.msgCallbacks.Unlock()
+		m.reloadFailed = runReloadCbs(cbs, format)
+		m.setFormat(format)
+	} else if len(m.reloadFailed) > 0 {
+		m.reloadFailed = runReloadCbs(m.reloadFailed, old)
+	}
+}
+
+// runReloadCbs runs cbs on a private copy of format and returns those that failed.
+func runReloadCbs(cbs []func(*Format) error, format *Format) (failed []func(*Format) error) {
+	patched := format.Clone() // callbacks may patch it with local overrides
+	for _, cb := range cbs {
+		if err := cb(patched); err != nil {
+			logger.Warnf("reload setting: %s, will retry", err)
+			failed = append(failed, cb)
+		}
+	}
+	return
+}
 
 func (m *baseMeta) refresh(ctx Context) {
 	for {
@@ -921,27 +979,7 @@ func (m *baseMeta) refresh(ctx Context) {
 		}
 		m.sesMu.Unlock()
 
-		old := m.getFormat()
-		if format, err := m.Load(false); err != nil {
-			if strings.HasPrefix(err.Error(), "database is not formatted") {
-				logger.Errorf("reload setting: %s", err)
-				os.Exit(UmountCode)
-			}
-			logger.Warnf("reload setting: %s", err)
-		} else if format.MetaVersion > MaxVersion {
-			logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
-			os.Exit(UmountCode)
-		} else if format.UUID != old.UUID {
-			logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
-			os.Exit(UmountCode)
-		} else if !reflect.DeepEqual(format, old) {
-			m.msgCallbacks.Lock()
-			cbs := m.reloadCb
-			m.msgCallbacks.Unlock()
-			for _, cb := range cbs {
-				cb(format)
-			}
-		}
+		m.reloadFormat()
 
 		if v, err := m.en.getCounter(usedSpace); err == nil {
 			atomic.StoreInt64(&m.usedSpace, v)
@@ -1418,7 +1456,7 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 	if ctx.Uid() == 0 {
 		return 0
 	}
-	if !ctx.CheckPermission() {
+	if !m.checkPermission(ctx) {
 		return 0
 	}
 
@@ -1532,6 +1570,16 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 }
 
 func (m *baseMeta) nextInode() (Ino, error) {
+	if state := m.replay.Load(); state != nil {
+		if state.Inode != 0 {
+			return state.Inode, nil
+		}
+		if len(state.Inodes) > 0 {
+			ino := state.Inodes[0]
+			state.Inodes = state.Inodes[1:]
+			return ino, nil
+		}
+	}
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeInodes.next >= m.freeInodes.maxid {
@@ -1585,29 +1633,40 @@ func (m *baseMeta) allocateInodes() (freeID, error) {
 	return freeID{next: uint64(v) - inodeBatch, maxid: uint64(v)}, nil
 }
 
-func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parentMode uint16) uint32 {
-	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
-		return parentGid
+// clientBehavior reports the platform semantics of the client that issued the
+// operation.
+func clientBehavior(ctx Context) string {
+	if b, ok := ctx.Value(CtxKey("behavior")).(string); ok && b != "" {
+		return b
 	}
-	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
+	return runtime.GOOS
+}
+
+func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parentMode uint16) uint32 {
+	switch clientBehavior(ctx) {
+	case "Hadoop", "darwin":
 		return parentGid
+	case "linux":
+		if parentMode&02000 != 0 {
+			return parentGid
+		}
 	}
 	return ctx.Gid()
 }
 
 func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, parentMode, childMode uint16) uint16 {
-	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+	if s := m.replay.Load(); s != nil && s.Mode != nil {
+		return *s.Mode
+	}
+	if clientBehavior(ctx) != "linux" || parentMode&02000 == 0 {
 		return childMode
 	}
-	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
-		if _type == TypeDirectory {
-			childMode |= 02000
-		} else if ctx.CheckPermission() && childMode&02010 == 02010 && ctx.Uid() != 0 {
-			if !containsGid(ctx, parentGid) {
-				childMode &= ^uint16(02000)
-			}
+	if _type == TypeDirectory {
+		childMode |= 02000
+	} else if m.checkPermission(ctx) && childMode&02010 == 02010 && ctx.Uid() != 0 {
+		if !containsGid(ctx, parentGid) {
+			childMode &= ^uint16(02000)
 		}
-		return childMode
 	}
 	return childMode
 }
@@ -1616,7 +1675,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if _type < TypeFile || _type > TypeSocket {
 		return syscall.EINVAL
 	}
-	if parent.IsTrash() {
+	if parent.IsTrash() && m.replay.Load() == nil {
 		return syscall.EPERM
 	}
 	if parent == RootInode && name == TrashName {
@@ -1636,8 +1695,10 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
 	// check group quota in transaction
-	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
-		return err
+	if !(parent == TrashInode && _type == TypeDirectory) {
+		if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
+			return err
+		}
 	}
 	ino, err := m.nextInode()
 	if err != nil {
@@ -1695,7 +1756,7 @@ func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 	st := m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 	if st == 0 {
 		m.parentMu.Lock()
-		m.dirParents[*inode] = parent
+		m.dirParents[*inode] = m.checkRoot(parent)
 		m.parentMu.Unlock()
 	}
 	return st
@@ -1838,7 +1899,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == RootInode && name == TrashName || parent == TrashInode || parent.IsTrash() && ctx.Uid() != 0 {
+	if parent == RootInode && name == TrashName || parent == TrashInode && m.replay.Load() == nil || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -1850,7 +1911,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	var inode Ino
 	var oldAttr Attr
 	st := m.en.doRmdir(ctx, parent, name, &inode, &oldAttr, skipCheckTrash...)
-	if st == 0 {
+	if st == 0 && parent != TrashInode {
 		if !parent.IsTrash() {
 			m.parentMu.Lock()
 			delete(m.dirParents, inode)
@@ -1869,6 +1930,7 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 	if len(entries) == 0 {
 		return 0
 	}
+	parent = m.checkRoot(parent)
 	var delta dirStat
 	st := m.en.doBatchUnlink(ctx, parent, entries, &delta, skipCheckTrash)
 	if st == 0 {
@@ -1973,6 +2035,10 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	tinode := new(Ino)
 	tattr := new(Attr)
 	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, tinode, attr, tattr)
+	if st == 0 && *tinode != 0 && *tinode == *inode {
+		// both names refer to the same file: POSIX requires no other action
+		return 0
+	}
 	if st == 0 {
 		var diffLength uint64
 		if attr.Typ == TypeDirectory {
@@ -2182,7 +2248,7 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		}
 		m.Unlock()
 		if removed {
-			_ = m.en.doDeleteSustainedInode(m.sid, inode)
+			_ = m.en.doDeleteSustainedInode(Background(), m.sid, inode)
 		}
 	}
 	return 0
@@ -2487,7 +2553,8 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	var parent = RootInode
 	attr.Typ = TypeDirectory
 	if fpath == "/" {
-		if st := m.GetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
+		inode = m.checkRoot(inode)
+		if st := m.en.doGetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
 			logger.Errorf("GetAttr inode %d: %s", inode, st)
 			return st
 		}
@@ -2801,7 +2868,7 @@ func (m *baseMeta) setFormat(format *Format) {
 }
 
 func (m *baseMeta) GetFormat() Format {
-	return *m.getFormat()
+	return *m.getFormat().Clone()
 }
 
 func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
@@ -2830,6 +2897,9 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 }
 
 func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID int) {
+	if m.conf.NoCompact {
+		return
+	}
 	// avoid too many or duplicated compaction
 	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
@@ -3049,6 +3119,10 @@ func (m *baseMeta) toTrash(parent Ino) bool {
 }
 
 func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
+	if state := m.replay.Load(); state != nil {
+		*trash = state.Trash
+		return 0
+	}
 	if !m.toTrash(parent) {
 		return 0
 	}
@@ -3442,8 +3516,17 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent)
 	}
 	if eno == 0 {
-		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
-		m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
+		var length uint64
+		if attr.Typ == TypeFile {
+			length = attr.Length
+		}
+		m.updateDirStat(ctx, parent, int64(length), align4K(attr.Length), 1)
+		if attr.Typ == TypeDirectory {
+			// the entries inside were counted while they were cloned
+			m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
+		} else {
+			m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
+		}
 	}
 	return eno
 }
@@ -3464,6 +3547,10 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	m.en.updateStats(align4K(attr.Length), 1)
 	atomic.AddUint64(count, 1)
 	m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
+	if attr.Typ == TypeDirectory && !top {
+		// Count subdirectories now so failed-clone cleanup balances quota usage.
+		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
+	}
 	if attr.Typ != TypeDirectory {
 		return 0
 	}
@@ -3590,7 +3677,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 			return nil, syscall.EPERM
 		}
 		if cur.Gid != attr.Gid {
-			if ctx.CheckPermission() && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+			if m.checkPermission(ctx) && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
 				return nil, syscall.EPERM
 			}
 			dirtyAttr.Gid = attr.Gid
@@ -3598,14 +3685,14 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		}
 	}
 	if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-		if ctx.CheckPermission() && ctx.Uid() != 0 {
+		if m.checkPermission(ctx) && ctx.Uid() != 0 {
 			return nil, syscall.EPERM
 		}
 		dirtyAttr.Uid = attr.Uid
 		changed = true
 	}
 	if set&SetAttrMode != 0 {
-		if ctx.CheckPermission() && ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
+		if m.checkPermission(ctx) && ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
 			if !containsGid(ctx, cur.Gid) {
 				attr.Mode &= 05777
 			}
@@ -3663,6 +3750,25 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	if set&SetAttrFlag != 0 {
 		dirtyAttr.Flags = attr.Flags
 		changed = true
+	} else if set&SetAttrLinuxFlags != 0 {
+		const linuxFlags = FlagSkipTrash | FlagImmutable | FlagAppend
+		flags := cur.Flags&^linuxFlags | attr.Flags&linuxFlags
+		// The kernel may pass FS_IOC_SETFLAGS through unchecked (before 5.13, or
+		// for FS_IOC_SETFLAGS_32), so redo the checks of vfs_fileattr_set() here.
+		if ctx.Uid() != 0 {
+			if ctx.Uid() != cur.Uid { // inode_owner_or_capable()
+				return nil, syscall.EPERM
+			}
+			if (cur.Flags^flags)&(FlagImmutable|FlagAppend) != 0 { // CAP_LINUX_IMMUTABLE
+				return nil, syscall.EPERM
+			}
+		}
+		dirtyAttr.Flags = flags
+		changed = true
+	} else if set&SetAttrWindowsFlags != 0 {
+		const windowsFlags = FlagImmutable | FlagWindowsHidden | FlagWindowsSystem | FlagWindowsArchive
+		dirtyAttr.Flags = cur.Flags&^windowsFlags | attr.Flags&windowsFlags
+		changed = true
 	}
 	if set&SetAttrTier != 0 {
 		dirtyAttr.Tier = attr.Tier
@@ -3672,6 +3778,8 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		*attr = *cur
 		return nil, 0
 	}
+	// Keep last: replay pins the mode recorded by the source.
+	dirtyAttr.Mode = m.finalMode(dirtyAttr.Mode)
 	return &dirtyAttr, 0
 }
 
@@ -3688,7 +3796,6 @@ func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) s
 var errACLNotInCache = errors.New("acl not in cache")
 
 func (m *baseMeta) getFaclFromCache(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) error {
-	ino = m.checkRoot(ino)
 	cAttr := &Attr{}
 	if m.conf.OpenCache > 0 && m.of.Check(ino, cAttr) {
 		aclId := getAttrACLId(cAttr, aclType)
@@ -3747,6 +3854,34 @@ func (m *baseMeta) saveACL(rule *aclAPI.Rule, aclMaxId *uint32) uint32 {
 	return id
 }
 
+// mergeFacl sets rule on attr; the result is final and must be persisted as is.
+func (m *baseMeta) mergeFacl(ctx Context, attr *Attr, aclType uint8, rule *aclAPI.Rule, insertACL func(*aclAPI.Rule) (uint32, error)) error {
+	// https://github.com/torvalds/linux/blob/480e035fc4c714fb5536e64ab9db04fedc89e910/fs/fuse/acl.c#L143-L151
+	// TODO: check linux capabilities
+	if ctx.Uid() != 0 && !inGroup(ctx, attr.Gid) {
+		attr.Mode &= 05777 // clear sgid
+	}
+	if rule.IsEmpty() {
+		setAttrACLId(attr, aclType, aclAPI.None)
+	} else if rule.IsMinimal() && aclType == aclAPI.TypeAccess {
+		setAttrACLId(attr, aclType, aclAPI.None)
+		attr.Mode = attr.Mode&07000 | rule.GetMode()
+	} else {
+		rule.InheritPerms(attr.Mode)
+		id, err := insertACL(rule)
+		if err != nil {
+			return err
+		}
+		setAttrACLId(attr, aclType, id)
+		if aclType == aclAPI.TypeAccess {
+			attr.Mode = attr.Mode&07000 | rule.GetMode()
+		}
+	}
+	// Keep last: replay pins the mode recorded by the source.
+	attr.Mode = m.finalMode(attr.Mode)
+	return nil
+}
+
 func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
 		return syscall.EINVAL
@@ -3755,6 +3890,7 @@ func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 	if !ino.IsNormal() {
 		return syscall.EPERM
 	}
+	ino = m.checkRoot(ino)
 
 	now := time.Now()
 	defer func() {
@@ -3766,6 +3902,7 @@ func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 }
 
 func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	ino = m.checkRoot(ino)
 	var err error
 	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
 		return 0

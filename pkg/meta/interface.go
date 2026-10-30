@@ -91,7 +91,9 @@ const (
 	SetAttrMtimeNow
 	SetAttrCtimeNow
 	SetAttrTier
-	SetAttrFlag = 1 << 15
+	SetAttrLinuxFlags   = 1 << 13
+	SetAttrWindowsFlags = 1 << 14
+	SetAttrFlag         = 1 << 15
 )
 
 const (
@@ -561,7 +563,8 @@ type Meta interface {
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
 	// OnReload register a callback for any change founded after reloaded.
-	OnReload(func(new *Format))
+	// A callback returning an error is retried on later reloads until it succeeds.
+	OnReload(func(new *Format) error)
 
 	HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32, quotas map[string]*Quota, strict, repair bool, create bool) error
 	// Triggers a global user group quota scan
@@ -589,7 +592,7 @@ type Meta interface {
 	DeleteTokens(ctx Context, ids []uint32) syscall.Errno
 	ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 
-	ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error
+	ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error
 }
 
 type ScanSlicesOption struct {

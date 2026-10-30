@@ -97,6 +97,25 @@ Grafana 仪表盘如下图：
 
 ![grafana_dashboard](../images/grafana_dashboard.png)
 
+针对其他部署形态，仓库中还提供了可以直接导入 JSON 文件的仪表盘模板：
+
+- [S3 网关](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_gateway.json)：在共享的对象存储、缓存、元数据面板之外，展示 S3 API 之下文件系统 SDK 层的指标（`juicefs_sdk_*`；一次 S3 请求会产生多次 SDK 操作）。
+- [`juicefs sync`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_sync.json)：展示运行中的 `juicefs sync` 任务进度与吞吐（需要配置 `--metrics`）。
+
+:::note
+这些仪表盘通过 Prometheus 的 `instance` 标签（即抓取目标地址）区分每一个客户端进程。如果两个不同的进程拥有相同的 `instance` 值——例如同一个 Prometheus 抓取的多个集群中存在相同 IP 的 Pod——它们的序列会被合并并重复计数。此时应通过 relabel 让 `instance` 全局唯一，例如 `cluster-a/10.0.0.5:9567`：
+
+```yaml
+relabel_configs:
+  - target_label: cluster
+    replacement: cluster-a
+  - source_labels: [cluster, __address__]
+    separator: /
+    target_label: instance
+```
+
+:::
+
 ## 收集监控指标 {#collect-metrics}
 
 根据部署 JuiceFS 方式的不同可以有不同的收集监控指标的方法，下面分别介绍。

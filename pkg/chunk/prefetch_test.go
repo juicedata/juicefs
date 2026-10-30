@@ -7,6 +7,18 @@ import (
 )
 
 func TestPrefetcher(t *testing.T) {
+	t.Run("should disable prefetch for non-positive parallelism", func(t *testing.T) {
+		for _, parallel := range []int{0, -1} {
+			f := newPrefetcher(parallel, func(k string) {
+				t.Errorf("Unexpected prefetch: %s", k)
+			})
+			if f != nil {
+				t.Fatalf("Expected nil prefetcher for parallel=%d", parallel)
+			}
+			f.fetch("a")
+		}
+	})
+
 	t.Run("should fetch given keys", func(t *testing.T) {
 		keys := []string{"source/1", "source/2", "source/3", "source/4"}
 		chRes := make(chan string, len(keys))
