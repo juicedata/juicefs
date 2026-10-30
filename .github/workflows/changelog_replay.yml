@@ -64,6 +64,9 @@ jobs:
             LOG_DIR="$replay_dir" \
             GOCOVERDIR="$replay_dir/coverage" \
             bash .github/scripts/command/changelog_replay.sh --dump-format all
+      - name: Prepare replay results for upload
+        if: always() && env.REPLAY_DIR != ''
+        run: sudo chmod -R a+rX "$REPLAY_DIR"
       - name: Upload replay results
         if: always() && env.REPLAY_DIR != ''
         uses: actions/upload-artifact@v4
