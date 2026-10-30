@@ -307,8 +307,9 @@ type baseMeta struct {
 	dSliceMu sync.Mutex
 	dSliceWG sync.WaitGroup
 
-	dirStatsLock sync.RWMutex
-	dirStats     map[Ino]dirStat
+	dirStatsLock      sync.RWMutex
+	dirStatsFlushLock sync.Mutex
+	dirStats          map[Ino]dirStat
 
 	fsStatsLock sync.Mutex
 	*fsStat
@@ -830,7 +831,7 @@ func (m *baseMeta) NewSession(record bool) error {
 		logger.Infof("%s session %d OK with version: %s", action, m.sid, version.Version())
 	}
 
-	m.loadQuotas()
+	_ = m.loadQuotas()
 
 	m.sessWG.Add(3)
 	go m.flushStats(ctx)
@@ -991,7 +992,7 @@ func (m *baseMeta) refresh(ctx Context) {
 		} else {
 			logger.Warnf("Get counter %s: %s", totalInodes, err)
 		}
-		m.loadQuotas()
+		_ = m.loadQuotas()
 
 		if m.conf.ReadOnly || m.conf.NoBGJob || m.conf.Heartbeat == 0 {
 			continue
@@ -1046,8 +1047,8 @@ func (m *baseMeta) FlushSession() {
 		return
 	}
 	m.doFlushStats()
-	m.doFlushDirStat()
-	m.doFlushQuotas()
+	_ = m.doFlushDirStat()
+	_ = m.doFlushQuotas()
 	logger.Infof("flush session %d:", m.sid)
 }
 

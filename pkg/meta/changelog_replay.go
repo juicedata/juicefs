@@ -362,15 +362,17 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) error {
 			return r.setQuota(ctx, e)
 		case OpDelQuota:
 			return r.delQuota(ctx, e)
-    case OpDirStat:
-      // FIXME: backup/load must restore an accurate directory-stat baseline.
-      // FIXME: coordinate pending and in-flight dir-stat updates with this resync to avoid double-counting.
-      inode, err := e.Ino(0)
-      if err != nil {
-        return err
-      }
-      _, st := dst.en.doSyncDirStat(ctx, inode)
-      return changelogCall(e, st)
+		case OpDirStat:
+			// FIXME: backup/load must restore an accurate directory-stat baseline.
+			inode, err := e.Ino(0)
+			if err != nil {
+				return err
+			}
+			if err := dst.doFlushDirStat(); err != nil {
+				return err
+			}
+			_, st := dst.en.doSyncDirStat(ctx, inode)
+			return changelogCall(e, st)
 		case OpRepairDir:
 			return r.repairDir(ctx, e)
 		case OpUpdateToken:
@@ -1119,6 +1121,12 @@ func (r *Replayer) setQuota(ctx Context, e *ChangeEntry) error {
 		return err
 	}
 	m := r.dst.getBase()
+	if err := m.doFlushDirStat(); err != nil {
+		return err
+	}
+	if err := m.doFlushQuotas(); err != nil {
+		return err
+	}
 	created, err := m.en.doSetQuota(ctx, qtype, key, &Quota{
 		MaxSpace:   maxSpace,
 		MaxInodes:  maxInodes,
@@ -1129,9 +1137,11 @@ func (r *Replayer) setQuota(ctx Context, e *ChangeEntry) error {
 		return err
 	}
 	if created && qtype == DirQuotaType && usedSpace < 0 && usedInodes < 0 {
-		return m.calcDirQuotaUsage(ctx, Ino(key), fmt.Sprintf("inode %d", key), false)
+		if err := m.calcDirQuotaUsage(ctx, Ino(key), fmt.Sprintf("inode %d", key), false); err != nil {
+			return err
+		}
 	}
-	return nil
+	return m.loadQuotas()
 }
 
 func (r *Replayer) delQuota(ctx Context, e *ChangeEntry) error {
@@ -1143,7 +1153,14 @@ func (r *Replayer) delQuota(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	return r.dst.getBase().en.doDelQuota(ctx, qtype, key)
+	m := r.dst.getBase()
+	if err := m.doFlushQuotas(); err != nil {
+		return err
+	}
+	if err := m.en.doDelQuota(ctx, qtype, key); err != nil {
+		return err
+	}
+	return m.loadQuotas()
 }
 
 func (r *Replayer) storeToken(ctx Context, e *ChangeEntry) error {
