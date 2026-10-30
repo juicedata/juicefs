@@ -368,9 +368,7 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) error {
 			if err != nil {
 				return err
 			}
-			if err := dst.doFlushDirStat(); err != nil {
-				return err
-			}
+			dst.doFlushDirStat()
 			_, st := dst.en.doSyncDirStat(ctx, inode)
 			return changelogCall(e, st)
 		case OpRepairDir:
@@ -1121,12 +1119,8 @@ func (r *Replayer) setQuota(ctx Context, e *ChangeEntry) error {
 		return err
 	}
 	m := r.dst.getBase()
-	if err := m.doFlushDirStat(); err != nil {
-		return err
-	}
-	if err := m.doFlushQuotas(); err != nil {
-		return err
-	}
+	m.doFlushDirStat()
+	m.doFlushQuotas()
 	created, err := m.en.doSetQuota(ctx, qtype, key, &Quota{
 		MaxSpace:   maxSpace,
 		MaxInodes:  maxInodes,
@@ -1141,7 +1135,8 @@ func (r *Replayer) setQuota(ctx Context, e *ChangeEntry) error {
 			return err
 		}
 	}
-	return m.loadQuotas()
+	m.loadQuotas()
+	return nil
 }
 
 func (r *Replayer) delQuota(ctx Context, e *ChangeEntry) error {
@@ -1154,13 +1149,12 @@ func (r *Replayer) delQuota(ctx Context, e *ChangeEntry) error {
 		return err
 	}
 	m := r.dst.getBase()
-	if err := m.doFlushQuotas(); err != nil {
-		return err
-	}
+	m.doFlushQuotas()
 	if err := m.en.doDelQuota(ctx, qtype, key); err != nil {
 		return err
 	}
-	return m.loadQuotas()
+	m.loadQuotas()
+	return nil
 }
 
 func (r *Replayer) storeToken(ctx Context, e *ChangeEntry) error {

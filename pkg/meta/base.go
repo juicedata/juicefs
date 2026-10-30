@@ -831,7 +831,7 @@ func (m *baseMeta) NewSession(record bool) error {
 		logger.Infof("%s session %d OK with version: %s", action, m.sid, version.Version())
 	}
 
-	_ = m.loadQuotas()
+	m.loadQuotas()
 
 	m.sessWG.Add(3)
 	go m.flushStats(ctx)
@@ -992,7 +992,7 @@ func (m *baseMeta) refresh(ctx Context) {
 		} else {
 			logger.Warnf("Get counter %s: %s", totalInodes, err)
 		}
-		_ = m.loadQuotas()
+		m.loadQuotas()
 
 		if m.conf.ReadOnly || m.conf.NoBGJob || m.conf.Heartbeat == 0 {
 			continue
@@ -1047,8 +1047,8 @@ func (m *baseMeta) FlushSession() {
 		return
 	}
 	m.doFlushStats()
-	_ = m.doFlushDirStat()
-	_ = m.doFlushQuotas()
+	m.doFlushDirStat()
+	m.doFlushQuotas()
 	logger.Infof("flush session %d:", m.sid)
 }
 
