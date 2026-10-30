@@ -1188,6 +1188,15 @@ func testListPrefixBoundary(t *testing.T, store ObjectStorage) {
 					}
 				})
 			}
+			t.Run("filtered-small-page", func(t *testing.T) {
+				objects, _, _, err := store.List(ctx, "p", "p1", "", delimiter, 2, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if keys := keysOf(t, objects); !reflect.DeepEqual(keys, []string{"p2"}) {
+					t.Fatalf("keys: got %q, want [p2]", keys)
+				}
+			})
 			for _, limit := range []int64{1, 2, 3} {
 				t.Run(fmt.Sprintf("paged/limit=%d", limit), func(t *testing.T) {
 					if isMinIO && delimiter == "" && limit == 1 {
