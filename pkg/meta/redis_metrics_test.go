@@ -31,6 +31,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
@@ -55,11 +56,27 @@ func gatherRedisPoolMetrics(t *testing.T, registry *prometheus.Registry) map[str
 
 type redisMetricsPushClient struct {
 	requests int
+	path     string
+	families map[string]*dto.MetricFamily
 }
 
-func (c *redisMetricsPushClient) Do(*http.Request) (*http.Response, error) {
+func (c *redisMetricsPushClient) Do(req *http.Request) (*http.Response, error) {
+	defer req.Body.Close()
 	c.requests++
-	return &http.Response{StatusCode: http.StatusAccepted, Body: io.NopCloser(strings.NewReader(""))}, nil
+	c.path = req.URL.Path
+	c.families = make(map[string]*dto.MetricFamily)
+	decoder := expfmt.NewDecoder(req.Body, expfmt.ResponseFormat(req.Header))
+	for {
+		family := &dto.MetricFamily{}
+		if err := decoder.Decode(family); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		c.families[family.GetName()] = family
+	}
+	return &http.Response{StatusCode: http.StatusAccepted, Body: http.NoBody}, nil
 }
 
 func TestRedisPoolMetrics(t *testing.T) {
@@ -104,26 +121,50 @@ func TestRedisPoolMetrics(t *testing.T) {
 	}
 
 	t.Run("push labels", func(t *testing.T) {
-		m := &redisMeta{baseMeta: newBaseMeta("metrics-test", testConfig()), rdb: clients["standalone"]}
-		registry := prometheus.NewPedanticRegistry()
-		m.InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", registry))
-		require.Len(t, gatherRedisPoolMetrics(t, registry), 6)
-		httpClient := &redisMetricsPushClient{}
-		err := push.New("http://unused.invalid", "juicefs").Gatherer(registry).
-			Grouping("node", "sdk-host").Client(httpClient).Push()
-		require.NoError(t, err)
-		require.Equal(t, 1, httpClient.requests)
+		for _, label := range []string{"node", "scope", "store", "stale_read", "type", "metrics_scope"} {
+			t.Run(label, func(t *testing.T) {
+				m := &redisMeta{baseMeta: newBaseMeta("metrics-test", testConfig()), rdb: clients["standalone"]}
+				registry := prometheus.NewPedanticRegistry()
+				m.InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", registry))
+				pools := gatherRedisPoolMetrics(t, registry)
+				require.Len(t, pools, 6)
+				for name, family := range pools {
+					require.Len(t, family.Metric, 1, name)
+					require.Empty(t, family.Metric[0].Label, name)
+				}
+				httpClient := &redisMetricsPushClient{}
+				err := push.New("http://unused.invalid", "juicefs").Gatherer(registry).
+					Grouping(label, "sdk-host").Client(httpClient).Push()
+				require.NoError(t, err)
+				require.Equal(t, 1, httpClient.requests)
+				require.Contains(t, httpClient.path, "/"+label+"/sdk-host")
+				for name := range pools {
+					require.Contains(t, httpClient.families, name)
+				}
+				require.Contains(t, httpClient.families, "juicefs_transaction_durations_histogram_seconds")
+				require.Contains(t, httpClient.families, "juicefs_meta_ops_durations_histogram_seconds")
+			})
+		}
 	})
 
 	t.Run("registration failure", func(t *testing.T) {
 		m := &redisMeta{baseMeta: newBaseMeta("metrics-test", testConfig()), rdb: clients["standalone"]}
 		registry := prometheus.NewPedanticRegistry()
-		registry.MustRegister(prometheus.NewCounter(prometheus.CounterOpts{
+		counter := prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "juicefs_redis_pool_hit_total", Help: "Conflicting metric.",
-		}))
+		})
+		counter.Add(7)
+		gauge := prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "juicefs_redis_pool_conn_total_current", Help: "Conflicting gauge.",
+		})
+		gauge.Set(9)
+		registry.MustRegister(counter, gauge)
 		m.InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", registry))
 		pools := gatherRedisPoolMetrics(t, registry)
-		require.Len(t, pools, 1)
+		require.Len(t, pools, 2)
 		require.Equal(t, "Conflicting metric.", pools["juicefs_redis_pool_hit_total"].GetHelp())
+		require.Equal(t, float64(7), pools["juicefs_redis_pool_hit_total"].Metric[0].GetCounter().GetValue())
+		require.Equal(t, "Conflicting gauge.", pools["juicefs_redis_pool_conn_total_current"].GetHelp())
+		require.Equal(t, float64(9), pools["juicefs_redis_pool_conn_total_current"].Metric[0].GetGauge().GetValue())
 	})
 }
