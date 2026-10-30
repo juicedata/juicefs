@@ -60,7 +60,7 @@ For Redis and KeyDB metadata engines, these client-side statistics describe the 
 | ---- | ---- | ----------- |
 | `juicefs_redis_pool_hit_total` | Counter | Number of times an idle connection was reused from the pool |
 | `juicefs_redis_pool_miss_total` | Counter | Total number of times no reusable idle connection was found in the pool |
-| `juicefs_redis_pool_timeout_total` | Counter | Number of timeouts acquiring a connection from the pool |
+| `juicefs_redis_pool_timeout_total` | Counter | Total number of timeouts acquiring a connection from the pool |
 | `juicefs_redis_pool_conn_total_current` | Gauge | Current number of connections in the command pool |
 | `juicefs_redis_pool_conn_idle_current` | Gauge | Current number of idle connections in the command pool |
 | `juicefs_redis_pool_conn_stale_total` | Counter | Number of stale connections removed from the pool |
