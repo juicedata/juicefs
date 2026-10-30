@@ -52,6 +52,21 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | `juicefs_meta_ops_total`                          | Number of metadata engine operations       |        |
 | `juicefs_meta_ops_duration_seconds`               | Accumulated time of metadata engine operations | second |
 
+### Redis connection pools
+
+When using Redis or KeyDB as the metadata engine, the following client-side metrics describe the main command connection pool used by standalone and Sentinel clients. Redis Cluster pool metrics are not collected. These metrics are provided by the official `go-redis` Prometheus collector and have no additional labels. Sentinel control connections and Pub/Sub pools are excluded. Scraping reads local pool statistics without sending Redis commands.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| `juicefs_redis_pool_hit_total` | Counter | Total number of times an idle connection was reused from the pool |
+| `juicefs_redis_pool_miss_total` | Counter | Total number of times no reusable idle connection was found in the pool |
+| `juicefs_redis_pool_timeout_total` | Counter | Total number of timeouts acquiring a connection from the pool |
+| `juicefs_redis_pool_conn_total_current` | Gauge | Current number of connections in the command pool |
+| `juicefs_redis_pool_conn_idle_current` | Gauge | Current number of idle connections in the command pool |
+| `juicefs_redis_pool_conn_stale_total` | Counter | Total number of stale connections removed from the pool |
+
+A pool miss triggers an attempt to create a new connection. Counters accumulate over the lifetime of the client's pool and can reset when the pool is recreated. Use `rate()` or `increase()` to observe changes over a specified time window.
+
 ### TiKV client
 
 For the TiKV metadata engine, the following metrics expose TiKV Go client's RPC and request queue activity. They read in-process statistics without querying TiKV.
