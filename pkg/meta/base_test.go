@@ -5200,6 +5200,63 @@ func testQuota(t *testing.T, m Meta) {
 			t.Errorf("Create d/overflow: got %s, want %s", st, syscall.EDQUOT)
 		}
 	})
+
+	t.Run("FlushAfterRmdir", func(t *testing.T) {
+		var parent, inode Ino
+		var attr Attr
+
+		_ = m.Remove(ctx, RootInode, "qrmdir", true, 10, nil)
+		if st := m.Mkdir(ctx, RootInode, "qrmdir", 0755, 0, 0, &parent, &attr); st != 0 {
+			t.Fatalf("Mkdir qrmdir: %s", st)
+		}
+		if st := m.Mkdir(ctx, parent, "d", 0755, 0, 0, &inode, &attr); st != 0 {
+			t.Fatalf("Mkdir qrmdir/d: %s", st)
+		}
+		for _, p := range []string{"/qrmdir", "/qrmdir/d"} {
+			if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 100}}, false, false, false); err != nil {
+				t.Fatalf("HandleQuota set %s: %s", p, err)
+			}
+		}
+		m.getBase().loadQuotas()
+		for i := 0; i < 3; i++ {
+			if st := m.Create(ctx, inode, fmt.Sprintf("f%d", i), 0644, 0, 0, nil, &attr); st != 0 {
+				t.Fatalf("Create qrmdir/d/f%d: %s", i, st)
+			}
+		}
+		m.getBase().doFlushQuotas()
+
+		// The unlinks leave negative usage of d pending until the next flush.
+		var count uint64
+		if st := m.Remove(ctx, parent, "d", true, 10, &count); st != 0 {
+			t.Fatalf("Remove qrmdir/d: %s", st)
+		}
+		m.getBase().doFlushQuotas()
+
+		if q, err := m.getBase().en.doGetQuota(ctx, DirQuotaType, uint64(inode)); err != nil {
+			t.Fatalf("get quota of removed dir: %s", err)
+		} else if q != nil {
+			t.Fatalf("quota of removed dir is recreated by flush: %+v", q)
+		}
+		if r, ok := m.(*redisMeta); ok {
+			for _, key := range []string{r.dirQuotaKey(), r.dirQuotaUsedSpaceKey(), r.dirQuotaUsedInodesKey()} {
+				if found, err := r.rdb.HExists(ctx, key, inode.String()).Result(); err != nil || found {
+					t.Fatalf("field %s of removed dir in %s: found %t, err %v", inode, key, found, err)
+				}
+			}
+		}
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, "/qrmdir", DirQuotaType, qs, false, false, false); err != nil {
+			t.Fatalf("HandleQuota get /qrmdir: %s", err)
+		} else if q := qs["/qrmdir"]; q.UsedSpace != 0 || q.UsedInodes != 0 {
+			t.Fatalf("usage of /qrmdir after removing d: %+v", q)
+		}
+		if err := m.HandleQuota(ctx, QuotaDel, "/qrmdir", DirQuotaType, nil, false, false, false); err != nil {
+			t.Fatalf("HandleQuota del /qrmdir: %s", err)
+		}
+		if st := m.Rmdir(ctx, RootInode, "qrmdir"); st != 0 {
+			t.Fatalf("Rmdir qrmdir: %s", st)
+		}
+	})
 }
 
 func testAtime(t *testing.T, m Meta) {

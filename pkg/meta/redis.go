@@ -4677,21 +4677,51 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 }
 
 func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
-	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		for _, q := range quotas {
-			config, err := m.getQuotaKeys(q.qtype)
-			if err != nil {
-				return err
-			}
-
-			key := strconv.FormatUint(q.qkey, 10)
-			pipe.HSetNX(ctx, config.quotaKey, key, m.packQuota(-1, -1))
-			pipe.HIncrBy(ctx, config.usedSpaceKey, key, q.quota.newSpace)
-			pipe.HIncrBy(ctx, config.usedInodesKey, key, q.quota.newInodes)
+	var dirFields []string
+	for _, q := range quotas {
+		if q.qtype == DirQuotaType {
+			dirFields = append(dirFields, strconv.FormatUint(q.qkey, 10))
 		}
-		return nil
-	})
-	return err
+	}
+	flush := func(rdb redis.Cmdable, exists map[string]bool) error {
+		_, err := rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			for _, q := range quotas {
+				config, err := m.getQuotaKeys(q.qtype)
+				if err != nil {
+					return err
+				}
+
+				key := strconv.FormatUint(q.qkey, 10)
+				if q.qtype == DirQuotaType {
+					// the directory or its quota was removed, drop the pending usage like SQL and TKV do
+					if !exists[key] {
+						continue
+					}
+				} else {
+					pipe.HSetNX(ctx, config.quotaKey, key, m.packQuota(-1, -1))
+				}
+				pipe.HIncrBy(ctx, config.usedSpaceKey, key, q.quota.newSpace)
+				pipe.HIncrBy(ctx, config.usedInodesKey, key, q.quota.newInodes)
+			}
+			return nil
+		})
+		return err
+	}
+	if len(dirFields) == 0 {
+		return flush(m.rdb, nil)
+	}
+	// watch the dir quota hash so that a concurrent rmdir/rename/quota delete restarts the flush
+	return m.txn(ctx, func(tx *redis.Tx) error {
+		vals, err := tx.HMGet(ctx, m.dirQuotaKey(), dirFields...).Result()
+		if err != nil {
+			return err
+		}
+		exists := make(map[string]bool, len(dirFields))
+		for i, v := range vals {
+			exists[dirFields[i]] = v != nil
+		}
+		return flush(tx, exists)
+	}, m.dirQuotaKey())
 }
 
 func (m *redisMeta) cleanUgUsage(ctx Context, qtype uint32) error {
