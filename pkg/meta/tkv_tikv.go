@@ -124,12 +124,24 @@ func (c *tikvClient) initMetrics(reg prometheus.Registerer) {
 	if reg == nil {
 		return
 	}
+	var pushLabels prometheus.Labels
+	if r, ok := reg.(interface{ PushLabels() prometheus.Labels }); ok {
+		pushLabels = r.PushLabels()
+	}
 	for _, collector := range []prometheus.Collector{
 		tikvmetrics.TiKVSendReqHistogram,
 		tikvmetrics.TiKVBatchPendingRequests,
 		tikvmetrics.TiKVBatchClientWaitEstablish,
 		tikvmetrics.TiKVNoAvailableConnectionCounter,
 	} {
+		if len(pushLabels) > 0 {
+			// Validate descriptors without adding push labels to the real metrics.
+			check := prometheus.WrapRegistererWith(pushLabels, prometheus.NewRegistry())
+			if err := check.Register(collector); err != nil {
+				logger.Warnf("Skip TiKV client metrics with conflicting push labels: %s", err)
+				continue
+			}
+		}
 		if err := reg.Register(collector); err != nil {
 			logger.Warnf("Register TiKV client metrics: %s", err)
 		}

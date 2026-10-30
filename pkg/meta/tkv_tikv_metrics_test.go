@@ -20,6 +20,7 @@
 package meta
 
 import (
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -27,6 +28,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 	tikvmetrics "github.com/tikv/client-go/v2/metrics"
 )
 
@@ -36,12 +38,23 @@ func (f metricsPushClient) Do(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+type metricsPushRegisterer struct {
+	prometheus.Registerer
+	labels prometheus.Labels
+}
+
+func (r metricsPushRegisterer) PushLabels() prometheus.Labels {
+	return r.labels
+}
+
 func TestTiKVClientMetrics(t *testing.T) {
 	// Use distinct children so real TiKV client tests do not affect these samples.
-	tikvmetrics.TiKVSendReqHistogram.WithLabelValues("metrics-test", "metrics-test", "false", "general").Observe(0.25)
-	tikvmetrics.TiKVBackoffHistogram.WithLabelValues("metrics-test").Observe(0.125)
-	tikvmetrics.TiKVRPCErrorCounter.WithLabelValues("metrics-test", "metrics-test").Inc()
-	tikvmetrics.TiKVBatchPendingRequests.WithLabelValues("metrics-test").Observe(3)
+	observe := func() {
+		tikvmetrics.TiKVSendReqHistogram.WithLabelValues("metrics-test", "metrics-test", "false", "general").Observe(0.25)
+		tikvmetrics.TiKVBackoffHistogram.WithLabelValues("metrics-test").Observe(0.125)
+		tikvmetrics.TiKVRPCErrorCounter.WithLabelValues("metrics-test", "metrics-test").Inc()
+		tikvmetrics.TiKVBatchPendingRequests.WithLabelValues("metrics-test").Observe(3)
+	}
 	t.Cleanup(func() {
 		tikvmetrics.TiKVSendReqHistogram.DeleteLabelValues("metrics-test", "metrics-test", "false", "general")
 		tikvmetrics.TiKVBackoffHistogram.DeleteLabelValues("metrics-test")
@@ -83,6 +96,84 @@ func TestTiKVClientMetrics(t *testing.T) {
 		return result
 	}
 
+	t.Run("SDK push labels", func(t *testing.T) {
+		for _, tt := range []struct {
+			name        string
+			labels      prometheus.Labels
+			skipRequest bool
+			skipPending bool
+		}{
+			{"scope", prometheus.Labels{"scope": "custom"}, true, false},
+			{"same value", prometheus.Labels{"scope": "general"}, true, false},
+			{"store", prometheus.Labels{"store": "custom"}, true, true},
+			{"stale_read", prometheus.Labels{"stale_read": "custom"}, true, false},
+			{"type", prometheus.Labels{"type": "custom"}, true, false},
+			{"metrics_scope", prometheus.Labels{"metrics_scope": "custom"}, false, false},
+			{"default labels", prometheus.Labels{"vol_name": "sdk-test", "mp": "sdk-test", "instance": "host"}, false, false},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				registry := prometheus.NewPedanticRegistry()
+				newMeta("sdk-push-labels").InitMetrics(metricsPushRegisterer{
+					Registerer: prometheus.WrapRegistererWithPrefix("juicefs_", registry),
+					labels:     tt.labels,
+				})
+				// Registration must detect conflicts before samples exist.
+				observe()
+				families := gather(t, registry)
+				for name, typ := range expected {
+					skip := name == "juicefs_tikv_client_go_request_seconds" && tt.skipRequest ||
+						name == "juicefs_tikv_client_go_batch_pending_requests" && tt.skipPending
+					if skip {
+						if families[name] != nil {
+							t.Errorf("conflicting metric %s was registered", name)
+						}
+					} else if family := families[name]; family == nil || family.GetType() != typ {
+						t.Errorf("non-conflicting metric %s was lost or changed", name)
+					}
+				}
+
+				pusher := push.New("http://pushgateway", "juicefs").Gatherer(registry)
+				for name, value := range tt.labels {
+					pusher.Grouping(name, value)
+				}
+				pushed := false
+				pusher.Client(metricsPushClient(func(req *http.Request) (*http.Response, error) {
+					defer req.Body.Close()
+					pushed = true
+					for name, value := range tt.labels {
+						if !strings.Contains(req.URL.Path, "/"+name+"/"+value) {
+							t.Errorf("grouping label %s was lost: %s", name, req.URL.Path)
+						}
+					}
+					decoder := expfmt.NewDecoder(req.Body, expfmt.FmtProtoDelim)
+					names := make(map[string]bool)
+					for {
+						family := new(dto.MetricFamily)
+						if err := decoder.Decode(family); err == io.EOF {
+							break
+						} else if err != nil {
+							t.Fatalf("decode pushed metrics: %v", err)
+						}
+						names[family.GetName()] = true
+					}
+					for name := range families {
+						if !names[name] {
+							t.Errorf("registered metric %s was not pushed", name)
+						}
+					}
+					return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
+				}))
+				if err := pusher.Push(); err != nil {
+					t.Fatalf("push SDK metrics: %v", err)
+				}
+				if !pushed {
+					t.Error("PushGateway request was not sent")
+				}
+			})
+		}
+	})
+
+	observe()
 	t.Run("private registries and custom labels", func(t *testing.T) {
 		for _, volume := range []string{"volume-a", "volume-b"} {
 			registry := prometheus.NewPedanticRegistry()
@@ -129,24 +220,19 @@ func TestTiKVClientMetrics(t *testing.T) {
 		newMeta("nil-registry").InitMetrics(nil)
 	})
 
-	t.Run("SDK PushGateway custom scope label", func(t *testing.T) {
+	t.Run("CLI conflicting scope label", func(t *testing.T) {
 		registry := prometheus.NewPedanticRegistry()
-		newMeta("sdk-push-labels").InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_", registry))
-		pusher := push.New("http://pushgateway", "juicefs").Gatherer(registry).Grouping("metrics_scope", "custom")
-		pushed := false
-		pusher.Client(metricsPushClient(func(req *http.Request) (*http.Response, error) {
-			defer req.Body.Close()
-			pushed = true
-			if !strings.Contains(req.URL.Path, "/metrics_scope/custom") {
-				t.Errorf("custom scope grouping label was lost: %s", req.URL.Path)
+		newMeta("cli-labels").InitMetrics(prometheus.WrapRegistererWithPrefix("juicefs_",
+			prometheus.WrapRegistererWith(prometheus.Labels{"scope": "custom"}, registry)))
+		families := gather(t, registry)
+		for name, typ := range expected {
+			if name == "juicefs_tikv_client_go_request_seconds" {
+				if families[name] != nil {
+					t.Errorf("conflicting metric %s was registered", name)
+				}
+			} else if family := families[name]; family == nil || family.GetType() != typ {
+				t.Errorf("non-conflicting metric %s was lost or changed", name)
 			}
-			return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
-		}))
-		if err := pusher.Push(); err != nil {
-			t.Fatalf("push SDK metrics with custom scope label: %v", err)
-		}
-		if !pushed {
-			t.Error("PushGateway request was not sent")
 		}
 	})
 

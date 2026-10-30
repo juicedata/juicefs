@@ -67,6 +67,8 @@ sidebar_position: 4
 
 指标名称和类型沿用 TiKV Go 客户端。连接建立耗时的名称虽然没有 `_seconds` 后缀，但单位仍为秒。无可用 batch 客户端的计数可能因并发限制或发送器繁忙而增加，不等同于 SQL 连接池的等待超时次数。
 
+SDK 向 Pushgateway、Graphite 或 remote write 端点推送指标时，如果自定义推送标签与 TiKV 指标标签同名，会跳过对应的 TiKV collector 并记录警告。原有 JuiceFS 指标及未冲突的 TiKV collector 仍会正常导出。
+
 ## 配额 {#quota}
 
 ### 指标

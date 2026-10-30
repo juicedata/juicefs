@@ -67,6 +67,8 @@ These collectors are shared by all TiKV clients in the process. When the Java or
 
 The metric names and types follow the TiKV Go client. The connection establishment histogram uses seconds despite not having a `_seconds` suffix. The unavailable batch client counter can increase because of concurrency limits or a busy sender; it is not a SQL-style connection pool timeout counter.
 
+When the SDK pushes metrics to Pushgateway, Graphite, or a remote write endpoint, a custom push label that conflicts with a TiKV metric label causes that TiKV collector to be skipped with a warning. Existing JuiceFS metrics and non-conflicting TiKV collectors continue to be exported.
+
 ## Quota {#quota}
 
 ### Metrics
