@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -267,4 +268,59 @@ func TestScanGcChunkObjects(t *testing.T) {
 			require.Equal(t, test.listedPrefixes, prefixSpin.Current())
 		})
 	}
+}
+
+// flakyFirstList wraps a storage and fails the first `failures` marker-less,
+// delimiter-less List calls for one exact prefix (the first page of a
+// per-prefix ListAll), delegating everything else.
+type flakyFirstList struct {
+	object.ObjectStorage
+	failPrefix string
+	failures   int
+
+	mu    sync.Mutex
+	calls int
+}
+
+func (f *flakyFirstList) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
+	f.mu.Lock()
+	if prefix == f.failPrefix && marker == "" && delimiter == "" && f.failures > 0 {
+		f.failures--
+		f.calls++
+		f.mu.Unlock()
+		return nil, false, "", errors.New("injected: timeout awaiting response headers")
+	}
+	f.mu.Unlock()
+	return f.ObjectStorage.List(ctx, prefix, marker, token, delimiter, limit, followLink)
+}
+
+func TestScanGcChunkObjectsFirstPageFailure(t *testing.T) {
+	keys := []string{"0/0/1_0_4", "0/1/1000_0_4", "1/1000/1000000_0_4"}
+
+	base, err := object.CreateStorage("mem", "gc-first-page", "", "", "")
+	require.NoError(t, err)
+	flaky := &flakyFirstList{ObjectStorage: base, failPrefix: "chunks/0/1/", failures: 1}
+	blob := object.WithPrefix(flaky, "chunks/")
+	for _, key := range keys {
+		require.NoError(t, blob.Put(context.Background(), key, bytes.NewReader([]byte("data"))))
+	}
+
+	progress := utils.NewProgress(true)
+	t.Cleanup(progress.Done)
+	prefixSpin := progress.AddCountBar("prefixes", 0)
+
+	var mu sync.Mutex
+	var got []string
+	err = scanGcChunkObjects(context.Background(), blob, 2, false, prefixSpin, func(obj object.Object) error {
+		mu.Lock()
+		got = append(got, obj.Key())
+		mu.Unlock()
+		return nil
+	})
+	// One transient first-page failure must not abort the scan; every
+	// object is visited.
+	require.NoError(t, err)
+	require.Equal(t, 1, flaky.calls)
+	sort.Strings(got)
+	require.Equal(t, keys, got)
 }
