@@ -39,6 +39,7 @@ import (
 	"github.com/dustin/go-humanize"
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -79,6 +80,10 @@ type tkvClient interface {
 	gc()
 	rewind(id uint64, factor int) uint64 // rewind id of log
 	config(key string) interface{}
+}
+
+type tkvMetricsClient interface {
+	initMetrics(prometheus.Registerer)
 }
 
 type kvTxn struct {
@@ -126,6 +131,16 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	m.en = m
 	return m, nil
+}
+
+func (m *kvMeta) InitMetrics(reg prometheus.Registerer) {
+	m.baseMeta.InitMetrics(reg)
+	if reg == nil {
+		return
+	}
+	if client, ok := m.client.(tkvMetricsClient); ok {
+		client.initMetrics(reg)
+	}
 }
 
 func (m *kvMeta) Shutdown() error {

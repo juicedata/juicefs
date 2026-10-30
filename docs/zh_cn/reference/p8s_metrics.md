@@ -67,6 +67,23 @@ sidebar_position: 4
 
 连接池未命中时，客户端会尝试创建新连接。Counter 在客户端连接池的生命周期内累计，连接池重建时可能重置。可用 `rate()` 或 `increase()` 查看指定时间窗口内的变化。
 
+### TiKV 客户端
+
+使用 TiKV 元数据引擎时，以下指标反映 TiKV Go 客户端的 RPC 和请求排队情况。采集只读取进程内统计，不向 TiKV 发起查询。
+
+这些 collector 由进程中的全部 TiKV 客户端共享。Java 或 Python SDK 在同一进程中打开多个卷时，各卷的指标会重复导出相同的进程总量。此时 `vol_name` 和 `mp` 标签标识指标的导出上下文，而非这些统计的归属；不要对同一进程中不同卷的这些指标求和。
+
+| 名称 | 类型 | 描述 |
+| ---- | ---- | ---- |
+| `juicefs_tikv_client_go_request_seconds` | Histogram | RPC 请求耗时，单位为秒；标签：`type`、`store`、`stale_read`、`scope` |
+| `juicefs_tikv_client_go_batch_pending_requests` | Histogram | batch 通道中的排队请求数；标签：`store` |
+| `juicefs_tikv_client_go_batch_client_wait_connection_establish` | Histogram | 等待 batch 连接建立的时间，单位为秒 |
+| `juicefs_tikv_client_go_batch_client_no_available_connection_total` | Counter | 无可用 batch 客户端发送请求的次数 |
+
+指标名称和类型沿用 TiKV Go 客户端。连接建立耗时的名称虽然没有 `_seconds` 后缀，但单位仍为秒。无可用 batch 客户端的计数可能因并发限制或发送器繁忙而增加，不等同于 SQL 连接池的等待超时次数。
+
+SDK 向 Pushgateway、Graphite 或 remote write 端点推送指标时，如果自定义推送标签与 TiKV 指标标签同名，会跳过对应的 TiKV collector 并记录警告。原有 JuiceFS 指标及未冲突的 TiKV collector 仍会正常导出。
+
 ## 配额 {#quota}
 
 ### 指标

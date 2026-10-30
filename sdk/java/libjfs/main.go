@@ -471,6 +471,16 @@ func updateAllCtx(name string, user, groups string) {
 	}
 }
 
+type pushLabelsRegisterer struct {
+	prometheus.Registerer
+	labels prometheus.Labels
+}
+
+// PushLabels reports exporter labels without adding them to collected metrics.
+func (r pushLabelsRegisterer) PushLabels() prometheus.Labels {
+	return r.labels
+}
+
 func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
 	pusher := push.New(pushGatewayAddr, "juicefs").Gatherer(registry)
 	for k, v := range commonLabels {
@@ -654,7 +664,11 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			if jConf.PushRemoteWrite != "" {
 				push2RemoteWrite(jConf.PushRemoteWrite, jConf.PushRemoteWriteAuth, interval, registry, commonLabels)
 			}
-			m.InitMetrics(registerer)
+			metaRegisterer := registerer
+			if jConf.PushGateway != "" || jConf.PushGraphite != "" || jConf.PushRemoteWrite != "" {
+				metaRegisterer = pushLabelsRegisterer{Registerer: registerer, labels: commonLabels}
+			}
+			m.InitMetrics(metaRegisterer)
 			vfs.InitMetrics(registerer)
 			go metric.UpdateMetrics(registerer)
 		}

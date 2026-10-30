@@ -67,6 +67,23 @@ When using Redis or KeyDB as the metadata engine, the following client-side metr
 
 A pool miss triggers an attempt to create a new connection. Counters accumulate over the lifetime of the client's pool and can reset when the pool is recreated. Use `rate()` or `increase()` to observe changes over a specified time window.
 
+### TiKV client
+
+For the TiKV metadata engine, the following metrics expose TiKV Go client's RPC and request queue activity. They read in-process statistics without querying TiKV.
+
+These collectors are shared by all TiKV clients in the process. When the Java or Python SDK opens multiple volumes, each volume's metrics export the same process totals. The `vol_name` and `mp` labels identify the exporter context, not the owner of these statistics; do not sum these metrics across volumes in the same process.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| `juicefs_tikv_client_go_request_seconds` | Histogram | RPC request duration in seconds; labels: `type`, `store`, `stale_read`, `scope` |
+| `juicefs_tikv_client_go_batch_pending_requests` | Histogram | Number of requests pending in the batch channel; label: `store` |
+| `juicefs_tikv_client_go_batch_client_wait_connection_establish` | Histogram | Time spent waiting for a batch connection to be established, in seconds |
+| `juicefs_tikv_client_go_batch_client_no_available_connection_total` | Counter | Number of times no batch client is available to send requests |
+
+The metric names and types follow the TiKV Go client. The connection establishment histogram uses seconds despite not having a `_seconds` suffix. The unavailable batch client counter can increase because of concurrency limits or a busy sender; it is not a SQL-style connection pool timeout counter.
+
+When the SDK pushes metrics to Pushgateway, Graphite, or a remote write endpoint, a custom push label that conflicts with a TiKV metric label causes that TiKV collector to be skipped with a warning. Existing JuiceFS metrics and non-conflicting TiKV collectors continue to be exported.
+
 ## Quota {#quota}
 
 ### Metrics
