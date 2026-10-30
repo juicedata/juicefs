@@ -307,6 +307,64 @@ func (c *aclCacheWithMissCount) GetMissIds() []uint32 {
 	return c.Cache.GetMissIds()
 }
 
+func TestMergeFacl(t *testing.T) {
+	minimal := &aclAPI.Rule{Owner: 6, Group: 4, Mask: 0xFFFF, Other: 0}
+	extended := &aclAPI.Rule{Owner: 7, Group: 7, Mask: 5, Other: 1, NamedUsers: aclAPI.Entries{{Id: 1001, Perm: 4}}}
+	srcMode := uint16(0640)
+	replay := &replayState{Mode: &srcMode}
+	for _, c := range []struct {
+		name    string
+		ctx     Context
+		state   *replayState
+		aclType uint8
+		rule    *aclAPI.Rule
+		mode    uint16
+		aclId   uint32
+	}{
+		{"non-member clears sgid", NewContext(1, 1000, []uint32{1000}), nil, aclAPI.TypeAccess, minimal, 0640, aclAPI.None},
+		{"extended access uses mask", Background(), nil, aclAPI.TypeAccess, extended, 02751, 7},
+		{"default keeps mode", Background(), nil, aclAPI.TypeDefault, extended, 02755, 7},
+		{"replay keeps source mode", Background(), replay, aclAPI.TypeAccess, minimal, srcMode, aclAPI.None},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			attr := &Attr{Mode: 02755, Uid: 1000, Gid: 2000}
+			insert := func(*aclAPI.Rule) (uint32, error) { return 7, nil }
+			m := &baseMeta{}
+			m.replay.Store(c.state)
+			require.NoError(t, m.mergeFacl(c.ctx, attr, c.aclType, c.rule.Dup(), insert))
+			assert.Equal(t, c.mode, attr.Mode)
+			assert.Equal(t, c.aclId, getAttrACLId(attr, c.aclType))
+		})
+	}
+}
+
+func TestMergeAttrReplayMode(t *testing.T) {
+	srcMode := uint16(0640)
+	replay := &replayState{Mode: &srcMode}
+	for _, c := range []struct {
+		name  string
+		ctx   Context
+		state *replayState
+		set   uint16
+		mode  uint16
+	}{
+		{"root chgrp keeps sgid", Background(), nil, SetAttrGID, 02644},
+		{"replay chgrp keeps source mode", Background(), replay, SetAttrGID, srcMode},
+		{"replay chown and chmod keep source mode", Background(), replay, SetAttrUID | SetAttrMode, srcMode},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			cur := &Attr{Typ: TypeFile, Mode: 02644, Uid: 1000, Gid: 1000}
+			attr := &Attr{Mode: srcMode, Uid: 1001, Gid: 1001}
+			m := &baseMeta{}
+			m.replay.Store(c.state)
+			dirty, st := m.mergeAttr(c.ctx, 2, c.set, cur, attr, time.Now(), nil)
+			require.Zero(t, st)
+			require.NotNil(t, dirty)
+			assert.Equal(t, c.mode, dirty.Mode)
+		})
+	}
+}
+
 func testACL(t *testing.T, m Meta) {
 	format := testFormat()
 	format.EnableACL = true
