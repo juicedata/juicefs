@@ -236,6 +236,76 @@ func testXattr(t *testing.T, m Meta) {
 			t.Fatalf("removexattr after unlink: got %s, want %s", st, syscall.ENOENT)
 		}
 	})
+
+	// An open file keeps its xattrs after its last name is removed, the same as its data and attributes.
+	// The xattrs go away with the inode at the last close, also the ones set after the removal.
+	t.Run("OpenFileKeepsXattrsAfterLastNameRemoved", func(t *testing.T) {
+		ctx := Background()
+		check := func(t *testing.T, inode Ino, removeLastName func() syscall.Errno) {
+			t.Helper()
+			if st := m.SetXattr(ctx, inode, "user.before", []byte("b"), XattrCreate); st != 0 {
+				t.Fatalf("setxattr before the removal: %s", st)
+			}
+			var attr Attr
+			if st := m.Open(ctx, inode, syscall.O_RDWR, &attr); st != 0 {
+				t.Fatalf("open: %s", st)
+			}
+			if st := removeLastName(); st != 0 {
+				t.Fatalf("remove the last name: %s", st)
+			}
+			var value []byte
+			if st := m.GetXattr(ctx, inode, "user.before", &value); st != 0 || string(value) != "b" {
+				t.Fatalf("getxattr after the removal: %q, %s; want %q", value, st, "b")
+			}
+			if st := m.SetXattr(ctx, inode, "user.after", []byte("a"), XattrCreate); st != 0 {
+				t.Fatalf("setxattr after the removal: %s", st)
+			}
+			if st := m.Close(ctx, inode); st != 0 {
+				t.Fatalf("close: %s", st)
+			}
+			for _, name := range []string{"user.before", "user.after"} {
+				value = nil
+				if st := m.GetXattr(ctx, inode, name, &value); st != ENOATTR && st != syscall.ENOENT {
+					t.Fatalf("getxattr %s after the last close: %q, %s; want it removed with the inode", name, value, st)
+				}
+			}
+		}
+		mknod := func(t *testing.T, parent Ino, name string) Ino {
+			t.Helper()
+			var inode Ino
+			if st := m.Mknod(ctx, parent, name, TypeFile, 0644, 022, 0, "", &inode, nil); st != 0 {
+				t.Fatalf("mknod %s: %s", name, st)
+			}
+			return inode
+		}
+		t.Run("Unlink", func(t *testing.T) {
+			inode := mknod(t, RootInode, "xattr-open-unlink")
+			check(t, inode, func() syscall.Errno { return m.Unlink(ctx, RootInode, "xattr-open-unlink") })
+		})
+		t.Run("RenameOver", func(t *testing.T) {
+			mknod(t, RootInode, "xattr-open-rename-src")
+			inode := mknod(t, RootInode, "xattr-open-rename-dst")
+			check(t, inode, func() syscall.Errno {
+				var ino Ino
+				var attr Attr
+				return m.Rename(ctx, RootInode, "xattr-open-rename-src", RootInode, "xattr-open-rename-dst", 0, &ino, &attr)
+			})
+			if st := m.Unlink(ctx, RootInode, "xattr-open-rename-dst"); st != 0 {
+				t.Fatalf("unlink the renamed file: %s", st)
+			}
+		})
+		t.Run("Remove", func(t *testing.T) {
+			var dir Ino
+			if st := m.Mkdir(ctx, RootInode, "xattr-open-remove", 0755, 022, 0, &dir, nil); st != 0 {
+				t.Fatalf("mkdir: %s", st)
+			}
+			inode := mknod(t, dir, "f")
+			check(t, inode, func() syscall.Errno {
+				var count uint64
+				return m.Remove(ctx, RootInode, "xattr-open-remove", false, 1, &count)
+			})
+		})
+	})
 }
 
 func testAccess(t *testing.T, m Meta) {
