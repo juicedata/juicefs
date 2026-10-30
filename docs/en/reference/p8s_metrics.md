@@ -54,7 +54,7 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 
 ### Redis connection pools
 
-For Redis and KeyDB metadata engines, these client-side statistics describe the main command connection pool of standalone and Sentinel clients. Redis Cluster pool metrics are not collected. The metrics use the official `go-redis` Prometheus collector and have no additional labels. Sentinel control connections and Pub/Sub pools are excluded. Scraping reads local pool statistics without sending Redis commands.
+When using Redis or KeyDB as the metadata engine, the following client-side metrics describe the main command connection pool used by standalone and Sentinel clients. Redis Cluster pool metrics are not collected. These metrics are provided by the official `go-redis` Prometheus collector and have no additional labels. Sentinel control connections and Pub/Sub pools are excluded. Scraping reads local pool statistics without sending Redis commands.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
