@@ -65,7 +65,7 @@ For Redis and KeyDB metadata engines, these client-side statistics describe the 
 | `juicefs_redis_pool_conn_idle_current` | Gauge | Current number of idle connections in the command pool |
 | `juicefs_redis_pool_conn_stale_total` | Counter | Number of stale connections removed from the pool |
 
-A pool miss triggers an attempt to create a new connection. Counters accumulate over the lifetime of the client's pool and can reset when the pool is recreated. Use `rate()` or `increase()` to observe changes over a time window.
+A pool miss triggers an attempt to create a new connection. Counters accumulate over the lifetime of the client's pool and can reset when the pool is recreated. Use `rate()` or `increase()` to observe changes over a specified time window.
 
 ## Quota {#quota}
 
