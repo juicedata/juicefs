@@ -52,7 +52,7 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | `juicefs_meta_ops_total`                          | Number of metadata engine operations       |        |
 | `juicefs_meta_ops_duration_seconds`               | Accumulated time of metadata engine operations | second |
 
-### Redis connection pool
+### Redis connection pools
 
 For Redis and KeyDB metadata engines, these client-side statistics describe the main command connection pool of standalone and Sentinel clients. Redis Cluster pool metrics are not collected. The metrics use the official `go-redis` Prometheus collector and have no additional labels. Sentinel control connections and Pub/Sub pools are excluded. Scraping reads local pool statistics without sending Redis commands.
 
