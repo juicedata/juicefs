@@ -362,15 +362,14 @@ func (r *Replayer) Replay(ctx Context, e *ChangeEntry) error {
 			return r.setQuota(ctx, e)
 		case OpDelQuota:
 			return r.delQuota(ctx, e)
-    case OpDirStat:
-      // FIXME: backup/load must restore an accurate directory-stat baseline.
-      // FIXME: coordinate pending and in-flight dir-stat updates with this resync to avoid double-counting.
-      inode, err := e.Ino(0)
-      if err != nil {
-        return err
-      }
-      _, st := dst.en.doSyncDirStat(ctx, inode)
-      return changelogCall(e, st)
+		case OpDirStat:
+			// FIXME: backup/load must restore an accurate directory-stat baseline.
+			inode, err := e.Ino(0)
+			if err != nil {
+				return err
+			}
+			_, st := dst.syncDirStat(ctx, inode)
+			return changelogCall(e, st)
 		case OpRepairDir:
 			return r.repairDir(ctx, e)
 		case OpUpdateToken:
@@ -1119,6 +1118,9 @@ func (r *Replayer) setQuota(ctx Context, e *ChangeEntry) error {
 		return err
 	}
 	m := r.dst.getBase()
+	// Flush pending usage so it is not added on top of recorded usage, then refresh cached limits.
+	m.doFlushQuotas()
+	defer m.loadQuotas()
 	created, err := m.en.doSetQuota(ctx, qtype, key, &Quota{
 		MaxSpace:   maxSpace,
 		MaxInodes:  maxInodes,
@@ -1143,7 +1145,10 @@ func (r *Replayer) delQuota(ctx Context, e *ChangeEntry) error {
 	if err != nil {
 		return err
 	}
-	return r.dst.getBase().en.doDelQuota(ctx, qtype, key)
+	m := r.dst.getBase()
+	m.doFlushQuotas()
+	defer m.loadQuotas()
+	return m.en.doDelQuota(ctx, qtype, key)
 }
 
 func (r *Replayer) storeToken(ctx Context, e *ChangeEntry) error {
