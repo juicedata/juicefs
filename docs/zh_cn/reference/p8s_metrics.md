@@ -52,6 +52,21 @@ sidebar_position: 4
 | `juicefs_meta_ops_total`                          | 元数据引擎操作的次数 |    |
 | `juicefs_meta_ops_duration_seconds`               | 元数据引擎操作的累计耗时 | 秒 |
 
+### Redis 连接池
+
+使用 Redis 或 KeyDB 元数据引擎时，以下客户端统计反映单机和 Sentinel 客户端的主命令连接池状态，不采集 Redis Cluster 的连接池指标。这些指标由 `go-redis` 官方 Prometheus collector 提供，不带额外标签。不包含 Sentinel 控制连接和 Pub/Sub 连接池。采集只读取本地连接池统计，不发送 Redis 命令。
+
+| 名称 | 类型 | 描述 |
+| ---- | ---- | ---- |
+| `juicefs_redis_pool_hit_total` | Counter | 从连接池复用空闲连接的累计次数 |
+| `juicefs_redis_pool_miss_total` | Counter | 连接池中未找到可复用空闲连接的累计次数 |
+| `juicefs_redis_pool_timeout_total` | Counter | 从连接池获取连接超时的累计次数 |
+| `juicefs_redis_pool_conn_total_current` | Gauge | 命令连接池当前的连接数 |
+| `juicefs_redis_pool_conn_idle_current` | Gauge | 命令连接池当前的空闲连接数 |
+| `juicefs_redis_pool_conn_stale_total` | Counter | 从连接池移除失效连接的累计数量 |
+
+连接池未命中时，客户端会尝试创建新连接。Counter 在客户端连接池的生命周期内累计，连接池重建时可能重置。可用 `rate()` 或 `increase()` 查看指定时间窗口内的变化。
+
 ## 配额 {#quota}
 
 ### 指标
