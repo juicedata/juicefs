@@ -48,6 +48,14 @@ juicefs.fdb: Makefile cmd/*.go pkg/*/*.go
 juicefs.fdb.cover: Makefile cmd/*.go pkg/*/*.go
 	go build -tags fdb -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -cover -o juicefs.fdb .
 
+# Requires the slatedb_uniffi shared library on the linker/loader path. Build it from
+# the tag matching slatedb.io/slatedb-go in go.mod, otherwise the binding aborts at
+# startup with a UniFFI contract/checksum mismatch:
+#   git clone --branch bindings/go/v0.15.0 https://github.com/slatedb/slatedb
+#   cd slatedb && cargo build --release -p slatedb-uniffi
+juicefs.slatedb: Makefile cmd/*.go pkg/*/*.go
+	go build -tags slatedb -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -o juicefs.slatedb .
+
 juicefs.gluster: Makefile cmd/*.go pkg/*/*.go
 	go build -tags gluster -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -o juicefs.gluster .
 
@@ -123,6 +131,9 @@ test.cmd:
 
 test.fdb:
 	go test -v -cover -count=1  -failfast -timeout=4m ./pkg/meta/ -tags fdb -run=TestFdb -args -test.gocoverdir="$(shell realpath cover/)"
+
+test.slatedb:
+	go test -v -cover -count=1  -failfast -timeout=10m ./pkg/meta/ -tags slatedb -run=TestSlateDB -args -test.gocoverdir="$(shell realpath cover/)"
 
 unit-random-test:
 	echo "Using meta:$(meta), seed: $(seed), checks:${checks}, steps: $(steps)"
