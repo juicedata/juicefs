@@ -663,7 +663,23 @@ func testKerberosToken(t *testing.T, m Meta) {
 		t.Fatalf("token1 mismatch: %+v != %+v", tk1, buildToken(tokens[id1]))
 	}
 
-	eno = m.DeleteTokens(ctx, []uint32{id1, id2})
+	base := m.getBase()
+	defer base.replay.Store(nil)
+	replayIDs := []uint32{id2 + 100, id2 + 10}
+	for _, replayID := range replayIDs {
+		base.replay.Store(&replayState{TokenId: replayID})
+		actual, _ := issueToken()
+		if actual != replayID {
+			t.Fatalf("replayed token ID: got %d, want %d", actual, replayID)
+		}
+	}
+	base.replay.Store(nil)
+	id3, _ := issueToken()
+	if id3 <= replayIDs[0] {
+		t.Fatalf("token ID after replay: got %d, want greater than %d", id3, replayIDs[0])
+	}
+
+	eno = m.DeleteTokens(ctx, []uint32{id1, id2, replayIDs[0], replayIDs[1], id3})
 	if eno != 0 {
 		t.Fatalf("delete tokens failed: %s", eno)
 	}

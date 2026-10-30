@@ -6177,23 +6177,39 @@ func (m *redisMeta) loadDumpedACLs(ctx Context) error {
 }
 
 func (m *redisMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
+	counterKey := m.counterKey(krbTokenCounter)
+	keys := []string{m.krbTokenKey()}
+	if m.tokenID() != 0 {
+		keys = append(keys, counterKey)
+	}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newId := m.tokenID()
+		var advance bool
 		if newId == 0 {
 			v, err := m.incrCounter(krbTokenCounter, 1)
 			if err != nil {
 				return err
 			}
 			newId = uint32(v)
+		} else {
+			// Keep the counter ahead of explicit IDs stored by replay.
+			current, err := tx.Get(ctx, counterKey).Int64()
+			if err != nil && err != redis.Nil {
+				return err
+			}
+			advance = current < int64(newId)
 		}
 		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, m.krbTokenKey(), strconv.FormatUint(uint64(newId), 10), token)
+			if advance {
+				pipe.Set(ctx, counterKey, newId, 0)
+			}
 			id = newId
 			m.genLog(ctx, pipe, time.Now(), "STORETOKEN(%d,%s)", id, logEncode(token))
 			return nil
 		})
 		return err
-	}, m.krbTokenKey())
+	}, keys...)
 	return id, errno(err)
 }
 

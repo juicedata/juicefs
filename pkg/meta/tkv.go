@@ -5092,6 +5092,9 @@ func (m *kvMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.
 				return err
 			}
 			newId = uint32(v)
+		} else if key := m.counterKey(krbTokenCounter); parseCounter(tx.get(key)) < int64(newId) {
+			// Keep the counter ahead of explicit IDs stored by replay.
+			tx.set(key, packCounter(int64(newId)))
 		}
 		tx.set(m.krbTokenKey(newId), token)
 		id = newId
