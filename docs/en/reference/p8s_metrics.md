@@ -58,7 +58,7 @@ When using Redis or KeyDB as the metadata engine, the following client-side metr
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| `juicefs_redis_pool_hit_total` | Counter | Number of times an idle connection was reused from the pool |
+| `juicefs_redis_pool_hit_total` | Counter | Total number of times an idle connection was reused from the pool |
 | `juicefs_redis_pool_miss_total` | Counter | Total number of times no reusable idle connection was found in the pool |
 | `juicefs_redis_pool_timeout_total` | Counter | Total number of timeouts acquiring a connection from the pool |
 | `juicefs_redis_pool_conn_total_current` | Gauge | Current number of connections in the command pool |
