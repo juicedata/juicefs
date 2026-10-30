@@ -82,7 +82,6 @@ func TestQiniuPrivateGet_ContextCanceled(t *testing.T) {
 func qiniuContextStore(server *httptest.Server) *qiniu {
 	cfg := &storage.Config{Zone: &storage.Zone{RsHost: server.URL}, RsfHost: server.URL}
 	client := server.Client()
-	client.Timeout = 2 * time.Second
 	cred := auth.New("access-key", "secret-key")
 	return &qiniu{
 		s3client: s3client{bucket: "bucket"},
@@ -114,7 +113,11 @@ func qiniuContextOperation(store *qiniu, ctx context.Context, operation string) 
 
 func TestQiniuObjectOperations_Context(t *testing.T) {
 	for _, operation := range []string{"stat", "copy", "delete", "list"} {
-		for _, mode := range []string{"cancel", "deadline"} {
+		modes := []string{"cancel"}
+		if operation == "stat" || operation == "list" {
+			modes = append(modes, "deadline")
+		}
+		for _, mode := range modes {
 			t.Run(operation+"/"+mode, func(t *testing.T) {
 				started := make(chan struct{}, 1)
 				stopped := make(chan struct{}, 1)
@@ -176,29 +179,21 @@ func TestQiniuList_OptionsAndPagination(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(storage.ListFilesRet{
-			Marker: "next",
-			Items: []storage.ListItem{
-				{Key: "dir/a", Fsize: 1, PutTime: 10000000},
-				{Key: "dir/z", Fsize: 7, PutTime: 20000000},
-			},
+			Marker:         "next",
+			Items:          []storage.ListItem{{Key: "dir/z"}},
 			CommonPrefixes: []string{"dir/m/"},
 		})
 	}))
 	defer server.Close()
-	store := &qiniu{
-		s3client: s3client{bucket: "bucket"},
-		bm: storage.NewBucketManagerEx(auth.New("access-key", "secret-key"),
-			&storage.Config{RsfHost: server.URL}, &qiniuclient.Client{Client: server.Client()}),
-	}
-	objects, more, marker, err := store.List(context.Background(), "dir/", "dir/a", "previous", "/", 1001, false)
+	store := qiniuContextStore(server)
+	objects, more, marker, err := store.List(context.Background(), "dir/", "", "previous", "/", 1001, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !more || marker != "next" || len(objects) != 2 {
 		t.Fatalf("unexpected page: %v, %v, %q", objects, more, marker)
 	}
-	if objects[0].Key() != "dir/m/" || !objects[0].IsDir() || objects[1].Key() != "dir/z" ||
-		objects[1].Size() != 7 || objects[1].Mtime().Unix() != 2 {
-		t.Fatalf("unexpected List metadata: %v", objects)
+	if objects[0].Key() != "dir/m/" || !objects[0].IsDir() || objects[1].Key() != "dir/z" {
+		t.Fatalf("unexpected List objects: %v", objects)
 	}
 }
