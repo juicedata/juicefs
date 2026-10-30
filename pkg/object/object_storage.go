@@ -32,6 +32,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/aws/smithy-go/encoding/httpbinding"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -462,6 +463,11 @@ func NewTiers(defaultSc string) Tiers {
 		Sc: defaultSc,
 	}
 	return t
+}
+
+// encodeCopySource escapes a copy-source header without encoding path separators.
+func encodeCopySource(bucket, key string) string {
+	return httpbinding.EscapePath(bucket+"/"+key, false)
 }
 
 func getOrDefaultScValue(v, defaultValue string) string {
