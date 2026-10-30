@@ -162,6 +162,7 @@ juicefs format \
 | [Storj](#storj)                             | `storj`    |
 | [Vultr 对象存储](#vultr-对象存储)           | `s3`       |
 | [Cloudflare R2](#r2)                        | `s3`       |
+| [Neon Object Storage](#neon)                | `s3`       |
 | [阿里云 OSS](#阿里云-oss)                   | `oss`      |
 | [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
 | [华为云 OBS](#华为云-obs)                   | `obs`      |
@@ -537,6 +538,37 @@ juicefs format \
 
 :::caution 特别提示
 因为 Cloudflare R2 的 `ListObjects` API 并非完全 S3 兼容（返回结果没有实现排序功能），所以 JuiceFS 的部分功能无法使用，比如 `juicefs gc`、`juicefs fsck`、`juicefs sync`、`juicefs destroy`。另外，使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#backup-automatically)功能，即加上 `--backup-meta 0`。
+:::
+
+### Neon Object Storage {#neon}
+
+[Neon Object Storage](https://neon.com/docs/storage/overview) 是与 Neon Postgres 一起分支的 S3 兼容对象存储，使用方法与 Amazon S3 相同。每个 Neon 分支都有独立的存储 endpoint，新建的分支会以写时复制（copy-on-write）的方式继承父分支的 bucket。请参考 [Get started with Object Storage](https://neon.com/docs/storage/get-started) 了解如何获取 S3 凭证。
+
+Neon Object Storage 仅支持 path-style 请求，因此 `--bucket` 选项的设置格式为 `https://<branch-endpoint>/<bucket>`。其中 `<branch-endpoint>` 是分支的存储 endpoint，即控制台中显示的（或 `neon env pull` 写入的）`AWS_ENDPOINT_URL_S3` 的值，例如 `br-cool-darkness-a1b2c3d4.storage.c-1.us-east-2.aws.neon.tech`。如果 bucket 不存在，会自动创建。例如：
+
+```shell
+juicefs format \
+    --storage s3 \
+    --bucket https://<branch-endpoint>/<bucket> \
+    --access-key <token-id> \
+    --secret-key <s3-secret-access-key> \
+    ... \
+    myjfs
+```
+
+请不要设置 `JFS_S3_VHOST_STYLE`，因为 Neon Object Storage 不接受 virtual-hosted-style 请求。
+
+使用 `juicefs sync` 时，URL 格式为 `s3://<access-key>:<secret-key>@<branch-endpoint>/<bucket>/<prefix>/`。
+
+:::caution 特别提示
+如果同时使用 Neon Postgres 作为[元数据引擎](how_to_set_up_metadata_engine.md#postgresql)，创建 Neon 分支会同时复制文件系统的元数据和数据。新分支上的元数据仍然指向父分支的存储 endpoint，因此在新分支上写入文件系统之前，需要将其更新为新分支的 endpoint：
+
+```shell
+juicefs config "postgres://<user>:<password>@<branch-db-host>/<database>?sslmode=require" \
+    --bucket https://<new-branch-endpoint>/<bucket>
+```
+
+如果跳过这一步，新分支的写入会进入父分支的 bucket。由于两份元数据会分配相同的 slice ID，这些写入可能覆盖父分支之后写入的数据块。
 :::
 
 ### 阿里云 OSS

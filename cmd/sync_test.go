@@ -113,6 +113,9 @@ func Test_isS3PathType(t *testing.T) {
 		{"s3-ap-southeast-1amazonaws.com:8080", false},
 		{"s3-ap-southeast-1", false},
 		{"s3-ap-southeast-1:8080", false},
+		{"br-cool-darkness-a1b2c3d4.storage.c-1.us-east-2.aws.neon.tech", true},
+		{"storage.c-1.us-east-2.aws.neon.tech", false},
+		{"ep-cool-darkness-a1b2c3d4.c-1.us-east-2.aws.neon.tech", false},
 	}
 	for _, tt := range tests {
 		t.Run("Test host", func(t *testing.T) {
