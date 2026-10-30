@@ -3078,7 +3078,7 @@ func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	return sids, nil
 }
 
-func (m *redisMeta) doRefreshSession() error {
+func (m *redisMeta) doRefreshSession() (bool, error) {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)
 	expire := m.expireTime()
@@ -3093,8 +3093,9 @@ func (m *redisMeta) doRefreshSession() error {
 	})
 	if err == nil && created.Val() {
 		logger.Warnf("Session %d was stale and cleaned up, but now I'm back again", m.sid)
+		return true, nil
 	}
-	return err
+	return false, err
 }
 
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {

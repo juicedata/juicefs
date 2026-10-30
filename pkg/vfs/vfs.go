@@ -847,6 +847,10 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 		err = syscall.EBADF
 		return
 	}
+	if h.isFenced() {
+		err = syscall.EIO
+		return
+	}
 
 	if !h.Wlock(ctx) {
 		err = syscall.EINTR
@@ -889,6 +893,10 @@ func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, size int64, fh ui
 	}
 	if h.writer == nil {
 		err = syscall.EBADF
+		return
+	}
+	if h.isFenced() {
+		err = syscall.EIO
 		return
 	}
 	if !h.Wlock(ctx) {
@@ -946,6 +954,10 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 	}
 	if ho.writer == nil {
 		err = syscall.EACCES
+		return
+	}
+	if ho.isFenced() {
+		err = syscall.EIO
 		return
 	}
 	if offIn >= maxFileSize || offIn+size >= maxFileSize || offOut >= maxFileSize || offOut+size >= maxFileSize {
@@ -1021,6 +1033,9 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 		if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 			err = syscall.EBADF
 		}
+		if h.isFenced() {
+			err = syscall.EIO
+		}
 		h.removeOp(ctx)
 		h.Wunlock()
 	} else if h.reader != nil {
@@ -1059,6 +1074,9 @@ func (v *VFS) Fsync(ctx Context, ino Ino, datasync int, fh uint64) (err syscall.
 		err = h.writer.Flush(ctx)
 		if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 			err = syscall.EBADF
+		}
+		if h.isFenced() {
+			err = syscall.EIO
 		}
 	}
 	return
@@ -1289,6 +1307,7 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	}
 	_ = os.Rename(statePath, statePath+".bak")
 
+	m.OnSessionLost(v.fenceLockedHandles)
 	go v.cleanupModified()
 	initVFSMetrics(v, writer, reader, registerer)
 	return v

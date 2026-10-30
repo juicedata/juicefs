@@ -22,9 +22,11 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -51,7 +53,11 @@ func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config), metaUri st
 	if metaUri == "" {
 		metaUri = "memkv://"
 	}
-	m := meta.NewClient(metaUri, metaConf)
+	return newTestVFS(meta.NewClient(metaUri, metaConf), metaConf)
+}
+
+func newTestVFS(m meta.Meta, metaConf *meta.Config) (*VFS, object.ObjectStorage) {
+	mp := metaConf.MountPoint
 	format := &meta.Format{
 		Name:        "test",
 		UUID:        uuid.New().String(),
@@ -602,6 +608,154 @@ func TestVFSLocks(t *testing.T) {
 	if e = v.Getlk(ctx, fe.Inode, 10, 2, &start, &len, &typ, &pid); e != syscall.EPERM {
 		t.Fatalf("getlk: %s", e)
 	}
+}
+
+func TestVFSFenceLockedHandles(t *testing.T) {
+	v, _ := createTestVFS(nil, "")
+	ctx := NewLogContext(meta.Background())
+	fe, fh, e := v.Create(ctx, 1, "fenced", 0644, 0, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("create fenced: %s", e)
+	}
+	oe, ofh, e := v.Create(ctx, 1, "unlocked", 0644, 0, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("create unlocked: %s", e)
+	}
+	if e = v.Flock(ctx, fe.Inode, fh, 123, syscall.F_WRLCK, true); e != 0 {
+		t.Fatalf("flock wr: %s", e)
+	}
+	if e = v.Write(ctx, fe.Inode, []byte("hello"), 0, fh); e != 0 {
+		t.Fatalf("write before fenced: %s", e)
+	}
+
+	v.fenceLockedHandles() // the session was cleaned up by others
+
+	if e = v.Write(ctx, fe.Inode, []byte("world"), 5, fh); e != syscall.EIO {
+		t.Fatalf("write after fenced: %s", e)
+	}
+	if e = v.Fallocate(ctx, fe.Inode, 0, 0, 100, fh); e != syscall.EIO {
+		t.Fatalf("fallocate after fenced: %s", e)
+	}
+	if e = v.Fsync(ctx, fe.Inode, 0, fh); e != syscall.EIO {
+		t.Fatalf("fsync after fenced: %s", e)
+	}
+	if e = v.Flush(ctx, fe.Inode, fh, 0); e != syscall.EIO {
+		t.Fatalf("flush after fenced: %s", e)
+	}
+	var attr meta.Attr
+	if e = v.Meta.GetAttr(ctx, fe.Inode, &attr); e != 0 || attr.Length != 0 {
+		t.Fatalf("buffered data should be dropped: %s, length %d", e, attr.Length)
+	}
+	buf := make([]byte, 10)
+	if _, e = v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
+		t.Fatalf("read after fenced: %s", e)
+	}
+	if e = v.Flock(ctx, fe.Inode, fh, 123, syscall.F_UNLCK, true); e != 0 {
+		t.Fatalf("flock unlock after fenced: %s", e)
+	}
+
+	// fenced handles stay fenced after graceful restart
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	if err := v.dumpAllHandles(statePath); err != nil {
+		t.Fatalf("dump handles: %s", err)
+	}
+	v2, _ := createTestVFS(nil, "")
+	if err := v2.loadAllHandles(statePath); err != nil {
+		t.Fatalf("load handles: %s", err)
+	}
+	if e = v2.Write(ctx, fe.Inode, []byte("world"), 5, fh); e != syscall.EIO {
+		t.Fatalf("write after restart: %s", e)
+	}
+	if e = v2.Write(ctx, oe.Inode, []byte("hello"), 0, ofh); e != 0 {
+		t.Fatalf("write unlocked after restart: %s", e)
+	}
+	v.Release(ctx, fe.Inode, fh)
+
+	// files without locks are not affected
+	if e = v.Write(ctx, oe.Inode, []byte("hello"), 0, ofh); e != 0 {
+		t.Fatalf("write unlocked: %s", e)
+	}
+	if e = v.Flush(ctx, oe.Inode, ofh, 0); e != 0 {
+		t.Fatalf("flush unlocked: %s", e)
+	}
+	v.Release(ctx, oe.Inode, ofh)
+
+	// a new open after all handles are closed works again
+	_, fh, e = v.Open(ctx, fe.Inode, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("open fenced again: %s", e)
+	}
+	if e = v.Write(ctx, fe.Inode, []byte("again"), 0, fh); e != 0 {
+		t.Fatalf("write after reopen: %s", e)
+	}
+	if e = v.Flush(ctx, fe.Inode, fh, 0); e != 0 {
+		t.Fatalf("flush after reopen: %s", e)
+	}
+	v.Release(ctx, fe.Inode, fh)
+}
+
+// lostSessionMeta finds the session lost on the next CheckSession, like a client that
+// resumes and commits buffered data before its next heartbeat.
+type lostSessionMeta struct {
+	meta.Meta
+	onLost func()
+	lost   atomic.Bool
+}
+
+func (m *lostSessionMeta) OnSessionLost(cb func()) {
+	m.onLost = cb
+	m.Meta.OnSessionLost(cb)
+}
+
+func (m *lostSessionMeta) CheckSession() {
+	if m.lost.CompareAndSwap(true, false) {
+		m.onLost()
+	}
+}
+
+func TestVFSFenceBeforeCommit(t *testing.T) {
+	metaConf := meta.DefaultConf()
+	metaConf.MountPoint = "/jfs"
+	m := &lostSessionMeta{Meta: meta.NewClient("memkv://", metaConf)}
+	v, _ := newTestVFS(m, metaConf)
+	ctx := NewLogContext(meta.Background())
+	fe, fh, e := v.Create(ctx, 1, "locked", 0644, 0, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("create locked: %s", e)
+	}
+	oe, ofh, e := v.Create(ctx, 1, "unlocked", 0644, 0, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("create unlocked: %s", e)
+	}
+	if e = v.Setlk(ctx, fe.Inode, fh, 1, 0, 100, syscall.F_WRLCK, 1, false); e != 0 {
+		t.Fatalf("setlk: %s", e)
+	}
+	if e = v.Write(ctx, fe.Inode, []byte("hello"), 0, fh); e != 0 {
+		t.Fatalf("write locked: %s", e)
+	}
+	if e = v.Write(ctx, oe.Inode, []byte("hello"), 0, ofh); e != 0 {
+		t.Fatalf("write unlocked: %s", e)
+	}
+
+	m.lost.Store(true) // no heartbeat ran since the session was cleaned up
+	if e = v.Flush(ctx, oe.Inode, ofh, 0); e != 0 {
+		t.Fatalf("flush unlocked: %s", e)
+	}
+	if m.lost.Load() {
+		t.Fatalf("session is not checked before commit")
+	}
+	if e = v.Flush(ctx, fe.Inode, fh, 1); e != syscall.EIO {
+		t.Fatalf("flush locked: %s", e)
+	}
+	var attr meta.Attr
+	if e = v.Meta.GetAttr(ctx, fe.Inode, &attr); e != 0 || attr.Length != 0 {
+		t.Fatalf("buffered data of locked file should be dropped: %s, length %d", e, attr.Length)
+	}
+	if e = v.Meta.GetAttr(ctx, oe.Inode, &attr); e != 0 || attr.Length != 5 {
+		t.Fatalf("data of unlocked file should be committed: %s, length %d", e, attr.Length)
+	}
+	v.Release(ctx, fe.Inode, fh)
+	v.Release(ctx, oe.Inode, ofh)
 }
 
 func TestInternalFile(t *testing.T) {

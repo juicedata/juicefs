@@ -86,7 +86,8 @@ type engine interface {
 	doLoad() ([]byte, error)
 
 	doNewSession(sinfo []byte, update bool) error
-	doRefreshSession() error
+	// doRefreshSession returns lost=true if the session had been cleaned up by others
+	doRefreshSession() (lost bool, err error)
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
 	doInit(format *Format, force bool) error
@@ -293,9 +294,12 @@ type baseMeta struct {
 	symlinks     *symlinkCache
 	msgCallbacks *msgCallbacks
 	reloadCb     []func(*Format) error
+	sessLostCb   []func()
 	reloadFailed []func(*Format) error // only accessed by the refresh goroutine
 	umounting    bool
 	sesMu        sync.Mutex
+	lastRefresh  atomic.Pointer[time.Time] // start of the last successful refresh
+	lastAttempt  time.Time                 // protected by sesMu
 	aclCache     aclAPI.Cache
 
 	sessCtx Context
@@ -821,9 +825,11 @@ func (m *baseMeta) NewSession(record bool) error {
 			m.conf.Sid = m.sid
 			action = "Create"
 		}
+		start := time.Now()
 		if err := m.en.doNewSession(m.newSessionInfo(), action == "Update"); err != nil {
 			return fmt.Errorf("create session: %s", err)
 		}
+		m.lastRefresh.Store(&start)
 		logger.Infof("%s session %d OK with version: %s", action, m.sid, version.Version())
 	}
 
@@ -970,9 +976,7 @@ func (m *baseMeta) refresh(ctx Context) {
 			return
 		}
 		if !m.conf.ReadOnly && m.conf.Heartbeat > 0 && m.sid > 0 {
-			if err := m.en.doRefreshSession(); err != nil {
-				logger.Errorf("Refresh session %d: %s", m.sid, err)
-			}
+			m.refreshSession()
 		}
 		m.sesMu.Unlock()
 
@@ -999,6 +1003,70 @@ func (m *baseMeta) refresh(ctx Context) {
 			go m.CleanStaleSessions(ctx)
 		}
 	}
+}
+
+// refreshSession must be called with sesMu held, so that the callbacks of a lost session
+// are finished before any CheckSession returns.
+func (m *baseMeta) refreshSession() {
+	start := time.Now()
+	m.lastAttempt = start
+	lost, err := m.en.doRefreshSession()
+	if err != nil {
+		logger.Errorf("Refresh session %d: %s", m.sid, err)
+		return
+	}
+	m.lastRefresh.Store(&start)
+	if lost {
+		m.sessionLost()
+	}
+}
+
+// sinceLastRefresh returns the larger of the monotonic and wall clock time elapsed since
+// the last successful refresh, since the monotonic clock may not advance while the whole
+// machine is paused.
+func (m *baseMeta) sinceLastRefresh() time.Duration {
+	t := m.lastRefresh.Load()
+	if t == nil {
+		return 0
+	}
+	d := time.Since(*t)
+	if w := time.Now().Round(0).Sub(t.Round(0)); w > d {
+		d = w
+	}
+	return d
+}
+
+func (m *baseMeta) OnSessionLost(fn func()) {
+	m.msgCallbacks.Lock()
+	defer m.msgCallbacks.Unlock()
+	m.sessLostCb = append(m.sessLostCb, fn)
+}
+
+func (m *baseMeta) sessionLost() {
+	logger.Warnf("Session %d was cleaned up by others, all the locks held by it are lost", m.sid)
+	m.msgCallbacks.Lock()
+	cbs := m.sessLostCb
+	m.msgCallbacks.Unlock()
+	for _, cb := range cbs {
+		cb()
+	}
+}
+
+func (m *baseMeta) CheckSession() {
+	if m.conf.ReadOnly || m.conf.Heartbeat <= 0 || m.sid == 0 {
+		return
+	}
+	lease := m.conf.Heartbeat * 4 // others may clean it up after 5 heartbeats
+	if m.sinceLastRefresh() < lease {
+		return
+	}
+	m.sesMu.Lock()
+	if m.umounting || m.sinceLastRefresh() < lease || time.Since(m.lastAttempt) < time.Second {
+		m.sesMu.Unlock()
+		return
+	}
+	m.refreshSession()
+	m.sesMu.Unlock()
 }
 
 func (m *baseMeta) CleanStaleSessions(ctx Context) {

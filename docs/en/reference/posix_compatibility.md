@@ -43,6 +43,10 @@ Besides the features covered by pjdfstest, JuiceFS provides:
 POSIX record locks are classified as **traditional locks** ("process-associated") and **OFD locks** (open file description locks). Their locking operation commands are `F_SETLK` and `F_OFD_SETLK` respectively. Due to the implementation of the FUSE kernel module, JuiceFS currently only supports traditional record locks. More details can be found at: [https://man7.org/linux/man-pages/man2/fcntl.2.html](https://man7.org/linux/man-pages/man2/fcntl.2.html).
 :::
 
+:::note
+Locks are bound to the client session. If a client stops sending heartbeats for about 5 times the `--heartbeat` interval (for example, the process or the host is frozen), other clients treat its session as stale and release all its locks. When such a client comes back, any file that it held a lock on returns `EIO` for later writes, `fsync` and `close`, and its unflushed data is discarded, because another client may hold the lock by then. Reopen the file to continue. Files without locks are not affected.
+:::
+
 ## LTP
 
 LTP is a joint project developed and maintained by IBM, Cisco, Fujitsu, and others.

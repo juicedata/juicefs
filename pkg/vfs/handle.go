@@ -43,6 +43,7 @@ type handle struct {
 	locks      uint8
 	flockOwner uint64 // kernel 3.1- does not pass lock_owner in release()
 	ofdOwner   uint64 // OFD lock
+	fenced     bool   // the locks were lost, so no more writes are allowed
 	reader     FileReader
 	writer     FileWriter
 	ops        []Context
@@ -179,6 +180,35 @@ func (v *VFS) newHandle(inode Ino, readOnly bool, tierID uint8) *handle {
 	return h
 }
 
+func (h *handle) isFenced() bool {
+	h.Lock()
+	defer h.Unlock()
+	return h.fenced
+}
+
+// fenceLockedHandles stops the handles holding locks from writing, since the locks were
+// released when the session was cleaned up by others, and another client may hold them now.
+func (v *VFS) fenceLockedHandles() {
+	v.hanleM.Lock()
+	var hs []*handle
+	for _, l := range v.handles {
+		hs = append(hs, l...)
+	}
+	v.hanleM.Unlock()
+	for _, h := range hs {
+		h.Lock()
+		fence := h.locks != 0 && !h.fenced
+		if fence {
+			h.fenced = true
+		}
+		h.Unlock()
+		if fence {
+			logger.Warnf("Locks of inode %d (fh %d) were lost, fail further writes to it", h.inode, h.fh)
+			v.writer.Fence(h.inode)
+		}
+	}
+}
+
 func (v *VFS) findAllHandles(inode Ino) []*handle {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
@@ -297,6 +327,7 @@ type saveHandle struct {
 	Off        uint64
 	Data       string
 	TierID     uint8
+	Fenced     bool `json:",omitempty"`
 }
 
 func (v *VFS) dumpAllHandles(path string) (err error) {
@@ -350,6 +381,7 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 				Off:        h.off,
 				Data:       hex.EncodeToString(h.data),
 				TierID:     h.tierID,
+				Fenced:     h.fenced,
 			}
 			h.Unlock()
 			vfsState.Handler[h.fh] = s
@@ -402,6 +434,7 @@ func (v *VFS) loadAllHandles(path string) error {
 			flockOwner: s.FlockOwner,
 			off:        s.Off,
 			tierID:     s.TierID,
+			fenced:     s.Fenced,
 		}
 		h.cond = utils.NewCond(h)
 		v.handles[h.inode] = append(v.handles[h.inode], h)
@@ -420,6 +453,9 @@ func (v *VFS) loadAllHandles(path string) error {
 		case syscall.O_RDWR:
 			h.reader = v.reader.Open(h.inode, s.Length)
 			h.writer = v.writer.Open(h.inode, s.Length, h.tierID)
+			if h.fenced {
+				v.writer.Fence(h.inode)
+			}
 		}
 	}
 	if len(v.handleIno) > 0 {

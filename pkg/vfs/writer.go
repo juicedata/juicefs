@@ -67,6 +67,8 @@ type DataWriter interface {
 	Truncate(inode Ino, length uint64)
 	UpdateMtime(inode Ino, mtime time.Time)
 	FlushAll() error
+	// Fence drops the uncommitted data of inode and fails later writes to it.
+	Fence(inode Ino)
 }
 
 type sliceWriter struct {
@@ -224,6 +226,14 @@ func (c *chunkWriter) commitThread() {
 		f.Unlock()
 
 		if err == 0 {
+			f.w.m.CheckSession() // may fence this file
+			f.Lock()
+			if f.fenced {
+				err = syscall.EIO
+			}
+			f.Unlock()
+		}
+		if err == 0 {
 			var ss = meta.Slice{Id: s.id, Size: s.length, Off: s.soff, Len: s.slen}
 			err = f.w.m.Write(meta.Background(), f.inode, c.indx, s.off, ss, s.lastMod)
 			f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
@@ -231,7 +241,7 @@ func (c *chunkWriter) commitThread() {
 
 		f.Lock()
 		if err != 0 {
-			if err == syscall.ENOENT || err == syscall.ENOSPC || err == syscall.EDQUOT {
+			if err == syscall.ENOENT || err == syscall.ENOSPC || err == syscall.EDQUOT || f.fenced {
 				go func(id uint64, length int) {
 					_ = f.w.store.Remove(id, length)
 				}(s.id, int(s.length))
@@ -260,6 +270,7 @@ type fileWriter struct {
 	length       uint64
 	tierID       uint8
 	err          syscall.Errno
+	fenced       bool
 	flushwaiting uint16
 	writewaiting uint16
 	refs         uint16
@@ -362,6 +373,9 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 	s := time.Now()
 	f.Lock()
 	defer f.Unlock()
+	if f.fenced {
+		return syscall.EIO
+	}
 	size := uint64(len(data))
 	f.writewaiting++
 	for f.flushwaiting > 0 {
@@ -563,6 +577,15 @@ func (w *dataWriter) free(f *fileWriter) {
 	f.refs--
 	if f.refs == 0 {
 		delete(w.files, f.inode)
+	}
+}
+
+func (w *dataWriter) Fence(inode Ino) {
+	if f := w.find(inode); f != nil {
+		f.Lock()
+		f.fenced = true
+		f.err = syscall.EIO
+		f.Unlock()
 	}
 }
 

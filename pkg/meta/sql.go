@@ -3422,15 +3422,19 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	return sids, nil
 }
 
-func (m *dbMeta) doRefreshSession() error {
-	return m.txn(func(ses *xorm.Session) error {
+func (m *dbMeta) doRefreshSession() (bool, error) {
+	var lost bool
+	err := m.txn(func(ses *xorm.Session) error {
+		lost = false
 		n, err := ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid})
 		if err == nil && n == 0 {
 			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
+			lost = true
 			err = mustInsert(ses, &session2{m.sid, m.expireTime(), m.currentSessionInfo()})
 		}
 		return err
 	})
+	return lost && err == nil, err
 }
 
 func (m *dbMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
