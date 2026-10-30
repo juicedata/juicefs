@@ -1062,7 +1062,12 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	blen := parseObjOrigSize(key)
 	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
-		if store.isPendingValid(key) {
+		if os.IsNotExist(err) {
+			// uploaded and removed by another client using the same cache dir
+			store.removePending(key)
+			_ = store.bcache.removeStage(key)
+			logger.Debugf("Staging file %s is gone, drop it", stagingPath)
+		} else if store.isPendingValid(key) {
 			logger.Errorf("Open staging file %s: %s", stagingPath, err)
 		} else {
 			logger.Debugf("Key %s is not needed, drop it", key)
