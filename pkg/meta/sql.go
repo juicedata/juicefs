@@ -2888,12 +2888,23 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			pn.setCtime(now)
 			updateParent = true
 		}
-		n.Parent = 0
+		// an open inode with no links left (O_TMPFILE) becomes a plain single-parent file
+		unlinked := n.Nlink == 0
+		if unlinked {
+			n.Parent = parent
+		} else {
+			n.Parent = 0
+		}
 		n.Nlink++
 		n.setCtime(now)
 
 		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: inode, Type: n.Type}); err != nil {
 			return err
+		}
+		if unlinked {
+			if _, err = s.Delete(&sustained{Sid: m.sid, Inode: inode}); err != nil {
+				return err
+			}
 		}
 		if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(&n, node{Inode: inode}); err != nil {
 			return err
@@ -3476,6 +3487,11 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		if !ok {
 			return nil
 		}
+		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold
+		if n.Nlink > 0 {
+			_, err = s.Delete(&sustained{Sid: sid, Inode: inode})
+			return err
+		}
 		newSpace = -align4K(n.Length)
 		if err = mustInsert(s, &delfile{inode, n.Length, time.Now().Unix()}); err != nil {
 			return err
@@ -3706,7 +3722,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		return nil
 	}, fout)
 	if err == nil {
-		m.updateParentStat(ctx, fout, nout.Parent, newLength, newSpace)
+		m.updateParentStat(ctx, fout, nout.Parent, nout.Nlink, newLength, newSpace)
 		m.updateUserGroupStat(ctx, nout.Uid, nout.Gid, newSpace, 0)
 	}
 	return errno(err)

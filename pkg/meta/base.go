@@ -2241,7 +2241,7 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 	var attr Attr
 	st := m.en.doWrite(ctx, inode, indx, off, slice, mtime, &numSlices, &delta, &attr)
 	if st == 0 {
-		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
+		m.updateParentStat(ctx, inode, attr.Parent, attr.Nlink, delta.length, delta.space)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
 		if numSlices%100 == 99 || numSlices > 350 {
 			if numSlices < maxSlices {
@@ -2268,7 +2268,7 @@ func (m *baseMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, 
 	var delta dirStat
 	st := m.en.doTruncate(ctx, inode, flags, length, &delta, attr, skipPermCheck)
 	if st == 0 {
-		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
+		m.updateParentStat(ctx, inode, attr.Parent, attr.Nlink, delta.length, delta.space)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
 	}
 	return st
@@ -2304,7 +2304,7 @@ func (m *baseMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		if flength != nil {
 			*flength = attr.Length
 		}
-		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
+		m.updateParentStat(ctx, inode, attr.Parent, attr.Nlink, delta.length, delta.space)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
 	}
 	return st

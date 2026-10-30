@@ -29,6 +29,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -178,6 +179,7 @@ func testMeta(t *testing.T, m Meta) {
 	testTrash(t, m)
 	testRenameOverRelinkedHardlink(t, m)
 	testParents(t, m)
+	testLinkOpenUnlinkedFile(t, m)
 	testRemove(t, m)
 	testResolve(t, m)
 	testStickyBit(t, m)
@@ -3043,6 +3045,80 @@ func testParents(t *testing.T, m Meta) {
 	}
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)
+	}
+}
+
+// testLinkOpenUnlinkedFile follows what O_TMPFILE and linkat do: the file
+// must keep its new name after the last close, and its length counts once,
+// in the directory it was linked into.
+func testLinkOpenUnlinkedFile(t *testing.T, m Meta) {
+	m.getBase().sid = 0
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+	ctx := Background()
+	var tmpdir, dir, inode Ino
+	var attr = &Attr{}
+	if st := m.Mkdir(ctx, 1, "tmpdir", 0755, 022, 0, &tmpdir, attr); st != 0 {
+		t.Fatalf("mkdir tmpdir: %s", st)
+	}
+	if st := m.Mkdir(ctx, 1, "linkdir", 0755, 022, 0, &dir, attr); st != 0 {
+		t.Fatalf("mkdir linkdir: %s", st)
+	}
+	if st := m.Create(ctx, tmpdir, "tmpfile", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create tmpfile: %s", st)
+	}
+	if st := m.Unlink(ctx, tmpdir, "tmpfile", true); st != 0 {
+		t.Fatalf("unlink tmpfile: %s", st)
+	}
+	var sliceId uint64
+	if st := m.NewSlice(ctx, &sliceId); st != 0 {
+		t.Fatalf("new slice: %s", st)
+	}
+	if st := m.Write(ctx, inode, 0, 0, Slice{Id: sliceId, Size: 8192, Len: 8192}, time.Now()); st != 0 {
+		t.Fatalf("write tmpfile: %s", st)
+	}
+	if st := m.Link(ctx, inode, dir, "linked", attr); st != 0 {
+		t.Fatalf("link linked -> tmpfile: %s", st)
+	}
+	if attr.Nlink != 1 || attr.Parent != dir {
+		t.Fatalf("expect nlink 1 and parent %d, but got nlink %d parent %d", dir, attr.Nlink, attr.Parent)
+	}
+	if s, err := m.GetSession(m.getBase().sid, true); err != nil || slices.Contains(s.Sustained, inode) {
+		t.Fatalf("expect inode %d not sustained after link, but got %+v: %v", inode, s, err)
+	}
+	if err := waitCheckResult(m, dirStat{0, 0, 0}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(ctx, tmpdir)
+	}); err != nil {
+		t.Fatalf("dir stat of tmpdir: %v", err)
+	}
+	if err := waitCheckResult(m, dirStat{8192, 8192, 1}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(ctx, dir)
+	}); err != nil {
+		t.Fatalf("dir stat of linkdir: %v", err)
+	}
+	if st := m.Close(ctx, inode); st != 0 {
+		t.Fatalf("close tmpfile: %s", st)
+	}
+	var ino Ino
+	if st := m.Lookup(ctx, dir, "linked", &ino, attr, true); st != 0 {
+		t.Fatalf("lookup linked: %s", st)
+	}
+	if ino != inode || attr.Nlink != 1 || attr.Length != 8192 {
+		t.Fatalf("expect inode %d with nlink 1 and length 8192, but got inode %d with nlink %d and length %d", inode, ino, attr.Nlink, attr.Length)
+	}
+	if ps := m.GetParents(ctx, inode); !reflect.DeepEqual(ps, map[Ino]int{dir: 1}) {
+		t.Fatalf("expect parents %v, but got %v", map[Ino]int{dir: 1}, ps)
+	}
+	if st := m.Unlink(ctx, dir, "linked"); st != 0 {
+		t.Fatalf("unlink linked: %s", st)
+	}
+	if st := m.Rmdir(ctx, 1, "linkdir"); st != 0 {
+		t.Fatalf("rmdir linkdir: %s", st)
+	}
+	if st := m.Rmdir(ctx, 1, "tmpdir"); st != 0 {
+		t.Fatalf("rmdir tmpdir: %s", st)
 	}
 }
 
