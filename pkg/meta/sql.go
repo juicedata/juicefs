@@ -6250,9 +6250,19 @@ func (m *dbMeta) loadDumpedACLs(ctx Context) error {
 func (m *dbMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
 	err := m.txn(func(s *xorm.Session) error {
 		t := &delegationToken{Id: m.tokenID(), Token: token}
+		explicit := t.Id != 0
 		_, err := s.Insert(t)
 		if err != nil {
 			return err
+		}
+		// PostgreSQL does not advance the serial sequence for explicit IDs.
+		if explicit && m.Name() == "postgres" {
+			_, err = s.Exec(`SELECT setval(seq, GREATEST(nextval(seq), ?))
+				FROM (SELECT pg_get_serial_sequence(?, 'id')::regclass AS seq) AS token_seq`,
+				t.Id, m.db.Quote(m.db.TableName(t, true)))
+			if err != nil {
+				return err
+			}
 		}
 		id = t.Id
 		m.genLog(ctx, s, time.Now().UnixNano(), "STORETOKEN(%d,%s)", id, logEncode(token))
