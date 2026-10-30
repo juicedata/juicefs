@@ -1,0 +1,82 @@
+name: "changelog-replay"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - 'pkg/meta/**'
+      - 'cmd/changelog.go'
+      - '.github/actions/build/action.yml'
+      - '.github/scripts/apt_install.sh'
+      - '.github/scripts/start_meta_engine.sh'
+      - '.github/scripts/command/changelog_replay.sh'
+      - '.github/scripts/command/changelog_replay/**'
+      - '.github/workflows/changelog_replay.yml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - 'pkg/meta/**'
+      - 'cmd/changelog.go'
+      - '.github/actions/build/action.yml'
+      - '.github/scripts/apt_install.sh'
+      - '.github/scripts/start_meta_engine.sh'
+      - '.github/scripts/command/changelog_replay.sh'
+      - '.github/scripts/command/changelog_replay/**'
+      - '.github/workflows/changelog_replay.yml'
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changelog_replay:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [redis, mysql, tikv]
+        destination: [redis, mysql, tikv]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: Install test tools
+        run: sudo .github/scripts/apt_install.sh fuse3 acl
+      - name: Build
+        uses: ./.github/actions/build
+      - name: Test Changelog Replay
+        timeout-minutes: 30
+        env:
+          META1: ${{ matrix.source }}
+          META2: ${{ matrix.destination }}
+        run: |
+          replay_dir=$(mktemp -d /tmp/changelog-replay.XXXXXX)
+          chmod 755 "$replay_dir"
+          install -m 755 juicefs "$replay_dir/juicefs"
+          install -d -m 1777 "$replay_dir/coverage"
+          echo "REPLAY_DIR=$replay_dir" >> "$GITHUB_ENV"
+          sudo META1="$META1" META2="$META2" \
+            JUICEFS="$replay_dir/juicefs" \
+            LOG_DIR="$replay_dir" \
+            GOCOVERDIR="$replay_dir/coverage" \
+            bash .github/scripts/command/changelog_replay.sh --dump-format all
+      - name: Upload replay results
+        if: always() && env.REPLAY_DIR != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog-replay-${{ matrix.source }}-${{ matrix.destination }}
+          path: |
+            ${{ env.REPLAY_DIR }}/**/*.log
+            ${{ env.REPLAY_DIR }}/**/*.json
+            ${{ env.REPLAY_DIR }}/**/*.txt
+            ${{ env.REPLAY_DIR }}/coverage/
+            tikv.log
+          if-no-files-found: warn
+      - name: Setup upterm session
+        if: failure() && github.run_attempt != 1
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
