@@ -303,3 +303,22 @@ func TestFUSE(t *testing.T) {
 		})
 	}
 }
+
+func TestGenFuseOptReadDirPlusAuto(t *testing.T) {
+	conf := &vfs.Config{Format: meta.Format{Name: "test"}}
+	for _, tt := range []struct {
+		name              string
+		noReadDirPlusAuto bool
+		want              bool
+	}{
+		{"default", false, true},
+		{"no-readdirplus-auto", true, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			opt := GenFuseOpt(conf, "", 1, false, false, 128<<10, tt.noReadDirPlusAuto)
+			if opt.EnableReadDirPlusAuto != tt.want {
+				t.Fatalf("EnableReadDirPlusAuto = %v, want %v", opt.EnableReadDirPlusAuto, tt.want)
+			}
+		})
+	}
+}

@@ -422,6 +422,10 @@ func fuseFlags() []cli.Flag {
 			Name:  "enable-ioctl",
 			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
 		},
+		&cli.BoolFlag{
+			Name:  "no-readdirplus-auto",
+			Usage: "always use READDIRPLUS for directory listing instead of the adaptive mode (fewer lookups for ls -l/find/rsync on large directories)",
+		},
 		&cli.StringFlag{
 			Name:  "root-squash",
 			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
@@ -557,8 +561,8 @@ func getFuserMountVersion() string {
 }
 
 func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
-	rawOpts, mt, noxattr, noacl, maxWrite := genFuseOptExt(c, format)
-	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite))
+	rawOpts, mt, noxattr, noacl, maxWrite, noReadDirPlusAuto := genFuseOptExt(c, format)
+	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite, noReadDirPlusAuto))
 	vfsConf.FuseOpts = &options
 }
 
@@ -645,12 +649,12 @@ func prepareMp(mp string) {
 	}
 }
 
-func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool, maxWrite int) {
+func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool, maxWrite int, noReadDirPlusAuto bool) {
 	enableXattr := c.Bool("enable-xattr")
 	if format.EnableACL {
 		enableXattr = true
 	}
-	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-fuse-io", 'B'))
+	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-fuse-io", 'B')), c.Bool("no-readdirplus-auto")
 }
 
 func shutdownGraceful(mp string) {
