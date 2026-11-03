@@ -1675,6 +1675,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if _type < TypeFile || _type > TypeSocket {
 		return syscall.EINVAL
 	}
+	parent = m.checkRoot(parent)
 	if parent.IsTrash() && m.replay.Load() == nil {
 		return syscall.EPERM
 	}
@@ -1692,7 +1693,6 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 
 	defer m.timeit("Mknod", time.Now())
-	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
 	// check group quota in transaction
 	if !(parent == TrashInode && _type == TypeDirectory) {
@@ -1776,6 +1776,7 @@ func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, in
 }
 
 func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	parent = m.checkRoot(parent)
 	if parent.IsTrash() {
 		return syscall.EPERM
 	}
@@ -1796,7 +1797,6 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if attr == nil {
 		attr = &Attr{}
 	}
-	parent = m.checkRoot(parent)
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		return st
 	}
@@ -1868,6 +1868,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 }
 
 func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
+	parent = m.checkRoot(parent)
 	if parent == RootInode && name == TrashName || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
@@ -1876,7 +1877,6 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 	}
 
 	defer m.timeit("Unlink", time.Now())
-	parent = m.checkRoot(parent)
 	var attr Attr
 	err := m.en.doUnlink(ctx, parent, name, &attr, skipCheckTrash...)
 	if err == 0 {
@@ -1899,6 +1899,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
+	parent = m.checkRoot(parent)
 	if parent == RootInode && name == TrashName || parent == TrashInode && m.replay.Load() == nil || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
@@ -1907,7 +1908,6 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	}
 
 	defer m.timeit("Rmdir", time.Now())
-	parent = m.checkRoot(parent)
 	var inode Ino
 	var oldAttr Attr
 	st := m.en.doRmdir(ctx, parent, name, &inode, &oldAttr, skipCheckTrash...)
@@ -1965,6 +1965,8 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	parentSrc = m.checkRoot(parentSrc)
+	parentDst = m.checkRoot(parentDst)
 	if parentSrc == RootInode && nameSrc == TrashName || parentDst == RootInode && nameDst == TrashName {
 		return syscall.EPERM
 	}
@@ -1993,8 +1995,6 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if attr == nil {
 		attr = &Attr{}
 	}
-	parentSrc = m.checkRoot(parentSrc)
-	parentDst = m.checkRoot(parentDst)
 	var quotaSrc, quotaDst Ino
 	if !parentSrc.IsTrash() {
 		quotaSrc, _ = m.getQuotaParent(ctx, parentSrc)
@@ -3461,6 +3461,7 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 
 func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno {
 
+	parent = m.checkRoot(parent)
 	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
 	}
@@ -3473,7 +3474,6 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	}
 
 	defer m.timeit("Clone", time.Now())
-	parent = m.checkRoot(parent)
 
 	var attr Attr
 	var eno syscall.Errno
