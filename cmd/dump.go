@@ -149,13 +149,12 @@ func dump(ctx *cli.Context) error {
 	removePassword(metaUri)
 
 	metaConf := meta.DefaultConf()
-	metaConf.ReadOnly = true
 	metaConf.Subdir = ctx.String("subdir")
 	m := meta.NewClient(metaUri, metaConf)
 	if _, err := m.Load(true); err != nil {
 		return err
 	}
-	if st := m.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
+	if st := m.Chroot(meta.Background(), metaConf.Subdir, true); st != 0 {
 		return fmt.Errorf("chroot to %q: %s", metaConf.Subdir, st)
 	}
 

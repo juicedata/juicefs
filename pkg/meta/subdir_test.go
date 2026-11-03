@@ -451,6 +451,7 @@ func testSubdirOperations(t *testing.T, m Meta) {
 			base.conf.ReadOnly = true
 			assert.Equal(t, syscall.ENOENT, m.Chroot(ctx, name+"/sub"), "read-only must not create subdir")
 			base.conf.ReadOnly = false
+			assert.Equal(t, syscall.ENOENT, m.Chroot(ctx, name+"/sub", true), "skipCreate must not create subdir")
 			lookup(t, RootInode, name, 0)
 			require.Zero(t, m.Chroot(ctx, name+"/sub"))
 			var inode, child Ino

@@ -553,8 +553,9 @@ type Meta interface {
 	GetPaths(ctx Context, inode Ino) []string
 	// Check integrity of an absolute path and repair it if asked
 	Check(ctx Context, fpath string, opt *CheckOpt) error
-	// Change root to a directory specified by subdir
-	Chroot(ctx Context, subdir string) syscall.Errno
+	// Change root to a directory specified by subdir; the directory is created
+	// if absent, unless the client is read-only or skipCreate is true
+	Chroot(ctx Context, subdir string, skipCreate ...bool) syscall.Errno
 	// chroot set the root directory by inode
 	chroot(inode Ino)
 	// Get a copy of the current format
