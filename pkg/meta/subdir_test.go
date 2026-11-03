@@ -433,7 +433,7 @@ func testSubdirOperations(t *testing.T, m Meta) {
 								realParent = mkdir(t, mount, "child")
 								parent = realParent
 							}
-							require.Zero(t, m.Chroot(ctx, name))
+							require.Zero(t, m.Chroot(ctx, name, false))
 						}
 						tc.run(t, parent, realParent, otherParent)
 					})
@@ -449,11 +449,11 @@ func testSubdirOperations(t *testing.T, m Meta) {
 				assert.True(t, st == 0 || st == syscall.ENOENT, "cleanup %s: %s", name, st)
 			})
 			base.conf.ReadOnly = true
-			assert.Equal(t, syscall.ENOENT, m.Chroot(ctx, name+"/sub"), "read-only must not create subdir")
+			assert.Equal(t, syscall.ENOENT, m.Chroot(ctx, name+"/sub", false), "read-only must not create subdir")
 			base.conf.ReadOnly = false
 			assert.Equal(t, syscall.ENOENT, m.Chroot(ctx, name+"/sub", true), "skipCreate must not create subdir")
 			lookup(t, RootInode, name, 0)
-			require.Zero(t, m.Chroot(ctx, name+"/sub"))
+			require.Zero(t, m.Chroot(ctx, name+"/sub", false))
 			var inode, child Ino
 			var attr Attr
 			require.Zero(t, base.en.doLookup(ctx, RootInode, name, &inode, &attr))
