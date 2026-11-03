@@ -164,6 +164,8 @@ In addition to completely exporting metadata, you can also export specific subdi
 juicefs dump redis://192.168.1.6:6379 meta-dump.json --subdir /path/in/juicefs
 ```
 
+A subdirectory dump only keeps the directory quotas within the subtree. The quota of the subdirectory itself becomes the root directory quota after the dump is loaded. User and group quotas and files pending deletion are not exported.
+
 Using tools like `jq` to analyze the exported file is also an option.
 
 ### Binary backup content analysis and troubleshooting

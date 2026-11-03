@@ -34,19 +34,7 @@
     "nextTrash": 1
   },
   "Sustained": [],
-  "DelFiles": [
-    {
-      "inode": 23,
-      "length": 0,
-      "expire": 1637664458
-    }
-  ],
-  "Quotas": {
-    "1": {
-      "maxSpace": 1073741824,
-      "maxInodes": 100
-    }
-  },
+  "DelFiles": [],
   "FSTree": {
     "attr": {"inode":3,"type":"directory","mode":493,"uid":501,"gid":20,"atime":1623746591,"mtime":1623746610,"ctime":1623746610,"atimensec":959224111,"mtimensec":959224111,"ctimensec":959224111,"nlink":2,"length":0,"tier":1},
     "xattrs": [{"name":"dk","value":"果汁%2525"}],
