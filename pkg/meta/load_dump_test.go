@@ -310,6 +310,7 @@ func checkMeta(t *testing.T, m Meta) {
 
 func testLoadSub(t *testing.T, uri, fname string) {
 	m := NewClient(uri, nil)
+	defer m.Shutdown()
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
@@ -375,7 +376,41 @@ func testLoadDump(t *testing.T, name, addr string) {
 		testDump(t, m, 0, sampleFile, "test.dump")
 		_ = m.Shutdown()
 		testLoadSub(t, addr, subSampleFile)
+		testLoadDumpedCounters(t, addr)
 	})
+}
+
+// Load keeps the dumped nextInode and nextChunk, which may cover inodes and
+// slices outside the tree, such as those of pending deleted files.
+func testLoadDumpedCounters(t *testing.T, addr string) {
+	raw, err := os.ReadFile(sampleFile)
+	if err != nil {
+		t.Fatalf("read %s: %s", sampleFile, err)
+	}
+	dump := strings.NewReplacer(`"nextInodes": 35,`, `"nextInodes": 2049,`, `"nextChunk": 9,`, `"nextChunk": 4097,`).Replace(string(raw))
+	if !strings.Contains(dump, `"nextInodes": 2049,`) || !strings.Contains(dump, `"nextChunk": 4097,`) {
+		t.Fatalf("counters in %s are not replaced", sampleFile)
+	}
+	m := NewClient(addr, nil)
+	defer m.Shutdown()
+	if err = m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err = m.LoadMeta(strings.NewReader(dump)); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+	ctx := Background()
+	var inode Ino
+	if st := m.Mknod(ctx, RootInode, "new-file", TypeFile, 0644, 0, 0, "", &inode, &Attr{}); st != 0 {
+		t.Fatalf("mknod: %s", st)
+	}
+	var id uint64
+	if st := m.NewSlice(ctx, &id); st != 0 {
+		t.Fatalf("new slice: %s", st)
+	}
+	if inode < 2049 || id < 4097 {
+		t.Fatalf("new inode %d or slice %d reuses dumped ids", inode, id)
+	}
 }
 
 func TestLoadDump(t *testing.T) { //skip mutate
