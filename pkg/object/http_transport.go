@@ -18,6 +18,7 @@ package object
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"math/rand"
 	"net"
@@ -32,17 +33,20 @@ import (
 // pool churns and the LB in front of the object-storage endpoint sees fresh
 // distribution. Opt in via JFS_HTTP_MAX_REQUESTS_PER_CONN > 0.
 //
-// Two-mode retirement: at the cap we flag the conn (in-flight Write still
-// completes). Preferred path — through rotatingRoundTripper — turns the flag
-// into a Connection: close header on the next request; the server closes
-// cleanly. Fallback path — direct *http.Transport callers like obs/swift/tos
-// SDKs — closes the conn after gracePeriodAfterMark more boundaries and
-// returns errConnRetired, relying on transport-level retry.
+// Two-mode retirement. Preferred path — through rotatingRoundTripper — counts
+// each request exactly once when the conn is handed out (GotConn) and sends
+// Connection: close on the request that reaches the cap; the server closes
+// cleanly and the conn never closes itself mid-request. Fallback path — direct
+// *http.Transport callers like obs/swift/tos SDKs — flags the conn at the cap,
+// closes it after gracePeriodAfterMark more boundaries and returns
+// errConnRetired, relying on transport-level retry.
 //
-// Boundaries are detected as Write-after-Read. TLS handshake adds 1-2 to the
-// effective count, negligible at typical caps. State lives entirely inside
-// the struct: when the underlying conn dies, the struct is GC'd — no map,
-// no goroutine, no timer.
+// Fallback boundaries are detected as Write-after-Read. TLS handshake adds 1-2
+// to the effective count, negligible at typical caps. Expect: 100-continue
+// uploads count twice ("100 Continue" is read before the body is written),
+// which is why the preferred path does not use this heuristic. State lives
+// entirely inside the struct: when the underlying conn dies, the struct is
+// GC'd — no map, no goroutine, no timer.
 type retiringConn struct {
 	net.Conn
 	maxRequests         int32
@@ -50,6 +54,7 @@ type retiringConn struct {
 	lastWasRead         int32
 	retired             int32
 	boundariesAfterMark int32
+	managed             int32 // used via rotatingRoundTripper
 }
 
 const gracePeriodAfterMark = 2
@@ -70,8 +75,11 @@ func newRetiringConn(c net.Conn, max int) net.Conn {
 	return &retiringConn{Conn: c, maxRequests: int32(jittered)}
 }
 
-func (c *retiringConn) IsRetired() bool {
-	return atomic.LoadInt32(&c.retired) == 1
+// onRoundTrip counts one request on the preferred path and reports whether it
+// reached the cap. It also turns off the fallback heuristic for this conn.
+func (c *retiringConn) onRoundTrip() bool {
+	atomic.StoreInt32(&c.managed, 1)
+	return atomic.AddInt32(&c.requestCount, 1) >= c.maxRequests
 }
 
 func (c *retiringConn) Read(b []byte) (int, error) {
@@ -83,7 +91,7 @@ func (c *retiringConn) Read(b []byte) (int, error) {
 }
 
 func (c *retiringConn) Write(b []byte) (int, error) {
-	if atomic.SwapInt32(&c.lastWasRead, 0) == 1 {
+	if atomic.LoadInt32(&c.managed) == 0 && atomic.SwapInt32(&c.lastWasRead, 0) == 1 {
 		if atomic.LoadInt32(&c.retired) == 1 {
 			if atomic.AddInt32(&c.boundariesAfterMark, 1) > gracePeriodAfterMark {
 				_ = c.Conn.Close()
@@ -107,7 +115,11 @@ func (t *rotatingRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 	cloned := req.Clone(req.Context())
 	cloned = cloned.WithContext(httptrace.WithClientTrace(cloned.Context(), &httptrace.ClientTrace{
 		GotConn: func(info httptrace.GotConnInfo) {
-			if rc, ok := info.Conn.(*retiringConn); ok && rc.IsRetired() {
+			conn := info.Conn
+			if tc, ok := conn.(*tls.Conn); ok {
+				conn = tc.NetConn()
+			}
+			if rc, ok := conn.(*retiringConn); ok && rc.onRoundTrip() {
 				cloned.Header.Set("Connection", "close")
 			} else if hadOrig {
 				cloned.Header["Connection"] = origConnection
