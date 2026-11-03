@@ -165,17 +165,13 @@ func dump(ctx *cli.Context) error {
 	}
 
 	isBinary := ctx.Bool("binary")
-	isSubdir := strings.Trim(metaConf.Subdir, "/") != ""
 	if isBinary {
-		if isSubdir {
-			logger.Warnf("--subdir is ignored with --binary, the whole volume will be dumped")
-		}
-		for _, flag := range []string{"fast", "skip-trash"} {
-			if ctx.Bool(flag) {
+		for _, flag := range []string{"subdir", "fast", "skip-trash"} {
+			if ctx.IsSet(flag) {
 				logger.Warnf("--%s is ignored with --binary", flag)
 			}
 		}
-	} else if isSubdir && ctx.Bool("fast") {
+	} else if strings.Trim(metaConf.Subdir, "/") != "" && ctx.Bool("fast") {
 		logger.Warnf("--fast is ignored with --subdir")
 	}
 
