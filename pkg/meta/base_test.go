@@ -1162,7 +1162,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx, 1, "subdir", 0755, 0, 0, &subIno, nil); st != 0 {
 		t.Fatalf("mkdir subdir: %s", st)
 	}
-	if st := m.Chroot(ctx, "subdir"); st != 0 {
+	if st := m.Chroot(ctx, "subdir", false); st != 0 {
 		t.Fatalf("chroot: %s", st)
 	}
 	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
@@ -5178,7 +5178,7 @@ func testQuota(t *testing.T, m Meta) {
 		base := m.getBase()
 		base.loadQuotas()
 		defer base.chroot(base.root)
-		if st := m.Chroot(ctx, path); st != 0 {
+		if st := m.Chroot(ctx, path, false); st != 0 {
 			t.Fatalf("Chroot: %s", st)
 		}
 

@@ -2803,7 +2803,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	return nil
 }
 
-func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
+func (m *baseMeta) Chroot(ctx Context, subdir string, skipCreate bool) syscall.Errno {
 	for subdir != "" {
 		ps := strings.SplitN(subdir, "/", 2)
 		if ps[0] != "" {
@@ -2811,7 +2811,11 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 			var inode Ino
 			r := m.Lookup(ctx, m.root, ps[0], &inode, &attr, true)
 			if r == syscall.ENOENT {
-				r = m.Mkdir(ctx, m.root, ps[0], 0777, 0, 0, &inode, &attr)
+				if m.conf.ReadOnly || skipCreate {
+					return r
+				}
+				logger.Warnf("Subdir %s not found, creating it", ps[0])
+				r = m.Mkdir(ctx, m.root, ps[0], 0777, uint16(utils.GetUmask()), 0, &inode, &attr)
 			}
 			if r != 0 {
 				return r
