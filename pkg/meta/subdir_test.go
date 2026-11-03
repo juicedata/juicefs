@@ -353,6 +353,42 @@ func testSubdirOperations(t *testing.T, m Meta) {
 				require.Zero(t, base.en.doLookup(ctx, clone, file, &child, &attr))
 				assert.Equal(t, uint8(TypeFile), attr.Typ)
 			}},
+			{"TrashName", func(t *testing.T, parent, realParent, otherParent Ino) {
+				var got Ino
+				var attr Attr
+				var count, total uint64
+				if realParent == RootInode { // the trash name is reserved only at the real volume root
+					target := create(t, parent, file)
+					var inode Ino
+					assert.Equal(t, syscall.EPERM, m.Mknod(ctx, parent, TrashName, TypeFile, 0644, 0, 0, "", &inode, nil))
+					assert.Equal(t, syscall.EPERM, m.Mkdir(ctx, parent, TrashName, 0755, 0, 0, &inode, nil))
+					assert.Equal(t, syscall.EPERM, m.Link(ctx, target, parent, TrashName, nil))
+					assert.Equal(t, syscall.EPERM, m.Rename(ctx, parent, file, parent, TrashName, 0, nil, nil))
+					assert.Equal(t, syscall.EPERM, m.Rename(ctx, parent, TrashName, parent, dir, 0, nil, nil))
+					assert.Equal(t, syscall.EPERM, m.Unlink(ctx, parent, TrashName))
+					assert.Equal(t, syscall.EPERM, m.Rmdir(ctx, parent, TrashName))
+					assert.Equal(t, syscall.EPERM, m.Clone(ctx, parent, target, parent, TrashName, 0, 0, 1, &count, &total))
+					require.Zero(t, m.Lookup(ctx, parent, TrashName, &got, &attr, false))
+					assert.Equal(t, TrashInode, got)
+				} else { // under a subdir it is an ordinary name
+					d := mkdir(t, parent, TrashName)
+					lookup(t, realParent, TrashName, d)
+					require.Zero(t, m.Lookup(ctx, parent, TrashName, &got, &attr, false))
+					assert.Equal(t, d, got)
+					require.Zero(t, m.Rmdir(ctx, parent, TrashName, true))
+					lookup(t, realParent, TrashName, 0)
+					inode := create(t, parent, TrashName)
+					require.Zero(t, m.Rename(ctx, parent, TrashName, parent, file, 0, nil, nil))
+					lookup(t, realParent, file, inode)
+					require.Zero(t, m.Rename(ctx, parent, file, parent, TrashName, 0, nil, nil))
+					lookup(t, realParent, TrashName, inode)
+					require.Zero(t, m.Link(ctx, inode, parent, link, nil))
+					require.Zero(t, m.Unlink(ctx, parent, link, true))
+					require.Zero(t, m.Clone(ctx, parent, inode, parent, dir, 0, 0, 1, &count, &total))
+					require.Zero(t, m.Unlink(ctx, parent, TrashName, true))
+					lookup(t, realParent, TrashName, 0)
+				}
+			}},
 			{"SummaryQuotaStatFS", func(t *testing.T, parent, realParent, otherParent Ino) {
 				var before, after Summary
 				require.Zero(t, m.GetSummary(ctx, parent, &before, true, true))
