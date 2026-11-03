@@ -366,16 +366,14 @@ func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	return bw, nil
 }
 
-// scopeSubdirDump drops volume-wide records that do not belong to a dump of the
-// subtree at root. Load maps root to RootInode, so its directory quota is moved there.
+// scopeSubdirDump drops quotas that do not belong to a dump of the subtree at
+// root. Load maps root to RootInode, so its directory quota is moved there.
 func scopeSubdirDump(dm *DumpedMeta, root Ino, getParent func(Ino) (Ino, error)) {
 	if root == RootInode {
 		return
 	}
 	dm.UserQuotas = nil
 	dm.GroupQuotas = nil
-	// files pending deletion are not in the tree and their inodes may be reused after load
-	dm.DelFiles = []*DumpedDelFile{}
 	quotas := make(map[Ino]*DumpedQuota)
 	for inode, q := range dm.Quotas {
 		if inode == root {

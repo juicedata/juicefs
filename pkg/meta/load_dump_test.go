@@ -383,7 +383,7 @@ func testLoadDump(t *testing.T, name, addr string) {
 // A subdir dump keeps only quotas inside the subtree and moves the quota of
 // the subdir itself to the new root.
 func testDumpSubdirQuota(t *testing.T, addr string) {
-	m := testLoad(t, addr, sampleFile, false) // has a quota on "/" and a pending deleted file
+	m := testLoad(t, addr, sampleFile, false) // has a quota on "/"
 	ctx := Background()
 	var subIno Ino
 	if st := m.Mkdir(ctx, 3, "sub", 0755, 0, 0, &subIno, nil); st != 0 { // inode 3 is /d1
@@ -406,9 +406,6 @@ func testDumpSubdirQuota(t *testing.T, addr string) {
 	var dm DumpedMeta
 	if err := json.Unmarshal(buf.Bytes(), &dm); err != nil {
 		t.Fatalf("unmarshal dump: %s", err)
-	}
-	if len(dm.DelFiles) != 0 {
-		t.Fatalf("subdir dump should not contain deleted files: %+v", dm.DelFiles)
 	}
 	want := map[Ino]int64{RootInode: 10 << 30, subIno: 20 << 30}
 	if len(dm.Quotas) != len(want) {
