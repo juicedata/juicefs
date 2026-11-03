@@ -422,11 +422,11 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |-|-|
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
 |`FILE`|导出文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。|
-|`--subdir=path`|只导出指定子目录的元数据，该目录必须已存在。|
+|`--subdir=path`|只导出指定子目录的元数据，该目录必须已存在。与 `--binary` 同时使用时会被忽略，始终导出整个文件系统。|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd>|导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。|
 |`--threads=10` <VersionAdd>1.2</VersionAdd>|并发线程数，默认 10。|
-|`--fast` <VersionAdd>1.2</VersionAdd>|使用更多内存来加速导出。|
-|`--skip-trash` <VersionAdd>1.2</VersionAdd>|跳过回收站中的文件和目录。|
+|`--fast` <VersionAdd>1.2</VersionAdd>|使用更多内存来加速导出。与 `--subdir` 或 `--binary` 同时使用时会被忽略。|
+|`--skip-trash` <VersionAdd>1.2</VersionAdd>|跳过回收站中的文件和目录。与 `--binary` 同时使用时会被忽略。|
 
 ### `juicefs load` {#load}
 

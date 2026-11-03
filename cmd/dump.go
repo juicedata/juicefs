@@ -164,7 +164,22 @@ func dump(ctx *cli.Context) error {
 		threads = 1
 	}
 
-	err := dumpMeta(m, dst, threads, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash"), ctx.Bool("binary"))
+	isBinary := ctx.Bool("binary")
+	isSubdir := strings.Trim(metaConf.Subdir, "/") != ""
+	if isBinary {
+		if isSubdir {
+			logger.Warnf("--subdir is ignored with --binary, the whole volume will be dumped")
+		}
+		for _, flag := range []string{"fast", "skip-trash"} {
+			if ctx.Bool(flag) {
+				logger.Warnf("--%s is ignored with --binary", flag)
+			}
+		}
+	} else if isSubdir && ctx.Bool("fast") {
+		logger.Warnf("--fast is ignored with --subdir")
+	}
+
+	err := dumpMeta(m, dst, threads, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash"), isBinary)
 	if err == nil {
 		if dst == "" {
 			dst = "STDOUT"
