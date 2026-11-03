@@ -19,6 +19,7 @@ package cmd
 import (
 	"compress/gzip"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -58,7 +59,7 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "subdir",
-				Usage: "only dump a sub-directory",
+				Usage: "only dump a sub-directory (must already exist)",
 			},
 			&cli.BoolFlag{
 				Name:  "keep-secret-key",
@@ -148,13 +149,14 @@ func dump(ctx *cli.Context) error {
 	removePassword(metaUri)
 
 	metaConf := meta.DefaultConf()
+	metaConf.ReadOnly = true
 	metaConf.Subdir = ctx.String("subdir")
 	m := meta.NewClient(metaUri, metaConf)
 	if _, err := m.Load(true); err != nil {
 		return err
 	}
 	if st := m.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
-		return st
+		return fmt.Errorf("chroot to %q: %s", metaConf.Subdir, st)
 	}
 
 	threads := ctx.Int("threads")

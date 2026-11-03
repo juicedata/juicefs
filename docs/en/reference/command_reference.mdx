@@ -425,7 +425,7 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |-|-|
 |`META-URL`|Database URL of the metadata engine. See [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
 |`FILE`|Export file path, if not specified, it will be exported to standard output. If the filename ends with `.gz`, it will be automatically compressed.|
-|`--subdir=path`|Only export metadata for the specified subdirectory.|
+|`--subdir=path`|Only export metadata for the specified subdirectory, which must already exist.|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd> |Export object storage authentication information, the default is `false`. Since it is exported in plain text, pay attention to data security when using it. If the export file does not contain object storage authentication information, you need to use [`juicefs config`](#config) to reconfigure object storage authentication information after the subsequent import is completed.|
 |`--threads=10` <VersionAdd>1.2</VersionAdd>|number of threads to dump metadata. (default: 10)|
 |`--fast` <VersionAdd>1.2</VersionAdd>|Use more memory to speedup dump.|

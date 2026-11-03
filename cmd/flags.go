@@ -286,7 +286,7 @@ func metaFlags() []cli.Flag {
 	return addCategories("META", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "subdir",
-			Usage: "mount a sub-directory as root",
+			Usage: "mount a sub-directory as root (will be created if absent, unless read-only)",
 		},
 		&cli.StringFlag{
 			Name:  "backup-meta",

@@ -2811,7 +2811,11 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 			var inode Ino
 			r := m.Lookup(ctx, m.root, ps[0], &inode, &attr, true)
 			if r == syscall.ENOENT {
-				r = m.Mkdir(ctx, m.root, ps[0], 0777, 0, 0, &inode, &attr)
+				if m.conf.ReadOnly {
+					return r
+				}
+				logger.Warnf("Subdir %s not found, creating it", ps[0])
+				r = m.Mkdir(ctx, m.root, ps[0], 0777, uint16(utils.GetUmask()), 0, &inode, &attr)
 			}
 			if r != 0 {
 				return r

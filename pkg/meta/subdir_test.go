@@ -23,6 +23,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -439,5 +440,27 @@ func testSubdirOperations(t *testing.T, m Meta) {
 				}
 			})
 		}
+		t.Run("ChrootCreate", func(t *testing.T) {
+			const name = "subdir-chroot"
+			root := base.root
+			t.Cleanup(func() {
+				base.chroot(root)
+				st := m.Remove(ctx, RootInode, name, true, 1, nil)
+				assert.True(t, st == 0 || st == syscall.ENOENT, "cleanup %s: %s", name, st)
+			})
+			base.conf.ReadOnly = true
+			assert.Equal(t, syscall.ENOENT, m.Chroot(ctx, name+"/sub"), "read-only must not create subdir")
+			base.conf.ReadOnly = false
+			lookup(t, RootInode, name, 0)
+			require.Zero(t, m.Chroot(ctx, name+"/sub"))
+			var inode, child Ino
+			var attr Attr
+			require.Zero(t, base.en.doLookup(ctx, RootInode, name, &inode, &attr))
+			want := uint16(0777) &^ uint16(utils.GetUmask())
+			assert.Equal(t, want, attr.Mode, "auto-created subdir must honor umask")
+			require.Zero(t, base.en.doLookup(ctx, inode, "sub", &child, &attr))
+			assert.Equal(t, want, attr.Mode, "auto-created subdir must honor umask")
+			assert.Equal(t, child, base.root)
+		})
 	})
 }

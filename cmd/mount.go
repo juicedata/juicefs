@@ -669,7 +669,7 @@ func mount(c *cli.Context) error {
 	}
 
 	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
-		return st
+		return fmt.Errorf("chroot to %q: %s", metaConf.Subdir, st)
 	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	registerer, registry := wrapRegister(c, mp, format.Name)
