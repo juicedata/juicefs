@@ -1435,7 +1435,7 @@ func (r *baseMeta) Resolve(ctx Context, parent Ino, dpath string, inode *Ino, at
 	if !force {
 		return syscall.ENOTSUP
 	}
-	*inode = RootInode
+	*inode = r.checkRoot(parent)
 	for dpath != "" {
 		ps := strings.SplitN(dpath, "/", 2)
 		if ps[0] != "" {
@@ -2839,7 +2839,7 @@ func (m *baseMeta) chroot(inode Ino) {
 
 func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino, create bool) syscall.Errno {
 	var attr Attr
-	*inode = RootInode
+	*inode = m.root
 	umask := utils.GetUmask()
 	for dpath != "" {
 		ps := strings.SplitN(dpath, "/", 2)

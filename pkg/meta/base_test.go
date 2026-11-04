@@ -1172,8 +1172,8 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", DirQuotaType, map[string]*Quota{
-		"/subdir": {
+	if err := m.HandleQuota(ctx, QuotaSet, "/", DirQuotaType, map[string]*Quota{
+		"/": {
 			MaxSpace:  0,
 			MaxInodes: 0,
 		},
@@ -1188,8 +1188,8 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", DirQuotaType, map[string]*Quota{
-		"/subdir": {
+	if err := m.HandleQuota(ctx, QuotaSet, "/", DirQuotaType, map[string]*Quota{
+		"/": {
 			MaxSpace:  1 << 10,
 			MaxInodes: 0,
 		},
@@ -1204,8 +1204,8 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", DirQuotaType, map[string]*Quota{
-		"/subdir": {
+	if err := m.HandleQuota(ctx, QuotaSet, "/", DirQuotaType, map[string]*Quota{
+		"/": {
 			MaxSpace:  0,
 			MaxInodes: 10,
 		},
@@ -1220,8 +1220,8 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
-	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", DirQuotaType, map[string]*Quota{
-		"/subdir": {
+	if err := m.HandleQuota(ctx, QuotaSet, "/", DirQuotaType, map[string]*Quota{
+		"/": {
 			MaxSpace:  1 << 10,
 			MaxInodes: 10,
 		},
@@ -5190,10 +5190,10 @@ func testQuota(t *testing.T, m Meta) {
 		}
 		base.doFlushQuotas()
 		qs := make(map[string]*Quota)
-		if err := m.HandleQuota(ctx, QuotaGet, path, DirQuotaType, qs, false, false, false); err != nil {
+		if err := m.HandleQuota(ctx, QuotaGet, "/", DirQuotaType, qs, false, false, false); err != nil {
 			t.Fatalf("Get quota: %s", err)
 		}
-		if q := qs[path]; q.UsedInodes != 2 || q.UsedSpace != 2*4<<10 {
+		if q := qs["/"]; q.UsedInodes != 2 || q.UsedSpace != 2*4<<10 {
 			t.Errorf("Subdir quota: got %+v, want 2 inodes and 8192 bytes", q)
 		}
 		if st := m.Create(ctx, inode, "overflow", 0644, 0, 0, nil, nil); st != syscall.EDQUOT {

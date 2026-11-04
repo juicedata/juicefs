@@ -393,11 +393,8 @@ func testSubdirOperations(t *testing.T, m Meta) {
 				var before, after Summary
 				require.Zero(t, m.GetSummary(ctx, parent, &before, true, true))
 				qpath := "/"
-				if realParent != RootInode {
-					qpath = "/subdir-operations"
-					if parent != RootInode {
-						qpath += "/child"
-					}
+				if parent != RootInode {
+					qpath = "/child"
 				}
 				quota := &Quota{MaxInodes: int64(before.Files+before.Dirs) + 1, MaxSpace: int64(before.Size) + 4096}
 				require.NoError(t, m.HandleQuota(ctx, QuotaSet, qpath, DirQuotaType, map[string]*Quota{qpath: quota}, true, false, false))
@@ -429,6 +426,111 @@ func testSubdirOperations(t *testing.T, m Meta) {
 				tree := &TreeSummary{Inode: parent, Path: "/", Type: TypeDirectory}
 				require.Zero(t, m.GetTreeSummary(ctx, tree, 1, 10, true, SortBySize, nil))
 				assert.Equal(t, after.Size, tree.Size)
+			}},
+			{"QuotaPaths", func(t *testing.T, parent, realParent, otherParent Ino) {
+				const created = "quota-created"
+				const outside = "quota-outside"
+				const hiddenInodes = 7777
+				chrooted := otherParent == RootInode
+				qpath := "/"
+				if parent != RootInode {
+					qpath = "/child"
+				}
+				newPath := path.Join(qpath, created)
+				var outsideIno Ino
+				if chrooted {
+					root := base.root
+					base.chroot(RootInode)
+					outsideIno = mkdir(t, RootInode, outside)
+					base.chroot(root)
+				}
+				t.Cleanup(func() {
+					var inode Ino
+					var attr Attr
+					if base.en.doLookup(ctx, realParent, created, &inode, &attr) == 0 {
+						assert.NoError(t, base.en.doDelQuota(ctx, DirQuotaType, uint64(inode)))
+						assert.Zero(t, m.Remove(ctx, parent, created, true, 1, nil))
+					}
+					assert.NoError(t, base.en.doDelQuota(ctx, DirQuotaType, uint64(realParent)))
+					if chrooted {
+						assert.NoError(t, base.en.doDelQuota(ctx, DirQuotaType, uint64(RootInode)))
+						assert.NoError(t, base.en.doDelQuota(ctx, DirQuotaType, uint64(outsideIno)))
+						root := base.root
+						base.chroot(RootInode)
+						assert.Zero(t, m.Remove(ctx, RootInode, outside, true, 1, nil))
+						base.chroot(root)
+					}
+					base.loadQuotas()
+				})
+
+				// Paths are relative to the mount root, and usage is computed for the same inode.
+				d := mkdir(t, parent, dir)
+				create(t, d, file)
+				quotas := map[string]*Quota{qpath: {MaxInodes: 100, MaxSpace: 1 << 30}}
+				require.NoError(t, m.HandleQuota(ctx, QuotaSet, qpath, DirQuotaType, quotas, true, false, false))
+				q, err := base.en.doGetQuota(ctx, DirQuotaType, uint64(realParent))
+				require.NoError(t, err)
+				require.NotNil(t, q, "quota of %s must be set on inode %d", qpath, realParent)
+				var sum Summary
+				require.Zero(t, m.GetSummary(ctx, parent, &sum, true, true))
+				assert.Equal(t, int64(sum.Dirs+sum.Files)-1, q.UsedInodes)
+				assert.Equal(t, int64(sum.Size)-align4K(0), q.UsedSpace)
+				require.NoError(t, m.HandleQuota(ctx, QuotaCheck, qpath, DirQuotaType, map[string]*Quota{}, true, false, false))
+
+				// --create makes the directory under the mount root and can be repeated.
+				for i := 0; i < 2; i++ {
+					qs := map[string]*Quota{newPath: {MaxInodes: 10, MaxSpace: -1}}
+					require.NoError(t, m.HandleQuota(ctx, QuotaSet, newPath, DirQuotaType, qs, false, false, true), "attempt %d", i)
+				}
+				var newIno Ino
+				var attr Attr
+				require.Zero(t, base.en.doLookup(ctx, realParent, created, &newIno, &attr))
+				lookup(t, otherParent, created, 0)
+
+				// Listed paths can be used to get the quota back; quotas outside the mount are hidden.
+				if chrooted {
+					for _, inode := range []Ino{RootInode, outsideIno} {
+						_, err := base.en.doSetQuota(ctx, DirQuotaType, uint64(inode), &Quota{MaxInodes: hiddenInodes, MaxSpace: -1})
+						require.NoError(t, err)
+					}
+				}
+				list := make(map[string]*Quota)
+				require.NoError(t, m.HandleQuota(ctx, QuotaList, "", AllQuotaType, list, false, false, false))
+				for _, k := range []string{qpath, newPath} {
+					require.Contains(t, list, k)
+					got := make(map[string]*Quota)
+					require.NoError(t, m.HandleQuota(ctx, QuotaGet, k, DirQuotaType, got, false, false, false))
+					require.Contains(t, got, k)
+					assert.Equal(t, list[k].MaxInodes, got[k].MaxInodes, k)
+				}
+				if chrooted {
+					for k, q := range list {
+						assert.NotEqual(t, int64(hiddenInodes), q.MaxInodes, "quota outside the mount must be hidden: %s", k)
+					}
+					err := m.HandleQuota(ctx, QuotaGet, "/../"+outside, DirQuotaType, map[string]*Quota{}, false, false, false)
+					assert.ErrorIs(t, err, syscall.ENOENT, "must not escape the mount root")
+				}
+			}},
+			{"ResolveForce", func(t *testing.T, parent, realParent, otherParent Ino) {
+				d := mkdir(t, parent, dir)
+				f := create(t, d, file)
+				rel := path.Join(dir, file)
+				if parent != RootInode {
+					rel = path.Join("child", rel)
+				}
+				var inode Ino
+				var attr Attr
+				require.Zero(t, m.Resolve(ctx, RootInode, rel, &inode, &attr, true))
+				assert.Equal(t, f, inode)
+				require.Zero(t, m.Resolve(ctx, parent, path.Join(dir, file), &inode, &attr, true))
+				assert.Equal(t, f, inode)
+				st := m.Resolve(ctx, RootInode, "subdir-operations", &inode, &attr, true)
+				if otherParent == RootInode {
+					assert.Equal(t, syscall.ENOENT, st, "must not escape the mount root")
+				} else {
+					require.Zero(t, st)
+					assert.Equal(t, otherParent, inode)
+				}
 			}},
 			{"Locks", func(t *testing.T, parent, realParent, otherParent Ino) {
 				inode := create(t, parent, file)

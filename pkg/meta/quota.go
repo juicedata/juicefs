@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -898,6 +899,20 @@ func (m *baseMeta) handleQuotaList(ctx Context, qtype uint32, key uint64, quotas
 
 	for ino, quota := range dirQuotas {
 		if !match(DirQuotaType, ino, quota) {
+			continue
+		}
+		if m.root != RootInode {
+			// paths are relative to the chroot; skip quotas outside of it
+			if Ino(ino) == m.root {
+				quotas["/"] = quota
+				continue
+			}
+			if Ino(ino) == RootInode {
+				continue
+			}
+			if ps := m.GetPaths(ctx, Ino(ino)); len(ps) > 0 && strings.HasPrefix(ps[0], "/") {
+				quotas[ps[0]] = quota
+			}
 			continue
 		}
 		if ps := m.GetPaths(ctx, Ino(ino)); len(ps) > 0 {
