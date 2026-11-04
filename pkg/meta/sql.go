@@ -5307,10 +5307,15 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			UserQuotas:  userQuotas,
 			GroupQuotas: groupQuotas,
 		}
-		if root != RootInode {
-			dm.UserQuotas = nil
-			dm.GroupQuotas = nil
-		}
+		scopeSubdirDump(&dm, root, func(inode Ino) (Ino, error) {
+			n := node{Inode: inode}
+			if ok, err := s.Get(&n); err != nil {
+				return 0, err
+			} else if !ok {
+				return 0, syscall.ENOENT
+			}
+			return n.Parent, nil
+		})
 		if !keepSecret && dm.Setting.SecretKey != "" {
 			dm.Setting.SecretKey = "removed"
 			logger.Warnf("Secret key is removed for the sake of safety")
