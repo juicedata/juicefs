@@ -1,8 +1,10 @@
 import errno
 from array import array
 import fractions
+import grp
 import io
 import unittest
+from unittest.mock import patch
 import os
 import pwd
 import stat
@@ -20,8 +22,11 @@ meta_url=os.environ.get('META_URL', 'redis://localhost')
 
 
 class FileTests(unittest.TestCase):
+    def open_client(self):
+        return juicefs.Client("test-volume", meta=meta_url, access_log="/tmp/access.log")
+
     def setUp(self):
-        self.v = juicefs.Client("test-volume", meta=meta_url, access_log="/tmp/access.log")
+        self.v = self.open_client()
         if not self.v.exists(TESTFN):
             self.v.mkdir(TESTFN)
 
@@ -130,6 +135,37 @@ class MakedirTests(FileTests):
 
 
 class ChownFileTests(FileTests):
+    def test_root_group_read_permissions(self):
+        self.v.chmod(TESTFN, 0o755)
+        self.create_file(TESTFILE)
+        users = {0: pwd.struct_passwd(("root", "x", 0, 0, "", "/", "")),
+                 1001: pwd.struct_passwd(("sdk-member", "x", 1001, 1001, "", "/", ""))}
+        groups = {gid: grp.struct_group((name, "x", gid, []))
+                  for gid, name in [(0, "root"), (1, "adm"), (1001, "sdk-members")]}
+        # Legacy hash of "root" on "test-volume"; SQL engines use a 31-bit GID.
+        legacy_gid = 2730912965
+        if meta_url.startswith(("sqlite3://", "mysql://", "postgres://")):
+            legacy_gid &= 0x7fffffff
+        for root_groups, file_gid, denied_mode in [([0], 0, 0o400), ([0, 1], legacy_gid, 0o404)]:
+            with self.subTest(root_groups=root_groups):
+                self.v.chown(TESTFILE, 0, file_gid)
+                self.v.chmod(TESTFILE, denied_mode)
+                memberships = {"root": root_groups, "sdk-member": [1001, 0]}
+                with patch.object(os, "geteuid", return_value=1001), \
+                        patch.object(pwd, "getpwuid", side_effect=users.__getitem__), \
+                        patch.object(grp, "getgrgid", side_effect=groups.__getitem__), \
+                        patch.object(os, "getgrouplist", side_effect=lambda name, gid: memberships[name]):
+                    member = self.open_client()
+                self.addCleanup(member.close)
+                with self.assertRaises(OSError) as denied:
+                    with member.open(TESTFILE, "rb") as f:
+                        f.read()
+                self.assertEqual(denied.exception.errno, errno.EACCES)
+
+                self.v.chmod(TESTFILE, 0o440)
+                with member.open(TESTFILE, "rb") as f:
+                    self.assertEqual(f.read(), b"content")
+
     def test_chown_uid_gid_arguments_must_be_index(self):
         stat = self.v.stat(TESTFN)
         uid = stat.st_uid

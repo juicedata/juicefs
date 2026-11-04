@@ -97,6 +97,8 @@ JuiceFS 的 Python SDK 暂不支持格式化文件系统，因此在使用之前
 
 `Client` 类的实现与 Python 的 io 模块类似。
 
+默认情况下，只有 UID 为 0 的账户拥有超级用户权限。UID 非零的 `root` 组成员按普通文件权限访问。升级 Python SDK 时，请同时升级随包提供的 `libjfs`，以确保组权限判断正确。
+
 可以使用以下代码实例化一个 JuiceFS 客户端，`name` 参数为文件系统名称，`meta` 参数为元数据引擎的 URL。其中，`name`参数必须存在，但允许使用空字符串或 `None`。
 
 ```python
