@@ -556,6 +556,9 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 	if err = dm.validate(); err != nil {
 		return
 	}
+	// Inodes and slices not in the tree (e.g. pending deleted files) may still be referenced.
+	counters.NextInode = max(counters.NextInode, dm.Counters.NextInode)
+	counters.NextChunk = max(counters.NextChunk, dm.Counters.NextChunk)
 
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
