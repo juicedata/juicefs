@@ -561,8 +561,9 @@ func getFuserMountVersion() string {
 }
 
 func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
-	rawOpts, mt, noxattr, noacl, maxWrite, noReadDirPlusAuto := genFuseOptExt(c, format)
-	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite, noReadDirPlusAuto))
+	enableXattr := c.Bool("enable-xattr") || format.EnableACL
+	options := vfs.FuseOptions(fuse.GenFuseOpt(format.Name, genFuseOpt(c, format.Name), enableXattr, format.EnableACL,
+		int(utils.ParseBytes(c, "max-fuse-io", 'B')), !c.Bool("no-readdirplus-auto")))
 	vfsConf.FuseOpts = &options
 }
 
@@ -647,14 +648,6 @@ func prepareMp(mp string) {
 			_ = os.Remove(f.Name())
 		}
 	}
-}
-
-func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool, maxWrite int, noReadDirPlusAuto bool) {
-	enableXattr := c.Bool("enable-xattr")
-	if format.EnableACL {
-		enableXattr = true
-	}
-	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-fuse-io", 'B')), c.Bool("no-readdirplus-auto")
 }
 
 func shutdownGraceful(mp string) {
