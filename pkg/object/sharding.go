@@ -183,13 +183,18 @@ func (s *nextObjects) Pop() interface{} {
 
 func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	heads := &nextObjects{make([]nextKey, 0)}
+	var failed bool
 	for i := range s.stores {
 		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink, true)
 		if err != nil {
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
 		}
-		first := <-ch
-		if first != nil {
+		// A nil from an open channel is how ListAll reports that the listing
+		// of that shard is incomplete; a closed channel just means no keys.
+		first, ok := <-ch
+		if ok && first == nil {
+			failed = true
+		} else if first != nil {
 			heads.Push(nextKey{first, ch})
 		}
 	}
@@ -197,15 +202,23 @@ func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink
 
 	out := make(chan Object, 1000)
 	go func() {
+		defer close(out)
+		if failed {
+			out <- nil
+			return
+		}
 		for heads.Len() > 0 {
 			n := heap.Pop(heads).(nextKey)
 			out <- n.o
-			o := <-n.ch
+			o, ok := <-n.ch
+			if ok && o == nil {
+				out <- nil
+				return
+			}
 			if o != nil {
 				heap.Push(heads, nextKey{o, n.ch})
 			}
 		}
-		close(out)
 	}()
 	return out, nil
 }
