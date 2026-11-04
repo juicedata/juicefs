@@ -557,7 +557,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	return nil
 }
 
-func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, maxWrite int) fuse.MountOptions {
+func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, maxWrite int, noReadDirPlusAuto bool) fuse.MountOptions {
 	var opt fuse.MountOptions
 	opt.FsName = "JuiceFS:" + conf.Format.Name
 	opt.Name = "juicefs"
@@ -573,7 +573,7 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, m
 	opt.DirectMount = true
 	opt.DontUmask = true
 	opt.Timeout = time.Minute * 15
-	opt.EnableReadDirPlusAuto = true
+	opt.EnableReadDirPlusAuto = !noReadDirPlusAuto
 	for _, n := range strings.Split(options, ",") {
 		// TODO allow_root
 		if n == "allow_other" {
