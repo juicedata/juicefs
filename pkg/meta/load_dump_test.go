@@ -310,6 +310,7 @@ func checkMeta(t *testing.T, m Meta) {
 
 func testLoadSub(t *testing.T, uri, fname string) {
 	m := NewClient(uri, nil)
+	defer m.Shutdown()
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
@@ -375,7 +376,68 @@ func testLoadDump(t *testing.T, name, addr string) {
 		testDump(t, m, 0, sampleFile, "test.dump")
 		_ = m.Shutdown()
 		testLoadSub(t, addr, subSampleFile)
+		testDumpSubdirQuota(t, addr)
 	})
+}
+
+// A subdir dump keeps only quotas inside the subtree and moves the quota of
+// the subdir itself to the new root.
+func testDumpSubdirQuota(t *testing.T, addr string) {
+	m := testLoad(t, addr, sampleFile, false) // has a quota on "/"
+	ctx := Background()
+	var subIno Ino
+	if st := m.Mkdir(ctx, 3, "sub", 0755, 0, 0, &subIno, nil); st != 0 { // inode 3 is /d1
+		t.Fatalf("mkdir /d1/sub: %s", st)
+	}
+	for p, space := range map[string]int64{"/d1": 10 << 30, "/d1/sub": 20 << 30, "/d": 30 << 30} {
+		if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: space, MaxInodes: 1000}}, false, false, false); err != nil {
+			t.Fatalf("set quota of %s: %s", p, err)
+		}
+	}
+	if st := m.Chroot(ctx, "d1", true); st != 0 {
+		t.Fatalf("chroot to d1: %s", st)
+	}
+	var buf bytes.Buffer
+	if err := m.DumpMeta(&buf, RootInode, 1, false, false, false); err != nil {
+		t.Fatalf("dump meta: %s", err)
+	}
+	_ = m.Shutdown()
+
+	var dm DumpedMeta
+	if err := json.Unmarshal(buf.Bytes(), &dm); err != nil {
+		t.Fatalf("unmarshal dump: %s", err)
+	}
+	want := map[Ino]int64{RootInode: 10 << 30, subIno: 20 << 30}
+	if len(dm.Quotas) != len(want) {
+		t.Fatalf("dumped quotas: %+v", dm.Quotas)
+	}
+	for ino, space := range want {
+		if q := dm.Quotas[ino]; q == nil || q.MaxSpace != space {
+			t.Fatalf("dumped quota of inode %d: %+v", ino, q)
+		}
+	}
+
+	m = NewClient(addr, nil)
+	defer m.Shutdown()
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err := m.LoadMeta(&buf); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+	quotas, _, _, err := m.getBase().en.doLoadQuotas(ctx)
+	if err != nil {
+		t.Fatalf("load quotas: %s", err)
+	}
+	if len(quotas) != len(want) {
+		t.Fatalf("loaded quotas: %+v", quotas)
+	}
+	// "/" has big, f11 and sub; "/sub" is empty
+	for ino, inodes := range map[Ino]int64{RootInode: 3, subIno: 0} {
+		if q := quotas[uint64(ino)]; q == nil || q.MaxSpace != want[ino] || q.UsedInodes != inodes {
+			t.Fatalf("loaded quota of inode %d: %+v", ino, q)
+		}
+	}
 }
 
 func TestLoadDump(t *testing.T) { //skip mutate

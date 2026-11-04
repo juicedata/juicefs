@@ -4294,10 +4294,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		UserQuotas:  ugQuotas["QU"],
 		GroupQuotas: ugQuotas["QG"],
 	}
-	if root != RootInode {
-		dm.UserQuotas = nil
-		dm.GroupQuotas = nil
-	}
+	scopeSubdirDump(&dm, root, m.dumpParent(ctx))
 	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")
