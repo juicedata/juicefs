@@ -424,7 +424,7 @@ func fuseFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "no-readdirplus-auto",
-			Usage: "always use READDIRPLUS for directory listing instead of the adaptive mode (fewer lookups for ls -l/find/rsync on large directories)",
+			Usage: "always use READDIRPLUS instead of adaptive mode",
 		},
 		&cli.StringFlag{
 			Name:  "root-squash",
