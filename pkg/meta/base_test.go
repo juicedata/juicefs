@@ -7271,6 +7271,52 @@ func newFuseDefaultCtx(uid, primaryGid uint32) *fuseDefaultCtx {
 	}
 }
 
+func TestRedisCleanupLeakedInodes(t *testing.T) {
+	m := newTestRedisMeta(t, 8)
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	ctx := Background()
+	var inode Ino
+	if st := m.Mknod(ctx, RootInode, "held", TypeFile, 0644, 022, 0, "", &inode, nil); st != 0 {
+		t.Fatalf("create file: %s", st)
+	}
+	if st := m.Open(ctx, inode, syscall.O_RDWR, &Attr{}); st != 0 {
+		t.Fatalf("open file: %s", st)
+	}
+
+	cutoff := time.Now().Add(-time.Hour)
+	m.replay.Store(&replayState{
+		Time:   cutoff.Add(-time.Hour),
+		Sid:    m.sid,
+		Opened: map[Ino]bool{inode: true},
+	})
+	st := m.Unlink(ctx, RootInode, "held", true)
+	m.replay.Store(nil)
+	if st != 0 {
+		t.Fatalf("replay unlink: %s", st)
+	}
+	if held, err := m.rdb.SIsMember(ctx, m.sustained(m.sid), inode.String()).Result(); err != nil || !held {
+		t.Fatalf("sustained inode: held=%t, err=%v", held, err)
+	}
+
+	// Simulate an inode missed by the session and directory scans.
+	err := m.deleteSustainedInode(ctx, 0, inode, func(tx *redis.Tx, attr *Attr) (bool, error) {
+		return m.leakedInodeInUse(ctx, tx, inode, attr, cutoff)
+	})
+	if err != nil {
+		t.Fatalf("cleanup inode: %s", err)
+	}
+	if exists, err := m.rdb.Exists(ctx, m.inodeKey(inode)).Result(); err != nil || exists != 1 {
+		t.Fatalf("sustained inode was deleted: exists=%d, err=%v", exists, err)
+	}
+	if st := m.Close(ctx, inode); st != 0 {
+		t.Fatalf("close file: %s", st)
+	}
+}
+
 // TestRedisStaleReadLockCleanup is a regression test for the gateway outage:
 // a read-lock whose holder crashed (no F_UNLCK) used to survive stale-session
 // cleanup, because F_RDLCK never added the inode to locked$<sid>, which is the
