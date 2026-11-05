@@ -259,7 +259,10 @@ func (c *CacheFiller) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr
 		i, err := strconv.ParseUint(p[len(inodePrefix):], 10, 64)
 		if err == nil {
 			*inode = meta.Ino(i)
-			return c.meta.GetAttr(ctx, meta.Ino(i), attr)
+			if !c.meta.IsUnderRoot(ctx, *inode) {
+				return syscall.ENOENT
+			}
+			return c.meta.GetAttr(ctx, *inode, attr)
 		}
 	}
 	p = strings.Trim(p, "/")

@@ -313,6 +313,10 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		if r.HasMore() {
 			numThreads = int(r.Get8())
 		}
+		if !v.Meta.IsUnderRoot(ctx, inode) {
+			_, _ = out.Write([]byte{uint8(syscall.ENOENT)})
+			return
+		}
 		var count uint64
 		var st syscall.Errno
 		go func() {
@@ -342,6 +346,10 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		if r.HasMore() {
 			concurrency = r.Get8()
 		}
+		if !v.Meta.IsUnderRoot(ctx, srcIno) || !v.Meta.IsUnderRoot(ctx, srcParentIno) || !v.Meta.IsUnderRoot(ctx, dstParentIno) {
+			_, _ = out.Write([]byte{uint8(syscall.ENOENT)})
+			return
+		}
 		var count, total uint64
 		var eno syscall.Errno
 		go func() {
@@ -369,7 +377,10 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		logger.Infof("Start to get legacy info of %d, recursive=%d", inode, recursive)
 
 		wb := utils.NewBuffer(4)
-		r := v.Meta.GetSummary(ctx, inode, &summary, recursive != 0, true)
+		r := syscall.ENOENT
+		if v.Meta.IsUnderRoot(ctx, inode) {
+			r = v.Meta.GetSummary(ctx, inode, &summary, recursive != 0, true)
+		}
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
@@ -439,7 +450,11 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var r syscall.Errno
 		go func() {
 			logger.Infof("Start to get info v2 of %d, recursive=%d", inode, recursive)
-			r = v.Meta.GetSummary(ctx, inode, &info.Summary, recursive != 0, strict)
+			if v.Meta.IsUnderRoot(ctx, inode) {
+				r = v.Meta.GetSummary(ctx, inode, &info.Summary, recursive != 0, strict)
+			} else {
+				r = syscall.ENOENT
+			}
 			close(done)
 		}()
 		writeProgress(&info.Summary.Files, &info.Summary.Size, out, done)
@@ -552,11 +567,15 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var r syscall.Errno
 		go func() {
 			logger.Infof("Start to get summary of %d, depth=%d, topN=%d", inode, depth, topN)
-			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict, sortBy,
-				func(count, bytes uint64) {
-					atomic.AddUint64(&files, count)
-					atomic.AddUint64(&size, bytes)
-				})
+			if v.Meta.IsUnderRoot(ctx, inode) {
+				r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict, sortBy,
+					func(count, bytes uint64) {
+						atomic.AddUint64(&files, count)
+						atomic.AddUint64(&size, bytes)
+					})
+			} else {
+				r = syscall.ENOENT
+			}
 			close(done)
 		}()
 		writeProgress(&files, &size, out, done)
@@ -574,6 +593,10 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 	case meta.CompactPath:
 		inode := Ino(r.Get64())
 		coCnt := r.Get16()
+		if !v.Meta.IsUnderRoot(ctx, inode) {
+			_, _ = out.Write([]byte{uint8(syscall.ENOENT)})
+			return
+		}
 
 		done := make(chan struct{})
 		var totalChunks, currChunks uint64
