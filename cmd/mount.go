@@ -342,6 +342,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.OpenCache = utils.Duration(c.String("open-cache"))
 	conf.OpenCacheLimit = c.Uint64("open-cache-limit")
 	conf.Heartbeat = utils.Duration(c.String("heartbeat"))
+	conf.SessionTimeout = utils.Duration(c.String("session-timeout"))
 	conf.MountPoint = mp
 	conf.Subdir = c.String("subdir")
 	conf.SkipDirMtime = utils.Duration(c.String("skip-dir-mtime"))

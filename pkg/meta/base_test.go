@@ -307,6 +307,19 @@ func (c *aclCacheWithMissCount) GetMissIds() []uint32 {
 	return c.Cache.GetMissIds()
 }
 
+func TestExpireTime(t *testing.T) {
+	for _, c := range []struct{ heartbeat, timeout, expected time.Duration }{
+		{12 * time.Second, 0, time.Minute},
+		{12 * time.Second, 30 * time.Second, time.Minute},
+		{12 * time.Second, 5 * time.Minute, 5 * time.Minute},
+	} {
+		m := &baseMeta{conf: &Config{Heartbeat: c.heartbeat, SessionTimeout: c.timeout}}
+		if ttl := time.Until(time.Unix(m.expireTime(), 0)); ttl < c.expected-2*time.Second || ttl > c.expected {
+			t.Fatalf("heartbeat %s, session timeout %s: expires in %s, expected %s", c.heartbeat, c.timeout, ttl, c.expected)
+		}
+	}
+}
+
 func TestMergeFacl(t *testing.T) {
 	minimal := &aclAPI.Rule{Owner: 6, Group: 4, Mask: 0xFFFF, Other: 0}
 	extended := &aclAPI.Rule{Owner: 7, Group: 7, Mask: 5, Other: 1, NamedUsers: aclAPI.Entries{{Id: 1001, Perm: 4}}}
@@ -708,6 +721,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	base := m.getBase()
 	if base.sid != ses[0].Sid {
 		t.Fatalf("my sid %d != registered sid %d", base.sid, ses[0].Sid)
+	}
+	if ttl, expected := time.Until(ses[0].Expire), max(base.conf.SessionTimeout, base.conf.Heartbeat*5); ttl < expected-10*time.Second || ttl > expected {
+		t.Fatalf("session expires in %s, expected %s", ttl, expected)
 	}
 	if err = base.en.doCleanStaleSession(base.sid); err != nil {
 		t.Fatalf("clean session: %s", err)

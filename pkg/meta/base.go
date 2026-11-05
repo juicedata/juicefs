@@ -900,7 +900,7 @@ func (m *baseMeta) stopDeleteSliceTasks() {
 
 func (m *baseMeta) expireTime() int64 {
 	if m.conf.Heartbeat > 0 {
-		return time.Now().Add(m.conf.Heartbeat * 5).Unix()
+		return time.Now().Add(max(m.conf.SessionTimeout, m.conf.Heartbeat*5)).Unix()
 	} else {
 		return time.Now().Add(time.Hour * 24 * 365).Unix()
 	}

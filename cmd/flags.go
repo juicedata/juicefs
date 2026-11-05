@@ -302,6 +302,11 @@ func metaFlags() []cli.Flag {
 			Value: "12s",
 			Usage: "interval to send heartbeat; it's recommended that all clients use the same heartbeat value",
 		},
+		&cli.StringFlag{
+			Name:  "session-timeout",
+			Value: "0",
+			Usage: "a session not refreshed for this long is considered stale and its locks are released (at least 5 heartbeats, 0 means 5 heartbeats)",
+		},
 		&cli.BoolFlag{
 			Name:  "read-only",
 			Usage: "allow lookup/read operations only",
