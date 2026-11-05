@@ -26,6 +26,7 @@ import (
 	"os"
 	"path"
 	"runtime/trace"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,11 +36,12 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/acl"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -492,16 +494,16 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 	defer trace.StartRegion(context.TODO(), "fs.Mkdir").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Mkdir (%s, %o): %s", p, mode, errstr(err)) }()
-	if p == "/" {
-		return syscall.EEXIST
-	}
-	fi, err := fs.resolve(ctx, parentDir(p), true)
+	nd, err := fs.resolveParent(ctx, p)
 	if err != 0 {
 		return err
 	}
+	if err = fs.checkCreate(ctx, nd, true); err != 0 {
+		return err
+	}
 	var inode Ino
-	err = fs.m.Mkdir(ctx, fi.inode, path.Base(p), mode, umask, 0, &inode, nil)
-	if err == syscall.ENOENT && fi.inode != 1 {
+	err = fs.m.Mkdir(ctx, nd.dir.inode, nd.name, mode, umask, 0, &inode, nil)
+	if err == syscall.ENOENT && nd.dir.inode != 1 {
 		// parent be moved into trash, try again
 		if fs.conf.DirEntryTimeout > 0 {
 			parent := parentDir(p)
@@ -511,11 +513,11 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 		}
 		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
 			return e
-		} else if fi2.inode != fi.inode {
-			err = fs.m.Mkdir(ctx, fi2.inode, path.Base(p), mode, umask, 0, &inode, nil)
+		} else if fi2.inode != nd.dir.inode {
+			err = fs.m.Mkdir(ctx, fi2.inode, nd.name, mode, umask, 0, &inode, nil)
 		}
 	}
-	fs.InvalidateEntry(fi.inode, path.Base(p))
+	fs.InvalidateEntry(nd.dir.inode, nd.name)
 	return
 }
 
@@ -586,8 +588,14 @@ func (fs *FileSystem) BatchDeleteEntries(ctx meta.Context, parent string, ps []s
 }
 
 func (fs *FileSystem) Delete0(ctx meta.Context, p string, callByUnlink bool) (err syscall.Errno) {
-	parent, err := fs.resolve(ctx, parentDir(p), true)
+	nd, err := fs.resolveParent(ctx, p)
 	if err != 0 {
+		return
+	}
+	if nd.typ != lastNorm && callByUnlink {
+		return syscall.EISDIR
+	}
+	if err = nd.rmdirErr(); err != 0 {
 		return
 	}
 	fi, err := fs.resolve(ctx, p, false)
@@ -599,11 +607,11 @@ func (fs *FileSystem) Delete0(ctx meta.Context, p string, callByUnlink bool) (er
 			err = syscall.EISDIR
 			return
 		}
-		err = fs.m.Rmdir(ctx, parent.inode, path.Base(p))
+		err = fs.m.Rmdir(ctx, nd.dir.inode, nd.name)
 	} else {
-		err = fs.m.Unlink(ctx, parent.inode, path.Base(p))
+		err = fs.m.Unlink(ctx, nd.dir.inode, nd.name)
 	}
-	fs.InvalidateEntry(parent.inode, path.Base(p))
+	fs.InvalidateEntry(nd.dir.inode, nd.name)
 	return
 }
 
@@ -611,68 +619,61 @@ func (fs *FileSystem) Rmdir(ctx meta.Context, p string) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Rmdir").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Rmdir (%s): %s", p, errstr(err)) }()
-	parent, err := fs.resolve(ctx, parentDir(p), true)
+	nd, err := fs.resolveParent(ctx, p)
 	if err != 0 {
 		return
 	}
-	err = fs.m.Rmdir(ctx, parent.inode, path.Base(p))
-	fs.InvalidateEntry(parent.inode, path.Base(p))
+	if err = nd.rmdirErr(); err != 0 {
+		return
+	}
+	err = fs.m.Rmdir(ctx, nd.dir.inode, nd.name)
+	fs.InvalidateEntry(nd.dir.inode, nd.name)
 	return
 }
 
+// Rmr follows rm(1): ".", ".." and "/" are refused before anything is removed.
 func (fs *FileSystem) Rmr(ctx meta.Context, p string, skipTrash bool, numthreads int) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Rmr").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Rmr (%s): %s", p, errstr(err)) }()
-	parent, err := fs.resolve(ctx, parentDir(p), true)
+	nd, err := fs.resolveParent(ctx, p)
 	if err != 0 {
 		return
 	}
-	err = fs.m.Remove(ctx, parent.inode, path.Base(p), skipTrash, numthreads, nil)
-	fs.InvalidateEntry(parent.inode, path.Base(p))
+	if err = nd.rmdirErr(); err != 0 {
+		return
+	}
+	if nd.slash {
+		var inode Ino
+		var attr Attr
+		if err = fs.m.Lookup(ctx, nd.dir.inode, nd.name, &inode, &attr, false); err != 0 {
+			return
+		}
+		if attr.Typ != meta.TypeDirectory {
+			return syscall.ENOTDIR
+		}
+	}
+	err = fs.m.Remove(ctx, nd.dir.inode, nd.name, skipTrash, numthreads, nil)
+	fs.InvalidateEntry(nd.dir.inode, nd.name)
 	return
 }
 
-func trimDotsForRename(paths []string) (res []string) {
-	for i, p := range paths {
-		if p == "." {
-			paths[i] = ""
-		} else if p == ".." {
+func renameComponents(p string) []string {
+	parts := strings.Split(p, "/")
+	for i, name := range parts {
+		switch name {
+		case ".":
+			parts[i] = ""
+		case "..":
 			if i > 0 {
-				paths[i] = ""
-				paths[i-1] = ""
+				parts[i-1], parts[i] = "", ""
 			}
 		}
 	}
-	for _, p := range paths {
-		if p != "" {
-			res = append(res, p)
-		}
-	}
-
-	return
+	return slices.DeleteFunc(parts, func(name string) bool { return name == "" })
 }
 
 func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, flags uint32) (err syscall.Errno) {
-	oss := trimDotsForRename(strings.Split(oldpath, "/"))
-	nss := trimDotsForRename(strings.Split(newpath, "/"))
-	var err0 syscall.Errno
-
-	// check if oldpath is ancestor of newpath
-	for i := 0; i < len(oss); {
-		if i >= len(nss) || oss[i] != nss[i] {
-			break
-		} else { // oss[i] == nss[i]
-			i++
-			if i == len(oss) && i == len(nss) {
-				break
-			} else if i == len(oss) {
-				err0 = syscall.EINVAL
-				break
-			}
-		}
-	}
-
 	defer trace.StartRegion(context.TODO(), "fs.Rename").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Rename (%s,%s,%d): %s", oldpath, newpath, flags, errstr(err)) }()
@@ -681,21 +682,88 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 		flags&meta.RenameExchange != 0 && flags&(meta.RenameNoReplace|meta.RenameWhiteout) != 0 {
 		return syscall.EINVAL
 	}
-	oldfi, err := fs.resolve(ctx, parentDir(oldpath), true)
+	src, err := fs.resolveParent(ctx, oldpath)
 	if err != 0 {
 		return
 	}
-	newfi, err := fs.resolve(ctx, parentDir(newpath), true)
+	dst, err := fs.resolveParent(ctx, newpath)
 	if err != 0 {
 		return
 	}
-	if err0 != 0 {
-		return err0
+	if src.typ != lastNorm {
+		return syscall.EBUSY
 	}
-	err = fs.m.Rename(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), flags, nil, nil)
-	fs.InvalidateEntry(oldfi.inode, path.Base(oldpath))
-	fs.InvalidateEntry(newfi.inode, path.Base(newpath))
+	if dst.typ != lastNorm {
+		if flags&meta.RenameNoReplace != 0 {
+			return syscall.EEXIST
+		}
+		return syscall.EBUSY
+	}
+	old, new := renameComponents(oldpath), renameComponents(newpath)
+	intoSubtree := len(old) < len(new) && slices.Equal(old, new[:len(old)])
+	if err = fs.checkRename(ctx, src, dst, flags, intoSubtree); err != 0 {
+		return
+	}
+	err = fs.m.Rename(ctx, src.dir.inode, src.name, dst.dir.inode, dst.name, flags, nil, nil)
+	fs.InvalidateEntry(src.dir.inode, src.name)
+	fs.InvalidateEntry(dst.dir.inode, dst.name)
 	return
+}
+
+func (fs *FileSystem) checkRename(ctx meta.Context, src, dst nameData, flags uint32, intoSubtree bool) syscall.Errno {
+	exchange := flags&meta.RenameExchange != 0
+	var err syscall.Errno
+	if src.slash || dst.slash {
+		var inode Ino
+		var attr Attr
+		if err = fs.m.Lookup(ctx, src.dir.inode, src.name, &inode, &attr, false); err != 0 {
+			return err
+		}
+		if attr.Typ != meta.TypeDirectory && (src.slash || dst.slash && !exchange) {
+			err = syscall.ENOTDIR
+		}
+	}
+	if err == 0 && intoSubtree {
+		if flags&(meta.RenameNoReplace|meta.RenameExchange) == 0 {
+			return syscall.EINVAL
+		}
+		err = syscall.EINVAL
+	}
+	// A target lookup failure takes precedence over a trailing-slash type error.
+	if err != 0 || exchange && dst.slash {
+		var inode Ino
+		var attr Attr
+		e := fs.m.Lookup(ctx, dst.dir.inode, dst.name, &inode, &attr, false)
+		if e != 0 {
+			if e == syscall.ENOENT && !exchange {
+				return err
+			}
+			return e
+		}
+		if flags&meta.RenameNoReplace != 0 {
+			return syscall.EEXIST
+		}
+		if dst.slash && attr.Typ != meta.TypeDirectory {
+			return syscall.ENOTDIR
+		}
+	}
+	return err
+}
+
+// checkCreate follows filename_create() in Linux: ".", ".." and "/" always
+// exist, and a trailing slash can only name a new directory.
+func (fs *FileSystem) checkCreate(ctx meta.Context, nd nameData, dir bool) syscall.Errno {
+	if nd.typ != lastNorm {
+		return syscall.EEXIST
+	}
+	if nd.slash && !dir {
+		var inode Ino
+		if err := fs.m.Lookup(ctx, nd.dir.inode, nd.name, &inode, &Attr{}, false); err != 0 {
+			return err
+		}
+		return syscall.EEXIST
+	}
+	return 0
 }
 
 func (fs *FileSystem) Link(ctx meta.Context, src string, dst string) (err syscall.Errno) {
@@ -707,12 +775,15 @@ func (fs *FileSystem) Link(ctx meta.Context, src string, dst string) (err syscal
 	if err != 0 {
 		return
 	}
-	pi, err := fs.resolve(ctx, parentDir(dst), true)
+	nd, err := fs.resolveParent(ctx, dst)
 	if err != 0 {
 		return
 	}
-	err = fs.m.Link(ctx, fi.inode, pi.inode, path.Base(dst), nil)
-	fs.InvalidateEntry(pi.inode, path.Base(dst))
+	if err = fs.checkCreate(ctx, nd, false); err != 0 {
+		return
+	}
+	err = fs.m.Link(ctx, fi.inode, nd.dir.inode, nd.name, nil)
+	fs.InvalidateEntry(nd.dir.inode, nd.name)
 	return
 }
 
@@ -723,15 +794,15 @@ func (fs *FileSystem) Symlink(ctx meta.Context, target string, link string) (err
 	if target == "" {
 		return syscall.ENOENT // as getname() in Linux, before the link is resolved
 	}
-	if strings.HasSuffix(link, "/") {
-		return syscall.EINVAL
-	}
-	fi, err := fs.resolve(ctx, parentDir(link), true)
+	nd, err := fs.resolveParent(ctx, link)
 	if err != 0 {
 		return
 	}
-	err = fs.m.Symlink(ctx, fi.inode, path.Base(link), target, nil, nil)
-	fs.InvalidateEntry(fi.inode, path.Base(link))
+	if err = fs.checkCreate(ctx, nd, false); err != 0 {
+		return
+	}
+	err = fs.m.Symlink(ctx, nd.dir.inode, nd.name, target, nil, nil)
+	fs.InvalidateEntry(nd.dir.inode, nd.name)
 	return
 }
 
@@ -868,6 +939,7 @@ func (fs *FileSystem) SetFacl(ctx meta.Context, p string, acltype uint8, rule *a
 		rule.Group = oldRule.Group & oldRule.Mask
 	}
 	err = fs.m.SetFacl(ctx, fi.inode, acltype, rule)
+	fs.InvalidateAttr(fi.inode)
 	return
 }
 
@@ -929,7 +1001,88 @@ func (fs *FileSystem) lookup(ctx meta.Context, parent Ino, name string, inode *I
 }
 
 func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
-	return fs.doResolve(ctx, p, followLastSymlink)
+	fi, err = fs.doResolve(ctx, p, followLastSymlink, false)
+	if fs.mayBeStale(err) {
+		fi, err = fs.doResolve(ctx, p, followLastSymlink, true)
+	}
+	return
+}
+
+// mayBeStale reports whether err may come from stale caches, since cached
+// entries can only allow but not deny. Such a path is resolved again with the
+// caches revalidated, like LOOKUP_REVAL in Linux.
+func (fs *FileSystem) mayBeStale(err syscall.Errno) bool {
+	return (err == syscall.EACCES || err == syscall.ENOTDIR) && (fs.conf.DirEntryTimeout > 0 || fs.conf.EntryTimeout > 0)
+}
+
+// lastType classifies the last component of a path, as LAST_* in Linux namei.
+type lastType uint8
+
+const (
+	lastNorm lastType = iota
+	lastDot
+	lastDotDot
+	lastRoot
+)
+
+// nameData is a path resolved up to its last component.
+type nameData struct {
+	dir   *FileStat // the parent directory, nil for lastRoot
+	name  string
+	typ   lastType
+	slash bool // the last component has trailing slashes
+}
+
+// rmdirErr returns the error of rmdir(2) on ".", ".." or "/".
+func (nd nameData) rmdirErr() syscall.Errno {
+	switch nd.typ {
+	case lastDot:
+		return syscall.EINVAL
+	case lastDotDot:
+		return syscall.ENOTEMPTY
+	case lastRoot:
+		return syscall.EBUSY
+	}
+	return 0
+}
+
+// resolveParent resolves all but the last component of p, like filename_parentat()
+// in Linux. The parent must be a searchable directory. The last component is only
+// classified, so callers must reject ".", ".." and "/" with their own errors
+// before passing the name to the metadata engine.
+func (fs *FileSystem) resolveParent(ctx meta.Context, p string) (nd nameData, err syscall.Errno) {
+	if p == "" {
+		return nd, syscall.ENOENT
+	}
+	trimmed := strings.TrimRight(p, "/")
+	nd.slash = len(trimmed) < len(p)
+	if trimmed == "" {
+		nd.typ = lastRoot
+		return nd, 0
+	}
+	dir := parentDir(trimmed)
+	for _, reval := range []bool{false, true} {
+		if nd.dir, err = fs.doResolve(ctx, dir, true, reval); err == 0 {
+			if !nd.dir.IsDir() {
+				err = syscall.ENOTDIR
+			} else {
+				err = fs.m.Access(ctx, nd.dir.inode, meta.MODE_MASK_X, nd.dir.attr)
+			}
+		}
+		if !fs.mayBeStale(err) {
+			break
+		}
+	}
+	if err != 0 {
+		return
+	}
+	switch nd.name = path.Base(trimmed); nd.name {
+	case ".":
+		nd.typ = lastDot
+	case "..":
+		nd.typ = lastDotDot
+	}
+	return nd, 0
 }
 
 func (fs *FileSystem) allowedSubdir(p string, allowAncestor bool) bool {
@@ -946,7 +1099,11 @@ func (fs *FileSystem) allowedSubdir(p string, allowAncestor bool) bool {
 	return false
 }
 
-func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
+// doResolve resolves p. With reval, cached entries are dropped before lookup.
+func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink, reval bool) (fi *FileStat, err syscall.Errno) {
+	if p == "" {
+		return nil, syscall.ENOENT
+	}
 	var inode Ino
 	var attr = &Attr{}
 
@@ -1016,6 +1173,9 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 			return nil, syscall.EACCES
 		}
 		parentAttr := *attr
+		if reval {
+			fs.InvalidateEntry(parent, name)
+		}
 		err = fs.lookup(ctx, parent, name, &inode, attr)
 		if err != 0 {
 			return
@@ -1078,18 +1238,20 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 	defer trace.StartRegion(context.TODO(), "fs.Create").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Create (%s,%o): %s", p, mode, errstr(err)) }()
-	if strings.HasSuffix(p, "/") {
-		return nil, syscall.EINVAL
-	}
-	var inode Ino
-	var attr = &Attr{}
-	var fi *FileStat
-	fi, err = fs.resolve(ctx, parentDir(p), true)
+	nd, err := fs.resolveParent(ctx, p)
 	if err != 0 {
 		return
 	}
-	err = fs.m.Create(ctx, fi.inode, path.Base(p), mode&07777, umask, syscall.O_EXCL, &inode, attr)
-	if err == syscall.ENOENT && fi.inode != 1 {
+	if nd.typ != lastNorm {
+		return nil, syscall.EEXIST
+	}
+	if nd.slash {
+		return nil, syscall.EISDIR
+	}
+	var inode Ino
+	var attr = &Attr{}
+	err = fs.m.Create(ctx, nd.dir.inode, nd.name, mode&07777, umask, syscall.O_EXCL, &inode, attr)
+	if err == syscall.ENOENT && nd.dir.inode != 1 {
 		// dir be moved into trash, try again
 		if fs.conf.DirEntryTimeout > 0 {
 			parent := parentDir(p)
@@ -1099,13 +1261,13 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 		}
 		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
 			return nil, e
-		} else if fi2.inode != fi.inode {
-			err = fs.m.Create(ctx, fi2.inode, path.Base(p), mode&07777, umask, syscall.O_EXCL, &inode, attr)
+		} else if fi2.inode != nd.dir.inode {
+			err = fs.m.Create(ctx, fi2.inode, nd.name, mode&07777, umask, syscall.O_EXCL, &inode, attr)
 		}
 	}
 	if err == 0 {
-		fi = AttrToFileInfo(inode, attr)
-		fi.name = path.Base(p)
+		fi := AttrToFileInfo(inode, attr)
+		fi.name = nd.name
 		f = &File{}
 		f.flags = vfs.MODE_MASK_W
 		f.path = p
@@ -1113,7 +1275,7 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 		f.info = fi
 		f.fs = fs
 	}
-	fs.InvalidateEntry(fi.inode, path.Base(p))
+	fs.InvalidateEntry(nd.dir.inode, nd.name)
 	return
 }
 
@@ -1137,17 +1299,32 @@ func (fs *FileSystem) Close() error {
 }
 
 func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (err syscall.Errno) {
-	srcParent, err := fs.resolve(ctx, parentDir(src), true)
+	snd, err := fs.resolveParent(ctx, src)
 	if err != 0 {
 		return
 	}
-	var srcIno Ino
-	err = fs.lookup(ctx, srcParent.Inode(), path.Base(src), &srcIno, &Attr{})
+	// The source is looked up as lookup_last() in Linux: a plain name is an entry
+	// of the parent, anything else names a directory.
+	var srcParent, srcIno Ino
+	var srcAttr Attr
+	if snd.typ == lastNorm && !snd.slash {
+		srcParent = snd.dir.inode
+		err = fs.lookup(ctx, srcParent, snd.name, &srcIno, &srcAttr)
+	} else if fi, e := fs.resolve(ctx, src, false); e != 0 {
+		err = e
+	} else if snd.typ == lastRoot || fi.inode == meta.RootInode {
+		err = syscall.EINVAL // the destination is always under the root
+	} else {
+		srcParent, srcIno, srcAttr = fi.attr.Parent, fi.inode, *fi.attr
+	}
 	if err != 0 {
 		return
 	}
-	dstParent, err := fs.resolve(ctx, parentDir(dst), true)
+	dnd, err := fs.resolveParent(ctx, dst)
 	if err != 0 {
+		return
+	}
+	if err = fs.checkCreate(ctx, dnd, srcAttr.Typ == meta.TypeDirectory); err != 0 {
 		return
 	}
 
@@ -1159,8 +1336,8 @@ func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (e
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
 	}
 
-	if err = fs.m.Clone(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), srcParent.Inode(), srcIno, dstParent.Inode(), path.Base(dst), cmode, umask, meta.CLONE_DEFAULT_CONCURRENCY, &count, &total); err != 0 {
-		logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParent.Inode(), path.Base(dst), cmode, umask, err)
+	if err = fs.m.Clone(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), srcParent, srcIno, dnd.dir.inode, dnd.name, cmode, umask, meta.CLONE_DEFAULT_CONCURRENCY, &count, &total); err != 0 {
+		logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dnd.dir.inode, dnd.name, cmode, umask, err)
 	}
 	return
 }
