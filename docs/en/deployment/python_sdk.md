@@ -84,8 +84,6 @@ Let's assume there is a pre-created file system named `myfs` with metadata engin
 
 The `Client` class implementation is similar to Python's io module.
 
-By default, only the account with UID 0 has superuser access. A member of the `root` group with a nonzero UID uses ordinary file permissions. Upgrade the Python SDK together with its bundled `libjfs` to ensure group permissions are evaluated correctly.
-
 You can instantiate a JuiceFS client with the following code, where the `name` parameter is the file system name and the `meta` parameter is the URL of the metadata engine. The `name` parameter must exist but can be an empty string or `None`.
 
 ```python
