@@ -278,7 +278,7 @@ func TestStoreAsync(t *testing.T) {
 				pending := len(store.pendingKeys)
 				store.pendingMutex.Unlock()
 				require.Zero(t, pending)
-				require.Empty(t, store.pendingCh)
+				require.Zero(t, store.pendingQ.len())
 				data, err := os.ReadFile(p)
 				require.NoError(t, err)
 				require.Equal(t, "good", string(data))
@@ -303,6 +303,104 @@ func TestStoreAsync(t *testing.T) {
 			testStore(t, store)
 		})
 	}
+}
+
+type stageOnlyCache struct {
+	CacheManager
+}
+
+func (c *stageOnlyCache) cache(string, *Page, bool, bool) {}
+
+func (c *stageOnlyCache) stage(key string, _ []byte, _ uint8) (string, error) {
+	return key, nil
+}
+
+func (c *stageOnlyCache) uploaded(string, int) {}
+
+func (c *stageOnlyCache) removeStage(string) error { return nil }
+
+func newStoreWithoutUploader(t *testing.T) (*cachedStore, object.ObjectStorage) {
+	mem, err := object.CreateStorage("mem", "", "", "", "")
+	require.NoError(t, err)
+	conf := defaultConf
+	conf.Writeback = true
+	conf.WritebackThresholdSize = conf.BlockSize + 1
+	store := &cachedStore{
+		storage:       mem,
+		conf:          conf,
+		bcache:        &stageOnlyCache{},
+		currentUpload: make(chan struct{}, 1),
+		compressor:    compress.NewCompressor(conf.Compress),
+		pendingQ:      newPendingQueue(),
+		pendingKeys:   make(map[string]*pendingItem),
+	}
+	store.initMetrics()
+	return store, mem
+}
+
+func TestStagedBlocksUploadOldestFirst(t *testing.T) {
+	store, _ := newStoreWithoutUploader(t)
+	now := time.Now()
+	const n = 200
+	// stage times in an order that is neither ascending nor descending
+	for i := 0; i < n; i++ {
+		age := time.Duration((i*73)%n+1) * time.Second
+		key := fmt.Sprintf("chunks/0/0/%d_0_4", i)
+		require.True(t, store.addDelayedStaging(key, key, now.Add(-age), false))
+	}
+	require.Equal(t, n, store.pendingQ.len())
+	last := store.pendingQ.pop()
+	for store.pendingQ.len() > 0 {
+		it := store.pendingQ.pop()
+		require.False(t, it.ts.Before(last.ts), "%s was handed out after %s", it.key, last.key)
+		last = it
+	}
+
+	// a failed upload is picked up again by the periodic scan, still oldest first
+	store.pendingMutex.Lock()
+	for _, it := range store.pendingKeys {
+		it.uploading.Store(false)
+	}
+	store.pendingMutex.Unlock()
+	store.scanDelayedStaging()
+	require.Equal(t, n, store.pendingQ.len())
+	last = store.pendingQ.pop()
+	for store.pendingQ.len() > 0 {
+		it := store.pendingQ.pop()
+		require.False(t, it.ts.Before(last.ts), "%s was handed out after %s", it.key, last.key)
+		last = it
+	}
+}
+
+func TestNewBlockWaitsBehindStagedBacklog(t *testing.T) {
+	store, mem := newStoreWithoutUploader(t)
+	oldKey := "chunks/0/0/1_0_4"
+	require.True(t, store.addDelayedStaging(oldKey, oldKey, time.Now().Add(-time.Hour), false))
+
+	// an upload slot is free, but the new block must not overtake the old one
+	writer := store.NewWriter(2, 0)
+	data := []byte("data")
+	_, err := writer.WriteAt(data, 0)
+	require.NoError(t, err)
+	require.NoError(t, writer.Finish(len(data)))
+	newKey := "chunks/0/0/2_0_4"
+	require.Eventually(t, func() bool {
+		return store.pendingQ.len() == 2
+	}, time.Second, time.Millisecond*10)
+	_, err = mem.Head(ctx, newKey)
+	require.Error(t, err)
+	require.Equal(t, oldKey, store.pendingQ.pop().key)
+	require.Equal(t, newKey, store.pendingQ.pop().key)
+
+	// without a backlog the block is uploaded right away
+	writer = store.NewWriter(3, 0)
+	_, err = writer.WriteAt(data, 0)
+	require.NoError(t, err)
+	require.NoError(t, writer.Finish(len(data)))
+	require.Eventually(t, func() bool {
+		_, err := mem.Head(ctx, "chunks/0/0/3_0_4")
+		return err == nil
+	}, time.Second, time.Millisecond*10)
 }
 
 func TestForceUpload(t *testing.T) {
