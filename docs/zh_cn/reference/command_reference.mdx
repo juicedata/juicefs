@@ -681,6 +681,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--hide-internal` <VersionAdd>1.4</VersionAdd>|在目录列表中隐藏所有内部文件（`.accesslog`、`.stats`、`.config`、`.control`），这些文件仍可通过完整路径访问（默认值：false）。|
 |`--log=path`|后台运行时日志文件的位置 (默认：`$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)|
 |`--force`|强制挂载即使挂载点已经被相同的文件系统挂载 (默认值:false)|
+|`--staging-flush-timeout=0` <VersionAdd>1.5</VersionAdd>|启用 `--writeback` 后，文件系统卸载完成时，挂载进程最多等待这么长时间，把本客户端暂存的数据块上传完再退出。等待期间忽略 `--upload-delay`，但仍然遵守 `--upload-hours`。支持秒 `s`、分 `m`、时 `h` 等单位。默认为 0，即不等待直接退出，暂存的数据块留在缓存目录中，等这台主机上下一次挂载时再上传。|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd>|新增／更新 `/etc/fstab` 中的条目，如果不存在将会创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接，默认为 false。|
 |`--disable-transparent-hugepage` <VersionAdd>1.3</VersionAdd>| 关闭内核的透明大页（THP），内存紧张时，THP 可能导致进程挂起等待，默认为 false。 |
 
