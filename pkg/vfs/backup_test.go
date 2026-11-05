@@ -111,7 +111,7 @@ func TestUsedInodesWithSubdir(t *testing.T) {
 
 	var dummy, want uint64
 	_ = m.StatFS(ctx, 0, &dummy, &dummy, &want, &dummy)
-	if st := m.Chroot(ctx, "sub"); st != 0 {
+	if st := m.Chroot(ctx, "sub", false); st != 0 {
 		t.Fatalf("chroot sub: %s", st)
 	}
 	var subUsed uint64

@@ -161,14 +161,16 @@ class Client(object):
         kwargs["pushRemoteWriteAuth"] = push_remote_write_auth
         kwargs["caller"] = 1
 
-        jsonConf = json.dumps(kwargs, sort_keys=True)
         self.umask = os.umask(0)
         os.umask(self.umask)
         user = pwd.getpwuid(os.geteuid())
         groups = [grp.getgrgid(gid).gr_name for gid in os.getgrouplist(user.pw_name, user.pw_gid)]
         superuser = pwd.getpwuid(0)
-        supergroups = [grp.getgrgid(gid).gr_name for gid in os.getgrouplist(superuser.pw_name, superuser.pw_gid)]
-        self.h = self.lib.jfs_init(0, 0, name.encode(), jsonConf.encode(), user.pw_name.encode(), ','.join(groups).encode(), superuser.pw_name.encode(), ''.join(supergroups).encode())
+        # Preserve the legacy GID mapping without granting superuser access to the group.
+        supergids = os.getgrouplist(superuser.pw_name, superuser.pw_gid)
+        kwargs["rootGroup"] = ''.join(grp.getgrgid(gid).gr_name for gid in supergids)
+        jsonConf = json.dumps(kwargs, sort_keys=True)
+        self.h = self.lib.jfs_init(0, 0, name.encode(), jsonConf.encode(), user.pw_name.encode(), ','.join(groups).encode(), superuser.pw_name.encode(), b'')
 
     def __del__(self):
         self.close(terminate=False)

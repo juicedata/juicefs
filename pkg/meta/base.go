@@ -92,7 +92,7 @@ type engine interface {
 	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
-	doDeleteSustainedInode(sid uint64, inode Ino) error
+	doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices(ctx Context, count *uint64) error
@@ -152,6 +152,7 @@ type engine interface {
 
 	doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
+	doInsertACL(ctx Context, rule *aclAPI.Rule) (uint32, error)
 	cacheACLs(ctx Context) error
 
 	// kerberos delegation token
@@ -162,6 +163,7 @@ type engine interface {
 	doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 
 	doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines int64) error
+	changelogScanStart(version int64) uint64
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
@@ -286,6 +288,7 @@ type baseMeta struct {
 	sessionJSON  atomic.Value // []byte
 	nextTxnId    uint64
 	of           *openfiles
+	replay       atomic.Pointer[replayState]
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
 	maxDeleting  chan struct{}
@@ -897,7 +900,7 @@ func (m *baseMeta) stopDeleteSliceTasks() {
 
 func (m *baseMeta) expireTime() int64 {
 	if m.conf.Heartbeat > 0 {
-		return time.Now().Add(m.conf.Heartbeat * 5).Unix()
+		return time.Now().Add(max(m.conf.SessionTimeout, m.conf.Heartbeat*5)).Unix()
 	} else {
 		return time.Now().Add(time.Hour * 24 * 365).Unix()
 	}
@@ -1453,7 +1456,7 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 	if ctx.Uid() == 0 {
 		return 0
 	}
-	if !ctx.CheckPermission() {
+	if !m.checkPermission(ctx) {
 		return 0
 	}
 
@@ -1567,6 +1570,16 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 }
 
 func (m *baseMeta) nextInode() (Ino, error) {
+	if state := m.replay.Load(); state != nil {
+		if state.Inode != 0 {
+			return state.Inode, nil
+		}
+		if len(state.Inodes) > 0 {
+			ino := state.Inodes[0]
+			state.Inodes = state.Inodes[1:]
+			return ino, nil
+		}
+	}
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeInodes.next >= m.freeInodes.maxid {
@@ -1620,29 +1633,40 @@ func (m *baseMeta) allocateInodes() (freeID, error) {
 	return freeID{next: uint64(v) - inodeBatch, maxid: uint64(v)}, nil
 }
 
-func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parentMode uint16) uint32 {
-	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
-		return parentGid
+// clientBehavior reports the platform semantics of the client that issued the
+// operation.
+func clientBehavior(ctx Context) string {
+	if b, ok := ctx.Value(CtxKey("behavior")).(string); ok && b != "" {
+		return b
 	}
-	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
+	return runtime.GOOS
+}
+
+func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parentMode uint16) uint32 {
+	switch clientBehavior(ctx) {
+	case "Hadoop", "darwin":
 		return parentGid
+	case "linux":
+		if parentMode&02000 != 0 {
+			return parentGid
+		}
 	}
 	return ctx.Gid()
 }
 
 func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, parentMode, childMode uint16) uint16 {
-	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+	if s := m.replay.Load(); s != nil && s.Mode != nil {
+		return *s.Mode
+	}
+	if clientBehavior(ctx) != "linux" || parentMode&02000 == 0 {
 		return childMode
 	}
-	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
-		if _type == TypeDirectory {
-			childMode |= 02000
-		} else if ctx.CheckPermission() && childMode&02010 == 02010 && ctx.Uid() != 0 {
-			if !containsGid(ctx, parentGid) {
-				childMode &= ^uint16(02000)
-			}
+	if _type == TypeDirectory {
+		childMode |= 02000
+	} else if m.checkPermission(ctx) && childMode&02010 == 02010 && ctx.Uid() != 0 {
+		if !containsGid(ctx, parentGid) {
+			childMode &= ^uint16(02000)
 		}
-		return childMode
 	}
 	return childMode
 }
@@ -1651,7 +1675,8 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if _type < TypeFile || _type > TypeSocket {
 		return syscall.EINVAL
 	}
-	if parent.IsTrash() {
+	parent = m.checkRoot(parent)
+	if parent.IsTrash() && m.replay.Load() == nil {
 		return syscall.EPERM
 	}
 	if parent == RootInode && name == TrashName {
@@ -1668,11 +1693,12 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 
 	defer m.timeit("Mknod", time.Now())
-	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
 	// check group quota in transaction
-	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
-		return err
+	if !(parent == TrashInode && _type == TypeDirectory) {
+		if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
+			return err
+		}
 	}
 	ino, err := m.nextInode()
 	if err != nil {
@@ -1750,6 +1776,7 @@ func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, in
 }
 
 func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	parent = m.checkRoot(parent)
 	if parent.IsTrash() {
 		return syscall.EPERM
 	}
@@ -1770,7 +1797,6 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if attr == nil {
 		attr = &Attr{}
 	}
-	parent = m.checkRoot(parent)
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		return st
 	}
@@ -1842,6 +1868,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 }
 
 func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
+	parent = m.checkRoot(parent)
 	if parent == RootInode && name == TrashName || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
@@ -1850,7 +1877,6 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 	}
 
 	defer m.timeit("Unlink", time.Now())
-	parent = m.checkRoot(parent)
 	var attr Attr
 	err := m.en.doUnlink(ctx, parent, name, &attr, skipCheckTrash...)
 	if err == 0 {
@@ -1873,7 +1899,8 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == RootInode && name == TrashName || parent == TrashInode || parent.IsTrash() && ctx.Uid() != 0 {
+	parent = m.checkRoot(parent)
+	if parent == RootInode && name == TrashName || parent == TrashInode && m.replay.Load() == nil || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -1881,11 +1908,10 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	}
 
 	defer m.timeit("Rmdir", time.Now())
-	parent = m.checkRoot(parent)
 	var inode Ino
 	var oldAttr Attr
 	st := m.en.doRmdir(ctx, parent, name, &inode, &oldAttr, skipCheckTrash...)
-	if st == 0 {
+	if st == 0 && parent != TrashInode {
 		if !parent.IsTrash() {
 			m.parentMu.Lock()
 			delete(m.dirParents, inode)
@@ -1939,11 +1965,16 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	parentSrc = m.checkRoot(parentSrc)
+	parentDst = m.checkRoot(parentDst)
 	if parentSrc == RootInode && nameSrc == TrashName || parentDst == RootInode && nameDst == TrashName {
 		return syscall.EPERM
 	}
 	if parentDst.IsTrash() || parentSrc.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
+	}
+	if nameSrc == "." || nameSrc == ".." || nameDst == "." || nameDst == ".." {
+		return syscall.EBUSY
 	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
@@ -1967,8 +1998,6 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if attr == nil {
 		attr = &Attr{}
 	}
-	parentSrc = m.checkRoot(parentSrc)
-	parentDst = m.checkRoot(parentDst)
 	var quotaSrc, quotaDst Ino
 	if !parentSrc.IsTrash() {
 		quotaSrc, _ = m.getQuotaParent(ctx, parentSrc)
@@ -2222,7 +2251,7 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		}
 		m.Unlock()
 		if removed {
-			_ = m.en.doDeleteSustainedInode(m.sid, inode)
+			_ = m.en.doDeleteSustainedInode(Background(), m.sid, inode)
 		}
 	}
 	return 0
@@ -2777,7 +2806,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	return nil
 }
 
-func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
+func (m *baseMeta) Chroot(ctx Context, subdir string, skipCreate bool) syscall.Errno {
 	for subdir != "" {
 		ps := strings.SplitN(subdir, "/", 2)
 		if ps[0] != "" {
@@ -2785,7 +2814,11 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 			var inode Ino
 			r := m.Lookup(ctx, m.root, ps[0], &inode, &attr, true)
 			if r == syscall.ENOENT {
-				r = m.Mkdir(ctx, m.root, ps[0], 0777, 0, 0, &inode, &attr)
+				if m.conf.ReadOnly || skipCreate {
+					return r
+				}
+				logger.Warnf("Subdir %s not found, creating it", ps[0])
+				r = m.Mkdir(ctx, m.root, ps[0], 0777, uint16(utils.GetUmask()), 0, &inode, &attr)
 			}
 			if r != 0 {
 				return r
@@ -2871,6 +2904,9 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 }
 
 func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID int) {
+	if m.conf.NoCompact {
+		return
+	}
 	// avoid too many or duplicated compaction
 	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
@@ -3090,6 +3126,10 @@ func (m *baseMeta) toTrash(parent Ino) bool {
 }
 
 func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
+	if state := m.replay.Load(); state != nil {
+		*trash = state.Trash
+		return 0
+	}
 	if !m.toTrash(parent) {
 		return 0
 	}
@@ -3424,6 +3464,7 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 
 func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno {
 
+	parent = m.checkRoot(parent)
 	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
 	}
@@ -3436,7 +3477,6 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	}
 
 	defer m.timeit("Clone", time.Now())
-	parent = m.checkRoot(parent)
 
 	var attr Attr
 	var eno syscall.Errno
@@ -3644,7 +3684,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 			return nil, syscall.EPERM
 		}
 		if cur.Gid != attr.Gid {
-			if ctx.CheckPermission() && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+			if m.checkPermission(ctx) && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
 				return nil, syscall.EPERM
 			}
 			dirtyAttr.Gid = attr.Gid
@@ -3652,14 +3692,14 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		}
 	}
 	if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-		if ctx.CheckPermission() && ctx.Uid() != 0 {
+		if m.checkPermission(ctx) && ctx.Uid() != 0 {
 			return nil, syscall.EPERM
 		}
 		dirtyAttr.Uid = attr.Uid
 		changed = true
 	}
 	if set&SetAttrMode != 0 {
-		if ctx.CheckPermission() && ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
+		if m.checkPermission(ctx) && ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
 			if !containsGid(ctx, cur.Gid) {
 				attr.Mode &= 05777
 			}
@@ -3745,6 +3785,8 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		*attr = *cur
 		return nil, 0
 	}
+	// Keep last: replay pins the mode recorded by the source.
+	dirtyAttr.Mode = m.finalMode(dirtyAttr.Mode)
 	return &dirtyAttr, 0
 }
 
@@ -3817,6 +3859,34 @@ func (m *baseMeta) saveACL(rule *aclAPI.Rule, aclMaxId *uint32) uint32 {
 		m.aclCache.Put(id, rule)
 	}
 	return id
+}
+
+// mergeFacl sets rule on attr; the result is final and must be persisted as is.
+func (m *baseMeta) mergeFacl(ctx Context, attr *Attr, aclType uint8, rule *aclAPI.Rule, insertACL func(*aclAPI.Rule) (uint32, error)) error {
+	// https://github.com/torvalds/linux/blob/480e035fc4c714fb5536e64ab9db04fedc89e910/fs/fuse/acl.c#L143-L151
+	// TODO: check linux capabilities
+	if ctx.Uid() != 0 && !inGroup(ctx, attr.Gid) {
+		attr.Mode &= 05777 // clear sgid
+	}
+	if rule.IsEmpty() {
+		setAttrACLId(attr, aclType, aclAPI.None)
+	} else if rule.IsMinimal() && aclType == aclAPI.TypeAccess {
+		setAttrACLId(attr, aclType, aclAPI.None)
+		attr.Mode = attr.Mode&07000 | rule.GetMode()
+	} else {
+		rule.InheritPerms(attr.Mode)
+		id, err := insertACL(rule)
+		if err != nil {
+			return err
+		}
+		setAttrACLId(attr, aclType, id)
+		if aclType == aclAPI.TypeAccess {
+			attr.Mode = attr.Mode&07000 | rule.GetMode()
+		}
+	}
+	// Keep last: replay pins the mode recorded by the source.
+	attr.Mode = m.finalMode(attr.Mode)
+	return nil
 }
 
 func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {

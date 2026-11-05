@@ -52,6 +52,38 @@ If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visu
 | `juicefs_meta_ops_total`                          | Number of metadata engine operations       |        |
 | `juicefs_meta_ops_duration_seconds`               | Accumulated time of metadata engine operations | second |
 
+### Redis connection pools
+
+When using Redis or KeyDB as the metadata engine, the following client-side metrics describe the main command connection pool used by standalone and Sentinel clients. Redis Cluster pool metrics are not collected. These metrics are provided by the official `go-redis` Prometheus collector and have no additional labels. Sentinel control connections and Pub/Sub pools are excluded. Scraping reads local pool statistics without sending Redis commands.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| `juicefs_redis_pool_hit_total` | Counter | Total number of times an idle connection was reused from the pool |
+| `juicefs_redis_pool_miss_total` | Counter | Total number of times no reusable idle connection was found in the pool |
+| `juicefs_redis_pool_timeout_total` | Counter | Total number of timeouts acquiring a connection from the pool |
+| `juicefs_redis_pool_conn_total_current` | Gauge | Current number of connections in the command pool |
+| `juicefs_redis_pool_conn_idle_current` | Gauge | Current number of idle connections in the command pool |
+| `juicefs_redis_pool_conn_stale_total` | Counter | Total number of stale connections removed from the pool |
+
+A pool miss triggers an attempt to create a new connection. Counters accumulate over the lifetime of the client's pool and can reset when the pool is recreated. Use `rate()` or `increase()` to observe changes over a specified time window.
+
+### TiKV client
+
+For the TiKV metadata engine, the following metrics expose TiKV Go client's RPC and request queue activity. They read in-process statistics without querying TiKV.
+
+These collectors are shared by all TiKV clients in the process. When the Java or Python SDK opens multiple volumes, each volume's metrics export the same process totals. The `vol_name` and `mp` labels identify the exporter context, not the owner of these statistics; do not sum these metrics across volumes in the same process.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| `juicefs_tikv_client_go_request_seconds` | Histogram | RPC request duration in seconds; labels: `type`, `store`, `stale_read`, `scope` |
+| `juicefs_tikv_client_go_batch_pending_requests` | Histogram | Number of requests pending in the batch channel; label: `store` |
+| `juicefs_tikv_client_go_batch_client_wait_connection_establish` | Histogram | Time spent waiting for a batch connection to be established, in seconds |
+| `juicefs_tikv_client_go_batch_client_no_available_connection_total` | Counter | Number of times no batch client is available to send requests |
+
+The metric names and types follow the TiKV Go client. The connection establishment histogram uses seconds despite not having a `_seconds` suffix. The unavailable batch client counter can increase because of concurrency limits or a busy sender; it is not a SQL-style connection pool timeout counter.
+
+When the SDK pushes metrics to Pushgateway, Graphite, or a remote write endpoint, a custom push label that conflicts with a TiKV metric label causes that TiKV collector to be skipped with a warning. Existing JuiceFS metrics and non-conflicting TiKV collectors continue to be exported.
+
 ## Quota {#quota}
 
 ### Metrics
@@ -72,6 +104,24 @@ Directory quotas carry an `inode` label, user quotas a `uid` label, and group qu
 | `juicefs_group_quota_max_inodes`            | Group quota maximum number of inodes          |      |
 | `juicefs_group_quota_used_space_bytes`      | Group quota used space                        | byte |
 | `juicefs_group_quota_used_inodes`           | Group quota used number of inodes             |      |
+
+### SQL connection pool
+
+For MySQL, PostgreSQL, and SQLite metadata engines, the following metrics describe each client's connection pool. They use the Prometheus Go SQL collector and have the additional label `db_name="metadata"`. Scraping reads local pool statistics without querying the database. These are client-side statistics, not database server totals.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| `juicefs_go_sql_max_open_connections` | Gauge | Maximum number of open connections; 0 means unlimited |
+| `juicefs_go_sql_open_connections` | Gauge | Number of open connections, including in-use and idle connections |
+| `juicefs_go_sql_in_use_connections` | Gauge | Number of connections currently in use |
+| `juicefs_go_sql_idle_connections` | Gauge | Number of idle connections |
+| `juicefs_go_sql_wait_count_total` | Counter | Total number of waits for a connection |
+| `juicefs_go_sql_wait_duration_seconds_total` | Counter | Total time spent waiting for a connection, in seconds |
+| `juicefs_go_sql_max_idle_closed_total` | Counter | Total connections closed because of the idle connection limit |
+| `juicefs_go_sql_max_idle_time_closed_total` | Counter | Total connections closed because of the maximum idle time |
+| `juicefs_go_sql_max_lifetime_closed_total` | Counter | Total connections closed because of the maximum connection lifetime |
+
+The wait counters help identify pool contention when metadata operations slow down. Counters accumulate over the lifetime of the client's pool; use `rate()` or `increase()` to observe changes over a time window.
 
 ## FUSE {#fuse}
 

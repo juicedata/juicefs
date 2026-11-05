@@ -42,9 +42,11 @@ type Config struct {
 	CaseInsensi        bool
 	ReadOnly           bool
 	NoBGJob            bool // disable background jobs like clean-up, backup, etc.
+	NoCompact          bool // disable compaction initiated by this client.
 	OpenCache          time.Duration
 	OpenCacheLimit     uint64 // max number of files to cache (soft limit)
 	Heartbeat          time.Duration
+	SessionTimeout     time.Duration
 	MountPoint         string
 	Subdir             string
 	AtimeMode          string
@@ -71,6 +73,10 @@ func (c *Config) SelfCheck() {
 	if c.Heartbeat > time.Minute*10 {
 		logger.Warnf("heartbeat should not be greater than 10 minutes")
 		c.Heartbeat = time.Minute * 10
+	}
+	if c.ReadOnly {
+		logger.Warnf("Read-only mode enabled, background compaction will be disabled")
+		c.NoCompact = true
 	}
 }
 

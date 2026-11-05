@@ -372,6 +372,12 @@ func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, s
 }
 
 func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno {
+	switch name {
+	case ".":
+		return syscall.EINVAL
+	case "..":
+		return syscall.ENOTEMPTY
+	}
 	parent = m.checkRoot(parent)
 	if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, nil); st != 0 {
 		return st
@@ -627,6 +633,9 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 }
 
 func (m *baseMeta) atimeNeedsUpdate(attr *Attr, now time.Time) bool {
+	if m.replay.Load() != nil {
+		return true
+	}
 	return m.conf.AtimeMode != NoAtime && relatimeNeedUpdate(attr, now) ||
 		// update atime only for > 1 second accesses
 		m.conf.AtimeMode == StrictAtime && now.Sub(time.Unix(attr.Atime, int64(attr.Atimensec))) > time.Second

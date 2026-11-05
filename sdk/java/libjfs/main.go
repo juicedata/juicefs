@@ -270,7 +270,7 @@ func (w *wrapper) isSuperuser(name string, groups []string) bool {
 	}
 	sg := w.getSuperGroup()
 	for _, g := range groups {
-		if g == sg {
+		if sg != "" && g == sg {
 			return true
 		}
 	}
@@ -285,7 +285,7 @@ func (w *wrapper) lookupUid(name string) uint32 {
 }
 
 func (w *wrapper) lookupGid(group string) uint32 {
-	if group == w.supergroup {
+	if group == w.conf.RootGroup {
 		return 0
 	}
 	return uint32(w.m.lookupGroup(group))
@@ -308,7 +308,7 @@ func (w *wrapper) uid2name(uid uint32) string {
 }
 
 func (w *wrapper) gid2name(gid uint32) string {
-	group := w.supergroup
+	group := w.conf.RootGroup
 	if gid > 0 {
 		group = w.m.lookupGroupID(gid)
 	}
@@ -392,6 +392,7 @@ type javaConf struct {
 	PushRemoteWriteAuth string `json:"pushRemoteWriteAuth"`
 	GuidMask            string `json:"guidMask"`
 	Caller              int    `json:"caller"`
+	RootGroup           string `json:"rootGroup"` // Group name mapped to GID 0.
 	Subdir              string `json:"subdir"`
 
 	AuthMethod string `json:"authMethod,omitempty"`
@@ -404,6 +405,7 @@ func cleanConf(conf javaConf) javaConf {
 	conf.AuthMethod = ""
 	conf.RealUser = ""
 	conf.SuperFS = false
+	conf.RootGroup = ""
 	return conf
 }
 
@@ -430,6 +432,9 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 			return 0
 		}
 		logger.Infof("JuiceFileSystem created for user:%s groups:%s", user, groups)
+	}
+	if conf.RootGroup == "" {
+		conf.RootGroup = supergroup
 	}
 	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf}
 	if formats[name] != nil && formats[name].KerbConf != "" {
@@ -471,6 +476,16 @@ func updateAllCtx(name string, user, groups string) {
 	}
 }
 
+type pushLabelsRegisterer struct {
+	prometheus.Registerer
+	labels prometheus.Labels
+}
+
+// PushLabels reports exporter labels without adding them to collected metrics.
+func (r pushLabelsRegisterer) PushLabels() prometheus.Labels {
+	return r.labels
+}
+
 func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
 	pusher := push.New(pushGatewayAddr, "juicefs").Gatherer(registry)
 	for k, v := range commonLabels {
@@ -478,7 +493,7 @@ func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, 
 	}
 	if pushAuth != "" {
 		if strings.Contains(pushAuth, ":") {
-			parts := strings.Split(pushAuth, ":")
+			parts := strings.SplitN(pushAuth, ":", 2)
 			pusher.BasicAuth(parts[0], parts[1])
 		}
 	}
@@ -654,7 +669,11 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			if jConf.PushRemoteWrite != "" {
 				push2RemoteWrite(jConf.PushRemoteWrite, jConf.PushRemoteWriteAuth, interval, registry, commonLabels)
 			}
-			m.InitMetrics(registerer)
+			metaRegisterer := registerer
+			if jConf.PushGateway != "" || jConf.PushGraphite != "" || jConf.PushRemoteWrite != "" {
+				metaRegisterer = pushLabelsRegisterer{Registerer: registerer, labels: commonLabels}
+			}
+			m.InitMetrics(metaRegisterer)
 			vfs.InitMetrics(registerer)
 			go metric.UpdateMetrics(registerer)
 		}

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -352,6 +353,42 @@ func testSubdirOperations(t *testing.T, m Meta) {
 				require.Zero(t, base.en.doLookup(ctx, clone, file, &child, &attr))
 				assert.Equal(t, uint8(TypeFile), attr.Typ)
 			}},
+			{"TrashName", func(t *testing.T, parent, realParent, otherParent Ino) {
+				var got Ino
+				var attr Attr
+				var count, total uint64
+				if realParent == RootInode { // the trash name is reserved only at the real volume root
+					target := create(t, parent, file)
+					var inode Ino
+					assert.Equal(t, syscall.EPERM, m.Mknod(ctx, parent, TrashName, TypeFile, 0644, 0, 0, "", &inode, nil))
+					assert.Equal(t, syscall.EPERM, m.Mkdir(ctx, parent, TrashName, 0755, 0, 0, &inode, nil))
+					assert.Equal(t, syscall.EPERM, m.Link(ctx, target, parent, TrashName, nil))
+					assert.Equal(t, syscall.EPERM, m.Rename(ctx, parent, file, parent, TrashName, 0, nil, nil))
+					assert.Equal(t, syscall.EPERM, m.Rename(ctx, parent, TrashName, parent, dir, 0, nil, nil))
+					assert.Equal(t, syscall.EPERM, m.Unlink(ctx, parent, TrashName))
+					assert.Equal(t, syscall.EPERM, m.Rmdir(ctx, parent, TrashName))
+					assert.Equal(t, syscall.EPERM, m.Clone(ctx, parent, target, parent, TrashName, 0, 0, 1, &count, &total))
+					require.Zero(t, m.Lookup(ctx, parent, TrashName, &got, &attr, false))
+					assert.Equal(t, TrashInode, got)
+				} else { // under a subdir it is an ordinary name
+					d := mkdir(t, parent, TrashName)
+					lookup(t, realParent, TrashName, d)
+					require.Zero(t, m.Lookup(ctx, parent, TrashName, &got, &attr, false))
+					assert.Equal(t, d, got)
+					require.Zero(t, m.Rmdir(ctx, parent, TrashName, true))
+					lookup(t, realParent, TrashName, 0)
+					inode := create(t, parent, TrashName)
+					require.Zero(t, m.Rename(ctx, parent, TrashName, parent, file, 0, nil, nil))
+					lookup(t, realParent, file, inode)
+					require.Zero(t, m.Rename(ctx, parent, file, parent, TrashName, 0, nil, nil))
+					lookup(t, realParent, TrashName, inode)
+					require.Zero(t, m.Link(ctx, inode, parent, link, nil))
+					require.Zero(t, m.Unlink(ctx, parent, link, true))
+					require.Zero(t, m.Clone(ctx, parent, inode, parent, dir, 0, 0, 1, &count, &total))
+					require.Zero(t, m.Unlink(ctx, parent, TrashName, true))
+					lookup(t, realParent, TrashName, 0)
+				}
+			}},
 			{"SummaryQuotaStatFS", func(t *testing.T, parent, realParent, otherParent Ino) {
 				var before, after Summary
 				require.Zero(t, m.GetSummary(ctx, parent, &before, true, true))
@@ -432,12 +469,35 @@ func testSubdirOperations(t *testing.T, m Meta) {
 								realParent = mkdir(t, mount, "child")
 								parent = realParent
 							}
-							require.Zero(t, m.Chroot(ctx, name))
+							require.Zero(t, m.Chroot(ctx, name, false))
 						}
 						tc.run(t, parent, realParent, otherParent)
 					})
 				}
 			})
 		}
+		t.Run("ChrootCreate", func(t *testing.T) {
+			const name = "subdir-chroot"
+			root := base.root
+			t.Cleanup(func() {
+				base.chroot(root)
+				st := m.Remove(ctx, RootInode, name, true, 1, nil)
+				assert.True(t, st == 0 || st == syscall.ENOENT, "cleanup %s: %s", name, st)
+			})
+			base.conf.ReadOnly = true
+			assert.Equal(t, syscall.ENOENT, m.Chroot(ctx, name+"/sub", false), "read-only must not create subdir")
+			base.conf.ReadOnly = false
+			assert.Equal(t, syscall.ENOENT, m.Chroot(ctx, name+"/sub", true), "skipCreate must not create subdir")
+			lookup(t, RootInode, name, 0)
+			require.Zero(t, m.Chroot(ctx, name+"/sub", false))
+			var inode, child Ino
+			var attr Attr
+			require.Zero(t, base.en.doLookup(ctx, RootInode, name, &inode, &attr))
+			want := uint16(0777) &^ uint16(utils.GetUmask())
+			assert.Equal(t, want, attr.Mode, "auto-created subdir must honor umask")
+			require.Zero(t, base.en.doLookup(ctx, inode, "sub", &child, &attr))
+			assert.Equal(t, want, attr.Mode, "auto-created subdir must honor umask")
+			assert.Equal(t, child, base.root)
+		})
 	})
 }
