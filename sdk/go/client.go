@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+// Package juicefs accesses a JuiceFS volume without a FUSE mount, with an API
+// modeled on os.Root and os.File.
 package juicefs
 
 import (

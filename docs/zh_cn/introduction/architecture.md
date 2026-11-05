@@ -13,6 +13,7 @@ JuiceFS 文件系统由三个部分组成：
 
 - 通过 **FUSE**，JuiceFS 文件系统能够以 POSIX 兼容的方式挂载到服务器，将海量云端存储直接当做本地存储来使用。点击[此处](https://juicefs.com/docs/zh/community/getting-started/installation)查看使用详情。
 - 通过 **Python SDK**，在无法通过 FUSE 挂载，或需要在 Python 进程中直接访问文件系统的场景，可以使用 Python SDK 直接读写文件系统。此外，Python SDK 原生实现了 fsspec 便于接入 Ray 等框架。点击[此处](https://juicefs.com/docs/zh/community/deployment/python_sdk)查看使用详情。
+- 通过 **Go SDK**，Go 程序无需 FUSE 挂载即可在进程内直接读写文件系统，API 以 Go 标准库（`os` 与 `io/fs`）为模型。点击[此处](../deployment/go_sdk.md)查看使用详情。
 - 通过 **Windows 客户端**，获得接近本地的文件系统体验。点击[此处](https://juicefs.com/docs/zh/community/tutorials/windows)查看使用详情。
 - 通过 **Hadoop Java SDK**，JuiceFS 文件系统能够直接替代 HDFS，为 Hadoop 提供低成本的海量存储。点击[此处](https://juicefs.com/docs/zh/community/hadoop_java_sdk)查看使用细节。
 - 通过 **Kubernetes CSI 驱动**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。点击[此处](https://juicefs.com/docs/zh/csi/introduction)查看 JuiceFS CSI 文档。
