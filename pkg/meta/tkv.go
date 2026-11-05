@@ -1720,7 +1720,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				tx.delete(m.inodeKey(inode))
 				newSpace, newInode = -align4K(0), -1
 			}
-			if _type != TypeFile || !opened { // an open file keeps its xattrs until doDeleteSustainedInode
+			if !opened { // an open file keeps its xattrs until doDeleteSustainedInode
 				tx.deleteKeys(m.xattrKey(inode, ""))
 			}
 			if attr.Parent == 0 {
@@ -1958,9 +1958,11 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					if info.attr.Nlink > 0 {
 						tx.set(m.inodeKey(info.inode), m.marshal(info.attr))
 					} else {
+						dnode := delNodes[info.inode]
+						opened := dnode != nil && dnode.opened
 						switch info.typ {
 						case TypeFile:
-							if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
+							if opened {
 								tx.set(m.inodeKey(info.inode), m.marshal(info.attr))
 								tx.set(m.sustainedKey(m.sid, info.inode), []byte{1})
 							} else {
@@ -1990,7 +1992,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 							})
 						}
 						// Delete xattrs and parent keys
-						if dnode, ok := delNodes[info.inode]; info.typ != TypeFile || !ok || !dnode.opened {
+						if !opened {
 							tx.deleteKeys(m.xattrKey(info.inode, ""))
 						}
 						if info.attr.Parent == 0 {
@@ -2436,7 +2438,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tx.delete(m.inodeKey(dino))
 						newSpace, newInode = -align4K(0), -1
 					}
-					if dtyp != TypeFile || !opened {
+					if !opened {
 						tx.deleteKeys(m.xattrKey(dino, ""))
 					}
 					if tattr.Parent == 0 {

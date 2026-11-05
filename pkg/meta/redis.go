@@ -1910,7 +1910,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 					pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 					pipe.Decr(ctx, m.totalInodesKey())
 				}
-				if _type != TypeFile || !opened { // an open file keeps its xattrs until doDeleteSustainedInode
+				if !opened { // an open file keeps its xattrs until doDeleteSustainedInode
 					pipe.Del(ctx, m.xattrKey(inode))
 				}
 				if attr.Parent == 0 {
@@ -2181,9 +2181,11 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 						}
 						inodes[info.inode] = info.attr
 					} else {
+						dnode := delNodes[info.inode]
+						opened := dnode != nil && dnode.opened
 						switch info.typ {
 						case TypeFile:
-							if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
+							if opened {
 								if inodes == nil {
 									inodes = make(map[Ino]*Attr)
 								}
@@ -2222,7 +2224,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 								Inodes: -1,
 							})
 						}
-						if dnode, ok := delNodes[info.inode]; info.typ != TypeFile || !ok || !dnode.opened {
+						if !opened {
 							keys = append(keys, m.xattrKey(info.inode))
 						}
 						if info.attr.Parent == 0 {
@@ -2749,7 +2751,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 							pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 							pipe.Decr(ctx, m.totalInodesKey())
 						}
-						if dtyp != TypeFile || !opened {
+						if !opened {
 							pipe.Del(ctx, m.xattrKey(dino))
 						}
 						if tattr.Parent == 0 {

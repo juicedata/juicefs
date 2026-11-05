@@ -2257,7 +2257,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				}
 				newSpace, newInode = -align4K(0), -1
 			}
-			if e.Type != TypeFile || !opened { // an open file keeps its xattrs until doDeleteSustainedInode
+			if !opened { // an open file keeps its xattrs until doDeleteSustainedInode
 				if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
 					return err
 				}
@@ -2730,7 +2730,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						}
 						newSpace, newInode = -align4K(0), -1
 					}
-					if de.Type != TypeFile || !opened {
+					if !opened {
 						if _, err := s.Delete(&xattr{Inode: dino}); err != nil {
 							return err
 						}
@@ -3150,10 +3150,12 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					} else {
 						// last link removed: prepare to delete inode and related rows
 						var entrySpace int64
+						dnode := batchDelNodes[info.n.Inode]
+						opened := dnode != nil && dnode.opened
 						switch info.n.Type {
 						case TypeFile:
 							entrySpace = align4K(info.n.Length)
-							if dnode, ok := batchDelNodes[info.n.Inode]; ok && dnode.opened {
+							if opened {
 								sustainedIns = append(sustainedIns, &sustained{Sid: m.sid, Inode: info.e.Inode})
 								if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 									return err
@@ -3190,7 +3192,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 								})
 							}
 						}
-						if dnode, ok := batchDelNodes[info.n.Inode]; info.n.Type != TypeFile || !ok || !dnode.opened {
+						if !opened {
 							xattrsDel = append(xattrsDel, info.e.Inode)
 						}
 					}
