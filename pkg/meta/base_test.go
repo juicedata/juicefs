@@ -265,7 +265,7 @@ func testXattr(t *testing.T, m Meta) {
 			}
 			for _, name := range []string{"user.before", "user.after"} {
 				value = nil
-				if st := m.GetXattr(ctx, inode, name, &value); st != ENOATTR && st != syscall.ENOENT {
+				if st := m.GetXattr(ctx, inode, name, &value); st != ENOATTR {
 					t.Fatalf("getxattr %s after the last close: %q, %s; want it removed with the inode", name, value, st)
 				}
 			}
@@ -2628,6 +2628,9 @@ func testCloseSession(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
+	if st := m.SetXattr(ctx, inode, "user.k", []byte("v"), XattrCreate); st != 0 {
+		t.Fatalf("setxattr f: %s", st)
+	}
 	if st := m.Flock(ctx, inode, 1, syscall.F_WRLCK, false); st != 0 {
 		t.Fatalf("flock wlock: %s", st)
 	}
@@ -2639,6 +2642,10 @@ func testCloseSession(t *testing.T, m Meta) {
 	}
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
+	}
+	var value []byte
+	if st := m.GetXattr(ctx, inode, "user.k", &value); st != 0 || string(value) != "v" {
+		t.Fatalf("getxattr f after unlink: %q, %s; want %q", value, st, "v")
 	}
 	time.Sleep(10 * time.Millisecond)
 	sid := m.getBase().sid
@@ -2655,6 +2662,9 @@ func testCloseSession(t *testing.T, m Meta) {
 	}
 	if _, err = m.GetSession(sid, true); err == nil {
 		t.Fatalf("get a deleted session: %s", err)
+	}
+	if st := m.GetXattr(ctx, inode, "user.k", &value); st != ENOATTR {
+		t.Fatalf("getxattr f after close session: %s; want %s", st, ENOATTR)
 	}
 	switch m := m.(type) {
 	case *redisMeta:
