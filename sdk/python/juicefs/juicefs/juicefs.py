@@ -102,7 +102,7 @@ class JuiceFSLib(object):
 class Client(object):
     """A JuiceFS client."""
     def __init__(self, name, meta, *, bucket="", storage_class="", read_only=False, no_session=False, no_bgjob=True,
-                 open_cache="0", backup_meta="3600", backup_skip_trash=False, heartbeat="12",
+                 open_cache="0", backup_meta="3600", backup_skip_trash=False, heartbeat="12", session_timeout="0",
                  cache_dir="memory", cache_size="100M", free_space_ratio="0.1", cache_partial_only=False,
                  verify_cache_checksum="extend", cache_eviction="2-random", cache_scan_interval="3600", cache_expire="0",
                  writeback=False, buffer_size="300M", prefetch=1, max_readahead="0", upload_limit="0",
@@ -123,6 +123,7 @@ class Client(object):
         kwargs["backupMeta"] = backup_meta
         kwargs["backupSkipTrash"] = backup_skip_trash
         kwargs["heartbeat"] = heartbeat
+        kwargs["sessionTimeout"] = session_timeout
         kwargs["cacheDir"] = cache_dir
         kwargs["cacheSize"] = cache_size
         kwargs["freeSpace"] = free_space_ratio
