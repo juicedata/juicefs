@@ -2580,7 +2580,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		}
 		tx.set(m.inodeKey(inode), m.marshal(&iattr))
 		if unlinked {
-			tx.delete(m.sustainedKey(m.sid, inode))
+			tx.delete(m.sustainedKey(m.sessionID(), inode))
 		} else {
 			if oldParent > 0 {
 				tx.incrBy(m.parentKey(inode, oldParent), 1)
@@ -2717,8 +2717,11 @@ func (m *kvMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) erro
 		}
 		m.parseAttr(a, &attr)
 		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold
-		if attr.Nlink > 0 {
-			tx.delete(m.sustainedKey(sid, inode))
+		if attr.Nlink > 0 && sid > 0 {
+			if tx.get(m.sustainedKey(sid, inode)) != nil {
+				tx.delete(m.sustainedKey(sid, inode))
+				m.genLog(tx, m.now(), "DELSUSTAINED(%d,%d)", sid, inode)
+			}
 			return nil
 		}
 		newSpace = -align4K(attr.Length)

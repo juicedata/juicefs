@@ -2897,7 +2897,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 			}
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&iattr), 0)
 			if unlinked {
-				pipe.SRem(ctx, m.sustained(m.sid), strconv.Itoa(int(inode)))
+				pipe.SRem(ctx, m.sustained(m.sessionID()), strconv.Itoa(int(inode)))
 			} else {
 				if oldParent > 0 {
 					pipe.HIncrBy(ctx, m.parentKey(inode), oldParent.String(), 1)
@@ -3144,10 +3144,16 @@ func (m *redisMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) e
 			return err
 		}
 		m.parseAttr(a, &attr)
-		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold
-		if attr.Nlink > 0 {
+		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold.
+		// sid 0 holds nothing; it comes from cleanupLeakedInodes, which deletes an unreachable inode anyway.
+		if attr.Nlink > 0 && sid > 0 {
+			held, err := tx.SIsMember(ctx, m.sustained(sid), strconv.Itoa(int(inode))).Result()
+			if err != nil || !held {
+				return err
+			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
+				m.genLog(ctx, pipe, m.now(), "DELSUSTAINED(%d,%d)", sid, inode)
 				return nil
 			})
 			return err

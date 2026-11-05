@@ -2933,7 +2933,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			return err
 		}
 		if unlinked {
-			if _, err = s.Delete(&sustained{Sid: m.sid, Inode: inode}); err != nil {
+			if _, err = s.Delete(&sustained{Sid: m.sessionID(), Inode: inode}); err != nil {
 				return err
 			}
 		}
@@ -3519,8 +3519,11 @@ func (m *dbMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) erro
 			return nil
 		}
 		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold
-		if n.Nlink > 0 {
-			_, err = s.Delete(&sustained{Sid: sid, Inode: inode})
+		if n.Nlink > 0 && sid > 0 {
+			held, err := s.Delete(&sustained{Sid: sid, Inode: inode})
+			if err == nil && held > 0 {
+				m.genLog(Background(), s, m.now().UnixNano(), "DELSUSTAINED(%d,%d)", sid, inode)
+			}
 			return err
 		}
 		newSpace = -align4K(n.Length)
