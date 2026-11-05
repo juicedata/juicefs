@@ -104,7 +104,6 @@ func (c *Client) Rmdir(name string) error {
 	return pathError("rmdir", name, err)
 }
 
-// RemoveAll is os.RemoveAll; files go to the trash if it is enabled.
 func (c *Client) RemoveAll(name string) error {
 	if name == "" {
 		return nil
@@ -114,7 +113,14 @@ func (c *Client) RemoveAll(name string) error {
 		if endsWithDot(name) {
 			err = syscall.EINVAL
 		} else {
-			err = c.backend.removeAll(name)
+			err = c.backend.remove(name)
+			if err != nil && err != syscall.ENOENT {
+				p := name
+				for len(p) > 1 && strings.HasSuffix(p, "/") {
+					p = p[:len(p)-1]
+				}
+				err = c.backend.removeAll(p)
+			}
 		}
 	}
 	if err == syscall.ENOENT {

@@ -13,6 +13,7 @@ The JuiceFS file system consists of three parts:
 
 - **FUSE**: JuiceFS file system can be mounted on a host in a POSIX-compatible manner, allowing the massive cloud storage to be used as local storage. For details, see [this document](https://juicefs.com/docs/community/getting-started/installation).
 - **Python SDK**: In scenarios where FUSE mounting is not feasible or where direct file system access from within a Python process is required, the Python SDK can read and write the file system directly. Furthermore, the Python SDK natively implements fsspec for easy integration with frameworks like Ray. For details, see [Python_SDK](https://juicefs.com/docs/community/deployment/python_sdk).
+- **Go SDK**: Go programs can read and write the file system directly in process without a FUSE mount, through an API modeled on the Go standard library (`os` and `io/fs`). For details, see [Go SDK](../deployment/go_sdk.md).
 - **Windows Client**: You can experience a file system performance close to that of a local one. For details, see [Use JuiceFS on Windows](https://juicefs.com/docs/community/tutorials/windows).
 - **Hadoop Java SDK**: JuiceFS can replace HDFS, providing Hadoop with cost-effective and abundant storage capacity.
 For details, see [Use JuiceFS on Hadoop Ecosystem](https://juicefs.com/docs/community/hadoop_java_sdk).
