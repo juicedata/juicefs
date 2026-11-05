@@ -46,7 +46,7 @@ type Config struct {
 	OpenCache          time.Duration
 	OpenCacheLimit     uint64 // max number of files to cache (soft limit)
 	Heartbeat          time.Duration
-	SessionTimeout     time.Duration // a session is considered stale if not refreshed for this long (at least 5 heartbeats, 0 means 5 heartbeats)
+	SessionTimeout     time.Duration
 	MountPoint         string
 	Subdir             string
 	AtimeMode          string
