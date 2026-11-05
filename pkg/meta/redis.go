@@ -1945,7 +1945,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 					pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 					pipe.Decr(ctx, m.totalInodesKey())
 				}
-				pipe.Del(ctx, m.xattrKey(inode))
+				if !opened { // an open file keeps its xattrs until doDeleteSustainedInode
+					pipe.Del(ctx, m.xattrKey(inode))
+				}
 				if attr.Parent == 0 {
 					pipe.Del(ctx, m.parentKey(inode))
 				}
@@ -2214,9 +2216,11 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 						}
 						inodes[info.inode] = info.attr
 					} else {
+						dnode := delNodes[info.inode]
+						opened := dnode != nil && dnode.opened
 						switch info.typ {
 						case TypeFile:
-							if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
+							if opened {
 								if inodes == nil {
 									inodes = make(map[Ino]*Attr)
 								}
@@ -2255,7 +2259,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 								Inodes: -1,
 							})
 						}
-						keys = append(keys, m.xattrKey(info.inode))
+						if !opened {
+							keys = append(keys, m.xattrKey(info.inode))
+						}
 						if info.attr.Parent == 0 {
 							keys = append(keys, m.parentKey(info.inode))
 						}
@@ -2780,7 +2786,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 							pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 							pipe.Decr(ctx, m.totalInodesKey())
 						}
-						pipe.Del(ctx, m.xattrKey(dino))
+						if !opened {
+							pipe.Del(ctx, m.xattrKey(dino))
+						}
 						if tattr.Parent == 0 {
 							pipe.Del(ctx, m.parentKey(dino))
 						}
@@ -3138,6 +3146,7 @@ func (m *redisMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) e
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(m.now().Unix()), Member: m.toDelete(inode, attr.Length)})
 			pipe.Del(ctx, m.inodeKey(inode))
+			pipe.Del(ctx, m.xattrKey(inode))
 			pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 			pipe.Decr(ctx, m.totalInodesKey())
 			pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))

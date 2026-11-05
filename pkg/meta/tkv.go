@@ -1762,7 +1762,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				tx.delete(m.inodeKey(inode))
 				newSpace, newInode = -align4K(0), -1
 			}
-			tx.deleteKeys(m.xattrKey(inode, ""))
+			if !opened { // an open file keeps its xattrs until doDeleteSustainedInode
+				tx.deleteKeys(m.xattrKey(inode, ""))
+			}
 			if attr.Parent == 0 {
 				tx.deleteKeys(m.fmtKey("A", inode, "P"))
 			}
@@ -1998,9 +2000,11 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					if info.attr.Nlink > 0 {
 						tx.set(m.inodeKey(info.inode), m.marshal(info.attr))
 					} else {
+						dnode := delNodes[info.inode]
+						opened := dnode != nil && dnode.opened
 						switch info.typ {
 						case TypeFile:
-							if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
+							if opened {
 								tx.set(m.inodeKey(info.inode), m.marshal(info.attr))
 								tx.set(m.sustainedKey(m.sessionID(), info.inode), []byte{1})
 							} else {
@@ -2030,7 +2034,9 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 							})
 						}
 						// Delete xattrs and parent keys
-						tx.deleteKeys(m.xattrKey(info.inode, ""))
+						if !opened {
+							tx.deleteKeys(m.xattrKey(info.inode, ""))
+						}
 						if info.attr.Parent == 0 {
 							tx.deleteKeys(m.fmtKey("A", info.inode, "P"))
 						}
@@ -2474,7 +2480,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tx.delete(m.inodeKey(dino))
 						newSpace, newInode = -align4K(0), -1
 					}
-					tx.deleteKeys(m.xattrKey(dino, ""))
+					if !opened {
+						tx.deleteKeys(m.xattrKey(dino, ""))
+					}
 					if tattr.Parent == 0 {
 						tx.deleteKeys(m.fmtKey("A", dino, "P"))
 					}
@@ -2709,6 +2717,7 @@ func (m *kvMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) erro
 		newSpace = -align4K(attr.Length)
 		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(m.now().Unix()))
 		tx.delete(m.inodeKey(inode))
+		tx.deleteKeys(m.xattrKey(inode, ""))
 		tx.delete(m.sustainedKey(sid, inode))
 		m.genLog(tx, m.now(), "DELSUSTAINED(%d,%d)", sid, inode)
 		return nil
