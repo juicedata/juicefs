@@ -53,6 +53,9 @@ func unmarshalFlock(buf []byte) map[lockOwner]byte {
 }
 
 func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	ikey := m.flockKey(inode)
 	ctx = ctx.WithValue(txMethodKey{}, "Flock"+strconv.Itoa(int(ltype)))
 	var err error
@@ -134,6 +137,9 @@ func unmarshalPlock(buf []byte) map[lockOwner][]byte {
 }
 
 func (m *kvMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if *ltype == F_UNLCK {
 		*start = 0
 		*end = 0
@@ -171,6 +177,9 @@ func (m *kvMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, star
 }
 
 func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	ikey := m.plockKey(inode)
 	ctx = ctx.WithValue(txMethodKey{}, "Setlk"+strconv.Itoa(int(ltype)))
 	var err error
@@ -236,6 +245,9 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 }
 
 func (m *kvMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+	if st := m.CheckSession(); st != 0 {
+		return nil, nil, st
+	}
 	fKey := m.flockKey(inode)
 	pKey := m.plockKey(inode)
 

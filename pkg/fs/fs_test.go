@@ -23,6 +23,8 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -1053,6 +1055,10 @@ func TestRevalidateStaleCache(t *testing.T) {
 }
 
 func createTestFS(t testing.TB) *FileSystem {
+	return createTestFSWithMeta(t, nil)
+}
+
+func createTestFSWithMeta(t testing.TB, wrap func(meta.Meta) meta.Meta) *FileSystem {
 	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
 		Name:      "test",
@@ -1061,6 +1067,9 @@ func createTestFS(t testing.TB) *FileSystem {
 		DirStats:  true,
 	}
 	_ = m.Init(format, true)
+	if wrap != nil {
+		m = wrap(m)
+	}
 	var conf = vfs.Config{
 		Meta: meta.DefaultConf(),
 		Chunk: &chunk.Config{
@@ -1084,4 +1093,191 @@ func createTestFS(t testing.TB) *FileSystem {
 	jfs.rotateAccessLog = 500
 	t.Cleanup(func() { _ = jfs.Close() })
 	return jfs
+}
+
+type terminalFSMeta struct {
+	meta.Meta
+	lost      atomic.Bool
+	flushes   atomic.Int32
+	closes    atomic.Int32
+	shutdowns atomic.Int32
+}
+
+func (m *terminalFSMeta) CheckSession() syscall.Errno {
+	if m.lost.Load() {
+		return syscall.EIO
+	}
+	return m.Meta.CheckSession()
+}
+
+func (m *terminalFSMeta) FlushSession() {
+	m.flushes.Add(1)
+	m.Meta.FlushSession()
+}
+
+func (m *terminalFSMeta) Close(ctx meta.Context, inode meta.Ino) syscall.Errno {
+	m.closes.Add(1)
+	return m.Meta.Close(ctx, inode)
+}
+
+func (m *terminalFSMeta) CloseSession() error {
+	if m.lost.Load() {
+		return meta.ErrSessionLost
+	}
+	return m.Meta.CloseSession()
+}
+
+func (m *terminalFSMeta) Shutdown() error {
+	m.shutdowns.Add(1)
+	return m.Meta.Shutdown()
+}
+
+func TestFileSystemLostSession(t *testing.T) {
+	var m *terminalFSMeta
+	jfs := createTestFSWithMeta(t, func(base meta.Meta) meta.Meta {
+		m = &terminalFSMeta{Meta: base}
+		return m
+	})
+	ctx := meta.Background()
+	buffered, st := jfs.Create(ctx, "/buffered", 0644, 0)
+	if st != 0 {
+		t.Fatal(st)
+	}
+	if _, st = buffered.Write(ctx, []byte("uncommitted")); st != 0 {
+		t.Fatal(st)
+	}
+	empty, st := jfs.Create(ctx, "/empty", 0644, 0)
+	if st != 0 {
+		t.Fatal(st)
+	}
+	if _, st = jfs.Stat(ctx, "/empty"); st != 0 {
+		t.Fatal(st)
+	}
+	config, st := jfs.Open(ctx, "/.config", vfs.MODE_MASK_R)
+	if st != 0 {
+		t.Fatal(st)
+	}
+	dir, st := jfs.Open(ctx, "/", 0)
+	if st != 0 {
+		t.Fatal(st)
+	}
+	if _, st = dir.Readdir(ctx, 0); st != 0 {
+		t.Fatal(st)
+	}
+	if _, st = dir.ReaddirPlus(ctx, 0); st != 0 {
+		t.Fatal(st)
+	}
+	m.lost.Store(true)
+
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{"cached stat", func() error { _, e := jfs.Stat(ctx, "/empty"); return e }},
+		{"cached open", func() error { _, e := jfs.Open(ctx, "/empty", 0); return e }},
+		{"root mkdir", func() error { return jfs.Mkdir(ctx, "/", 0755, 0) }},
+		{"root delete", func() error { return jfs.Delete(ctx, "/") }},
+		{"root unlink", func() error { return jfs.Unlink(ctx, "/") }},
+		{"root rmdir", func() error { return jfs.Rmdir(ctx, "/") }},
+		{"root remove", func() error { return jfs.Rmr(ctx, "/", false, 1) }},
+		{"root rename", func() error { return jfs.Rename(ctx, "/", "/other", 0) }},
+		{"invalid rename flags", func() error { return jfs.Rename(ctx, "/empty", "/other", ^uint32(0)) }},
+		{"create", func() error { _, e := jfs.Create(ctx, "/invalid/", 0644, 0); return e }},
+		{"cached file stat", func() error { _, e := empty.Stat(); return e }},
+		{"cached read", func() error { _, e := config.Pread(ctx, make([]byte, 1), 0); return e }},
+		{"EOF read", func() error { _, e := empty.Read(ctx, make([]byte, 1)); return e }},
+		{"empty read", func() error { _, e := empty.Pread(ctx, nil, 0); return e }},
+		{"buffered write", func() error { _, e := buffered.Write(ctx, []byte("later")); return e }},
+		{"empty write", func() error { _, e := empty.Pwrite(ctx, nil, 0); return e }},
+		{"empty flush", func() error { return empty.Flush(ctx) }},
+		{"empty fsync", func() error { return empty.Fsync(ctx) }},
+		{"seek", func() error { _, e := empty.Seek(ctx, 0, io.SeekStart); return e }},
+		{"truncate", func() error { return empty.Truncate(ctx, 0) }},
+		{"noop utime", func() error { return empty.Utime(ctx, -1, -1) }},
+		{"cached readdir", func() error { _, e := dir.Readdir(ctx, 0); return e }},
+		{"cached readdirplus", func() error { _, e := dir.ReaddirPlus(ctx, 0); return e }},
+		{"cached root quota", func() error { _, e := dir.GetQuota(ctx); return e }},
+		{"filesystem flush", jfs.Flush},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.call(); err != syscall.EIO {
+				t.Fatalf("got %v, want EIO", err)
+			}
+		})
+	}
+	for _, f := range []*File{buffered, empty, config, dir} {
+		if st := f.Close(ctx); st != syscall.EIO {
+			t.Fatalf("close: %v", st)
+		}
+		if f.wdata != nil || f.rdata != nil || f.data != nil || f.dircache != nil || f.entries != nil {
+			t.Fatalf("close retained local file state")
+		}
+	}
+	var attr meta.Attr
+	if st := m.Meta.GetAttr(ctx, buffered.inode, &attr); st != 0 || attr.Length != 0 {
+		t.Fatalf("buffered data committed after loss: %v, length %d", st, attr.Length)
+	}
+	if err := jfs.Close(); err != syscall.EIO {
+		t.Fatalf("filesystem close: %v", err)
+	}
+	if m.flushes.Load() != 0 || m.closes.Load() != 0 {
+		t.Fatalf("remote cleanup after session loss: flushes %d, closes %d", m.flushes.Load(), m.closes.Load())
+	}
+	if m.shutdowns.Load() != 1 {
+		t.Fatalf("lost client did not release metadata resources: %d", m.shutdowns.Load())
+	}
+}
+
+func TestFileSystemFlushStoppedLog(t *testing.T) {
+	var m *terminalFSMeta
+	jfs := createTestFSWithMeta(t, func(base meta.Meta) meta.Meta {
+		m = &terminalFSMeta{Meta: base}
+		return m
+	})
+	jfs.logM.Lock()
+	close(jfs.logBuffer)
+	jfs.logBuffer = nil
+	jfs.logM.Unlock()
+	jfs.logWG.Wait()
+	jfs.logM.Lock()
+	jfs.logBuffer = make(chan string, 1)
+	jfs.logBuffer <- "log writer has stopped"
+	jfs.logM.Unlock()
+	done := make(chan error, 1)
+	go func() { done <- jfs.Flush() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("flush blocked on a stopped log writer")
+	}
+	m.lost.Store(true)
+	if err := jfs.Close(); err != syscall.EIO {
+		t.Fatalf("close after stopped log: %v", err)
+	}
+}
+
+func TestFileSystemLostSessionCloseLogging(t *testing.T) {
+	var m *terminalFSMeta
+	jfs := createTestFSWithMeta(t, func(base meta.Meta) meta.Meta {
+		m = &terminalFSMeta{Meta: base}
+		return m
+	})
+	m.lost.Store(true)
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				_, _ = jfs.Stat(meta.Background(), "/")
+			}
+		}()
+	}
+	if err := jfs.Close(); err != syscall.EIO {
+		t.Fatalf("close: %v", err)
+	}
+	wg.Wait()
 }

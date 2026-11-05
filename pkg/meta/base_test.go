@@ -217,6 +217,8 @@ func testMeta(t *testing.T, m Meta) {
 	testKerberosToken(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
+	base.conf.ReadOnly = false
+	testSessionLeaseLoss(t, m)
 }
 
 func testXattr(t *testing.T, m Meta) {
@@ -709,18 +711,15 @@ func testMetaClient(t *testing.T, m Meta) {
 	if base.sid != ses[0].Sid {
 		t.Fatalf("my sid %d != registered sid %d", base.sid, ses[0].Sid)
 	}
-	if err = base.en.doCleanStaleSession(base.sid); err != nil {
-		t.Fatalf("clean session: %s", err)
+	if lost, err := base.en.doRefreshSession(); err != nil || lost {
+		t.Fatalf("refresh live session: lost %t, err %v", lost, err)
 	}
-	if err = base.en.doRefreshSession(); err != nil {
-		t.Fatalf("refresh session: %s", err)
-	}
-	restored, err := m.GetSession(base.sid, false)
+	refreshed, err := m.GetSession(base.sid, false)
 	if err != nil {
-		t.Fatalf("get restored session: %s", err)
+		t.Fatalf("get refreshed session: %s", err)
 	}
-	if !reflect.DeepEqual(ses[0].SessionInfo, restored.SessionInfo) { // session should remain unchanged even after rejoining
-		t.Fatalf("restored session info changed: %+v != %+v", restored.SessionInfo, ses[0].SessionInfo)
+	if !reflect.DeepEqual(ses[0].SessionInfo, refreshed.SessionInfo) {
+		t.Fatalf("refreshed session info changed: %+v != %+v", refreshed.SessionInfo, ses[0].SessionInfo)
 	}
 	go m.CleanStaleSessions(Background())
 

@@ -175,6 +175,9 @@ var (
 )
 
 func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	var inode Ino
 	var attr = &Attr{}
 	if parent == rootID || name == internalNodes[0].name { // 0 is the control file
@@ -205,6 +208,9 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 }
 
 func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	if IsSpecialNode(ino) && getInternalNode(ino) != nil {
 		n := getInternalNode(ino)
 		entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
@@ -240,6 +246,9 @@ func get_filetype(mode uint16) uint8 {
 }
 
 func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask uint16, rdev uint32) (entry *meta.Entry, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		logit(ctx, "mknod", err, "(%d,%s,%s:0%04o,0x%08X):%s", parent, name, smode(mode), mode, rdev, (*Entry)(entry))
 	}()
@@ -268,6 +277,9 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 }
 
 func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	return v.doUnlink(ctx, parent, name, false)
 }
 
@@ -289,6 +301,9 @@ func (v *VFS) doUnlink(ctx Context, parent Ino, name string, skipTrash bool) (er
 }
 
 func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16) (entry *meta.Entry, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		logit(ctx, "mkdir", err, "(%d,%s,%s:0%04o):%s", parent, name, smode(mode), mode, (*Entry)(entry))
 	}()
@@ -312,6 +327,9 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 }
 
 func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() { logit(ctx, "rmdir", err, "(%d,%s)", parent, name) }()
 	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
@@ -325,6 +343,9 @@ func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 }
 
 func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		logit(ctx, "symlink", err, "(%d,%s,%s):%s", parent, name, path, (*Entry)(entry))
 	}()
@@ -348,12 +369,18 @@ func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry 
 }
 
 func (v *VFS) Readlink(ctx Context, ino Ino) (path []byte, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() { logit(ctx, "readlink", err, "(%d): (%s)", ino, string(path)) }()
 	err = v.Meta.ReadLink(ctx, ino, &path)
 	return
 }
 
 func (v *VFS) Rename(ctx Context, parent Ino, name string, newparent Ino, newname string, flags uint32) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		logit(ctx, "rename", err, "(%d,%s,%d,%s,%d)", parent, name, newparent, newname, flags)
 	}()
@@ -382,6 +409,9 @@ func (v *VFS) Rename(ctx Context, parent Ino, name string, newparent Ino, newnam
 }
 
 func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *meta.Entry, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		logit(ctx, "link", err, "(%d,%d,%s):%s", ino, newparent, newname, (*Entry)(entry))
 	}()
@@ -408,6 +438,9 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 }
 
 func (v *VFS) Opendir(ctx Context, ino Ino, flags uint32) (fh uint64, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() { logit(ctx, "opendir", err, "(%d) [fh:%d]", ino, fh) }()
 	if ctx.CheckPermission() {
 		var mmask uint8 = 0
@@ -438,6 +471,9 @@ func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 }
 
 func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, readAt time.Time, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() { logit(ctx, "readdir", err, "(%d,%d,%d,%t): (%d)", ino, size, off, plus, len(entries)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
@@ -496,15 +532,18 @@ func (v *VFS) Releasedir(ctx Context, ino Ino, fh uint64) int {
 	defer logit(ctx, "releasedir", 0, "(%d)", ino)
 	h := v.findHandle(ino, fh)
 	if h == nil {
-		return 0
+		return int(v.Meta.CheckSession())
 	}
 	v.ReleaseHandler(ino, fh)
-	return 0
+	return int(v.Meta.CheckSession())
 }
 
 const O_TMPFILE = 020000000
 
 func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32) (entry *meta.Entry, fh uint64, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		logit(ctx, "create", err, "(%d,%s,%s:0%04o):%s [fh:%d]", parent, name, smode(mode), mode, (*Entry)(entry), fh)
 	}()
@@ -548,6 +587,9 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 }
 
 func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		if entry != nil {
 			logit(ctx, "open", err, "(%d,%#x) [fh:%d]", ino, flags, fh)
@@ -602,6 +644,9 @@ func (v *VFS) marshalConf() []byte {
 }
 
 func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	// defer func() { logit(ctx, "truncate (%d,%d): %s", ino, size, strerr(err)) }()
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM
@@ -656,6 +701,13 @@ func (v *VFS) ReleaseHandler(ino Ino, fh uint64) {
 }
 
 func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
+	if v.Meta.CheckSession() != 0 {
+		if ino == logInode {
+			closeAccessLog(fh)
+		}
+		v.releaseFileHandle(ino, fh)
+		return
+	}
 	var err syscall.Errno
 	defer func() { logit(ctx, "release", err, "(%d,%d)", ino, fh) }()
 	if IsSpecialNode(ino) {
@@ -702,6 +754,9 @@ func hasReadPerm(flag uint32) bool {
 }
 
 func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	size := uint32(len(buf))
 	if IsSpecialNode(ino) {
 		if ino == controlInode && runtime.GOOS == "darwin" {
@@ -805,6 +860,9 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 }
 
 func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	size := uint64(len(buf))
 	if ino == controlInode && runtime.GOOS == "darwin" {
 		fh = v.getControlHandle(ctx.Pid())
@@ -869,6 +927,9 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 }
 
 func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, size int64, fh uint64) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() { logit(ctx, "fallocate", err, "(%d,%d,%d,%d)", ino, mode, off, size) }()
 	if off < 0 || size <= 0 {
 		err = syscall.EINVAL
@@ -919,6 +980,9 @@ func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, size int64, fh ui
 }
 
 func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut Ino, fhOut, offOut, size uint64, flags uint32) (copied uint64, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		logit(ctx, "copy_file_range", err, "(%d,%d,%d,%d,%d,%d)", nodeIn, offIn, nodeOut, offOut, size, flags)
 	}()
@@ -995,6 +1059,9 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 }
 
 func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	if ino == controlInode && runtime.GOOS == "darwin" {
 		fh = v.getControlHandle(ctx.Pid())
 		defer v.releaseControlHandle(ctx.Pid())
@@ -1040,6 +1107,9 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 }
 
 func (v *VFS) Fsync(ctx Context, ino Ino, datasync int, fh uint64) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() { logit(ctx, "fsync", err, "(%d,%d)", ino, datasync) }()
 	if IsSpecialNode(ino) {
 		return
@@ -1091,6 +1161,9 @@ func isXattrEnabled(conf *Config, name string) bool {
 }
 
 func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags uint32) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() { logit(ctx, "setxattr", err, "(%d,%s,%d,%d)", ino, name, len(value), flags) }()
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM
@@ -1141,6 +1214,9 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 }
 
 func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []byte, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	if !isXattrEnabled(v.Conf, name) {
 		err = syscall.ENODATA
 		return
@@ -1180,6 +1256,9 @@ func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []
 }
 
 func (v *VFS) ListXattr(ctx Context, ino Ino, size int) (data []byte, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() { logit(ctx, "listxattr", err, "(%d,%d): (%d)", ino, size, len(data)) }()
 	if IsSpecialNode(ino) {
 		err = meta.ENOATTR
@@ -1193,6 +1272,9 @@ func (v *VFS) ListXattr(ctx Context, ino Ino, size int) (data []byte, err syscal
 }
 
 func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() { logit(ctx, "removexattr", err, "(%d,%s)", ino, name) }()
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM
@@ -1284,10 +1366,18 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	if statePath == "" {
 		statePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
-	if err := v.loadAllHandles(statePath); err != nil && !os.IsNotExist(err) {
-		logger.Errorf("load state from %s: %s", statePath, err)
+	if conf.Meta.SessionLease != nil || conf.Meta.Sid == 0 || conf.Meta.Heartbeat <= 0 || conf.Meta.ReadOnly {
+		if err := v.loadAllHandles(statePath); err != nil {
+			if !os.IsNotExist(err) {
+				logger.Errorf("load state from %s: %s", statePath, err)
+			}
+			if conf.Meta.SessionLease != nil {
+				return nil
+			}
+		} else {
+			_ = os.Rename(statePath, statePath+".bak")
+		}
 	}
-	_ = os.Rename(statePath, statePath+".bak")
 
 	go v.cleanupModified()
 	initVFSMetrics(v, writer, reader, registerer)
@@ -1328,6 +1418,9 @@ func (v *VFS) cleanupModified() {
 }
 
 func (v *VFS) FlushAll(path string) (err error) {
+	if st := v.Meta.CheckSession(); st != 0 {
+		return st
+	}
 	now := time.Now()
 	defer func() {
 		logger.Infof("flush buffered data in %s: %v", time.Since(now), err)

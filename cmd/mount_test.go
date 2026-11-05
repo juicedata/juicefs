@@ -18,12 +18,14 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -50,6 +52,75 @@ const testMeta = "redis://127.0.0.1:6379/11"
 var testMountPoint = filepath.Join(os.TempDir(), fmt.Sprintf("jfs-unit-test-%d", os.Getpid()))
 
 const testVolume = "test"
+
+type mountSessionMeta struct {
+	meta.Meta
+	lost chan struct{}
+}
+
+func (m *mountSessionMeta) SessionLost() <-chan struct{} { return m.lost }
+
+func TestMountSessionExit(t *testing.T) {
+	if os.Getenv("JUICEFS_TEST_SESSION_EXIT") == "1" {
+		defer func() { _ = os.WriteFile(os.Getenv("JUICEFS_TEST_SESSION_MARKER"), nil, 0600) }()
+		m := &mountSessionMeta{lost: make(chan struct{})}
+		watchMountSession(m)
+		close(m.lost)
+		select {}
+	}
+	marker := filepath.Join(t.TempDir(), "deferred-cleanup")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestMountSessionExit$")
+	cmd.Env = append(os.Environ(), "JUICEFS_TEST_SESSION_EXIT=1", "JUICEFS_TEST_SESSION_MARKER="+marker)
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != meta.UmountCode {
+		t.Fatalf("lost session exit: %v, want exit code %d", err, meta.UmountCode)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("session loss ran deferred cleanup: %v", err)
+	}
+
+	m := &mountSessionMeta{lost: make(chan struct{})}
+	stop := watchMountSession(m)
+	stop()
+	close(m.lost)
+}
+
+func TestLoadMountSessionLease(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	t.Setenv("_FUSE_STATE_PATH", path)
+	conf := meta.DefaultConf()
+	conf.Sid = 42
+	if err := loadMountSessionLease(conf); !errors.Is(err, meta.ErrSessionLost) {
+		t.Fatalf("missing state: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"Handler":{}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := loadMountSessionLease(conf); !errors.Is(err, meta.ErrSessionLost) {
+		t.Fatalf("old state without lease: %v", err)
+	}
+	lease := meta.SessionLease{Sid: conf.Sid, Heartbeat: conf.Heartbeat, LastRefresh: time.Now().UnixNano()}
+	data, err := json.Marshal(struct{ SessionLease meta.SessionLease }{lease})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := loadMountSessionLease(conf); err != nil || conf.SessionLease == nil || *conf.SessionLease != lease {
+		t.Fatalf("load lease: %+v, %v", conf.SessionLease, err)
+	}
+	for _, disabled := range []*meta.Config{
+		{Heartbeat: time.Second},
+		{Sid: 42},
+		{Sid: 42, Heartbeat: time.Second, ReadOnly: true},
+	} {
+		if err := loadMountSessionLease(disabled); err != nil || disabled.SessionLease != nil {
+			t.Fatalf("unprotected client should not load lease: %+v, %v", disabled, err)
+		}
+	}
+}
 
 // gomonkey may encounter the problem of insufficient permissions under mac, please solve it by viewing this link https://github.com/agiledragon/gomonkey/issues/70
 func Test_exposeMetrics(t *testing.T) {

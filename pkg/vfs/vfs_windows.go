@@ -27,6 +27,9 @@ const O_ACCMODE = uint32(fuse.O_ACCMODE)
 const F_UNLCK = 0x01
 
 func (v *VFS) ChFlags(ctx Context, ino Ino, flags uint8) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		logit(ctx, "chflags", err, "(%d):%d", ino, flags)
 	}()

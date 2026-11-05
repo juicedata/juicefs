@@ -101,8 +101,7 @@ var (
 
 	formats = make(map[string]*meta.Format)
 
-	kerbOnce           = sync.Once{}
-	superuserChangedCb = make(map[string]struct{})
+	kerbOnce = sync.Once{}
 
 	MaxDeletes = meta.RmrDefaultThreads
 	caller     = CALLER_JAVA
@@ -414,6 +413,18 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 	defer fslock.Unlock()
 	key := fsKey{name: name, conf: cleanConf(conf)}
 	ws := activefs[key]
+	if len(ws) > 0 && ws[0].Meta().CheckSession() != 0 {
+		for _, w := range ws {
+			for _, active := range handlers {
+				if active == w {
+					return 0
+				}
+			}
+		}
+		_ = ws[0].Close()
+		delete(activefs, key)
+		ws = nil
+	}
 	var jfs *fs.FileSystem
 	var m *mapping
 	if len(ws) > 0 {
@@ -423,6 +434,10 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 		m = newMapping(name)
 		jfs = f()
 		if jfs == nil {
+			return 0
+		}
+		if jfs.Meta().CheckSession() != 0 {
+			_ = jfs.Close()
 			return 0
 		}
 		var err error
@@ -437,15 +452,12 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 		conf.RootGroup = supergroup
 	}
 	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf}
-	if formats[name] != nil && formats[name].KerbConf != "" {
-		if _, ok := superuserChangedCb[name]; !ok {
-			jfs.Meta().OnReload(func(format *meta.Format) error {
-				kerb.loadConf(name, format.KerbConf, jfs)
-				updateAllCtx(name, user, groups)
-				return nil
-			})
-			superuserChangedCb[name] = struct{}{}
-		}
+	if len(ws) == 0 && formats[name] != nil && formats[name].KerbConf != "" {
+		jfs.Meta().OnReload(func(format *meta.Format) error {
+			kerb.loadConf(name, format.KerbConf, jfs)
+			updateAllCtx(name, user, groups)
+			return nil
+		})
 	}
 	activefs[key] = append(ws, w)
 	updateAllCtx(name, user, groups)
@@ -980,8 +992,8 @@ func jfs_term(pid int64, h int64, terminate C.int) int32 {
 					activefs[k] = ws[:len(ws)-1]
 				} else {
 					_ = w.Flush()
-					if terminate != 0 {
-						w.Close()
+					if terminate != 0 || w.Meta().CheckSession() != 0 {
+						_ = w.Close()
 						delete(activefs, k)
 					}
 					// Otherwise, don't close the filesystem, so it can be re-used later
@@ -1004,7 +1016,7 @@ func jfs_term(pid int64, h int64, terminate C.int) int32 {
 			logger.Warnf("error pushing to RemoteWrite: %s", err)
 		}
 	}
-	return 0
+	return errno(w.Meta().CheckSession())
 }
 
 //export jfs_open
@@ -1018,7 +1030,10 @@ func jfs_open(pid int64, h int64, cpath *C.char, lenPtr uintptr, flags int32) in
 	if err != 0 {
 		return errno(err)
 	}
-	st, _ := f.Stat()
+	st, statErr := f.Stat()
+	if statErr != nil {
+		return errno(statErr)
+	}
 	if st.IsDir() {
 		return ENOENT
 	}
@@ -1041,7 +1056,10 @@ func jfs_open_posix(pid int64, h int64, cpath *C.char, lenPtr uintptr, flags int
 	if err != 0 {
 		return errno(err)
 	}
-	st, _ := f.Stat()
+	st, statErr := f.Stat()
+	if statErr != nil {
+		return errno(statErr)
+	}
 	if st.IsDir() {
 		return EISDIR
 	}
@@ -1589,7 +1607,13 @@ func jfs_statvfs(pid int64, h int64, buf uintptr) int32 {
 	if w == nil {
 		return EINVAL
 	}
+	if st := w.Meta().CheckSession(); st != 0 {
+		return errno(st)
+	}
 	total, avail := w.StatFS(w.withPid(pid))
+	if st := w.Meta().CheckSession(); st != 0 {
+		return errno(st)
+	}
 	wb := utils.NewNativeBuffer(toBuf(buf, 16))
 	wb.Put64(total)
 	wb.Put64(avail)
@@ -1653,7 +1677,10 @@ func setOwner(w *wrapper, ctx meta.Context, path string, owner, group string) in
 		return errno(err)
 	}
 	defer f.Close(ctx)
-	st, _ := f.Stat()
+	st, statErr := f.Stat()
+	if statErr != nil {
+		return errno(statErr)
+	}
 	uid := uint32(st.(*fs.FileStat).Uid())
 	gid := uint32(st.(*fs.FileStat).Gid())
 	if owner != "" {
@@ -1692,7 +1719,10 @@ func jfs_listdir(pid int64, h int64, cpath *C.char, offset int64, buf uintptr, b
 		if err != 0 {
 			return errno(err)
 		}
-		st, _ := f.Stat()
+		st, statErr := f.Stat()
+		if statErr != nil {
+			return errno(statErr)
+		}
 		if !st.IsDir() {
 			return ENOTDIR
 		}
@@ -1735,7 +1765,10 @@ func jfs_listdir2(pid int64, h int64, cpath *C.char, plus bool, buf **byte, size
 	if err != 0 {
 		return errno(err)
 	}
-	st, _ := f.Stat()
+	st, statErr := f.Stat()
+	if statErr != nil {
+		return errno(statErr)
+	}
 	if !st.IsDir() {
 		return ENOTDIR
 	}
@@ -1820,7 +1853,10 @@ func jfs_concat(pid int64, h int64, _dst *C.char, buf uintptr, bufsize int32) in
 		tmp = srcs[0]
 	}
 
-	dfi, _ := df.Stat()
+	dfi, statErr := df.Stat()
+	if statErr != nil {
+		return errno(statErr)
+	}
 	_, err = w.CopyFileRange(ctx, tmp, 0, dst, uint64(dfi.Size()), 1<<63)
 	r := errno(err)
 	if r == 0 {
@@ -1860,6 +1896,9 @@ func jfs_status(pid int64, h int64, trash bool, session uint64, p_buf **byte) in
 	w := F(h)
 	if w == nil {
 		return EINVAL
+	}
+	if st := w.Meta().CheckSession(); st != 0 {
+		return errno(st)
 	}
 	ctx := w.withPid(pid)
 
@@ -1901,7 +1940,10 @@ func jfs_lseek(pid int64, fd int32, offset int64, whence int64) int64 {
 	f, ok := openFiles[fd]
 	if ok {
 		filesLock.Unlock()
-		off, _ := f.Seek(f.w.withPid(pid), offset, int(whence))
+		off, err := f.Seek(f.w.withPid(pid), offset, int(whence))
+		if err != nil {
+			return int64(errno(err))
+		}
 		return off
 	}
 	filesLock.Unlock()
@@ -2060,6 +2102,9 @@ func jfs_warmup(pid int64, h int64, _paths *C.char, numthreads int32, background
 	if w == nil {
 		return EINVAL
 	}
+	if st := w.Meta().CheckSession(); st != 0 {
+		return errno(st)
+	}
 	ctx := w.withPid(pid)
 
 	var paths []string
@@ -2069,6 +2114,9 @@ func jfs_warmup(pid int64, h int64, _paths *C.char, numthreads int32, background
 		return EINVAL
 	}
 	w.Warmup(ctx, paths, int(numthreads), background, isEvict, isCheck, resp)
+	if st := w.Meta().CheckSession(); st != 0 {
+		return errno(st)
+	}
 	res, err := json.Marshal(resp)
 	if err != nil {
 		logger.Fatalf("json: %s", err)

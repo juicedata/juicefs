@@ -161,6 +161,9 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 }
 
 func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall.Errno) {
+	if st := m.CheckSession(); st != 0 {
+		return nil, st
+	}
 	stat, st = m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
 	if st != 0 {
 		return
@@ -236,6 +239,9 @@ func (m *baseMeta) flushDirStat(ctx Context) {
 }
 
 func (m *baseMeta) doFlushDirStat() {
+	if m.CheckSession() != 0 {
+		return
+	}
 	if !m.getFormat().DirStats {
 		return
 	}
@@ -268,12 +274,20 @@ func (m *baseMeta) flushStats(ctx Context) {
 }
 
 func (m *baseMeta) doFlushStats() {
+	if m.CheckSession() != 0 {
+		return
+	}
 	m.fsStatsLock.Lock()
-	m.en.doFlushStats()
+	if m.CheckSession() == 0 {
+		m.en.doFlushStats()
+	}
 	m.fsStatsLock.Unlock()
 }
 
 func (m *baseMeta) syncVolumeStat(ctx Context, used, inodes int64) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	return m.en.doSyncVolumeStat(ctx, used, inodes)
 }
 
@@ -544,6 +558,9 @@ func (m *baseMeta) updateQuota(q *Quota, newSpace, newInodes int64) {
 }
 
 func (m *baseMeta) doFlushQuotas() {
+	if m.CheckSession() != 0 {
+		return
+	}
 	if !m.getFormat().DirStats && !m.getFormat().UserGroupQuota {
 		return
 	}
@@ -558,6 +575,9 @@ func (m *baseMeta) doFlushQuotas() {
 	m.quotaMu.RUnlock()
 
 	if len(allQuotas) == 0 {
+		return
+	}
+	if m.CheckSession() != 0 {
 		return
 	}
 	if err := m.en.doFlushQuotas(Background(), allQuotas); err != nil {
@@ -584,6 +604,9 @@ func (m *baseMeta) doFlushQuotas() {
 }
 
 func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32, quotas map[string]*Quota, strict, repair bool, create bool) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	var inode Ino
 	var dpath string
 	var key uint64
@@ -698,6 +721,9 @@ func (m *baseMeta) calcDirQuotaUsage(ctx Context, ino Ino, dpath string, strict 
 }
 
 func (m *baseMeta) ScanUserGroupUsage(ctx Context) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	userUsage, groupUsage, err := m.scanGlobalUserGroupUsage(ctx)
 	if err != nil {
 		return fmt.Errorf("scan global user group usage: %v", err)

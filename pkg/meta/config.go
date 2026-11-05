@@ -54,7 +54,8 @@ type Config struct {
 	Sid                uint64
 	SortDir            bool
 	FastStatfs         bool
-	NetworkInterfaces  []string // list of network interfaces to use for IP discovery (empty means all)
+	NetworkInterfaces  []string      // list of network interfaces to use for IP discovery (empty means all)
+	SessionLease       *SessionLease `json:"-"` // lease inherited during graceful restart
 }
 
 func DefaultConf() *Config {

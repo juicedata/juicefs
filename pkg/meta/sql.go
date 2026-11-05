@@ -824,6 +824,14 @@ func (m *dbMeta) doNewSession(sinfo []byte, update bool) error {
 		beans := session2{Sid: m.sid, Expire: m.expireTime(), Info: sinfo}
 		if update {
 			return m.txn(func(s *xorm.Session) error {
+				old := session2{Sid: m.sid}
+				ok, e := s.ForUpdate().Get(&old)
+				if e != nil {
+					return e
+				}
+				if !ok || old.Expire <= time.Now().Unix() {
+					return ErrSessionLost
+				}
 				_, err = s.Cols("expire", "info").Update(&beans, &session2{Sid: beans.Sid})
 				if err == nil {
 					m.genLog(Background(), s, time.Now().UnixNano(), "NEWSESSION(%d,%d,%s)", m.sid, beans.Expire, logEncode(sinfo))
@@ -1340,6 +1348,9 @@ func (m *dbMeta) shouldRetry(err error) bool {
 }
 
 func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
@@ -1357,8 +1368,18 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 		method  txMethod
 	)
 	for i := 0; i < 50; i++ {
+		if st := m.CheckSession(); st != 0 {
+			return st
+		}
 		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
-			return nil, f(s)
+			if st := m.CheckSession(); st != 0 {
+				return nil, st
+			}
+			err := f(s)
+			if st := m.CheckSession(); st != 0 {
+				return nil, st
+			}
+			return nil, err
 		})
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
@@ -1379,6 +1400,9 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 }
 
 func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
 	s := m.db.NewSession()
@@ -1401,6 +1425,9 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 		method  txMethod
 	)
 	for i := 0; i < maxRetry; i++ {
+		if st := m.CheckSession(); st != 0 {
+			return st
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1440,6 +1467,9 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 }
 
 func (m *dbMeta) simpleTxn(ctx context.Context, f func(s *xorm.Session) error) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
 	s := m.spool.Get().(*xorm.Session)
@@ -1451,6 +1481,9 @@ func (m *dbMeta) simpleTxn(ctx context.Context, f func(s *xorm.Session) error) e
 		method   txMethod
 	)
 	for i := 0; i < maxRetry; i++ {
+		if st := m.CheckSession(); st != 0 {
+			return st
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -3453,15 +3486,23 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	return sids, nil
 }
 
-func (m *dbMeta) doRefreshSession() error {
-	return m.txn(func(ses *xorm.Session) error {
-		n, err := ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid})
-		if err == nil && n == 0 {
-			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-			err = mustInsert(ses, &session2{m.sid, m.expireTime(), m.currentSessionInfo()})
+func (m *dbMeta) doRefreshSession() (bool, error) {
+	var lost bool
+	err := m.txn(func(ses *xorm.Session) error {
+		lost = false
+		old := session2{Sid: m.sid}
+		ok, err := ses.ForUpdate().Get(&old)
+		if err != nil {
+			return err
 		}
+		if !ok || old.Expire <= time.Now().Unix() {
+			lost = true
+			return nil
+		}
+		_, err = ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid})
 		return err
 	})
+	return lost && err == nil, err
 }
 
 func (m *dbMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error {
@@ -3608,6 +3649,9 @@ func (m *dbMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 }
 
 func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("CopyFileRange", time.Now())
 	f := m.of.find(fout)
 	if f != nil {
@@ -4185,6 +4229,9 @@ func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 }
 
 func (m *dbMeta) ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		var cs []chunk
 		err := s.Find(&cs)
@@ -4440,6 +4487,9 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr, trustNlink bool) s
 }
 
 func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("GetXattr", time.Now())
 	inode = m.checkRoot(inode)
 	return errno(m.simpleTxn(ctx, func(s *xorm.Session) error {
@@ -4457,6 +4507,9 @@ func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 }
 
 func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("ListXattr", time.Now())
 	inode = m.checkRoot(inode)
 	return errno(m.roTxn(ctx, func(s *xorm.Session) error {
@@ -5134,6 +5187,9 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 }
 
 func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) (err error) {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer func() {
 		if p := recover(); p != nil {
 			debug.PrintStack()
@@ -5474,6 +5530,9 @@ func (m *dbMeta) checkAddr() error {
 }
 
 func (m *dbMeta) LoadMeta(r io.Reader) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if err := m.checkAddr(); err != nil {
 		return err
 	}
@@ -6329,11 +6388,12 @@ type dbDirHandler struct {
 func (m *dbMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
 	h := &dbDirHandler{
 		dirHandler: dirHandler{
-			inode:       inode,
-			plus:        plus,
-			initEntries: entries,
-			fetcher:     m.getDirFetcher(),
-			batchNum:    DirBatchNum["db"],
+			checkSession: m.CheckSession,
+			inode:        inode,
+			plus:         plus,
+			initEntries:  entries,
+			fetcher:      m.getDirFetcher(),
+			batchNum:     DirBatchNum["db"],
 		},
 	}
 	h.batch, _ = h.fetch(Background(), 0)

@@ -144,7 +144,7 @@ func (n *jfsObjects) IsEncryptionSupported() bool {
 
 // IsReady returns whether the layer is ready to take requests.
 func (n *jfsObjects) IsReady(_ context.Context) bool {
-	return true
+	return n.fs.Meta().CheckSession() == 0
 }
 
 func (n *jfsObjects) Shutdown(ctx context.Context) error {
@@ -152,6 +152,9 @@ func (n *jfsObjects) Shutdown(ctx context.Context) error {
 }
 
 func (n *jfsObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo, errors []error) {
+	if st := n.fs.Meta().CheckSession(); st != 0 {
+		return info, []error{st}
+	}
 	sinfo := minio.StorageInfo{}
 	sinfo.Backend.Type = madmin.FS
 	return sinfo, nil
@@ -298,6 +301,9 @@ func (n *jfsObjects) deleteBucketNoLock(ctx context.Context, bucket string) erro
 }
 
 func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, options minio.BucketOptions) error {
+	if st := n.fs.Meta().CheckSession(); st != 0 {
+		return st
+	}
 	if bucket == minio.MinioMetaBucket {
 		return n.makeBucketNoLock(ctx, bucket)
 	}
@@ -411,7 +417,7 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 		}
 		defer f.Close(mctx)
 		if !n.gConf.HideDir {
-			if fi, _ := f.Stat(); fi.(*fs.FileStat).Atime() == 0 && prefixEntry == "" {
+			if fi, err := f.Stat(); err == nil && fi.(*fs.FileStat).Atime() == 0 && prefixEntry == "" {
 				entries = append(entries, &minio.Entry{Name: ""})
 			}
 		}
@@ -449,6 +455,9 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 }
 
 func (n *jfsObjects) checkBucket(ctx context.Context, bucket string) error {
+	if st := n.fs.Meta().CheckSession(); st != 0 {
+		return st
+	}
 	if err := n.isValidBucketName(bucket); err != nil {
 		return err
 	}
@@ -628,6 +637,9 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 	if err := n.checkBucket(ctx, bucket); err != nil {
 		for idx := range objects {
 			errs[idx] = minio.BucketNotFound{Bucket: bucket}
+			if errors.Is(err, syscall.EIO) {
+				errs[idx] = err
+			}
 		}
 		return
 	}
@@ -691,7 +703,10 @@ func (n *jfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	if eno != 0 {
 		return nil, jfsToObjectErr(ctx, eno, bucket, object)
 	}
-	_, _ = f.Seek(mctx, startOffset, 0)
+	if _, err = f.Seek(mctx, startOffset, 0); err != nil {
+		_ = f.Close(mctx)
+		return nil, err
+	}
 	r := &io.LimitedReader{R: &fReader{f}, N: length}
 	closer := func() { _ = f.Close(mctx) }
 	return minio.NewGetObjectReaderFromReader(r, objInfo, opts, closer)
@@ -1168,7 +1183,10 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 	}
 	f, eno := n.fs.Open(mctx, n.tpath(bucket, "uploads"), 0)
 	if eno != 0 {
-		return // no found
+		if eno == syscall.EIO {
+			err = jfsToObjectErr(ctx, eno, bucket)
+		}
+		return
 	}
 	defer f.Close(mctx)
 	parents, eno := f.ReaddirPlus(mctx, 0)
@@ -1561,6 +1579,11 @@ func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (
 }
 
 func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeout *minio.DynamicTimeout) (context.Context, error) {
+	if j.meta != nil {
+		if st := j.meta.CheckSession(); st != 0 {
+			return ctx, st
+		}
+	}
 	if j.readonly || j.inode == 0 {
 		return ctx, nil
 	}
@@ -1581,6 +1604,9 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 	}
 
 	for {
+		if st := j.meta.CheckSession(); st != 0 {
+			return ctx, st
+		}
 		if err := ctx.Err(); err != nil {
 			return ctx, err
 		}
@@ -1700,7 +1726,7 @@ func (n *jfsObjects) lockBucket(ctx context.Context) (*jfsFLock, error) {
 
 func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
 	if n.gConf.ReadOnly {
-		return &jfsFLock{readonly: true}
+		return &jfsFLock{readonly: true, meta: n.fs.Meta()}
 	}
 	if len(objects) != 1 {
 		panic(fmt.Errorf("jfsObjects.NewNSLock: the length of the objects parameter must be 1, current %s", objects))
@@ -1710,7 +1736,7 @@ func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker 
 	lk, err := n.newJFSFLock(lockfile, n.conf.Meta.Sid)
 	if err != nil {
 		logger.Errorf("failed to open the file to be locked: %s error %s", lockfile, err)
-		return &jfsFLock{}
+		return &jfsFLock{meta: n.fs.Meta()}
 	}
 	return lk
 }
@@ -1733,6 +1759,9 @@ func (n *jfsObjects) ListObjectVersions(ctx context.Context, bucket, prefix, mar
 }
 
 func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object string, info any) (oi minio.ObjectInfo, e error) {
+	if st := n.fs.Meta().CheckSession(); st != 0 {
+		return oi, st
+	}
 	if info != nil {
 		fi := info.(*fs.FileStat)
 		oi = minio.ObjectInfo{
@@ -1753,10 +1782,16 @@ func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 }
 
 func (n *jfsObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- minio.ObjectInfo, opts minio.ObjectOptions) error {
+	if st := n.fs.Meta().CheckSession(); st != 0 {
+		return st
+	}
 	return minio.FsWalk(ctx, n, bucket, prefix, n.listDirFactory(), n.isLeaf, n.isLeafDir, results, n.getObjectInfoNoFSLock, n.getObjectInfoNoFSLock)
 }
 
 func (n *jfsObjects) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
+	if st := n.fs.Meta().CheckSession(); st != 0 {
+		return st
+	}
 	meta, err := minio.LoadBucketMetadata(ctx, n, bucket)
 	if err != nil {
 		return err
@@ -1773,6 +1808,9 @@ func (n *jfsObjects) SetBucketPolicy(ctx context.Context, bucket string, policy 
 }
 
 func (n *jfsObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
+	if st := n.fs.Meta().CheckSession(); st != 0 {
+		return nil, st
+	}
 	meta, err := minio.LoadBucketMetadata(ctx, n, bucket)
 	if err != nil {
 		return nil, err
@@ -1784,6 +1822,9 @@ func (n *jfsObjects) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 }
 
 func (n *jfsObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
+	if st := n.fs.Meta().CheckSession(); st != 0 {
+		return st
+	}
 	meta, err := minio.LoadBucketMetadata(ctx, n, bucket)
 	if err != nil {
 		return err

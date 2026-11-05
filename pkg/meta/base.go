@@ -86,7 +86,7 @@ type engine interface {
 	doLoad() ([]byte, error)
 
 	doNewSession(sinfo []byte, update bool) error
-	doRefreshSession() error
+	doRefreshSession() (lost bool, err error)
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
 	doInit(format *Format, force bool) error
@@ -299,10 +299,13 @@ type baseMeta struct {
 	reloadFailed []func(*Format) error // only accessed by the refresh goroutine
 	umounting    bool
 	sesMu        sync.Mutex
+	lease        atomic.Pointer[sessionLeaseState]
+	sessionLost  chan struct{}
 	aclCache     aclAPI.Cache
 
-	sessCtx Context
-	sessWG  sync.WaitGroup
+	sessCtx   Context
+	sessWG    sync.WaitGroup
+	monitorWG sync.WaitGroup
 
 	dSliceMu sync.Mutex
 	dSliceWG sync.WaitGroup
@@ -369,6 +372,7 @@ type baseMeta struct {
 
 func newBaseMeta(addr string, conf *Config) *baseMeta {
 	return &baseMeta{
+		sessionLost:  make(chan struct{}),
 		addr:         utils.RemovePassword(addr),
 		conf:         conf,
 		sid:          conf.Sid,
@@ -715,9 +719,15 @@ func (r *baseMeta) OnMsg(mtype uint32, cb MsgCallback) {
 }
 
 func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
+	if st := r.CheckSession(); st != 0 {
+		return st
+	}
 	r.msgCallbacks.Lock()
 	cb, ok := r.msgCallbacks.callbacks[mid]
 	r.msgCallbacks.Unlock()
+	if st := r.CheckSession(); st != 0 {
+		return st
+	}
 	if ok {
 		return cb(args...)
 	}
@@ -799,15 +809,32 @@ func (m *baseMeta) currentSessionInfo() []byte {
 }
 
 func (m *baseMeta) NewSession(record bool) error {
+	if m.CheckSession() != 0 {
+		return ErrSessionLost
+	}
 	m.sessCtx = Background()
 	ctx := m.sessCtx
-	go m.refresh(ctx)
+	m.umounting = false
+	if record && !m.conf.ReadOnly {
+		if m.conf.Sid == 0 {
+			m.sid = 0
+		}
+		if m.conf.Heartbeat != 0 && m.conf.Heartbeat < time.Second {
+			m.conf.Heartbeat = time.Second
+		}
+		if m.sid != 0 {
+			if err := m.restoreSessionLease(); err != nil {
+				return err
+			}
+		}
+	}
 
 	if err := m.en.cacheACLs(ctx); err != nil {
 		return err
 	}
 
 	if m.conf.ReadOnly {
+		go m.refresh(ctx)
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
 	}
@@ -824,10 +851,30 @@ func (m *baseMeta) NewSession(record bool) error {
 			m.conf.Sid = m.sid
 			action = "Create"
 		}
+		old := m.lease.Load()
+		start := time.Now()
+		if m.CheckSession() != 0 {
+			return ErrSessionLost
+		}
 		if err := m.en.doNewSession(m.newSessionInfo(), action == "Update"); err != nil {
-			return fmt.Errorf("create session: %s", err)
+			if errors.Is(err, ErrSessionLost) || m.CheckSession() != 0 {
+				m.loseSession()
+				return ErrSessionLost
+			}
+			return fmt.Errorf("create session: %w", err)
+		}
+		if !m.publishRefresh(old, start) {
+			return ErrSessionLost
 		}
 		logger.Infof("%s session %d OK with version: %s", action, m.sid, version.Version())
+	}
+	go m.refresh(ctx)
+	if record && m.conf.Heartbeat > 0 {
+		m.monitorWG.Add(1)
+		go func() {
+			defer m.monitorWG.Done()
+			m.monitorSession(ctx)
+		}()
 	}
 
 	m.loadQuotas()
@@ -848,6 +895,9 @@ func (m *baseMeta) NewSession(record bool) error {
 			m.sessWG.Add(1)
 			go m.cleanupChangelog(ctx)
 		}
+	}
+	if m.CheckSession() != 0 {
+		return ErrSessionLost
 	}
 	return nil
 }
@@ -968,16 +1018,17 @@ func (m *baseMeta) refresh(ctx Context) {
 			utils.SleepWithJitter(time.Second * 12)
 		}
 		m.sesMu.Lock()
-		if m.umounting {
+		if ctx.Canceled() || m.umounting || m.CheckSession() != 0 {
 			m.sesMu.Unlock()
 			return
 		}
 		if !m.conf.ReadOnly && m.conf.Heartbeat > 0 && m.sid > 0 {
-			if err := m.en.doRefreshSession(); err != nil {
-				logger.Errorf("Refresh session %d: %s", m.sid, err)
-			}
+			m.refreshSession()
 		}
 		m.sesMu.Unlock()
+		if m.CheckSession() != 0 {
+			return
+		}
 
 		m.reloadFormat()
 
@@ -1005,6 +1056,9 @@ func (m *baseMeta) refresh(ctx Context) {
 }
 
 func (m *baseMeta) CleanStaleSessions(ctx Context) {
+	if m.CheckSession() != 0 || ctx.Canceled() {
+		return
+	}
 	sids, err := m.en.doFindStaleSessions(1000)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
@@ -1024,25 +1078,58 @@ func (m *baseMeta) CleanStaleSessions(ctx Context) {
 }
 
 func (m *baseMeta) CloseSession() error {
-	m.FlushSession()
-	m.sesMu.Lock()
+	if m.CheckSession() != 0 {
+		if m.sessCtx != nil {
+			m.sessCtx.Cancel()
+		}
+		return ErrSessionLost
+	}
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for !m.sesMu.TryLock() {
+		select {
+		case <-m.SessionLost():
+			return ErrSessionLost
+		case <-ticker.C:
+			if m.CheckSession() != 0 {
+				return ErrSessionLost
+			}
+		}
+	}
+	if m.CheckSession() != 0 {
+		m.sesMu.Unlock()
+		return ErrSessionLost
+	}
 	m.umounting = true
 	m.sesMu.Unlock()
+	m.FlushSession()
+	sid := m.sid
 	var err error
-	if m.sid > 0 {
+	if m.sid > 0 && m.CheckSession() == 0 {
 		err = m.en.doCleanStaleSession(m.sid)
 	}
 	if m.sessCtx != nil {
 		m.sessCtx.Cancel()
 	}
+	m.monitorWG.Wait()
 	m.sessWG.Wait()
 	m.stopDeleteSliceTasks()
-	logger.Infof("close session %d: %v", m.sid, err)
+	old := m.lease.Load()
+	if old != nil && old.lost {
+		return ErrSessionLost
+	}
+	if m.lease.CompareAndSwap(old, nil) {
+		m.conf.Sid = 0
+		m.conf.SessionLease = nil
+	} else if m.CheckSession() != 0 {
+		return ErrSessionLost
+	}
+	logger.Infof("close session %d: %v", sid, err)
 	return err
 }
 
 func (m *baseMeta) FlushSession() {
-	if m.conf.ReadOnly {
+	if m.conf.ReadOnly || m.CheckSession() != 0 {
 		return
 	}
 	m.doFlushStats()
@@ -1123,6 +1210,9 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 }
 
 func (m *baseMeta) CleanupSlices(ctx Context) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	return errno(m.en.doCleanupSlices(ctx, nil))
 }
 
@@ -1179,6 +1269,9 @@ func (m *baseMeta) cleanupChangelog(ctx Context) {
 }
 
 func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("StatFS", time.Now())
 	if st := m.statRootFs(ctx, totalspace, availspace, iused, iavail); st != 0 {
 		return st
@@ -1304,6 +1397,9 @@ func (m *baseMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 }
 
 func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, checkPerm bool) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if inode == nil || attr == nil {
 		return syscall.EINVAL // bad request
 	}
@@ -1432,6 +1528,9 @@ func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 }
 
 func (r *baseMeta) Resolve(ctx Context, parent Ino, dpath string, inode *Ino, attr *Attr, force bool) syscall.Errno {
+	if st := r.CheckSession(); st != 0 {
+		return st
+	}
 	if !force {
 		return syscall.ENOTSUP
 	}
@@ -1453,6 +1552,9 @@ func (r *baseMeta) Resolve(ctx Context, parent Ino, dpath string, inode *Ino, at
 }
 
 func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if ctx.Uid() == 0 {
 		return 0
 	}
@@ -1492,6 +1594,9 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 }
 
 func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	inode = m.checkRoot(inode)
 	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
 		return 0
@@ -1535,6 +1640,9 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("SetAttr", time.Now())
 	inode = m.checkRoot(inode)
 	var oldAttr Attr
@@ -1672,6 +1780,9 @@ func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, paren
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if _type < TypeFile || _type > TypeSocket {
 		return syscall.EINVAL
 	}
@@ -1739,6 +1850,9 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 }
 
 func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if attr == nil {
 		attr = &Attr{}
 	}
@@ -1753,6 +1867,9 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 }
 
 func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	st := m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 	if st == 0 {
 		m.parentMu.Lock()
@@ -1763,6 +1880,9 @@ func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 }
 
 func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if len(path) == 0 || len(path) > MaxSymlink {
 		return syscall.EINVAL
 	}
@@ -1776,6 +1896,9 @@ func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, in
 }
 
 func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	parent = m.checkRoot(parent)
 	if parent.IsTrash() {
 		return syscall.EPERM
@@ -1824,6 +1947,9 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 }
 
 func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	noatime := m.conf.AtimeMode == NoAtime || m.conf.ReadOnly
 	if target, ok := m.symlinks.Load(inode); ok {
 		if noatime {
@@ -1868,6 +1994,9 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 }
 
 func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	parent = m.checkRoot(parent)
 	if parent == RootInode && name == TrashName || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
@@ -1893,6 +2022,9 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 }
 
 func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if name == "." {
 		return syscall.EINVAL
 	}
@@ -1927,6 +2059,9 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 
 // BatchUnlink delete multiple files in the same directory (case-sensitive filenames)
 func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count *uint64, skipCheckTrash bool) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if len(entries) == 0 {
 		return 0
 	}
@@ -1946,6 +2081,9 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 }
 
 func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, count *uint64) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if len(entries) == 0 {
 		return 0
 	}
@@ -1965,6 +2103,9 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
 	if parentSrc == RootInode && nameSrc == TrashName || parentDst == RootInode && nameDst == TrashName {
@@ -2097,6 +2238,9 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 
 // caller makes sure inode is not special inode.
 func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
+	if m.CheckSession() != 0 {
+		return
+	}
 	if m.conf.AtimeMode == NoAtime || m.conf.ReadOnly {
 		return
 	}
@@ -2121,6 +2265,9 @@ func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
 }
 
 func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st syscall.Errno) {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
@@ -2173,11 +2320,17 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st sy
 }
 
 func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	m.of.InvalidateChunk(inode, indx)
 	return 0
 }
 
 func (m *baseMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (st syscall.Errno) {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer func() {
 		if st == 0 {
 			m.touchAtime(ctx, inode, nil)
@@ -2227,6 +2380,9 @@ func (m *baseMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (s
 }
 
 func (m *baseMeta) NewSlice(ctx Context, id *uint64) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeSlices.next >= m.freeSlices.maxid {
@@ -2243,6 +2399,7 @@ func (m *baseMeta) NewSlice(ctx Context, id *uint64) syscall.Errno {
 }
 
 func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
+	st := m.CheckSession()
 	if m.of.Close(inode) {
 		m.Lock()
 		_, removed := m.removedFiles[inode]
@@ -2250,14 +2407,20 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 			delete(m.removedFiles, inode)
 		}
 		m.Unlock()
-		if removed {
+		if removed && st == 0 && m.CheckSession() == 0 {
 			_ = m.en.doDeleteSustainedInode(Background(), m.sid, inode)
 		}
 	}
-	return 0
+	if st == 0 {
+		st = m.CheckSession()
+	}
+	return st
 }
 
 func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("Write", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -2284,6 +2447,9 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 }
 
 func (m *baseMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("Truncate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -2304,6 +2470,9 @@ func (m *baseMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, 
 }
 
 func (m *baseMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, flength *uint64) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if mode&fallocCollapesRange != 0 && mode != fallocCollapesRange {
 		return syscall.EINVAL
 	}
@@ -2340,6 +2509,9 @@ func (m *baseMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 }
 
 func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) (rerr syscall.Errno) {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	var attr Attr
 	defer func() {
 		if rerr == 0 {
@@ -2381,6 +2553,9 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 }
 
 func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
@@ -2398,6 +2573,9 @@ func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 }
 
 func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
@@ -2410,6 +2588,9 @@ func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 }
 
 func (m *baseMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
+	if st := m.CheckSession(); st != 0 {
+		return nil
+	}
 	if inode == RootInode || inode == TrashInode {
 		return map[Ino]int{1: 1}
 	}
@@ -2426,6 +2607,9 @@ func (m *baseMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
 }
 
 func (m *baseMeta) GetPaths(ctx Context, inode Ino) []string {
+	if st := m.CheckSession(); st != 0 {
+		return nil
+	}
 	if inode == RootInode {
 		return []string{"/"}
 	}
@@ -2551,6 +2735,9 @@ func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn met
 }
 
 func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	var attr Attr
 	var inode = RootInode
 	var parent = RootInode
@@ -2807,6 +2994,9 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 }
 
 func (m *baseMeta) Chroot(ctx Context, subdir string, skipCreate bool) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	for subdir != "" {
 		ps := strings.SplitN(subdir, "/", 2)
 		if ps[0] != "" {
@@ -2879,6 +3069,9 @@ func (m *baseMeta) GetFormat() Format {
 }
 
 func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	var wg sync.WaitGroup
 	ch := make(chan cchunk, 1000000)
 	for i := 0; i < threads; i++ {
@@ -2904,7 +3097,7 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 }
 
 func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID int) {
-	if m.conf.NoCompact {
+	if m.conf.NoCompact || m.CheckSession() != 0 {
 		return
 	}
 	// avoid too many or duplicated compaction
@@ -3016,6 +3209,9 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 }
 
 func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	var attr Attr
 	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
 		logger.Errorf("get attr error [inode %v]: %v", inode, st)
@@ -3102,7 +3298,7 @@ func (m *baseMeta) deleteSlice_(id uint64, size uint32) {
 }
 
 func (m *baseMeta) deleteSlice(id uint64, size uint32) {
-	if id == 0 || m.conf.MaxDeletes == 0 {
+	if id == 0 || m.conf.MaxDeletes == 0 || m.CheckSession() != 0 {
 		return
 	}
 	m.dSliceMu.Lock()
@@ -3260,6 +3456,9 @@ func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, incre
 }
 
 func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *CleanupTrashStats) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	logger.Debugf("cleanup trash: started")
 	now := time.Now()
 	var st syscall.Errno
@@ -3404,6 +3603,9 @@ func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int, count *uint64) er
 }
 
 func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendingSliceScan, tfs trashFileScan, pfs pendingFileScan) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	eg := errgroup.Group{}
 	if tss != nil {
 		eg.Go(func() error {
@@ -3463,6 +3665,9 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 }
 
 func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 
 	parent = m.checkRoot(parent)
 	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
@@ -3791,6 +3996,9 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 }
 
 func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	var cur Attr
 	inode = m.checkRoot(inode)
 	if st := m.en.doGetAttr(ctx, inode, &cur); st != 0 {
@@ -3890,6 +4098,9 @@ func (m *baseMeta) mergeFacl(ctx Context, attr *Attr, aclType uint8, rule *aclAP
 }
 
 func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
 		return syscall.EINVAL
 	}
@@ -3909,6 +4120,9 @@ func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 }
 
 func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	ino = m.checkRoot(ino)
 	var err error
 	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
@@ -3926,26 +4140,41 @@ func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 }
 
 func (m *baseMeta) StoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
+	if st := m.CheckSession(); st != 0 {
+		return 0, st
+	}
 	defer m.timeit("StoreToken", time.Now())
 	return m.en.doStoreToken(ctx, token)
 }
 
 func (m *baseMeta) UpdateToken(ctx Context, id uint32, token []byte) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("UpdateToken", time.Now())
 	return m.en.doUpdateToken(ctx, id, token)
 }
 
 func (m *baseMeta) LoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno) {
+	if st := m.CheckSession(); st != 0 {
+		return nil, st
+	}
 	defer m.timeit("LoadToken", time.Now())
 	return m.en.doLoadToken(ctx, id)
 }
 
 func (m *baseMeta) DeleteTokens(ctx Context, ids []uint32) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("DeleteTokens", time.Now())
 	return m.en.doDeleteTokens(ctx, ids)
 }
 
 func (m *baseMeta) ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno) {
+	if st := m.CheckSession(); st != 0 {
+		return nil, st
+	}
 	defer m.timeit("ListTokens", time.Now())
 	return m.en.doListTokens(ctx)
 }
@@ -3968,6 +4197,9 @@ type DirHandler interface {
 }
 
 func (m *baseMeta) NewDirHandler(ctx Context, inode Ino, plus bool, initEntries []*Entry) (DirHandler, syscall.Errno) {
+	if st := m.CheckSession(); st != 0 {
+		return nil, st
+	}
 	var attr Attr
 	var st syscall.Errno
 	defer func() {
@@ -4041,13 +4273,14 @@ type dirFetcher func(ctx Context, inode Ino, cursor interface{}, offset, limit i
 
 type dirHandler struct {
 	sync.Mutex
-	inode       Ino
-	plus        bool
-	initEntries []*Entry
-	batch       *dirBatch
-	fetcher     dirFetcher
-	readOff     int
-	batchNum    int
+	checkSession func() syscall.Errno
+	inode        Ino
+	plus         bool
+	initEntries  []*Entry
+	batch        *dirBatch
+	fetcher      dirFetcher
+	readOff      int
+	batchNum     int
 }
 
 func (h *dirHandler) fetch(ctx Context, offset int) (*dirBatch, error) {
@@ -4074,6 +4307,11 @@ func (h *dirHandler) fetch(ctx Context, offset int) (*dirBatch, error) {
 }
 
 func (h *dirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
+	if h.checkSession != nil {
+		if st := h.checkSession(); st != 0 {
+			return nil, st
+		}
+	}
 	var prefix []*Entry
 	if offset < len(h.initEntries) {
 		prefix = h.initEntries[offset:]
@@ -4144,6 +4382,9 @@ func (h *dirHandler) Close() {
 }
 
 func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	opt = opt.check()
 
 	bak := newBakFormat()
@@ -4199,6 +4440,9 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 }
 
 func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if opt == nil {
 		opt = &LoadOption{}
 	}

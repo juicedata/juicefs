@@ -372,6 +372,9 @@ func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, s
 }
 
 func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	switch name {
 	case ".":
 		return syscall.EINVAL
@@ -406,6 +409,9 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, 
 }
 
 func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	var attr Attr
 	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
 		return st

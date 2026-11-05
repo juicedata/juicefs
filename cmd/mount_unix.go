@@ -949,13 +949,22 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 					}
 					err = v.FlushAll(path)
 					if err != nil {
+						if m.CheckSession() != 0 {
+							exitLostSession(err)
+						}
 						logger.Fatalf("flush buffered data failed: %s", err)
 					}
 					m.FlushSession()
+					if m.CheckSession() != 0 {
+						exitLostSession(meta.ErrSessionLost)
+					}
 					object.Shutdown(blob)
 					logger.Warnf("exit with code 1")
 					os.Exit(1)
 				} else {
+					if m.CheckSession() != 0 {
+						exitLostSession(err)
+					}
 					logger.Warnf("flush buffered data failed: %s, don't restart", err)
 					continue
 				}

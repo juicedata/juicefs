@@ -597,6 +597,9 @@ func (f *fileReader) prepareRequests(ranges []uint64) []*req {
 }
 
 func (f *fileReader) shouldStop() bool {
+	if st := f.r.m.CheckSession(); st != 0 {
+		f.err = st
+	}
 	return f.err != 0 || f.closing
 }
 
@@ -606,10 +609,13 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 	for waited := true; waited; {
 		waited = false
 		for _, req := range reqs {
+			if f.shouldStop() {
+				return 0, f.err
+			}
 			s := req.s
 			for s.state != READY && uint64(s.currentPos) < s.block.len {
 				waited = true
-				if s.cond.WaitWithTimeout(time.Second) {
+				if s.cond.WaitWithTimeout(time.Millisecond * 100) {
 					if ctx.Canceled() {
 						logger.Warnf("read %d interrupted after %s", f.inode, time.Since(start))
 						return 0, syscall.EINTR
@@ -640,9 +646,15 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 }
 
 func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, syscall.Errno) {
+	if st := f.r.m.CheckSession(); st != 0 {
+		return 0, st
+	}
 	if f.r.readBufferUsed() > f.r.bufferSize {
 		time.Sleep(time.Millisecond * 10)             // slow down
 		for f.r.readBufferUsed() > f.r.bufferSize*2 { // readahead uses 80% of buffer, stop here to avoid OOM
+			if st := f.r.m.CheckSession(); st != 0 {
+				return 0, st
+			}
 			time.Sleep(time.Millisecond * 100)
 		}
 	}
@@ -750,6 +762,9 @@ func (r *dataReader) readBufferUsed() int64 {
 
 func (r *dataReader) checkReadBuffer() {
 	for {
+		if r.m.CheckSession() != 0 {
+			return
+		}
 		r.Lock()
 		for _, f := range r.files {
 			for f != nil {

@@ -43,6 +43,14 @@ Besides the features covered by pjdfstest, JuiceFS provides:
 POSIX record locks are classified as **traditional locks** ("process-associated") and **OFD locks** (open file description locks). Their locking operation commands are `F_SETLK` and `F_OFD_SETLK` respectively. Due to the implementation of the FUSE kernel module, JuiceFS currently only supports traditional record locks. More details can be found at: [https://man7.org/linux/man-pages/man2/fcntl.2.html](https://man7.org/linux/man-pages/man2/fcntl.2.html).
 :::
 
+### Client session failure
+
+Locks belong to a client session. Other clients may release them after the session expires, approximately five heartbeat intervals after its last renewal. To avoid continuing to use lost locks, a client with a recorded session and a positive heartbeat interval permanently stops serving file operations if its session has been removed, or if no renewal has succeeded within `4 × heartbeat − 1 second`. With the default 12-second heartbeat, this local deadline is 47 seconds. Both elapsed monotonic time and wall-clock time are checked to detect long process or machine pauses.
+
+This protection applies to the whole client, including files without locks. The mount process exits without flushing buffered writes; remount the filesystem and reopen files to recover. SDK clients and the S3 gateway keep their host process running, but subsequent file operations fail with an I/O error. Close old SDK clients and their file handles before creating a new client, or restart the gateway. Uncommitted data can be lost, as with a client crash. Read-only clients, sessions disabled with `NoSession`, and a zero heartbeat retain their existing behavior and do not have this timeout protection.
+
+Graceful restart requires an existing, unexpired session and a valid lease snapshot from the old process. If the snapshot is absent, the heartbeat changes, or the lease cannot be verified before its original deadline, the takeover is rejected; unmount and mount again instead. Old clients do not provide this protection. Local checks cannot cancel requests already sent to the metadata engine, or prevent every pause between a check and a write; this mechanism is a conservative client failure policy rather than server-enforced fencing.
+
 ## LTP
 
 LTP is a joint project developed and maintained by IBM, Cisco, Fujitsu, and others.

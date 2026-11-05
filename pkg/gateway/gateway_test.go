@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -975,4 +976,110 @@ func TestDeleteObjects(t *testing.T) {
 			t.Fatalf("sibling bucket dir /jmrqfoo must not be pruned, got: %s", eno)
 		}
 	})
+}
+
+type terminalGatewayMeta struct {
+	meta.Meta
+	lost    atomic.Bool
+	checked chan struct{}
+}
+
+func (m *terminalGatewayMeta) CheckSession() syscall.Errno {
+	select {
+	case m.checked <- struct{}{}:
+	default:
+	}
+	if m.lost.Load() {
+		return syscall.EIO
+	}
+	return m.Meta.CheckSession()
+}
+
+func TestGatewayLostSessionLockWait(t *testing.T) {
+	m := &terminalGatewayMeta{Meta: meta.NewClient("memkv://", nil), checked: make(chan struct{}, 2)}
+	defer m.Meta.Shutdown()
+	lock := &jfsFLock{meta: m, inode: 1}
+	lock.localLock.Lock()
+	defer lock.localLock.Unlock()
+	done := make(chan error, 1)
+	go func() {
+		_, err := lock.getFlockWithTimeOut(context.Background(), meta.F_WRLCK, minio.NewDynamicTimeout(10*time.Second, time.Second))
+		done <- err
+	}()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-m.checked:
+		case <-time.After(time.Second):
+			t.Fatal("lock request did not enter local wait")
+		}
+	}
+	m.lost.Store(true)
+	select {
+	case err := <-done:
+		if !errors.Is(err, syscall.EIO) {
+			t.Fatalf("terminal lock wait: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("local lock wait did not stop after session loss")
+	}
+}
+
+func (m *terminalGatewayMeta) CloseSession() error {
+	if m.lost.Load() {
+		return meta.ErrSessionLost
+	}
+	return m.Meta.CloseSession()
+}
+
+func TestGatewayLostSession(t *testing.T) {
+	m := &terminalGatewayMeta{Meta: meta.NewClient("memkv://", nil)}
+	format := &meta.Format{Name: "test", BlockSize: 4096, DirStats: true}
+	if err := m.Init(format, true); err != nil {
+		t.Fatal(err)
+	}
+	n, _ := newTestGatewayWithMeta(t, m, format, Config{})
+	ctx := context.Background()
+	if !n.IsReady(ctx) {
+		t.Fatal("live gateway is not ready")
+	}
+	if _, err := n.GetBucketInfo(ctx, format.Name); err != nil {
+		t.Fatal(err)
+	}
+	m.lost.Store(true)
+	if n.IsReady(ctx) {
+		t.Fatal("terminal gateway is ready")
+	}
+	if _, errs := n.StorageInfo(ctx); len(errs) != 1 || !errors.Is(errs[0], syscall.EIO) {
+		t.Fatalf("storage info: %v", errs)
+	}
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{"bucket info", func() error { _, e := n.GetBucketInfo(ctx, format.Name); return e }},
+		{"single bucket create", func() error { return n.MakeBucketWithLocation(ctx, format.Name, minio.BucketOptions{}) }},
+		{"list buckets", func() error { _, e := n.ListBuckets(ctx); return e }},
+		{"list objects", func() error { _, e := n.ListObjects(ctx, format.Name, "", "", "", 100); return e }},
+		{"object info", func() error { _, e := n.GetObjectInfo(ctx, format.Name, "file", minio.ObjectOptions{}); return e }},
+		{"delete object", func() error { _, e := n.DeleteObject(ctx, format.Name, "file", minio.ObjectOptions{}); return e }},
+		{"multipart upload", func() error { _, e := n.NewMultipartUpload(ctx, format.Name, "file", minio.ObjectOptions{}); return e }},
+		{"walk", func() error { return n.Walk(ctx, format.Name, "", make(chan minio.ObjectInfo), minio.ObjectOptions{}) }},
+		{"get bucket policy", func() error { _, e := n.GetBucketPolicy(ctx, format.Name); return e }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.call(); !errors.Is(err, syscall.EIO) {
+				t.Fatalf("got %v, want EIO", err)
+			}
+		})
+	}
+	if _, errs := n.DeleteObjects(ctx, format.Name, []minio.ObjectToDelete{{ObjectName: "file"}}, minio.ObjectOptions{}); len(errs) != 1 || !errors.Is(errs[0], syscall.EIO) {
+		t.Fatalf("delete objects masked EIO: %v", errs)
+	}
+	lk := n.NewNSLock(format.Name, "file")
+	if _, err := lk.GetLock(ctx, minio.NewDynamicTimeout(time.Second, time.Second)); !errors.Is(err, syscall.EIO) {
+		t.Fatalf("lock masked EIO: %v", err)
+	}
+	if err := n.Shutdown(ctx); !errors.Is(err, syscall.EIO) {
+		t.Fatalf("shutdown masked EIO: %v", err)
+	}
 }

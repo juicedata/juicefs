@@ -456,6 +456,9 @@ func (m *kvMeta) parseQuota(buf []byte) *Quota {
 }
 
 func (m *kvMeta) get(key []byte) ([]byte, error) {
+	if st := m.CheckSession(); st != 0 {
+		return nil, st
+	}
 	var value []byte
 	err := m.client.simpleTxn(Background(), func(tx *kvTxn) error {
 		value = tx.get(key)
@@ -465,6 +468,9 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 }
 
 func (m *kvMeta) scanKeys(ctx context.Context, prefix []byte) ([][]byte, error) {
+	if st := m.CheckSession(); st != 0 {
+		return nil, st
+	}
 	var keys [][]byte
 	err := m.client.txn(ctx, func(tx *kvTxn) error {
 		tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
@@ -477,6 +483,9 @@ func (m *kvMeta) scanKeys(ctx context.Context, prefix []byte) ([][]byte, error) 
 }
 
 func (m *kvMeta) scanValues(ctx context.Context, prefix []byte, limit int, filter func(k, v []byte) bool) (map[string][]byte, error) {
+	if st := m.CheckSession(); st != 0 {
+		return nil, st
+	}
 	if limit == 0 {
 		return nil, nil
 	}
@@ -496,6 +505,9 @@ func (m *kvMeta) scanValues(ctx context.Context, prefix []byte, limit int, filte
 }
 
 func (m *kvMeta) scan(startKey, endKey []byte, limit int, filter func(k, v []byte) bool) ([][]byte, [][]byte, error) {
+	if st := m.CheckSession(); st != 0 {
+		return nil, nil, st
+	}
 	if limit == 0 {
 		return nil, nil, nil
 	}
@@ -666,38 +678,37 @@ func (m *kvMeta) doFlushStats() {
 }
 
 func (m *kvMeta) doNewSession(sinfo []byte, update bool) error {
-	if !m.getFormat().ChangeLog {
-		if err := m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime())); err != nil {
-			return fmt.Errorf("new session: %s", err)
-		}
-		if err := m.setValue(m.sessionInfoKey(m.sid), sinfo); err != nil {
-			return fmt.Errorf("new session: %s", err)
-		}
-		return nil
-	}
 	err := m.txn(Background(), func(tx *kvTxn) error {
+		if update {
+			buf := tx.get(m.sessionKey(m.sid))
+			if buf == nil || m.parseInt64(buf) <= time.Now().Unix() {
+				return ErrSessionLost
+			}
+		}
 		tx.set(m.sessionKey(m.sid), m.packInt64(m.expireTime()))
 		tx.set(m.sessionInfoKey(m.sid), sinfo)
 		m.genLog(tx, time.Now(), "NEWSESSION(%d,%d,%s)", m.sid, m.expireTime(), logEncode(sinfo))
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("new session: %s", err)
+		return fmt.Errorf("new session: %w", err)
 	}
 	return nil
 }
 
-func (m *kvMeta) doRefreshSession() error {
-	return m.txn(Background(), func(tx *kvTxn) error {
+func (m *kvMeta) doRefreshSession() (bool, error) {
+	var lost bool
+	err := m.txn(Background(), func(tx *kvTxn) error {
 		buf := tx.get(m.sessionKey(m.sid))
-		if buf == nil {
-			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-			tx.set(m.sessionInfoKey(m.sid), m.currentSessionInfo())
+		lost = buf == nil || m.parseInt64(buf) <= time.Now().Unix()
+		if lost {
+			return nil
 		}
 		expire := m.expireTime()
 		tx.set(m.sessionKey(m.sid), m.packInt64(expire))
 		return nil
 	})
+	return lost && err == nil, err
 }
 
 func (m *kvMeta) doCleanStaleSession(sid uint64) error {
@@ -1145,6 +1156,9 @@ func (m *kvMeta) shouldRetry(err error) bool {
 }
 
 func (m *kvMeta) txn(ctx Context, f func(tx *kvTxn) error, inodes ...Ino) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
@@ -1161,18 +1175,28 @@ func (m *kvMeta) txn(ctx Context, f func(tx *kvTxn) error, inodes ...Ino) error 
 		maxRetry = val.(int)
 	}
 	for i := 0; i < maxRetry; i++ {
+		if st := m.CheckSession(); st != 0 {
+			return st
+		}
 		if ctx.Canceled() {
 			logger.Warnf("Transaction %s interrupted after %s, tried %d, inodes: %v", method.name(ctx), time.Since(start), i+1, inodes)
 			return syscall.EINTR
 		}
 		var callbacks []func()
 		err := m.client.txn(ctx, func(tx *kvTxn) error {
+			if st := m.CheckSession(); st != 0 {
+				return st
+			}
 			// Drivers may retry the callback internally, so keep only the last attempt.
 			callbacks = nil
 			tx.onCommit = func(callback func()) {
 				callbacks = append(callbacks, callback)
 			}
-			return f(tx)
+			err := f(tx)
+			if st := m.CheckSession(); st != 0 {
+				return st
+			}
+			return err
 		}, i)
 		if err == nil {
 			for _, callback := range callbacks {
@@ -2794,6 +2818,9 @@ func (m *kvMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 }
 
 func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("CopyFileRange", time.Now())
 	var newLength, newSpace int64
 	f := m.of.find(fout)
@@ -3288,6 +3315,9 @@ func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 }
 
 func (m *kvMeta) ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
 	var cbErr error
@@ -3486,6 +3516,9 @@ func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr, trustNlink bool) s
 }
 
 func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("GetXattr", time.Now())
 	inode = m.checkRoot(inode)
 	buf, err := m.get(m.xattrKey(inode, name))
@@ -3500,6 +3533,9 @@ func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 }
 
 func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer m.timeit("ListXattr", time.Now())
 	inode = m.checkRoot(inode)
 	keys, err := m.scanKeys(ctx, m.xattrKey(inode, ""))
@@ -4014,6 +4050,9 @@ func (m *kvMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dep
 }
 
 func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) (err error) {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	defer func() {
 		if p := recover(); p != nil {
 			debug.PrintStack()
@@ -4407,6 +4446,9 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair, aclMaxId *uint32) {
 }
 
 func (m *kvMeta) LoadMeta(r io.Reader) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	var exist bool
 	err := m.txn(Background(), func(tx *kvTxn) error {
 		exist = tx.exist(m.fmtKey())
@@ -5152,11 +5194,12 @@ type kvDirHandler struct {
 func (m *kvMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
 	s := &kvDirHandler{
 		dirHandler: dirHandler{
-			inode:       inode,
-			plus:        plus,
-			initEntries: entries,
-			fetcher:     m.getDirFetcher(),
-			batchNum:    DirBatchNum["kv"],
+			checkSession: m.CheckSession,
+			inode:        inode,
+			plus:         plus,
+			initEntries:  entries,
+			fetcher:      m.getDirFetcher(),
+			batchNum:     DirBatchNum["kv"],
 		},
 	}
 	s.batch, _ = s.fetch(Background(), 0)

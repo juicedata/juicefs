@@ -40,6 +40,9 @@ func (r *redisMeta) lastLockOfSession(lkeys []string, lkey string) bool {
 }
 
 func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
+	if st := r.CheckSession(); st != 0 {
+		return st
+	}
 	ikey := r.flockKey(inode)
 	lkey := r.ownerKey(owner)
 	ctx = ctx.WithValue(txMethodKey{}, "Flock"+strconv.Itoa(int(ltype)))
@@ -49,7 +52,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			if err != nil {
 				return err
 			}
-			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			_, err = r.pipelined(ctx, tx.TxPipelined, func(pipe redis.Pipeliner) error {
 				pipe.HDel(ctx, ikey, lkey)
 				if r.lastLockOfSession(lkeys, lkey) {
 					pipe.SRem(ctx, r.lockedKey(r.sid), ikey)
@@ -74,7 +77,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 						return syscall.EAGAIN
 					}
 				}
-				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				_, err = r.pipelined(ctx, tx.TxPipelined, func(pipe redis.Pipeliner) error {
 					pipe.HSet(ctx, ikey, lkey, "R")
 					pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
 					r.genLog(ctx, pipe, time.Now(), "FLOCK(%d,%d,R)", inode, owner)
@@ -85,7 +88,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			if len(owners) > 0 {
 				return syscall.EAGAIN
 			}
-			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			_, err = r.pipelined(ctx, tx.TxPipelined, func(pipe redis.Pipeliner) error {
 				pipe.HSet(ctx, ikey, lkey, "W")
 				pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
 				r.genLog(ctx, pipe, time.Now(), "FLOCK(%d,%d,W)", inode, owner)
@@ -110,6 +113,9 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 }
 
 func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
+	if st := r.CheckSession(); st != 0 {
+		return st
+	}
 	if *ltype == F_UNLCK {
 		*start = 0
 		*end = 0
@@ -148,6 +154,9 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 }
 
 func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
+	if st := r.CheckSession(); st != 0 {
+		return st
+	}
 	ikey := r.plockKey(inode)
 	lkey := r.ownerKey(owner)
 	ctx = ctx.WithValue(txMethodKey{}, "Setlk"+strconv.Itoa(int(ltype)))
@@ -172,7 +181,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 						return err
 					}
 				}
-				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				_, err = r.pipelined(ctx, tx.TxPipelined, func(pipe redis.Pipeliner) error {
 					if len(ls) == 0 {
 						pipe.HDel(ctx, ikey, lkey)
 						if r.lastLockOfSession(lkeys, lkey) {
@@ -202,7 +211,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 				}
 			}
 			ls = updateLocks(ls, lock)
-			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			_, err = r.pipelined(ctx, tx.TxPipelined, func(pipe redis.Pipeliner) error {
 				pipe.HSet(ctx, ikey, lkey, dumpLocks(ls))
 				pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
 				ls := "R"
@@ -231,6 +240,9 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 }
 
 func (r *redisMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+	if st := r.CheckSession(); st != 0 {
+		return nil, nil, st
+	}
 	fKey := r.flockKey(inode)
 	pKey := r.plockKey(inode)
 

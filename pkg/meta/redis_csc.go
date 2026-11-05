@@ -25,6 +25,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -52,6 +53,7 @@ type redisCache struct {
 	expiry       time.Duration
 	preload      int
 	subscription *redis.PubSub
+	closeOnce    sync.Once
 
 	inodeCache *expirable.LRU[Ino, []byte]
 	entryCache *expirable.LRU[string, *cachedEntry]
@@ -307,19 +309,21 @@ func (c *redisCache) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.P
 }
 
 func (c *redisCache) close() {
-	if c.subscription != nil {
-		if err := c.subscription.Close(); err != nil {
-			logger.Warnf("failed closing Redis cache subscription: %v", err)
+	c.closeOnce.Do(func() {
+		if c.subscription != nil {
+			if err := c.subscription.Close(); err != nil {
+				logger.Warnf("failed closing Redis cache subscription: %v", err)
+			}
 		}
-		c.subscription = nil
-	}
-	if c.tracker != nil {
-		if err := c.tracker.Close(); err != nil {
-			logger.Warnf("failed closing Redis cache tracking client: %v", err)
+		if c.tracker != nil {
+			if err := c.tracker.Close(); err != nil {
+				logger.Warnf("failed closing Redis cache tracking client: %v", err)
+			}
 		}
-		c.tracker = nil
-	}
-	c.cli = nil
+		c.inodeCache.Purge()
+		c.entryCache.Purge()
+		c.entryTerms.Purge()
+	})
 }
 
 func (c *redisCache) onInvalidateConnect(ctx context.Context, cn *redis.Conn) error {
@@ -338,7 +342,7 @@ func (c *redisCache) onInvalidateConnect(ctx context.Context, cn *redis.Conn) er
 }
 
 func (m *redisMeta) preloadCache() {
-	if m.cache == nil {
+	if m.CheckSession() != 0 || m.cache == nil {
 		return
 	}
 	if m.cache.preload <= 0 {
@@ -356,6 +360,9 @@ func (m *redisMeta) preloadCache() {
 	var entries []*Entry
 	if eno := m.doReaddir(ctx, m.root, 1, &entries, m.cache.preload); eno != 0 {
 		logger.Warnf("failed to read root %d directory: %d", m.root, eno)
+		return
+	}
+	if m.CheckSession() != 0 {
 		return
 	}
 	for _, entry := range entries {

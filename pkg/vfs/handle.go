@@ -284,8 +284,9 @@ func (v *VFS) invalidateDirHandle(parent Ino, name string, inode Ino, attr *Attr
 }
 
 type state struct {
-	Handler map[uint64]saveHandle
-	NextFh  uint64
+	Handler      map[uint64]saveHandle
+	NextFh       uint64
+	SessionLease *meta.SessionLease `json:",omitempty"`
 }
 
 type saveHandle struct {
@@ -300,6 +301,9 @@ type saveHandle struct {
 }
 
 func (v *VFS) dumpAllHandles(path string) (err error) {
+	if st := v.Meta.CheckSession(); st != 0 {
+		return st
+	}
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
 	var vfsState state
@@ -336,7 +340,8 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 				length = h.writer.GetLength()
 				err := h.writer.Flush(meta.Background())
 				if err != 0 {
-					logger.Errorf("flush writer of %d: %s", ino, err)
+					h.Unlock()
+					return err
 				}
 			} else if h.reader != nil {
 				length = h.reader.GetLength()
@@ -356,9 +361,19 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 		}
 	}
 	vfsState.NextFh = v.nextfh
+	lease, err := v.Meta.ExportSessionLease()
+	if err != nil {
+		return err
+	}
+	if lease.Sid != 0 && lease.Heartbeat > 0 {
+		vfsState.SessionLease = &lease
+	}
 	d, err := json.Marshal(vfsState)
 	if err != nil {
 		return err
+	}
+	if st := v.Meta.CheckSession(); st != 0 {
+		return st
 	}
 	f, err := os.Create(path)
 	if err != nil {
@@ -372,7 +387,24 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 	return
 }
 
+// LoadSessionLease reads the lease inherited by a graceful restart before creating
+// the metadata session. A nil lease identifies a state written without protection.
+func LoadSessionLease(path string) (*meta.SessionLease, error) {
+	d, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var saved state
+	if err := json.Unmarshal(d, &saved); err != nil {
+		return nil, err
+	}
+	return saved.SessionLease, nil
+}
+
 func (v *VFS) loadAllHandles(path string) error {
+	if st := v.Meta.CheckSession(); st != 0 {
+		return st
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -386,6 +418,16 @@ func (v *VFS) loadAllHandles(path string) error {
 	err = json.Unmarshal(d, &vfsState)
 	if err != nil {
 		return err
+	}
+	if expected := v.Conf.Meta.SessionLease; expected != nil {
+		if vfsState.SessionLease == nil || *vfsState.SessionLease != *expected {
+			return meta.ErrSessionLost
+		}
+	} else if vfsState.SessionLease != nil && v.Conf.Meta.Sid != 0 && vfsState.SessionLease.Sid != v.Conf.Meta.Sid {
+		return meta.ErrSessionLost
+	}
+	if st := v.Meta.CheckSession(); st != 0 {
+		return st
 	}
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()

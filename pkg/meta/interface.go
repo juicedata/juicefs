@@ -428,6 +428,13 @@ type Meta interface {
 	Load(checkVersion bool) (*Format, error)
 	// NewSession creates or update client session.
 	NewSession(record bool) error
+	// CheckSession checks the local session lease without contacting the metadata service.
+	// A lost or expired session permanently returns EIO.
+	CheckSession() syscall.Errno
+	// SessionLost is closed when this client session becomes permanently invalid.
+	SessionLost() <-chan struct{}
+	// ExportSessionLease returns the current lease for graceful restart.
+	ExportSessionLease() (SessionLease, error)
 	// CloseSession does cleanup and close the session.
 	CloseSession() error
 	// FlushSession flushes the status to meta service.

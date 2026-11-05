@@ -19,6 +19,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -677,8 +678,17 @@ func mount(c *cli.Context) error {
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 
+	resuming := metaConf.Sid != 0
+	if err := loadMountSessionLease(metaConf); err != nil {
+		exitLostSession(err)
+	}
+	stopSessionWatch := watchMountSession(metaCli)
+	defer stopSessionWatch()
 	err = metaCli.NewSession(true)
 	if err != nil {
+		if resuming || errors.Is(err, meta.ErrSessionLost) || metaCli.CheckSession() != 0 {
+			exitLostSession(err)
+		}
 		logger.Fatalf("new session: %s", err)
 	}
 
@@ -688,15 +698,68 @@ func mount(c *cli.Context) error {
 		return nil
 	})
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
+	if v == nil {
+		exitLostSession(fmt.Errorf("%w: cannot restore file handles", meta.ErrSessionLost))
+	}
 	installHandler(metaCli, mp, v, blob)
 	v.UpdateFormat = updateFormat(c)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mountMain(v, c)
+	if metaCli.CheckSession() != 0 {
+		exitLostSession(meta.ErrSessionLost)
+	}
 	if err := v.FlushAll(""); err != nil {
+		if metaCli.CheckSession() != 0 {
+			exitLostSession(err)
+		}
 		logger.Errorf("flush all delayed data: %s", err)
 	}
 	err = metaCli.CloseSession()
+	if errors.Is(err, meta.ErrSessionLost) || metaCli.CheckSession() != 0 {
+		exitLostSession(meta.ErrSessionLost)
+	}
 	object.Shutdown(blob)
 	logger.Infof("The juicefs mount process exit successfully, mountpoint: %q", metaConf.MountPoint)
 	return err
+}
+
+func loadMountSessionLease(conf *meta.Config) error {
+	if conf.Sid == 0 || conf.ReadOnly || conf.Heartbeat <= 0 {
+		return nil
+	}
+	statePath := os.Getenv("_FUSE_STATE_PATH")
+	if statePath == "" {
+		statePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
+	}
+	lease, err := vfs.LoadSessionLease(statePath)
+	if err != nil {
+		return fmt.Errorf("%w: load session lease: %v", meta.ErrSessionLost, err)
+	}
+	if lease == nil {
+		return fmt.Errorf("%w: missing session lease in %s", meta.ErrSessionLost, statePath)
+	}
+	conf.SessionLease = lease
+	return nil
+}
+
+func watchMountSession(m meta.Meta) func() {
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		select {
+		case <-m.SessionLost():
+			exitLostSession(meta.ErrSessionLost)
+		case <-done:
+		}
+	}()
+	return func() {
+		close(done)
+		<-finished
+	}
+}
+
+func exitLostSession(err error) {
+	logger.Errorf("Client session is no longer valid; remount the filesystem: %s", err)
+	os.Exit(meta.UmountCode)
 }

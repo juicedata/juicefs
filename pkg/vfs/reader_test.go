@@ -40,6 +40,8 @@ type readerRefreshMeta struct {
 	updated atomic.Bool
 }
 
+func (*readerRefreshMeta) CheckSession() syscall.Errno { return 0 }
+
 func (m *readerRefreshMeta) Read(ctx meta.Context, ino meta.Ino, index uint32, slices *[]meta.Slice) syscall.Errno {
 	id := uint64(1)
 	if ino == 10 && m.updated.Load() {
@@ -156,6 +158,8 @@ type readerTestMeta struct {
 	meta.Meta
 	read func() ([]meta.Slice, syscall.Errno)
 }
+
+func (*readerTestMeta) CheckSession() syscall.Errno { return 0 }
 
 func (m *readerTestMeta) Read(_ meta.Context, _ meta.Ino, _ uint32, slices *[]meta.Slice) syscall.Errno {
 	var err syscall.Errno

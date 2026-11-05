@@ -52,6 +52,11 @@ func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config), metaUri st
 		metaUri = "memkv://"
 	}
 	m := meta.NewClient(metaUri, metaConf)
+	return newTestVFS(m, metaConf)
+}
+
+func newTestVFS(m meta.Meta, metaConf *meta.Config) (*VFS, object.ObjectStorage) {
+	mp := metaConf.MountPoint
 	format := &meta.Format{
 		Name:        "test",
 		UUID:        uuid.New().String(),

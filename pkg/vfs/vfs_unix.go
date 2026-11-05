@@ -43,8 +43,13 @@ type Statfs struct {
 }
 
 func (v *VFS) StatFS(ctx Context, ino Ino) (st *Statfs, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	var totalspace, availspace, iused, iavail uint64
-	_ = v.Meta.StatFS(ctx, ino, &totalspace, &availspace, &iused, &iavail)
+	if err = v.Meta.StatFS(ctx, ino, &totalspace, &availspace, &iused, &iavail); err != 0 {
+		return
+	}
 	st = new(Statfs)
 	st.Total = totalspace
 	st.Avail = availspace
@@ -75,6 +80,9 @@ func accessTest(attr *Attr, mmode uint16, uid uint32, gid uint32) syscall.Errno 
 }
 
 func (v *VFS) Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() { logit(ctx, "access", err, "(%d,0x%X)", ino, mask) }()
 	var mmask uint16
 	if mask&unix.R_OK != 0 {
@@ -148,6 +156,9 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 }
 
 func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	str := setattrStr(set, mode, uid, gid, atime, mtime, size)
 	defer func() {
 		logit(ctx, "setattr", err, "(%d[%d],0x%X,[%s]):%s", ino, fh, set, str, (*Entry)(entry))
@@ -228,6 +239,9 @@ func (l lockType) String() string {
 }
 
 func (v *VFS) Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *uint64, typ *uint32, pid *uint32) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		logit(ctx, "getlk", err, "(%d,%d,%016X): (%d,%d,%s,%d)", ino, fh, owner, *start, *len, lockType(*typ), *pid)
 	}()
@@ -247,6 +261,9 @@ func (v *VFS) Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *u
 }
 
 func (v *VFS) Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end uint64, typ uint32, pid uint32, block bool) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	defer func() {
 		logit(ctx, "setlk", err, "(%d,%d,%016X,%d,%d,%s,%t,%d)", ino, fh, owner, start, end, lockType(typ), block, pid)
 	}()
@@ -280,6 +297,9 @@ func (v *VFS) Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end ui
 }
 
 func (v *VFS) Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, block bool) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	var name string
 	defer func() { logit(ctx, "flock", err, "(%d,%d,%016X,%s,%t)", ino, fh, owner, name, block) }()
 	switch typ {
@@ -320,6 +340,9 @@ func (v *VFS) Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, b
 }
 
 func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut []byte) (err syscall.Errno) {
+	if err = v.Meta.CheckSession(); err != 0 {
+		return
+	}
 	const (
 		FS_IOC_GETFLAGS    = 0x80086601
 		FS_IOC_SETFLAGS    = 0x40086602

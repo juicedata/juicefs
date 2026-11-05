@@ -93,6 +93,10 @@ func (s *sliceWriter) prepareID(ctx meta.Context, retry bool) {
 	f := s.chunk.file
 	f.Lock()
 	for s.id == 0 {
+		if st := f.w.m.CheckSession(); st != 0 {
+			s.err = st
+			break
+		}
 		var id uint64
 		f.Unlock()
 		st := f.w.m.NewSlice(ctx, &id)
@@ -129,10 +133,23 @@ func (s *sliceWriter) markDone() {
 // freezed, no more data
 func (s *sliceWriter) flushData() {
 	defer s.markDone()
+	f := s.chunk.file
+	if st := f.w.m.CheckSession(); st != 0 {
+		f.Lock()
+		s.err = st
+		s.writer.Abort() // this slice has not been submitted to metadata
+		f.Unlock()
+		return
+	}
 	if s.slen == 0 {
 		return
 	}
 	s.prepareID(meta.Background(), true)
+	if st := f.w.m.CheckSession(); st != 0 {
+		f.Lock()
+		s.err = st
+		f.Unlock()
+	}
 	if s.err != 0 {
 		logger.Infof("flush inode: %v chunk: %d err: %s", s.chunk.file.inode, s.id, s.err)
 		s.writer.Abort()
@@ -212,17 +229,20 @@ func (c *chunkWriter) commitThread() {
 	for len(c.slices) > 0 {
 		s := c.slices[0]
 		for !s.done {
-			if s.notify.WaitWithTimeout(time.Millisecond*100) && !s.freezed && time.Since(s.started) > flushDuration*2 {
+			if s.notify.WaitWithTimeout(time.Millisecond*100) && !s.freezed && (f.w.m.CheckSession() != 0 || time.Since(s.started) > flushDuration*2) {
 				s.freezed = true
 				go s.flushData()
 			}
 		}
-		for s.dep != nil && !s.dep.committed {
+		for s.dep != nil && !s.dep.committed && f.w.m.CheckSession() == 0 {
 			f.commitcond.WaitWithTimeout(time.Millisecond * 100)
 		}
 		err := s.err
 		f.Unlock()
 
+		if err == 0 {
+			err = f.w.m.CheckSession()
+		}
 		if err == 0 {
 			var ss = meta.Slice{Id: s.id, Size: s.length, Off: s.soff, Len: s.slen}
 			err = f.w.m.Write(meta.Background(), f.inode, c.indx, s.off, ss, s.lastMod)
@@ -348,13 +368,22 @@ func (w *dataWriter) usedBufferSize() int64 {
 }
 
 func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Errno {
+	if st := f.w.m.CheckSession(); st != 0 {
+		return st
+	}
 	for f.totalSlices() >= 1000 {
+		if st := f.w.m.CheckSession(); st != 0 {
+			return st
+		}
 		time.Sleep(time.Millisecond)
 	}
 	if f.w.usedBufferSize() > f.w.bufferSize {
 		// slow down
 		time.Sleep(time.Millisecond * 10)
 		for f.w.usedBufferSize() > f.w.bufferSize*2 {
+			if st := f.w.m.CheckSession(); st != 0 {
+				return st
+			}
 			time.Sleep(time.Millisecond * 100)
 		}
 	}
@@ -365,17 +394,27 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 	size := uint64(len(data))
 	f.writewaiting++
 	for f.flushwaiting > 0 {
-		if f.writecond.WaitWithTimeout(time.Second) && ctx.Canceled() {
+		if st := f.w.m.CheckSession(); st != 0 {
+			f.writewaiting--
+			return st
+		}
+		if f.writecond.WaitWithTimeout(time.Millisecond*100) && ctx.Canceled() {
 			f.writewaiting--
 			logger.Warnf("write %d interrupted after %d", f.inode, time.Since(s))
 			return syscall.EINTR
 		}
 	}
 	f.writewaiting--
+	if st := f.w.m.CheckSession(); st != 0 {
+		return st
+	}
 
 	indx := uint32(off / meta.ChunkSize)
 	pos := uint32(off % meta.ChunkSize)
 	for len(data) > 0 {
+		if st := f.w.m.CheckSession(); st != 0 {
+			return st
+		}
 		n := uint32(len(data))
 		if pos+n > meta.ChunkSize {
 			n = meta.ChunkSize - pos
@@ -404,6 +443,9 @@ func (f *fileWriter) updateMtime(t time.Time) {
 }
 
 func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
+	if st := f.w.m.CheckSession(); st != 0 {
+		return st
+	}
 	s := time.Now()
 	f.Lock()
 	defer f.Unlock()
@@ -416,6 +458,9 @@ func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
 	}
 	var deadline = time.Now().Add(wait)
 	for len(f.chunks) > 0 && err == 0 {
+		if err = f.w.m.CheckSession(); err != 0 {
+			break
+		}
 		for _, c := range f.chunks {
 			for _, s := range c.slices {
 				if !s.freezed {
@@ -424,7 +469,7 @@ func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
 				}
 			}
 		}
-		if f.flushcond.WaitWithTimeout(time.Second*3) && ctx.Canceled() && time.Since(s) > f.w.conf.Chunk.PutTimeout*2 {
+		if f.flushcond.WaitWithTimeout(time.Millisecond*100) && ctx.Canceled() && time.Since(s) > f.w.conf.Chunk.PutTimeout*2 {
 			logger.Warnf("flush %d interrupted after %d", f.inode, time.Since(s))
 			err = syscall.EINTR
 			break
@@ -447,6 +492,9 @@ func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
 	}
 	if err == 0 {
 		err = f.err
+	}
+	if st := f.w.m.CheckSession(); st != 0 {
+		err = st
 	}
 	return err
 }
@@ -502,6 +550,9 @@ func NewDataWriter(conf *Config, m meta.Meta, store chunk.ChunkStore, reader Dat
 
 func (w *dataWriter) flushAll() {
 	for {
+		if w.m.CheckSession() != 0 {
+			return
+		}
 		w.Lock()
 		now := time.Now()
 		for _, f := range w.files {
@@ -567,6 +618,9 @@ func (w *dataWriter) free(f *fileWriter) {
 }
 
 func (w *dataWriter) Flush(ctx meta.Context, inode Ino) syscall.Errno {
+	if st := w.m.CheckSession(); st != 0 {
+		return st
+	}
 	f := w.find(inode)
 	if f != nil {
 		return f.Flush(ctx)
@@ -597,6 +651,9 @@ func (w *dataWriter) UpdateMtime(inode Ino, mtime time.Time) {
 }
 
 func (w *dataWriter) FlushAll() error {
+	if st := w.m.CheckSession(); st != 0 {
+		return st
+	}
 	var err error
 	w.Lock()
 	for inode, ind := range w.files {

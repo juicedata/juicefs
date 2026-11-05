@@ -679,6 +679,9 @@ func (m *kvMeta) maxTxnBatchNum() int {
 }
 
 func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
+	if st := m.CheckSession(); st != 0 {
+		return st
+	}
 	if opt == nil {
 		opt = &LoadOption{}
 	}
