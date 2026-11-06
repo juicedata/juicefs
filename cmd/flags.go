@@ -203,6 +203,10 @@ func dataCacheFlags() []cli.Flag {
 			Name:  "max-readahead",
 			Usage: "max buffering for read ahead in MiB per read session",
 		},
+		&cli.StringFlag{
+			Name:  "initial-readahead",
+			Usage: "initial read-ahead window size in MiB when sequential read is detected (default: block-size; will be clamped to [block-size, max-readahead])",
+		},
 		&cli.IntFlag{
 			Name:  "prefetch",
 			Value: 1,
