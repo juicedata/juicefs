@@ -442,6 +442,17 @@ func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent chan token) 
 		return fmt.Errorf("handler not set")
 	}
 	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var handlerErr error
+	handle := func(s meta.Slice, parts []chunk.Range) {
+		if err := handler(s, parts); err != nil {
+			mu.Lock()
+			if handlerErr == nil {
+				handlerErr = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
+			}
+			mu.Unlock()
+		}
+	}
 	for iter.hasNext() {
 		s, parts := iter.next()
 		if len(parts) == 0 {
@@ -462,18 +473,17 @@ func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent chan token) 
 					<-concurrent
 					wg.Done()
 				}()
-				if err := handler(s, parts); err != nil {
-					iter.err = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
-				}
+				handle(s, parts)
 			}()
 		default:
-			if err := handler(s, parts); err != nil {
-				iter.err = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
-			}
+			handle(s, parts)
 		}
 	}
 	wg.Wait()
-	return iter.err
+	if iter.err != nil {
+		return iter.err
+	}
+	return handlerErr
 }
 
 func newSliceIterator(ctx meta.Context, mClient meta.Meta, ino Ino, size uint64, stat *CacheResponse, ranges []ByteRange) *sliceIterator {
