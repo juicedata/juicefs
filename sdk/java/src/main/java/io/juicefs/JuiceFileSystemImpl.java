@@ -475,6 +475,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("backupMeta", getConf(conf, "backup-meta", "3600"));
     obj.put("backupSkipTrash", Boolean.valueOf(getConf(conf, "backup-skip-trash", "false")));
     obj.put("heartbeat", getConf(conf, "heartbeat", "12"));
+    obj.put("sessionTimeout", getConf(conf, "session-timeout", "0"));
     obj.put("attrTimeout", getConf(conf, "attr-cache", "0.0"));
     obj.put("entryTimeout", getConf(conf, "entry-cache", "0.0"));
     obj.put("dirEntryTimeout", getConf(conf, "dir-entry-cache", "0.0"));
