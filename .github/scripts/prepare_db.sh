@@ -111,6 +111,9 @@ prepare_db() {
     "test.fdb")
         install_fdb
         ;;
+    "test.sdk.go")
+        # SQLite and a local directory only
+        ;;
     "test.pkg")
         install_mysql
         retry install_tikv
