@@ -313,6 +313,13 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		if r.HasMore() {
 			numThreads = int(r.Get8())
 		}
+		// The CLI only lets root set this bit. The control file is 0666, so the
+		// mount must enforce the same rule. Uid 0 is root; Windows maps Administrator to 0 first.
+		if skipTrash && ctx.Uid() != 0 {
+			logger.Warnf("skip-trash rmr %d/%s refused for uid %d", inode, name, ctx.Uid())
+			_, _ = out.Write([]byte{uint8(syscall.EPERM)})
+			return
+		}
 		var count uint64
 		var st syscall.Errno
 		go func() {

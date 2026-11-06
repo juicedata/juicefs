@@ -42,6 +42,10 @@ import (
 // nolint:errcheck
 
 func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config), metaUri string) (*VFS, object.ObjectStorage) {
+	return newTestVFS(applyMetaConfOption, metaUri, nil)
+}
+
+func newTestVFS(applyMetaConfOption func(metaConfig *meta.Config), metaUri string, patchFormat func(*meta.Format)) (*VFS, object.ObjectStorage) {
 	mp := "/jfs"
 	metaConf := meta.DefaultConf()
 	metaConf.MountPoint = mp
@@ -59,6 +63,9 @@ func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config), metaUri st
 		BlockSize:   4096,
 		Compression: "lz4",
 		DirStats:    true,
+	}
+	if patchFormat != nil {
+		patchFormat(format)
 	}
 	err := m.Init(format, true)
 	if err != nil {
@@ -1204,4 +1211,117 @@ func testReaddir(t *testing.T, metaUri string, dirNum int, offset int) {
 	entriesOne := readAll(ctx, parent, fh, offset)
 	entriesTwo := readAll(ctx, parent, fh, offset)
 	require.True(t, reflect.DeepEqual(entriesOne, entriesTwo))
+}
+
+func trashEntryCount(t *testing.T, v *VFS) int {
+	t.Helper()
+	ctx := NewLogContext(meta.NewContext(1, 0, []uint32{0}))
+	var entries []*meta.Entry
+	if st := v.Meta.Readdir(ctx, meta.TrashInode, 0, &entries); st != 0 {
+		t.Fatalf("readdir trash: %s", st)
+	}
+	n := 0
+	for _, e := range entries {
+		name := string(e.Name)
+		if name != "." && name != ".." {
+			n++
+		}
+	}
+	return n
+}
+
+func sendRmr(t *testing.T, v *VFS, ctx Context, fh uint64, off *uint64, parent Ino, name string, skipTrash bool) syscall.Errno {
+	t.Helper()
+	nb := []byte(name)
+	buf := make([]byte, 4+4+8+1+len(nb)+1+1)
+	w := utils.NewBuffer(uint32(len(buf)))
+	w.Put32(meta.Rmr)
+	w.Put32(uint32(8 + 1 + len(nb) + 1 + 1))
+	w.Put64(uint64(parent))
+	w.Put8(uint8(len(nb)))
+	w.Put(nb)
+	if skipTrash {
+		w.Put8(1)
+	} else {
+		w.Put8(0)
+	}
+	w.Put8(1)
+	if e := v.Write(ctx, controlInode, w.Bytes(), *off, fh); e != 0 {
+		t.Fatalf("write rmr: %s", e)
+	}
+	*off += uint64(len(buf))
+	resp := make([]byte, 1024)
+	for {
+		n, errno := v.Read(ctx, controlInode, resp, *off, fh)
+		if errno != 0 {
+			t.Fatalf("read rmr result: %s", errno)
+		}
+		if n == 0 {
+			time.Sleep(time.Millisecond * 20)
+			continue
+		}
+		*off += uint64(n)
+		if n%17 == 1 {
+			return syscall.Errno(resp[n-1])
+		}
+		if n == 1 {
+			return syscall.Errno(resp[0])
+		}
+	}
+}
+
+func TestRmrSkipTrashRequiresRoot(t *testing.T) {
+	v, _ := newTestVFS(nil, "", func(format *meta.Format) {
+		format.TrashDays = 1
+	})
+	user := NewLogContext(meta.NewContext(10, 1000, []uint32{1000}))
+	root := NewLogContext(meta.NewContext(11, 0, []uint32{0}))
+	for _, name := range []string{"keep", "gone", "trashed"} {
+		if _, _, e := v.Create(root, 1, name, 0644, 0, syscall.O_RDWR); e != 0 {
+			t.Fatalf("create %s: %s", name, e)
+		}
+	}
+	fe, e := v.Lookup(root, 1, ".control")
+	if e != 0 {
+		t.Fatalf("lookup .control: %s", e)
+	}
+	_, fh, e := v.Open(root, fe.Inode, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("open .control: %s", e)
+	}
+	var off uint64
+
+	if st := sendRmr(t, v, user, fh, &off, 1, "keep", true); st != syscall.EPERM {
+		t.Fatalf("non-root skip-trash: %s, want EPERM", st)
+	}
+	var ino meta.Ino
+	var attr meta.Attr
+	if st := v.Meta.Lookup(root, 1, "keep", &ino, &attr, false); st != 0 {
+		t.Fatalf("keep should still exist: %s", st)
+	}
+	if n := trashEntryCount(t, v); n != 0 {
+		t.Fatalf("refused rmr should not touch trash, got %d entries", n)
+	}
+
+	before := trashEntryCount(t, v)
+	if st := sendRmr(t, v, user, fh, &off, 1, "trashed", false); st != 0 {
+		t.Fatalf("non-root rmr into trash: %s", st)
+	}
+	if st := v.Meta.Lookup(root, 1, "trashed", &ino, &attr, false); st != syscall.ENOENT {
+		t.Fatalf("trashed should be removed: %s", st)
+	}
+	if n := trashEntryCount(t, v); n <= before {
+		t.Fatalf("rmr without skip-trash should land in trash, before %d after %d", before, n)
+	}
+
+	before = trashEntryCount(t, v)
+	if st := sendRmr(t, v, root, fh, &off, 1, "gone", true); st != 0 {
+		t.Fatalf("root skip-trash: %s", st)
+	}
+	if st := v.Meta.Lookup(root, 1, "gone", &ino, &attr, false); st != syscall.ENOENT {
+		t.Fatalf("gone should be removed: %s", st)
+	}
+	if n := trashEntryCount(t, v); n != before {
+		t.Fatalf("root skip-trash should not add trash entries, before %d after %d", before, n)
+	}
 }
