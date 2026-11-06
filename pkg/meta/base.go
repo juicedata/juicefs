@@ -36,15 +36,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
+
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
-	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -1407,7 +1408,7 @@ func (m *baseMeta) decodeDelayedSlices(buf []byte, ss *[]Slice) {
 	}
 }
 
-func clearSUGID(ctx Context, cur *Attr, set *Attr) {
+func clearSUGID(ctx Context, cur *Attr, set *Attr, chown bool) {
 	switch runtime.GOOS {
 	case "darwin":
 		if ctx.Uid() != 0 {
@@ -1418,12 +1419,12 @@ func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 	case "linux":
 		// same as ext
 		if cur.Typ != TypeDirectory {
-			if ctx.Uid() != 0 || (cur.Mode>>3)&1 != 0 {
+			if (cur.Mode>>3)&1 != 0 || (ctx.Uid() != 0 && (!chown || !containsGid(ctx, cur.Gid))) {
 				// clear SUID and SGID
 				cur.Mode &= 01777
 				set.Mode &= 01777
 			} else {
-				// keep SGID if the file is non-group-executable
+				// Explicit chown also keeps non-executable SGID for group members.
 				cur.Mode &= 03777
 				set.Mode &= 03777
 			}
@@ -3674,10 +3675,22 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 		attr.Mode |= (cur.Mode & 06000)
 	}
-	var changed bool
-	if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-		clearSUGID(ctx, &dirtyAttr, attr)
+	chown := set&SetAttrChown != 0
+	changed := chown || set&SetAttrCtimeNow != 0
+	if (cur.Mode&06000) != 0 && (chown || set&(SetAttrUID|SetAttrGID) != 0) {
+		clearSUGID(ctx, &dirtyAttr, attr, chown)
 		changed = true
+	}
+	if chown {
+		if cur.Flags&(FlagImmutable|FlagAppend) != 0 {
+			return nil, syscall.EPERM
+		}
+		// Check ownership when an unchanged ID is explicitly supplied,
+		// or when chown(-1, -1) would clear set-ID bits.
+		if ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
+			(set&(SetAttrUID|SetAttrGID) != 0 || dirtyAttr.Mode != cur.Mode) {
+			return nil, syscall.EPERM
+		}
 	}
 	if set&SetAttrGID != 0 {
 		if ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
@@ -3788,6 +3801,13 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	// Keep last: replay pins the mode recorded by the source.
 	dirtyAttr.Mode = m.finalMode(dirtyAttr.Mode)
 	return &dirtyAttr, 0
+}
+
+func setAttrLogFlags(set uint16) uint16 {
+	if set&SetAttrChown != 0 {
+		return set&^SetAttrChown | SetAttrMode | SetAttrUID | SetAttrGID | SetAttrCtimeNow
+	}
+	return set
 }
 
 func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) syscall.Errno {

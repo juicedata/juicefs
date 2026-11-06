@@ -49,6 +49,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -1653,9 +1654,7 @@ func setOwner(w *wrapper, ctx meta.Context, path string, owner, group string) in
 		return errno(err)
 	}
 	defer f.Close(ctx)
-	st, _ := f.Stat()
-	uid := uint32(st.(*fs.FileStat).Uid())
-	gid := uint32(st.(*fs.FileStat).Gid())
+	uid, gid := uint32(math.MaxUint32), uint32(math.MaxUint32)
 	if owner != "" {
 		uid = w.lookupUid(owner)
 	}

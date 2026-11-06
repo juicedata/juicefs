@@ -1656,7 +1656,7 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			Update(&dirtyNode, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&dirtyNode, attr)
-			m.genLog(ctx, s, now.UnixNano(), "SETATTR(%d,%d,%d,%s)", inode, set, sugidclearmode, attr.logFields())
+			m.genLog(ctx, s, now.UnixNano(), "SETATTR(%d,%d,%d,%s)", inode, setAttrLogFlags(set), sugidclearmode, attr.logFields())
 		}
 		return err
 	}, inode))

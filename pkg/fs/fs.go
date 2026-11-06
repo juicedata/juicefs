@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"runtime/trace"
@@ -1445,11 +1446,11 @@ func (f *File) Chown(ctx meta.Context, uid uint32, gid uint32) (err syscall.Errn
 	defer trace.StartRegion(context.TODO(), "fs.Chown").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chown (%s,%d,%d): %s", f.path, uid, gid, errstr(err)) }()
-	var flag uint16
-	if uid != uint32(f.info.Uid()) {
+	flag := uint16(meta.SetAttrChown)
+	if uid != math.MaxUint32 {
 		flag |= meta.SetAttrUID
 	}
-	if gid != uint32(f.info.Gid()) {
+	if gid != math.MaxUint32 {
 		flag |= meta.SetAttrGID
 	}
 	var attr = Attr{Uid: uid, Gid: gid}

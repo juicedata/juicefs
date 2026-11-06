@@ -1425,7 +1425,7 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(dirtyAttr), 0)
-			m.genLog(ctx, pipe, now, "SETATTR(%d,%d,%d,%s)", inode, set, sugidclearmode, dirtyAttr.logFields())
+			m.genLog(ctx, pipe, now, "SETATTR(%d,%d,%d,%s)", inode, setAttrLogFlags(set), sugidclearmode, dirtyAttr.logFields())
 			return nil
 		})
 		if err == nil {

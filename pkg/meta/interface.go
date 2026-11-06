@@ -91,6 +91,9 @@ const (
 	SetAttrMtimeNow
 	SetAttrCtimeNow
 	SetAttrTier
+	// SetAttrChown applies chown permission checks, clears set-ID bits and updates ctime,
+	// including when neither SetAttrUID nor SetAttrGID is set.
+	SetAttrChown
 	SetAttrLinuxFlags   = 1 << 13
 	SetAttrWindowsFlags = 1 << 14
 	SetAttrFlag         = 1 << 15
