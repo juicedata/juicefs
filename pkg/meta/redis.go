@@ -3130,6 +3130,11 @@ func (m *redisMeta) doRefreshSession() error {
 }
 
 func (m *redisMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) error {
+	return m.deleteSustainedInode(ctx, sid, inode, nil)
+}
+
+// deleteSustainedInode deletes the inode unless keep, called in the same transaction, returns true.
+func (m *redisMeta) deleteSustainedInode(ctx Context, sid uint64, inode Ino, keep func(tx *redis.Tx, attr *Attr) (bool, error)) error {
 	var attr Attr
 	var newSpace int64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
@@ -3142,6 +3147,11 @@ func (m *redisMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) e
 			return err
 		}
 		m.parseAttr(a, &attr)
+		if keep != nil {
+			if kept, err := keep(tx, &attr); err != nil || kept {
+				return err
+			}
+		}
 		newSpace = -align4K(attr.Length)
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(m.now().Unix()), Member: m.toDelete(inode, attr.Length)})
@@ -3970,7 +3980,25 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 	cutoff := time.Now().Add(time.Hour * -1)
 	prefix := len(m.prefix)
 
-	_ = m.scan(ctx, "d[0-9]*", func(keys []string) error {
+	// An inode found nowhere below is deleted, so stop if any scan is incomplete.
+	if err := m.scan(ctx, "session[0-9]*", func(keys []string) error {
+		for _, key := range keys {
+			inodes, err := m.rdb.SMembers(ctx, key).Result()
+			if err != nil {
+				logger.Errorf("SMembers %s: %s", key, err)
+				return err
+			}
+			for _, s := range inodes {
+				ino, _ := strconv.Atoi(s)
+				foundInodes[Ino(ino)] = struct{}{}
+			}
+		}
+		return nil
+	}); err != nil {
+		logger.Warnf("Skip cleaning up leaked inodes: scan sustained inodes: %s", err)
+		return
+	}
+	if err := m.scan(ctx, "d[0-9]*", func(keys []string) error {
 		for _, key := range keys {
 			ino, _ := strconv.Atoi(key[prefix+1:])
 			var entries []*Entry
@@ -3984,7 +4012,10 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		logger.Warnf("Skip cleaning up leaked inodes: scan directories: %s", err)
+		return
+	}
 	_ = m.scan(ctx, "i*", func(keys []string) error {
 		values, err := m.rdb.MGet(ctx, keys...).Result()
 		if err != nil {
@@ -4001,7 +4032,9 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 			if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
 				logger.Infof("found dangling inode: %s %+v", keys[i], attr)
 				if delete {
-					err = m.doDeleteSustainedInode(ctx, 0, Ino(ino))
+					err = m.deleteSustainedInode(ctx, 0, Ino(ino), func(tx *redis.Tx, attr *Attr) (bool, error) {
+						return m.leakedInodeInUse(ctx, tx, Ino(ino), attr, cutoff)
+					})
 					if err != nil {
 						logger.Errorf("delete leaked inode %d : %s", ino, err)
 					}
@@ -4010,6 +4043,81 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 		}
 		return nil
 	})
+}
+
+// leakedInodeInUse checks again, in the deleting transaction, an inode that cleanupLeakedInodes did not find.
+func (m *redisMeta) leakedInodeInUse(ctx Context, tx *redis.Tx, inode Ino, attr *Attr, cutoff time.Time) (bool, error) {
+	// linked or renamed after the scans
+	if !time.Unix(attr.Ctime, 0).Before(cutoff) {
+		return true, nil
+	}
+	if attr.Nlink == 0 {
+		// Replayed unlink operations can add sustained inodes with an old ctime.
+		var cursor uint64
+		for {
+			keys, next, err := tx.Scan(ctx, cursor, m.prefix+"session[0-9]*", 10000).Result()
+			if err != nil {
+				return true, err
+			}
+			for _, key := range keys {
+				sustained, err := tx.SIsMember(ctx, key, inode.String()).Result()
+				if err != nil || sustained {
+					return sustained, err
+				}
+			}
+			if next == 0 {
+				break
+			}
+			cursor = next
+		}
+	}
+	// the top directory of a running clone
+	if err := tx.Watch(ctx, m.detachedNodes()).Err(); err != nil {
+		return true, err
+	}
+	if err := tx.ZScore(ctx, m.detachedNodes(), inode.String()).Err(); err != redis.Nil {
+		return true, err
+	}
+	// added to a directory after the directory was scanned, without a new ctime (clone)
+	parents := []Ino{attr.Parent}
+	if attr.Parent == 0 {
+		if err := tx.Watch(ctx, m.parentKey(inode)).Err(); err != nil {
+			return true, err
+		}
+		vals, err := tx.HGetAll(ctx, m.parentKey(inode)).Result()
+		if err != nil {
+			return true, err
+		}
+		parents = parents[:0]
+		for k, v := range vals {
+			if n, _ := strconv.Atoi(v); n > 0 {
+				p, _ := strconv.ParseUint(k, 10, 64)
+				parents = append(parents, Ino(p))
+			}
+		}
+	}
+	for _, p := range parents {
+		if err := tx.Watch(ctx, m.entryKey(p)).Err(); err != nil {
+			return true, err
+		}
+		var cursor uint64
+		for {
+			kvs, next, err := tx.HScan(ctx, m.entryKey(p), cursor, "*", 10000).Result()
+			if err != nil {
+				return true, err
+			}
+			for i := 1; i < len(kvs); i += 2 {
+				if _, ino := m.parseEntry([]byte(kvs[i])); ino == inode {
+					return true, nil
+				}
+			}
+			if next == 0 {
+				break
+			}
+			cursor = next
+		}
+	}
+	return false, nil
 }
 
 func (m *redisMeta) scan(ctx context.Context, pattern string, f func([]string) error) error {
