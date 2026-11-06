@@ -182,30 +182,55 @@ func (s *nextObjects) Pop() interface{} {
 }
 
 func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
-	heads := &nextObjects{make([]nextKey, 0)}
+	ctx, cancel := context.WithCancel(ctx)
+	heads := &nextObjects{make([]nextKey, 0, len(s.stores))}
+	// abort stops the remaining shard listings and drains their channels,
+	// so their producers do not block forever on a full channel.
+	abort := func() {
+		cancel()
+		for _, h := range heads.os {
+			go func(ch <-chan Object) {
+				for range ch {
+				}
+			}(h.ch)
+		}
+	}
 	for i := range s.stores {
 		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink, true)
 		if err != nil {
+			abort()
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
 		}
-		first := <-ch
-		if first != nil {
-			heads.Push(nextKey{first, ch})
+		first, ok := <-ch
+		if !ok {
+			continue
 		}
+		if first == nil {
+			abort()
+			return nil, fmt.Errorf("list %s: incomplete listing", s.stores[i])
+		}
+		heads.Push(nextKey{first, ch})
 	}
 	heap.Init(heads)
 
 	out := make(chan Object, 1000)
 	go func() {
+		defer close(out)
+		defer cancel()
 		for heads.Len() > 0 {
 			n := heap.Pop(heads).(nextKey)
 			out <- n.o
-			o := <-n.ch
-			if o != nil {
-				heap.Push(heads, nextKey{o, n.ch})
+			o, ok := <-n.ch
+			if !ok {
+				continue
 			}
+			if o == nil {
+				abort()
+				out <- nil
+				return
+			}
+			heap.Push(heads, nextKey{o, n.ch})
 		}
-		close(out)
 	}()
 	return out, nil
 }

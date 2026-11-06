@@ -97,7 +97,9 @@ type ObjectStorage interface {
 	Head(ctx context.Context, key string) (Object, error)
 	// List returns a list of objects using ListObjectV2.
 	List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
-	// ListAll returns all the objects as a channel.
+	// ListAll returns all the objects as a channel. The channel is closed when
+	// the listing ends; a nil object received before that means the listing
+	// failed and the result is incomplete.
 	ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error)
 
 	// CreateMultipartUpload starts to upload a large object part by part.

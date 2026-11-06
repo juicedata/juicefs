@@ -1080,6 +1080,85 @@ func TestShardingListRetryKeepsToken(t *testing.T) {
 	}
 }
 
+// listStub sends keys (then a nil if fail is set) on an unbuffered channel and
+// closes done when its producer exits.
+type listStub struct {
+	ObjectStorage
+	keys []string
+	fail bool
+	done chan struct{}
+}
+
+func (s *listStub) String() string { return "stub://" }
+
+func (s *listStub) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
+	ch := make(chan Object)
+	go func() {
+		defer close(s.done)
+		defer close(ch)
+		for _, k := range s.keys {
+			ch <- &obj{key: k}
+		}
+		if s.fail {
+			ch <- nil
+		}
+	}()
+	return ch, nil
+}
+
+func TestShardingListFailedShard(t *testing.T) {
+	var goodKeys []string
+	for i := 0; i < 100; i++ {
+		goodKeys = append(goodKeys, fmt.Sprintf("k%03d", i))
+	}
+	cases := []struct {
+		name    string
+		badKeys []string
+		wantErr bool
+		want    []string
+	}{
+		{name: "first", wantErr: true},
+		{name: "merging", badKeys: []string{"a"}, want: []string{"a"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bad := &listStub{keys: c.badKeys, fail: true, done: make(chan struct{})}
+			good := &listStub{keys: goodKeys, done: make(chan struct{})}
+			s := &sharded{stores: []ObjectStorage{good, bad}}
+			ch, err := s.ListAll(context.Background(), "", "", false)
+			if c.wantErr {
+				if err == nil {
+					t.Fatal("expect error for a failed shard")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("list all: %s", err)
+				}
+				var got []string
+				var sawNil bool
+				for o := range ch {
+					if o == nil {
+						sawNil = true
+						break
+					}
+					got = append(got, o.Key())
+				}
+				if !sawNil {
+					t.Fatalf("failed shard not reported, got %v", got)
+				}
+				if !reflect.DeepEqual(got, c.want) {
+					t.Fatalf("got %v, want %v", got, c.want)
+				}
+			}
+			select {
+			case <-good.done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("listing of the healthy shard is leaked")
+			}
+		})
+	}
+}
+
 func TestSQLite(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "teststore.db")
 	s, err := newSQLStore("sqlite3", dbPath, "", "")
