@@ -201,6 +201,42 @@ http.Handle("/metrics", promhttp.HandlerFor(
 
 Metrics can also be pushed to a Pushgateway with `Config.PushGateway`.
 
+## Benchmarks
+
+Run from the repository root, without `-race` when measuring performance:
+
+```shell
+go test -tags nogspt -run '^$' -bench '^BenchmarkClient' -benchmem -benchtime=1s ./sdk/go
+```
+
+The benchmarks use temporary SQLite metadata and local file storage. No FUSE mount or external services are needed. Setup, fixture validation and cleanup are excluded from timing. All workloads are single-threaded (queue depth 1).
+
+| Benchmark | Workload and timing | Metrics |
+| --- | --- | --- |
+| `ClientMetadata/CreateEmpty` | Create and close a new, uniquely named empty file per operation; deletion is excluded | files/s, average µs/op |
+| `ClientMetadata/Mkdir` | Create a different empty directory per operation; prepare names before timing, exclude deletion | op/s, average µs/op |
+| `ClientMetadata/RemoveDir` | Pre-create one empty directory per operation; only delete directories during timing | op/s, average µs/op |
+| `ClientMetadata/RemoveFile/Empty` | Pre-create and close a batch of empty files; remove one file per operation during timing | files/s, average µs/op |
+| `ClientMetadata/RemoveFile/4KiB` | Pre-create and close/flush a batch of 4 KiB files; remove one file per operation during timing | files/s, average µs/op |
+| `ClientMetadata/OpenClose` | Sequentially traverse 1,024 pre-created empty files, opening and closing one file per operation; restart after each traversal | files/s, average µs/op |
+| `ClientMetadata/Stat` | Sequentially traverse 1,024 pre-created empty files, querying one file's attributes per operation; restart after each traversal | ops/s, average µs/op |
+| `ClientSmallFiles/Create4KiB` | Create a new 4 KiB file per operation, including close/flush | files/s, average µs/op |
+| `ClientSmallFiles/Read4KiBWarm` | Rotate through 256 pre-created, warmed 4 KiB files; each operation includes open/read/close | files/s, average µs/op |
+| `ClientSequential/Write256MiB` | Write a 256 MiB file sequentially in 1 MiB requests, then `Sync`; rewind and overwrite on subsequent passes | MB/s |
+| `ClientSequential/Read256MiB` | Read a pre-created 256 MiB file sequentially in 1 MiB requests; rewind on each pass | MB/s |
+| `ClientRandom/Read4KiB` | Read aligned 4 KiB blocks in a fixed random permutation across a 256 MiB file | IOPS, average µs/op |
+| `ClientRandom/Write4KiBSync` | Write aligned 4 KiB blocks in the same random order, including `Sync` after every write | IOPS, average µs/op |
+
+Benchmark names have the `Benchmark` prefix. All cases report allocations; `avg-us/op` is the arithmetic mean, not a latency percentile. MB/s uses decimal megabytes. File creation includes generating a unique filename but excludes deletion. `RemoveFile` excludes filename generation, file preparation and post-deletion verification; it measures time until `Remove` returns without an additional wait for background data reclamation. For `OpenClose` and `Stat`, batch creation and filename generation are excluded from timing; the default metadata cache settings are retained.
+
+Large-file cases keep one handle open during timing and disable the SDK chunk cache; internal read buffers and the OS page cache remain enabled. Read fixtures are fully read and verified before timing, so reads can hit warm caches. The random offset sequence is prepared outside timing. `Sync` waits for upload and metadata commit, but the local file storage backend does not call `fsync`, so these results are not physical-disk durability or cold-storage measurements. For comparisons, keep the workload, cache state and flush policy consistent. Run individual cases in separate processes for repeated samples, for example:
+
+```shell
+for sample in 1 2 3; do
+    go test -tags nogspt -run '^$' -bench '^BenchmarkClientRandom$/^Write4KiBSync$' -benchmem -benchtime=1s ./sdk/go
+done
+```
+
 ## Known limitations
 
 - **Concurrent use of a `File`**: the SDK does not synchronize calls on the same `*File`. Concurrent `Read` or `Write` calls share the offset without ordering, so synchronize them in the application, or use `ReadAt` and `WriteAt`. Reads and writes on the same handle are still serialized inside JuiceFS.
