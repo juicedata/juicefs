@@ -41,11 +41,11 @@ sudo chkconfig --add netfs
 
 ### 使用 systemd.mount 实现自动挂载
 
-基于安全考虑，JuiceFS 将命令行中的一些选项隐藏在环境变量中，所以像数据库访问密码、S3 访问密钥和密钥等设置不能直接应用于 `/etc/fstab` 文件。在这种情况下，你可以使用 systemd 来挂载 JuiceFS 实例。
-
-以下是如何设置 systemd 配置文件的步骤：
+如果需要通过环境变量传入数据库密码或对象存储访问密钥，可以使用 systemd.mount 配置开机挂载。
 
 1. 创建文件 `/etc/systemd/system/juicefs.mount`，并添加以下内容：
+
+    unit 文件名必须与 `Where=` 的挂载路径匹配。使用其他挂载点时，修改 `Where=`，用 `systemd-escape -p --suffix=mount <MOUNTPOINT>` 生成对应文件名，并同步修改下方命令中的 unit 名称。
 
     ```conf
     [Unit]
@@ -57,14 +57,16 @@ sudo chkconfig --add netfs
     What=mysql://juicefs@(mysql.host:3306)/juicefs
     Where=/juicefs
     Type=juicefs
-    Options=_netdev,allow_other,writeback_cache
+    Options=_netdev,allow_other,writeback_cache,max-uploads=50
 
     [Install]
     WantedBy=remote-fs.target
     WantedBy=multi-user.target
     ```
 
-    你可以根据需要更改环境变量、挂载选项等。
+    `Options=` 的写法与 `/etc/fstab` 相同：JuiceFS 命令行选项去掉 `--` 前缀，例如 `--max-uploads=50` 写作 `max-uploads=50`，`--writeback` 写作 `writeback`；FUSE 选项（如 `allow_other`）直接填写，多个选项用逗号分隔。
+
+    保留 `_netdev`，使挂载排在 `network-online.target` 之后。`Options=` 中的字面 `%` 应写成 `%%`。
 
 2. 使用以下命令启用和启动 JuiceFS 挂载：
 
@@ -76,64 +78,7 @@ sudo chkconfig --add netfs
 
 完成这些步骤后，就可以访问 `/juicefs` 目录来存取文件了。
 
-#### 修改挂载点
-
-systemd 要求 unit 文件名与 `Where=` 的挂载路径保持一致：绝对路径中的 `/` 换成 `-`，路径本身含有的 `-` 则转义为 `\x2d`。例如：
-
-| 挂载点 | unit 文件名 |
-| --- | --- |
-| `/juicefs` | `juicefs.mount` |
-| `/mnt/jfs` | `mnt-jfs.mount` |
-| `/data/jfs-cache/mnt` | `data-jfs\x2dcache-mnt.mount` |
-
-可以用 `systemd-escape` 直接生成文件名：
-
-```bash
-$ systemd-escape -p --suffix=mount /mnt/jfs
-mnt-jfs.mount
-```
-
-如果文件名与 `Where=` 不一致，systemd 会拒绝启动该 unit，并报错：`Where= setting doesn't match unit name. Refusing.`
-
-修改挂载点时，依次执行：
-
-```bash
-# 1. 修改 unit 文件中的 Where= 为新挂载点
-# 2. 按新路径重命名 unit 文件，例如 mv juicefs.mount mnt-jfs.mount
-$ sudo systemctl daemon-reload
-$ sudo systemctl disable --now juicefs.mount     # 停用旧 unit
-$ sudo systemctl enable --now mnt-jfs.mount      # 启用新 unit 并立即挂载
-```
-
-#### 传递挂载参数
-
-`[Mount]` 段的 `Options=` 会原样作为 `-o` 参数传给 `mount.juicefs`，书写规则与 `/etc/fstab` 的 options 列一致：
-
-* JuiceFS 命令行选项去掉 `--` 前缀，带值的用 `=` 连接，布尔开关只写名字。例如 `--max-uploads=50` 写成 `max-uploads=50`，`--writeback` 写成 `writeback`。
-* 原本通过 `-o` 传入的 FUSE 选项直接写，例如 `allow_other`、`max_read=131072`。
-* 多个选项用逗号分隔且不加空格；建议保留 `_netdev`，确保网络就绪后再挂载。
-
-例如把下面的挂载命令迁移到 systemd：
-
-```bash
-juicefs mount --max-uploads=50 --writeback --cache-size=204800 -o allow_other <META-URL> /juicefs
-```
-
-对应的 `[Mount]` 段为：
-
-```conf
-[Mount]
-What=mysql://juicefs@(mysql.host:3306)/juicefs
-Where=/juicefs
-Type=juicefs
-Options=_netdev,allow_other,max-uploads=50,writeback,cache-size=204800
-```
-
-:::tip 提示
-`Options=` 会出现在 `mount` 命令输出和进程参数中，请不要在这里填写数据库密码、对象存储密钥等敏感信息，这类信息应放在 `[Mount]` 段的 `Environment=` 里（如 `META_PASSWORD`、`ALICLOUD_ACCESS_KEY_ID`、`ALICLOUD_ACCESS_KEY_SECRET`），systemd 会将其传入挂载助手的进程环境。
-::::
-
-修改 unit 文件后，需要先执行 `systemctl daemon-reload`，再执行 `systemctl restart <unit>` 生效；挂载失败时可以用 `systemctl status <unit>` 和 `journalctl -u <unit>` 排查。
+修改挂载参数或环境变量后，执行 `systemctl daemon-reload`，再执行 `systemctl restart <unit>` 使配置生效。
 
 ## macOS
 

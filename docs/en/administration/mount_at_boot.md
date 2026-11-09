@@ -41,11 +41,11 @@ sudo chkconfig --add netfs
 
 ### Automating Mounting with systemd.mount
 
-If you're using JuiceFS and need to apply settings like database access password, S3 access key, and secret key, which are hidden from the command line using environment variables for security reason, it may not be easy to configure them in the `/etc/fstab` file. In such cases, you can utilize systemd to mount your JuiceFS instance.
-
-Here's how you can set up your systemd configuration file:
+Use `systemd.mount` to mount JuiceFS at boot when database passwords or object storage credentials need to be passed through environment variables.
 
 1. Create the file `/etc/systemd/system/juicefs.mount` and add the following content:
+
+    The unit filename must match `Where=`. For a different mount point, update `Where=` and use `systemd-escape -p --suffix=mount <MOUNTPOINT>` to generate the matching filename. Use that name in the commands below as well.
 
     ```conf
     [Unit]
@@ -57,14 +57,14 @@ Here's how you can set up your systemd configuration file:
     What=mysql://juicefs@(mysql.host:3306)/juicefs
     Where=/juicefs
     Type=juicefs
-    Options=_netdev,allow_other,writeback_cache
+    Options=_netdev,allow_other,writeback_cache,max-uploads=50
 
     [Install]
     WantedBy=remote-fs.target
     WantedBy=multi-user.target
     ```
 
-    Feel free to modify the options and environments according to your needs.
+    Write `Options=` as a comma-separated list, using the same syntax as the options column in `/etc/fstab`: remove `--` from JuiceFS flags (e.g. `max-uploads=50`, `writeback`) and keep FUSE options such as `allow_other`. Keep `_netdev` to order the mount after `network-online.target`; write a literal `%` as `%%`.
 
 2. Enable and start the JuiceFS mount using the following commands:
 
@@ -76,64 +76,7 @@ Here's how you can set up your systemd configuration file:
 
 After completing these steps, you will be able to access `/juicefs` and store your files there.
 
-#### Changing the mount point
-
-systemd requires the unit file name to match the `Where=` path: every `/` becomes `-`, and a `-` inside the path is escaped as `\x2d`. For example:
-
-| Mount point | Unit file |
-| --- | --- |
-| `/juicefs` | `juicefs.mount` |
-| `/mnt/jfs` | `mnt-jfs.mount` |
-| `/data/jfs-cache/mnt` | `data-jfs\x2dcache-mnt.mount` |
-
-Use `systemd-escape` to generate the name:
-
-```bash
-$ systemd-escape -p --suffix=mount /mnt/jfs
-mnt-jfs.mount
-```
-
-If the file name does not match `Where=`, systemd refuses to start the unit and reports: `Where= setting doesn't match unit name. Refusing.`
-
-To change the mount point:
-
-```bash
-# 1. Update Where= in the unit file to the new mount point
-# 2. Rename the unit file to match the new path, e.g. mv juicefs.mount mnt-jfs.mount
-$ sudo systemctl daemon-reload
-$ sudo systemctl disable --now juicefs.mount     # stop and disable the old unit
-$ sudo systemctl enable --now mnt-jfs.mount      # enable the new unit and mount now
-```
-
-#### Passing mount options
-
-Everything in `Options=` is passed verbatim as the `-o` argument of `mount.juicefs`, following the same rules as the options column in `/etc/fstab`:
-
-* JuiceFS CLI flags drop the `--` prefix; flags that take a value use `=`, boolean flags are written by name only. For example, `--max-uploads=50` becomes `max-uploads=50` and `--writeback` becomes `writeback`.
-* FUSE options that are normally passed with `-o` are written as is, e.g. `allow_other`, `max_read=131072`.
-* Separate options with commas and no spaces; keep `_netdev` so that the mount waits for the network.
-
-For example, this command:
-
-```bash
-juicefs mount --max-uploads=50 --writeback --cache-size=204800 -o allow_other <META-URL> /juicefs
-```
-
-becomes:
-
-```conf
-[Mount]
-What=mysql://juicefs@(mysql.host:3306)/juicefs
-Where=/juicefs
-Type=juicefs
-Options=_netdev,allow_other,max-uploads=50,writeback,cache-size=204800
-```
-
-:::tip
-`Options=` shows up in the `mount` output and in the process arguments, so never put database passwords or object storage keys there. Put them in `Environment=` of the `[Mount]` section instead (e.g. `META_PASSWORD`, `ALICLOUD_ACCESS_KEY_ID`, `ALICLOUD_ACCESS_KEY_SECRET`); systemd passes them to the environment of the mount helper.
-::::
-
-After editing a unit file, run `systemctl daemon-reload` and then `systemctl restart <unit>` for the change to take effect. When a mount fails, check `systemctl status <unit>` and `journalctl -u <unit>`.
+After changing the mount options or environment variables, run `systemctl daemon-reload` and then `systemctl restart <unit>`.
 
 ## macOS
 
