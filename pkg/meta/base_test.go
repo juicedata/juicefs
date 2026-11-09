@@ -7589,3 +7589,99 @@ func TestRedisLockIndexRelease(t *testing.T) {
 		t.Fatalf("locked$%d still lists plock inode after last owner released", r1.sid)
 	}
 }
+
+// TestRedisLeakedLocks covers lock fields left by sessions that no longer
+// exist and were never registered in their locked$<sid> index, such as read
+// flocks taken by clients before #7340 (#7821).
+func TestRedisLeakedLocks(t *testing.T) {
+	testRedisLeakedLocks(t, func(r *redisMeta) { r.CleanStaleSessions(Background()) })
+}
+
+func testRedisLeakedLocks(t *testing.T, reconcile func(r *redisMeta)) {
+	newMeta := func(init bool) *redisMeta {
+		m, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
+		if err != nil {
+			t.Fatalf("create meta: %s", err)
+		}
+		if init {
+			if err := m.Reset(); err != nil {
+				t.Fatalf("reset meta: %s", err)
+			}
+			if err := m.Init(testFormat(), false); err != nil {
+				t.Fatalf("init meta: %s", err)
+			}
+		} else if _, err := m.Load(true); err != nil {
+			t.Fatalf("load meta: %s", err)
+		}
+		if err := m.NewSession(true); err != nil {
+			t.Fatalf("new session: %s", err)
+		}
+		return m.(*redisMeta)
+	}
+	r1 := newMeta(true)
+	defer r1.CloseSession()
+	r2 := newMeta(false)
+	defer r2.CloseSession()
+
+	ctx := Background()
+	var flockIno, plockIno Ino
+	for name, ino := range map[string]*Ino{"leaked_flock": &flockIno, "leaked_plock": &plockIno} {
+		if st := r1.Create(ctx, 1, name, 0644, 0, 0, ino, &Attr{}); st != 0 {
+			t.Fatalf("create %s: %s", name, st)
+		}
+		defer r1.Unlink(ctx, 1, name)
+	}
+
+	const deadSid, legacySid = 999, 998
+	deadFlock := fmt.Sprintf("%d_%016X", deadSid, 1)
+	deadPlock := fmt.Sprintf("%d_%016X", deadSid, 2)
+	legacyFlock := fmt.Sprintf("%d_%016X", legacySid, 3)
+	// a live legacy session that still holds a read flock
+	if err := r1.rdb.ZAdd(ctx, legacySessions, redis.Z{Score: float64(time.Now().Add(time.Hour).Unix()), Member: strconv.Itoa(legacySid)}).Err(); err != nil {
+		t.Fatalf("add legacy session: %s", err)
+	}
+	defer r1.rdb.ZRem(ctx, legacySessions, strconv.Itoa(legacySid))
+	// locks left by a crashed client whose session is gone, missing from its locked$ index
+	if err := r1.rdb.HSet(ctx, r1.flockKey(flockIno), deadFlock, "R", legacyFlock, "R").Err(); err != nil {
+		t.Fatalf("leak flock: %s", err)
+	}
+	if err := r1.rdb.HSet(ctx, r1.plockKey(plockIno), deadPlock, dumpLocks([]plockRecord{{syscall.F_WRLCK, 1, 0, 100}})).Err(); err != nil {
+		t.Fatalf("leak plock: %s", err)
+	}
+	// a live session holds a read flock on the same file
+	if st := r1.Flock(ctx, flockIno, 4, syscall.F_RDLCK, false); st != 0 {
+		t.Fatalf("flock by a live session: %s", st)
+	}
+
+	reconcile(r2)
+
+	fields, err := r1.rdb.HGetAll(ctx, r1.flockKey(flockIno)).Result()
+	if err != nil {
+		t.Fatalf("HGetAll %s: %s", r1.flockKey(flockIno), err)
+	}
+	if _, ok := fields[deadFlock]; ok {
+		t.Fatalf("leaked read flock of session %d is not cleaned up: %v", deadSid, fields)
+	}
+	if _, ok := fields[legacyFlock]; !ok {
+		t.Fatalf("read flock of live legacy session %d was removed: %v", legacySid, fields)
+	}
+	if _, ok := fields[r1.ownerKey(4)]; !ok {
+		t.Fatalf("read flock of live session %d was removed: %v", r1.sid, fields)
+	}
+	if st := r2.Setlk(ctx, plockIno, 5, false, syscall.F_WRLCK, 0, 100, 1); st != 0 {
+		t.Fatalf("write plock after cleaning up a leaked one: %s", st)
+	}
+	_ = r2.Setlk(ctx, plockIno, 5, false, syscall.F_UNLCK, 0, 100, 1)
+
+	// once the live holders release, a writer gets the lock
+	if st := r1.Flock(ctx, flockIno, 4, syscall.F_UNLCK, false); st != 0 {
+		t.Fatalf("unlock flock: %s", st)
+	}
+	if err := r1.rdb.HDel(ctx, r1.flockKey(flockIno), legacyFlock).Err(); err != nil {
+		t.Fatalf("release legacy flock: %s", err)
+	}
+	if st := r2.Flock(ctx, flockIno, 6, syscall.F_WRLCK, false); st != 0 {
+		t.Fatalf("write flock after live holders released: %s", st)
+	}
+	_ = r2.Flock(ctx, flockIno, 6, syscall.F_UNLCK, false)
+}
