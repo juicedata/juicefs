@@ -201,6 +201,42 @@ http.Handle("/metrics", promhttp.HandlerFor(
 
 也可以通过 `Config.PushGateway` 将指标推送到 Pushgateway。
 
+## 基准测试
+
+在仓库根目录运行，测量性能时不要加 `-race`：
+
+```shell
+go test -tags nogspt -run '^$' -bench '^BenchmarkClient' -benchmem -benchtime=1s ./sdk/go
+```
+
+测试使用临时 SQLite 元数据和本地文件存储，无需 FUSE 挂载或外部服务。初始化、测试数据准备与校验、清理均不计时。所有场景均为单线程，队列深度为 1。
+
+| Benchmark | 工作负载和计时范围 | 指标 |
+| --- | --- | --- |
+| `ClientMetadata/CreateEmpty` | 每次创建并关闭一个名称唯一的空文件，不计删除 | files/s、平均 µs/op |
+| `ClientMetadata/Mkdir` | 每次创建一个不同的空目录，目录名在计时前准备，不计删除 | op/s、平均 µs/op |
+| `ClientMetadata/RemoveDir` | 计时前为每次操作准备一个空目录，计时内只删除目录 | op/s、平均 µs/op |
+| `ClientMetadata/RemoveFile/Empty` | 计时前创建并关闭一批空文件，计时内逐个删除 | files/s、平均 µs/op |
+| `ClientMetadata/RemoveFile/4KiB` | 计时前创建并关闭/刷新一批 4 KiB 文件，计时内逐个删除 | files/s、平均 µs/op |
+| `ClientMetadata/OpenClose` | 顺序遍历预先创建的 1,024 个空文件，每次打开并关闭一个文件，遍历完后重新开始 | files/s、平均 µs/op |
+| `ClientMetadata/Stat` | 顺序遍历预先创建的 1,024 个空文件，每次查询一个文件的属性，遍历完后重新开始 | ops/s、平均 µs/op |
+| `ClientSmallFiles/Create4KiB` | 每次创建一个新的 4 KiB 文件，包含关闭/刷新 | files/s、平均 µs/op |
+| `ClientSmallFiles/Read4KiBWarm` | 轮换读取预先创建并预热的 256 个 4 KiB 文件，每次包含打开、读取和关闭 | files/s、平均 µs/op |
+| `ClientSequential/Write256MiB` | 以 1 MiB 请求连续写入 256 MiB 文件，每轮包含 `Sync`，后续轮次回到文件开头覆盖 | MB/s |
+| `ClientSequential/Read256MiB` | 以 1 MiB 请求连续读取预先创建的 256 MiB 文件，每轮回到文件开头 | MB/s |
+| `ClientRandom/Read4KiB` | 按固定随机排列读取 256 MiB 文件中对齐的 4 KiB 块 | IOPS、平均 µs/op |
+| `ClientRandom/Write4KiBSync` | 按相同随机顺序写入对齐的 4 KiB 块，每次写入均包含 `Sync` | IOPS、平均 µs/op |
+
+Benchmark 名称均带有 `Benchmark` 前缀。所有场景均输出内存分配；`avg-us/op` 为算术平均延迟，不是延迟分位数。MB/s 使用十进制 MB。文件创建包含生成唯一文件名的开销，不包含删除。`RemoveFile` 的文件名生成、文件准备和删除后校验均不计时；测量到 `Remove` 返回为止，不额外等待后台数据回收。`OpenClose` 和 `Stat` 的批量文件创建及文件名生成不计时，保留默认元数据缓存设置。
+
+大文件测试在计时期间保持同一个文件句柄打开，关闭 SDK chunk 缓存；内部读缓冲和操作系统页缓存仍启用。读取数据在计时前已完整读取并校验，因此可能命中热缓存。随机偏移序列在计时前生成。`Sync` 等待数据上传和元数据提交，但本地 file 存储后端不调用 `fsync`，结果不代表物理磁盘持久化或冷读性能。比较结果时应保持工作负载、缓存状态和刷新策略一致。重复采样建议每次使用独立进程运行单个 case，例如：
+
+```shell
+for sample in 1 2 3; do
+    go test -tags nogspt -run '^$' -bench '^BenchmarkClientRandom$/^Write4KiBSync$' -benchmem -benchtime=1s ./sdk/go
+done
+```
+
 ## 已知限制
 
 - **并发使用同一个 `File`**：SDK 不对同一个 `*File` 上的调用做同步。并发的 `Read` 或 `Write` 共享偏移量且没有顺序保证，请在应用中自行同步，或改用 `ReadAt` 和 `WriteAt`。同一个句柄上的读写在 JuiceFS 内部仍然是串行执行的。
