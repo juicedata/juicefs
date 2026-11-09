@@ -17,13 +17,16 @@
 package object
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -119,37 +122,97 @@ func TestRetiringConnFallback(t *testing.T) {
 	}
 }
 
-func TestRotatingRoundTripperInjectsConnectionClose(t *testing.T) {
-	var seenClose bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seenClose = seenClose || strings.EqualFold(r.Header.Get("Connection"), "close")
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
+func newRetiringTestClient(max int, tlsConfig *tls.Config) *http.Client {
 	transport := &http.Transport{
 		MaxIdleConnsPerHost: 1,
+		TLSClientConfig:     tlsConfig,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
 			if err != nil {
 				return nil, err
 			}
-			return newRetiringConn(conn, 2), nil
+			return newRetiringConn(conn, max), nil
 		},
 	}
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: &rotatingRoundTripper{inner: transport}, Timeout: 5 * time.Second}
+	return &http.Client{Transport: &rotatingRoundTripper{inner: transport}, Timeout: 10 * time.Second}
+}
 
-	for i := 0; i < 8; i++ {
-		resp, err := client.Get(server.URL)
-		if err != nil {
-			t.Fatalf("request %d: %v", i+1, err)
+func TestRotatingRoundTripperInjectsConnectionClose(t *testing.T) {
+	for _, useTLS := range []bool{false, true} {
+		var seenClose int32
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.EqualFold(r.Header.Get("Connection"), "close") {
+				atomic.StoreInt32(&seenClose, 1)
+			}
+		})
+		var client *http.Client
+		var server *httptest.Server
+		if useTLS {
+			server = httptest.NewTLSServer(handler)
+			client = newRetiringTestClient(2, server.Client().Transport.(*http.Transport).TLSClientConfig)
+		} else {
+			server = httptest.NewServer(handler)
+			client = newRetiringTestClient(2, nil)
 		}
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
+
+		for i := 0; i < 8; i++ {
+			resp, err := client.Get(server.URL)
+			if err != nil {
+				t.Fatalf("tls=%v request %d: %v", useTLS, i+1, err)
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+		}
+		client.CloseIdleConnections()
+		server.Close()
+		if atomic.LoadInt32(&seenClose) == 0 {
+			t.Fatalf("tls=%v: expected a request with Connection: close", useTLS)
+		}
 	}
-	if !seenClose {
-		t.Fatal("expected a request with Connection: close")
+}
+
+// aws-sdk-go-v2 sends Expect: 100-continue for bodies >= 2MB, so "100 Continue"
+// arrives while the body is being written. Rotation must not abort such
+// uploads: they are not replayable, so http.Transport cannot retry them.
+func TestRotatingRoundTripperExpectContinue(t *testing.T) {
+	var mu sync.Mutex
+	perConn := make(map[string]int)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		mu.Lock()
+		perConn[r.RemoteAddr]++
+		mu.Unlock()
+	}))
+	defer server.Close()
+
+	body := bytes.Repeat([]byte("x"), 1<<20)
+	for _, max := range []int{2, 3, 10} {
+		mu.Lock()
+		perConn = make(map[string]int)
+		mu.Unlock()
+		client := newRetiringTestClient(max, nil)
+		for i := 0; i < 40; i++ {
+			req, _ := http.NewRequest(http.MethodPut, server.URL, bytes.NewReader(body))
+			req.Header.Set("Expect", "100-continue")
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("max=%d request %d: %v", max, i+1, err)
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+		}
+		client.CloseIdleConnections()
+
+		mu.Lock()
+		if len(perConn) < 2 {
+			t.Fatalf("max=%d: connection was never rotated", max)
+		}
+		for addr, n := range perConn {
+			if n > max+max/2 {
+				t.Fatalf("max=%d: conn %s served %d requests", max, addr, n)
+			}
+		}
+		mu.Unlock()
 	}
 }
 
