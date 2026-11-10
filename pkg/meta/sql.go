@@ -2956,7 +2956,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if !ok {
 			return syscall.ENOENT
 		}
-		if m.checkLink(&pn) {
+		if m.checkLink(&n) {
 			return ELink
 		}
 		if n.Type == TypeDirectory {
@@ -5260,6 +5260,22 @@ func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, map
 
 func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
 	r := errno(m.txn(func(s *xorm.Session) error {
+		inodes := map[Ino]bool{inode: true}
+		for _, e := range entry.Entries {
+			inodes[e.Attr.Inode] = true
+		}
+		var nodes []*node
+		for ino := range inodes {
+			nodes = append(nodes, &node{Inode: ino})
+		}
+		if err := m.getNodesForUpdate(s, nodes...); err != nil {
+			return err
+		}
+		for _, n := range nodes {
+			if n.Type == TypeFile && n.Nlink > 1 {
+				return syscall.EAGAIN
+			}
+		}
 		if err := m.checkEntry(s, inode, entry); err != nil {
 			return err
 		}
@@ -5286,6 +5302,139 @@ func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map
 		}
 	}
 	return r
+}
+
+func (m *dbMeta) PrepareHardlink(ctx Context, inode Ino, entry *DumpedEntry) ([]HardlinkEntry, syscall.Errno) {
+	var links []HardlinkEntry
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
+		*entry = DumpedEntry{}
+		links = nil
+		if err := m.dumpTree(s, inode, entry); err != nil {
+			return err
+		}
+		if entry.Attr.Type == "link" {
+			return ELink
+		}
+		if entry.Attr.Type != "regular" || entry.Attr.Nlink < 2 {
+			return syscall.EAGAIN
+		}
+		var edges []edge
+		if err := s.Asc("id").Find(&edges, &edge{Inode: inode}); err != nil {
+			return err
+		}
+		if len(edges) != int(entry.Attr.Nlink) {
+			return syscall.EAGAIN
+		}
+		for _, e := range edges {
+			if e.Type != TypeFile {
+				return syscall.EAGAIN
+			}
+			links = append(links, HardlinkEntry{ID: e.Id, Parent: e.Parent, Name: string(e.Name)})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, errno(err)
+	}
+	links[0].Link = inode
+	for i := 1; i < len(links); i++ {
+		ino, err := m.nextInode()
+		if err != nil {
+			return nil, errno(err)
+		}
+		links[i].Link = ino
+	}
+	return links, 0
+}
+
+func (m *dbMeta) ReplaceHardlink(ctx Context, inode Ino, entry *DumpedEntry, links []HardlinkEntry, target uint64) syscall.Errno {
+	if entry == nil || entry.Attr == nil || entry.Attr.Inode != inode || entry.Attr.Type != "regular" ||
+		entry.Attr.Nlink < 2 || len(links) != int(entry.Attr.Nlink) || links[0].Link != inode || target == 0 {
+		return syscall.EINVAL
+	}
+	reserved := make(map[Ino]bool)
+	for _, l := range links {
+		if l.Link <= RootInode || reserved[l.Link] || l.ID <= 0 || l.Name == "" {
+			return syscall.EINVAL
+		}
+		reserved[l.Link] = true
+	}
+	err := m.txn(func(s *xorm.Session) error {
+		parents := map[Ino]*node{}
+		for _, l := range links {
+			parents[l.Parent] = &node{Inode: l.Parent}
+		}
+		cur := &node{Inode: inode}
+		nodes := []*node{cur}
+		for _, p := range parents {
+			nodes = append(nodes, p)
+		}
+		if err := m.getNodesForUpdate(s, nodes...); err != nil {
+			return err
+		}
+		if m.checkLink(cur) {
+			return ELink
+		}
+		for _, p := range parents {
+			if p.Type != TypeDirectory {
+				return syscall.EAGAIN
+			}
+		}
+		var edges []edge
+		if err := s.ForUpdate().Asc("id").Find(&edges, &edge{Inode: inode}); err != nil {
+			return err
+		}
+		if len(edges) != len(links) {
+			return syscall.EAGAIN
+		}
+		for i, e := range edges {
+			l := links[i]
+			if e.Id != l.ID || e.Parent != l.Parent || string(e.Name) != l.Name || e.Type != TypeFile {
+				return syscall.EAGAIN
+			}
+		}
+		var chunks []chunk
+		if err := s.ForUpdate().Find(&chunks, &chunk{Inode: inode}); err != nil {
+			return err
+		}
+		if err := m.checkEntry(s, inode, entry); err != nil {
+			return err
+		}
+		for i, e := range edges {
+			l := links[i]
+			n := *cur
+			n.Inode, n.Parent, n.Nlink = l.Link, l.Parent, 1
+			n.Type, n.Rdev, n.Length = TypeLink, uint32(TypeFile), target
+			n.AccessACLId, n.DefaultACLId = aclAPI.None, aclAPI.None
+			if l.Link != inode {
+				if err := mustInsert(s, &n); err != nil {
+					return err
+				}
+			}
+			if err := updateEdge(s, &e, &edge{Inode: l.Link, Type: TypeLink}); err != nil {
+				return err
+			}
+		}
+		if err := m.replaceTree(s, inode, entry, map[Ino]uint64{inode: target}); err != nil {
+			return err
+		}
+		if _, err := s.Where("inode = ?", inode).Cols("parent", "nlink").Update(&node{Parent: links[0].Parent, Nlink: 1}); err != nil {
+			return err
+		}
+		data, err := json.Marshal(links)
+		if err != nil {
+			return err
+		}
+		m.genLog(ctx, s, time.Now().UnixNano(), "REPLACEHARDLINK(%d,%d,%s)", inode, target, logEncode(data))
+		return nil
+	}, inode)
+	if err == nil {
+		m.of.InvalidateChunk(inode, invalidateAllChunks)
+		m.updateStats(int64(len(links)-1)*align4K(0), int64(len(links)-1))
+		m.updateUserGroupStat(ctx, entry.Attr.Uid, entry.Attr.Gid, int64(len(links)-1)*align4K(0), int64(len(links)-1))
+		m.newMsg(ExternalLink, inode, target)
+	}
+	return errno(err)
 }
 
 func (m *dbMeta) dumpEntryFast(snap *dbSnap, inode Ino, typ uint8) *DumpedEntry {

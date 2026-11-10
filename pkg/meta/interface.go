@@ -611,6 +611,15 @@ type Meta interface {
 
 	DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno
 	Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno
+	PrepareHardlink(ctx Context, inode Ino, entry *DumpedEntry) ([]HardlinkEntry, syscall.Errno)
+	ReplaceHardlink(ctx Context, inode Ino, entry *DumpedEntry, links []HardlinkEntry, target uint64) syscall.Errno
+}
+
+type HardlinkEntry struct {
+	ID     int64
+	Parent Ino
+	Name   string
+	Link   Ino
 }
 
 type ScanSlicesOption struct {

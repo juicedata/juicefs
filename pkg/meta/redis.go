@@ -5623,6 +5623,14 @@ func (m *redisMeta) replaceTree(ctx context.Context, pipe redis.Pipeliner, entry
 	}
 }
 
+func (m *redisMeta) PrepareHardlink(ctx Context, inode Ino, entry *DumpedEntry) ([]HardlinkEntry, syscall.Errno) {
+	return nil, syscall.ENOTSUP
+}
+
+func (m *redisMeta) ReplaceHardlink(ctx Context, inode Ino, entry *DumpedEntry, links []HardlinkEntry, target uint64) syscall.Errno {
+	return syscall.ENOTSUP
+}
+
 func (m *redisMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
 	ctx := Background()
 	dumped := &DumpedEntry{Attr: &DumpedAttr{}}

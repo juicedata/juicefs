@@ -4409,6 +4409,14 @@ func (m *kvMeta) dumpTree(tx *kvTxn, inode Ino, entry *DumpedEntry) (map[Ino]*At
 	return snap.attrs, nil
 }
 
+func (m *kvMeta) PrepareHardlink(ctx Context, inode Ino, entry *DumpedEntry) ([]HardlinkEntry, syscall.Errno) {
+	return nil, syscall.ENOTSUP
+}
+
+func (m *kvMeta) ReplaceHardlink(ctx Context, inode Ino, entry *DumpedEntry, links []HardlinkEntry, target uint64) syscall.Errno {
+	return syscall.ENOTSUP
+}
+
 func (m *kvMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
 	ctx := Background()
 	dumped := &DumpedEntry{Attr: &DumpedAttr{}}
