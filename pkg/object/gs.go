@@ -36,6 +36,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 type gs struct {
@@ -128,6 +129,8 @@ func (g *gs) Get(ctx context.Context, key string, off, limit int64, getters ...A
 
 func (g *gs) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
 	t := g.GetTier(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	writer := g.getClient().Bucket(g.bucket).Object(key).NewWriter(ctx)
 	writer.StorageClass = t.Sc
 	// If you upload small objects (< 16MiB), you should set ChunkSize
@@ -219,7 +222,7 @@ func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	}
 	clis := make([]*storage.Client, size)
 	for i := 0; i < size; i++ {
-		client, err := storage.NewClient(ctx)
+		client, err := storage.NewClient(ctx, option.WithUserAgent(UserAgent))
 		if err != nil {
 			return nil, err
 		}

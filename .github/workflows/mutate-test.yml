@@ -24,6 +24,10 @@ on:
         required: false
         default: false  
 
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
 
   build-matrix:
@@ -33,10 +37,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure fast APT mirror
+        uses: vegardit/fast-apt-mirror.sh@1.4.5
+
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: 'oldstable'
+          go-version: '1.25.0'
 
       - name: install go-mutesting
         run: |
@@ -145,7 +152,8 @@ jobs:
       - name: Prepare Database
         timeout-minutes: 10
         run: |
-          docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
+          docker build --build-arg MINIO_VERSION=RELEASE.2022-01-25T19-56-04Z -t juicefs/minio-test:RELEASE.2022-01-25T19-56-04Z -f .github/scripts/command/Dockerfile.minio-old .
+          docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" juicefs/minio-test:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
           go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc alias set local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
           make
           # sudo make -C fstests setup

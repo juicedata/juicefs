@@ -53,20 +53,22 @@ func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
 type setTimeout func(time.Duration)
 
 func (fs *fileSystem) replyAttr(ctx *fuseContext, entry *meta.Entry, attr *fuse.Attr, set setTimeout) {
+	fs.v.UpdateLength(entry.Inode, entry.Attr) // UpdateLength before ModifiedSince check to avoid TOCTOU race
 	if vfs.IsSpecialNode(entry.Inode) {
 		set(time.Hour)
-	} else if entry.Attr.Typ == meta.TypeFile && fs.v.ModifiedSince(entry.Inode, ctx.start) {
-		logger.Debugf("refresh attr for %d", entry.Inode)
-		var attr meta.Attr
-		st := fs.v.Meta.GetAttr(ctx, entry.Inode, &attr)
-		if st == 0 {
-			*entry.Attr = attr
+	} else {
+		if entry.Attr.Typ == meta.TypeFile && fs.v.ModifiedSince(entry.Inode, ctx.start) {
+			logger.Debugf("refresh attr for %d", entry.Inode)
+			var nAttr meta.Attr
+			st := fs.v.Meta.GetAttr(ctx, entry.Inode, &nAttr)
+			if st == 0 {
+				*entry.Attr = nAttr
+				fs.v.UpdateLength(entry.Inode, entry.Attr) // Merge again in case write appeared during GetAttr
+			}
+		} else {
 			set(fs.conf.AttrTimeout)
 		}
-	} else {
-		set(fs.conf.AttrTimeout)
 	}
-	fs.v.UpdateLength(entry.Inode, entry.Attr)
 	attrToStat(entry.Inode, entry.Attr, attr)
 }
 
@@ -112,10 +114,21 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 	return 0
 }
 
+const fattrPassthrough = fuse.FATTR_MODE | fuse.FATTR_UID | fuse.FATTR_GID | fuse.FATTR_SIZE |
+	fuse.FATTR_ATIME | fuse.FATTR_MTIME | fuse.FATTR_ATIME_NOW | fuse.FATTR_MTIME_NOW
+
+func toSetAttrMask(valid uint32) int {
+	set := int(valid & fattrPassthrough)
+	if valid&fuse.FATTR_CTIME != 0 {
+		set |= meta.SetAttrCtime
+	}
+	return set
+}
+
 func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entry, err := fs.v.SetAttr(ctx, Ino(in.NodeId), int(in.Valid), in.Fh, in.Mode, in.Uid, in.Gid, int64(in.Atime), int64(in.Mtime), in.Atimensec, in.Mtimensec, in.Size)
+	entry, err := fs.v.SetAttr(ctx, Ino(in.NodeId), toSetAttrMask(in.Valid), in.Fh, in.Mode, in.Uid, in.Gid, int64(in.Atime), int64(in.Mtime), in.Atimensec, in.Mtimensec, in.Size)
 	if err != 0 {
 		return fuse.Status(err)
 	}
@@ -544,23 +557,22 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	return nil
 }
 
-func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, maxWrite int) fuse.MountOptions {
+func GenFuseOpt(name, options string, enableXattr, enableACL bool, maxWrite int, readDirPlusAuto bool) fuse.MountOptions {
 	var opt fuse.MountOptions
-	opt.FsName = "JuiceFS:" + conf.Format.Name
+	opt.FsName = "JuiceFS:" + name
 	opt.Name = "juicefs"
-	opt.SingleThreaded = mt == 0
 	opt.MaxBackground = 200
 	opt.EnableLocks = true
 	opt.EnableSymlinkCaching = true
-	opt.DisableXAttrs = noxattr
-	opt.EnableAcl = !noacl
+	opt.DisableXAttrs = !enableXattr
+	opt.EnableAcl = enableACL
 	opt.IgnoreSecurityLabels = false
 	opt.MaxWrite = maxWrite
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.DontUmask = true
 	opt.Timeout = time.Minute * 15
-	opt.EnableReadDirPlusAuto = true
+	opt.EnableReadDirPlusAuto = readDirPlusAuto
 	for _, n := range strings.Split(options, ",") {
 		// TODO allow_root
 		if n == "allow_other" {
@@ -578,7 +590,7 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, m
 	}
 	opt.Options = append(opt.Options, "default_permissions")
 	if runtime.GOOS == "darwin" {
-		opt.Options = append(opt.Options, "fssubtype=juicefs", "volname="+conf.Format.Name)
+		opt.Options = append(opt.Options, "fssubtype=juicefs", "volname="+name)
 		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
 	}
 	return opt

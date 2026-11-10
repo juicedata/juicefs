@@ -257,7 +257,7 @@ func initForSvc(c *cli.Context, mp string, svcType, metaUrl, listenAddr string) 
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
+	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir, false); st != 0 {
 		logger.Fatalf("Chroot to %q: %s", metaConf.Subdir, st)
 	}
 	registerer, registry := wrapRegister(c, svcType, format.Name)
@@ -276,9 +276,10 @@ func initForSvc(c *cli.Context, mp string, svcType, metaUrl, listenAddr string) 
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}
-	metaCli.OnReload(func(fmt *meta.Format) {
+	metaCli.OnReload(func(fmt *meta.Format) error {
 		updateFormat(c)(fmt)
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		return nil
 	})
 
 	// Go will catch all the signals

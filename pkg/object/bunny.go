@@ -160,6 +160,7 @@ func newBunny(endpoint, accessKey, password, token string) (ObjectStorage, error
 	}
 
 	client := bunny.NewClient(*endpoint_url, password)
+	client.Name = UserAgent
 	return &bunnyClient{client: &client, endpoint: endpoint}, nil
 }
 

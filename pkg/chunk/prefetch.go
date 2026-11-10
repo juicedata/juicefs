@@ -28,6 +28,9 @@ type prefetcher struct {
 }
 
 func newPrefetcher(parallel int, fetch func(string)) *prefetcher {
+	if parallel <= 0 {
+		return nil
+	}
 	p := &prefetcher{
 		pending: make(chan string, max(parallel*4, 10)),
 		busy:    make(map[string]bool),
@@ -50,6 +53,9 @@ func (p *prefetcher) do() {
 }
 
 func (p *prefetcher) fetch(key string) {
+	if p == nil {
+		return
+	}
 	p.Lock()
 	defer p.Unlock()
 	if _, ok := p.busy[key]; ok {

@@ -298,7 +298,7 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
-	} else if marker == "" {
+	} else if marker == "" || marker < prefix {
 		obj, err := d.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -307,6 +307,9 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return generateListResult(objs, limit)
+		}
 	}
 	entries, err := readDirSorted(dir, followLink)
 	if err != nil {

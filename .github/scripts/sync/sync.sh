@@ -859,6 +859,57 @@ test_checkpoint_with_delete_dst(){
     grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
 }
 
+test_checkpoint_delayed_dir_delete_on_signal(){
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount -d $META_URL /jfs
+    rm -rf data && mkdir data
+
+    for i in $(seq 1 3000); do
+        dd if=/dev/urandom of=$(printf "data/file%04d" $i) bs=64K count=1 status=none
+    done
+
+    mkdir -p /jfs/data
+    extra_dir_count=40
+    for i in $(seq 1 $extra_dir_count); do
+        mkdir -p "$(printf "/jfs/data/00extra_dir_%04d" $i)"
+    done
+
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 3600s \
+        --delete-dst --dirs --threads 2 > sync_bg.log 2>&1 &
+    sync_pid=$!
+    sleep 3
+    kill -INT $sync_pid || true
+    wait $sync_pid || true
+    # The signal save must have produced a checkpoint.
+    checkpoint_file=$(find /jfs/data -maxdepth 1 -name ".juicefs-sync-checkpoint*" 2>/dev/null | head -1)
+    if [ -z "$checkpoint_file" ]; then
+        echo "FAIL: checkpoint should have been saved on SIGINT"
+        exit 1
+    fi
+    echo "Checkpoint saved on signal: $checkpoint_file"
+    # Resume and let the sync finish; the delayed directory deletes restored from
+    # the checkpoint must now be applied.
+    ./juicefs sync data/ /jfs/data/ --enable-checkpoint --checkpoint-interval 1s \
+        --delete-dst --dirs 2>&1 | tee sync2.log
+    # Key assertion: every extra directory has been deleted after resume.
+    leftover=0
+    for i in $(seq 1 $extra_dir_count); do
+        d=$(printf "/jfs/data/00extra_dir_%04d" $i)
+        if [ -d "$d" ]; then
+            echo "FAIL: delayed-deleted dir $d still exists after resume (issue #7392)"
+            leftover=$((leftover + 1))
+        fi
+    done
+    if [ "$leftover" -ne 0 ]; then
+        echo "FAIL: $leftover extra directories were lost from the checkpoint and never deleted"
+        exit 1
+    fi
+    # Source files must all be present on the destination.
+    compare_sync_dirs data/ /jfs/data/
+    grep "panic:\|<FATAL>" sync2.log && echo "panic or fatal in sync2.log" && exit 1 || true
+}
+
 test_checkpoint_with_delete_src(){
     # Test: checkpoint with --delete-src should correctly delete source after sync
     prepare_test

@@ -162,7 +162,7 @@ func selectionFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:    "update",
 			Aliases: []string{"u"},
-			Usage:   "skip files if the destination is newer",
+			Usage:   "update existing files only when the source mtime is newer; ignore size differences",
 		},
 		&cli.BoolFlag{
 			Name:    "force-update",
@@ -487,17 +487,14 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			store = object.WithPrefix(store, u.Path[1:])
 		}
 	}
-	if os, ok := store.(object.SupportTier); ok {
-		if err := os.InitTiers(object.NewTiers("")); err != nil {
-			logger.Warnf("Set storage tier: %s", err)
-		}
-	}
+	initStorageTiers(store, object.NewTiers(""))
 	return store, nil
 }
 
 func isS3PathType(endpoint string) bool {
 	//localhost[:8080] 127.0.0.1[:8080]  s3.ap-southeast-1.amazonaws.com[:8080] s3-ap-southeast-1.amazonaws.com[:8080]
-	pattern := `^((localhost)|(s3[.-].*\.amazonaws\.com)|((1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|[1-9])\.((1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)\.){2}(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)))?(:\d*)?$`
+	//br-xxx.storage.c-1.us-east-2.aws.neon.tech (Neon Object Storage only supports path-style)
+	pattern := `^((localhost)|(s3[.-].*\.amazonaws\.com)|([^.]+\.storage\.[^.]+\.[^.]+\.aws\.neon\.tech)|((1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|[1-9])\.((1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)\.){2}(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)))?(:\d*)?$`
 	return regexp.MustCompile(pattern).MatchString(endpoint)
 }
 
@@ -587,12 +584,7 @@ func doSync(c *cli.Context) error {
 		object.Shutdown(dst)
 	}()
 	if config.StorageClass != "" {
-		if os, ok := dst.(object.SupportTier); ok {
-			tiers := object.NewTiers(config.StorageClass)
-			if err := os.InitTiers(tiers); err != nil {
-				logger.Warnf("Set storage tier: %s", err)
-			}
-		}
+		initStorageTiers(dst, object.NewTiers(config.StorageClass))
 	}
 	src, err = wrapSyncEncryptedStore(src, c.String("decrypt-rsa-key"), "JFS_DECRYPT_RSA_PASSPHRASE", "decrypt", c.String("decrypt-algo"))
 	if err != nil {

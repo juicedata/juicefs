@@ -13,7 +13,7 @@ LEGACY_META_URL=$META_URL
 if [[ "$META" == "redis" ]]; then
     LEGACY_META_URL=${META_URL%%\?*}
 fi
-[ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
+[ ! -x mc ] && .github/scripts/download_mc.sh linux-amd64 ./mc && chmod +x mc
 
 download_juicefs_client(){
     version=$1
@@ -29,10 +29,11 @@ test_config_min_client_version()
     download_juicefs_client 1.0.0
     ./juicefs format $META_URL myjfs
     ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d && exit 1 || true
-    ./juicefs config $META_URL --min-client-version 1.0.1
+    if ./juicefs config $META_URL --min-client-version 1.0.1; then
+        echo "<FATAL>: expect min-client-version downgrade to fail"
+        exit 1
+    fi
     ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d && exit 1 || true
-    ./juicefs config $META_URL --min-client-version 1.0.0
-    ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d
 }
 
 test_config_max_client_version()
@@ -43,7 +44,11 @@ test_config_max_client_version()
     ./juicefs-1.0.0 format $LEGACY_META_URL myjfs
     ./juicefs-1.0.0 config $LEGACY_META_URL --max-client-version 1.0.1
     ./juicefs mount $META_URL /jfs -d && exit 1 || true
-    ./juicefs config $META_URL --max-client-version $current_version
+    if ./juicefs config $META_URL --max-client-version $current_version; then
+        echo "<FATAL>: expect max-client-version update by a disallowed client to fail"
+        exit 1
+    fi
+    ./juicefs config $META_URL --max-client-version $current_version --force
     ./juicefs mount $META_URL /jfs -d
 }
 

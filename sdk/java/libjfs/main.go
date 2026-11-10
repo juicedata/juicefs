@@ -133,6 +133,7 @@ const (
 	ENOTEMPTY = -0x27
 	ENODATA   = -0x3d
 	ENOTSUP   = -0x5f
+	ELOOP     = -0x28
 )
 
 func errno(err error) int32 {
@@ -178,6 +179,8 @@ func errno(err error) int32 {
 		return ENODATA
 	case syscall.ENOTSUP:
 		return ENOTSUP
+	case syscall.ELOOP:
+		return ELOOP
 	default:
 		logger.Warnf("unknown errno %d: %s", eno, err)
 		return -int32(eno)
@@ -267,7 +270,7 @@ func (w *wrapper) isSuperuser(name string, groups []string) bool {
 	}
 	sg := w.getSuperGroup()
 	for _, g := range groups {
-		if g == sg {
+		if sg != "" && g == sg {
 			return true
 		}
 	}
@@ -282,7 +285,7 @@ func (w *wrapper) lookupUid(name string) uint32 {
 }
 
 func (w *wrapper) lookupGid(group string) uint32 {
-	if group == w.supergroup {
+	if group == w.conf.RootGroup {
 		return 0
 	}
 	return uint32(w.m.lookupGroup(group))
@@ -305,7 +308,7 @@ func (w *wrapper) uid2name(uid uint32) string {
 }
 
 func (w *wrapper) gid2name(gid uint32) string {
-	group := w.supergroup
+	group := w.conf.RootGroup
 	if gid > 0 {
 		group = w.m.lookupGroupID(gid)
 	}
@@ -349,6 +352,7 @@ type javaConf struct {
 	BackupMeta          string `json:"backupMeta"`
 	BackupSkipTrash     bool   `json:"backupSkipTrash"`
 	Heartbeat           string `json:"heartbeat"`
+	SessionTimeout      string `json:"sessionTimeout"`
 	CacheDir            string `json:"cacheDir"`
 	CacheSize           string `json:"cacheSize"`
 	CacheItems          int64  `json:"cacheItems"`
@@ -387,7 +391,9 @@ type javaConf struct {
 	PushGraphite        string `json:"pushGraphite"`
 	PushRemoteWrite     string `json:"pushRemoteWrite"`
 	PushRemoteWriteAuth string `json:"pushRemoteWriteAuth"`
+	GuidMask            string `json:"guidMask"`
 	Caller              int    `json:"caller"`
+	RootGroup           string `json:"rootGroup"` // Group name mapped to GID 0.
 	Subdir              string `json:"subdir"`
 
 	AuthMethod string `json:"authMethod,omitempty"`
@@ -400,6 +406,7 @@ func cleanConf(conf javaConf) javaConf {
 	conf.AuthMethod = ""
 	conf.RealUser = ""
 	conf.SuperFS = false
+	conf.RootGroup = ""
 	return conf
 }
 
@@ -419,18 +426,24 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 		if jfs == nil {
 			return 0
 		}
-		switch jfs.Meta().Name() {
-		case "mysql", "postgres", "sqlite3":
-			m.mask = 0x7FFFFFFF // limit generated uid to int32
+		var err error
+		m.mask, err = guidMask(conf.GuidMask, jfs.Meta().Name())
+		if err != nil {
+			logger.Errorf("invalid configuration: %s", err)
+			return 0
 		}
 		logger.Infof("JuiceFileSystem created for user:%s groups:%s", user, groups)
+	}
+	if conf.RootGroup == "" {
+		conf.RootGroup = supergroup
 	}
 	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf}
 	if formats[name] != nil && formats[name].KerbConf != "" {
 		if _, ok := superuserChangedCb[name]; !ok {
-			jfs.Meta().OnReload(func(format *meta.Format) {
+			jfs.Meta().OnReload(func(format *meta.Format) error {
 				kerb.loadConf(name, format.KerbConf, jfs)
 				updateAllCtx(name, user, groups)
+				return nil
 			})
 			superuserChangedCb[name] = struct{}{}
 		}
@@ -464,6 +477,16 @@ func updateAllCtx(name string, user, groups string) {
 	}
 }
 
+type pushLabelsRegisterer struct {
+	prometheus.Registerer
+	labels prometheus.Labels
+}
+
+// PushLabels reports exporter labels without adding them to collected metrics.
+func (r pushLabelsRegisterer) PushLabels() prometheus.Labels {
+	return r.labels
+}
+
 func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
 	pusher := push.New(pushGatewayAddr, "juicefs").Gatherer(registry)
 	for k, v := range commonLabels {
@@ -471,7 +494,7 @@ func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, 
 	}
 	if pushAuth != "" {
 		if strings.Contains(pushAuth, ":") {
-			parts := strings.Split(pushAuth, ":")
+			parts := strings.SplitN(pushAuth, ":", 2)
 			pusher.BasicAuth(parts[0], parts[1])
 		}
 	}
@@ -564,6 +587,10 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			logger.Fatalf("invalid json")
 		}
 	}
+	if _, err = guidMask(jConf.GuidMask, ""); err != nil {
+		logger.Errorf("invalid configuration: %s", err)
+		return 0
+	}
 	return getOrCreate(name, user, C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf, func() *fs.FileSystem {
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
 			utils.SetLogLevel(logrus.DebugLevel)
@@ -599,6 +626,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 		metaConf.NoBGJob = jConf.NoBGJob || jConf.NoSession
 		metaConf.OpenCache = utils.Duration(jConf.OpenCache)
 		metaConf.Heartbeat = utils.Duration(jConf.Heartbeat)
+		metaConf.SessionTimeout = utils.Duration(jConf.SessionTimeout)
 		m := meta.NewClient(jConf.MetaURL, metaConf)
 		format, err := m.Load(true)
 		if err != nil {
@@ -643,7 +671,11 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			if jConf.PushRemoteWrite != "" {
 				push2RemoteWrite(jConf.PushRemoteWrite, jConf.PushRemoteWriteAuth, interval, registry, commonLabels)
 			}
-			m.InitMetrics(registerer)
+			metaRegisterer := registerer
+			if jConf.PushGateway != "" || jConf.PushGraphite != "" || jConf.PushRemoteWrite != "" {
+				metaRegisterer = pushLabelsRegisterer{Registerer: registerer, labels: commonLabels}
+			}
+			m.InitMetrics(metaRegisterer)
 			vfs.InitMetrics(registerer)
 			go metric.UpdateMetrics(registerer)
 		}
@@ -669,6 +701,8 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 		if jConf.FreeSpace != "" {
 			freeSpaceRatio, _ = strconv.ParseFloat(jConf.FreeSpace, 64)
 		}
+		uploadLimit := utils.ParseMbpsStr("upload-limit", jConf.UploadLimit)
+		downloadLimit := utils.ParseMbpsStr("download-limit", jConf.DownloadLimit)
 		chunkConf := chunk.Config{
 			BlockSize:         format.BlockSize * 1024,
 			Compress:          format.Compression,
@@ -687,8 +721,8 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			MaxUpload:         jConf.MaxUploads,
 			MaxDownload:       jConf.MaxDownloads,
 			MaxRetries:        jConf.IORetries,
-			UploadLimit:       utils.ParseMbpsStr("upload-limit", jConf.UploadLimit) * 1e6 / 8,
-			DownloadLimit:     utils.ParseMbpsStr("download-limit", jConf.DownloadLimit) * 1e6 / 8,
+			UploadLimit:       uploadLimit * 1e6 / 8,
+			DownloadLimit:     downloadLimit * 1e6 / 8,
 			Prefetch:          jConf.Prefetch,
 			Writeback:         jConf.Writeback,
 			HashPrefix:        format.HashPrefix,
@@ -721,14 +755,16 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			logger.Errorf("new session: %s", err)
 			return nil
 		}
-		m.OnReload(func(fmt *meta.Format) {
-			if chunkConf.UploadLimit > 0 {
-				fmt.UploadLimit = chunkConf.UploadLimit
+		m.OnReload(func(format *meta.Format) error {
+			upload, download := format.UploadLimit, format.DownloadLimit
+			if uploadLimit > 0 {
+				upload = uploadLimit
 			}
-			if chunkConf.DownloadLimit > 0 {
-				fmt.DownloadLimit = chunkConf.DownloadLimit
+			if downloadLimit > 0 {
+				download = downloadLimit
 			}
-			store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+			store.UpdateLimit(upload, download)
+			return nil
 		})
 
 		conf := &vfs.Config{
@@ -1216,7 +1252,9 @@ func jfs_listXattr(pid int64, h int64, path *C.char, buf uintptr, bufsize int32)
 }
 
 //export jfs_listXattr2
-func jfs_listXattr2(pid int64, h int64, path *C.char, value **C.char, size *int) int32 {
+func jfs_listXattr2(pid int64, h int64, path *C.char, value **C.char, size *int64) int32 {
+	*value = nil
+	*size = 0
 	w := F(h)
 	if w == nil {
 		return EINVAL
@@ -1224,7 +1262,7 @@ func jfs_listXattr2(pid int64, h int64, path *C.char, value **C.char, size *int)
 	t, err := w.ListXattr(w.withPid(pid), C.GoString(path))
 	if err == 0 {
 		*value = C.CString(string(t))
-		*size = len(t)
+		*size = int64(len(t))
 	}
 	return errno(err)
 }
@@ -1687,6 +1725,8 @@ func jfs_listdir(pid int64, h int64, cpath *C.char, offset int64, buf uintptr, b
 func jfs_listdir2(pid int64, h int64, cpath *C.char, plus bool, buf **byte, size *int64) int32 {
 	var ctx meta.Context
 	var f *fs.File
+	*buf = nil
+	*size = 0
 	w := F(h)
 	if w == nil {
 		return EINVAL
@@ -1702,7 +1742,6 @@ func jfs_listdir2(pid int64, h int64, cpath *C.char, plus bool, buf **byte, size
 		return ENOTDIR
 	}
 
-	*size = 0
 	if plus {
 		es, err := f.ReaddirPlus(ctx, 0)
 		if err != 0 {

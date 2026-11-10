@@ -35,15 +35,14 @@ func (v *VFS) ChFlags(ctx Context, ino Ino, flags uint8) (err syscall.Errno) {
 		return
 	}
 
-	err = syscall.EINVAL
 	var attr = &Attr{Flags: flags}
 
 	if ctx.CheckPermission() {
-		if err = v.Meta.CheckSetAttr(ctx, ino, meta.SetAttrFlag, *attr); err != 0 {
+		if err = v.Meta.CheckSetAttr(ctx, ino, meta.SetAttrWindowsFlags, *attr); err != 0 {
 			return
 		}
 	}
 
-	err = v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
+	err = v.Meta.SetAttr(ctx, ino, meta.SetAttrWindowsFlags, 0, attr)
 	return
 }

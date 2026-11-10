@@ -475,6 +475,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("backupMeta", getConf(conf, "backup-meta", "3600"));
     obj.put("backupSkipTrash", Boolean.valueOf(getConf(conf, "backup-skip-trash", "false")));
     obj.put("heartbeat", getConf(conf, "heartbeat", "12"));
+    obj.put("sessionTimeout", getConf(conf, "session-timeout", "0"));
     obj.put("attrTimeout", getConf(conf, "attr-cache", "0.0"));
     obj.put("entryTimeout", getConf(conf, "entry-cache", "0.0"));
     obj.put("dirEntryTimeout", getConf(conf, "dir-entry-cache", "0.0"));
@@ -504,6 +505,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("pushGraphite", getConf(conf, "push-graphite", ""));
     obj.put("pushRemoteWrite", getConf(conf, "push-remote-write", ""));
     obj.put("pushRemoteWriteAuth", getConf(conf, "push-remote-write-auth", ""));
+    obj.put("guidMask", getConf(conf, "guid-mask", ""));
     obj.put("fastResolve", Boolean.valueOf(getConf(conf, "fast-resolve", "true")));
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
     obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
@@ -2340,8 +2342,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public AuthCredential buildAuthCredential(String spn) throws IOException {
-    // auth use kerberos
-    if (UserGroupInformation.getLoginUser().hasKerberosCredentials()) {
+    // auth use kerberos, only when the server principal is configured
+    if (spn != null && !spn.isEmpty() && UserGroupInformation.getLoginUser().hasKerberosCredentials()) {
       dtEnabled = true;
       byte[] cred;
       try {
@@ -2400,8 +2402,8 @@ public class JuiceFileSystemImpl extends FileSystem {
       throw new IOException(String.format("get delegation token failed, return code %d", r));
     }
     int id = tokenBuf.getInt(0);
-    long issueDate = tokenBuf.getLongLong(4);
-    long maxDate = tokenBuf.getLongLong(12);
+    long issueDate = TimeUnit.SECONDS.toMillis(tokenBuf.getLongLong(4));
+    long maxDate = TimeUnit.SECONDS.toMillis(tokenBuf.getLongLong(12));
     int pwdLen = r - 20;
     byte[] pwd = new byte[pwdLen];
     tokenBuf.get(20, pwd, 0, pwdLen);

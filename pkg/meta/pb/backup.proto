@@ -116,6 +116,13 @@ message Batch {
 }
 
 message Footer {
+  enum Engine {
+    UNKNOWN = 0;
+    REDIS = 1;
+    SQL = 2;
+    KV = 3;
+  }
+
   message SegInfo {
     repeated uint64 offset = 1;
     uint64 num = 2;
@@ -124,4 +131,5 @@ message Footer {
   uint32 magic = 1;
   uint32 version = 2;
   map<string, SegInfo> infos = 3;
+  Engine source = 4;
 }

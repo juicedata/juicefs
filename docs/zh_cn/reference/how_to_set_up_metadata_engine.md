@@ -177,6 +177,20 @@ KeyDB 的 Active Replication 功能是异步复制的，可能会导致一致性
 
 使用 BadgerDB 作为 JuiceFS 元数据存储引擎时，使用 `badger://` 协议头指定数据库路径。
 
+可以在 BadgerDB 元数据 URL 中追加 query 参数：
+
+`sync=true|false`：控制 BadgerDB 是否开启提交时同步（`SyncWrites`），默认值是 `false`，以获得更好的写入性能。
+
+例如：
+
+```shell
+juicefs format badger://$HOME/badger-data?sync=true myjfs
+```
+
+:::note 注意
+默认配置不会在每次提交时同步元数据到磁盘。即使应用对 JuiceFS 文件调用 `fsync()` 成功，掉电或系统崩溃仍可能导致最近已提交的元数据变更丢失。
+:::
+
 #### 创建文件系统
 
 无需提前创建 BadgerDB 数据库，直接创建文件系统即可：
@@ -690,6 +704,19 @@ juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 ```shell
 "sqlite3://my-jfs.db?cache=shared&_busy_timeout=5000"
 ```
+
+也可以通过 `_sync`（别名 `_synchronous`）配置提交时的同步方式。JuiceFS 默认使用 WAL 模式，`_sync` 默认值是 `NORMAL`；设置为 `FULL` 可在每次事务提交时同步 WAL，但会增加写入开销。例如：
+
+```shell
+juicefs format "sqlite3://my-jfs.db?_sync=FULL" pics
+juicefs mount -d "sqlite3://my-jfs.db?_sync=FULL" /mnt/jfs
+```
+
+该参数需要在每次挂载时指定。
+
+:::note 注意
+默认配置不会在每次提交时同步元数据到磁盘。即使应用对 JuiceFS 文件调用 `fsync()` 成功，掉电或系统崩溃仍可能导致最近已提交的元数据变更丢失。
+:::
 
 更多 SQLite 数据库的地址格式示例，请参考 [Go-SQLite3 Driver](https://github.com/mattn/go-sqlite3#connection-string)。
 

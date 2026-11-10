@@ -17,18 +17,22 @@
 package object
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/aws/smithy-go/encoding/httpbinding"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -36,6 +40,10 @@ var ctx = context.Background()
 var logger = utils.GetLogger("juicefs")
 
 var UserAgent = "JuiceFS"
+
+func setUserAgent(req *http.Request) {
+	req.Header.Set("User-Agent", UserAgent)
+}
 
 type MtimeChanger interface {
 	Chtimes(path string, mtime time.Time) error
@@ -247,12 +255,17 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 	walk = func(prefix string, entries []Object) error {
 		var concurrent = 10
 		var err error
+		var stopped atomic.Bool
+		defer stopped.Store(true)
 		threads := make([]listThread, concurrent)
 		for c := 0; c < concurrent; c++ {
 			t := &threads[c]
 			t.cond = utils.NewCond(t)
 			go func(c int) {
 				for i := c; i < len(entries); i += concurrent {
+					if stopped.Load() {
+						return
+					}
 					key := entries[i].Key()
 					if end != "" && key >= end {
 						break
@@ -263,13 +276,13 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
-					t.entries, t.hasMore, t.nextToken, t.err = store.List(ctx, key, "\x00", t.nextToken, "/", 1000, followLink) // exclude itself
+					t.entries, t.hasMore, t.nextToken, t.err = store.List(ctx, key, key, t.nextToken, "/", 1000, followLink) // exclude itself
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()
 					for t.ready {
 						t.cond.WaitWithTimeout(time.Second)
-						if err != nil {
+						if stopped.Load() {
 							t.Unlock()
 							return
 						}
@@ -336,6 +349,18 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 		}
 	}()
 	return listed, nil
+}
+
+// genNextKey returns the exclusive upper bound of a prefix, or "" if unbounded.
+func genNextKey(prefix string) string {
+	end := []byte(prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		if end[i] != 0xff {
+			end[i]++
+			return string(end[:i+1])
+		}
+	}
+	return ""
 }
 
 func generateListResult(objs []Object, limit int64) ([]Object, bool, string, error) {
@@ -446,9 +471,61 @@ func NewTiers(defaultSc string) Tiers {
 	return t
 }
 
+// encodeCopySource escapes a copy-source header without encoding path separators.
+func encodeCopySource(bucket, key string) string {
+	return httpbinding.EscapePath(bucket+"/"+key, false)
+}
+
 func getOrDefaultScValue(v, defaultValue string) string {
 	if v == "" {
 		return defaultValue
 	}
 	return v
+}
+
+const s3RequestIDKey = "X-Amz-Request-Id"
+
+func isExists(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "BucketAlreadyExists") || strings.Contains(msg, "BucketAlreadyOwnedByYou")
+}
+
+func defaultPathStyle() bool {
+	v := os.Getenv("JFS_S3_VHOST_STYLE")
+	return v == "" || v == "0" || v == "false"
+}
+
+func findLen(in io.Reader) (io.Reader, int64, error) {
+	var vlen int64
+	switch v := in.(type) {
+	case *bytes.Buffer:
+		vlen = int64(v.Len())
+	case *bytes.Reader:
+		vlen = int64(v.Len())
+	case *strings.Reader:
+		vlen = int64(v.Len())
+	case *os.File:
+		st, err := v.Stat()
+		if err != nil {
+			return nil, 0, err
+		}
+		vlen = st.Size()
+	case io.ReadSeeker:
+		var err error
+		vlen, err = v.Seek(0, 2)
+		if err != nil {
+			return nil, 0, err
+		}
+		if _, err = v.Seek(0, 0); err != nil {
+			return nil, 0, err
+		}
+	default:
+		d, err := io.ReadAll(in)
+		if err != nil {
+			return nil, 0, err
+		}
+		vlen = int64(len(d))
+		in = bytes.NewBuffer(d)
+	}
+	return in, vlen, nil
 }

@@ -106,7 +106,9 @@ func (hfs *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm o
 	if flag&(os.O_EXCL) != 0 {
 		mode |= vfs.MODE_MASK_X
 	}
-	name = strings.TrimRight(name, "/")
+	if trimmed := strings.TrimRight(name, "/"); trimmed != "" {
+		name = trimmed
+	}
 	f, err := hfs.fs.Open(hfs.ctx, name, uint32(mode))
 	if err != 0 {
 		if err == syscall.ENOENT && flag&os.O_CREATE != 0 {
@@ -134,6 +136,9 @@ func (hfs *webdavFS) Rename(ctx context.Context, oldName, newName string) error 
 
 func (hfs *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	fi, err := hfs.fs.Stat(hfs.ctx, removeNewLine(name))
+	if fi == nil {
+		return nil, econv(err)
+	}
 	return fi, econv(err)
 }
 

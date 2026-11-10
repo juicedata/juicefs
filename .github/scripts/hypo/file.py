@@ -43,6 +43,7 @@ class JuicefsDataMachine(RuleBasedStateMachine):
 
     def __init__(self):
         super(JuicefsDataMachine, self).__init__()
+        self.open_fds = 0
         print(f'__init__')
 
     def equal(self, result1, result2):
@@ -80,9 +81,15 @@ class JuicefsDataMachine(RuleBasedStateMachine):
     def init_folders(self):
         self.fsop1.init_rootdir()
         self.fsop2.init_rootdir()
+        return self.open_file()
+
+    @rule(target = fds)
+    @precondition(lambda self: self.open_fds == 0)
+    def open_file(self):
         f1, _ = self.fsop1.do_open(file=self.FILE_NAME, mode='w+', encoding='utf8', errors='strict')
         f2, _ = self.fsop2.do_open(file=self.FILE_NAME, mode='w+', encoding='utf8', errors='strict')
         assert f1 is not None and f2 is not None, red(f'init_folders:\nf1 is {f1}\nf2 is {f2}')
+        self.open_fds += 1
         return (self.FILE_NAME, f1, f2)
 
     
@@ -141,6 +148,7 @@ class JuicefsDataMachine(RuleBasedStateMachine):
         if isinstance(result1, Exception):
             return fd
         else:
+            self.open_fds -= 1
             return multiple()
     @rule(fd = fds.filter(lambda x: x != multiple()))
     @precondition(lambda self: self.should_run('flush_and_fsync'))

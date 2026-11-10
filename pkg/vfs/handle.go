@@ -79,8 +79,10 @@ func (h *handle) removeOp(ctx Context) {
 	defer h.Unlock()
 	for i, c := range h.ops {
 		if c == ctx {
-			h.ops[i] = h.ops[len(h.ops)-1]
-			h.ops = h.ops[:len(h.ops)-1]
+			last := len(h.ops) - 1
+			h.ops[i] = h.ops[last]
+			h.ops[last] = nil
+			h.ops = h.ops[:last]
 			break
 		}
 	}
@@ -181,7 +183,7 @@ func (v *VFS) findAllHandles(inode Ino) []*handle {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
 	hs := v.handles[inode]
-	if len(hs) <= 1 {
+	if len(hs) == 0 {
 		return hs
 	}
 	// copy hs so it will not be modified by releaseHandle
@@ -226,6 +228,7 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 				hs[i] = hs[len(hs)-1]
 			}
 			if len(hs) > 1 {
+				hs[len(hs)-1] = nil
 				v.handles[inode] = hs[:len(hs)-1]
 			} else {
 				delete(v.handles, inode)
@@ -266,9 +269,7 @@ func (v *VFS) releaseFileHandle(ino Ino, fh uint64) {
 }
 
 func (v *VFS) invalidateDirHandle(parent Ino, name string, inode Ino, attr *Attr) {
-	v.hanleM.Lock()
-	hs := v.handles[parent]
-	v.hanleM.Unlock()
+	hs := v.findAllHandles(parent)
 	for _, h := range hs {
 		h.Lock()
 		if h.dirHandler != nil {

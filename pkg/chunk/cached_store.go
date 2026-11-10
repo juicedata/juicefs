@@ -82,18 +82,6 @@ func (s *rSlice) index(off int) int {
 	return off / s.store.conf.BlockSize
 }
 
-func (s *rSlice) keys() []string {
-	if s.length <= 0 {
-		return nil
-	}
-	lastIndx := (s.length - 1) / s.store.conf.BlockSize
-	keys := make([]string, lastIndx+1)
-	for i := 0; i <= lastIndx; i++ {
-		keys[i] = s.key(i)
-	}
-	return keys
-}
-
 func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err error) {
 	p := page.Data
 	if len(p) == 0 {
@@ -422,19 +410,28 @@ func (s *wSlice) upload(indx int) {
 		}
 		ctx := context.WithValue(context.Background(), object.TierKey{}, s.tierID)
 		if s.writeback && blen < s.store.conf.WritebackThresholdSize {
-			stagingPath := "unknown"
-			stageFailed := false
 			block.Acquire()
+			const (
+				stagePending int32 = iota
+				stageSucceeded
+				stageAbandoned
+			)
+			stagingPath := "unknown"
+			var stageState atomic.Int32
+			stageState.Store(stagePending)
 			err := utils.WithTimeout(context.TODO(), func(context.Context) (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
 				defer block.Release()
-				stagingPath, err = s.store.bcache.stage(key, block.Data, s.tierID)
-				if err == nil && stageFailed { // upload thread already marked me as failed because of timeout
+				var stageErr error
+				stagingPath, stageErr = s.store.bcache.stage(key, block.Data, s.tierID)
+				if stageErr == nil && !stageState.CompareAndSwap(stagePending, stageSucceeded) {
 					_ = s.store.bcache.removeStage(key)
 				}
-				return err
+				return stageErr
 			}, s.store.conf.PutTimeout)
 			if err != nil {
-				stageFailed = true
+				if !stageState.CompareAndSwap(stagePending, stageAbandoned) {
+					_ = s.store.bcache.removeStage(key)
+				}
 				if !errors.Is(err, errStageConcurrency) {
 					s.store.stageBlockErrors.Add(1)
 					logger.Warnf("write %s to disk: %s, upload it directly", key, err)
@@ -703,13 +700,19 @@ func logRequest(typeStr, key, param, reqID string, err error, used time.Duration
 
 var errTryFullRead = errors.New("try full read")
 
-func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page, off int) (n int, err error) {
+type getResult struct {
+	n     int
+	reqID string
+	sc    string
+}
+
+func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page, off int) (int, error) {
 	p := page.Data
 	fullPage, err := store.group.TryPiggyback(key)
 	if fullPage != nil {
 		defer fullPage.Release()
 		if err == nil { // piggybacked a full read
-			n = copy(p, fullPage.Data[off:])
+			n := copy(p, fullPage.Data[off:])
 			return n, nil
 		}
 	}
@@ -720,34 +723,38 @@ func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page,
 		store.downLimit.Wait(int64(len(p)))
 	}
 
+	tmp := getResult{sc: object.DefaultStorageClass}
 	start := time.Now()
-	var (
-		reqID string
-		sc    = object.DefaultStorageClass
-	)
 	page.Acquire()
 	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
 		defer page.Release()
-		in, err := store.storage.Get(cCtx, key, int64(off), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
-		if err == nil {
-			n, err = io.ReadFull(in, p)
+		in, getErr := store.storage.Get(cCtx, key, int64(off), int64(len(p)), object.WithRequestID(&tmp.reqID), object.WithStorageClass(&tmp.sc))
+		if getErr == nil {
+			tmp.n, getErr = io.ReadFull(in, p)
 			_ = in.Close()
 		}
-		return err
+		return getErr
 	}, store.conf.GetTimeout)
 
 	used := time.Since(start)
-	logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", off, len(p)), reqID, err, used)
+	res := getResult{sc: object.DefaultStorageClass}
+	if err == nil {
+		res = tmp
+	}
+	logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", off, len(p)), res.reqID, err, used)
 	if errors.Is(err, context.Canceled) {
 		return 0, err
 	}
-	store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
-	store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
+	store.objectDataBytes.WithLabelValues("GET", res.sc).Add(float64(res.n))
+	store.objectReqsHistogram.WithLabelValues("GET", res.sc).Observe(used.Seconds())
 	if err == nil {
 		store.fetcher.fetch(key)
-		return n, nil
+		return res.n, nil
 	}
 	store.objectReqErrors.Add(1)
+	if errors.Is(err, utils.ErrFuncTimeout) {
+		return 0, err
+	}
 	// fall back to full read
 	return 0, errTryFullRead
 }
@@ -768,11 +775,7 @@ func (store *cachedStore) load(ctx context.Context, key string, page *Page, cach
 		store.downLimit.Wait(int64(len(page.Data)))
 	}
 	var (
-		in    io.ReadCloser
-		n     int
 		p     *Page
-		reqID string
-		sc    = object.DefaultStorageClass
 		start = time.Now()
 	)
 	if compressed {
@@ -782,39 +785,44 @@ func (store *cachedStore) load(ctx context.Context, key string, page *Page, cach
 	} else {
 		p = page
 	}
+	tmp := getResult{sc: object.DefaultStorageClass}
 	p.Acquire()
 	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
 		defer p.Release()
 		// it will be retried in the upper layer.
-		in, err = store.storage.Get(cCtx, key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
-		if err == nil {
-			n, err = io.ReadFull(in, p.Data)
+		in, getErr := store.storage.Get(cCtx, key, 0, -1, object.WithRequestID(&tmp.reqID), object.WithStorageClass(&tmp.sc))
+		if getErr == nil {
+			tmp.n, getErr = io.ReadFull(in, p.Data)
 			_ = in.Close()
 		}
-		if compressed && err == io.ErrUnexpectedEOF {
-			err = nil
+		if compressed && getErr == io.ErrUnexpectedEOF {
+			getErr = nil
 		}
-		return err
+		return getErr
 	}, store.conf.GetTimeout)
 	if errors.Is(err, context.Canceled) {
 		return err
 	}
 	used := time.Since(start)
-	logRequest("GET", key, "", reqID, err, used)
-	if store.downLimit != nil && compressed {
-		store.downLimit.Wait(int64(n))
+	res := getResult{sc: object.DefaultStorageClass}
+	if err == nil {
+		res = tmp
 	}
-	store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
-	store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
+	logRequest("GET", key, "", res.reqID, err, used)
+	if store.downLimit != nil && compressed {
+		store.downLimit.Wait(int64(res.n))
+	}
+	store.objectDataBytes.WithLabelValues("GET", res.sc).Add(float64(res.n))
+	store.objectReqsHistogram.WithLabelValues("GET", res.sc).Observe(used.Seconds())
 	if err != nil {
 		store.objectReqErrors.Add(1)
 		return fmt.Errorf("get %s: %s", key, err)
 	}
 	if compressed {
-		n, err = store.compressor.Decompress(page.Data, p.Data[:n])
+		res.n, err = store.compressor.Decompress(page.Data, p.Data[:res.n])
 	}
-	if err != nil || n < len(page.Data) {
-		return fmt.Errorf("read %s fully: %v (%d < %d) after %s", key, err, n, len(page.Data), used)
+	if err != nil || res.n < len(page.Data) {
+		return fmt.Errorf("read %s fully: %v (%d < %d) after %s", key, err, res.n, len(page.Data), used)
 	}
 	if cache {
 		store.bcache.cache(key, page, forceCache, !store.conf.OSCache)
@@ -863,6 +871,9 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		}
 	}
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
+		if !store.conf.Writeback {
+			return false
+		}
 		if fi, err := os.Stat(fpath); err == nil {
 			return store.addDelayedStaging(key, fpath, fi.ModTime(), force)
 		} else {
@@ -871,17 +882,19 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		}
 	})
 
-	go func() {
-		for {
-			if store.bcache.isEmpty() {
-				logger.Warn("cache store is empty, use memory cache")
-				config.CacheSize = 100 << 20
-				config.CacheDir = "memory"
-				store.bcache = newMemStore(&config, store.bcache.getMetrics())
+	if mgr, ok := store.bcache.(*cacheManager); ok {
+		fallbackConfig := config
+		fallbackConfig.CacheSize = 100 << 20
+		fallbackConfig.CacheDir = "memory"
+
+		go func() {
+			for !mgr.isEmpty() {
+				time.Sleep(time.Second)
 			}
-			time.Sleep(time.Second)
-		}
-	}()
+			logger.Warn("cache store is empty, use memory cache")
+			store.bcache = newMemStore(&fallbackConfig, mgr.getMetrics())
+		}()
+	}
 
 	if !config.CacheEnabled() {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
@@ -1060,7 +1073,12 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	_, err = f.ReadAt(block.Data, 0)
 	tierID := uint8(0)
 	if err == nil {
-		tierID, err = f.ReadTierID()
+		footer := &stageFooter{}
+		if ferr := footer.unmarshal(f); ferr != nil {
+			logger.Warnf("Parse stage footer of %s failed, upload with default tier: %s", stagingPath, ferr)
+		} else {
+			tierID = footer.Tier
+		}
 	}
 	_ = f.Close()
 	if err != nil {
@@ -1169,11 +1187,38 @@ func (store *cachedStore) Remove(id uint64, length int) error {
 	return r.Remove()
 }
 
-func (store *cachedStore) FillCache(id uint64, length uint32) error {
-	r := sliceForRead(id, int(length), store)
-	keys := r.keys()
+// blockIndexes returns the indexes of the blocks overlapping parts, in
+// ascending order and without duplicates. Empty parts select the whole object.
+func (s *rSlice) blockIndexes(parts []Range) []int {
+	if s.length <= 0 {
+		return nil
+	}
+	if len(parts) == 0 {
+		parts = []Range{{Len: uint32(s.length)}}
+	}
+	var indexes []int
+	next := 0
+	for _, p := range parts {
+		if p.Len == 0 || int(p.Off) >= s.length {
+			continue
+		}
+		end := min(int(p.Off)+int(p.Len), s.length)
+		// next skips the blocks already collected for an earlier part
+		first := max(int(p.Off)/s.store.conf.BlockSize, next)
+		last := (end - 1) / s.store.conf.BlockSize
+		for i := first; i <= last; i++ {
+			indexes = append(indexes, i)
+		}
+		next = max(next, last+1)
+	}
+	return indexes
+}
+
+func (store *cachedStore) FillCache(id uint64, size uint32, parts []Range) error {
+	r := sliceForRead(id, int(size), store)
 	var err error
-	for _, k := range keys {
+	for _, i := range r.blockIndexes(parts) {
+		k := r.key(i)
 		if _, existed := store.bcache.exist(k); existed { // already cached
 			continue
 		}
@@ -1181,6 +1226,14 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 		if size == 0 || size > store.conf.BlockSize {
 			logger.Warnf("Invalid size: %s %d", k, size)
 			continue
+		}
+		if shared, e := store.group.TryPiggyback(k); shared != nil {
+			if e == nil {
+				store.bcache.cache(k, shared, true, !store.conf.OSCache)
+				shared.Release()
+				continue
+			}
+			shared.Release()
 		}
 		p := NewOffPage(size)
 		if e := store.load(context.TODO(), k, p, true, true); e != nil {
@@ -1192,22 +1245,20 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 	return err
 }
 
-func (store *cachedStore) EvictCache(id uint64, length uint32) error {
-	r := sliceForRead(id, int(length), store)
-	keys := r.keys()
-	for _, k := range keys {
-		store.bcache.remove(k, false)
+func (store *cachedStore) EvictCache(id uint64, size uint32, parts []Range) error {
+	r := sliceForRead(id, int(size), store)
+	for _, i := range r.blockIndexes(parts) {
+		store.bcache.remove(r.key(i), false)
 	}
 	return nil
 }
 
-func (store *cachedStore) CheckCache(id uint64, length uint32, handler func(exists bool, loc string, size int)) error {
-	r := sliceForRead(id, int(length), store)
-	keys := r.keys()
+func (store *cachedStore) CheckCache(id uint64, size uint32, parts []Range, handler func(exists bool, loc string, size int)) error {
+	r := sliceForRead(id, int(size), store)
 	var loc string
 	var existed bool
-	for i, k := range keys {
-		loc, existed = store.bcache.exist(k)
+	for _, i := range r.blockIndexes(parts) {
+		loc, existed = store.bcache.exist(r.key(i))
 		if handler != nil {
 			handler(existed, loc, r.blockSize(i))
 		}

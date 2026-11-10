@@ -158,7 +158,7 @@ func errorconv(err syscall.Errno) int {
 		return -fuse.EINVAL
 	case syscall.EBADFD:
 		return -fuse.EBADF
-	case syscall.EDQUOT:
+	case syscall.ENOSPC, syscall.EDQUOT:
 		return -fuse.ENOSPC
 	case syscall.EBUSY:
 		return -fuse.EBUSY
@@ -725,6 +725,9 @@ func (j *juice) Flush(path string, fh uint64) (e int) {
 		return
 	}
 	e = errorconv(j.vfs.Flush(ctx, ino, fh, 0))
+	if e == 0 {
+		j.invalidateAttrCache(ino)
+	}
 	return
 }
 
@@ -775,6 +778,9 @@ func (j *juice) Fsync(path string, datasync bool, fh uint64) (e int) {
 		e = -fuse.EBADF
 	} else {
 		e = errorconv(j.vfs.Fsync(ctx, ino, 1, fh))
+	}
+	if e == 0 {
+		j.invalidateAttrCache(ino)
 	}
 	return
 }

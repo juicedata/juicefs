@@ -22,8 +22,10 @@ package meta
 import (
 	"bytes"
 	"context"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -177,8 +179,22 @@ func (c *badgerClient) config(key string) interface{} {
 	return nil
 }
 
+// simpleTxn runs f in a read-only transaction: reads skip conflict
+// tracking, and writes are rejected with badger.ErrReadOnlyTxn.
 func (c *badgerClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
-	return c.txn(ctx, f, retry)
+	tx := &badgerTxn{c.client.NewTransaction(false), c}
+	defer tx.t.Discard()
+	defer func() {
+		if r := recover(); r != nil {
+			fe, ok := r.(error)
+			if ok {
+				err = fe
+			} else {
+				panic(r)
+			}
+		}
+	}()
+	return f(&kvTxn{kvtxn: tx, retry: retry})
 }
 
 func (c *badgerClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
@@ -194,7 +210,7 @@ func (c *badgerClient) txn(ctx context.Context, f func(*kvTxn) error, retry int)
 			}
 		}
 	}()
-	err = f(&kvTxn{tx, retry})
+	err = f(&kvTxn{kvtxn: tx, retry: retry})
 	if err != nil {
 		return err
 	}
@@ -240,7 +256,24 @@ func (c *badgerClient) close() error {
 func (c *badgerClient) gc() {}
 
 func newBadgerClient(addr string) (tkvClient, error) {
-	opt := badger.DefaultOptions(addr)
+	dataPath, queryStr, _ := strings.Cut(addr, "?")
+	opt := badger.DefaultOptions(dataPath)
+	if queryStr != "" {
+		query, err := url.ParseQuery(queryStr)
+		if err != nil {
+			return nil, err
+		}
+		syncValue := strings.ToLower(query.Get("sync"))
+		switch syncValue {
+		case "false":
+			opt.SyncWrites = false
+		case "true":
+			opt.SyncWrites = true
+		default:
+			logger.Warnf("invalid badger sync option %q, fallback to false", syncValue)
+			opt.SyncWrites = false
+		}
+	}
 	opt.Logger = utils.GetLogger("badger")
 	opt.MetricsEnabled = false
 	client, err := badger.Open(opt)

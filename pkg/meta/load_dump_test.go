@@ -18,17 +18,22 @@ package meta
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -38,8 +43,9 @@ const subSampleFile = "metadata-sub.sample"
 
 func TestEscape(t *testing.T) {
 	cases := []struct {
-		value            []rune
-		gbkStart, gbkEnd int
+		value                []rune
+		gbkStart, gbkEnd     int
+		expectedEscapedValue string
 	}{
 		{value: []rune("%1F果汁数据科技有限公司%2B"), gbkStart: 0, gbkEnd: 0},
 		{value: []rune("果汁数据科技有限公司%1F"), gbkStart: 0, gbkEnd: 1},
@@ -51,6 +57,7 @@ func TestEscape(t *testing.T) {
 		{value: []rune("%果汁数据科%技有限公司%"), gbkStart: 1, gbkEnd: 4},
 		{value: []rune("\"果汁数据科\"技有限公司%"), gbkStart: 1, gbkEnd: 4},
 		{value: []rune("\\果汁数\\据科技有限公司"), gbkStart: 1, gbkEnd: 4},
+		{value: []rune("file name with spaces"), expectedEscapedValue: "file%20name%20with%20spaces"},
 	}
 	for _, c := range cases {
 		var v []byte
@@ -66,6 +73,9 @@ func TestEscape(t *testing.T) {
 		v = append(v, []byte(string(suffix))...)
 		s := escape(string(v))
 		t.Log("escape value: ", s)
+		if c.expectedEscapedValue != "" && s != c.expectedEscapedValue {
+			t.Fatalf("expected escaped value %q, but got %q", c.expectedEscapedValue, s)
+		}
 		r := unescape(s)
 		if !bytes.Equal(r, v) {
 			t.Fatalf("expected %v, but got %v", v, r)
@@ -300,6 +310,7 @@ func checkMeta(t *testing.T, m Meta) {
 
 func testLoadSub(t *testing.T, uri, fname string) {
 	m := NewClient(uri, nil)
+	defer m.Shutdown()
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
@@ -360,12 +371,107 @@ func testLoadDump(t *testing.T, name, addr string) {
 		conf := DefaultConf()
 		conf.Subdir = "d1"
 		m = NewClient(addr, conf)
-		_ = m.Chroot(Background(), "d1")
+		_ = m.Chroot(Background(), "d1", false)
 		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
 		testDump(t, m, 0, sampleFile, "test.dump")
 		_ = m.Shutdown()
 		testLoadSub(t, addr, subSampleFile)
+		testDumpSubdirQuota(t, addr)
+		testLoadDumpedCounters(t, addr)
 	})
+}
+
+// A subdir dump keeps only quotas inside the subtree and moves the quota of
+// the subdir itself to the new root.
+func testDumpSubdirQuota(t *testing.T, addr string) {
+	m := testLoad(t, addr, sampleFile, false) // has a quota on "/"
+	ctx := Background()
+	var subIno Ino
+	if st := m.Mkdir(ctx, 3, "sub", 0755, 0, 0, &subIno, nil); st != 0 { // inode 3 is /d1
+		t.Fatalf("mkdir /d1/sub: %s", st)
+	}
+	for p, space := range map[string]int64{"/d1": 10 << 30, "/d1/sub": 20 << 30, "/d": 30 << 30} {
+		if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: space, MaxInodes: 1000}}, false, false, false); err != nil {
+			t.Fatalf("set quota of %s: %s", p, err)
+		}
+	}
+	if st := m.Chroot(ctx, "d1", true); st != 0 {
+		t.Fatalf("chroot to d1: %s", st)
+	}
+	var buf bytes.Buffer
+	if err := m.DumpMeta(&buf, RootInode, 1, false, false, false); err != nil {
+		t.Fatalf("dump meta: %s", err)
+	}
+	_ = m.Shutdown()
+
+	var dm DumpedMeta
+	if err := json.Unmarshal(buf.Bytes(), &dm); err != nil {
+		t.Fatalf("unmarshal dump: %s", err)
+	}
+	want := map[Ino]int64{RootInode: 10 << 30, subIno: 20 << 30}
+	if len(dm.Quotas) != len(want) {
+		t.Fatalf("dumped quotas: %+v", dm.Quotas)
+	}
+	for ino, space := range want {
+		if q := dm.Quotas[ino]; q == nil || q.MaxSpace != space {
+			t.Fatalf("dumped quota of inode %d: %+v", ino, q)
+		}
+	}
+
+	m = NewClient(addr, nil)
+	defer m.Shutdown()
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err := m.LoadMeta(&buf); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+	quotas, _, _, err := m.getBase().en.doLoadQuotas(ctx)
+	if err != nil {
+		t.Fatalf("load quotas: %s", err)
+	}
+	if len(quotas) != len(want) {
+		t.Fatalf("loaded quotas: %+v", quotas)
+	}
+	// "/" has big, f11 and sub; "/sub" is empty
+	for ino, inodes := range map[Ino]int64{RootInode: 3, subIno: 0} {
+		if q := quotas[uint64(ino)]; q == nil || q.MaxSpace != want[ino] || q.UsedInodes != inodes {
+			t.Fatalf("loaded quota of inode %d: %+v", ino, q)
+		}
+	}
+}
+
+// Load keeps the dumped nextInode and nextChunk, which may cover inodes and
+// slices outside the tree, such as those of pending deleted files.
+func testLoadDumpedCounters(t *testing.T, addr string) {
+	raw, err := os.ReadFile(sampleFile)
+	if err != nil {
+		t.Fatalf("read %s: %s", sampleFile, err)
+	}
+	dump := strings.NewReplacer(`"nextInodes": 35,`, `"nextInodes": 2049,`, `"nextChunk": 9,`, `"nextChunk": 4097,`).Replace(string(raw))
+	if !strings.Contains(dump, `"nextInodes": 2049,`) || !strings.Contains(dump, `"nextChunk": 4097,`) {
+		t.Fatalf("counters in %s are not replaced", sampleFile)
+	}
+	m := NewClient(addr, nil)
+	defer m.Shutdown()
+	if err = m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err = m.LoadMeta(strings.NewReader(dump)); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+	ctx := Background()
+	var inode Ino
+	if st := m.Mknod(ctx, RootInode, "new-file", TypeFile, 0644, 0, 0, "", &inode, &Attr{}); st != 0 {
+		t.Fatalf("mknod: %s", st)
+	}
+	var id uint64
+	if st := m.NewSlice(ctx, &id); st != 0 {
+		t.Fatalf("new slice: %s", st)
+	}
+	if inode < 2049 || id < 4097 {
+		t.Fatalf("new inode %d or slice %d reuses dumped ids", inode, id)
+	}
 }
 
 func TestLoadDump(t *testing.T) { //skip mutate
@@ -465,6 +571,360 @@ func TestLoadDumpV2(t *testing.T) {
 	}
 }
 
+func duplicateBackup(t *testing.T, conflict bool) []byte {
+	t.Helper()
+	format, err := json.Marshal(testFormat())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	attr := (&Attr{Typ: TypeFile, Mode: 0644, Nlink: 1, Parent: RootInode, Length: 4096}).Marshal()
+	otherAttr := (&Attr{Typ: TypeFile, Mode: 0600, Nlink: 1, Parent: RootInode, Length: 8192}).Marshal()
+	slices := marshalSlice(0, 11, 4096, 0, 4096)
+	records := []*pb.Batch{
+		{Nodes: []*pb.Node{{Inode: 2, Data: attr}, {Inode: 2, Data: attr}}},
+		{Edges: []*pb.Edge{{Parent: 1, Inode: 2, Name: []byte("file"), Type: TypeFile}, {Parent: 1, Inode: 2, Name: []byte("file"), Type: TypeFile}}},
+		{Chunks: []*pb.Chunk{{Inode: 2, Index: 0, Slices: slices}, {Inode: 2, Index: 0, Slices: slices}}},
+		{Symlinks: []*pb.Symlink{{Inode: 3, Target: []byte("target")}, {Inode: 3, Target: []byte("target")}}},
+		{Xattrs: []*pb.Xattr{{Inode: 2, Name: "user.test", Value: []byte("value")}, {Inode: 2, Name: "user.test", Value: []byte("value")}}},
+		{Parents: []*pb.Parent{{Inode: 2, Parent: 1, Cnt: 2}, {Inode: 2, Parent: 1, Cnt: 2}}},
+		{SliceRefs: []*pb.SliceRef{{Id: 11, Size: 4096, Refs: 2}, {Id: 11, Size: 4096, Refs: 2}}},
+	}
+	if conflict {
+		records = []*pb.Batch{{Nodes: []*pb.Node{{Inode: 2, Data: attr}, {Inode: 2, Data: otherAttr}}}}
+	}
+
+	var buf bytes.Buffer
+	bak := newBakFormat()
+	if err = bak.writeSegment(&buf, newBakSegment(&pb.Format{Data: format})); err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range records {
+		if err = bak.writeSegment(&buf, newBakSegment(record)); err != nil {
+			t.Fatal(err)
+		}
+		if !conflict {
+			if err = bak.writeSegment(&buf, newBakSegment(record)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err = bak.writeFooter(&buf); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func loadDuplicateBackup(t *testing.T, m Meta) {
+	t.Helper()
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err := m.LoadMetaV2(Background(), bytes.NewReader(duplicateBackup(t, false)), &LoadOption{Threads: 10}); err != nil {
+		t.Fatalf("load duplicate backup: %s", err)
+	}
+}
+
+func checkSQLDuplicateBackup(t *testing.T, m *dbMeta) {
+	t.Helper()
+	loadDuplicateBackup(t, m)
+	t.Cleanup(func() { _ = m.Reset() })
+	for name, bean := range map[string]interface{}{
+		"node":     &node{},
+		"edge":     &edge{},
+		"chunk":    &chunk{},
+		"symlink":  &symlink{},
+		"xattr":    &xattr{},
+		"sliceRef": &sliceRef{},
+	} {
+		count, err := m.db.Count(bean)
+		if err != nil {
+			t.Fatalf("count %s: %s", name, err)
+		}
+		if count != 1 {
+			t.Fatalf("%s count: got %d, want 1", name, count)
+		}
+	}
+	if err := m.loadXattrs(Background(), &pb.Batch{Xattrs: []*pb.Xattr{{Inode: 4, Name: "user.empty"}}}); err != nil {
+		t.Fatalf("load empty xattr: %s", err)
+	}
+	var empty xattr
+	if ok, err := m.db.Where("inode = ?", 4).Get(&empty); err != nil || !ok || len(empty.Value) != 0 {
+		t.Fatalf("empty xattr: %+v, found %v, err %v", empty, ok, err)
+	}
+	checkSQLIgnoredRows(t, m)
+}
+
+func TestLoadMetaV2DuplicateRecords(t *testing.T) {
+	t.Run("sqlite", func(t *testing.T) {
+		client, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "duplicate.db")+"?table_prefix=backup", testConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := client.(*dbMeta)
+		t.Cleanup(func() { _ = m.Shutdown() })
+		checkSQLDuplicateBackup(t, m)
+	})
+
+	t.Run("badger", func(t *testing.T) {
+		client, err := newKVMeta("badger", t.TempDir(), testConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := client.(*kvMeta)
+		t.Cleanup(func() { _ = m.Shutdown() })
+		loadDuplicateBackup(t, m)
+
+		edgeValue := utils.NewBuffer(9)
+		edgeValue.Put8(TypeFile)
+		edgeValue.Put64(2)
+		checks := []struct {
+			key, want []byte
+		}{
+			{m.inodeKey(2), (&Attr{Typ: TypeFile, Mode: 0644, Nlink: 1, Parent: RootInode, Length: 4096}).Marshal()},
+			{m.entryKey(1, "file"), edgeValue.Bytes()},
+			{m.chunkKey(2, 0), marshalSlice(0, 11, 4096, 0, 4096)},
+			{m.symKey(3), []byte("target")},
+			{m.xattrKey(2, "user.test"), []byte("value")},
+			{m.parentKey(2, 1), packCounter(2)},
+			{m.sliceKey(11, 4096), packCounter(1)},
+		}
+		for _, check := range checks {
+			got, err := m.get(check.key)
+			if err != nil {
+				t.Fatalf("get %q: %s", check.key, err)
+			}
+			if !bytes.Equal(got, check.want) {
+				t.Fatalf("value for %q: got %v, want %v", check.key, got, check.want)
+			}
+		}
+	})
+}
+
+func TestMySQLClientLoadMetaV2DuplicateRecords(t *testing.T) { //skip mutate
+	client, err := newSQLMeta("mysql", "root:@/dev", testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := client.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	checkSQLDuplicateBackup(t, m)
+}
+
+func TestPostgreSQLClientLoadMetaV2DuplicateRecords(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
+	client, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := client.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	checkSQLDuplicateBackup(t, m)
+}
+
+func TestLoadMetaV2ConflictingDuplicateRecord(t *testing.T) {
+	client, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "duplicate-conflict.db"), testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := client.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err = m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err = m.LoadMetaV2(Background(), bytes.NewReader(duplicateBackup(t, true)), &LoadOption{Threads: 10}); err != nil {
+		t.Fatalf("load conflicting duplicate record: %s", err)
+	}
+	got := node{Inode: 2}
+	if ok, err := m.db.Get(&got); err != nil || !ok || got.Mode != 0644 || got.Length != 4096 {
+		t.Fatalf("existing node changed: %+v, found %v, err %v", got, ok, err)
+	}
+}
+
+func checkSQLIgnoredRows(t *testing.T, m *dbMeta) {
+	t.Helper()
+	tests := []struct {
+		name string
+		row  func(Ino) interface{}
+	}{
+		{"node", func(ino Ino) interface{} {
+			return &node{Inode: ino, Type: TypeFile, Flags: 1, Mode: 0640, Uid: 1001, Gid: 1002,
+				Atime: -100, Mtime: 200, Ctime: 300, Atimensec: 123, Mtimensec: 456, Ctimensec: 789,
+				Nlink: 2, Length: 1 << 33, Rdev: 17, Parent: 1, AccessACLId: 7, DefaultACLId: 8, Tier: 2}
+		}},
+		{"edge", func(ino Ino) interface{} {
+			return &edge{Parent: 1, Name: fmt.Appendf(nil, "file-%d\xff\n", ino), Inode: ino, Type: TypeFile}
+		}},
+		{"chunk", func(ino Ino) interface{} {
+			return &chunk{Inode: ino, Indx: 2, Slices: marshalSlice(0, 11, 4096, 0, 4096)}
+		}},
+		{"symlink", func(ino Ino) interface{} { return &symlink{Inode: ino, Target: []byte("target\xff")} }},
+		{"xattr", func(ino Ino) interface{} { return &xattr{Inode: ino, Name: "user.empty", Value: []byte{}} }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const first Ino = 100
+			n := m.getTxnBatchNum() + 1
+			rows := make([]interface{}, 0, n+2)
+			for i := 0; i < n; i++ {
+				rows = append(rows, tt.row(first+Ino(i)))
+				if i == 0 {
+					rows = append(rows, tt.row(first))
+				}
+			}
+			rows = append(rows, tt.row(first))
+			if err := m.insertRowsIdempotent(rows); err != nil {
+				t.Fatal(err)
+			}
+			// Keep the existing row even when the incoming contents differ.
+			conflict := tt.row(first)
+			switch v := conflict.(type) {
+			case *node:
+				v.Mode = 0600
+			case *edge:
+				v.Inode = 99999
+			case *chunk:
+				v.Slices = marshalSlice(0, 12, 4096, 0, 4096)
+			case *symlink:
+				v.Target = []byte("other")
+			case *xattr:
+				v.Value = []byte("other")
+			}
+			if err := m.insertRowsIdempotent([]interface{}{conflict}); err != nil {
+				t.Fatal(err)
+			}
+			const workers = 4
+			start := make(chan struct{})
+			errs := make(chan error, workers)
+			for i := 0; i < workers; i++ {
+				go func(i int) {
+					<-start
+					errs <- m.insertRowsIdempotent([]interface{}{tt.row(first), tt.row(first + Ino(n+i)), tt.row(first + Ino(n+workers))})
+				}(i)
+			}
+			close(start)
+			for i := 0; i < workers; i++ {
+				if err := <-errs; err != nil {
+					t.Fatal(err)
+				}
+			}
+			count, err := m.db.Where("inode >= ?", first).Count(reflect.New(reflect.TypeOf(tt.row(first)).Elem()).Interface())
+			if err != nil || count != int64(n+workers+1) {
+				t.Fatalf("count: got %d, want %d, err %v", count, n+workers+1, err)
+			}
+			for _, ino := range []Ino{first, first + Ino(n-1), first + Ino(n+workers-1)} {
+				want := tt.row(ino)
+				got := reflect.New(reflect.TypeOf(want).Elem()).Interface()
+				if ok, err := m.db.Where("inode = ?", ino).Get(got); err != nil || !ok {
+					t.Fatalf("get inode %d: found %v, err %v", ino, ok, err)
+				}
+				gv, wv := reflect.ValueOf(got).Elem(), reflect.ValueOf(want).Elem()
+				for j := 0; j < wv.NumField(); j++ {
+					if wv.Type().Field(j).Name == "Id" {
+						continue
+					}
+					g, w := gv.Field(j).Interface(), wv.Field(j).Interface()
+					if wb, ok := w.([]byte); ok {
+						if !bytes.Equal(g.([]byte), wb) {
+							t.Fatalf("%s: got %v, want %v", wv.Type().Field(j).Name, g, w)
+						}
+					} else if !reflect.DeepEqual(g, w) {
+						t.Fatalf("%s: got %v, want %v", wv.Type().Field(j).Name, g, w)
+					}
+				}
+			}
+			for _, row := range rows {
+				if id := reflect.ValueOf(row).Elem().FieldByName("Id"); id.IsValid() && id.Int() != 0 {
+					t.Fatalf("input row ID was changed: %v", row)
+				}
+			}
+		})
+	}
+}
+
+func TestInsertRowsIdempotentLogs(t *testing.T) {
+	client, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "duplicate-logs.db")+"?table_prefix=backup", testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := client.(*dbMeta)
+	t.Cleanup(func() { _ = m.Shutdown() })
+	if err = m.prepareLoad(Background(), &LoadOption{}); err != nil {
+		t.Fatal(err)
+	}
+	hooks := logger.ReplaceHooks(make(logrus.LevelHooks))
+	t.Cleanup(func() { logger.ReplaceHooks(hooks) })
+	hook := logtest.NewLocal(&logger.Logger)
+	first := &xattr{Inode: 2, Name: "user.secret", Value: []byte("secret")}
+	second := &xattr{Inode: 3, Name: "user.secret", Value: []byte{}}
+	if err = m.insertRowsIdempotent([]interface{}{first}); err != nil {
+		t.Fatal(err)
+	}
+	if len(hook.AllEntries()) != 0 {
+		t.Fatalf("unexpected log for unique rows: %v", hook.AllEntries())
+	}
+	if err = m.insertRowsIdempotent([]interface{}{first, second, first}); err != nil {
+		t.Fatal(err)
+	}
+	entries := hook.AllEntries()
+	want := "Load backup rows: table=jfs_backup_xattr submitted=3 inserted=1 skipped=2"
+	if len(entries) != 1 || entries[0].Level != logrus.WarnLevel || entries[0].Message != want {
+		t.Fatalf("unexpected skipped-row logs: %v", entries)
+	}
+}
+
+func TestRedisLoadMetaV2DuplicateRecords(t *testing.T) {
+	client, err := newRedisMeta("redis", "127.0.0.1:6379/13", testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := client.(*redisMeta)
+	t.Cleanup(func() {
+		_ = m.Reset()
+		_ = m.Shutdown()
+	})
+	loadDuplicateBackup(t, m)
+
+	slices, err := m.rdb.LRange(Background(), m.chunkKey(2, 0), 0, -1).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(slices) != 1 || !bytes.Equal([]byte(slices[0]), marshalSlice(0, 11, 4096, 0, 4096)) {
+		t.Fatalf("chunk slices: %v", slices)
+	}
+	parent, err := m.rdb.HGet(Background(), m.parentKey(2), "1").Int64()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parent != 2 {
+		t.Fatalf("parent count: got %d, want 2", parent)
+	}
+	multi := append(marshalSlice(0, 21, 4096, 0, 2048), marshalSlice(2048, 22, 4096, 0, 2048)...)
+	batch := &pb.Batch{}
+	for i := 0; i <= redisPipeLimit; i++ {
+		batch.Chunks = append(batch.Chunks, &pb.Chunk{Inode: 4, Index: uint32(i), Slices: multi})
+	}
+	batch.Chunks = append(batch.Chunks, batch.Chunks[0])
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() { errs <- m.loadChunks(Background(), batch) }()
+	}
+	for i := 0; i < 2; i++ {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i <= redisPipeLimit; i++ {
+		got, err := m.rdb.LRange(Background(), m.chunkKey(4, uint32(i)), 0, -1).Result()
+		if err != nil || len(got) != 2 || strings.Join(got, "") != string(multi) {
+			t.Fatalf("chunk %d: %v, err %v", i, got, err)
+		}
+	}
+
+}
+
 func TestLoadDumpSlow(t *testing.T) { //skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
@@ -486,7 +946,7 @@ func TestLoadDump_MemKV(t *testing.T) {
 		_ = os.Remove(settingPath)
 		m := testLoad(t, "memkv://user:pass@test/jfs", sampleFile, false)
 		if kvm, ok := m.(*kvMeta); ok { // memkv will be empty if created again
-			if st := kvm.Chroot(Background(), "d1"); st != 0 {
+			if st := kvm.Chroot(Background(), "d1", false); st != 0 {
 				t.Fatalf("Chroot to subdir d1: %s", st)
 			}
 		}

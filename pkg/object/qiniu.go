@@ -31,18 +31,23 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/middleware"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/qiniu/go-sdk/v7/auth"
+	qiniuclient "github.com/qiniu/go-sdk/v7/client"
 	"github.com/qiniu/go-sdk/v7/storage"
+	"github.com/qiniu/go-sdk/v7/storagev2/apis"
+	"github.com/qiniu/go-sdk/v7/storagev2/http_client"
 )
 
 type qiniu struct {
 	s3client
 	bm     *storage.BucketManager
+	api    *apis.Storage
 	cred   *auth.Credentials
 	cfg    *storage.Config
 	marker string
@@ -53,7 +58,7 @@ func (q *qiniu) String() string {
 }
 
 func (q *qiniu) InitTiers(_ Tiers) error {
-	// avoid panic when GetStorageClass
+	// Initialize tier 0 for callers that still pass the default tier ID.
 	if err := q.tierStorage.InitTiers(nil); err != nil {
 		return err
 	}
@@ -64,14 +69,15 @@ func (q *qiniu) Limits() Limits {
 	return Limits{}
 }
 
-func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
+func (q *qiniu) download(ctx context.Context, key string, off, limit int64) (io.ReadCloser, error) {
 	deadline := time.Now().Add(time.Second * 3600).Unix()
 	url := storage.MakePrivateURL(q.cred, os.Getenv("QINIU_DOMAIN"), key, deadline)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC().Format(http.TimeFormat)
+	setUserAgent(req)
 	req.Header.Add("Date", now)
 	if off > 0 || limit > 0 {
 		if limit > 0 {
@@ -85,6 +91,7 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if resp.StatusCode != 200 && resp.StatusCode != 206 {
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("Status code: %d", resp.StatusCode)
 	}
 	return resp.Body, nil
@@ -92,8 +99,12 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 
 var notexist = "no such file or directory"
 
+func (q *qiniu) entry(key string) string {
+	return q.bucket + ":" + key
+}
+
 func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
-	r, err := q.bm.Stat(q.bucket, key)
+	r, err := q.api.StatObject(ctx, &apis.StatObjectRequest{Entry: q.entry(key)}, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), notexist) {
 			err = os.ErrNotExist
@@ -104,7 +115,7 @@ func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
 	mtime := time.Unix(0, r.PutTime*100)
 	return &obj{
 		key,
-		r.Fsize,
+		r.Size,
 		mtime,
 		strings.HasSuffix(key, "/"),
 		"", "",
@@ -113,7 +124,7 @@ func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
 
 func (q *qiniu) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if strings.HasPrefix(key, "/") && os.Getenv("QINIU_DOMAIN") != "" {
-		return q.download(key, off, limit)
+		return q.download(ctx, key, off, limit)
 	}
 	return q.s3client.Get(ctx, key, off, limit, getters...)
 }
@@ -123,7 +134,7 @@ func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, getters ...At
 	if err != nil {
 		return err
 	}
-	putPolicy := storage.PutPolicy{Scope: q.bucket + ":" + key}
+	putPolicy := storage.PutPolicy{Scope: q.entry(key)}
 	upToken := putPolicy.UploadToken(q.cred)
 	formUploader := storage.NewFormUploader(q.cfg)
 	var ret storage.PutRet
@@ -131,7 +142,10 @@ func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, getters ...At
 }
 
 func (q *qiniu) Copy(ctx context.Context, dst, src string) error {
-	return q.bm.Copy(q.bucket, src, q.bucket, dst, true)
+	_, err := q.api.CopyObject(ctx, &apis.CopyObjectRequest{
+		SrcEntry: q.entry(src), DestEntry: q.entry(dst), IsForce: true,
+	}, nil)
+	return err
 }
 
 func (q *qiniu) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
@@ -139,7 +153,7 @@ func (q *qiniu) CreateMultipartUpload(ctx context.Context, key string) (*Multipa
 }
 
 func (q *qiniu) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	err := q.bm.Delete(q.bucket, key)
+	_, err := q.api.DeleteObject(ctx, &apis.DeleteObjectRequest{Entry: q.entry(key)}, nil)
 	if err != nil && strings.Contains(err.Error(), notexist) {
 		return nil
 	}
@@ -147,10 +161,34 @@ func (q *qiniu) Delete(ctx context.Context, key string, getters ...AttrGetter) e
 }
 
 func (q *qiniu) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, false, "", err
+		}
+		objs, hasNext, nextToken, err := q.listPage(ctx, prefix, startAfter, token, delimiter, limit, followLink)
+		if err != nil || len(objs) > 0 || !hasNext {
+			return objs, hasNext, nextToken, err
+		}
+		// Filtering a page does not mean the remote listing is exhausted.
+		token = nextToken
+	}
+}
+
+func (q *qiniu) listPage(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	entries, prefixes, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, token, int(limit))
+	ret, hasNext, err := q.bm.ListFilesWithContext(ctx, q.bucket,
+		storage.ListInputOptionsPrefix(prefix),
+		storage.ListInputOptionsDelimiter(delimiter),
+		storage.ListInputOptionsMarker(token),
+		storage.ListInputOptionsLimit(int(limit)))
+	var entries []storage.ListItem
+	var prefixes []string
+	var markerOut string
+	if ret != nil {
+		entries, prefixes, markerOut = ret.Items, ret.CommonPrefixes, ret.Marker
+	}
 	if len(entries) > 0 || err == io.EOF {
 		// ignore error if returned something
 		err = nil
@@ -176,10 +214,6 @@ func (q *qiniu) List(ctx context.Context, prefix, startAfter, token, delimiter s
 			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
-	}
-	if len(objs) == 0 {
-		hasNext = false
-		markerOut = ""
 	}
 	return objs, hasNext, markerOut, nil
 }
@@ -220,7 +254,7 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		options.HTTPClient = httpClient
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
-		})
+		}, middleware.AddUserAgentKey(UserAgent))
 		options.RetryMaxAttempts = 1
 	})
 	s3c := s3client{bucket: bucket, s3: client, region: region}
@@ -243,9 +277,20 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		zone.SrcUpHosts = []string{"free-qvm-z0-xs.qiniup.com"}
 	}
 	cfg.Zone = zone
+	if err := qiniuclient.SetAppName(UserAgent); err != nil {
+		return nil, fmt.Errorf("set Qiniu User-Agent: %s", err)
+	}
 	cred := auth.New(accessKey, secretKey)
 	bucketManager := storage.NewBucketManager(cred, &cfg)
-	return &qiniu{s3c, bucketManager, cred, &cfg, ""}, nil
+	api := apis.NewStorage(&http_client.Options{
+		BasicHTTPClient:     bucketManager.Client.Client,
+		Credentials:         cred,
+		Regions:             cfg.GetRegion(),
+		UseInsecureProtocol: !cfg.UseHTTPS,
+		HostRetryConfig:     &http_client.RetryConfig{},
+		HostsRetryConfig:    &http_client.RetryConfig{},
+	})
+	return &qiniu{s3c, bucketManager, api, cred, &cfg, ""}, nil
 }
 
 func init() {

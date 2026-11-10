@@ -11,10 +11,38 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Configure fast APT mirror
+      if: runner.os == 'Linux'
+      uses: vegardit/fast-apt-mirror.sh@1.4.5
+
     - uses: actions/setup-go@v3
       with:
-        go-version: 'oldstable'
+        go-version: '1.25.0'
         cache: true
+
+    - name: Use distro fusermount3
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        fusermount_bin=/usr/bin/fusermount3
+        if [[ ! -x "$fusermount_bin" || ! -u "$fusermount_bin" || "$(stat -c %u "$fusermount_bin")" != "0" ]]; then
+          echo "::error::$fusermount_bin must be an executable setuid-root helper"
+          exit 1
+        fi
+        helper_dir="$RUNNER_TEMP/juicefs-fuse-bin"
+        mkdir -p "$helper_dir"
+        ln -sf "$fusermount_bin" "$helper_dir/fusermount3"
+        echo "$helper_dir" >> "$GITHUB_PATH"
+
+    - name: Allow FUSE unmounts in AppArmor
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        if [[ -f /etc/apparmor.d/fusermount3 ]]; then
+          sudo mkdir -p /etc/apparmor.d/local
+          echo 'umount,' | sudo tee -a /etc/apparmor.d/local/fusermount3 >/dev/null
+          sudo apparmor_parser -r /etc/apparmor.d/fusermount3
+        fi
 
     - name: Change go version for root user
       shell: bash

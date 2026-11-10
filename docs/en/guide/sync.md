@@ -135,6 +135,10 @@ One solution is to include all directories in the directory hierarchy by using t
 
 You can sync data between any [supported storage system](../reference/how_to_set_up_object_storage.md), but note that if one of the endpoint is a JuiceFS volume, it it then recommended to [sync without mount point](#sync-without-mount-point) since it runs without FUSE overhead.
 
+:::note Paths containing special characters
+`juicefs sync` interprets both source and destination paths as URLs. Therefore, if a path contains characters with special meanings in URLs (such as `#`), they must be escaped (URL-encoded) before use. Otherwise, the path may be truncated or parsed incorrectly. For example, `#` must be written as `%23`, so the path `a/b#c/d` should be written as `a/b%23c/d`.
+:::
+
 ### Sync without mount point <VersionAdd>1.1</VersionAdd> {#sync-without-mount-point}
 
 For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
@@ -188,6 +192,16 @@ juicefs sync /media/ "username:password"@192.168.1.100:/backup/
 ```
 
 When using the SFTP/SSH protocol, if no password is specified, the sync task will prompt for the password. If you want to explicitly specify the username and password, you need to enclose them in double quotation marks, with a colon separating the username and password.
+
+SFTP uploads pipeline multiple write requests for each file to reduce the impact of network latency, including when the source size is unknown. This concurrency is separate from the file-level concurrency controlled by `--threads`. With `--inplace`, writes remain sequential so a failed upload leaves only a prefix of the data rather than holes.
+
+SFTP remote paths use the following formats:
+
+- Default SSH port: `username@host:/path`
+- Custom SSH port: `username@host:port:/path`
+- IPv6 with a custom SSH port: `username@[2001:db8::1]:2022:/path`
+
+When specifying a custom SSH port, the colon between the port and path is required and cannot be omitted. For example, use `username@192.168.1.100:2022:/backup/`, not `username@192.168.1.100:2022/backup/`. Colons after the remote path starts are treated as part of the path, so timestamped names such as `/backup/2026-07-23T05:53:21/` can be used without URL encoding.
 
 ## Sync behavior {#sync-behavior}
 
@@ -339,7 +353,7 @@ The sync client and your traffic-control server communicate via a simple JSON-ov
 | Field | Type | Description |
 |-------|------|-------------|
 | `granted` | int64 | Number of bytes actually granted (equal to the requested amount for a blocking server). |
-| `expired` | int64 | Token validity in **milliseconds**. After this window elapses, the client returns any unused tokens, provided it currently has no pending bandwidth demand. |
+| `expired` | int64 | Token validity period in **milliseconds**. After the token expires, the client returns any unused tokens, if it has no pending bandwidth requests. |
 
 The client blocks on the POST request until the server responds, so the server's internal token bucket (or any other rate-limiting logic) is what enforces the global limit.
 
@@ -404,15 +418,15 @@ go run traffic_control_server.go
 juicefs sync --traffic-control-url http://10.0.0.1:8080/token s3://src/ s3://dst/
 ```
 
-`--bwlimit` and `--traffic-control-url` can be used together. For each limiter check, sync tries the global traffic-control service first; if the service is unavailable, that check falls back to the local `--bwlimit`. After the service recovers, subsequent checks use the global limit again. Ongoing waits that have already fallen back to `--bwlimit` are not interrupted by recovery. To make the fallback meaningful, set `--bwlimit` to a smaller per-process value than the global cap.
+`--bwlimit` and `--traffic-control-url` can be used together. On each rate-limiting check, sync tries the global traffic-control service first. If the service is unavailable, the current check falls back to the local `--bwlimit`. After the service recovers, subsequent checks use the global limit again. Ongoing waits that have already fallen back to `--bwlimit` are not interrupted when the service comes back. To make the fallback effective, set `--bwlimit` (per-process limit) to a value lower than the global cap.
 
-If `--traffic-control-url` is used without `--bwlimit`, there is no local fallback: while the traffic-control service is unavailable, sync transfers without any rate limit (logged as `run without rate limit`), and resumes the global limit once the service recovers.
+If `--traffic-control-url` is set without `--bwlimit`, there is no local fallback. While the traffic-control service is unavailable, sync transfers without any rate limit (logged as `run without rate limit`), and resumes the global limit once the service recovers.
 
 ## Observation {#observation}
 
 When using `sync` to transfer large files, the progress bar might move slowly or get stuck. If this happens, you can observe the progress using other methods.
 
-`sync` is designed for scenarios involving a large number of files. Its progress bar only updates when a file has been transferred. In a large file scenario, each file is transferred slowly, so the progress bar updates infrequently or even appears stuck. This is worse for destinations without multipart upload support (such as `file`, `sftp`, and `jfs` schemes), where each file is transferred using a single thread.
+`sync` is designed for scenarios involving a large number of files. Its progress bar only updates when a file has been transferred. In a large file scenario, each file is transferred slowly, so the progress bar updates infrequently or even appears stuck. This is worse for destinations without multipart upload support (such as `file`, `sftp`, and `jfs` schemes), where each file uses a single copy task. SFTP uploads still pipeline multiple write requests within that task to reduce the impact of network latency.
 
 If you notice the progress bar is not changing, use the methods below for monitoring and troubleshooting:
 

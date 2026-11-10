@@ -30,6 +30,12 @@ func getKerberosClient() (*krb.Client, error) {
 		return nil, err
 	}
 
+	disablePAFXFAST := os.Getenv("KRB5_DISABLE_PA_FX_FAST") == "true"
+	var krbSettings []func(*krb.Settings)
+	if disablePAFXFAST {
+		krbSettings = append(krbSettings, krb.DisablePAFXFAST(true))
+	}
+
 	// Try to authenticate with keytab file first.
 	keytabPath := os.Getenv("KRB5KEYTAB")
 	keytabBase64 := os.Getenv("KRB5KEYTAB_BASE64")
@@ -60,7 +66,7 @@ func getKerberosClient() (*krb.Client, error) {
 		}
 		username, realm := sp[0], sp[1]
 		logger.Infof("username: %s, realm: %s", username, realm)
-		client := krb.NewWithKeytab(username, realm, kt, cfg)
+		client := krb.NewWithKeytab(username, realm, kt, cfg, krbSettings...)
 		return client, nil
 	}
 
@@ -87,7 +93,7 @@ func getKerberosClient() (*krb.Client, error) {
 		return nil, err
 	}
 
-	client, err := krb.NewFromCCache(ccache, cfg)
+	client, err := krb.NewFromCCache(ccache, cfg, krbSettings...)
 	if err != nil {
 		return nil, err
 	}

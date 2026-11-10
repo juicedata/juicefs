@@ -32,6 +32,26 @@ const (
 	flushDuration = time.Second * 5
 )
 
+var (
+	flushStackMu       sync.Mutex
+	lastFlushStackDump time.Time
+)
+
+func dumpFlushTimeoutStacks() {
+	// Diagnostics must not queue more writers behind an in-flight dump.
+	if !flushStackMu.TryLock() {
+		return
+	}
+	defer flushStackMu.Unlock()
+	if time.Since(lastFlushStackDump) < time.Minute {
+		return
+	}
+	lastFlushStackDump = time.Now()
+	buf := make([]byte, 1<<20)
+	n := runtime.Stack(buf, true)
+	logger.Warnf("All goroutines (%d):\n%s", runtime.NumGoroutine(), buf[:n])
+}
+
 type FileWriter interface {
 	Write(ctx meta.Context, offset uint64, data []byte) syscall.Errno
 	Flush(ctx meta.Context) syscall.Errno
@@ -416,9 +436,7 @@ func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
 					logger.Errorf("pending slice %d-%d: %+v", f.inode, c.indx, *s)
 				}
 			}
-			buf := make([]byte, 1<<20)
-			n := runtime.Stack(buf, true)
-			logger.Warnf("All goroutines (%d):\n%s", runtime.NumGoroutine(), buf[:n])
+			dumpFlushTimeoutStacks()
 			err = syscall.EIO
 			break
 		}

@@ -14,7 +14,7 @@ HEARTBEAT_SLEEP=3
 DIR_QUOTA_FLUSH_INTERVAL=4
 VOLUME_QUOTA_FLUSH_INTERVAL=2
 
-wget https://dl.min.io/client/mc/release/darwin-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O mc
+wget https://github.com/minio/mc/releases/download/RELEASE.2021-04-22T17-40-00Z/mc.darwin-amd64.RELEASE.2021-04-22T17-40-00Z -O mc
 chmod +x mc
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=admin123

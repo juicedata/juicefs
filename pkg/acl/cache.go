@@ -17,6 +17,7 @@
 package acl
 
 import (
+	"maps"
 	"sync"
 )
 
@@ -58,9 +59,7 @@ func (c *cache) GetAll() map[uint32]*Rule {
 	defer c.lock.RUnlock()
 
 	cpy := make(map[uint32]*Rule, len(c.id2Rule))
-	for id, r := range c.id2Rule {
-		cpy[id] = r
-	}
+	maps.Copy(cpy, c.id2Rule)
 	return cpy
 }
 

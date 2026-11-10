@@ -164,6 +164,7 @@ func newB2(endpoint, keyID, applicationKey, token string) (ObjectStorage, error)
 	}
 	hostParts := strings.Split(uri.Host, ".")
 	name := hostParts[0]
+	// TODO: set UserAgent once kothar/go-backblaze supports http.Client injection
 	client, err := backblaze.NewB2(backblaze.Credentials{
 		KeyID:          keyID,
 		ApplicationKey: applicationKey,

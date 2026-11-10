@@ -33,21 +33,23 @@ import (
 
 	plog "github.com/pingcap/log"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"github.com/tikv/client-go/v2/config"
 	tikverr "github.com/tikv/client-go/v2/error"
+	tikvmetrics "github.com/tikv/client-go/v2/metrics"
 	"github.com/tikv/client-go/v2/oracle"
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
-	pd "github.com/tikv/pd/client"
+	"github.com/tikv/client-go/v2/util"
+	"github.com/tikv/pd/client/opt"
 	"go.uber.org/zap"
 )
 
 func init() {
 	Register("tikv", newKVMeta)
 	drivers["tikv"] = newTikvClient
-
 }
 
 func newTikvClient(addr string) (tkvClient, error) {
@@ -86,8 +88,8 @@ func newTikvClient(addr string) (tkvClient, error) {
 			dur = time.Hour
 		}
 		interval = dur
+		logger.Infof("TiKV gc interval is set to %s", interval)
 	}
-	logger.Infof("TiKV gc interval is set to %s", interval)
 
 	client, err := txnkv.NewClient(strings.Split(tUrl.Host, ","))
 	if err != nil {
@@ -95,7 +97,7 @@ func newTikvClient(addr string) (tkvClient, error) {
 	}
 
 	if strings.ToLower(query.Get("open-tso-follower-proxy")) == "true" {
-		if err := client.KVStore.GetPDClient().UpdateOption(pd.EnableTSOFollowerProxy, true); err != nil {
+		if err := client.KVStore.GetPDClient().UpdateOption(opt.EnableTSOFollowerProxy, true); err != nil {
 			logger.Warnf("Failed to enable TSO Follower Proxy: %v", err)
 		} else {
 			logger.Infof("Enabling TSO Follower Proxy")
@@ -104,7 +106,7 @@ func newTikvClient(addr string) (tkvClient, error) {
 
 	if waitStr := query.Get("max-tso-batch-wait-interval"); waitStr != "" {
 		if waitDur, err := time.ParseDuration(waitStr); err == nil {
-			if err := client.KVStore.GetPDClient().UpdateOption(pd.MaxTSOBatchWaitInterval, waitDur); err != nil {
+			if err := client.KVStore.GetPDClient().UpdateOption(opt.MaxTSOBatchWaitInterval, waitDur); err != nil {
 				logger.Warnf("Failed to set MaxTSOBatchWaitInterval: %v", err)
 			} else {
 				logger.Infof("Set MaxTSOBatchWaitInterval to %s", waitDur)
@@ -115,7 +117,35 @@ func newTikvClient(addr string) (tkvClient, error) {
 	}
 
 	prefix := strings.TrimLeft(tUrl.Path, "/")
-	return withPrefix(&tikvClient{client: client.KVStore, gcInterval: interval, changeLogShards: tiKVChangeLogShards()}, append([]byte(prefix), 0xFD)), nil
+	return withPrefix(&tikvClient{client: client.KVStore, gcInterval: interval, changeLogShards: tiKVChangeLogShards(), volume: prefix}, append([]byte(prefix), 0xFD)), nil
+}
+
+func (c *tikvClient) initMetrics(reg prometheus.Registerer) {
+	if reg == nil {
+		return
+	}
+	var pushLabels prometheus.Labels
+	if r, ok := reg.(interface{ PushLabels() prometheus.Labels }); ok {
+		pushLabels = r.PushLabels()
+	}
+	for _, collector := range []prometheus.Collector{
+		tikvmetrics.TiKVSendReqHistogram,
+		tikvmetrics.TiKVBatchPendingRequests,
+		tikvmetrics.TiKVBatchClientWaitEstablish,
+		tikvmetrics.TiKVNoAvailableConnectionCounter,
+	} {
+		if len(pushLabels) > 0 {
+			// Validate descriptors without adding push labels to the real metrics.
+			check := prometheus.WrapRegistererWith(pushLabels, prometheus.NewRegistry())
+			if err := check.Register(collector); err != nil {
+				logger.Warnf("Skip TiKV client metrics with conflicting push labels: %s", err)
+				continue
+			}
+		}
+		if err := reg.Register(collector); err != nil {
+			logger.Warnf("Register TiKV client metrics: %s", err)
+		}
+	}
 }
 
 type tikvTxn struct {
@@ -130,7 +160,7 @@ func (tx *tikvTxn) get(key []byte) []byte {
 	if err != nil {
 		panic(err)
 	}
-	return value
+	return value.Value
 }
 
 func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
@@ -140,7 +170,7 @@ func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
 	}
 	values := make([][]byte, len(keys))
 	for i, key := range keys {
-		values[i] = ret[string(key)]
+		values[i] = ret[string(key)].Value
 	}
 	return values
 }
@@ -310,6 +340,7 @@ type tikvClient struct {
 	client          *tikv.KVStore
 	gcInterval      time.Duration
 	changeLogShards int
+	volume          string
 }
 
 func (c *tikvClient) name() string {
@@ -337,6 +368,7 @@ func (c *tikvClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry 
 	if err != nil {
 		return errors.Wrap(err, "failed to begin transaction")
 	}
+	tx.SetRequestSourceType(c.volume)
 	defer func() {
 		if r := recover(); r != nil {
 			if e, ok := r.(error); ok {
@@ -346,7 +378,7 @@ func (c *tikvClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry 
 			}
 		}
 	}()
-	if err = f(&kvTxn{&tikvTxn{tx}, retry}); err != nil {
+	if err = f(&kvTxn{kvtxn: &tikvTxn{tx}, retry: retry}); err != nil {
 		return err
 	}
 	if !tx.IsReadOnly() {
@@ -365,6 +397,7 @@ func (c *tikvClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (
 	if err != nil {
 		return err
 	}
+	tx.SetRequestSourceType(c.volume)
 	defer func() {
 		if r := recover(); r != nil {
 			fe, ok := r.(error)
@@ -375,7 +408,7 @@ func (c *tikvClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (
 			}
 		}
 	}()
-	if err = f(&kvTxn{&tikvTxn{tx}, retry}); err != nil {
+	if err = f(&kvTxn{kvtxn: &tikvTxn{tx}, retry: retry}); err != nil {
 		return err
 	}
 	if !tx.IsReadOnly() {
@@ -396,6 +429,7 @@ OUT:
 			return err
 		}
 		snap := c.client.GetSnapshot(ts)
+		snap.SetRequestSourceType(c.volume)
 		snap.SetScanBatchSize(10240)
 		snap.SetNotFillCache(true)
 		snap.SetPriority(txnutil.PriorityLow)
@@ -442,7 +476,9 @@ func (c *tikvClient) gc() {
 		return
 	}
 
-	safePoint, err := c.client.GC(context.Background(), oracle.GoTimeToTS(oracle.GetTimeFromTS(currentTs).Add(-c.gcInterval)))
+	// Set request source to `internal_gc` instead of the default `unknown`.
+	ctx := util.WithInternalSourceType(context.Background(), util.InternalTxnGC)
+	safePoint, err := c.client.GC(ctx, oracle.GoTimeToTS(oracle.GetTimeFromTS(currentTs).Add(-c.gcInterval)))
 	if err == nil {
 		logger.Debugf("TiKV GC returns new safe point: %d (%s)", safePoint, oracle.GetTimeFromTS(safePoint))
 	} else {

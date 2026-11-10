@@ -20,7 +20,9 @@ sidebar_position: 4
 | 名称                            | 描述            | 单位 |
 |-------------------------------|---------------|----|
 | `juicefs_used_space`          | 总使用空间         | 字节 |
-| `juicefs_used_inodes`         | 总 inodes 数量   |    |
+| `juicefs_used_inodes`         | 已使用的 inodes 数量 |    |
+| `juicefs_total_space`         | 文件系统总容量       | 字节 |
+| `juicefs_total_inodes`        | 总 inodes 数量   |    |
 
 ## 操作系统 {#operating-system}
 
@@ -34,14 +36,101 @@ sidebar_position: 4
 
 ## 元数据引擎 {#metadata-engine}
 
+### 标签
+
+| 名称     | 描述                                  |
+| ----     | -----------                           |
+| `method` | 元数据引擎操作（例如 getattr、setattr、lookup） |
+
 ### 指标
 
 | 名称                                              | 描述           | 单位 |
 | ----                                              | -----------    | ---- |
 | `juicefs_transaction_durations_histogram_seconds` | 事务的延时分布 | 秒   |
 | `juicefs_transaction_restart`                     | 事务重启的次数 |      |
+| `juicefs_meta_ops_durations_histogram_seconds`    | 元数据引擎操作的延时分布 | 秒 |
+| `juicefs_meta_ops_total`                          | 元数据引擎操作的次数 |    |
+| `juicefs_meta_ops_duration_seconds`               | 元数据引擎操作的累计耗时 | 秒 |
+
+### Redis 连接池
+
+使用 Redis 或 KeyDB 元数据引擎时，以下客户端统计反映单机和 Sentinel 客户端的主命令连接池状态，不采集 Redis Cluster 的连接池指标。这些指标由 `go-redis` 官方 Prometheus collector 提供，不带额外标签。不包含 Sentinel 控制连接和 Pub/Sub 连接池。采集只读取本地连接池统计，不发送 Redis 命令。
+
+| 名称 | 类型 | 描述 |
+| ---- | ---- | ---- |
+| `juicefs_redis_pool_hit_total` | Counter | 从连接池复用空闲连接的累计次数 |
+| `juicefs_redis_pool_miss_total` | Counter | 连接池中未找到可复用空闲连接的累计次数 |
+| `juicefs_redis_pool_timeout_total` | Counter | 从连接池获取连接超时的累计次数 |
+| `juicefs_redis_pool_conn_total_current` | Gauge | 命令连接池当前的连接数 |
+| `juicefs_redis_pool_conn_idle_current` | Gauge | 命令连接池当前的空闲连接数 |
+| `juicefs_redis_pool_conn_stale_total` | Counter | 从连接池移除失效连接的累计数量 |
+
+连接池未命中时，客户端会尝试创建新连接。Counter 在客户端连接池的生命周期内累计，连接池重建时可能重置。可用 `rate()` 或 `increase()` 查看指定时间窗口内的变化。
+
+### TiKV 客户端
+
+使用 TiKV 元数据引擎时，以下指标反映 TiKV Go 客户端的 RPC 和请求排队情况。采集只读取进程内统计，不向 TiKV 发起查询。
+
+这些 collector 由进程中的全部 TiKV 客户端共享。Java 或 Python SDK 在同一进程中打开多个卷时，各卷的指标会重复导出相同的进程总量。此时 `vol_name` 和 `mp` 标签标识指标的导出上下文，而非这些统计的归属；不要对同一进程中不同卷的这些指标求和。
+
+| 名称 | 类型 | 描述 |
+| ---- | ---- | ---- |
+| `juicefs_tikv_client_go_request_seconds` | Histogram | RPC 请求耗时，单位为秒；标签：`type`、`store`、`stale_read`、`scope` |
+| `juicefs_tikv_client_go_batch_pending_requests` | Histogram | batch 通道中的排队请求数；标签：`store` |
+| `juicefs_tikv_client_go_batch_client_wait_connection_establish` | Histogram | 等待 batch 连接建立的时间，单位为秒 |
+| `juicefs_tikv_client_go_batch_client_no_available_connection_total` | Counter | 无可用 batch 客户端发送请求的次数 |
+
+指标名称和类型沿用 TiKV Go 客户端。连接建立耗时的名称虽然没有 `_seconds` 后缀，但单位仍为秒。无可用 batch 客户端的计数可能因并发限制或发送器繁忙而增加，不等同于 SQL 连接池的等待超时次数。
+
+SDK 向 Pushgateway、Graphite 或 remote write 端点推送指标时，如果自定义推送标签与 TiKV 指标标签同名，会跳过对应的 TiKV collector 并记录警告。原有 JuiceFS 指标及未冲突的 TiKV collector 仍会正常导出。
+
+## 配额 {#quota}
+
+### 指标
+
+目录配额带有 `inode` 标签，用户配额带有 `uid` 标签，组配额带有 `gid` 标签。
+
+| 名称                                        | 描述                       | 单位 |
+|---------------------------------------------|---------------------------|------|
+| `juicefs_dir_quota_max_space_bytes`         | 目录配额的空间上限          | 字节 |
+| `juicefs_dir_quota_max_inodes`              | 目录配额的 inodes 上限     |      |
+| `juicefs_dir_quota_used_space_bytes`        | 目录配额已使用的空间        | 字节 |
+| `juicefs_dir_quota_used_inodes`             | 目录配额已使用的 inodes 数量 |     |
+| `juicefs_user_quota_max_space_bytes`        | 用户配额的空间上限          | 字节 |
+| `juicefs_user_quota_max_inodes`             | 用户配额的 inodes 上限     |      |
+| `juicefs_user_quota_used_space_bytes`       | 用户配额已使用的空间        | 字节 |
+| `juicefs_user_quota_used_inodes`            | 用户配额已使用的 inodes 数量 |     |
+| `juicefs_group_quota_max_space_bytes`       | 组配额的空间上限            | 字节 |
+| `juicefs_group_quota_max_inodes`            | 组配额的 inodes 上限       |      |
+| `juicefs_group_quota_used_space_bytes`      | 组配额已使用的空间          | 字节 |
+| `juicefs_group_quota_used_inodes`           | 组配额已使用的 inodes 数量  |     |
+
+### SQL 连接池
+
+使用 MySQL、PostgreSQL 或 SQLite 元数据引擎时，以下指标反映各客户端的连接池状态。它们由 Prometheus Go SQL collector 提供，带有额外标签 `db_name="metadata"`。采集只读取本地连接池统计，不向数据库发起查询。这些是客户端统计，而非数据库服务端的总量。
+
+| 名称 | 类型 | 描述 |
+| ---- | ---- | ---- |
+| `juicefs_go_sql_max_open_connections` | Gauge | 最大连接数，0 表示不限制 |
+| `juicefs_go_sql_open_connections` | Gauge | 已打开的连接数，包括使用中和空闲连接 |
+| `juicefs_go_sql_in_use_connections` | Gauge | 正在使用的连接数 |
+| `juicefs_go_sql_idle_connections` | Gauge | 空闲连接数 |
+| `juicefs_go_sql_wait_count_total` | Counter | 等待获取连接的累计次数 |
+| `juicefs_go_sql_wait_duration_seconds_total` | Counter | 等待获取连接的累计时间，单位为秒 |
+| `juicefs_go_sql_max_idle_closed_total` | Counter | 因空闲连接数限制而关闭的连接总数 |
+| `juicefs_go_sql_max_idle_time_closed_total` | Counter | 因达到最大空闲时间而关闭的连接总数 |
+| `juicefs_go_sql_max_lifetime_closed_total` | Counter | 因达到最大连接生命周期而关闭的连接总数 |
+
+元数据操作变慢时，等待指标可用于判断是否存在连接池争用。Counter 在客户端连接池的生命周期内累计，可用 `rate()` 或 `increase()` 查看指定时间窗口内的变化。
 
 ## FUSE {#fuse}
+
+### 标签
+
+| 名称     | 描述                            |
+| ----     | -----------                     |
+| `method` | FUSE 操作（例如 read、write、lookup） |
+| `errno`  | 失败操作的错误名（例如 EIO、ENOENT） |
 
 ### 指标
 
@@ -50,6 +139,9 @@ sidebar_position: 4
 | `juicefs_fuse_read_size_bytes`                 | 读请求的大小分布     | 字节 |
 | `juicefs_fuse_written_size_bytes`              | 写请求的大小分布     | 字节 |
 | `juicefs_fuse_ops_durations_histogram_seconds` | 所有请求的延时分布   | 秒   |
+| `juicefs_fuse_ops_total`                       | 操作的次数           |      |
+| `juicefs_fuse_ops_durations_seconds`           | 操作的累计耗时       | 秒   |
+| `juicefs_fuse_ops_io_errors`                   | IO 错误的次数        |      |
 | `juicefs_fuse_open_handlers`                   | 打开的文件和目录数量 |      |
 
 ## SDK {#sdk}
@@ -60,7 +152,7 @@ sidebar_position: 4
 | ----                                          | -----------        | ---- |
 | `juicefs_sdk_read_size_bytes`                 | 读请求的大小分布   | 字节 |
 | `juicefs_sdk_written_size_bytes`              | 写请求的大小分布   | 字节 |
-| `juicefs_sdk_ops_durations_histogram_seconds` | 所有请求的延时分布 | 秒   |
+| `juicefs_sdk_ops_durations_histogram_seconds` | SDK 内部操作的延时分布（一次请求可能产生多次操作） | 秒   |
 
 ## 缓存 {#cache}
 
@@ -81,16 +173,20 @@ sidebar_position: 4
 | `juicefs_blockcache_read_hist_seconds`  | 读缓存块的延时分布   | 秒  |
 | `juicefs_blockcache_write_hist_seconds` | 写缓存块的延时分布   | 秒  |
 | `juicefs_staging_blocks`                | 暂存路径中的块数    |    |
-| `juicefs_staging_block_bytes`           | 暂存路径中块的总字节数 | 秒  |
+| `juicefs_staging_block_bytes`           | 暂存路径中块的总字节数 | 字节 |
 | `juicefs_staging_block_delay_seconds`   | 暂存块延迟的总秒数 | 秒  |
+| `juicefs_staging_block_errors`          | 暂存块出错的次数 |    |
+| `juicefs_staging_write_bytes`           | 写入暂存路径的总字节数 | 字节 |
+| `juicefs_staging_writing_blocks`        | 正在写入暂存路径的块数 |    |
 
 ## 对象存储 {#object-storage}
 
 ### 标签
 
-| 名称     | 描述                                              |
-| ----     | -----------                                       |
-| `method` | 请求对象存储的方法（例如 GET、PUT、HEAD、DELETE） |
+| 名称            | 描述                                              |
+| ----            | -----------                                       |
+| `method`        | 请求对象存储的方法（例如 GET、PUT、HEAD、DELETE） |
+| `storage_class` | 请求对象所属的存储类型（配置了存储类型时存在）     |
 
 ### 指标
 
@@ -99,6 +195,7 @@ sidebar_position: 4
 | `juicefs_object_request_durations_histogram_seconds` | 请求对象存储的延时分布   | 秒   |
 | `juicefs_object_request_errors`                      | 请求失败的总次数         |      |
 | `juicefs_object_request_data_bytes`                  | 请求对象存储的总数据大小 | 字节 |
+| `juicefs_object_request_uploading`                   | 正在进行中的上传请求数   |      |
 
 ## 内部特性 {#internal}
 
@@ -107,7 +204,11 @@ sidebar_position: 4
 | 名称                                     | 描述               | 单位 |
 |----------------------------------------| -----------        | ---- |
 | `juicefs_compact_size_histogram_bytes` | 合并数据的大小分布 | 字节 |
-| `juicefs_used_read_buffer_size_bytes`  | 当前用于读取的缓冲区的大小 |    |
+| `juicefs_used_read_buffer_size_bytes`  | 当前用于读取的缓冲区的大小 | 字节 |
+| `juicefs_used_buffer_size_bytes`       | 当前用于写入的缓冲区的大小 | 字节 |
+| `juicefs_store_cache_size_bytes`       | 内存中的数据缓存大小 | 字节 |
+| `juicefs_last_successful_backup`       | 上次成功备份元数据的时间戳（仅在启用 `--backup-meta` 时导出） | 秒 |
+| `juicefs_last_backup_duration`         | 上次备份元数据的耗时（仅在启用 `--backup-meta` 时导出） | 秒 |
 | `juicefs_bgjob_duration_seconds` | 后台清理任务耗时（标签：`job`、`status`） | 秒 |
 | `juicefs_bgjob_deletions_total` | 后台任务执行的删除总数（标签：`job`） | |
 
@@ -117,7 +218,7 @@ sidebar_position: 4
 
 | 名称 | 描述 | 单位 |
 |-|-|-|
-| `subdir_info` | 当前挂载的子目录配置信息（标签：`subdir`，值恒为 `1`） | |
+| `juicefs_subdir_info` | 当前挂载的子目录配置信息（标签：`subdir`，值恒为 `1`） | |
 
 `subdir` 标签包含挂载的子目录路径，空字符串表示根挂载。
 
@@ -133,7 +234,13 @@ sidebar_position: 4
 | `juicefs_sync_copied` | 已经同步过的对象数量 | |
 | `juicefs_sync_copied_bytes` | 已经同步过的数据总大小 | 字节 |
 | `juicefs_sync_skipped` | 同步时被跳过的对象数量 | |
+| `juicefs_sync_skipped_bytes` | 同步时被跳过的数据总大小 | 字节 |
+| `juicefs_sync_excluded` | 同步时被规则排除的对象数量 | |
+| `juicefs_sync_excluded_bytes` | 同步时被规则排除的数据总大小 | 字节 |
+| `juicefs_sync_extra` | 目标端多出的对象数量 | |
+| `juicefs_sync_extra_bytes` | 目标端多出的数据总大小 | 字节 |
 | `juicefs_sync_failed` | 同步时失败的对象数量 | |
 | `juicefs_sync_deleted` | 同步时被删除的对象数量 | |
 | `juicefs_sync_checked` | 同步时校验过 checksum 的对象数量 | |
 | `juicefs_sync_checked_bytes` | 同步时校验过 checksum 的数据总大小 | 字节 |
+| `juicefs_sync_listed_prefix` | 同步时列出的前缀数量 | |

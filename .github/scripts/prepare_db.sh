@@ -51,17 +51,17 @@ install_etcd() {
 }
 
 install_keydb() {
-    echo "deb https://download.keydb.dev/open-source-dist $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/keydb.list
-    sudo wget -O /etc/apt/trusted.gpg.d/keydb.gpg https://download.keydb.dev/open-source-dist/keyring.gpg
-    sudo .github/scripts/apt_install.sh keydb
-    keydb-server --storage-provider flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
-    keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
+    docker run -d --name keydb-flash --network host eqalpha/keydb:x86_64_v6.3.4 \
+        keydb-server --storage-provider flash /tmp/ --port 6378 --bind 127.0.0.1
+    docker run -d --name keydb --network host eqalpha/keydb:x86_64_v6.3.4 \
+        keydb-server --port 6377 --bind 127.0.0.1
     check_port 6377
     check_port 6378
 }
 
 install_minio() {
-    docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
+    docker build --build-arg MINIO_VERSION=RELEASE.2022-01-25T19-56-04Z -t juicefs/minio-test:RELEASE.2022-01-25T19-56-04Z -f .github/scripts/command/Dockerfile.minio-old .
+    docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" juicefs/minio-test:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
     go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc alias set local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
 }
 

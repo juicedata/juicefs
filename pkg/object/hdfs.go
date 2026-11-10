@@ -219,7 +219,7 @@ func (h *hdfsclient) List(ctx context.Context, prefix, marker, token, delimiter 
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
-	} else if marker == "" {
+	} else if marker == "" || marker < prefix {
 		obj, err := h.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -228,6 +228,9 @@ func (h *hdfsclient) List(ctx context.Context, prefix, marker, token, delimiter 
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return generateListResult(objs, limit)
+		}
 	}
 
 	file, err := h.c.Open(dir)
@@ -392,6 +395,7 @@ func parseHDFSAddr(addr string, conf hadoopconf.HadoopConf) (rpcAddresses []stri
 		}
 	}
 	if len(nns) > 0 {
+		sort.Strings(nns)
 		rpcAddresses = nns
 	} else {
 		rpcAddresses = strings.Split(authority, ",")

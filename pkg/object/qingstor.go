@@ -111,41 +111,6 @@ func (q *qingstor) Restore(ctx context.Context, key string, days int32) error {
 	return notSupported
 }
 
-func findLen(in io.Reader) (io.Reader, int64, error) {
-	var vlen int64
-	switch v := in.(type) {
-	case *bytes.Buffer:
-		vlen = int64(v.Len())
-	case *bytes.Reader:
-		vlen = int64(v.Len())
-	case *strings.Reader:
-		vlen = int64(v.Len())
-	case *os.File:
-		st, err := v.Stat()
-		if err != nil {
-			return nil, 0, err
-		}
-		vlen = st.Size()
-	case io.ReadSeeker:
-		var err error
-		vlen, err = v.Seek(0, 2)
-		if err != nil {
-			return nil, 0, err
-		}
-		if _, err = v.Seek(0, 0); err != nil {
-			return nil, 0, err
-		}
-	default:
-		d, err := io.ReadAll(in)
-		if err != nil {
-			return nil, 0, err
-		}
-		vlen = int64(len(d))
-		in = bytes.NewBuffer(d)
-	}
-	return in, vlen, nil
-}
-
 func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	body, vlen, err := findLen(in)
 	if err != nil {
@@ -179,7 +144,7 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 
 func (q *qingstor) Copy(ctx context.Context, dst, src string) error {
 	sc := getOrDefaultScValue(q.GetTier(ctx).Sc, DefaultStorageClass)
-	source := fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, src)
+	source := "/" + encodeCopySource(*q.bucket.Properties.BucketName, src)
 	input := &qs.PutObjectInput{
 		XQSCopySource:   &source,
 		XQSStorageClass: &sc,
@@ -280,7 +245,7 @@ func (q *qingstor) UploadPartCopy(ctx context.Context, key string, uploadID stri
 	input := &qs.UploadMultipartInput{
 		UploadID:      &uploadID,
 		PartNumber:    &num,
-		XQSCopySource: aws.String(fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, srcKey)),
+		XQSCopySource: aws.String("/" + encodeCopySource(*q.bucket.Properties.BucketName, srcKey)),
 		XQSCopyRange:  aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
 	}
 	r, err := q.bucket.UploadMultipartWithContext(ctx, key, input)
@@ -351,6 +316,7 @@ func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, e
 	}
 	conf.Host = host
 	conf.Protocol = uri.Scheme
+	conf.AdditionalUserAgent = UserAgent
 	if uri.Scheme == "http" {
 		conf.Port = 80
 	} else {

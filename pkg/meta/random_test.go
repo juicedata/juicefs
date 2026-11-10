@@ -237,7 +237,7 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 		n.gid = p.gid
 		if _type == TypeDirectory {
 			p.mode |= 02000
-		} else if n.mode&02010 == 02010 && m.ctx.Uid() != 0 {
+		} else if m.ctx.CheckPermission() && n.mode&02010 == 02010 && m.ctx.Uid() != 0 {
 			if !containsGid(m.ctx, p.gid) {
 				n.mode &= ^uint16(02000)
 			}
@@ -390,7 +390,7 @@ func (m *fsMachine) symlink(parent Ino, name string, inode Ino, target string) s
 		n.gid = p.gid
 		if _type == TypeDirectory {
 			p.mode |= 02000
-		} else if n.mode&02010 == 02010 && m.ctx.Uid() != 0 {
+		} else if m.ctx.CheckPermission() && n.mode&02010 == 02010 && m.ctx.Uid() != 0 {
 			if !containsGid(m.ctx, p.gid) {
 				n.mode &= ^uint16(02000)
 			}
@@ -823,15 +823,6 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		if srcnode == nil {
 			return syscall.ENOENT
 		}
-		c := dst.children[dstname]
-		if c != nil {
-			if srcnode._type == TypeDirectory && c._type != TypeDirectory {
-				return syscall.ENOTDIR
-			} else if srcnode._type != TypeDirectory && c._type == TypeDirectory {
-				return syscall.EISDIR
-			}
-		}
-
 	}
 	src := m.nodes[srcparent]
 	if src == nil {
@@ -858,17 +849,6 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	srcnode := src.children[srcname]
 	if srcnode == nil {
 		return syscall.ENOENT
-	}
-
-	if metaType == "tkv" {
-		c := dst.children[dstname]
-		if c != nil {
-			if srcnode._type == TypeDirectory && c._type != TypeDirectory {
-				return syscall.ENOTDIR
-			} else if srcnode._type != TypeDirectory && c._type == TypeDirectory {
-				return syscall.EISDIR
-			}
-		}
 	}
 
 	if !src.stickyAccess(srcnode, m.ctx.Uid()) {

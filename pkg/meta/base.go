@@ -37,6 +37,7 @@ import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
@@ -91,7 +92,7 @@ type engine interface {
 	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
-	doDeleteSustainedInode(sid uint64, inode Ino) error
+	doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices(ctx Context, count *uint64) error
@@ -103,6 +104,8 @@ type engine interface {
 	doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name string) syscall.Errno
 	doFindDetachedNodes(t time.Time) []Ino
 	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
+
+	doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, length uint64) error) error
 
 	doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error)
 	// set quota, return true if there is no quota exists before
@@ -125,7 +128,7 @@ type engine interface {
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
-	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
+	doRepair(ctx Context, inode Ino, attr *Attr, trustNlink bool) syscall.Errno
 	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
 	doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno)
 	doList(ctx Context, inode Ino) ([]*slice, syscall.Errno)
@@ -149,6 +152,7 @@ type engine interface {
 
 	doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
+	doInsertACL(ctx Context, rule *aclAPI.Rule) (uint32, error)
 	cacheACLs(ctx Context) error
 
 	// kerberos delegation token
@@ -159,9 +163,11 @@ type engine interface {
 	doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 
 	doCleanupChangelog(ctx Context, maxAge time.Duration, maxLines int64) error
+	changelogScanStart(version int64) uint64
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
+	backupSource() pb.Footer_Engine
 	dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error
 	load(ctx Context, typ int, opt *LoadOption, val proto.Message) error
 	prepareLoad(ctx Context, opt *LoadOption) error
@@ -277,21 +283,26 @@ type baseMeta struct {
 	sync.Mutex
 	addr string
 	conf *Config
-	fmt  *Format
+	// fmt is reloaded in the background while other goroutines read it, so it is
+	// only ever accessed through getFormat/setFormat
+	fmt atomic.Pointer[Format]
 
 	root         Ino
 	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict
 	subTrash     internalNode
 	sid          uint64
+	sessionJSON  atomic.Value // []byte
 	nextTxnId    uint64
 	of           *openfiles
+	replay       atomic.Pointer[replayState]
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
 	maxDeleting  chan struct{}
 	dslices      chan Slice // slices to delete
 	symlinks     *symlinkCache
 	msgCallbacks *msgCallbacks
-	reloadCb     []func(*Format)
+	reloadCb     []func(*Format) error
+	reloadFailed []func(*Format) error // only accessed by the refresh goroutine
 	umounting    bool
 	sesMu        sync.Mutex
 	aclCache     aclAPI.Cache
@@ -520,7 +531,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 
 		bgjobDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name:    "juicefs_bgjob_duration_seconds",
+				Name:    "bgjob_duration_seconds",
 				Help:    "Background job duration in seconds.",
 				Buckets: prometheus.ExponentialBuckets(1, 2, 13),
 			},
@@ -528,7 +539,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		),
 		bgjobDels: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "juicefs_bgjob_deletions_total",
+				Name: "bgjob_deletions_total",
 				Help: "Number of deletions (files or slices) by background jobs.",
 			},
 			[]string{"job"},
@@ -646,6 +657,14 @@ func logEncode2(name string) string {
 	return logEncode([]byte(name))
 }
 
+func logGids(ctx Context) string {
+	gids := make([]string, len(ctx.Gids()))
+	for i, gid := range ctx.Gids() {
+		gids[i] = strconv.FormatUint(uint64(gid), 10)
+	}
+	return strings.Join(gids, ":")
+}
+
 func (m *baseMeta) checkRoot(inode Ino) Ino {
 	switch inode {
 	case 0:
@@ -711,10 +730,22 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
+var ErrNotFormatted = errors.New("database is not formatted, please run `juicefs format ...` first")
+
 func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
+	format, err := m.loadFormat(checkVersion)
+	if err != nil {
+		return nil, err
+	}
+	m.setFormat(format)
+	return format, nil
+}
+
+// loadFormat reads the stored format without publishing it.
+func (m *baseMeta) loadFormat(checkVersion bool) (*Format, error) {
 	body, err := m.en.doLoad()
 	if err == nil && len(body) == 0 {
-		err = fmt.Errorf("database is not formatted, please run `juicefs format ...` first")
+		err = ErrNotFormatted
 	}
 	if err != nil {
 		return nil, err
@@ -731,9 +762,6 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	if format.Tiers == nil {
 		format.Tiers = object.NewTiers(format.StorageClass)
 	}
-	m.Lock()
-	m.fmt = format
-	m.Unlock()
 	return format, nil
 }
 
@@ -765,7 +793,15 @@ func (m *baseMeta) newSessionInfo() []byte {
 	if err != nil {
 		panic(err) // marshal SessionInfo should never fail
 	}
+	m.sessionJSON.Store(buf) // keep session info unchanged throughout its lifecycle
 	return buf
+}
+
+func (m *baseMeta) currentSessionInfo() []byte {
+	if data := m.sessionJSON.Load(); data != nil {
+		return data.([]byte)
+	}
+	return m.newSessionInfo()
 }
 
 func (m *baseMeta) NewSession(record bool) error {
@@ -814,7 +850,7 @@ func (m *baseMeta) NewSession(record bool) error {
 		go m.cleanupSlices(ctx)
 		go m.cleanupTrash(ctx)
 		go m.symlinks.clean(ctx, &m.sessWG)
-		if m.fmt.ChangeLog {
+		if m.getFormat().ChangeLog {
 			m.sessWG.Add(1)
 			go m.cleanupChangelog(ctx)
 		}
@@ -829,8 +865,8 @@ const (
 )
 
 func (m *baseMeta) startDeleteSliceTasks() {
-	m.Lock()
-	defer m.Unlock()
+	m.dSliceMu.Lock()
+	defer m.dSliceMu.Unlock()
 	if m.conf.MaxDeletes <= 0 || m.dslices != nil {
 		return
 	}
@@ -870,19 +906,62 @@ func (m *baseMeta) stopDeleteSliceTasks() {
 
 func (m *baseMeta) expireTime() int64 {
 	if m.conf.Heartbeat > 0 {
-		return time.Now().Add(m.conf.Heartbeat * 5).Unix()
+		return time.Now().Add(max(m.conf.SessionTimeout, m.conf.Heartbeat*5)).Unix()
 	} else {
 		return time.Now().Add(time.Hour * 24 * 365).Unix()
 	}
 }
 
-func (m *baseMeta) OnReload(fn func(f *Format)) {
+func (m *baseMeta) OnReload(fn func(f *Format) error) {
 	m.msgCallbacks.Lock()
 	defer m.msgCallbacks.Unlock()
 	m.reloadCb = append(m.reloadCb, fn)
 }
 
 const UmountCode = 11
+
+// reloadFormat reloads the stored format and republishes it.
+func (m *baseMeta) reloadFormat() {
+	old := m.getFormat()
+	format, err := m.loadFormat(false)
+	if err != nil {
+		if errors.Is(err, ErrNotFormatted) {
+			logger.Errorf("reload setting: %s", err)
+			os.Exit(UmountCode)
+		}
+		logger.Warnf("reload setting: %s", err)
+		return
+	}
+	if format.MetaVersion > MaxVersion {
+		logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
+		os.Exit(UmountCode)
+	}
+	if format.UUID != old.UUID {
+		logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
+		os.Exit(UmountCode)
+	}
+	if !reflect.DeepEqual(format, old) {
+		m.msgCallbacks.Lock()
+		cbs := m.reloadCb
+		m.msgCallbacks.Unlock()
+		m.reloadFailed = runReloadCbs(cbs, format)
+		m.setFormat(format)
+	} else if len(m.reloadFailed) > 0 {
+		m.reloadFailed = runReloadCbs(m.reloadFailed, old)
+	}
+}
+
+// runReloadCbs runs cbs on a private copy of format and returns those that failed.
+func runReloadCbs(cbs []func(*Format) error, format *Format) (failed []func(*Format) error) {
+	patched := format.Clone() // callbacks may patch it with local overrides
+	for _, cb := range cbs {
+		if err := cb(patched); err != nil {
+			logger.Warnf("reload setting: %s, will retry", err)
+			failed = append(failed, cb)
+		}
+	}
+	return
+}
 
 func (m *baseMeta) refresh(ctx Context) {
 	for {
@@ -906,27 +985,7 @@ func (m *baseMeta) refresh(ctx Context) {
 		}
 		m.sesMu.Unlock()
 
-		old := m.getFormat()
-		if format, err := m.Load(false); err != nil {
-			if strings.HasPrefix(err.Error(), "database is not formatted") {
-				logger.Errorf("reload setting: %s", err)
-				os.Exit(UmountCode)
-			}
-			logger.Warnf("reload setting: %s", err)
-		} else if format.MetaVersion > MaxVersion {
-			logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
-			os.Exit(UmountCode)
-		} else if format.UUID != old.UUID {
-			logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
-			os.Exit(UmountCode)
-		} else if !reflect.DeepEqual(format, old) {
-			m.msgCallbacks.Lock()
-			cbs := m.reloadCb
-			m.msgCallbacks.Unlock()
-			for _, cb := range cbs {
-				cb(format)
-			}
-		}
+		m.reloadFormat()
 
 		if v, err := m.en.getCounter(usedSpace); err == nil {
 			atomic.StoreInt64(&m.usedSpace, v)
@@ -1069,6 +1128,14 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 	}
 }
 
+func (m *baseMeta) CleanupSlices(ctx Context) syscall.Errno {
+	return errno(m.en.doCleanupSlices(ctx, nil))
+}
+
+func (m *baseMeta) WaitDeleteSlices() {
+	m.stopDeleteSliceTasks()
+}
+
 func parseChangelogTime(entry string) (time.Time, error) {
 	idx := strings.IndexByte(entry, '|')
 	if idx < 0 {
@@ -1097,8 +1164,9 @@ func parseChangelogTime(entry string) (time.Time, error) {
 func (m *baseMeta) cleanupChangelog(ctx Context) {
 	defer m.sessWG.Done()
 	for {
-		maxAge := time.Duration(m.fmt.ChangeLogMaxAge) * time.Second
-		maxLines := m.fmt.ChangeLogMaxLines
+		format := m.getFormat()
+		maxAge := time.Duration(format.ChangeLogMaxAge) * time.Second
+		maxLines := format.ChangeLogMaxLines
 		interval := 5 * time.Minute
 		select {
 		case <-ctx.Done():
@@ -1164,22 +1232,21 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 
 func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	used, inodes := atomic.LoadInt64(&m.usedSpace), atomic.LoadInt64(&m.usedInodes)
-	var err error
 	if !m.conf.FastStatfs || used == unknownUsage || inodes == unknownUsage {
-		var remoteUsed int64 // using an additional variable here to ensure the assignment inside `utils.WithTimeout` does not change the `used` variable again after a timeout.
-		err = utils.WithTimeout(ctx, func(context.Context) error {
-			remoteUsed, err = m.en.getCounter(usedSpace)
-			return err
-		}, time.Millisecond*150)
-		if err == nil {
+		var remoteUsed int64 // avoid race
+		if err := utils.WithTimeout(ctx, func(context.Context) error {
+			var getErr error
+			remoteUsed, getErr = m.en.getCounter(usedSpace)
+			return getErr
+		}, time.Millisecond*150); err == nil {
 			used = remoteUsed
 		}
 		var remoteInodes int64
-		err = utils.WithTimeout(ctx, func(context.Context) error {
-			remoteInodes, err = m.en.getCounter(totalInodes)
-			return err
-		}, time.Millisecond*150)
-		if err == nil {
+		if err := utils.WithTimeout(ctx, func(context.Context) error {
+			var getErr error
+			remoteInodes, getErr = m.en.getCounter(totalInodes)
+			return getErr
+		}, time.Millisecond*150); err == nil {
 			inodes = remoteInodes
 		}
 	}
@@ -1395,7 +1462,7 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 	if ctx.Uid() == 0 {
 		return 0
 	}
-	if !ctx.CheckPermission() {
+	if !m.checkPermission(ctx) {
 		return 0
 	}
 
@@ -1440,11 +1507,12 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	if inode == RootInode || inode == TrashInode {
 		// doGetAttr could overwrite the `attr` after timeout
 		var a Attr
+		var attrErr syscall.Errno
 		e := utils.WithTimeout(ctx, func(context.Context) error {
-			err = m.en.doGetAttr(ctx, inode, &a)
+			attrErr = m.en.doGetAttr(ctx, inode, &a)
 			return nil
 		}, time.Millisecond*300)
-		if e == nil && err == 0 {
+		if e == nil && attrErr == 0 {
 			*attr = a
 		} else {
 			err = 0
@@ -1508,6 +1576,16 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 }
 
 func (m *baseMeta) nextInode() (Ino, error) {
+	if state := m.replay.Load(); state != nil {
+		if state.Inode != 0 {
+			return state.Inode, nil
+		}
+		if len(state.Inodes) > 0 {
+			ino := state.Inodes[0]
+			state.Inodes = state.Inodes[1:]
+			return ino, nil
+		}
+	}
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeInodes.next >= m.freeInodes.maxid {
@@ -1561,29 +1639,40 @@ func (m *baseMeta) allocateInodes() (freeID, error) {
 	return freeID{next: uint64(v) - inodeBatch, maxid: uint64(v)}, nil
 }
 
-func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parentMode uint16) uint32 {
-	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
-		return parentGid
+// clientBehavior reports the platform semantics of the client that issued the
+// operation.
+func clientBehavior(ctx Context) string {
+	if b, ok := ctx.Value(CtxKey("behavior")).(string); ok && b != "" {
+		return b
 	}
-	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
+	return runtime.GOOS
+}
+
+func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parentMode uint16) uint32 {
+	switch clientBehavior(ctx) {
+	case "Hadoop", "darwin":
 		return parentGid
+	case "linux":
+		if parentMode&02000 != 0 {
+			return parentGid
+		}
 	}
 	return ctx.Gid()
 }
 
 func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, parentMode, childMode uint16) uint16 {
-	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+	if s := m.replay.Load(); s != nil && s.Mode != nil {
+		return *s.Mode
+	}
+	if clientBehavior(ctx) != "linux" || parentMode&02000 == 0 {
 		return childMode
 	}
-	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
-		if _type == TypeDirectory {
-			childMode |= 02000
-		} else if childMode&02010 == 02010 && ctx.Uid() != 0 {
-			if !containsGid(ctx, parentGid) {
-				childMode &= ^uint16(02000)
-			}
+	if _type == TypeDirectory {
+		childMode |= 02000
+	} else if m.checkPermission(ctx) && childMode&02010 == 02010 && ctx.Uid() != 0 {
+		if !containsGid(ctx, parentGid) {
+			childMode &= ^uint16(02000)
 		}
-		return childMode
 	}
 	return childMode
 }
@@ -1592,7 +1681,8 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if _type < TypeFile || _type > TypeLink {
 		return syscall.EINVAL
 	}
-	if parent.IsTrash() {
+	parent = m.checkRoot(parent)
+	if parent.IsTrash() && m.replay.Load() == nil {
 		return syscall.EPERM
 	}
 	if parent == RootInode && name == TrashName {
@@ -1609,11 +1699,12 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 
 	defer m.timeit("Mknod", time.Now())
-	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
 	// check group quota in transaction
-	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
-		return err
+	if !(parent == TrashInode && _type == TypeDirectory) {
+		if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
+			return err
+		}
 	}
 	ino, err := m.nextInode()
 	if err != nil {
@@ -1671,7 +1762,7 @@ func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 	st := m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 	if st == 0 {
 		m.parentMu.Lock()
-		m.dirParents[*inode] = parent
+		m.dirParents[*inode] = m.checkRoot(parent)
 		m.parentMu.Unlock()
 	}
 	return st
@@ -1691,6 +1782,7 @@ func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, in
 }
 
 func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	parent = m.checkRoot(parent)
 	if parent.IsTrash() {
 		return syscall.EPERM
 	}
@@ -1711,7 +1803,6 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if attr == nil {
 		attr = &Attr{}
 	}
-	parent = m.checkRoot(parent)
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		return st
 	}
@@ -1783,6 +1874,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 }
 
 func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
+	parent = m.checkRoot(parent)
 	if parent == RootInode && name == TrashName || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
@@ -1791,7 +1883,6 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 	}
 
 	defer m.timeit("Unlink", time.Now())
-	parent = m.checkRoot(parent)
 	var attr Attr
 	err := m.en.doUnlink(ctx, parent, name, &attr, skipCheckTrash...)
 	if err == 0 {
@@ -1814,7 +1905,8 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == RootInode && name == TrashName || parent == TrashInode || parent.IsTrash() && ctx.Uid() != 0 {
+	parent = m.checkRoot(parent)
+	if parent == RootInode && name == TrashName || parent == TrashInode && m.replay.Load() == nil || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -1822,18 +1914,19 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	}
 
 	defer m.timeit("Rmdir", time.Now())
-	parent = m.checkRoot(parent)
 	var inode Ino
 	var oldAttr Attr
 	st := m.en.doRmdir(ctx, parent, name, &inode, &oldAttr, skipCheckTrash...)
-	if st == 0 {
+	if st == 0 && parent != TrashInode {
 		if !parent.IsTrash() {
 			m.parentMu.Lock()
 			delete(m.dirParents, inode)
 			m.parentMu.Unlock()
 		}
 		m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
-		m.updateDirQuota(ctx, parent, -align4K(0), -1)
+		if !parent.IsTrash() {
+			m.updateDirQuota(ctx, parent, -align4K(0), -1)
+		}
 	}
 	return st
 }
@@ -1843,6 +1936,7 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 	if len(entries) == 0 {
 		return 0
 	}
+	parent = m.checkRoot(parent)
 	var delta dirStat
 	st := m.en.doBatchUnlink(ctx, parent, entries, &delta, skipCheckTrash)
 	if st == 0 {
@@ -1877,11 +1971,16 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	parentSrc = m.checkRoot(parentSrc)
+	parentDst = m.checkRoot(parentDst)
 	if parentSrc == RootInode && nameSrc == TrashName || parentDst == RootInode && nameDst == TrashName {
 		return syscall.EPERM
 	}
 	if parentDst.IsTrash() || parentSrc.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
+	}
+	if nameSrc == "." || nameSrc == ".." || nameDst == "." || nameDst == ".." {
+		return syscall.EBUSY
 	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
@@ -1905,8 +2004,6 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if attr == nil {
 		attr = &Attr{}
 	}
-	parentSrc = m.checkRoot(parentSrc)
-	parentDst = m.checkRoot(parentDst)
 	var quotaSrc, quotaDst Ino
 	if !parentSrc.IsTrash() {
 		quotaSrc, _ = m.getQuotaParent(ctx, parentSrc)
@@ -1947,6 +2044,10 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	tinode := new(Ino)
 	tattr := new(Attr)
 	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, tinode, attr, tattr)
+	if st == 0 && *tinode != 0 && *tinode == *inode {
+		// both names refer to the same file: POSIX requires no other action
+		return 0
+	}
 	if st == 0 {
 		var diffLength uint64
 		if attr.Typ == TypeDirectory {
@@ -2165,7 +2266,7 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		}
 		m.Unlock()
 		if removed {
-			_ = m.en.doDeleteSustainedInode(m.sid, inode)
+			_ = m.en.doDeleteSustainedInode(Background(), m.sid, inode)
 		}
 	}
 	return 0
@@ -2470,7 +2571,8 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	var parent = RootInode
 	attr.Typ = TypeDirectory
 	if fpath == "/" {
-		if st := m.GetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
+		inode = m.checkRoot(inode)
+		if st := m.en.doGetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
 			logger.Errorf("GetAttr inode %d: %s", inode, st)
 			return st
 		}
@@ -2643,7 +2745,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 							attr.Ctime = now
 							attr.Length = 4 << 10
 						}
-						if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 || st1 == syscall.ENOENT {
+						if st1 := m.en.doRepair(ctx, inode, attr, false); st1 == 0 || st1 == syscall.ENOENT {
 							logger.Debugf("Path %s (inode %d) is successfully repaired", path, inode)
 						} else {
 							hasError = true
@@ -2719,7 +2821,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	return nil
 }
 
-func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
+func (m *baseMeta) Chroot(ctx Context, subdir string, skipCreate bool) syscall.Errno {
 	for subdir != "" {
 		ps := strings.SplitN(subdir, "/", 2)
 		if ps[0] != "" {
@@ -2727,7 +2829,11 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 			var inode Ino
 			r := m.Lookup(ctx, m.root, ps[0], &inode, &attr, true)
 			if r == syscall.ENOENT {
-				r = m.Mkdir(ctx, m.root, ps[0], 0777, 0, 0, &inode, &attr)
+				if m.conf.ReadOnly || skipCreate {
+					return r
+				}
+				logger.Warnf("Subdir %s not found, creating it", ps[0])
+				r = m.Mkdir(ctx, m.root, ps[0], 0777, uint16(utils.GetUmask()), 0, &inode, &attr)
 			}
 			if r != 0 {
 				return r
@@ -2776,13 +2882,15 @@ func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino, create bool) s
 }
 
 func (m *baseMeta) getFormat() *Format {
-	m.Lock()
-	defer m.Unlock()
-	return m.fmt
+	return m.fmt.Load()
+}
+
+func (m *baseMeta) setFormat(format *Format) {
+	m.fmt.Store(format)
 }
 
 func (m *baseMeta) GetFormat() Format {
-	return *m.getFormat()
+	return *m.getFormat().Clone()
 }
 
 func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
@@ -2811,6 +2919,9 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 }
 
 func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID int) {
+	if m.conf.NoCompact {
+		return
+	}
 	// avoid too many or duplicated compaction
 	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
@@ -2907,7 +3018,8 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 	} else if st == 0 {
 		m.of.InvalidateChunk(inode, indx)
 	} else {
-		logger.Warnf("compact %d %d: %s", inode, indx, err)
+		logger.Warnf("compact %d %d: %s; slice %d (%d bytes) may be orphaned, will be cleaned by gc",
+			inode, indx, st, id, size)
 	}
 
 	if force {
@@ -3029,6 +3141,10 @@ func (m *baseMeta) toTrash(parent Ino) bool {
 }
 
 func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
+	if state := m.replay.Load(); state != nil {
+		*trash = state.Trash
+		return 0
+	}
 	if !m.toTrash(parent) {
 		return 0
 	}
@@ -3045,7 +3161,9 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 	if st == syscall.ENOENT {
 		attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
 		st = m.en.doMknod(Background(), TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
-		m.en.updateStats(align4K(0), 1)
+		if st == 0 {
+			m.en.updateStats(align4K(0), 1)
+		}
 	}
 
 	m.Lock()
@@ -3129,6 +3247,21 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 	}
 }
 
+type ignoreAttrFlagsKey struct{}
+
+// A detached tree is unreachable, so it can only be removed by the cleanup of
+// detached nodes; immutable/append flags on the entries it contains (copied
+// from the source by clone) must not block that, or the tree would pin its
+// slices forever.
+func withIgnoredAttrFlags(ctx Context) Context {
+	return ctx.WithValue(ignoreAttrFlagsKey{}, true)
+}
+
+func ignoreAttrFlags(ctx Context) bool {
+	ignored, _ := ctx.Value(ignoreAttrFlagsKey{}).(bool)
+	return ignored
+}
+
 func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
 	for _, inode := range m.en.doFindDetachedNodes(edge) {
 		if eno := m.en.doCleanupDetachedNode(Background(), inode); eno != 0 {
@@ -3185,7 +3318,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 		}()
 	}
 
-	concurrent := make(chan int, 1) // no effect for flatterned trash dirs
+	concurrent := make(chan int, backgroundDeleteThreads)
 	for len(entries) > 0 {
 		if ctx.Canceled() {
 			return errno(ctx.Err())
@@ -3227,7 +3360,7 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 			logger.Warnf("bad entry as a subTrash: %s", entry.Name)
 			continue
 		}
-		if m.fmt.DirStats {
+		if m.getFormat().DirStats {
 			ds, st := m.GetDirStat(ctx, entry.Inode)
 			if st == 0 && ds != nil {
 				if _, err := scan(entry.Inode, uint64(ds.length), ts, ds.inodes); err != nil {
@@ -3346,6 +3479,7 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 
 func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno {
 
+	parent = m.checkRoot(parent)
 	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
 	}
@@ -3358,7 +3492,6 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	}
 
 	defer m.timeit("Clone", time.Now())
-	parent = m.checkRoot(parent)
 
 	var attr Attr
 	var eno syscall.Errno
@@ -3405,8 +3538,17 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent)
 	}
 	if eno == 0 {
-		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
-		m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
+		var length uint64
+		if attr.Typ == TypeFile {
+			length = attr.Length
+		}
+		m.updateDirStat(ctx, parent, int64(length), align4K(attr.Length), 1)
+		if attr.Typ == TypeDirectory {
+			// the entries inside were counted while they were cloned
+			m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
+		} else {
+			m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
+		}
 	}
 	return eno
 }
@@ -3427,11 +3569,12 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	m.en.updateStats(align4K(attr.Length), 1)
 	atomic.AddUint64(count, 1)
 	m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
+	if attr.Typ == TypeDirectory && !top {
+		// Count subdirectories now so failed-clone cleanup balances quota usage.
+		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
+	}
 	if attr.Typ != TypeDirectory {
 		return 0
-	}
-	if eno = m.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &attr); eno != 0 {
-		return eno
 	}
 	// Use DirHandler for batch processing to avoid loading all entries at once
 	handler, eno := m.NewDirHandler(ctx, srcIno, true, nil)
@@ -3447,21 +3590,20 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	defer cloneCtx.Cancel()
 
 	var g errgroup.Group
-	var skipped uint32
+	nlink := uint32(2)
 
 	cloneChild := func(e *Entry) syscall.Errno {
 		childEno := m.cloneEntry(cloneCtx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrent)
 		if childEno == syscall.ENOENT {
 			logger.Warnf("ignore deleted %s in dir %d", string(e.Name), srcIno)
-			if e.Attr.Typ == TypeDirectory {
-				atomic.AddUint32(&skipped, 1)
-			}
 			return 0
 		}
 		if childEno != 0 {
 			cloneCtx.Cancel()
+			return childEno
 		}
-		return childEno
+		atomic.AddUint32(&nlink, 1)
+		return 0
 	}
 
 	offset := 0
@@ -3533,10 +3675,10 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		eno = syscall.EINTR
 	}
 
-	if eno == 0 && skipped > 0 {
-		attr.Nlink -= skipped
-		if eno := m.en.doRepair(ctx, ino, &attr); eno != 0 {
-			logger.Warnf("fix nlink of %d: %s", ino, eno)
+	if eno == 0 && nlink != attr.Nlink {
+		attr.Nlink = nlink
+		if st := m.en.doRepair(ctx, ino, &attr, true); st != 0 {
+			logger.Warnf("fix nlink of %d: %s", ino, st)
 		}
 	}
 	return eno
@@ -3557,7 +3699,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 			return nil, syscall.EPERM
 		}
 		if cur.Gid != attr.Gid {
-			if ctx.CheckPermission() && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+			if m.checkPermission(ctx) && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
 				return nil, syscall.EPERM
 			}
 			dirtyAttr.Gid = attr.Gid
@@ -3565,14 +3707,14 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		}
 	}
 	if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-		if ctx.CheckPermission() && ctx.Uid() != 0 {
+		if m.checkPermission(ctx) && ctx.Uid() != 0 {
 			return nil, syscall.EPERM
 		}
 		dirtyAttr.Uid = attr.Uid
 		changed = true
 	}
 	if set&SetAttrMode != 0 {
-		if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
+		if m.checkPermission(ctx) && ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
 			if !containsGid(ctx, cur.Gid) {
 				attr.Mode &= 05777
 			}
@@ -3630,6 +3772,25 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	if set&SetAttrFlag != 0 {
 		dirtyAttr.Flags = attr.Flags
 		changed = true
+	} else if set&SetAttrLinuxFlags != 0 {
+		const linuxFlags = FlagSkipTrash | FlagImmutable | FlagAppend
+		flags := cur.Flags&^linuxFlags | attr.Flags&linuxFlags
+		// The kernel may pass FS_IOC_SETFLAGS through unchecked (before 5.13, or
+		// for FS_IOC_SETFLAGS_32), so redo the checks of vfs_fileattr_set() here.
+		if ctx.Uid() != 0 {
+			if ctx.Uid() != cur.Uid { // inode_owner_or_capable()
+				return nil, syscall.EPERM
+			}
+			if (cur.Flags^flags)&(FlagImmutable|FlagAppend) != 0 { // CAP_LINUX_IMMUTABLE
+				return nil, syscall.EPERM
+			}
+		}
+		dirtyAttr.Flags = flags
+		changed = true
+	} else if set&SetAttrWindowsFlags != 0 {
+		const windowsFlags = FlagImmutable | FlagWindowsHidden | FlagWindowsSystem | FlagWindowsArchive
+		dirtyAttr.Flags = cur.Flags&^windowsFlags | attr.Flags&windowsFlags
+		changed = true
 	}
 	if set&SetAttrTier != 0 {
 		dirtyAttr.Tier = attr.Tier
@@ -3639,6 +3800,8 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		*attr = *cur
 		return nil, 0
 	}
+	// Keep last: replay pins the mode recorded by the source.
+	dirtyAttr.Mode = m.finalMode(dirtyAttr.Mode)
 	return &dirtyAttr, 0
 }
 
@@ -3655,7 +3818,6 @@ func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) s
 var errACLNotInCache = errors.New("acl not in cache")
 
 func (m *baseMeta) getFaclFromCache(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) error {
-	ino = m.checkRoot(ino)
 	cAttr := &Attr{}
 	if m.conf.OpenCache > 0 && m.of.Check(ino, cAttr) {
 		aclId := getAttrACLId(cAttr, aclType)
@@ -3714,6 +3876,34 @@ func (m *baseMeta) saveACL(rule *aclAPI.Rule, aclMaxId *uint32) uint32 {
 	return id
 }
 
+// mergeFacl sets rule on attr; the result is final and must be persisted as is.
+func (m *baseMeta) mergeFacl(ctx Context, attr *Attr, aclType uint8, rule *aclAPI.Rule, insertACL func(*aclAPI.Rule) (uint32, error)) error {
+	// https://github.com/torvalds/linux/blob/480e035fc4c714fb5536e64ab9db04fedc89e910/fs/fuse/acl.c#L143-L151
+	// TODO: check linux capabilities
+	if ctx.Uid() != 0 && !inGroup(ctx, attr.Gid) {
+		attr.Mode &= 05777 // clear sgid
+	}
+	if rule.IsEmpty() {
+		setAttrACLId(attr, aclType, aclAPI.None)
+	} else if rule.IsMinimal() && aclType == aclAPI.TypeAccess {
+		setAttrACLId(attr, aclType, aclAPI.None)
+		attr.Mode = attr.Mode&07000 | rule.GetMode()
+	} else {
+		rule.InheritPerms(attr.Mode)
+		id, err := insertACL(rule)
+		if err != nil {
+			return err
+		}
+		setAttrACLId(attr, aclType, id)
+		if aclType == aclAPI.TypeAccess {
+			attr.Mode = attr.Mode&07000 | rule.GetMode()
+		}
+	}
+	// Keep last: replay pins the mode recorded by the source.
+	attr.Mode = m.finalMode(attr.Mode)
+	return nil
+}
+
 func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
 		return syscall.EINVAL
@@ -3722,6 +3912,7 @@ func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 	if !ino.IsNormal() {
 		return syscall.EPERM
 	}
+	ino = m.checkRoot(ino)
 
 	now := time.Now()
 	defer func() {
@@ -3733,6 +3924,7 @@ func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 }
 
 func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	ino = m.checkRoot(ino)
 	var err error
 	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
 		return 0
@@ -3970,6 +4162,7 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 	opt = opt.check()
 
 	bak := newBakFormat()
+	bak.Footer.Msg.Source = m.en.backupSource()
 	ch := make(chan *dumpedResult, 100)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -4062,11 +4255,39 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		go workerFunc(ctx, taskCh)
 	}
 
+	loaded := DumpedCounters{NextInode: 2, NextChunk: 1}
+	var counters []*pb.Counter
 	bak := &BakFormat{}
+
+	sendTask := func(t *task, name string, num int) bool {
+		select {
+		case <-ctx.Done():
+			return false
+		case taskCh <- t:
+			if opt.Progress != nil {
+				opt.Progress(name, num)
+			}
+			return true
+		}
+	}
+
 	for {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
+				source, err := readBackupSource(r)
+				if err != nil {
+					ctx.Cancel()
+					wg.Wait()
+					return err
+				}
+				batch := &pb.Batch{Counters: counters}
+				if source != pb.Footer_REDIS {
+					batch = loaded.toBatch(counters)
+				}
+				if len(batch.Counters) > 0 {
+					sendTask(&task{segTypeCounter, batch}, SegType2Name[segTypeCounter], len(batch.Counters))
+				}
 				close(taskCh)
 				break
 			}
@@ -4075,16 +4296,15 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			return err
 		}
 
-		select {
-		case <-ctx.Done():
+		if loaded.updateFromSegment(seg, &counters) {
+			continue
+		}
+
+		if !sendTask(&task{int(seg.typ), seg.val}, seg.Name(), int(seg.num())) {
 			wg.Wait()
 			return ctx.Err()
-		case taskCh <- &task{int(seg.typ), seg.val}:
-			if opt.Progress != nil {
-				opt.Progress(seg.Name(), int(seg.num()))
-			}
 		}
 	}
 	wg.Wait()
-	return nil
+	return ctx.Err()
 }

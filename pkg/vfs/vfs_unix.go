@@ -117,7 +117,9 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 		atimeStr = strconv.FormatInt(atime, 10)
 	}
 	if atimeStr != "" {
-		sb.WriteString("atime=" + atimeStr + ",")
+		sb.WriteString("atime=")
+		sb.WriteString(atimeStr)
+		sb.WriteString(",")
 	}
 
 	var mtimeStr string
@@ -127,12 +129,16 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 		mtimeStr = strconv.FormatInt(mtime, 10)
 	}
 	if mtimeStr != "" {
-		sb.WriteString("mtime=" + mtimeStr + ",")
+		sb.WriteString("mtime=")
+		sb.WriteString(mtimeStr)
+		sb.WriteString(",")
 	}
 
 	if set&meta.SetAttrSize != 0 {
 		sizeStr := strconv.FormatUint(size, 10)
-		sb.WriteString("size=" + sizeStr + ",")
+		sb.WriteString("size=")
+		sb.WriteString(sizeStr)
+		sb.WriteString(",")
 	}
 	r := sb.String()
 	if len(r) > 1 {
@@ -347,22 +353,21 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		} else {
 			return syscall.EINVAL
 		}
-		if ctx.CheckPermission() && ctx.Uid() != 0 && iflag&(FS_SECRM_FL|FS_IMMUTABLE_FL|FS_APPEND_FL) != 0 {
-			return syscall.EPERM
-		}
+		var flags uint8
 		if (iflag & FS_SECRM_FL) != 0 {
-			attr.Flags |= meta.FlagSkipTrash
+			flags |= meta.FlagSkipTrash
 		}
 		if (iflag & FS_IMMUTABLE_FL) != 0 {
-			attr.Flags |= meta.FlagImmutable
+			flags |= meta.FlagImmutable
 		}
 		if (iflag & FS_APPEND_FL) != 0 {
-			attr.Flags |= meta.FlagAppend
+			flags |= meta.FlagAppend
 		}
 		if iflag &= ^uint64(FS_SECRM_FL | FS_IMMUTABLE_FL | FS_APPEND_FL); iflag != 0 {
 			return syscall.ENOTSUP
 		}
-		return v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
+		attr.Flags = flags
+		return v.Meta.SetAttr(ctx, ino, meta.SetAttrLinuxFlags, 0, attr)
 	} else {
 		if err = v.Meta.GetAttr(ctx, ino, attr); err != 0 {
 			return

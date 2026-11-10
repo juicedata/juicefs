@@ -50,8 +50,8 @@ func (o *obj) StorageClass() string { return o.sc }
 func (o *obj) Status() string       { return o.status }
 
 type MultipartUpload struct {
-	MinPartSize int
-	MaxCount    int
+	MinPartSize int64
+	MaxCount    int64
 	UploadID    string
 }
 
@@ -70,9 +70,9 @@ type PendingPart struct {
 type Limits struct {
 	IsSupportMultipartUpload bool
 	IsSupportUploadPartCopy  bool
-	MinPartSize              int
+	MinPartSize              int64
 	MaxPartSize              int64
-	MaxPartCount             int
+	MaxPartCount             int64
 }
 
 // ObjectStorage is the interface for object storage.
@@ -97,7 +97,9 @@ type ObjectStorage interface {
 	Head(ctx context.Context, key string) (Object, error)
 	// List returns a list of objects using ListObjectV2.
 	List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
-	// ListAll returns all the objects as a channel.
+	// ListAll returns all the objects as a channel. The channel is closed when
+	// the listing ends; a nil object received before that means the listing
+	// failed and the result is incomplete.
 	ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error)
 
 	// CreateMultipartUpload starts to upload a large object part by part.
@@ -121,24 +123,20 @@ type Shutdownable interface {
 }
 
 func Shutdown(o ObjectStorage) {
-	fn := func(o ObjectStorage) {
+	switch o := o.(type) {
+	case *encrypted:
+		Shutdown(o.ObjectStorage)
+	case *chunkedEncrypted:
+		Shutdown(o.ObjectStorage)
+	case *withPrefix:
+		Shutdown(o.os)
+	case *sharded:
+		for _, s := range o.stores {
+			Shutdown(s)
+		}
+	default:
 		if s, ok := o.(Shutdownable); ok {
 			s.Shutdown()
 		}
-	}
-
-	switch o := o.(type) {
-	case *encrypted:
-		fn(o.ObjectStorage)
-	case *chunkedEncrypted:
-		fn(o.ObjectStorage)
-	case *withPrefix:
-		fn(o.os)
-	case *sharded:
-		for _, s := range o.stores {
-			fn(s)
-		}
-	default:
-		fn(o)
 	}
 }

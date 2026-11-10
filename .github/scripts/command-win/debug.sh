@@ -29,7 +29,7 @@ check_debug_file(){
 test_debug_juicefs(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs 
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     dd if=/dev/urandom of=/z/bigfile bs=1M count=1024
     ./juicefs.exe debug z:
     check_debug_file
@@ -41,7 +41,7 @@ test_debug_abnormal_juicefs(){
     rm -rf debug | true
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs 
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     dd if=/dev/urandom of=/z/bigfile bs=1M count=1024
     killall -9 redis-server | true
     ./juicefs.exe debug z:

@@ -7,15 +7,21 @@ on:
       - 'release-**'
     paths:
       - '**/rmfiles.yml'
+      - '.github/actions/build/action.yml'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
       - '**/rmfiles.yml'
+      - '.github/actions/build/action.yml'
   schedule:
     - cron:  '0 20 * * *'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   rmr-test:
@@ -89,10 +95,10 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           mp=/tmp/jfs
           volume=jfs
-          test -d $mp && ./juicefs umount -f $mp
+          test -d $mp && ./juicefs umount -f $mp || true
           ./juicefs status $meta_url && UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || echo "meta not exist"
           if [ -n "$UUID" ];then
-            ./juicefs destroy --yes $meta_url $UUID
+            ./juicefs destroy --yes $meta_url $UUID || true
           fi
           if [ "${{matrix.meta}}" == "badger" ]; then
             sudo rm -rf /tmp/test /tmp/test2 || true

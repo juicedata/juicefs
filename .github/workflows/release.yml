@@ -5,6 +5,10 @@ on:
     tags:
       - v*
 
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   releaser:
     runs-on: ubuntu-22.04
@@ -18,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: "oldstable"
+          go-version: "1.25.0"
 
       - name: Set up Java
         uses: actions/setup-java@v3
@@ -57,8 +61,12 @@ jobs:
 
       - name: Build SDK
         run: |
-          make -C sdk/java package-all && sudo chown -R $USER sdk/java/target
-          echo "JUICEFS_VERSION=$(mvn -f sdk/java/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
+          set -e
+          make -C sdk/java package-all
+          sudo chown -R "$USER" sdk/java/target
+          JUICEFS_VERSION=$(mvn -f sdk/java/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)
+          test -s "sdk/java/target/juicefs-hadoop-${JUICEFS_VERSION}.jar"
+          echo "JUICEFS_VERSION=${JUICEFS_VERSION}" >> "$GITHUB_ENV"
 
       - name: Upload SDK
         uses: softprops/action-gh-release@v1

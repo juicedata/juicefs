@@ -3,14 +3,28 @@
 package meta
 
 import (
+	"bytes"
 	"context"
+	"net"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/push"
 	"github.com/stretchr/testify/require"
 )
+
+type writeHookConn struct {
+	net.Conn
+	onWrite func([]byte)
+}
+
+func (c *writeHookConn) Write(b []byte) (int, error) {
+	c.onWrite(b)
+	return c.Conn.Write(b)
+}
 
 func mockRedisCSCMeta(t *testing.T) *redisMeta {
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10?client-cache=true", testConfig())
@@ -49,6 +63,56 @@ func TestRedisCache(t *testing.T) {
 		cache.entryCache.Add(cache.entryName(101, "file"), &cachedEntry{})
 		m.rdb.HSet(ctx, m.entryKey(100), "file", "content").Err()
 	})
+	t.Run("cache is purged after tracking is enabled on a new connection", func(t *testing.T) {
+		cache := newRedisCache("", 1000, time.Minute, 0)
+		ino := Ino(290)
+		var d net.Dialer
+		cli := redis.NewClient(&redis.Options{
+			Addr: "127.0.0.1:6379",
+			DB:   10,
+			Dialer: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				cn, err := d.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+				return &writeHookConn{Conn: cn, onWrite: func(b []byte) {
+					// cached right before tracking takes effect, so it may have missed invalidations
+					if bytes.Contains(b, []byte("BCAST")) {
+						cache.inodeCache.Add(ino, []byte("stale"))
+					}
+				}}, nil
+			},
+		})
+		defer cli.Close()
+		require.NoError(t, cache.init(cli))
+		defer cache.close()
+		_, ok := cache.inodeCache.Get(ino)
+		require.False(t, ok, "entries cached before tracking is enabled must be purged")
+	})
+	t.Run("invalidations resume after the tracking connection reconnects", func(t *testing.T) {
+		other := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: 10})
+		defer other.Close()
+		ino := Ino(280)
+		require.NoError(t, other.Set(ctx, m.inodeKey(ino), m.marshal(&Attr{Typ: TypeFile}), 0).Err())
+		require.NoError(t, other.Do(ctx, "CLIENT", "KILL", "TYPE", "pubsub").Err())
+		require.Eventually(t, func() bool {
+			// cache the attr, then change it from another client
+			m.cache.inodeCache.Remove(ino)
+			if err := m.rdb.Get(ctx, m.inodeKey(ino)).Err(); err != nil {
+				return false
+			}
+			if _, ok := m.cache.inodeCache.Get(ino); !ok {
+				return false
+			}
+			if err := other.Set(ctx, m.inodeKey(ino), m.marshal(&Attr{Typ: TypeFile}), 0).Err(); err != nil {
+				return false
+			}
+			time.Sleep(200 * time.Millisecond)
+			_, ok := m.cache.inodeCache.Get(ino)
+			return !ok
+		}, 10*time.Second, 100*time.Millisecond)
+	})
+
 	t.Run("cache expiration", func(t *testing.T) {
 		shortExpiry := 50 * time.Millisecond
 		cache := newRedisCache("jfs", 1000, shortExpiry, 0)
@@ -80,6 +144,29 @@ func TestRedisCache(t *testing.T) {
 		require.False(t, ok)
 	})
 
+	t.Run("cached lookup returns current attrs", func(t *testing.T) {
+		other := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: 10})
+		defer other.Close()
+		parent, ino := Ino(300), Ino(301)
+		require.NoError(t, other.Set(ctx, m.inodeKey(ino), m.marshal(&Attr{Typ: TypeFile, Mode: 0644, Length: 301}), 0).Err())
+		require.NoError(t, other.HSet(ctx, m.entryKey(parent), "f", m.packEntry(TypeFile, ino)).Err())
+		require.Eventually(t, func() bool { return m.cache.entryTerm(parent) > 0 }, 3*time.Second, 10*time.Millisecond)
+		var found Ino
+		var attr Attr
+		require.Equal(t, syscall.Errno(0), m.doLookup(Background(), parent, "f", &found, &attr))
+		require.Equal(t, uint64(301), attr.Length)
+		_, ok := m.cache.entryCache.Get(m.cache.entryName(parent, "f"))
+		require.True(t, ok)
+
+		// another client changes the file but not the directory
+		require.NoError(t, other.Set(ctx, m.inodeKey(ino), m.marshal(&Attr{Typ: TypeFile, Mode: 0600, Length: 1}), 0).Err())
+		require.Eventually(t, func() bool {
+			return m.doLookup(Background(), parent, "f", &found, &attr) == 0 && attr.Length == 1
+		}, 3*time.Second, 10*time.Millisecond)
+		require.Equal(t, ino, found)
+		require.Equal(t, uint16(0600), attr.Mode)
+	})
+
 	t.Run("entry hook", func(t *testing.T) {
 		cache := m.cache
 		ino := Ino(104)
@@ -107,12 +194,37 @@ func TestRedisCache(t *testing.T) {
 		require.False(t, ok)
 	})
 
+	t.Run("reads in transactions bypass the cache", func(t *testing.T) {
+		ino := Ino(340)
+		fresh, stale := m.marshal(&Attr{Typ: TypeFile, Length: 2}), m.marshal(&Attr{Typ: TypeFile, Length: 1})
+		require.NoError(t, m.rdb.Set(ctx, m.inodeKey(ino), fresh, 0).Err())
+		time.Sleep(100 * time.Millisecond) // let the invalidation pass
+		// an invalidation that has not arrived yet
+		m.cache.inodeCache.Add(ino, stale)
+		v, err := m.rdb.Get(ctx, m.inodeKey(ino)).Bytes()
+		require.NoError(t, err)
+		require.Equal(t, stale, v)
+
+		err = m.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			v, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
+			require.NoError(t, err)
+			require.Equal(t, fresh, v)
+			return nil
+		}, m.inodeKey(ino))
+		require.NoError(t, err)
+
+		// The transaction must not disable caching on the parent client.
+		v, err = m.rdb.Get(ctx, m.inodeKey(ino)).Bytes()
+		require.NoError(t, err)
+		require.Equal(t, stale, v)
+	})
+
 	t.Run("entry generation invalidation", func(t *testing.T) {
 		cache := m.cache
 		parent := Ino(105)
 		name := cache.entryName(parent, "f")
 		gen := cache.entryTerm(parent)
-		cache.entryCache.Add(name, &cachedEntry{ino: 106, term: gen, Attr: Attr{Typ: TypeFile}})
+		cache.entryCache.Add(name, &cachedEntry{ino: 106, term: gen})
 
 		err := cache.HandlePushNotification(ctx, push.NotificationHandlerContext{}, []interface{}{"invalidate", []interface{}{m.entryKey(parent)}})
 		require.NoError(t, err)
@@ -181,7 +293,7 @@ func TestRedisCache(t *testing.T) {
 		cache := newRedisCache("jfs", 1000, 20*time.Millisecond, 0)
 		parent := Ino(110)
 		name := cache.entryName(parent, "f")
-		cache.entryCache.Add(name, &cachedEntry{ino: 111, term: cache.entryTerm(parent), Attr: Attr{Typ: TypeFile}})
+		cache.entryCache.Add(name, &cachedEntry{ino: 111, term: cache.entryTerm(parent)})
 
 		cache.bumpEntryTerm(parent)
 		entry, ok := cache.entryCache.Get(name)
@@ -193,7 +305,7 @@ func TestRedisCache(t *testing.T) {
 		cache := newRedisCache("jfs", 1000, 10*time.Millisecond, 0)
 		parent := Ino(112)
 		name := cache.entryName(parent, "f")
-		cache.entryCache.Add(name, &cachedEntry{ino: 113, term: cache.entryTerm(parent), Attr: Attr{Typ: TypeFile}})
+		cache.entryCache.Add(name, &cachedEntry{ino: 113, term: cache.entryTerm(parent)})
 		cache.bumpEntryTerm(parent)
 
 		time.Sleep(2 * cache.expiry)
@@ -206,7 +318,7 @@ func TestRedisCache(t *testing.T) {
 		cache := newRedisCache("jfs", 1000, 10*time.Millisecond, 0)
 		parent := Ino(114)
 		name := cache.entryName(parent, "f")
-		cache.entryCache.Add(name, &cachedEntry{ino: 115, term: cache.entryTerm(parent), Attr: Attr{Typ: TypeFile}})
+		cache.entryCache.Add(name, &cachedEntry{ino: 115, term: cache.entryTerm(parent)})
 		cache.bumpEntryTerm(parent)
 
 		for range 3 {

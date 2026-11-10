@@ -101,7 +101,9 @@ const (
 	SetAttrMtimeNow
 	SetAttrCtimeNow
 	SetAttrTier
-	SetAttrFlag = 1 << 15
+	SetAttrLinuxFlags   = 1 << 13
+	SetAttrWindowsFlags = 1 << 14
+	SetAttrFlag         = 1 << 15
 )
 
 const (
@@ -130,6 +132,8 @@ const RootInode Ino = 1
 const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
 
 const RmrDefaultThreads = 50
+
+const backgroundDeleteThreads = 10
 
 func (i Ino) String() string {
 	return strconv.FormatUint(uint64(i), 10)
@@ -186,6 +190,13 @@ type Attr struct {
 	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
 
 	Tier uint8 // storage tier of the file
+}
+
+// logFields is the comma-separated attribute tail shared by SETATTR and REPAIRDIR changelog entries.
+func (a *Attr) logFields() string {
+	return fmt.Sprintf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+		a.Uid, a.Gid, a.Mode, a.Flags, a.Atime, a.Mtime,
+		a.Atimensec, a.Mtimensec, a.Ctime, a.Ctimensec, a.AccessACL, a.Tier)
 }
 
 func (attr *Attr) Marshal() []byte {
@@ -362,7 +373,28 @@ type TreeSummary struct {
 	Size     uint64
 	Files    uint64
 	Dirs     uint64
+	Duration time.Duration
 	Children []*TreeSummary `json:",omitempty"`
+}
+
+// TreeSort is the key used to rank children before picking the top N.
+type TreeSort uint8
+
+const (
+	SortBySize TreeSort = iota // zero value keeps the historical behavior
+	SortByInodes
+	SortByCost
+)
+
+func (s *TreeSummary) sortKey(by TreeSort) uint64 {
+	switch by {
+	case SortByInodes:
+		return s.Files + s.Dirs
+	case SortByCost:
+		return uint64(s.Duration)
+	default:
+		return s.Size
+	}
 }
 
 type SessionInfo struct {
@@ -515,23 +547,29 @@ type Meta interface {
 	// Compact chunks for specified path
 	Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno
 
-	// ListSlices returns all slices used by all files.
-	ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno
+	// CleanupSlices performs metadata cleanup and schedules slice deletion tasks.
+	CleanupSlices(ctx Context) syscall.Errno
+	// WaitDeleteSlices waits for pending slice deletion tasks and stops the workers.
+	WaitDeleteSlices()
+	// ScanSlices scans all slices used by all files, calling fn for each slice.
+	// Ino is 0 for pending slices, 1 for trash slices, or the actual inode.
+	ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno
 	// Remove all files and directories recursively.
 	// count represents the number of attempted deletions of entries (even if failed).
 	Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno
 	// Get summary of a node; for a directory it will accumulate all its child nodes
 	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno
 	// GetTreeSummary returns a summary in tree structure
-	GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, updateProgress func(count uint64, bytes uint64)) syscall.Errno
+	GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, sortBy TreeSort, updateProgress func(count uint64, bytes uint64)) syscall.Errno
 	// Clone a file or directory
 	Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno
 	// GetPaths returns all paths of an inode
 	GetPaths(ctx Context, inode Ino) []string
 	// Check integrity of an absolute path and repair it if asked
 	Check(ctx Context, fpath string, opt *CheckOpt) error
-	// Change root to a directory specified by subdir
-	Chroot(ctx Context, subdir string) syscall.Errno
+	// Change root to a directory specified by subdir; the directory is created
+	// if absent, unless the client is read-only or skipCreate is true
+	Chroot(ctx Context, subdir string, skipCreate bool) syscall.Errno
 	// chroot set the root directory by inode
 	chroot(inode Ino)
 	// Get a copy of the current format
@@ -540,10 +578,11 @@ type Meta interface {
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
 	// OnReload register a callback for any change founded after reloaded.
-	OnReload(func(new *Format))
+	// A callback returning an error is retried on later reloads until it succeeds.
+	OnReload(func(new *Format) error)
 
 	HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32, quotas map[string]*Quota, strict, repair bool, create bool) error
-	//Triggers a global user group quota scan
+	// Triggers a global user group quota scan
 	ScanUserGroupUsage(ctx Context) error
 
 	// Dump the tree under root, which may be modified by checkRoot
@@ -568,10 +607,15 @@ type Meta interface {
 	DeleteTokens(ctx Context, ids []uint32) syscall.Errno
 	ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 
-	ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error
+	ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error
 
 	DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno
 	Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno
+}
+
+type ScanSlicesOption struct {
+	ScanPending bool
+	Progress    func()
 }
 
 type CheckOpt struct {

@@ -49,10 +49,15 @@ type Sections struct {
 
 // Status retrieves the status of the filesystem
 func Status(ctx context.Context, m Meta, trash bool, sections *Sections) error {
-	format, err := m.Load(true)
-	if err != nil {
-		return fmt.Errorf("load setting: %v", err)
+	format := m.getBase().getFormat()
+	if format == nil {
+		var err error
+		format, err = m.Load(true)
+		if err != nil {
+			return fmt.Errorf("load setting: %v", err)
+		}
 	}
+	format = format.Clone()
 	format.RemoveSecret()
 
 	sessions, err := m.ListSessions()
@@ -69,6 +74,7 @@ func Status(ctx context.Context, m Meta, trash bool, sections *Sections) error {
 
 	if trash {
 		progress := utils.NewProgress(false)
+		defer progress.Done()
 		trashFileSpinner := progress.AddDoubleSpinner("Trash Files")
 		pendingDeletedFileSpinner := progress.AddDoubleSpinner("Pending Deleted Files")
 		trashSlicesSpinner := progress.AddDoubleSpinner("Trash Slices")
@@ -102,7 +108,6 @@ func Status(ctx context.Context, m Meta, trash bool, sections *Sections) error {
 		pendingDeletedSlicesSpinner.Done()
 		trashFileSpinner.Done()
 		pendingDeletedFileSpinner.Done()
-		progress.Done()
 		stat.TrashSliceCount, stat.TrashSliceSize = trashSlicesSpinner.Current()
 		stat.PendingDeletedSliceCount, stat.PendingDeletedSliceSize = pendingDeletedSlicesSpinner.Current()
 		stat.TrashFileCount, stat.TrashFileSize = trashFileSpinner.Current()

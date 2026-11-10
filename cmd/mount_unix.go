@@ -422,6 +422,10 @@ func fuseFlags() []cli.Flag {
 			Name:  "enable-ioctl",
 			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
 		},
+		&cli.BoolFlag{
+			Name:  "no-readdirplus-auto",
+			Usage: "always use READDIRPLUS instead of adaptive mode",
+		},
 		&cli.StringFlag{
 			Name:  "root-squash",
 			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
@@ -557,8 +561,9 @@ func getFuserMountVersion() string {
 }
 
 func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
-	rawOpts, mt, noxattr, noacl, maxWrite := genFuseOptExt(c, format)
-	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite))
+	enableXattr := c.Bool("enable-xattr") || format.EnableACL
+	options := vfs.FuseOptions(fuse.GenFuseOpt(format.Name, genFuseOpt(c, format.Name), enableXattr, format.EnableACL,
+		int(utils.ParseBytes(c, "max-fuse-io", 'B')), !c.Bool("no-readdirplus-auto")))
 	vfsConf.FuseOpts = &options
 }
 
@@ -645,14 +650,6 @@ func prepareMp(mp string) {
 	}
 }
 
-func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool, maxWrite int) {
-	enableXattr := c.Bool("enable-xattr")
-	if format.EnableACL {
-		enableXattr = true
-	}
-	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-fuse-io", 'B'))
-}
-
 func shutdownGraceful(mp string) {
 	_, conf, err := loadConfig(mp)
 	if err != nil {
@@ -669,7 +666,14 @@ func shutdownGraceful(mp string) {
 		return
 	}
 	for i := 0; i < 600; i++ {
-		if err := syscall.Kill(conf.Pid, syscall.SIGHUP); err != nil {
+		if i == 0 {
+			if err := syscall.Kill(conf.Pid, syscall.SIGHUP); err != nil {
+				os.Setenv("_FUSE_STATE_PATH", conf.StatePath)
+				os.Setenv("_JFS_META_SID", strconv.Itoa(int(conf.Meta.Sid)))
+				return
+			}
+		}
+		if err := syscall.Kill(conf.Pid, syscall.Signal(0)); err != nil {
 			os.Setenv("_FUSE_STATE_PATH", conf.StatePath)
 			os.Setenv("_JFS_META_SID", strconv.Itoa(int(conf.Meta.Sid)))
 			return
@@ -691,10 +695,10 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 		return false
 	}
 	var ino uint64
-	var err error
-	err = utils.WithTimeout(context.TODO(), func(context.Context) error {
-		ino, err = utils.GetFileInode(mp)
-		return err
+	err := utils.WithTimeout(context.TODO(), func(context.Context) error {
+		var getErr error
+		ino, getErr = utils.GetFileInode(mp)
+		return getErr
 	}, time.Second*3)
 	if err != nil {
 		logger.Warnf("get inode of %q: %s", mp, err)
@@ -939,7 +943,10 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 			if sig == syscall.SIGHUP {
 				path := fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 				if err := v.FlushAll(""); err == nil {
-					fuse.Shutdown()
+					if !fuse.Shutdown() {
+						logger.Warnf("FUSE session is busy, don't restart")
+						continue
+					}
 					err = v.FlushAll(path)
 					if err != nil {
 						logger.Fatalf("flush buffered data failed: %s", err)
@@ -967,7 +974,9 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 }
 func launchMount(c *cli.Context, mp string, conf *vfs.Config) error {
 	increaseRlimit()
-	utils.AdjustOOMKiller(-1000)
+	if os.Getenv("JFS_INSIDE_CONTAINER") != "1" {
+		utils.AdjustOOMKiller(-1000)
+	}
 	utils.SetIOFlusher()
 
 	if c.Bool("disable-transparent-hugepage") {

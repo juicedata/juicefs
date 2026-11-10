@@ -26,11 +26,13 @@ import (
 	"path"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -264,7 +266,7 @@ func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter str
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
-	} else if marker == "" {
+	} else if marker == "" || marker < prefix {
 		obj, err := j.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -273,6 +275,9 @@ func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter str
 			return nil, false, "", err
 		}
 		objs = append(objs, obj)
+		if len(objs) == int(limit) {
+			return objs, true, obj.Key(), nil
+		}
 	}
 	entries, err := j.readDirSorted(dir, followLink)
 	if err != 0 {
@@ -413,17 +418,95 @@ func (j *juiceFS) Readlink(name string) (string, error) {
 	return string(target), toError(err)
 }
 
+func (j *juiceFS) Limits() object.Limits {
+	return object.Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  false,
+		MinPartSize:              4 << 30,
+		MaxPartSize:              4 << 30,
+		MaxPartCount:             10000000,
+	}
+}
+
+func (j *juiceFS) CreateMultipartUpload(_ context.Context, key string) (*object.MultipartUpload, error) {
+	if vfs.IsSpecialName(key) {
+		return nil, fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
+	}
+	return &object.MultipartUpload{
+		MinPartSize: j.Limits().MinPartSize,
+		MaxCount:    j.Limits().MaxPartCount,
+		UploadID:    uuid.NewString(),
+	}, nil
+}
+
+func (j *juiceFS) partDir(key, uploadID string) string {
+	name := path.Base(key)
+	if len(name) > 200 {
+		name = name[:200]
+	}
+	return fmt.Sprintf("%s/.jfs.part-%s-%s/", path.Dir(key), name, uploadID)
+}
+
+func (j *juiceFS) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*object.Part, error) {
+	err := j.Put(context.Background(), path.Join(j.partDir(key, uploadID), strconv.Itoa(num)), in)
+	return &object.Part{
+		Num: num,
+	}, err
+}
+
+func (j *juiceFS) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*object.Part, error) {
+	return nil, utils.ErrNotSUP
+}
+
+func (j *juiceFS) AbortUpload(rCtx context.Context, key string, uploadID string) {
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
+	_ = j.jfs.Rmr(ctx, j.path(j.partDir(key, uploadID)), true, meta.RmrDefaultThreads)
+}
+
+func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID string, parts []*object.Part) (err error) {
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
+	tmp := j.path(path.Join(j.partDir(key, uploadID), "complete"))
+	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
+	// CompleteUpload needs to implement idempotence
+	if errors.Is(eno, syscall.EEXIST) {
+		_ = j.jfs.Delete(ctx, tmp)
+		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
+	}
+	if eno != 0 {
+		return toError(eno)
+	}
+	defer f.Close(ctx)
+	defer j.jfs.Delete(ctx, tmp) //nolint:errcheck
+	var total uint64
+	for _, part := range parts {
+		p := j.path(path.Join(j.partDir(key, uploadID), strconv.Itoa(part.Num)))
+		copied, eno := j.jfs.CopyFileRange(ctx, p, 0, tmp, total, uint64(j.Limits().MaxPartSize))
+		if eno != 0 {
+			return toError(eno)
+		}
+		total += copied
+	}
+
+	eno = j.jfs.Rename(ctx, tmp, j.path(key), 0)
+	if eno == 0 {
+		_ = j.jfs.Rmr(ctx, j.path(j.partDir(key, uploadID)), true, meta.RmrDefaultThreads)
+	}
+	return toError(eno)
+}
+
 func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
-		BlockSize:   format.BlockSize * 1024,
-		Compress:    format.Compression,
-		HashPrefix:  format.HashPrefix,
-		GetTimeout:  time.Minute,
-		PutTimeout:  time.Minute,
-		MaxUpload:   50,
-		MaxDownload: 200,
-		MaxRetries:  10,
-		BufferSize:  300 << 20,
+		BlockSize:     format.BlockSize * 1024,
+		Compress:      format.Compression,
+		HashPrefix:    format.HashPrefix,
+		GetTimeout:    time.Minute,
+		PutTimeout:    time.Minute,
+		MaxUpload:     50,
+		MaxDownload:   200,
+		MaxRetries:    10,
+		BufferSize:    300 << 20,
+		UploadLimit:   format.UploadLimit * 1e6 / 8,
+		DownloadLimit: format.DownloadLimit * 1e6 / 8,
 	}
 	chunkConf.SelfCheck(format.UUID)
 	return chunkConf
@@ -462,8 +545,9 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	if err != nil {
 		return nil, fmt.Errorf("new session: %s", err)
 	}
-	metaCli.OnReload(func(fmt *meta.Format) {
+	metaCli.OnReload(func(fmt *meta.Format) error {
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		return nil
 	})
 
 	vfsConf := &vfs.Config{

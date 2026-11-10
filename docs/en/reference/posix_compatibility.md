@@ -9,16 +9,18 @@ JuiceFS ensures POSIX compatibility by using [pjdfstest](https://github.com/pjd/
 
 ## Pjdfstest
 
-Pjdfstest is a test suite that helps to test POSIX system calls. JuiceFS passed all of its latest 8,813 tests:
+Pjdfstest is a test suite that helps to test POSIX system calls. JuiceFS passed all of its latest 8,789 tests:
 
 ```
 All tests successful.
 
 Test Summary Report
 -------------------
-/root/soft/pjdfstest/tests/chown/00.t          (Wstat: 0 Tests: 1323 Failed: 0)
-  TODO passed:   693, 697, 708-709, 714-715, 729, 733
-Files=235, Tests=8813, 233 wallclock secs ( 2.77 usr  0.38 sys +  2.57 cusr  3.93 csys =  9.65 CPU)
+/root/code/juicefs/posix_test/pjdfstest/tests/chown/00.t          (Wstat: 0 Tests: 1280 Failed: 0)
+  TODO passed:   1054, 1058, 1064, 1069, 1073, 1079, 1084
+                1088, 1094, 1099, 1103, 1109, 1114, 1118
+                1124, 1129, 1133, 1139, 1144
+Files=237, Tests=8789, 191 wallclock secs ( 1.61 usr  0.40 sys + 25.44 cusr 36.67 csys = 64.12 CPU)
 Result: PASS
 ```
 
@@ -53,66 +55,66 @@ JuiceFS passed most of the file system related tests.
 
 ### Test environment
 
-- Host: Amazon EC2: c5d.xlarge (4C 8G)
-- OS: Ubuntu 20.04.1 LTS (Kernel `5.4.0-1029-aws`)
-- Object storage: Amazon S3
-- JuiceFS version: 0.17-dev (2021-09-16 292f2b65)
+- Host: Aliyun ESC server
+- OS: Ubuntu 24.04 (Kernel `6.8.0-55-generic`)
+- JuiceFS version: 1.4-beta2
+- LTP version: 20260529
 
 ### Test steps
 
-1. Download the LTP [release](https://github.com/linux-test-project/ltp/releases/download/20210524/ltp-full-20210524.tar.bz2) from GitHub.
+1. Download the LTP [release](https://github.com/linux-test-project/ltp/releases/download/20260529/ltp-full-20260529.tar.xz) from GitHub.
+
 2. Unarchive, compile, and install LTP:
 
    ```bash
-   tar -jvxf ltp-full-20210524.tar.bz2
-   cd ltp-full-20210524
+   tar -xvf ltp-full-20260529.tar.xz
+   cd ltp-full-20260529
    ./configure
    make all
    make install
    ```
 
-3. Change the directory to `/opt/ltp` where the test tools are installed:
+3. Install kirk (the new LTP test runner that replaces the removed runltp):
+
+   ```bash
+   pip install kirk
+   ```
+
+4. Change the directory to `/opt/ltp` where the test tools are installed:
 
    ```bash
    cd /opt/ltp
    ```
 
-   The test definition files are located under `runtest`. To speed up testing, we delete some pressure cases and unrelated cases in `fs` and `syscalls` (refer to [Appendix](#appendix), modified files are saved as `fs-jfs` and `syscalls-jfs`), then execute:
+5. Create test configuration files. To simplify testing, delete pressure tests, filesystem‑unrelated entries, and tests that do not run on JuiceFS from `runtest/fs` and `runtest/syscalls`. Then, save the modified files as `fs‑jfs` and `syscalls‑jfs`. (See [Appendix](#appendix) for the detailed deletion list.)
+
+6. Execute tests:
 
    ```bash
-   ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
+   export LTPROOT=/opt/ltp
+   export PATH=/opt/ltp/testcases/bin:$PATH
+   cd /mnt/jfs
+   kirk --run-suite fs_bind --sut default --tmp-dir /mnt/jfs
+   kirk --run-suite fs_perms_simple --sut default --tmp-dir /mnt/jfs
+   kirk --run-suite smoketest --sut default --tmp-dir /mnt/jfs
+   kirk --run-suite fs-jfs --sut default --tmp-dir /mnt/jfs
+   kirk --run-suite syscalls-jfs --sut default --tmp-dir /mnt/jfs
+   kirk --run-suite fcntl-locktests --sut default --tmp-dir /mnt/jfs
    ```
 
 ### Test result
 
-```bash
-Testcase                                           Result     Exit Value
---------                                           ------     ----------
-fcntl17                                            FAIL       7
-fcntl17_64                                         FAIL       7
-getxattr05                                         CONF       32
-ioctl_loop05                                       FAIL       4
-ioctl_ns07                                         FAIL       1
-lseek11                                            CONF       32
-open14                                             CONF       32
-openat03                                           CONF       32
-setxattr03                                         FAIL       6
+| Test suite | Tests run | Passed | Failed | Broken | Skipped |
+|------------|------|--------|--------|--------|---------|
+| fs_bind | 95 | 95 | 0 | 0 | 0 |
+| fs_perms_simple | 18 | 18 | 0 | 0 | 0 |
+| smoketest | 12 | 10 | 0 | 0 | 2 |
+| fs-jfs | 30 | 30 | 0 | 0 | 0 |
+| syscalls-jfs | 1323 | 1300 | 0 | 0 | 23 |
+| fcntl-locktests | 1 | 1 | 0 | 0 | 0 |
+| **Total** | **1479** | **1454** | **0** | **0** | **25** |
 
------------------------------------------------
-Total Tests: 1270
-Total Skipped Tests: 4
-Total Failures: 5
-Kernel Version: 5.4.0-1029-aws
-Machine Architecture: x86_64
-```
-
-Here are causes of the skipped and failed tests:
-
-- fcntl17, fcntl17_64: These tests require the file system to automatically detect deadlocks when trying to add POSIX locks. JuiceFS does not support it yet.
-- getxattr05: This test requires extended ACLs, which are not yet supported by JuiceFS.
-- ioctl_loop05, ioctl_ns07, setxattr03: These tests require `ioctl`, which is not yet supported by JuiceFS.
-- lseek11: This test requires `lseek` to handle `SEEK_DATA` and `SEEK_HOLE` flags. JuiceFS uses a kernel general function, which does not support these two flags.
-- open14, openat03: These tests require `open` to handle the `O_TMPFILE` flag. It is not supported by FUSE and thus not by JuiceFS.
+All file system-related tests run on JuiceFS passed, with 0 failures and 0 broken tests.
 
 ### Appendix
 
@@ -159,143 +161,48 @@ iogen01 export LTPROOT; rwtest -N iogen01 -i 120s -s read,write -Da -Dv -n 2 500
 quota_remount_test01 quota_remount_test01.sh
 isofs isofs.sh
 
-# syscalls --> syscalls-jfs
-bpf_prog05 bpf_prog05
-cacheflush01 cacheflush01
-chown01_16 chown01_16
-chown02_16 chown02_16
-chown03_16 chown03_16
-chown04_16 chown04_16
-chown05_16 chown05_16
-clock_nanosleep03 clock_nanosleep03
-clock_gettime03 clock_gettime03
-leapsec01 leapsec01
+## syscalls --> syscalls-jfs
+# A large number of test cases unrelated to file systems were removed from the syscalls suite. Only some cases unsupported by FUSE or JuiceFS are listed here.
+# For the complete list, please refer to .github/workflows/bash/rm_syscalls
+
+# Pure kernel functionality tests, unrelated to userspace filesystems.
 close_range01 close_range01
 close_range02 close_range02
-fallocate06 fallocate06
-fchown01_16 fchown01_16
-fchown02_16 fchown02_16
-fchown03_16 fchown03_16
-fchown04_16 fchown04_16
-fchown05_16 fchown05_16
-fcntl06 fcntl06
-fcntl06_64 fcntl06_64
-getegid01_16 getegid01_16
-getegid02_16 getegid02_16
-geteuid01_16 geteuid01_16
-geteuid02_16 geteuid02_16
-getgid01_16 getgid01_16
-getgid03_16 getgid03_16
-getgroups01_16 getgroups01_16
-getgroups03_16 getgroups03_16
-getresgid01_16 getresgid01_16
-getresgid02_16 getresgid02_16
-getresgid03_16 getresgid03_16
-getresuid01_16 getresuid01_16
-getresuid02_16 getresuid02_16
-getresuid03_16 getresuid03_16
-getrusage04 getrusage04
-getuid01_16 getuid01_16
-getuid03_16 getuid03_16
-ioctl_sg01 ioctl_sg01
-fanotify16 fanotify16
-fanotify18 fanotify18
-fanotify19 fanotify19
-lchown01_16 lchown01_16
-lchown02_16 lchown02_16
-lchown03_16 lchown03_16
-mbind02 mbind02
-mbind03 mbind03
-mbind04 mbind04
-migrate_pages02 migrate_pages02
-migrate_pages03 migrate_pages03
-modify_ldt01 modify_ldt01
-modify_ldt02 modify_ldt02
-modify_ldt03 modify_ldt03
-move_pages01 move_pages01
-move_pages02 move_pages02
-move_pages03 move_pages03
-move_pages04 move_pages04
-move_pages05 move_pages05
-move_pages06 move_pages06
-move_pages07 move_pages07
-move_pages09 move_pages09
-move_pages10 move_pages10
-move_pages11 move_pages11
-move_pages12 move_pages12
-msgctl05 msgctl05
-msgstress04 msgstress04
 openat201 openat201
 openat202 openat202
 openat203 openat203
-madvise06 madvise06
-madvise09 madvise09
-ptrace04 ptrace04
-quotactl01 quotactl01
-quotactl04 quotactl04
-quotactl06 quotactl06
-readdir21 readdir21
-recvmsg03 recvmsg03
-sbrk03 sbrk03
-semctl08 semctl08
-semctl09 semctl09
-set_mempolicy01 set_mempolicy01
-set_mempolicy02 set_mempolicy02
-set_mempolicy03 set_mempolicy03
-set_mempolicy04 set_mempolicy04
-set_thread_area01 set_thread_area01
-setfsgid01_16 setfsgid01_16
-setfsgid02_16 setfsgid02_16
-setfsgid03_16 setfsgid03_16
-setfsuid01_16 setfsuid01_16
-setfsuid02_16 setfsuid02_16
-setfsuid03_16 setfsuid03_16
-setfsuid04_16 setfsuid04_16
-setgid01_16 setgid01_16
-setgid02_16 setgid02_16
-setgid03_16 setgid03_16
-sgetmask01 sgetmask01
-setgroups01_16 setgroups01_16
-setgroups02_16 setgroups02_16
-setgroups03_16 setgroups03_16
-setgroups04_16 setgroups04_16
-setregid01_16 setregid01_16
-setregid02_16 setregid02_16
-setregid03_16 setregid03_16
-setregid04_16 setregid04_16
-setresgid01_16 setresgid01_16
-setresgid02_16 setresgid02_16
-setresgid03_16 setresgid03_16
-setresgid04_16 setresgid04_16
-setresuid01_16 setresuid01_16
-setresuid02_16 setresuid02_16
-setresuid03_16 setresuid03_16
-setresuid04_16 setresuid04_16
-setresuid05_16 setresuid05_16
-setreuid01_16 setreuid01_16
-setreuid02_16 setreuid02_16
-setreuid03_16 setreuid03_16
-setreuid04_16 setreuid04_16
-setreuid05_16 setreuid05_16
-setreuid06_16 setreuid06_16
-setreuid07_16 setreuid07_16
-setuid01_16 setuid01_16
-setuid03_16 setuid03_16
-setuid04_16 setuid04_16
-shmctl06 shmctl06
-socketcall01 socketcall01
-socketcall02 socketcall02
-socketcall03 socketcall03
-ssetmask01 ssetmask01
-swapoff01 swapoff01
-swapoff02 swapoff02
-swapon01 swapon01
-swapon02 swapon02
-swapon03 swapon03
-switch01 endian_switch01
-sysinfo03 sysinfo03
-timerfd04 timerfd04
-perf_event_open02 perf_event_open02
-statx07 statx07
+
+# CVE regression tests (SELINUX), unrelated to JuiceFS
+listxattr04 listxattr04
 io_uring02 io_uring02
+
+# Tests skipped due to environment limitations; they require a newer kernel version
+listmount04 listmount04
+name_to_handle_at03 name_to_handle_at03
+statmount09 statmount09
+mount08 mount08
+
+# Deprecated system calls, now replaced by getdents64
+readdir21 readdir21
+
+# Tests explicitly skipping FUSE
+file_attr01 file_attr01
+file_attr02 file_attr02
+file_attr03 file_attr03
+file_attr04 file_attr04
+file_attr05 file_attr05
+ioctl_fiemap01 ioctl_fiemap01
+openat02 openat02
+unlink09 unlink09
+mount03 mount03
+
+# Tests unsupported by the FUSE kernel module
+fanotify10 fanotify10
+fanotify13 fanotify13
+fanotify16 fanotify16
+fanotify18 fanotify18
+fanotify19 fanotify19
+
+# JuiceFS does not support the FS_NOCOW_FL flag
+fallocate06 fallocate06
 ```

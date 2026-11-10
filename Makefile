@@ -6,6 +6,7 @@ REVISION := $(shell git rev-parse --short HEAD 2>/dev/null)
 REVISIONDATE := $(shell git log -1 --pretty=format:'%cd' --date short 2>/dev/null)
 PKG := github.com/juicedata/juicefs/pkg/version
 GCFLAGS =
+LDFLAGS =
 BUILD ?= release
 ifneq ($(strip $(REVISION)),) # Use git clone
 	LDFLAGS += -X $(PKG).revision=$(REVISION) \
@@ -92,7 +93,7 @@ snapshot:
 		-v `pwd`:/go/src/github.com/juicedata/juicefs \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-w /go/src/github.com/juicedata/juicefs \
-		juicedata/golang-cross:v1.25.7-0 release --snapshot --clean --skip-publish
+		juicedata/golang-cross:v1.25.7-0 release --snapshot --clean
 
 release:
 	docker run --rm --privileged \

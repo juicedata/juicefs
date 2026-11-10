@@ -92,14 +92,24 @@ func (n ZStandard) Compress(dst, src []byte) (int, error) {
 
 // Decompress using Zstd
 func (n ZStandard) Decompress(dst, src []byte) (int, error) {
-	d, err := zstd.Decompress(dst, src)
+	if len(src) == 0 {
+		return 0, fmt.Errorf("decompress an empty input")
+	}
+	// Use DecompressInto to limit writes to len(dst), not cap(dst).
+	out := dst
+	if len(out) == 0 {
+		// libzstd needs a non-empty output, even for an empty frame
+		var scratch [1]byte
+		out = scratch[:]
+	}
+	written, err := zstd.DecompressInto(out, src)
 	if err != nil {
 		return 0, err
 	}
-	if len(d) > 0 && len(dst) > 0 && &d[0] != &dst[0] {
-		return 0, fmt.Errorf("buffer too short: %d < %d", len(dst), len(d))
+	if written > len(dst) {
+		return 0, fmt.Errorf("buffer too short: %d < %d", len(dst), written)
 	}
-	return len(d), err
+	return written, nil
 }
 
 // LZ4 implements Compressor using LZ4 library

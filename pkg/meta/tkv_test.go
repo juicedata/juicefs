@@ -20,13 +20,273 @@ package meta
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"sort"
+	"syscall"
 	"testing"
 
 	"github.com/dgraph-io/badger/v4"
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 )
+
+type aclRollbackClient struct {
+	tkvClient
+	childKey        []byte
+	err             error
+	injected        bool
+	onRollback      func(*kvTxn)
+	retryInternally bool
+}
+
+func (c *aclRollbackClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) error {
+	err := c.tkvClient.txn(ctx, func(tx *kvTxn) error {
+		if err := f(tx); err != nil {
+			return err
+		}
+		// Only interrupt the outer creation transaction, after it stages the child.
+		if !c.injected && tx.get(c.childKey) != nil {
+			c.injected = true
+			if c.onRollback != nil {
+				c.onRollback(tx)
+			}
+			return c.err
+		}
+		return nil
+	}, retry)
+	if c.retryInternally && err == c.err {
+		return c.tkvClient.txn(ctx, f, retry)
+	}
+	return err
+}
+
+func TestKVTxnOnCommit(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		bodyError   error
+		commitError error
+		internal    bool
+		attempts    int
+		wantError   error
+	}{
+		{name: "commit", attempts: 1},
+		{name: "body_error", bodyError: syscall.EIO, attempts: 1, wantError: syscall.EIO},
+		{name: "commit_error", commitError: syscall.EIO, attempts: 1, wantError: syscall.EIO},
+		{name: "retry", commitError: badger.ErrConflict, attempts: 2},
+		{name: "driver_retry", commitError: badger.ErrConflict, internal: true, attempts: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := newKVMeta("badger", t.TempDir(), testConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := raw.(*kvMeta)
+			m.client = withPrefix(m.client, []byte("callbacks/"))
+			t.Cleanup(func() { _ = m.Shutdown() })
+			key := []byte("committed")
+			if tc.commitError != nil {
+				m.client = &aclRollbackClient{tkvClient: m.client, childKey: key, err: tc.commitError, retryInternally: tc.internal}
+			}
+			attempts := 0
+			var called []int
+			err = m.txn(Background(), func(tx *kvTxn) error {
+				attempts++
+				attempt := attempts
+				tx.set(key, []byte{byte(attempt)})
+				tx.onCommit(func() {
+					val, err := m.get(key)
+					if err != nil || !bytes.Equal(val, []byte{byte(attempt)}) {
+						t.Errorf("callback ran before commit: value %x, error %v", val, err)
+					}
+					called = append(called, attempt*10+1)
+				})
+				tx.onCommit(func() { called = append(called, attempt*10+2) })
+				if len(called) != 0 {
+					t.Fatal("callback ran during transaction or for a failed attempt")
+				}
+				return tc.bodyError
+			})
+			if err != tc.wantError || attempts != tc.attempts {
+				t.Fatalf("transaction: %v, attempts: %d; want %v, %d", err, attempts, tc.wantError, tc.attempts)
+			}
+			if tc.wantError != nil {
+				if len(called) != 0 {
+					t.Fatalf("callbacks ran after rollback: %v", called)
+				}
+			} else if len(called) != 2 || called[0] != attempts*10+1 || called[1] != attempts*10+2 {
+				t.Fatalf("callbacks should run once in registration order for attempt %d: %v", attempts, called)
+			}
+		})
+	}
+}
+
+func TestKVACLTransactionRollback(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		retry    bool
+		internal bool
+	}{{"retry", true, false}, {"driver_retry", true, true}, {"abort", false, false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := newKVMeta("badger", t.TempDir(), testConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := raw.(*kvMeta)
+			t.Cleanup(func() { _ = m.Shutdown() })
+			format := testFormat()
+			format.EnableACL = true
+			if err := m.Init(format, true); err != nil {
+				t.Fatal(err)
+			}
+			ctx := Background()
+			var parent, child Ino
+			if st := m.Mkdir(ctx, RootInode, "parent", 0770, 0, 0, &parent, nil); st != 0 {
+				t.Fatal(st)
+			}
+			rule := &aclAPI.Rule{Owner: 7, Group: 5, Mask: 5, Other: 0, NamedUsers: []aclAPI.Entry{{Id: 1001, Perm: 4}}}
+			if st := m.SetFacl(ctx, parent, aclAPI.TypeDefault, rule); st != 0 {
+				t.Fatal(st)
+			}
+			failure := error(syscall.EIO)
+			if tc.retry {
+				failure = badger.ErrConflict
+			}
+			client := &aclRollbackClient{tkvClient: m.client, childKey: m.entryKey(parent, "child"), err: failure, retryInternally: tc.internal}
+			var otherParent, otherChild Ino
+			if !tc.retry {
+				if st := m.Mkdir(ctx, RootInode, "other", 0770, 0, 0, &otherParent, nil); st != 0 {
+					t.Fatal(st)
+				}
+				if st := m.SetFacl(ctx, otherParent, aclAPI.TypeDefault, rule); st != 0 {
+					t.Fatal(st)
+				}
+			}
+			var abortedACL uint32
+			client.onRollback = func(tx *kvTxn) {
+				_, inode := m.parseEntry(tx.get(client.childKey))
+				var attr Attr
+				m.parseAttr(tx.get(m.inodeKey(inode)), &attr)
+				abortedACL = attr.AccessACL
+				// Try the same ACL in another transaction before the first one rolls back.
+				if !tc.retry {
+					if st := m.Create(ctx, otherParent, "child", 0666, 022, 0, &otherChild, nil); st != 0 {
+						t.Fatalf("concurrent create: %s", st)
+					}
+				}
+			}
+			m.client = client
+			st := m.Create(ctx, parent, "child", 0666, 022, 0, &child, nil)
+			if !client.injected {
+				t.Fatal("creation transaction was not interrupted")
+			}
+			if !tc.retry {
+				if st != syscall.EIO {
+					t.Fatalf("first create: %s", st)
+				}
+				st = m.Create(ctx, parent, "child", 0666, 022, 0, &child, nil)
+			}
+			if st != 0 {
+				t.Fatalf("create: %s", st)
+			}
+			if val, err := m.get(m.aclKey(abortedACL)); err != nil || val != nil {
+				t.Fatalf("aborted ACL persisted: %x, error: %v", val, err)
+			}
+			if m.aclCache.Get(abortedACL) != nil {
+				t.Fatal("aborted ACL was published to the cache")
+			}
+			children := []Ino{child}
+			if !tc.retry {
+				children = append(children, otherChild)
+			}
+			for _, inode := range children {
+				m.aclCache.Clear()
+				var attr Attr
+				if st := m.GetAttr(ctx, inode, &attr); st != 0 || attr.AccessACL == 0 {
+					t.Fatalf("getattr: %s, ACL: %d", st, attr.AccessACL)
+				}
+				var got aclAPI.Rule
+				if st := m.GetFacl(ctx, inode, aclAPI.TypeAccess, &got); st != 0 {
+					t.Fatalf("getfacl after rollback and cache clear: %s", st)
+				}
+				if want := rule.ChildAccessACL(0666); !got.IsEqual(want) {
+					t.Fatalf("ACL: %s, want %s", &got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestKVACLTransactionCache(t *testing.T) {
+	for _, commit := range []bool{true, false} {
+		t.Run(fmt.Sprintf("commit=%v", commit), func(t *testing.T) {
+			raw, err := newKVMeta("badger", t.TempDir(), testConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := raw.(*kvMeta)
+			m.client = withPrefix(m.client, []byte("acl-test/"))
+			t.Cleanup(func() { _ = m.Shutdown() })
+			if err := m.Init(testFormat(), true); err != nil {
+				t.Fatal(err)
+			}
+			ctx := Background()
+			rule := &aclAPI.Rule{Owner: 7, Group: 5, Mask: 5, Other: 0, NamedUsers: []aclAPI.Entry{{Id: 1001, Perm: 4}}}
+			var id uint32
+			err = m.txn(ctx, func(tx *kvTxn) error {
+				var err error
+				if id, err = m.insertACL(tx, rule); err != nil {
+					return err
+				}
+				if val, err := m.get(m.aclKey(id)); err != nil || val != nil {
+					t.Fatalf("uncommitted ACL persisted: %x, error: %v", val, err)
+				}
+				got, err := m.getACL(tx, id)
+				if err != nil || !got.IsEqual(rule) {
+					t.Fatalf("read own ACL: %v, error: %v", got, err)
+				}
+				// A higher ID commits first, making this transaction's ID a cache gap.
+				other := rule.Dup()
+				other.Owner = 6
+				if err := m.txn(ctx, func(tx *kvTxn) error {
+					_, err := m.insertACL(tx, other)
+					return err
+				}); err != nil {
+					return err
+				}
+				// Neither reading our own writes nor another snapshot may publish this ACL.
+				if err := m.tryLoadMissACLs(tx); err != nil {
+					return err
+				}
+				if err := m.txn(ctx, m.tryLoadMissACLs); err != nil {
+					return err
+				}
+				if m.aclCache.Get(id) != nil || m.aclCache.GetId(rule) != aclAPI.None {
+					t.Fatal("uncommitted ACL is visible to other transactions")
+				}
+				if !commit {
+					return syscall.EIO
+				}
+				return nil
+			})
+			if commit && err != nil || !commit && err != syscall.EIO {
+				t.Fatalf("transaction: %v", err)
+			}
+			cached := m.aclCache.Get(id)
+			val, err := m.get(m.aclKey(id))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if commit {
+				if cached == nil || !cached.IsEqual(rule) || !bytes.Equal(val, rule.Encode()) {
+					t.Fatalf("committed ACL: cached %v, stored %x", cached, val)
+				}
+			} else if cached != nil || val != nil {
+				t.Fatalf("aborted ACL: cached %v, stored %x", cached, val)
+			}
+		})
+	}
+}
 
 func TestMemKVClient(t *testing.T) {
 	_ = os.Remove(settingPath)
@@ -240,8 +500,8 @@ func testTKV(t *testing.T, c tkvClient) {
 	for i := 0; i < 1000; i++ {
 		txn(func(kt *kvTxn) {
 			for j := 0; j < 100; j++ {
-				k := []byte(fmt.Sprintf("Key_%d_%d", i, j))
-				v := []byte(fmt.Sprintf("Value_%d_%d", i, j))
+				k := fmt.Appendf(nil, "Key_%d_%d", i, j)
+				v := fmt.Appendf(nil, "Value_%d_%d", i, j)
 				kt.set(k, v)
 				keys = append(keys, k)
 			}
@@ -256,7 +516,7 @@ func testTKV(t *testing.T, c tkvClient) {
 	})
 	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i], keys[j]) < 0 })
 	for i, k := range keys {
-		if !bytes.Equal(k, kvs[i*2]) || !bytes.Equal([]byte(fmt.Sprintf("Value%s", k[3:])), kvs[i*2+1]) {
+		if !bytes.Equal(k, kvs[i*2]) || !bytes.Equal(fmt.Appendf(nil, "Value%s", k[3:]), kvs[i*2+1]) {
 			t.Fatalf("expect %s but got %s, %s", k, keys[i*2], keys[i*2+1])
 		}
 	}
@@ -320,6 +580,88 @@ func TestBadgerScanKeysOnlyNilValues(t *testing.T) {
 	}
 }
 
+func TestBadgerSimpleTxnReadOnly(t *testing.T) {
+	c, err := newBadgerClient(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.close()
+
+	if err := c.txn(Background(), func(kt *kvTxn) error {
+		kt.set([]byte("ro_key"), []byte("ro_value"))
+		return nil
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	var got []byte
+	var scanned int
+	if err := c.simpleTxn(Background(), func(kt *kvTxn) error {
+		got = kt.get([]byte("ro_key"))
+		kt.scan([]byte("ro_"), nextKey([]byte("ro_")), false, func(k, v []byte) bool {
+			scanned++
+			return true
+		})
+		return nil
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "ro_value" || scanned != 1 {
+		t.Fatalf("simpleTxn read: got %q, scanned %d", got, scanned)
+	}
+
+	err = c.simpleTxn(Background(), func(kt *kvTxn) error {
+		kt.set([]byte("ro_key2"), []byte("v"))
+		return nil
+	}, 0)
+	if err != badger.ErrReadOnlyTxn {
+		t.Fatalf("expected ErrReadOnlyTxn, got %v", err)
+	}
+	var leaked []byte
+	if err := c.simpleTxn(Background(), func(kt *kvTxn) error {
+		leaked = kt.get([]byte("ro_key2"))
+		return nil
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if leaked != nil {
+		t.Fatalf("write in read-only txn must not be committed, got %q", leaked)
+	}
+}
+
+func TestBadgerSyncOption(t *testing.T) {
+	root := t.TempDir()
+	tests := []struct {
+		name     string
+		addr     string
+		expected bool
+	}{
+		{name: "default false", addr: root + "/default", expected: false},
+		{name: "sync true", addr: root + "/true?sync=true", expected: true},
+		{name: "sync false", addr: root + "/false?sync=false", expected: false},
+		{name: "sync invalid 1", addr: root + "/invalid1?sync=1", expected: false},
+		{name: "sync invalid 0", addr: root + "/invalid0?sync=0", expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := newBadgerClient(tt.addr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.close()
+
+			bc, ok := client.(*badgerClient)
+			if !ok {
+				t.Fatalf("unexpected client type %T", client)
+			}
+			if got := bc.client.Opts().SyncWrites; got != tt.expected {
+				t.Fatalf("sync option mismatch: got %v, expected %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestBadgerDeleteTxnTooBig(t *testing.T) {
 	dir := t.TempDir()
 
@@ -337,7 +679,7 @@ func TestBadgerDeleteTxnTooBig(t *testing.T) {
 	const numKeys = 5000
 	wb := db.NewWriteBatch()
 	for i := 0; i < numKeys; i++ {
-		if err := wb.Set([]byte(fmt.Sprintf("txbig_%05d", i)), []byte("v")); err != nil {
+		if err := wb.Set(fmt.Appendf(nil, "txbig_%05d", i), []byte("v")); err != nil {
 			t.Fatal(err)
 		}
 	}

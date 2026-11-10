@@ -29,6 +29,20 @@ used_memory_dataset_perc: 70.12%
 
 Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above) but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier that the metadata of each file occupies about 300 bytes, this is actually calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](../../reference/command_reference.mdx#gc) command to clean up possible redundant data.
 
+### Recover from out-of-memory (OOM) conditions {#recover-from-oom}
+
+Once Redis memory usage reaches the `maxmemory` limit, all write operations are rejected with the error `OOM command not allowed when used memory > 'maxmemory'`. At this point, even attempts to free up space by deleting files with [`juicefs rmr`](../../reference/command_reference.mdx#rmr) or by [purging the trash](../../security/trash.md#purge) will fail, because these operations still require writes to Redis to complete.
+
+To recover from this state, consider the following options:
+
+- **Temporarily increase the memory limit**: Use [`CONFIG SET maxmemory <new-value>`](https://redis.io/commands/config-set) to temporarily raise the Redis memory limit so writes become available again. Then run `juicefs rmr` or purge the trash to free up space and restore `maxmemory` to its original value afterward. If deletion alone cannot free enough space, you can also use this window to scale up Redis.
+- **Reserve a placeholder key (recommended preparation in advance)**: While the file system is running normally, write a large placeholder key into Redis ahead of time to reserve a portion of memory. If an OOM condition occurs, deleting this key immediately releases memory, allowing `juicefs rmr` and trash-purging operations to proceed.
+
+To reduce the risk of OOM, take the following preventive measures:
+
+- When deploying, reserve some buffer for `maxmemory`, rather than setting it close to the physical memory limit, leaving room for operations such as deletions.
+- If you are using a managed service, configure capacity monitoring and alerting so that you can scale up before memory usage approaches the limit.
+
 ## High availability
 
 ### Sentinel mode {#sentinel-mode}

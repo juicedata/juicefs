@@ -84,7 +84,7 @@ func newScw(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		options.HTTPClient = httpClient
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
-		})
+		}, addS3UserAgent)
 		options.RetryMaxAttempts = 1
 	})
 	return &scw{s3client{bucket: bucket, s3: client, region: region}}, nil

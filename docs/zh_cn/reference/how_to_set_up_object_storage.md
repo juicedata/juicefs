@@ -162,6 +162,7 @@ juicefs format \
 | [Storj](#storj)                             | `storj`    |
 | [Vultr 对象存储](#vultr-对象存储)           | `s3`       |
 | [Cloudflare R2](#r2)                        | `s3`       |
+| [Neon Object Storage](#neon)                | `s3`       |
 | [阿里云 OSS](#阿里云-oss)                   | `oss`      |
 | [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
 | [华为云 OBS](#华为云-obs)                   | `obs`      |
@@ -266,6 +267,19 @@ juicefs format \
 
 :::tip 提示
 所有 S3 兼容的对象存储服务其 `--bucket` 选项的格式为 `https://<bucket>.<endpoint>` 或者 `https://<endpoint>/<bucket>`，默认的 `region` 为 `us-east-1`，当需要不同的 `region` 的时候，可以通过环境变量 `AWS_REGION` 或者 `AWS_DEFAULT_REGION` 手动设置。
+:::
+
+:::tip 提示
+对于 AWS SDK 的请求和响应 checksum，JuiceFS 默认将 `AWS_REQUEST_CHECKSUM_CALCULATION` 和 `AWS_RESPONSE_CHECKSUM_VALIDATION` 设置为 `when_required`。这样只有在 S3 要求时才会发送或校验 SDK 层面的 checksum header，可以提升对 S3 兼容服务的兼容性。
+
+如果使用的是 Amazon S3，并且希望 SDK 在操作支持 checksum 时都进行计算和校验，可以在运行 JuiceFS 前设置以下环境变量：
+
+```shell
+export AWS_REQUEST_CHECKSUM_CALCULATION=when_supported
+export AWS_RESPONSE_CHECKSUM_VALIDATION=when_supported
+```
+
+以上配置只控制 AWS SDK 层面的 checksum。`--bucket` 中的 `disable-checksum=true` 查询参数控制的是 JuiceFS 自身写入对象元数据的 CRC checksum。
 :::
 
 ### Google 云存储 {#google-cloud}
@@ -524,6 +538,37 @@ juicefs format \
 
 :::caution 特别提示
 因为 Cloudflare R2 的 `ListObjects` API 并非完全 S3 兼容（返回结果没有实现排序功能），所以 JuiceFS 的部分功能无法使用，比如 `juicefs gc`、`juicefs fsck`、`juicefs sync`、`juicefs destroy`。另外，使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#backup-automatically)功能，即加上 `--backup-meta 0`。
+:::
+
+### Neon Object Storage {#neon}
+
+[Neon Object Storage](https://neon.com/docs/storage/overview) 是与 Neon Postgres 一起分支的 S3 兼容对象存储，使用方法与 Amazon S3 相同。每个 Neon 分支都有独立的存储 endpoint，新建的分支会以写时复制（copy-on-write）的方式继承父分支的 bucket。请参考 [Get started with Object Storage](https://neon.com/docs/storage/get-started) 了解如何获取 S3 凭证。
+
+Neon Object Storage 仅支持 path-style 请求，因此 `--bucket` 选项的设置格式为 `https://<branch-endpoint>/<bucket>`。其中 `<branch-endpoint>` 是分支的存储 endpoint，即控制台中显示的（或 `neon env pull` 写入的）`AWS_ENDPOINT_URL_S3` 的值，例如 `br-cool-darkness-a1b2c3d4.storage.c-1.us-east-2.aws.neon.tech`。如果 bucket 不存在，会自动创建。例如：
+
+```shell
+juicefs format \
+    --storage s3 \
+    --bucket https://<branch-endpoint>/<bucket> \
+    --access-key <token-id> \
+    --secret-key <s3-secret-access-key> \
+    ... \
+    myjfs
+```
+
+请不要设置 `JFS_S3_VHOST_STYLE`，因为 Neon Object Storage 不接受 virtual-hosted-style 请求。
+
+使用 `juicefs sync` 时，URL 格式为 `s3://<access-key>:<secret-key>@<branch-endpoint>/<bucket>/<prefix>/`。
+
+:::caution 特别提示
+如果同时使用 Neon Postgres 作为[元数据引擎](how_to_set_up_metadata_engine.md#postgresql)，创建 Neon 分支会同时复制文件系统的元数据和数据。新分支上的元数据仍然指向父分支的存储 endpoint，因此在新分支上写入文件系统之前，需要将其更新为新分支的 endpoint：
+
+```shell
+juicefs config "postgres://<user>:<password>@<branch-db-host>/<database>?sslmode=require" \
+    --bucket https://<new-branch-endpoint>/<bucket>
+```
+
+如果跳过这一步，新分支的写入会进入父分支的 bucket。由于两份元数据会分配相同的 slice ID，这些写入可能覆盖父分支之后写入的数据块。
 :::
 
 ### 阿里云 OSS
@@ -801,6 +846,10 @@ make juicefs.ceph
 - `~/.ceph/config`
 - 在当前工作目录中的 `ceph.conf`
 
+:::caution
+对于只需要扫描对象 key 的任务，可以设置 `JFS_OBJECT_NO_ORDER=1` 或 `JFS_OBJECT_NO_ORDER=true`，跳过 Ceph RADOS 列举时的排序和逐对象 stat 调用。这个设置能提升大规模存储池的列举速度，但返回的对象是无序的，且不包含可靠的大小和修改时间。不要在依赖有序列举或对象元数据的命令中启用它，例如 `sync` 等。
+:::
+
 创建一个文件系统：
 
 ```bash
@@ -902,7 +951,7 @@ $ sudo docker run -d --name minio \
     -e "MINIO_ROOT_PASSWORD=minioadmin" \
     -v $PWD/minio-data:/data \
     --restart unless-stopped \
-    minio/minio server /data --console-address ":9900"
+    quay.io/minio/minio server /data --console-address ":9900"
 ```
 
 容器创建成功以后使用以下地址访问：

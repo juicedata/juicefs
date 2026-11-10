@@ -107,7 +107,7 @@ The 3FS cache system consists of TLS (Thread-Local Storage) queues and global qu
 | Encryption | Not supported | Supported | Supported |
 | Compression | Not supported | Supported | Supported |
 | Quota management | Not supported | Supported | Supported |
-| Network protocol | RDMA | TCP | TCP |
+| Network protocol | RDMA | TCP | TCP/RDMA |
 | Snapshots | Not supported | Supports cloning | Supports cloning |
 | POSIX ACL | Not supported | Supported | Supported |
 | POSIX compliance | Partial | Fully compatible | Fully compatible |
@@ -133,6 +133,6 @@ While this approach can deliver performance improvements, it comes with higher c
 JuiceFS uses object storage as its backend, significantly reducing costs and simplifying maintenance. To meet AI workloads' performance demands:
 
 - **Enterprise Edition features**: Distributed caching, distributed metadata service, and Python SDK
-- **Upcoming optimizations**: v5.2 adds zero-copy over TCP for faster data transfers
+- **High-performance networking**: TCP zero‑copy (since v5.2) and RDMA (since v5.3)
 - **Cloud-native advantages**: Full POSIX compatibility, mature open-source ecosystem, and Kubernetes CSI support
 - **Enterprise capabilities**: Quotas, security management, and disaster recovery features

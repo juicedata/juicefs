@@ -17,12 +17,13 @@
 package meta
 
 import (
+	"bufio"
 	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
-	"unsafe"
+	"os"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -166,11 +167,189 @@ func (f *BakFormat) ReadFooter(r io.ReadSeeker) (*BakFooter, error) { // nolint:
 	if err := footer.Unmarshal(r); err != nil {
 		return nil, err
 	}
-	if footer.Msg.Magic != BakMagic {
-		return nil, fmt.Errorf("invalid magic number %d, expect %d", footer.Msg.Magic, BakMagic)
-	}
 	f.Footer = footer
 	return footer, nil
+}
+
+// readBackupSource reads the footer after the end-of-segments marker.
+func readBackupSource(r io.Reader) (pb.Footer_Engine, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return pb.Footer_UNKNOWN, fmt.Errorf("failed to read footer: %w", err)
+	}
+	if len(data) < 8 {
+		return pb.Footer_UNKNOWN, fmt.Errorf("failed to read footer length: %w", io.ErrUnexpectedEOF)
+	}
+	length := binary.BigEndian.Uint64(data[len(data)-8:])
+	if length != uint64(len(data)-8) {
+		return pb.Footer_UNKNOWN, fmt.Errorf("invalid footer length %d, actual %d", length, len(data)-8)
+	}
+	footer := &BakFooter{Len: length}
+	if err := footer.unmarshal(data[:len(data)-8]); err != nil {
+		return pb.Footer_UNKNOWN, err
+	}
+	return footer.Msg.Source, nil
+}
+
+// LoadChangelogBaseline reads the volume format, lastChangelog and the changelog
+// versions included in a JSON or binary metadata backup. A binary backup that is
+// not seekable is copied to a temporary file.
+func LoadChangelogBaseline(r io.Reader) (*Format, int64, map[uint64]struct{}, error) {
+	reader := bufio.NewReader(r)
+	var first byte
+
+	for {
+		prefix, err := reader.Peek(1)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		first = prefix[0]
+		if first != ' ' && first != '\t' && first != '\r' && first != '\n' {
+			break
+		}
+		_, _ = reader.Discard(1)
+	}
+
+	var format Format
+	var from int64
+	var err error
+	seen := make(map[uint64]struct{})
+	if first == '{' {
+		from, err = readJSONBaseline(reader, &format, seen)
+	} else {
+		rs, ok := r.(io.ReadSeeker)
+		if !ok {
+			fp, err := os.CreateTemp("", "juicefs-backup-*")
+			if err != nil {
+				return nil, 0, nil, err
+			}
+			defer os.Remove(fp.Name())
+			defer fp.Close()
+			if _, err := io.Copy(fp, reader); err != nil {
+				return nil, 0, nil, fmt.Errorf("copy backup: %w", err)
+			}
+			rs = fp
+		}
+		from, err = readBinaryBaseline(rs, &format, seen)
+	}
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	if format.UUID == "" {
+		return nil, 0, nil, fmt.Errorf("backup does not contain a volume UUID")
+	}
+	if from <= 0 {
+		return nil, 0, nil, fmt.Errorf("backup does not contain a positive lastChangelog")
+	}
+	for id := range seen {
+		if id == 0 || id > uint64(from) {
+			return nil, 0, nil, fmt.Errorf("backup changelog %d is outside the baseline ending at %d", int64(id), from)
+		}
+	}
+	return &format, from, seen, nil
+}
+
+func readJSONBaseline(r io.Reader, format *Format, seen map[uint64]struct{}) (int64, error) {
+	dec := json.NewDecoder(r)
+	dec.UseNumber()
+	if _, err := dec.Token(); err != nil {
+		return 0, err
+	}
+	var from int64
+	for dec.More() {
+		name, err := dec.Token()
+		if err != nil {
+			return 0, err
+		}
+		switch name {
+		case "Setting":
+			err = dec.Decode(format)
+		case "Counters":
+			var counters DumpedCounters
+			err = dec.Decode(&counters)
+			from = counters.LastChangelog
+		case "ChangeLog":
+			var logs []struct{ Version int64 }
+			err = dec.Decode(&logs)
+			for _, log := range logs {
+				seen[uint64(log.Version)] = struct{}{}
+			}
+		case "FSTree", "Trash":
+			// Dump writes the file trees after all other fields.
+			return from, nil
+		default:
+			err = skipJSONValue(dec)
+		}
+		if err != nil {
+			return 0, fmt.Errorf("read backup field %s: %w", name, err)
+		}
+	}
+	_, err := dec.Token()
+	return from, err
+}
+
+// skipJSONValue skips the next value without retaining it in memory.
+func skipJSONValue(dec *json.Decoder) error {
+	depth := 0
+	for {
+		token, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		switch token {
+		case json.Delim('{'), json.Delim('['):
+			depth++
+		case json.Delim('}'), json.Delim(']'):
+			depth--
+		}
+		if depth == 0 {
+			return nil
+		}
+	}
+}
+
+func readBinaryBaseline(r io.ReadSeeker, format *Format, seen map[uint64]struct{}) (int64, error) {
+	bak := &BakFormat{}
+	footer, err := bak.ReadFooter(r)
+	if err != nil {
+		return 0, err
+	}
+	var from int64
+	for _, name := range []string{"format", "counter", "changeLog"} {
+		info := footer.Msg.Infos[name]
+		if info == nil {
+			continue
+		}
+		for _, offset := range info.Offset {
+			if _, err := r.Seek(int64(offset), io.SeekStart); err != nil {
+				return 0, err
+			}
+			seg, err := bak.ReadSegment(r)
+			if err != nil {
+				return 0, err
+			}
+			if seg.Name() != name {
+				return 0, fmt.Errorf("expected backup segment %s, got %s", name, seg.Name())
+			}
+			switch seg.typ {
+			case segTypeFormat:
+				if err := json.Unmarshal(seg.val.(*pb.Format).Data, format); err != nil {
+					return 0, err
+				}
+			case segTypeCounter:
+				for _, counter := range seg.val.(*pb.Batch).Counters {
+					if counter.Key == "lastChangelog" {
+						from = counter.Value
+					}
+				}
+			case segTypeChangeLog:
+				for _, log := range seg.val.(*pb.Batch).Changelogs {
+					seen[uint64(log.Version)] = struct{}{}
+				}
+			}
+		}
+	}
+	return from, nil
 }
 
 type BakFooter struct {
@@ -196,24 +375,46 @@ func (h *BakFooter) Marshal(w io.Writer) error {
 }
 
 func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
-	lenSize := int64(unsafe.Sizeof(h.Len))
-	_, _ = r.Seek(-lenSize, io.SeekEnd)
-
-	data := make([]byte, lenSize)
-	if n, err := r.Read(data); err != nil && n != int(lenSize) {
-		return fmt.Errorf("failed to read footer length: err %w, read len %d, expect len %d", err, n, lenSize)
+	end, err := r.Seek(-8, io.SeekEnd)
+	if err != nil {
+		return fmt.Errorf("failed to seek footer length: %w", err)
 	}
-
-	h.Len = binary.BigEndian.Uint64(data)
-	_, _ = r.Seek(-int64(h.Len)-lenSize, io.SeekEnd)
-	data = make([]byte, h.Len)
-	if n, err := r.Read(data); err != nil && n != int(h.Len) {
-		return fmt.Errorf("failed to read footer: err %w, read len %d, expect len %d", err, n, h.Len)
+	if end < 0 {
+		return fmt.Errorf("failed to read footer length: %w", io.ErrUnexpectedEOF)
 	}
+	var length [8]byte
+	if _, err := io.ReadFull(r, length[:]); err != nil {
+		return fmt.Errorf("failed to read footer length: %w", err)
+	}
+	h.Len = binary.BigEndian.Uint64(length[:])
+	if h.Len > uint64(end) || h.Len > uint64(^uint(0)>>1) {
+		return fmt.Errorf("invalid footer length %d, available %d", h.Len, end)
+	}
+	if _, err := r.Seek(end-int64(h.Len), io.SeekStart); err != nil {
+		return fmt.Errorf("failed to seek footer: %w", err)
+	}
+	data := make([]byte, int(h.Len))
+	if _, err := io.ReadFull(r, data); err != nil {
+		return fmt.Errorf("failed to read footer: %w", err)
+	}
+	return h.unmarshal(data)
+}
 
+func (h *BakFooter) unmarshal(data []byte) error {
 	h.Msg = &pb.Footer{}
 	if err := proto.Unmarshal(data, h.Msg); err != nil {
 		return fmt.Errorf("failed to unmarshal footer: %w", err)
+	}
+	if h.Msg.Magic != BakMagic {
+		return fmt.Errorf("invalid magic number %d, expect %d", h.Msg.Magic, BakMagic)
+	}
+	if h.Msg.Version != BakVersion {
+		return fmt.Errorf("unsupported backup version %d", h.Msg.Version)
+	}
+	switch h.Msg.Source {
+	case pb.Footer_UNKNOWN, pb.Footer_REDIS, pb.Footer_SQL, pb.Footer_KV:
+	default:
+		return fmt.Errorf("unsupported backup source %d", h.Msg.Source)
 	}
 	return nil
 }
@@ -359,8 +560,8 @@ func (s *BakSegment) Unmarshal(r io.Reader) error {
 		return fmt.Errorf("failed to read segment %s length: %v", s, err)
 	}
 	data := make([]byte, s.len)
-	n, err := r.Read(data)
-	if err != nil && n != int(s.len) {
+	n, err := io.ReadFull(r, data)
+	if err != nil {
 		return fmt.Errorf("failed to read segment value: err %v, read len %d, expect len %d", err, n, s.len)
 	}
 
@@ -427,6 +628,86 @@ func (opt *LoadOption) check() {
 	if opt.Threads < 1 {
 		opt.Threads = 10
 	}
+}
+
+func (c *DumpedCounters) updateFromSegment(seg *BakSegment, counters *[]*pb.Counter) bool {
+	recordInode := func(inode uint64) {
+		if Ino(inode) < TrashInode {
+			c.NextInode = max(c.NextInode, int64(inode)+1)
+		} else {
+			c.NextTrash = max(c.NextTrash, int64(Ino(inode)-TrashInode))
+		}
+	}
+	switch seg.typ {
+	case segTypeCounter:
+		batch := seg.val.(*pb.Batch)
+		*counters = append(*counters, batch.Counters...)
+		for _, counter := range batch.Counters {
+			switch counter.Key {
+			case "nextInode":
+				c.NextInode = max(c.NextInode, counter.Value)
+			case "nextChunk":
+				c.NextChunk = max(c.NextChunk, counter.Value)
+			case "nextSession":
+				c.NextSession = max(c.NextSession, counter.Value)
+			case "nextTrash":
+				c.NextTrash = max(c.NextTrash, counter.Value)
+			}
+		}
+		return true
+	case segTypeNode:
+		var attr Attr
+		for _, node := range seg.val.(*pb.Batch).Nodes {
+			recordInode(node.Inode)
+			if Ino(node.Inode) != RootInode && Ino(node.Inode) != TrashInode {
+				attr.Unmarshal(node.Data)
+				c.UsedSpace += align4K(attr.Length)
+				c.UsedInodes++
+			}
+		}
+	case segTypeChunk:
+		for _, chunk := range seg.val.(*pb.Batch).Chunks {
+			recordInode(chunk.Inode)
+			for _, s := range readSliceBuf(chunk.Slices) {
+				c.NextChunk = max(c.NextChunk, int64(s.id)+1)
+			}
+		}
+	case segTypeSliceRef:
+		for _, ref := range seg.val.(*pb.Batch).SliceRefs {
+			c.NextChunk = max(c.NextChunk, int64(ref.Id)+1)
+		}
+	case segTypeSustained:
+		for _, sustained := range seg.val.(*pb.Batch).Sustained {
+			c.NextSession = max(c.NextSession, int64(sustained.Sid))
+			for _, inode := range sustained.Inodes {
+				recordInode(inode)
+			}
+		}
+	case segTypeDelFile:
+		for _, file := range seg.val.(*pb.Batch).Delfiles {
+			recordInode(file.Inode)
+		}
+	}
+	return false
+}
+
+func (c *DumpedCounters) toBatch(counters []*pb.Counter) *pb.Batch {
+	others := counters[:0]
+	for _, counter := range counters {
+		switch counter.Key {
+		case usedSpace, totalInodes, "nextInode", "nextChunk", "nextSession", "nextTrash":
+		default:
+			others = append(others, counter)
+		}
+	}
+	return &pb.Batch{Counters: append(others,
+		&pb.Counter{Key: usedSpace, Value: c.UsedSpace},
+		&pb.Counter{Key: totalInodes, Value: c.UsedInodes},
+		&pb.Counter{Key: "nextInode", Value: c.NextInode},
+		&pb.Counter{Key: "nextChunk", Value: c.NextChunk},
+		&pb.Counter{Key: "nextSession", Value: c.NextSession},
+		&pb.Counter{Key: "nextTrash", Value: c.NextTrash},
+	)}
 }
 
 // transaction

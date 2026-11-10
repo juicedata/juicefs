@@ -107,7 +107,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sort(max(juicefs_uptime{vol_name=\"$name\"}) by (${node_label}, juicefs_version))",
+          "expr": "sort(max(juicefs_uptime{vol_name=\"$name\", instance=~\"$instance\"}) by (${node_label}, juicefs_version))",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -228,7 +228,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "avg(juicefs_used_space{vol_name=\"$name\"})",
+          "expr": "avg(juicefs_used_space{vol_name=\"$name\", instance=~\"$instance\"})",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -328,7 +328,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "avg(juicefs_used_inodes{vol_name=\"$name\"})",
+          "expr": "avg(juicefs_used_inodes{vol_name=\"$name\", instance=~\"$instance\"})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -427,7 +427,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "count by (juicefs_version) (juicefs_uptime{vol_name=\"$name\"})",
+          "expr": "count by (juicefs_version) (juicefs_uptime{vol_name=\"$name\", instance=~\"$instance\"})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -527,7 +527,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_fuse_ops_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval]) < 5000000000) by (${node_label})",
+          "expr": "sum(rate(juicefs_fuse_ops_durations_histogram_seconds_count{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval]) < 5000000000) by (${node_label})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -626,7 +626,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_fuse_written_size_bytes_sum{vol_name=\"$name\"}[$__rate_interval]) < 5000000000) by (${node_label})",
+          "expr": "sum(rate(juicefs_fuse_written_size_bytes_sum{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval]) < 5000000000) by (${node_label})",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -638,7 +638,7 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_fuse_read_size_bytes_sum{vol_name=\"$name\"}[$__rate_interval]) < 5000000000) by (${node_label})",
+          "expr": "sum(rate(juicefs_fuse_read_size_bytes_sum{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval]) < 5000000000) by (${node_label})",
           "format": "time_series",
           "hide": false,
           "interval": "",
@@ -736,7 +736,7 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_fuse_ops_durations_histogram_seconds_sum{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},mp) * 1000000 / sum(rate(juicefs_fuse_ops_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},mp)",
+          "expr": "sum(rate(juicefs_fuse_ops_durations_histogram_seconds_sum{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by  (${node_label},mp) * 1000000 / sum(rate(juicefs_fuse_ops_durations_histogram_seconds_count{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by  (${node_label},mp)",
           "format": "time_series",
           "hide": false,
           "interval": "",
@@ -834,7 +834,7 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_transaction_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label})",
+          "expr": "sum(rate(juicefs_transaction_durations_histogram_seconds_count{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by  (${node_label})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -931,7 +931,7 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_transaction_durations_histogram_seconds_sum{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},mp) * 1000000 / sum(rate(juicefs_transaction_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},mp)",
+          "expr": "sum(rate(juicefs_transaction_durations_histogram_seconds_sum{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by  (${node_label},mp) * 1000000 / sum(rate(juicefs_transaction_durations_histogram_seconds_count{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by  (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1029,7 +1029,7 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_transaction_restart{vol_name=~\"$name\"}[$__rate_interval])) by (${node_label})",
+          "expr": "sum(rate(juicefs_transaction_restart{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label})",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "Restarts {{${node_label}}}",
@@ -1125,11 +1125,11 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (method)",
+          "expr": "sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by  (${node_label}, method)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{method}}",
+          "legendFormat": "{{method}} {{${node_label}}}",
           "refId": "A"
         },
         {
@@ -1137,11 +1137,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_object_request_errors{vol_name=\"$name\"}[$__rate_interval])) ",
+          "expr": "sum(rate(juicefs_object_request_errors{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "errors",
+          "legendFormat": "errors {{${node_label}}}",
           "refId": "B"
         }
       ],
@@ -1235,7 +1235,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_object_request_data_bytes{method=\"PUT\",vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},method)",
+          "expr": "sum(rate(juicefs_object_request_data_bytes{method=\"PUT\",vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by  (${node_label},method)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1247,7 +1247,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_object_request_data_bytes{method=\"GET\",vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},method)",
+          "expr": "sum(rate(juicefs_object_request_data_bytes{method=\"GET\",vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by  (${node_label},method)",
           "format": "time_series",
           "hide": false,
           "interval": "",
@@ -1260,7 +1260,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_object_request_data_bytes{method=\"GET\",vol_name=\"$name\"}[$__rate_interval]))",
+          "expr": "sum(rate(juicefs_object_request_data_bytes{method=\"GET\",vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval]))",
           "hide": false,
           "interval": "",
           "legendFormat": "Total",
@@ -1356,7 +1356,7 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_object_request_durations_histogram_seconds_sum{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label}) * 1000000 / sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label})",
+          "expr": "sum(rate(juicefs_object_request_durations_histogram_seconds_sum{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by  (${node_label}) * 1000000 / sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by  (${node_label})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1454,7 +1454,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_cpu_usage{vol_name=\"$name\"}[$__rate_interval])*100 < 1000) by (${node_label},mp)",
+          "expr": "sum(rate(juicefs_cpu_usage{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])*100 < 1000) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1551,7 +1551,7 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(juicefs_memory{vol_name=\"$name\"}) by (${node_label},mp)",
+          "expr": "sum(juicefs_memory{vol_name=\"$name\", instance=~\"$instance\"}) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1649,7 +1649,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "sum(juicefs_go_goroutines{vol_name=\"$name\"}) by (${node_label},mp)",
+          "expr": "sum(juicefs_go_goroutines{vol_name=\"$name\", instance=~\"$instance\"}) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1749,7 +1749,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(juicefs_blockcache_bytes{vol_name=\"$name\"}) by (${node_label},mp)",
+          "expr": "sum(juicefs_blockcache_bytes{vol_name=\"$name\", instance=~\"$instance\"}) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1848,7 +1848,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(juicefs_blockcache_blocks{vol_name=\"$name\"}) by (${node_label},mp)",
+          "expr": "sum(juicefs_blockcache_blocks{vol_name=\"$name\", instance=~\"$instance\"}) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1947,7 +1947,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_blockcache_hits{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) *100 / (sum(rate(juicefs_blockcache_hits{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) + sum(rate(juicefs_blockcache_miss{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp))",
+          "expr": "sum(rate(juicefs_blockcache_hits{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label},mp) *100 / (sum(rate(juicefs_blockcache_hits{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label},mp) + sum(rate(juicefs_blockcache_miss{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label},mp))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1959,7 +1959,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_blockcache_hit_bytes{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) *100 / (sum(rate(juicefs_blockcache_hit_bytes{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) + sum(rate(juicefs_blockcache_miss_bytes{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp))",
+          "expr": "sum(rate(juicefs_blockcache_hit_bytes{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label},mp) *100 / (sum(rate(juicefs_blockcache_hit_bytes{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label},mp) + sum(rate(juicefs_blockcache_miss_bytes{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label},mp))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -2059,7 +2059,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_compact_size_histogram_bytes_count{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp)",
+          "expr": "sum(rate(juicefs_compact_size_histogram_bytes_count{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -2158,7 +2158,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_compact_size_histogram_bytes_sum{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp)",
+          "expr": "sum(rate(juicefs_compact_size_histogram_bytes_sum{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -2257,7 +2257,7 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(juicefs_fuse_open_handlers{vol_name=\"$name\"}) by (${node_label},mp)",
+          "expr": "sum(juicefs_fuse_open_handlers{vol_name=\"$name\", instance=~\"$instance\"}) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -2356,7 +2356,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "juicefs_staging_blocks{vol_name=\"$name\"}",
+          "expr": "juicefs_staging_blocks{vol_name=\"$name\", instance=~\"$instance\"}",
           "legendFormat": "{{${node_label}}}:{{mp}}",
           "range": true,
           "refId": "A"
@@ -2454,7 +2454,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "juicefs_staging_block_bytes{vol_name=\"$name\"}",
+          "expr": "juicefs_staging_block_bytes{vol_name=\"$name\", instance=~\"$instance\"}",
           "legendFormat": "{{${node_label}}}:{{mp}}",
           "range": true,
           "refId": "A"
@@ -2552,7 +2552,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(rate(juicefs_staging_block_delay_seconds{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) / sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) ",
+          "expr": "sum(rate(juicefs_staging_block_delay_seconds{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label},mp) / sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label},mp) ",
           "hide": false,
           "legendFormat": "{{${node_label}}}:{{mp}}",
           "range": true,
@@ -2560,6 +2560,1597 @@
         }
       ],
       "title": "Juicefs Staging Block Delay",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 55
+      },
+      "id": 32,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(rate(juicefs_fuse_ops_io_errors{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label}, errno)",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{errno}} {{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "IO Errors",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 55
+      },
+      "id": 33,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(rate(juicefs_meta_ops_total{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label}, method)",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{method}} {{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Metadata Ops",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 55
+      },
+      "id": 34,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "juicefs_used_space{vol_name=~\"$name\", instance=~\"$instance\"}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "Used {{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "juicefs_total_space{vol_name=~\"$name\", instance=~\"$instance\"}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "Total {{${node_label}}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Capacity",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 61
+      },
+      "id": 35,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "histogram_quantile(0.95, sum by (le, ${node_label}) (rate(juicefs_fuse_ops_durations_histogram_seconds_bucket{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "p95 {{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "histogram_quantile(0.99, sum by (le, ${node_label}) (rate(juicefs_fuse_ops_durations_histogram_seconds_bucket{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "p99 {{${node_label}}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "IO Latency Quantiles",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 61
+      },
+      "id": 36,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "histogram_quantile(0.95, sum by (le, ${node_label}) (rate(juicefs_object_request_durations_histogram_seconds_bucket{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "p95 {{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "histogram_quantile(0.99, sum by (le, ${node_label}) (rate(juicefs_object_request_durations_histogram_seconds_bucket{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "p99 {{${node_label}}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Objects Latency Quantiles",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 61
+      },
+      "id": 37,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "histogram_quantile(0.95, sum by (le, ${node_label}) (rate(juicefs_transaction_durations_histogram_seconds_bucket{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "p95 {{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "histogram_quantile(0.99, sum by (le, ${node_label}) (rate(juicefs_transaction_durations_histogram_seconds_bucket{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "p99 {{${node_label}}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Transaction Latency Quantiles",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 67
+      },
+      "id": 38,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "juicefs_object_request_uploading{vol_name=~\"$name\", instance=~\"$instance\"}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Upload Backlog",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 67
+      },
+      "id": 39,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(rate(juicefs_staging_block_errors{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label})",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Staging Errors",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 67
+      },
+      "id": 40,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(rate(juicefs_blockcache_drops{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label})",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "drops {{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(rate(juicefs_blockcache_evicts{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])) by (${node_label})",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "evicts {{${node_label}}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Cache Drops & Evictions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 73
+      },
+      "id": 41,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (${node_label}, method) (rate(juicefs_meta_ops_duration_seconds{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])) / sum by (${node_label}, method) (rate(juicefs_meta_ops_total{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval]))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{method}} {{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Metadata Ops Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 73
+      },
+      "id": 42,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (job, exported_job) (rate(juicefs_bgjob_duration_seconds_sum{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])) / sum by (job, exported_job) (rate(juicefs_bgjob_duration_seconds_count{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval]))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Background Job Duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 73
+      },
+      "id": 43,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "time() - max(juicefs_last_successful_backup{vol_name=~\"$name\"})",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "age",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Backup Freshness",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 79
+      },
+      "id": 44,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (job, exported_job) (rate(juicefs_bgjob_deletions_total{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval]))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Background Job Deletions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 79
+      },
+      "id": 45,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "juicefs_used_buffer_size_bytes{vol_name=~\"$name\", instance=~\"$instance\"}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "write buf {{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "juicefs_used_read_buffer_size_bytes{vol_name=~\"$name\", instance=~\"$instance\"}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "read buf {{${node_label}}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "juicefs_store_cache_size_bytes{vol_name=~\"$name\", instance=~\"$instance\"}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "store cache {{${node_label}}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Memory Buffers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 79
+      },
+      "id": 46,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "topk(8, sum by (method, ${node_label}) (rate(juicefs_fuse_ops_total{vol_name=~\"$name\", instance=~\"$instance\"}[$__rate_interval])))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{method}} {{${node_label}}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "FUSE Ops by Method",
       "type": "timeseries"
     }
   ],
@@ -2639,6 +4230,32 @@
         "skipUrlSync": false,
         "sort": 0,
         "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(juicefs_uptime{vol_name=~\"$name\"}, instance)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "instance",
+        "options": [],
+        "query": {
+          "query": "label_values(juicefs_uptime{vol_name=~\"$name\"}, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": ".*"
       }
     ]
   },
@@ -2672,6 +4289,6 @@
   "timezone": "",
   "title": "JuiceFS Dashboard",
   "uid": "-hm07csGk",
-  "version": 2,
+  "version": 4,
   "weekStart": ""
 }

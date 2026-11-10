@@ -12,11 +12,17 @@ slug: /adopters
 | [BentoML](https://bentoml.com)  | GenAI, Inference  | [BentoML Reduced LLM Loading Time from 20+ to a Few Minutes with JuiceF](https://juicefs.com/en/blog/user-stories/accelerate-large-language-model-loading)   |
 | [Lepton AI](https://www.lepton.ai) | GenAI, Training, Inference | [How Lepton AI Cut Cloud Storage Costs by 98% for AI Workflows with JuiceFS](https://juicefs.com/en/blog/user-stories/cloud-storage-artificial-intelligence-juicefs-vs-efs)          |
 | [Graviti Diffus](https://www.diffus.graviti.com) | GenAI, Inference |      |
+| [HeyGen](https://www.heygen.com) | GenAI | |
+| [Lovart](https://www.lovart.ai) | GenAI | |
+| [MiniMax](https://www.minimax.io) | GenAI | |
+| [StepFun](https://www.stepfun.com) | GenAI | |
 | [Plus.AI](https://plus.ai) | Autonomous driving, AI pipeline  |                     |
 | [Jerry](https://getjerry.com) | Car insurance, Data platform | [Low-Cost Read/Write Separation: Jerry Builds a Primary-Replica ClickHouse Architecture](https://juicefs.com/en/blog/user-stories/read-write-separation) |
 | [DJI](https://www.dji.com) | Drone & Autonomous driving, AI pipeline|             |
 | [Clobotics](https://clobotics.com)   | Drone, AI pipeline  | [How Clobotics Overcame Multi-Cloud and Massive File Storage Challenges](https://juicefs.com/en/blog/user-stories/multi-cloud-storage-posix-compatible)     |
 | [TP-LINK](https://www.tp-link.com) | AI      |       |
+| [Yealink](https://www.yealink.com) | Unified communications | |
+| [Terminus](https://www.terminusgroup.com) | AIoT | |
 | [MemVerge](https://memverge.com)  | BioTech, High performance file store  |            |
 | [MDI Biological Laboratory](https://mdibl.org) | BioTech, High performance file store |           |
 | [Lawrence Berkeley Lab](https://www.lbl.gov) | BioTech, High performance file store |             |
@@ -35,6 +41,7 @@ slug: /adopters
 | [Pingan Bank](https://pingan.com)  | Fintech, Data platform  |             |
 | [Tongdun](https://tongdun.cn)  | Fintech, Data platform |        |
 | [Yaoxin Financing Re-Guarantee](https://www.yaoxinhd.com)  | Data platform, File sharing      |          |
+| [Sui Wallet](https://slush.app) | Blockchain | |
 | [China Telecom](https://www.chinatelecomglobal.com)  | Telecom, Data platform | [Scaling Hadoop on cloud: Managing PB-Level Data through Separation of Compute and Storage with JuiceFS](https://juicefs.com/en/blog/user-stories/applicatio-of-juicefs-in-china-telecoms-daily-average-pb-data-scenario)   |
 | [China Mobile Cloud](https://ecloud.he.chinamobile.com)  | Public cloud, Data platform  | [Improving Apache HBase Performance on Cloud with JuiceFS](https://juicefs.com/en/blog/user-stories/juicefs-support-hbase-at-chinamobile-cloud)    |
 | [Volcano Engine](https://www.volcengine.com)  | Public cloud, File sharing, VFX rendering | [How JuiceFS Accelerates Edge Rendering Performance in Volcengine](https://juicefs.com/en/blog/user-stories/how-juicefs-accelerates-edge-rendering-performance-in-volcengine)   |
@@ -57,8 +64,11 @@ slug: /adopters
 | [Ricequant](https://www.ricequant.com)  | Quantitative trading, AI, File sharing   |         |
 | [Dmall](https://www.dmall.com/en) | SaaS, Data platform, File sharing | [Why DMALL Switched to a Big Data Storage-Compute Decoupled Architecture](https://juicefs.com/en/blog/user-stories/storage-compute-decoupled-architecture-cloud-native-big-data)      |
 | [Horizon Robotics](https://horizon.ai)  | Autonomous driving, AI pipeline |                 |
+| [Momenta](https://momenta.ai) | Automotive, AI | |
 | [Li Auto](https://www.lixiang.com/en) | Automotive, Big Data, AI  | [Migrating on-Premises Hadoop to Cloud with JuiceFS: A Case Study from Li Auto](https://juicefs.com/en/blog/user-stories/li-autos-practice-of-migrating-data-from-hdfs-to-juicefs)   |
 | [NIO Auto](https://www.nio.com)  | Automotive, AI, File sharing |         |
+| [XPENG](https://www.xpeng.com) | Automotive, AI | |
+| [CARIZON](https://www.carizon.com) | Automotive | |
 | [SAIC Motor](https://www.saicmotor.com/english)    | Automotive, AI   |          |
 | [Wuling Auto](https://wuling.com) | Automotive, Data platform   |           |
 | [coSence](https://www.coscene.io)  | Robotics, AI pipeline  | [coScene Chose JuiceFS over Alluxio to Tackle Object Storage Drawbacks](https://juicefs.com/en/blog/user-stories/juicefs-vs-alluxio-ai-robot-storage)          |

@@ -1,0 +1,113 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dynamic-ce-verifier
+  labels:
+    juicefs-app-type: dynamic-ce-verifier
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        juicefs-app-type: dynamic-ce-verifier
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: verifier
+        image: python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - mountPath: /data
+            name: data
+          - mountPath: /verifier
+            name: verifier-script
+        command: ["python3", "/verifier/verify.py"]
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: dynamic-ce
+      - name: verifier-script
+        configMap:
+          name: dynamic-ce-verifier
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dynamic-ce-verifier
+data:
+  verify.py: |
+    import os
+    import random
+    import subprocess
+    import threading
+    import time
+
+    file_size = 4 * 1024 * 1024
+    read_size = 512 * 1024
+    files = 16
+    workers = 8
+    read_seconds = 300
+    base = "/data/read-timeout-verifier"
+    tmp = "/tmp/read-timeout-verifier"
+
+    os.makedirs(base, exist_ok=True)
+    os.makedirs(tmp, exist_ok=True)
+    for i in range(files):
+        data = bytes([ord("A") + i % 26]) * file_size
+        path = os.path.join(base, f"block_{i:03d}")
+        with open(path, "wb") as f:
+            f.write(data)
+    os.sync()
+
+    # Give Chaos Mesh time to inject latency after this pod has prepared data.
+    time.sleep(90)
+
+    stop = time.monotonic() + read_seconds
+    io_failed = 0
+    short_reads = 0
+    ok = 0
+    lock = threading.Lock()
+
+    def verify_worker(worker):
+        global io_failed, short_reads, ok
+        rng = random.Random(worker)
+        round_id = 0
+        while time.monotonic() < stop:
+            idx = rng.randrange(files)
+            src = os.path.join(base, f"block_{idx:03d}")
+            dst = os.path.join(tmp, f"read_{worker}_{round_id}")
+            round_id += 1
+            cmd = ["dd", f"if={src}", f"of={dst}", f"bs={read_size}", "count=1", "iflag=direct", "status=none"]
+            result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if result.returncode != 0:
+                with lock:
+                    io_failed += 1
+                continue
+            with open(dst, "rb") as f:
+                data = f.read()
+            if len(data) != read_size:
+                with lock:
+                    short_reads += 1
+                try:
+                    os.remove(dst)
+                except FileNotFoundError:
+                    pass
+                continue
+            expected = bytes([ord("A") + idx % 26]) * read_size
+            if data != expected:
+                print(f"FATAL: successful direct read returned wrong data: file={src} size={len(data)} expected_byte={expected[:1]!r} got_prefix={data[:16]!r}", flush=True)
+                os._exit(1)
+            with lock:
+                ok += 1
+            try:
+                os.remove(dst)
+            except FileNotFoundError:
+                pass
+
+    threads = [threading.Thread(target=verify_worker, args=(i,)) for i in range(workers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    print(f"PASS: chaos read timeout verifier ok={ok} io_failed={io_failed} short_reads={short_reads}", flush=True)

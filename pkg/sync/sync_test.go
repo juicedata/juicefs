@@ -20,13 +20,16 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -242,6 +245,49 @@ func TestSyncForceUpdateDeleteDst(t *testing.T) {
 			}
 			if _, err := dst.Head(ctx, "dst-only/file"); !os.IsNotExist(err) {
 				t.Fatalf("head dst dst-only/file: %v, want not exist", err)
+			}
+		})
+	}
+}
+
+// Directories listed as child prefixes must be synced even when --start
+// sorts before them, regardless of the number of list threads.
+func TestSyncDirsWithStartAndListThreads(t *testing.T) {
+	for _, listThreads := range []int{1, 2} {
+		t.Run(fmt.Sprintf("list-threads=%d", listThreads), func(t *testing.T) {
+			tmpSrc := t.TempDir() + "/"
+			tmpDst := t.TempDir() + "/"
+			src, _ := object.CreateStorage("file", tmpSrc, "", "", "")
+			dst, _ := object.CreateStorage("file", tmpDst, "", "", "")
+			for _, key := range []string{"a", "p/", "q/x"} {
+				if err := src.Put(ctx, key, bytes.NewReader([]byte(key))); err != nil {
+					t.Fatalf("put src %s: %s", key, err)
+				}
+			}
+			if err := os.Chmod(tmpSrc+"q", 0700); err != nil {
+				t.Fatalf("chmod src q: %s", err)
+			}
+			config := &Config{
+				Start:       "a",
+				Threads:     10,
+				ListThreads: listThreads,
+				ListDepth:   1,
+				Dirs:        true,
+				Perms:       true,
+				Limit:       -1,
+				MaxSize:     math.MaxInt64,
+				Quiet:       true,
+			}
+			if err := Sync(src, dst, config); err != nil {
+				t.Fatalf("sync: %s", err)
+			}
+			if fi, err := os.Stat(tmpDst + "p"); err != nil || !fi.IsDir() {
+				t.Fatalf("empty dir p should be synced: %v", err)
+			}
+			if fi, err := os.Stat(tmpDst + "q"); err != nil {
+				t.Fatalf("stat dst q: %s", err)
+			} else if fi.Mode().Perm() != 0700 {
+				t.Fatalf("mode of dir q should be synced: got %o, want 700", fi.Mode().Perm())
 			}
 		})
 	}
@@ -731,6 +777,48 @@ func TestSyncLimitDeleteDstBoundary(t *testing.T) {
 	}
 	if err := testKeysEqual(all, []string{"", "a2"}); err != nil {
 		t.Fatalf("testKeysEqual fail: %s", err)
+	}
+}
+
+// When --limit stops a partial sync before an extra destination directory is
+// emptied, deleting the directory is deferred rather than reported as a
+// failure. A later unlimited sync can remove the remaining contents and the
+// directory itself.
+func TestSyncLimitDeleteDstDefersNonEmptyDir(t *testing.T) {
+	t.Cleanup(func() {
+		dstDelayDelMu.Lock()
+		dstDelayDel = nil
+		dstDelayDelMu.Unlock()
+	})
+	tmpSrc := t.TempDir() + "/"
+	tmpDst := t.TempDir() + "/"
+	src, _ := object.CreateStorage("file", tmpSrc, "", "", "")
+	dst, _ := object.CreateStorage("file", tmpDst, "", "", "")
+
+	if err := dst.Put(ctx, "extra/file", bytes.NewReader([]byte("data"))); err != nil {
+		t.Fatalf("put dst extra/file: %s", err)
+	}
+
+	config := &Config{
+		Threads:     1,
+		ListThreads: 1,
+		Update:      true,
+		Dirs:        true,
+		DeleteDst:   true,
+		Limit:       2,
+		MaxSize:     math.MaxInt64,
+		Quiet:       true,
+	}
+	if err := Sync(src, dst, config); err != nil {
+		t.Fatalf("sync with exhausted limit: %s", err)
+	}
+
+	all, err := ListAll(dst, "", "", "", true)
+	if err != nil {
+		t.Fatalf("list all dst: %s", err)
+	}
+	if err := testKeysEqual(all, []string{"", "extra/", "extra/file"}); err != nil {
+		t.Fatalf("partial sync should retain non-empty directory: %s", err)
 	}
 }
 
@@ -1232,6 +1320,102 @@ func TestSyncEncryptLargeFile(t *testing.T) {
 	}
 }
 
+type progressReaderFunc func([]byte) (int, error)
+
+func (f progressReaderFunc) Read(b []byte) (int, error) { return f(b) }
+
+func TestWithProgressLimitsActualBytes(t *testing.T) {
+	const readSize = 1 << 20
+	local := ratelimit.NewBucket(time.Hour, 2*readSize)
+	oldLimiter, oldCopiedBytes := limiter, copiedBytes
+	limiter, copiedBytes = &mixedLimiter{local: local}, nil
+	t.Cleanup(func() { limiter, copiedBytes = oldLimiter, oldCopiedBytes })
+
+	data := []byte("abc")
+	source := bytes.NewReader(data)
+	readErr := errors.New("source read failed")
+	wantTokens := int64(2*readSize - len(data))
+	r := newProgressReader(progressReaderFunc(func(b []byte) (int, error) {
+		if got := local.Available(); got != wantTokens {
+			t.Fatalf("tokens before source read: got %d, want %d", got, wantTokens)
+		}
+		n, err := source.Read(b[:1])
+		if source.Len() == 0 && n > 0 {
+			err = readErr
+		}
+		return n, err
+	}), int64(len(data)))
+	b := make([]byte, readSize)
+	for _, wantErr := range []error{nil, nil, readErr} {
+		if n, err := r.Read(b); n != 1 || err != wantErr {
+			t.Fatalf("read: got (%d, %v), want (1, %v)", n, err, wantErr)
+		}
+	}
+	if n, err := r.Read(b); n != 0 || err != io.EOF {
+		t.Fatalf("final read: got (%d, %v), want (0, EOF)", n, err)
+	}
+	if got := local.Available(); got != wantTokens {
+		t.Fatalf("tokens after EOF: got %d, want %d", got, wantTokens)
+	}
+}
+
+func TestCopyLimitsSmallObject(t *testing.T) {
+	const readSize = 1 << 20
+	cases := []struct {
+		name string
+		body string
+		size int64
+		// wantTokens is the exact reservation expected, or -1 when the size is
+		// unknown and only the copied content matters.
+		wantTokens int64
+	}{
+		{"empty", "", 0, 0},
+		{"tiny", "x", 1, 1},
+		{"unknownSize", "hello", -1, -1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			local := ratelimit.NewBucket(time.Hour, 2*readSize)
+			oldLimiter, oldCopiedBytes := limiter, copiedBytes
+			limiter, copiedBytes = &mixedLimiter{local: local}, nil
+			t.Cleanup(func() { limiter, copiedBytes = oldLimiter, oldCopiedBytes })
+
+			src, err := object.CreateStorage("mem", "", "", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			dst, err := object.CreateStorage("file", t.TempDir()+"/", "", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := src.Put(ctx, "key", strings.NewReader(c.body)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := doCopySingle0(src, dst, "key", c.size, false); err != nil {
+				t.Fatal(err)
+			}
+
+			in, err := dst.Get(ctx, "key", 0, -1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer in.Close()
+			got, err := io.ReadAll(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != c.body {
+				t.Fatalf("copied content: got %q, want %q", got, c.body)
+			}
+			if c.wantTokens >= 0 {
+				if used := int64(2*readSize) - local.Available(); used != c.wantTokens {
+					t.Fatalf("reserved tokens: got %d, want %d", used, c.wantTokens)
+				}
+			}
+		})
+	}
+}
+
 // TestMixedLimiterFailover verifies that the global traffic control takes
 // precedence, falls back to the local bwlimit when the global service is
 // unavailable, and switches back to the global limit once it recovers.
@@ -1358,5 +1542,49 @@ func TestGlobalLimitDrainWaitersOnFailure(t *testing.T) {
 	}
 	if g.healthy.Load() {
 		t.Fatalf("expected global limit to be marked unhealthy")
+	}
+}
+
+func TestCopyDataWithoutProgress(t *testing.T) {
+	savedCopied, savedCopiedBytes := copied, copiedBytes
+	copied, copiedBytes = nil, nil
+	defer func() { copied, copiedBytes = savedCopied, savedCopiedBytes }()
+
+	src, err := object.CreateStorage("mem", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create src: %s", err)
+	}
+	dst, err := object.CreateStorage("mem", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create dst: %s", err)
+	}
+	data := bytes.Repeat([]byte("juicefs"), 50)
+	if err = src.Put(ctx, "backup", bytes.NewReader(data)); err != nil {
+		t.Fatalf("put: %s", err)
+	}
+	wantChksum := crc32.Checksum(data, crc32.MakeTable(crc32.Castagnoli))
+
+	settleGoroutines := func() {
+		runtime.GC()
+		time.Sleep(300 * time.Millisecond)
+		runtime.GC()
+	}
+	settleGoroutines()
+	base := runtime.NumGoroutine()
+
+	const cycles = 50
+	for i := 0; i < cycles; i++ {
+		chksum, err := CopyData(src, dst, "backup", int64(len(data)), true)
+		if err != nil {
+			t.Fatalf("CopyData: %s", err)
+		}
+		if chksum != wantChksum {
+			t.Fatalf("checksum mismatch: got %d, want %d", chksum, wantChksum)
+		}
+	}
+
+	settleGoroutines()
+	if leaked := runtime.NumGoroutine() - base; leaked > cycles/10 {
+		t.Fatalf("leaked %d goroutines after %d CopyData calls", leaked, cycles)
 	}
 }

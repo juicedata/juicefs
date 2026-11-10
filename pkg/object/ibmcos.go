@@ -144,7 +144,7 @@ func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...A
 func (s *ibmcos) Copy(ctx context.Context, dst, src string) error {
 	t := s.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, DefaultStorageClass)
-	src = s.bucket + "/" + src
+	src = encodeCopySource(s.bucket, src)
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
 		Key:        &dst,
@@ -343,6 +343,7 @@ func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage
 			authEndpoint, apiKey, serviceInstanceID)).
 		WithS3ForcePathStyle(defaultPathStyle())
 	sess := session.Must(session.NewSession())
+	sess.Handlers.Build.PushBack(request.MakeAddToUserAgentFreeFormHandler(UserAgent))
 	client := s3.New(sess, conf)
 	return &ibmcos{bucket: bucket, s3: client}, nil
 }

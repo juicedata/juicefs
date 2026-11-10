@@ -106,7 +106,7 @@ $ aws --endpoint-url http://localhost:9000 s3 ls s3://<bucket>
 
 ### Use the MinIO Client
 
-To avoid compatibility issues, we recommend using the `RELEASE.2021-04-22T17-40-00Z` version of the MinIO Client (`mc`). You can find historical versions with different architectures of `mc` at this [address](https://dl.min.io/client/mc/release). For example, for the amd64 architecture, you can download the `RELEASE.2021-04-22T17-40-00Z` version of `mc` from this [link](https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z).
+To avoid compatibility issues, we recommend using the `RELEASE.2021-04-22T17-40-00Z` version of the MinIO Client (`mc`). You can find historical versions with different architectures of `mc` at this [address](https://github.com/minio/mc/releases). For example, for the amd64 architecture, you can download the `RELEASE.2021-04-22T17-40-00Z` version of `mc` from this [link](https://github.com/minio/mc/releases/download/RELEASE.2021-04-22T17-40-00Z/mc.linux-amd64.RELEASE.2021-04-22T17-40-00Z).
 
 After installing `mc`, add a new alias:
 

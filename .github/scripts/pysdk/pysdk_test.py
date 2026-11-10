@@ -1,8 +1,13 @@
 import errno
+from array import array
 import fractions
+import grp
+import io
 import unittest
+from unittest.mock import patch
 import os
 import pwd
+import stat
 from os.path import dirname
 import sys
 import time
@@ -17,8 +22,11 @@ meta_url=os.environ.get('META_URL', 'redis://localhost')
 
 
 class FileTests(unittest.TestCase):
+    def open_client(self):
+        return juicefs.Client("test-volume", meta=meta_url, access_log="/tmp/access.log")
+
     def setUp(self):
-        self.v = juicefs.Client("test-volume", meta=meta_url, access_log="/tmp/access.log")
+        self.v = self.open_client()
         if not self.v.exists(TESTFN):
             self.v.mkdir(TESTFN)
 
@@ -46,6 +54,44 @@ class FileTests(unittest.TestCase):
         fd.close()
         with self.v.open(TESTFILE, "rb") as fobj:
             self.assertEqual(fobj.read().splitlines(), [b"bacon"])
+
+
+class ReadintoTests(FileTests):
+    def test_readinto_writable_buffers(self):
+        content = b"abcdefghijk"
+        self.create_file(TESTFILE, content)
+        buffers = [
+            lambda: bytearray(8),
+            lambda: bytearray(),
+            lambda: array('I', [0, 0]),
+            lambda: memoryview(array('I', [0, 0])),
+            lambda: memoryview(bytearray(8)).cast('B', (2, 4)),
+            lambda: memoryview(bytearray(12))[2:10],
+        ]
+        for make_buffer in buffers:
+            with self.subTest(buffer=make_buffer()):
+                actual = make_buffer()
+                expected = make_buffer()
+                reference = io.BytesIO(content)
+                with self.v.open(TESTFILE, 'rb', 0) as stream:
+                    for _ in range(3):
+                        self.assertEqual(stream.readinto(actual), reference.readinto(expected))
+                        self.assertEqual(memoryview(actual).tobytes(), memoryview(expected).tobytes())
+                        self.assertEqual(stream.tell(), reference.tell())
+
+    def test_readinto_invalid_buffer_preserves_position(self):
+        content = b"abcdefghijk"
+        self.create_file(TESTFILE, content)
+        for position in (2, len(content)):
+            for buffer in (b"1234", b"", memoryview(b"1234"),
+                           memoryview(bytearray(8))[::2], [0, 0, 0, 0]):
+                with self.subTest(position=position, buffer=buffer):
+                    with self.v.open(TESTFILE, 'rb', 0) as stream:
+                        stream.seek(position)
+                        with self.assertRaises(TypeError):
+                            stream.readinto(buffer)
+                        self.assertEqual(stream.tell(), position)
+                        self.assertEqual(stream.read(), content[position:])
 
 
 class UtimeTests(FileTests):
@@ -89,6 +135,37 @@ class MakedirTests(FileTests):
 
 
 class ChownFileTests(FileTests):
+    def test_root_group_read_permissions(self):
+        self.v.chmod(TESTFN, 0o755)
+        self.create_file(TESTFILE)
+        users = {0: pwd.struct_passwd(("root", "x", 0, 0, "", "/", "")),
+                 1001: pwd.struct_passwd(("sdk-member", "x", 1001, 1001, "", "/", ""))}
+        groups = {gid: grp.struct_group((name, "x", gid, []))
+                  for gid, name in [(0, "root"), (1, "adm"), (1001, "sdk-members")]}
+        # Legacy hash of "root" on "test-volume"; SQL engines use a 31-bit GID.
+        legacy_gid = 2730912965
+        if meta_url.startswith(("sqlite3://", "mysql://", "postgres://")):
+            legacy_gid &= 0x7fffffff
+        for root_groups, file_gid, denied_mode in [([0], 0, 0o400), ([0, 1], legacy_gid, 0o404)]:
+            with self.subTest(root_groups=root_groups):
+                self.v.chown(TESTFILE, 0, file_gid)
+                self.v.chmod(TESTFILE, denied_mode)
+                memberships = {"root": root_groups, "sdk-member": [1001, 0]}
+                with patch.object(os, "geteuid", return_value=1001), \
+                        patch.object(pwd, "getpwuid", side_effect=users.__getitem__), \
+                        patch.object(grp, "getgrgid", side_effect=groups.__getitem__), \
+                        patch.object(os, "getgrouplist", side_effect=lambda name, gid: memberships[name]):
+                    member = self.open_client()
+                self.addCleanup(member.close)
+                with self.assertRaises(OSError) as denied:
+                    with member.open(TESTFILE, "rb") as f:
+                        f.read()
+                self.assertEqual(denied.exception.errno, errno.EACCES)
+
+                self.v.chmod(TESTFILE, 0o440)
+                with member.open(TESTFILE, "rb") as f:
+                    self.assertEqual(f.read(), b"content")
+
     def test_chown_uid_gid_arguments_must_be_index(self):
         stat = self.v.stat(TESTFN)
         uid = stat.st_uid
@@ -231,6 +308,44 @@ class NonLocalSymlinkTests(FileTests):
         src = os.path.join(TESTFN, 'some_link')
         self.v.symlink('/some_dir', src)
         assert self.v.readlink(src) == '../some_dir'
+
+
+class ListdirTests(FileTests):
+    def test_listdir_empty(self):
+        d = os.path.join(TESTFN, 'empty_dir')
+        self.v.mkdir(d)
+        self.assertEqual(self.v.listdir(d), [])
+        self.assertEqual(self.v.listdir(d, detail=True), [])
+
+    def test_listdir_names(self):
+        d = os.path.join(TESTFN, 'names_dir')
+        self.v.mkdir(d)
+        names = ['a', 'b' * 200, 'with space', '中文名字']
+        for n in names:
+            self.create_file(os.path.join(d, n))
+        self.v.mkdir(os.path.join(d, 'subdir'))
+        self.assertEqual(sorted(self.v.listdir(d)), sorted(names + ['subdir']))
+
+    def test_listdir_detail(self):
+        d = os.path.join(TESTFN, 'detail_dir')
+        self.v.mkdir(d)
+        self.create_file(os.path.join(d, 'f'), b'0123456789')
+        self.v.mkdir(os.path.join(d, 'sub'))
+        infos = dict(self.v.listdir(d, detail=True))
+        self.assertEqual(sorted(infos), ['f', 'sub'])
+        self.assertTrue(stat.S_ISREG(infos['f'].st_mode))
+        self.assertEqual(infos['f'].st_size, 10)
+        self.assertTrue(stat.S_ISDIR(infos['sub'].st_mode))
+
+    def test_listdir_many(self):
+        d = os.path.join(TESTFN, 'many_dir')
+        self.v.mkdir(d)
+        names = ['file_%03d' % i for i in range(200)]
+        for n in names:
+            self.create_file(os.path.join(d, n))
+        self.assertEqual(sorted(self.v.listdir(d)), sorted(names))
+        infos = self.v.listdir(d, detail=True)
+        self.assertEqual(sorted(n for n, _ in infos), sorted(names))
 
 
 class ExtendedAttributeTests(FileTests):

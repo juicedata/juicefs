@@ -20,6 +20,10 @@ on:
       - '.markdownlint-cli2.jsonc'
       - '.github/workflows/check-doc.yaml'
 
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check-doc:
     name: Check document

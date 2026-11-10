@@ -12,6 +12,7 @@ Starting with JuiceFS 1.4, tiered storage lets you map individual files or direc
   - `0` is the default tier.
   - `1` to `3` are user‑configurable tiers.
 - **storage-class**: The storage class assigned to a tier, for example, `STANDARD_IA`, `INTELLIGENT_TIERING`, or `GLACIER_IR`.
+- **tag**: A custom object tag for a tier, in the `key=value` format. It is attached to objects when they are uploaded and can be used together with the cloud provider's lifecycle rules (see [Custom tags](#6-custom-tags)).
 - **Tier attribute on a file/directory**: Stored in metadata; it determines which storage class is used for subsequent writes or object migrations.
 
 ## Prerequisites
@@ -104,9 +105,39 @@ Key fields to look for:
 - `expected(...),actual(...)` — shown when the metadata mapping and the object's actual storage class differ. This signals that `tier set --force` is needed to rewrite the objects.
 - `actual(...)` — shown for files with `tier=0`, displaying the object's actual storage class.
 
+## 6. Custom tags
+
+In addition to `storage-class`, you can configure a custom object tag for a tier, in the `key=value` format:
+
+```shell
+juicefs config redis://localhost --tier 1 --storage-class STANDARD --tag juicefs-tier=archive -y
+```
+
+You can also set a tag for the default tier (tier 0) when formatting:
+
+```shell
+juicefs format --storage-class STANDARD --tag juicefs-tier=archive redis://localhost myjfs
+```
+
+Once set, JuiceFS automatically attaches the tag to objects when they are uploaded. You can view the `tag` of each tier with `juicefs tier list`, or view a specific file's tag with `juicefs info`.
+
+### Typical usage: moving data to the archive tier with lifecycle rules
+
+Uploading objects directly with an archive storage class (such as `GLACIER` or `DEEP_ARCHIVE`) can be expensive. This is because some cloud providers charge archive-tier write/request fees, making each upload API call costly. When the goal is to move data to the archive tier, a more cost‑effective approach is:
+
+1. Keep uploading objects with a regular storage class such as `STANDARD` and set a custom tag for that tier, for example, `--tag juicefs-tier=archive`.
+2. Configure a lifecycle rule on the object storage bucket that filters objects by this tag and automatically transitions the matched objects to an archive storage class.
+
+This avoids the high API costs of uploading archive-class objects directly, while still using the cloud provider's lifecycle rules to gradually move the data to the archive tier.
+
+:::note
+The tag must be in the `key=value` format (exactly one `=`, and neither the key nor the value can be empty). Otherwise, it is rejected or ignored. For how to configure lifecycle rules, refer to your cloud provider's documentation.
+:::
+
 ## Notes
 
 - `tier set` only accepts file and directory paths.
 - `--tier` only `0` to `3` are allowed.
 - In writeback-cache mode (`--writeback`), `tier set` may fail if the file's data has not yet been uploaded to object storage. Wait for the upload to complete, then retry.
 - Changing `--storage-class` does **not** automatically migrate existing objects. You must run `tier set ... --force` manually.
+- `--tag` only applies to newly uploaded objects. It does not modify the tags of existing objects in object storage.

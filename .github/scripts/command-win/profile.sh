@@ -9,7 +9,7 @@ test_profile()
 {
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs
-    ./juicefs.exe mount -d $META_URL z:
+    ./juicefs.exe mount -d $META_URL z: --fuse-access-log c:/fuse.log --access-log c:/fsop.log --log c:/mount.log
     ./juicefs.exe mdtest $META_URL //d --depth 3 --dirs 3 --files 10 --threads 5 
     timeout 5s ./juicefs profile /z/.accesslog || EXIT_CODE=$?
     if [ "$EXIT_CODE" = "124" ]; then

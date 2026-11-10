@@ -26,6 +26,10 @@ on:
         required: false
         default: false
 
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-matrix:
     runs-on: ubuntu-22.04
@@ -50,7 +54,7 @@ jobs:
       matrix:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
 
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-24.04-4-cores
 
     steps:
       - name: Checkout
@@ -82,16 +86,10 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Install nodejs
-        run: |
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
-          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
-          nvm install 22
-          nvm use 22
-          node -v 
-          nvm current
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
 
       - name: Download Random Test
         run: |
@@ -102,17 +100,17 @@ jobs:
         timeout-minutes: 30
         continue-on-error: true
         run: |
-          sudo BINARY=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
+          sudo NODE_BIN="$(command -v node)" BINARY=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
 
       - name: Test Load & Dump with Json Fast Mode
         timeout-minutes: 30
         run: |
-          sudo FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh  
+          sudo NODE_BIN="$(command -v node)" FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
 
       - name: Test Load & Dump with Json
         timeout-minutes: 30
         run: |
-          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh     
+          sudo NODE_BIN="$(command -v node)" GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
 
       - name: log
         if: always()
@@ -172,4 +170,3 @@ jobs:
       - name: Success
         if: success()
         run: echo "All Done"
-        

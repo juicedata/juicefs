@@ -15,19 +15,15 @@
  */
 package io.juicefs.permission;
 
-import io.juicefs.utils.ReflectionUtil;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.ranger.admin.client.RangerAdminClient;
 import org.apache.ranger.authorization.hadoop.config.RangerPluginConfig;
 import org.apache.ranger.plugin.service.RangerBasePlugin;
 import org.apache.ranger.plugin.service.RangerChainedPlugin;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 public class RangerJfsPlugin extends RangerBasePlugin {
-  private static final Logger LOG = LoggerFactory.getLogger(RangerJfsPlugin.class);
 
   private FileSystem fs;
   private String rangerUrl;
@@ -49,12 +45,7 @@ public class RangerJfsPlugin extends RangerBasePlugin {
     RangerAdminClient admin = createAdminClient(getConfig());
     refresher = new RangerAdminRefresher(this, admin, fs, rangerUrl, pollingIntervalMs);
     refresher.start();
-    List<RangerChainedPlugin> chainedPlugins = null;
-    try {
-      chainedPlugins = (List<RangerChainedPlugin>) ReflectionUtil.getField(RangerBasePlugin.class.getName(), "chainedPlugins", this);
-    } catch (Exception e) {
-      LOG.warn("Get field \"chainedPlugins\" failed", e);
-    }
+    List<RangerChainedPlugin> chainedPlugins = getChainedPlugins();
     if (chainedPlugins != null) {
       for (RangerChainedPlugin plugin : chainedPlugins) {
         plugin.init();

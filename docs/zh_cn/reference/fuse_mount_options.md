@@ -49,7 +49,7 @@ FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentati
 
 从 JuiceFS v1.4 开始，`ReadDirPlusAuto` 已自动启用。该特性允许 FUSE 内核模块自动决定是否使用 `ReadDirPlus` 操作（在返回目录条目的同时返回文件属性），而非仅使用普通的 `ReadDir`。这减少了目录列表时后续的 `getattr` 调用次数，显著提升了大目录的列举性能。
 
-这是一项内部优化，用户无需进行任何配置。
+对大目录中每个条目执行 stat 时（如 `ls -l`、`find`、`rsync`），自适应模式可能产生大量额外的 `lookup` 请求，在元数据延迟较高时会比较慢。此时可使用 `--no-readdirplus-auto` 挂载，始终使用 `ReadDirPlus`，代价是可能获取不需要的属性（如普通的 `ls`）。
 
 ## debug
 

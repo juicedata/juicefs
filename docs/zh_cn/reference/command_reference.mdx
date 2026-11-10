@@ -252,7 +252,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--trash-days value`|文件被自动清理前在回收站内保留的天数|
 |`--enable-acl` <VersionAdd>1.2</VersionAdd>|开启 [POSIX ACL](../security/posix_acl.md)（不支持关闭），同时允许连接的最小客户端版本会提升到 v1.2|
 |`--encrypt-secret`|如果密钥之前以原格式存储，则加密密钥 (默认值：false)|
-|`--min-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最小客户端版本|
+|`--min-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最小客户端版本，只能提高，不能降低|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最大客户端版本|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd>|开启目录统计，这是快速汇总和目录配额所必需的 (默认值：false)|
 |`--changelog` <VersionAdd>1.4</VersionAdd>|启用[元数据 changelog](../administration/changelog.md)（默认值：false）|
@@ -422,11 +422,11 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |-|-|
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
 |`FILE`|导出文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。|
-|`--subdir=path`|只导出指定子目录的元数据。|
+|`--subdir=path`|只导出指定子目录的元数据，该目录必须已存在。与 `--binary` 同时使用时会被忽略，始终导出整个文件系统。|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd>|导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。|
 |`--threads=10` <VersionAdd>1.2</VersionAdd>|并发线程数，默认 10。|
-|`--fast` <VersionAdd>1.2</VersionAdd>|使用更多内存来加速导出。|
-|`--skip-trash` <VersionAdd>1.2</VersionAdd>|跳过回收站中的文件和目录。|
+|`--fast` <VersionAdd>1.2</VersionAdd>|使用更多内存来加速导出。与 `--subdir` 或 `--binary` 同时使用时会被忽略。|
+|`--skip-trash` <VersionAdd>1.2</VersionAdd>|跳过回收站中的文件和目录。与 `--binary` 同时使用时会被忽略。|
 
 ### `juicefs load` {#load}
 
@@ -692,6 +692,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--enable-cap` <VersionAdd>1.3</VersionAdd>|启用 security.capability 扩展属性 (xattr) ，默认为 false。|
 |`--enable-selinux` <VersionAdd>1.3</VersionAdd>|启用 security.selinux 扩展属性 (xattr) ，默认为 false。|
 |`--enable-ioctl` <VersionAdd>1.1</VersionAdd>|启用 ioctl (仅支持 GETFLAGS/SETFLAGS) (默认：false)|
+|`--no-readdirplus-auto` <VersionAdd>1.4.3</VersionAdd>|始终使用 READDIRPLUS，而非自适应模式 (默认：false)|
 |`--root-squash value` <VersionAdd>1.1</VersionAdd>|将本地 root 用户 (UID=0) 映射到一个指定用户，如 UID:GID|
 |`--all-squash value` <VersionAdd>1.3</VersionAdd>|将所有用户映射到一个指定用户，如 UID:GID|
 |`--umask value` <VersionAdd>1.3</VersionAdd> |新文件和新目录的 umask 的八进制格式|
@@ -872,13 +873,28 @@ echo '/jfs/f1
 /jfs/f2
 /jfs/f3' > /tmp/filelist.txt
 juicefs warmup -f /tmp/filelist.txt
+
+# 只预热文件中的部分字节范围
+echo '/jfs/f1
+/jfs/f2 [0-4096]
+/jfs/f3 [0-4096;1048576-1052672]' > /tmp/filelist.txt
+juicefs warmup -f /tmp/filelist.txt
 ```
+
+文件中的每一行，或者是一个路径（预热整个文件），或者是一个路径加上方括号包裹的字节范围列表。
+范围为 `start-end` 形式，多个范围之间用 `;` 分隔，其中 `start` 包含在内、`end` 不包含在内，
+因此 `[0-4096]` 表示开头的 4096 字节。由于方括号本身起到界定作用，含空格的路径无需引号。
+如果某一行的方括号内容不合法，该行会被报告并跳过，而不会被当作普通路径处理。
+
+字节范围决定了操作哪些数据块，而块是缓存的最小单位，因此一个范围至少会覆盖一个完整的块
+（由 `--block-size` 决定，默认 4 MiB）。使用 `--evict` 时尤其需要注意，范围涉及的块会被整块清除；
+`--check` 的统计结果同样以块为单位。
 
 #### 参数
 
 |项 | 说明|
 |-|-|
-|`--file=value, -f value`|指定一个包含一组路径的文件（每一行为一个文件路径）。|
+|`--file=value, -f value`|指定一个包含一组路径的文件（每一行为 `path` 或 `path [start-end;...]`）。|
 |`--threads=50, -p 50`|并发的工作线程数，默认 50。如果带宽不足导致下载失败，需要减少并发度，控制下载速度。|
 |`--background, -b`|后台运行（默认：false）|
 |`--evict` <VersionAdd>1.2</VersionAdd>|逐出已缓存的块|
@@ -1020,6 +1036,8 @@ juicefs sync SRC DST --traffic-control-url http://127.0.0.1:8080/traffic-control
 
   * `granted`：本次授予的可用字节数。
   * `expired`：本次授予额度的过期时间（毫秒）。
+
+完整使用指南（含参考服务端实现）请参阅[全局流量控制](../guide/sync.md#global-traffic-control)。
 
 #### 分布式相关参数 {#sync-cluster-related-options}
 

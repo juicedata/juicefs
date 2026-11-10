@@ -102,7 +102,7 @@ class JuiceFSLib(object):
 class Client(object):
     """A JuiceFS client."""
     def __init__(self, name, meta, *, bucket="", storage_class="", read_only=False, no_session=False, no_bgjob=True,
-                 open_cache="0", backup_meta="3600", backup_skip_trash=False, heartbeat="12",
+                 open_cache="0", backup_meta="3600", backup_skip_trash=False, heartbeat="12", session_timeout="0",
                  cache_dir="memory", cache_size="100M", free_space_ratio="0.1", cache_partial_only=False,
                  verify_cache_checksum="extend", cache_eviction="2-random", cache_scan_interval="3600", cache_expire="0",
                  writeback=False, buffer_size="300M", prefetch=1, max_readahead="0", upload_limit="0",
@@ -123,6 +123,7 @@ class Client(object):
         kwargs["backupMeta"] = backup_meta
         kwargs["backupSkipTrash"] = backup_skip_trash
         kwargs["heartbeat"] = heartbeat
+        kwargs["sessionTimeout"] = session_timeout
         kwargs["cacheDir"] = cache_dir
         kwargs["cacheSize"] = cache_size
         kwargs["freeSpace"] = free_space_ratio
@@ -161,14 +162,16 @@ class Client(object):
         kwargs["pushRemoteWriteAuth"] = push_remote_write_auth
         kwargs["caller"] = 1
 
-        jsonConf = json.dumps(kwargs, sort_keys=True)
         self.umask = os.umask(0)
         os.umask(self.umask)
         user = pwd.getpwuid(os.geteuid())
         groups = [grp.getgrgid(gid).gr_name for gid in os.getgrouplist(user.pw_name, user.pw_gid)]
         superuser = pwd.getpwuid(0)
-        supergroups = [grp.getgrgid(gid).gr_name for gid in os.getgrouplist(superuser.pw_name, superuser.pw_gid)]
-        self.h = self.lib.jfs_init(0, 0, name.encode(), jsonConf.encode(), user.pw_name.encode(), ','.join(groups).encode(), superuser.pw_name.encode(), ''.join(supergroups).encode())
+        # Preserve the legacy GID mapping without granting superuser access to the group.
+        supergids = os.getgrouplist(superuser.pw_name, superuser.pw_gid)
+        kwargs["rootGroup"] = ''.join(grp.getgrgid(gid).gr_name for gid in supergids)
+        jsonConf = json.dumps(kwargs, sort_keys=True)
+        self.h = self.lib.jfs_init(0, 0, name.encode(), jsonConf.encode(), user.pw_name.encode(), ','.join(groups).encode(), superuser.pw_name.encode(), b'')
 
     def __del__(self):
         self.close(terminate=False)
@@ -278,11 +281,10 @@ class Client(object):
     def listdir(self, path, detail=False):
         """Return a list containing the names of the entries in the directory given by path."""
         buf = c_void_p()
-        size = c_int()
-        # func jfs_listdir(pid int, h int64, cpath *C.char, offset int, buf uintptr, bufsize int) int {
+        size = c_int64()
 
         self.lib.jfs_listdir2(c_int64(_tid()), c_int64(self.h), _bin(path), bool(detail), byref(buf), byref(size))
-        data = string_at(buf, size)
+        data = string_at(buf, size.value)
         infos = []
         pos = 0
         while pos < len(data):
@@ -356,9 +358,9 @@ class Client(object):
     def listxattr(self, path):
         """List extended attributes on a file."""
         buf = c_void_p()
-        size = c_int()
+        size = c_int64()
         self.lib.jfs_listXattr2(c_int64(_tid()), c_int64(self.h), _bin(path), byref(buf), byref(size))
-        data = string_at(buf, size).decode()
+        data = string_at(buf, size.value).decode()
         self.lib.free(buf)
         if not data:
             return []
@@ -420,7 +422,7 @@ class Client(object):
         """Get the summary of a directory."""
         buf = c_void_p()
 
-        n = self.lib.jfs_gettreesummary(_tid(), self.h, _bin(path), c_uint8(depth), c_uint32(entries), byref(buf))
+        n = self.lib.jfs_gettreesummary(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint8(depth), c_uint8(entries), byref(buf))
         data = string_at(buf, n)
         res = json.loads(str(data, encoding='utf-8'))
 
@@ -434,7 +436,7 @@ class Client(object):
                 for v in entry["Children"]:
                     parseSummary(v, removefields)
 
-        parseSummary(res, ["Inode"])
+        parseSummary(res, ["Inode", "Duration"])
         self.lib.free(buf)
         return res
 
@@ -530,11 +532,15 @@ class _File(object):
         return buf
 
     def readinto(self, buffer):
-        data = self.read(len(buffer))
-        if not data:
-            return 0
-        buffer[:len(data)] = data
-        return len(data)
+        """Read bytes into a writable, contiguous buffer."""
+        self._check_closed()
+        with memoryview(buffer) as view:
+            if view.readonly:
+                raise TypeError('readinto() argument must be a writable bytes-like object')
+            with view.cast('B') as byte_view:
+                data = self.read(len(byte_view))
+                byte_view[:len(data)] = data
+                return len(data)
 
     def write(self, data):
         """Write the string data to the file."""
@@ -618,21 +624,22 @@ class _File(object):
         return self
 
     def readlines(self, hint=-1):
-        """Return a list of lines from the stream."""
+        """Return lines; a positive hint counts lines, not bytes."""
         self._check_closed()
-        if hint == -1:
+        if hint is None or hint <= 0:
             data = self.read(-1)
         else:
+            # Unlike the standard library's size hint, this is a line limit.
             rs = []
             while hint > 0:
                 r = self.read(1)
                 if not r:
                     break
                 rs.append(r)
-                if r[0] == b'\n':
+                if r == b'\n':
                     hint -= 1
             data = b''.join(rs)
-        return data.splitlines(True)
+        return io.BytesIO(data).readlines()
 
     def writelines(self, lines):
         """Write a list of lines to the file."""
@@ -682,9 +689,9 @@ class File(object):
         return self.next()
 
     def next(self):
-        lines = self.readlines(1)
-        if lines:
-            return lines[0]
+        line = self.readline()
+        if line:
+            return line
         raise StopIteration
 
     def fileno(self):
@@ -737,6 +744,17 @@ def test():
         assert data == [b"hello"]
     print(list(v.open("/d/file")))
     assert list(v.open("/d/file")) == ['hello']
+    with v.open("/d/lines", 'wb') as f:
+        f.write(b"first\rpart\nsecond\nlast")
+    with v.open("/d/lines", 'rb', 0) as f:
+        assert f.readline() == b"first\rpart\n"
+        assert f.tell() == len(b"first\rpart\n")
+        assert f.readline() == b"second\n"
+        assert f.readline() == b"last"
+        assert f.readline() == b''
+    with v.open("/d/lines", 'rb', 0) as f:
+        assert list(f) == [b"first\rpart\n", b"second\n", b"last"]
+    v.remove("/d/lines")
     try:
         v.open("/d/d/file", "w")
     except OSError as e:

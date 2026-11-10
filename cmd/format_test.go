@@ -17,12 +17,31 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 )
+
+type unsupportedTierStorage struct {
+	object.ObjectStorage
+	initCalls *int
+}
+
+func (s *unsupportedTierStorage) InitTiers(_ object.Tiers) error {
+	*s.initCalls = *s.initCalls + 1
+	return errors.New("not supported")
+}
+
+func (s *unsupportedTierStorage) GetTier(context.Context) object.Tier {
+	return object.Tier{}
+}
 
 func TestFixObjectSize(t *testing.T) {
 	t.Run("Should make sure the size is in range", func(t *testing.T) {
@@ -56,6 +75,46 @@ func TestFixObjectSize(t *testing.T) {
 	})
 }
 
+func TestCreateStorageTierWarning(t *testing.T) {
+	const storageName = "unsupported-tier-test"
+	initCalls := 0
+	object.Register(storageName, func(bucket, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+		storage, err := object.CreateStorage("mem", bucket, accessKey, secretKey, token)
+		if err != nil {
+			return nil, err
+		}
+		return &unsupportedTierStorage{ObjectStorage: storage, initCalls: &initCalls}, nil
+	})
+
+	var logs bytes.Buffer
+	originalOutput := logger.Out
+	logger.SetOutput(&logs)
+	defer logger.SetOutput(originalOutput)
+
+	format := meta.Format{Name: "test", Storage: storageName, Tiers: object.NewTiers("")}
+	if _, err := createStorage(format); err != nil {
+		t.Fatalf("create storage without configured tiers: %s", err)
+	}
+	if initCalls != 1 {
+		t.Fatalf("InitTiers called %d times, expected 1", initCalls)
+	}
+	if strings.Contains(logs.String(), "Set storage tier:") {
+		t.Fatalf("unexpected storage tier warning: %s", logs.String())
+	}
+
+	logs.Reset()
+	format.Tiers[0] = object.Tier{ID: 0, Sc: "STANDARD_IA"}
+	if _, err := createStorage(format); err != nil {
+		t.Fatalf("create storage with a configured tier: %s", err)
+	}
+	if initCalls != 2 {
+		t.Fatalf("InitTiers called %d times, expected 2", initCalls)
+	}
+	if !strings.Contains(logs.String(), "Set storage tier: not supported") {
+		t.Fatalf("missing storage tier warning: %s", logs.String())
+	}
+}
+
 func TestFormat(t *testing.T) {
 	rdb := resetTestMeta()
 	if err := Main([]string{"", "format", "--bucket", t.TempDir(), testMeta, testVolume}); err != nil {
@@ -84,5 +143,38 @@ func TestFormat(t *testing.T) {
 	}
 	if f.Capacity != 1<<30 || f.Inodes != 1000 {
 		t.Fatalf("unexpected volume: %+v", f)
+	}
+}
+
+func TestFormatVersion(t *testing.T) {
+	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "test.db")
+	bucket := filepath.Join(t.TempDir(), "testBucket")
+	if err := Main([]string{"", "format", metaURL, "--bucket", bucket, testVolume}); err != nil {
+		t.Fatalf("format: %s", err)
+	}
+	if err := Main([]string{"", "config", metaURL, "--min-client-version", "99.0.0", "--yes"}); err != nil {
+		t.Fatalf("config: %s", err)
+	}
+
+	err := Main([]string{"", "format", metaURL, "--bucket", t.TempDir(), testVolume})
+	if err == nil || !strings.Contains(err.Error(), "allowed minimum version: 99.0.0") {
+		t.Fatalf("format error %q does not report the version policy", err)
+	}
+
+	data, err := getStdout([]string{"", "config", metaURL})
+	if err != nil {
+		t.Fatalf("get config: %s", err)
+	}
+	var format meta.Format
+	if err = json.Unmarshal(data, &format); err != nil {
+		t.Fatalf("json unmarshal: %s", err)
+	}
+	if format.Bucket != bucket+"/" {
+		t.Fatalf("bucket %q != expect %q", format.Bucket, bucket+"/")
+	}
+
+	format.MetaVersion = meta.MaxVersion + 1
+	if err = checkFormatVersion(&format, true); err == nil {
+		t.Fatal("force bypassed incompatible metadata version")
 	}
 }

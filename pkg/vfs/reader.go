@@ -97,6 +97,7 @@ type sliceReader struct {
 	block      *frange
 	state      sstate
 	page       *chunk.Page
+	pageUsed   bool
 	indx       uint32
 	currentPos uint32
 	lastAccess time.Time
@@ -193,15 +194,24 @@ func (s *sliceReader) run() {
 	s.currentPos = 0
 	if s.block.off > length {
 		s.block.len = 0
-		s.state = READY
-		s.done(0, 0)
 	} else if s.block.end() > length {
 		s.block.len = length - s.block.off
 	}
 	need := s.block.len
-	f.Unlock()
+	if need == 0 {
+		s.state = READY
+		s.done(0, 0)
+	}
+	if s.pageUsed {
+		// The previous page may still be held by the cache or an unfinished read.
+		old := s.page
+		s.page = chunk.NewOffPage(len(old.Data))
+		old.Release()
+	}
 
 	p := s.page.Slice(0, int(need))
+	s.pageUsed = true
+	f.Unlock()
 	defer p.Release()
 	var n int
 
@@ -239,6 +249,7 @@ func (s *sliceReader) invalidate() {
 		// TODO cancel ongoing read
 	case READY:
 		if s.refs > 0 {
+			s.currentPos = 0
 			s.state = NEW
 			go s.run()
 		} else {
@@ -591,17 +602,22 @@ func (f *fileReader) shouldStop() bool {
 
 func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, syscall.Errno) {
 	start := time.Now()
-	for _, req := range reqs {
-		s := req.s
-		for s.state != READY && uint64(s.currentPos) < s.block.len {
-			if s.cond.WaitWithTimeout(time.Second) {
-				if ctx.Canceled() {
-					logger.Warnf("read %d interrupted after %s", f.inode, time.Since(start))
-					return 0, syscall.EINTR
+	// Recheck all requests after any wait: a ready slice may be refreshed while the lock is released.
+	for waited := true; waited; {
+		waited = false
+		for _, req := range reqs {
+			s := req.s
+			for s.state != READY && uint64(s.currentPos) < s.block.len {
+				waited = true
+				if s.cond.WaitWithTimeout(time.Second) {
+					if ctx.Canceled() {
+						logger.Warnf("read %d interrupted after %s", f.inode, time.Since(start))
+						return 0, syscall.EINTR
+					}
 				}
-			}
-			if f.shouldStop() {
-				return 0, f.err
+				if f.shouldStop() {
+					return 0, f.err
+				}
 			}
 		}
 	}

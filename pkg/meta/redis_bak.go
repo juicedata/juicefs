@@ -41,6 +41,10 @@ var (
 	redisPipeLimit = 1000
 )
 
+func (m *redisMeta) backupSource() pb.Footer_Engine {
+	return pb.Footer_REDIS
+}
+
 func (m *redisMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var dumps = []func(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error{
 		m.dumpFormat,
@@ -784,13 +788,17 @@ func (m *redisMeta) loadEdges(ctx Context, msg proto.Message) error {
 
 func (m *redisMeta) loadChunks(ctx Context, msg proto.Message) error {
 	batch := msg.(*pb.Batch)
-	pipe := m.rdb.Pipeline()
+	pipe := m.rdb.TxPipeline()
 	for _, chk := range batch.Chunks {
-		slices := make([]string, 0, len(chk.Slices))
+		slices := make([]interface{}, 0, len(chk.Slices)/sliceBytes)
 		for off := 0; off < len(chk.Slices); off += sliceBytes {
 			slices = append(slices, string(chk.Slices[off:off+sliceBytes]))
 		}
-		pipe.RPush(ctx, m.chunkKey(Ino(chk.Inode), chk.Index), slices)
+		key := m.chunkKey(Ino(chk.Inode), chk.Index)
+		pipe.Del(ctx, key)
+		if len(slices) > 0 {
+			pipe.RPush(ctx, key, slices...)
+		}
 
 		if pipe.Len() >= redisPipeLimit {
 			if err := execPipe(ctx, pipe); err != nil {
@@ -967,7 +975,7 @@ func (m *redisMeta) loadDirStats(ctx Context, msg proto.Message) error {
 func (m *redisMeta) loadParents(ctx Context, msg proto.Message) error {
 	pipe := m.rdb.Pipeline()
 	for _, p := range msg.(*pb.Batch).Parents {
-		pipe.HIncrBy(ctx, m.parentKey(Ino(p.Inode)), Ino(p.Parent).String(), p.Cnt)
+		pipe.HSet(ctx, m.parentKey(Ino(p.Inode)), Ino(p.Parent).String(), p.Cnt)
 		if pipe.Len() >= redisPipeLimit {
 			if err := execPipe(ctx, pipe); err != nil {
 				return err

@@ -342,6 +342,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.OpenCache = utils.Duration(c.String("open-cache"))
 	conf.OpenCacheLimit = c.Uint64("open-cache-limit")
 	conf.Heartbeat = utils.Duration(c.String("heartbeat"))
+	conf.SessionTimeout = utils.Duration(c.String("session-timeout"))
 	conf.MountPoint = mp
 	conf.Subdir = c.String("subdir")
 	conf.SkipDirMtime = utils.Duration(c.String("skip-dir-mtime"))
@@ -414,10 +415,10 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		chunkConf.Readahead = 8 * chunkConf.BlockSize
 	}
 
-	if chunkConf.UploadLimit == 0 {
+	if !c.IsSet("upload-limit") {
 		chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
 	}
-	if chunkConf.DownloadLimit == 0 {
+	if !c.IsSet("download-limit") {
 		chunkConf.DownloadLimit = format.DownloadLimit * 1e6 / 8
 	}
 	chunkConf.SelfCheck(format.UUID)
@@ -460,6 +461,7 @@ func (h *storageHolder) Shutdown() {
 }
 
 func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.Format)) (object.ObjectStorage, error) {
+	format = format.Clone()
 	if patch != nil {
 		patch(format)
 	}
@@ -471,7 +473,7 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 		ObjectStorage: blob,
 		fmt:           *format, // keep a copy to find the change
 	}
-	cli.OnReload(func(new *meta.Format) {
+	cli.OnReload(func(new *meta.Format) error {
 		if patch != nil {
 			patch(new)
 		}
@@ -480,12 +482,12 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 			logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q tiers=%v", new.Storage, new.Bucket, new.AccessKey, new.Tiers[0].Sc, new.Tiers)
 			newBlob, err := createStorage(*new)
 			if err != nil {
-				logger.Warnf("object storage: %s", err)
-				return
+				return fmt.Errorf("object storage: %w", err)
 			}
 			holder.ObjectStorage = newBlob
 			holder.fmt = *new
 		}
+		return nil
 	})
 	return holder, nil
 }
@@ -562,8 +564,9 @@ func mount(c *cli.Context) error {
 	var err error
 	if stage == 0 || supervisor == "test" {
 		err = utils.WithTimeout(context.TODO(), func(context.Context) error {
-			mp, err = filepath.Abs(mp)
-			return err
+			var pathErr error
+			mp, pathErr = filepath.Abs(mp)
+			return pathErr
 		}, time.Second*3)
 		if err != nil {
 			logger.Fatalf("abs %q: %s", mp, err)
@@ -666,8 +669,8 @@ func mount(c *cli.Context) error {
 		vfsConf.StatePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
 
-	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
-		return st
+	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir, false); st != 0 {
+		return fmt.Errorf("chroot to %q: %s", metaConf.Subdir, st)
 	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	registerer, registry := wrapRegister(c, mp, format.Name)
@@ -680,9 +683,10 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("new session: %s", err)
 	}
 
-	metaCli.OnReload(func(fmt *meta.Format) {
+	metaCli.OnReload(func(fmt *meta.Format) error {
 		updateFormat(c)(fmt)
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		return nil
 	})
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
 	installHandler(metaCli, mp, v, blob)

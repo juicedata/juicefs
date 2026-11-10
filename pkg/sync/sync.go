@@ -68,7 +68,7 @@ var (
 	extra, extraBytes       *utils.Bar
 	deleted, failed         *utils.Bar
 	listedPrefix            *utils.Bar
-	concurrent              chan int
+	concurrent              = make(chan int, 10)
 	limiter                 *mixedLimiter
 	totalHandled            atomic.Int64
 )
@@ -421,6 +421,10 @@ func try(n int, f func() error) (err error) {
 }
 
 func deleteObj(storage object.ObjectStorage, key string, dry bool) error {
+	return deleteObjWithLimit(storage, key, dry, -1)
+}
+
+func deleteObjWithLimit(storage object.ObjectStorage, key string, dry bool, limit int64) error {
 	if dry {
 		logger.Debugf("Will delete %s from %s", key, storage)
 		deleted.Increment()
@@ -430,6 +434,9 @@ func deleteObj(storage object.ObjectStorage, key string, dry bool) error {
 	if err := try(3, func() error { return storage.Delete(ctx, key) }); err == nil {
 		deleted.Increment()
 		logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
+		return nil
+	} else if limit == 0 {
+		logger.Warnf("Deferring deletion of non-empty directory %s from %s; the object limit may have been reached: %s", key, storage, err)
 		return nil
 	} else {
 		failed.Increment()
@@ -742,20 +749,35 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 	}
 	r := &chksumReader{in, 0, calChksum}
 	defer in.Close()
-	err = dst.Put(ctx, key, &withProgress{r})
+	err = dst.Put(ctx, key, newProgressReader(r, size))
 	return r.chksum, err
 }
 
 type withProgress struct {
-	r io.Reader
+	r        io.Reader
+	reserved int64 // bytes allowed but not yet consumed by a source read
+}
+
+func newProgressReader(r io.Reader, size int64) io.Reader {
+	p := &withProgress{r: r}
+	if size < 0 {
+		return p
+	}
+	return io.LimitReader(p, size)
 }
 
 func (w *withProgress) Read(b []byte) (int, error) {
-	if limiter != nil {
-		limiter.Wait(int64(len(b)))
+	if need := int64(len(b)) - w.reserved; need > 0 {
+		if limiter != nil {
+			limiter.Wait(need)
+		}
+		w.reserved += need
 	}
 	n, err := w.r.Read(b)
-	copiedBytes.IncrInt64(int64(n))
+	w.reserved -= int64(n)
+	if copiedBytes != nil {
+		copiedBytes.IncrInt64(int64(n))
+	}
 	return n, err
 }
 
@@ -800,7 +822,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		defer in.Close()
 		r := &chksumReader{in, 0, calChksum}
-		pr := &withProgress{r}
+		pr := newProgressReader(r, size)
 		err = utils.ErrNotSUP
 		if obj, ok := dst.(object.SupportUploadPartStream); ok {
 			part, err = obj.UploadPartStream(key, uploadID, num+1, pr)
@@ -990,13 +1012,6 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 	}
 
 	return chksum, nil
-}
-
-func InitForCopyData() {
-	concurrent = make(chan int, 10)
-	progress := utils.NewProgress(true)
-	copied = progress.AddCountSpinner("Copied objects")
-	copiedBytes = progress.AddByteSpinner("Copied bytes")
 }
 
 func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
@@ -1537,12 +1552,12 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				sendTask(withSize(obj, markChecksum))
 			} else if config.DeleteSrc {
 				if obj.IsDir() {
-					if checkpointMgr != nil {
-						checkpointMgr.UpdateLastListedKey(prefix, obj)
-					}
 					srcDelayDelMu.Lock()
 					srcDelayDel = append(srcDelayDel, obj.Key())
 					srcDelayDelMu.Unlock()
+					if checkpointMgr != nil {
+						checkpointMgr.UpdateLastListedKey(prefix, obj)
+					}
 				} else {
 					sendTask(withSize(obj, markDeleteSrc))
 				}
@@ -1904,7 +1919,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 					listedPrefix.Increment()
 					continue
 				}
-				err = startProducer(tasks, src, dst, key, config.ListDepth, config, checkpointMgr)
+				err := startProducer(tasks, src, dst, key, config.ListDepth, config, checkpointMgr)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", key, err)
 					failed.Increment()
@@ -2166,7 +2181,6 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			uploads = workerUploads
 		}
 	}
-
 	if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
 		major, minor := utils.GetKernelVersion()
 		// copy_file_range() system call first appeared in Linux 4.5, and reworked in 5.3
@@ -2426,7 +2440,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			}
 			for i := len(keys) - 1; i >= 0; i-- {
 				incrHandled(1)
-				_ = deleteObj(storage, keys[i], config.Dry)
+				_ = deleteObjWithLimit(storage, keys[i], config.Dry, config.Limit)
 			}
 		}
 		delWg := sync.WaitGroup{}
@@ -2549,7 +2563,7 @@ func initSyncMetrics(config *Config) {
 		}
 		if listedPrefix != nil {
 			config.Registerer.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
-				Name: "Prefix",
+				Name: "listed_prefix",
 				Help: "listed prefix",
 			}, func() float64 {
 				return float64(listedPrefix.Current())

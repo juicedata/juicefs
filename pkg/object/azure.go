@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
@@ -291,6 +292,16 @@ func autoWasbEndpoint(accountName, scheme string, makeClient func(serviceURL str
 	return "", fmt.Errorf("fail to auto-detect endpoint: %w", lastErr)
 }
 
+func azblobOptions() *azblob.ClientOptions {
+	return &azblob.ClientOptions{
+		ClientOptions: azcore.ClientOptions{
+			Telemetry: policy.TelemetryOptions{
+				ApplicationID: UserAgent,
+			},
+		},
+	}
+}
+
 func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
@@ -307,7 +318,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 	if connString := os.Getenv("AZURE_STORAGE_CONNECTION_STRING"); connString != "" {
 		logger.Debugf("Using Azure connection string authentication")
 		var client *azblob.Client
-		if client, err = azblob.NewClientFromConnectionString(connString, nil); err != nil {
+		if client, err = azblob.NewClientFromConnectionString(connString, azblobOptions()); err != nil {
 			return nil, err
 		}
 		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, useTokenAuth: false}, nil
@@ -329,7 +340,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 				}
 			}
 			sasURL := fmt.Sprintf("%s://%s.%s?%s", uri.Scheme, accountName, domain, normalized)
-			client, err := azblob.NewClientWithNoCredential(sasURL, nil)
+			client, err := azblob.NewClientWithNoCredential(sasURL, azblobOptions())
 			if err != nil {
 				return nil, fmt.Errorf("Failed to create Azure blob client with SAS token: %v", err)
 			}
@@ -348,7 +359,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 			}
 		}
 		serviceURL := fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain)
-		client, err := azblob.NewClient(serviceURL, tokenCred, nil)
+		client, err := azblob.NewClient(serviceURL, tokenCred, azblobOptions())
 		if err != nil {
 			return nil, fmt.Errorf("Failed to create Azure blob client with token credential: %v", err)
 		}
@@ -368,7 +379,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 			return nil, fmt.Errorf("Unable to get endpoint of container %s: %w", containerName, err)
 		}
 	}
-	client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain), credential, nil)
+	client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain), credential, azblobOptions())
 	if err != nil {
 		return nil, err
 	}

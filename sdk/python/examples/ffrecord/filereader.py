@@ -162,6 +162,5 @@ if __name__ == "__main__":
     reader.open_fd()
     data = reader.read_one(0)
     print(data)
-    data = pickle.loads(data)
     print(data["index"])
     print(data["txt"])

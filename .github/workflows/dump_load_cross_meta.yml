@@ -26,6 +26,10 @@ on:
         required: false
         default: false
 
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   dump_load_cross_meta:
     timeout-minutes: 90

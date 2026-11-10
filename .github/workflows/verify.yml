@@ -29,6 +29,10 @@ on:
   schedule:
     - cron: "0 17 * * 0"
 
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     runs-on: ubuntu-22.04
@@ -58,6 +62,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
+      - name: Configure fast APT mirror
+        uses: vegardit/fast-apt-mirror.sh@1.4.5
+
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
@@ -84,6 +91,10 @@ jobs:
         run: |
           make juicefs.lite
           ./juicefs.lite version
+
+      - name: vet nosftp
+        timeout-minutes: 10
+        run: go vet -tags nosftp ./pkg/object/
 
       - name: build windows
         timeout-minutes: 10
