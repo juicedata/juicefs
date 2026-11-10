@@ -1130,6 +1130,10 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	conf.NegEntryTimeout = utils.Duration(c.String("negative-entry-cache"))
 	conf.ReaddirCache = c.Bool("readdir-cache")
 	major, minor := utils.GetKernelVersion()
+	if runtime.GOOS == "linux" && conf.Format.EnableACL && major > 0 &&
+		(major < 4 || (major == 4 && minor < 9)) {
+		logger.Warnf("POSIX ACL permission checking requires Linux kernel 4.9 or higher, current version: %d.%d", major, minor)
+	}
 	if conf.ReaddirCache {
 		if conf.AttrTimeout == 0 {
 			logger.Warnf("readdir-cache is enabled without attr-cache, it's performance may be affected")

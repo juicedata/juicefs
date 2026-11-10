@@ -54,5 +54,5 @@ For detailed rules, guidelines, and implementation of POSIX ACLs, see:
 
 ## Notes
 
-* ACL permission checks require [Linux kernel 4.9](https://lkml.iu.edu/hypermail/linux/kernel/1610.0/01531.html) or later.
+* ACL permission checks require [Linux kernel 4.9](https://lkml.iu.edu/hypermail/linux/kernel/1610.0/01531.html) or later. With ACLs enabled, mounting on older kernels logs a warning and continues, but ACL permission checks may be incorrect.
 * Enabling ACLs may impact performance. However, due to memory cache optimization, most usage scenarios experience minimal performance degradation.
