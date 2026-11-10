@@ -3110,6 +3110,68 @@ func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	return sids, nil
 }
 
+// doCleanupLeakedLocks deletes lock fields whose session no longer exists.
+// Clients before v1.4.2 (#7340) did not register read flocks in locked$<sid>, so
+// cleaning up their sessions left those flocks behind. This can be removed once
+// such clients and the locks they leaked are gone.
+func (m *redisMeta) doCleanupLeakedLocks(ctx Context, increProgress func()) error {
+	alive := make(map[string]bool)
+	isAlive := func(sid string) (bool, error) {
+		if ok, found := alive[sid]; found {
+			return ok, nil
+		}
+		ok := true
+		if _, err := m.rdb.ZScore(ctx, m.allSessions(), sid).Result(); err == redis.Nil {
+			if _, err = m.rdb.ZScore(ctx, legacySessions, sid).Result(); err == redis.Nil {
+				ok = false
+			} else if err != nil {
+				return false, err
+			}
+		} else if err != nil {
+			return false, err
+		}
+		alive[sid] = ok
+		return ok, nil
+	}
+	for _, pattern := range []string{"lockf*", "lockp*"} {
+		err := m.scan(ctx, pattern, func(keys []string) error {
+			for _, key := range keys {
+				owners, err := m.rdb.HKeys(ctx, key).Result()
+				if err != nil {
+					return err
+				}
+				var leaked []string
+				for _, o := range owners {
+					ok, err := isAlive(strings.Split(o, "_")[0])
+					if err != nil {
+						return err
+					}
+					if !ok {
+						leaked = append(leaked, o)
+					}
+				}
+				if len(leaked) == 0 {
+					continue
+				}
+				if err = m.rdb.HDel(ctx, key, leaked...).Err(); err != nil {
+					return err
+				}
+				logger.Infof("Deleted leaked locks %v of %s", leaked, key)
+				if increProgress != nil {
+					for range leaked {
+						increProgress()
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *redisMeta) doRefreshSession() error {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)

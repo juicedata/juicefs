@@ -7594,7 +7594,15 @@ func TestRedisLockIndexRelease(t *testing.T) {
 // exist and were never registered in their locked$<sid> index, such as read
 // flocks taken by clients before #7340 (#7821).
 func TestRedisLeakedLocks(t *testing.T) {
-	testRedisLeakedLocks(t, func(r *redisMeta) { r.CleanStaleSessions(Background()) })
+	testRedisLeakedLocks(t, func(r *redisMeta) {
+		var cleaned int
+		if err := r.CleanupLeakedLocks(Background(), func() { cleaned++ }); err != nil {
+			t.Fatalf("cleanup leaked locks: %s", err)
+		}
+		if cleaned != 2 {
+			t.Fatalf("cleaned %d leaked locks, expect 2", cleaned)
+		}
+	})
 }
 
 func testRedisLeakedLocks(t *testing.T, reconcile func(r *redisMeta)) {

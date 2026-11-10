@@ -3259,6 +3259,19 @@ func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, incre
 	}
 }
 
+// SQL and TKV release the locks of a stale session by its sid, so only engines
+// that may leak locks implement this.
+type leakedLockCleaner interface {
+	doCleanupLeakedLocks(ctx Context, increProgress func()) error
+}
+
+func (m *baseMeta) CleanupLeakedLocks(ctx Context, increProgress func()) error {
+	if c, ok := m.en.(leakedLockCleaner); ok {
+		return c.doCleanupLeakedLocks(ctx, increProgress)
+	}
+	return nil
+}
+
 func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *CleanupTrashStats) syscall.Errno {
 	logger.Debugf("cleanup trash: started")
 	now := time.Now()
