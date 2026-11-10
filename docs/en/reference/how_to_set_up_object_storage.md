@@ -165,6 +165,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Cloudflare R2](#r2)                                        | `s3`       |
 | [Bunny Storage](#bunny)                                     | `bunny`    |
 | [Neon Object Storage](#neon)                                | `s3`       |
+| [Hippius](#hippius)                                         | `s3`       |
 | [Alibaba Cloud OSS](#alibaba-cloud-oss)                     | `oss`      |
 | [Tencent Cloud COS](#tencent-cloud-cos)                     | `cos`      |
 | [Huawei Cloud OBS](#huawei-cloud-obs)                       | `obs`      |
@@ -610,6 +611,22 @@ juicefs config "postgres://<user>:<password>@<branch-db-host>/<database>?sslmode
 
 Without this step, writes from the new branch go to the parent's bucket and can overwrite blocks written later by the parent volume, because both copies of the metadata allocate the same slice IDs.
 :::
+
+### Hippius {#hippius}
+
+[Hippius](https://hippius.com) Object Storage is an S3-compatible storage, using `s3` for `--storage` option. Please refer to [Documentation](https://docs.hippius.com/use/console/s3) to learn how to create Access Key and Secret Key.
+
+Hippius only supports path-style requests, so the format of the option `--bucket` is `https://s3.hippius.com/<bucket>`. For example:
+
+```shell
+juicefs format \
+    --storage s3 \
+    --bucket https://s3.hippius.com/<bucket> \
+    --access-key <your-access-key> \
+    --secret-key <your-secret-key> \
+    ... \
+    myjfs
+```
 
 ### Alibaba Cloud OSS
 
