@@ -4553,7 +4553,7 @@ func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 				return err
 			}
 			if !ok {
-				return syscall.ENOENT
+				return ENOATTR
 			}
 			if m.checkLink(&n) {
 				return ELink

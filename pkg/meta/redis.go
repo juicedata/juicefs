@@ -4488,6 +4488,9 @@ func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte)
 	if err == redis.Nil {
 		var attr Attr
 		if st := m.doGetAttr(ctx, inode, &attr); st != 0 {
+			if st == syscall.ENOENT {
+				return ENOATTR
+			}
 			return st
 		}
 		if m.checkLink(inode, &attr) {
