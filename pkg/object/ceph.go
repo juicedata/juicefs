@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/ceph/go-ceph/rados"
+	"golang.org/x/sync/errgroup"
 )
 
 type ceph struct {
@@ -213,45 +214,127 @@ func (c *ceph) Head(_ context.Context, key string) (Object, error) {
 	return o, err
 }
 
-func (c *ceph) ListAll(_ context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
-	ctx, err := c.newContext()
-	if err != nil {
-		return nil, err
+func (c *ceph) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
+	if isUnorderedList(ctx) {
+		return c.listAllUnordered(ctx, prefix, marker)
 	}
-	iter, err := ctx.Iter()
-	if err != nil {
-		ctx.Destroy()
-		return nil, err
-	}
+	return c.listAllInMemory(ctx, prefix, marker)
+}
 
+func (c *ceph) listAllUnordered(ctx context.Context, prefix, marker string) (<-chan Object, error) {
+	const concurrent = 20
+	objs := make(chan Object, 1000)
+	keys := make(chan string, 1000)
+	group, listCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		defer close(keys)
+		return c.iterKeys(listCtx, prefix, marker, func(key string) error {
+			select {
+			case keys <- key:
+				return nil
+			case <-listCtx.Done():
+				return listCtx.Err()
+			}
+		})
+	})
+	for i := 0; i < concurrent; i++ {
+		group.Go(func() error {
+			ioctx, err := c.newContext()
+			if err != nil {
+				return err
+			}
+			defer ioctx.Destroy()
+			for key := range keys {
+				if err := listCtx.Err(); err != nil {
+					return err
+				}
+				st, err := ioctx.Stat(key)
+				if errors.Is(err, rados.ErrNotFound) {
+					logger.Debugf("Skip non-existent key: %s", key)
+					continue
+				} else if err != nil {
+					return fmt.Errorf("stat key %s: %w", key, err)
+				}
+				select {
+				case objs <- &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), "", ""}:
+				case <-listCtx.Done():
+					return listCtx.Err()
+				}
+			}
+			return nil
+		})
+	}
+	go func() {
+		defer close(objs)
+		if err := group.Wait(); err != nil && ctx.Err() == nil {
+			logger.Errorf("List %s: %s", c, err)
+			select {
+			case objs <- nil:
+			case <-ctx.Done():
+			}
+		}
+	}()
+	return objs, nil
+}
+
+func (c *ceph) iterKeys(ctx context.Context, prefix, marker string, emit func(string) error) error {
+	return c.do(func(ioctx *rados.IOContext) error {
+		iter, err := ioctx.Iter()
+		if err != nil {
+			return err
+		}
+		defer iter.Close()
+		for iter.Next() {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			key := iter.Value()
+			if key == "" || key <= marker || !strings.HasPrefix(key, prefix) {
+				continue
+			}
+			if err := emit(key); err != nil {
+				return err
+			}
+		}
+		if err := iter.Err(); err != nil {
+			return fmt.Errorf("iterate pool %s: %w", c.name, err)
+		}
+		return nil
+	})
+}
+
+func (c *ceph) listAllInMemory(ctx context.Context, prefix, marker string) (<-chan Object, error) {
 	var objs = make(chan Object, 1000)
 	if v := os.Getenv("JFS_OBJECT_NO_ORDER"); v == "1" || v == "true" {
 		go func() {
 			defer close(objs)
-			for iter.Next() {
-				key := iter.Value()
-				if key == "" || key <= marker || !strings.HasPrefix(key, prefix) {
-					continue
+			err := c.iterKeys(ctx, prefix, marker, func(key string) error {
+				select {
+				case objs <- &obj{key, 0, time.Time{}, strings.HasSuffix(key, "/"), "", ""}:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
 				}
-				objs <- &obj{key, 0, time.Time{}, key[len(key)-1] == '/', "", ""}
+			})
+			if err != nil && ctx.Err() == nil {
+				logger.Errorf("List %s: %s", c, err)
+				select {
+				case objs <- nil:
+				case <-ctx.Done():
+				}
 			}
-			iter.Close()
-			c.release(ctx)
 		}()
 		return objs, nil
 	}
 
 	// FIXME: this will be really slow for many objects
 	keys := make([]string, 0, 1000)
-	for iter.Next() {
-		key := iter.Value()
-		if key <= marker || !strings.HasPrefix(key, prefix) {
-			continue
-		}
+	if err := c.iterKeys(ctx, prefix, marker, func(key string) error {
 		keys = append(keys, key)
+		return nil
+	}); err != nil {
+		return nil, err
 	}
-	iter.Close()
-	c.release(ctx)
 	// the keys are not ordered, sort them first
 	sort.Strings(keys)
 

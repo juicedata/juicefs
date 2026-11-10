@@ -56,6 +56,7 @@ type Config struct {
 	ManagerAddr       string
 	ListThreads       int
 	ListDepth         int
+	ExternalSortDir   string
 	BWLimit           int64
 	TrafficControlURL string
 	NoHTTPS           bool
@@ -193,6 +194,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Threads:              c.Int("threads"),
 		ListThreads:          c.Int("list-threads"),
 		ListDepth:            c.Int("list-depth"),
+		ExternalSortDir:      c.String("external-sort-dir"),
 		Update:               c.Bool("update"),
 		ForceUpdate:          c.Bool("force-update"),
 		Perms:                c.Bool("perms"),

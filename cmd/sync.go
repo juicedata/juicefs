@@ -272,6 +272,10 @@ func syncStorageFlags() []cli.Flag {
 			Value: 1,
 			Usage: "list the top N level of directories in parallel",
 		},
+		&cli.StringFlag{
+			Name:  "external-sort-dir",
+			Usage: "sort listings under this directory instead of trusting the order returned by storages, for those not listing keys in lexicographic order (e.g. Ceph, TOS with hierarchical namespace)",
+		},
 		&cli.BoolFlag{
 			Name:  "no-https",
 			Usage: "donot use HTTPS",

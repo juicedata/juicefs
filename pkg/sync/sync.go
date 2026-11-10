@@ -281,7 +281,10 @@ func formatSize(bytes int64) string {
 	return fmt.Sprintf("%.2f %siB", v, units[z])
 }
 
-func listAll(store object.ObjectStorage, prefix, start, end string, followLink, includeStart bool) (<-chan object.Object, error) {
+func listAll(ctx context.Context, store object.ObjectStorage, prefix, start, end string, followLink, includeStart bool, sortDir string) (<-chan object.Object, error) {
+	if sortDir != "" {
+		return listAllWithExternalSort(ctx, store, prefix, start, end, followLink, includeStart, sortDir)
+	}
 	startTime := time.Now()
 	logger.Debugf("Iterating objects from %s with prefix %s start %q", store, prefix, start)
 
@@ -296,8 +299,10 @@ func listAll(store object.ObjectStorage, prefix, start, end string, followLink, 
 		}
 	}
 
-	if ch, err := store.ListAll(ctx, prefix, start, followLink); err == nil {
+	listCtx, cancel := context.WithCancel(ctx)
+	if ch, err := store.ListAll(listCtx, prefix, start, followLink); err == nil {
 		go func() {
+			defer cancel()
 			for obj := range ch {
 				if obj != nil && end != "" && obj.Key() > end {
 					break
@@ -308,8 +313,10 @@ func listAll(store object.ObjectStorage, prefix, start, end string, followLink, 
 		}()
 		return out, nil
 	} else if !errors.Is(err, utils.ErrNotSUP) {
+		cancel()
 		return nil, err
 	}
+	cancel()
 
 	marker := start
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
@@ -331,7 +338,7 @@ func listAll(store object.ObjectStorage, prefix, start, end string, followLink, 
 			for _, obj := range objs {
 				key := obj.Key()
 				if !first && key <= lastkey {
-					logger.Errorf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
+					logger.Errorf("The keys are out of order: marker %q, last %q current %q, try --external-sort-dir to sort them", marker, lastkey, key)
 					out <- nil
 					break END
 				}
@@ -381,7 +388,7 @@ func listAll(store object.ObjectStorage, prefix, start, end string, followLink, 
 
 // ListAll on all the keys that starts at marker from object storage.
 func ListAll(store object.ObjectStorage, prefix, start, end string, followLink bool) (<-chan object.Object, error) {
-	return listAll(store, prefix, start, end, followLink, true)
+	return listAll(ctx, store, prefix, start, end, followLink, true, "")
 }
 
 var bufPool = sync.Pool{
@@ -1420,7 +1427,13 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 		includeStart = false
 	}
 
-	srckeys, err := listAll(src, prefix, startAfter, end, !config.Links, includeStart)
+	listCtx := ctx
+	if config.ExternalSortDir != "" {
+		var cancel context.CancelFunc
+		listCtx, cancel = context.WithCancel(ctx)
+		defer cancel()
+	}
+	srckeys, err := listAll(listCtx, src, prefix, startAfter, end, !config.Links, includeStart, config.ExternalSortDir)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", src, err)
 	}
@@ -1431,7 +1444,7 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 		close(t)
 		dstkeys = t
 	} else {
-		dstkeys, err = listAll(dst, prefix, startAfter, end, !config.Links, includeStart)
+		dstkeys, err = listAll(listCtx, dst, prefix, startAfter, end, !config.Links, includeStart, config.ExternalSortDir)
 		if err != nil {
 			return fmt.Errorf("list %s: %s", dst, err)
 		}
@@ -1802,19 +1815,27 @@ func matchLeveledPath(rules []rule, key string) bool {
 	return true
 }
 
-func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.Object, followLink bool, startAfter string, onChildPrefix func(string)) (chan object.Object, error) {
+// delimiterListLimit returns the page size to list a level of store with delimiter.
+func delimiterListLimit(store object.ObjectStorage) int64 {
+	if strings.HasPrefix(store.String(), "file://") || strings.HasPrefix(store.String(), "nfs://") ||
+		strings.HasPrefix(store.String(), "gluster://") || strings.HasPrefix(store.String(), "jfs://") ||
+		strings.HasPrefix(store.String(), "hdfs://") || strings.HasPrefix(store.String(), "webdav://") {
+		return math.MaxInt64
+	}
+	return maxResults
+}
+
+func listCommonPrefix(ctx context.Context, store object.ObjectStorage, prefix string, cp chan object.Object, followLink bool, startAfter string, onChildPrefix func(string), sortDir string) (<-chan object.Object, error) {
+	if sortDir != "" {
+		return listCommonPrefixWithExternalSort(ctx, store, prefix, cp, followLink, startAfter, onChildPrefix, sortDir)
+	}
 	var total []object.Object
 	var objs []object.Object
 	var err error
 	var nextToken string
 	marker := startAfter
 	var hasMore bool
-	var thisListMaxResults int64 = maxResults
-	if strings.HasPrefix(store.String(), "file://") || strings.HasPrefix(store.String(), "nfs://") ||
-		strings.HasPrefix(store.String(), "gluster://") || strings.HasPrefix(store.String(), "jfs://") ||
-		strings.HasPrefix(store.String(), "hdfs://") || strings.HasPrefix(store.String(), "webdav://") {
-		thisListMaxResults = math.MaxInt64
-	}
+	thisListMaxResults := delimiterListLimit(store)
 	for {
 		objs, hasMore, nextToken, err = store.List(ctx, prefix, marker, nextToken, "/", thisListMaxResults, followLink)
 		if err != nil {
@@ -2072,7 +2093,9 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		}
 	}
 
-	srckeys, err := listCommonPrefix(src, prefix, commonPrefix, !config.Links, startAfter, onChildPrefix)
+	listCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	srckeys, err := listCommonPrefix(listCtx, src, prefix, commonPrefix, !config.Links, startAfter, onChildPrefix, config.ExternalSortDir)
 	if err == utils.ErrNotSUP {
 		return startSingleProducer(tasks, src, dst, prefix, config, checkpointMgr)
 	} else if err != nil {
@@ -2088,7 +2111,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		close(t)
 		dstkeys = t
 	} else {
-		dstkeys, err = listCommonPrefix(dst, prefix, dcp, !config.Links, startAfter, nil)
+		dstkeys, err = listCommonPrefix(listCtx, dst, prefix, dcp, !config.Links, startAfter, nil, config.ExternalSortDir)
 		if err == utils.ErrNotSUP {
 			return startSingleProducer(tasks, src, dst, prefix, config, checkpointMgr)
 		} else if err != nil {

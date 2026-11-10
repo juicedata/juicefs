@@ -82,8 +82,6 @@ func gcExternalSort(
 	})
 
 	sortErr := eg.Wait()
-	_ = metaSorter.Done()
-	_ = objSorter.Done()
 	waitLeakedObj()
 	if sortErr != nil {
 		return sortErr
@@ -118,7 +116,6 @@ func newGcExternalSorters(ctx context.Context, extSortDir string, threads int) (
 	})
 	if err != nil {
 		metaSorter.CloseInput()
-		_ = metaSorter.Done()
 		return nil, nil, errors.Errorf("create object sorter: %s", err)
 	}
 	return metaSorter, objSorter, nil
