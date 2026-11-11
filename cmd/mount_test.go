@@ -51,6 +51,84 @@ var testMountPoint = filepath.Join(os.TempDir(), fmt.Sprintf("jfs-unit-test-%d",
 
 const testVolume = "test"
 
+type reloadStorageMeta struct {
+	meta.Meta
+	reload func(*meta.Format) error
+}
+
+func (m *reloadStorageMeta) OnReload(callback func(*meta.Format) error) {
+	m.reload = callback
+}
+
+func TestReloadableStorageConcurrentReload(t *testing.T) {
+	m := &reloadStorageMeta{}
+	format := &meta.Format{Name: "reload-race", Storage: "mem", Bucket: "initial"}
+	store, err := NewReloadableStorage(format, m, nil)
+	require.NoError(t, err)
+	require.NotNil(t, m.reload)
+
+	start := make(chan struct{})
+	errors := make(chan error, 2)
+	var workers sync.WaitGroup
+	for range 2 {
+		workers.Go(func() {
+			<-start
+			for range 1000 {
+				_ = store.String()
+				if err := store.Put(context.Background(), "key", strings.NewReader("payload")); err != nil {
+					errors <- err
+					return
+				}
+			}
+		})
+	}
+	close(start)
+	for i := range 100 {
+		next := format.Clone()
+		next.Bucket = fmt.Sprintf("reload-%d", i)
+		require.NoError(t, m.reload(next))
+	}
+	workers.Wait()
+	close(errors)
+	for err := range errors {
+		require.NoError(t, err)
+	}
+	require.Contains(t, store.String(), "reload-99")
+}
+
+func TestReloadableStorageReloadFailure(t *testing.T) {
+	m := &reloadStorageMeta{}
+	format := &meta.Format{Name: "reload-failure", Storage: "mem", Bucket: "initial"}
+	store, err := NewReloadableStorage(format, m, nil)
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, store.Put(ctx, "key", strings.NewReader("original")))
+
+	failed := format.Clone()
+	failed.Storage = "unsupported-reload-storage"
+	require.Error(t, m.reload(failed))
+	require.Contains(t, store.String(), "initial")
+	reader, err := store.Get(ctx, "key", 1, 3)
+	require.NoError(t, err)
+	defer reader.Close()
+
+	next := format.Clone()
+	next.Storage = "file"
+	next.Bucket = t.TempDir() + "/"
+	require.NoError(t, m.reload(next))
+	require.NotContains(t, store.String(), "mem://")
+	data, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.Equal(t, "rig", string(data))
+	require.NoError(t, store.Put(ctx, "new", strings.NewReader("replacement")))
+	info, err := store.Head(ctx, "new")
+	require.NoError(t, err)
+	require.EqualValues(t, len("replacement"), info.Size())
+	require.NoError(t, store.Delete(ctx, "new"))
+	_, err = store.Head(ctx, "new")
+	require.Error(t, err)
+}
+
 // gomonkey may encounter the problem of insufficient permissions under mac, please solve it by viewing this link https://github.com/agiledragon/gomonkey/issues/70
 func Test_exposeMetrics(t *testing.T) {
 	if runtime.GOOS != "linux" {
