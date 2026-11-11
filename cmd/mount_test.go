@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -127,6 +129,57 @@ func TestReloadableStorageReloadFailure(t *testing.T) {
 	require.NoError(t, store.Delete(ctx, "new"))
 	_, err = store.Head(ctx, "new")
 	require.Error(t, err)
+}
+
+func TestReloadableStorageConcurrentS3UserAgent(t *testing.T) {
+	t.Setenv("AWS_REGION", "us-east-1")
+	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
+	var requests, invalid atomic.Int64
+	expected := "JuiceFS-" + version.Version()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Method != http.MethodHead || !strings.Contains(r.Header.Get("User-Agent"), expected) {
+			invalid.Add(1)
+		}
+		w.Header().Set("Content-Length", "0")
+		w.Header().Set("Last-Modified", "Mon, 02 Jan 2006 15:04:05 GMT")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	format := &meta.Format{Name: "reload-agent", Storage: "s3", Bucket: server.URL + "/bucket",
+		AccessKey: "test-access-key", SecretKey: "test-secret-key"}
+	m := &reloadStorageMeta{}
+	store, err := NewReloadableStorage(format, m, nil)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	var workers sync.WaitGroup
+	for range 2 {
+		workers.Go(func() {
+			<-start
+			for range 200 {
+				if _, err := store.Head(ctx, "key"); err != nil {
+					errs <- err
+					return
+				}
+			}
+		})
+	}
+	close(start)
+	for i := range 100 {
+		next := format.Clone()
+		next.AccessKey = fmt.Sprintf("test-access-%d", i)
+		require.NoError(t, m.reload(next))
+	}
+	workers.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	require.EqualValues(t, 400, requests.Load())
+	require.Zero(t, invalid.Load())
 }
 
 // gomonkey may encounter the problem of insufficient permissions under mac, please solve it by viewing this link https://github.com/agiledragon/gomonkey/issues/70

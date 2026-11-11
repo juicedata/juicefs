@@ -233,11 +233,14 @@ func fixObjectSize(s uint64) uint64 {
 	return s
 }
 
+func init() {
+	object.UserAgent = "JuiceFS-" + version.Version()
+}
+
 func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	if err := format.Decrypt(); err != nil {
 		return nil, fmt.Errorf("format decrypt: %s", err)
 	}
-	object.UserAgent = "JuiceFS-" + version.Version()
 	var blob object.ObjectStorage
 	var err error
 	if u, err := url.Parse(format.Bucket); err == nil {
