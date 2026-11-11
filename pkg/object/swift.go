@@ -124,6 +124,20 @@ func (s *swiftOSS) Head(ctx context.Context, key string) (Object, error) {
 	}, err
 }
 
+// parseSwiftEndpoint returns the container and host of an endpoint in either
+// http://<container>.<host> or http://<host>/<container> form. Only the second
+// can name a container containing dots or "@".
+func parseSwiftEndpoint(uri *url.URL) (container, host string, err error) {
+	if c := strings.Trim(uri.Path, "/"); c != "" {
+		return c, uri.Host, nil
+	}
+	hostSlice := strings.SplitN(uri.Host, ".", 2)
+	if len(hostSlice) != 2 {
+		return "", "", fmt.Errorf("Invalid host: %s", uri.Host)
+	}
+	return hostSlice[0], hostSlice[1], nil
+}
+
 func newSwiftOSS(endpoint, username, apiKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
@@ -136,23 +150,24 @@ func newSwiftOSS(endpoint, username, apiKey, token string) (ObjectStorage, error
 		return nil, fmt.Errorf("Invalid uri.Scheme: %s", uri.Scheme)
 	}
 
-	hostSlice := strings.SplitN(uri.Host, ".", 2)
-	if len(hostSlice) != 2 {
-		return nil, fmt.Errorf("Invalid host: %s", uri.Host)
+	container, host, err := parseSwiftEndpoint(uri)
+	if err != nil {
+		return nil, err
 	}
-	container := hostSlice[0]
-	host := hostSlice[1]
-
-	// current only support V1 authentication
-	authURL := uri.Scheme + "://" + host + "/auth/v1.0"
 
 	conn := swift.Connection{
 		UserName:  username,
 		ApiKey:    apiKey,
 		AuthToken: token,
-		AuthUrl:   authURL,
 		UserAgent: UserAgent,
 		Transport: httpClient.Transport.(*http.Transport),
+	}
+	if err = conn.ApplyEnvironment(); err != nil {
+		return nil, fmt.Errorf("Invalid Swift environment: %s", err)
+	}
+	// The standard OS_* and ST_* variables can select Keystone authentication
+	if conn.AuthUrl == "" {
+		conn.AuthUrl = uri.Scheme + "://" + host + "/auth/v1.0"
 	}
 	err = conn.Authenticate(context.Background())
 	if err != nil {

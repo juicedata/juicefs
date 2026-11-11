@@ -921,9 +921,9 @@ juicefs format \
 
 [OpenStack Swift](https://github.com/openstack/swift) 是一种分布式对象存储系统，旨在从一台计算机扩展到数千台服务器。Swift 已针对多租户和高并发进行了优化。Swift 广泛适用于备份、Web 和移动内容的理想选择，可以无限量存储任何非结构化数据。
 
-`--bucket` 选项格式为 `http://<container>.<endpoint>`，`container` 用来设定对象的命名空间。
+`--bucket` 选项格式为 `http://<container>.<endpoint>`，`container` 用来设定对象的命名空间。 容器名称包含点或 `@` 时，请改用 `http://<endpoint>/<container>` 格式。
 
-**当前，JuiceFS 仅支持  [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html)。**
+JuiceFS 默认使用 [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html)。如需使用 Keystone V2 或 V3 认证，请在运行每条 JuiceFS 命令的环境中设置标准的 OpenStack 环境变量，例如 `OS_AUTH_URL`、`OS_TENANT_NAME` 或 `OS_PROJECT_NAME`，V3 还需设置 `OS_USER_DOMAIN_ID` 和 `OS_PROJECT_DOMAIN_ID`。
 
 `--access-key` 选项的值是用户名，`--secret-key` 选项的值是密码。例如：
 

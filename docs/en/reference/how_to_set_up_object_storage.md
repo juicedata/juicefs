@@ -963,9 +963,9 @@ The format of `--bucket` option is `<host[,host...]>/<volume_name>`. Please note
 
 [OpenStack Swift](https://github.com/openstack/swift) is a distributed object storage system designed to scale from a single machine to thousands of servers. Swift is optimized for multi-tenancy and high concurrency. Swift is ideal for backups, web and mobile content, and any other unstructured data that can grow without bound.
 
-The `--bucket` option format is `http://<container>.<endpoint>`. A container defines a namespace for objects.
+The `--bucket` option format is `http://<container>.<endpoint>` or `http://<endpoint>/<container>`. A container defines a namespace for objects. Use the second form if the container name contains dots or `@`.
 
-**Currently, JuiceFS only supports [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html).**
+JuiceFS uses [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html) by default. To use Keystone V2 or V3 authentication, set the standard OpenStack environment variables, such as `OS_AUTH_URL`, `OS_TENANT_NAME` or `OS_PROJECT_NAME`, and for V3 `OS_USER_DOMAIN_ID` and `OS_PROJECT_DOMAIN_ID`, in the environment of every JuiceFS command.
 
 The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
@@ -974,6 +974,20 @@ juicefs format \
     --storage swift \
     --bucket http://<container>.<endpoint> \
     --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+For example, [Blomp](https://www.blomp.com) gives each account one container named after its email address and uses Keystone:
+
+```bash
+export OS_AUTH_URL=https://authenticate.blomp.com/v3
+export OS_USER_DOMAIN_ID=default OS_PROJECT_NAME=storage OS_PROJECT_DOMAIN_ID=default
+juicefs format \
+    --storage swift \
+    --bucket https://storage.blomp.com/<email> \
+    --access-key <email> \
     --secret-key <password> \
     ... \
     myjfs
