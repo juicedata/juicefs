@@ -103,3 +103,147 @@ func TestCond(t *testing.T) {
 		}
 	}
 }
+
+// Hold waiters between releasing the lock and receiving their notification.
+type condTestLocker struct {
+	sync.Mutex
+	unlocked  chan struct{}
+	resume    chan struct{}
+	relocking chan struct{}
+}
+
+func (m *condTestLocker) Lock() {
+	if m.relocking != nil {
+		m.relocking <- struct{}{}
+	}
+	m.Mutex.Lock()
+}
+
+func (m *condTestLocker) Unlock() {
+	m.Mutex.Unlock()
+	m.unlocked <- struct{}{}
+	<-m.resume
+}
+
+func TestCondNotificationBeforeReceive(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		waiters   int
+		signals   int
+		broadcast bool
+		timeout   bool
+	}{
+		{name: "Signal", waiters: 1, signals: 1},
+		{name: "MultipleSignals", waiters: 8, signals: 8},
+		{name: "SignalOne", waiters: 8, signals: 1},
+		{name: "Broadcast", waiters: 8, broadcast: true},
+		{name: "SignalAfterTimeout", waiters: 1, signals: 1, timeout: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &condTestLocker{
+				unlocked: make(chan struct{}, tc.waiters),
+				resume:   make(chan struct{}),
+			}
+			c := NewCond(m)
+			if tc.timeout {
+				close(m.resume)
+				m.Lock()
+				timedOut := c.WaitWithTimeout(0)
+				m.Mutex.Unlock()
+				if !timedOut {
+					t.Fatal("wait without a notification should time out")
+				}
+				<-m.unlocked
+				m.resume = make(chan struct{})
+			}
+			done := make(chan bool, tc.waiters)
+			for i := 0; i < tc.waiters; i++ {
+				go func() {
+					m.Lock()
+					timedOut := c.WaitWithTimeout(100 * time.Millisecond)
+					m.Mutex.Unlock()
+					done <- timedOut
+				}()
+			}
+			for i := 0; i < tc.waiters; i++ {
+				<-m.unlocked
+			}
+			m.Lock()
+			for i := 0; i < tc.signals; i++ {
+				c.Signal()
+			}
+			if tc.broadcast {
+				c.Broadcast()
+			}
+			close(m.resume)
+			m.Mutex.Unlock()
+			var notified int
+			for i := 0; i < tc.waiters; i++ {
+				if !<-done {
+					notified++
+				}
+			}
+			want := tc.signals
+			if tc.broadcast {
+				want = tc.waiters
+			}
+			if notified != want {
+				t.Fatalf("notified %d waiters, want %d", notified, want)
+			}
+		})
+	}
+}
+
+func TestCondNotificationAfterTimeoutBeforeRelock(t *testing.T) {
+	for _, name := range []string{"Signal", "Broadcast", "Timeout"} {
+		t.Run(name, func(t *testing.T) {
+			m := &condTestLocker{
+				unlocked:  make(chan struct{}),
+				resume:    make(chan struct{}),
+				relocking: make(chan struct{}),
+			}
+			c := NewCond(m)
+			done := make(chan bool, 1)
+			go func() {
+				m.Mutex.Lock()
+				timedOut := c.WaitWithTimeout(0)
+				m.Mutex.Unlock()
+				done <- timedOut
+			}()
+			<-m.unlocked
+			m.Mutex.Lock()
+			close(m.resume)
+			// The waiter has selected the timeout branch but cannot re-acquire L yet.
+			<-m.relocking
+			switch name {
+			case "Signal":
+				c.Signal()
+			case "Broadcast":
+				c.Broadcast()
+			}
+			m.Mutex.Unlock()
+			if timedOut := <-done; timedOut != (name == "Timeout") {
+				t.Errorf("timedOut = %v, want %v", timedOut, name == "Timeout")
+			}
+			m.Mutex.Lock()
+			defer m.Mutex.Unlock()
+			if c.waiters.Len() != 0 {
+				t.Fatalf("got %d remaining waiters, want 0", c.waiters.Len())
+			}
+		})
+	}
+}
+
+func TestCondNotificationWithoutWaiters(t *testing.T) {
+	var m sync.Mutex
+	c := NewCond(&m)
+	m.Lock()
+	defer m.Unlock()
+	for _, notify := range []func(){c.Signal, c.Broadcast} {
+		// A notification without waiters must not be saved for a future wait.
+		notify()
+		if !c.WaitWithTimeout(time.Millisecond) {
+			t.Fatal("notification was delivered to a future waiter")
+		}
+	}
+}
