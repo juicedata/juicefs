@@ -4191,6 +4191,13 @@ func (m *dbMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 
 func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
 	st := errno(m.txn(func(s *xorm.Session) error {
+		n := &node{Inode: inode}
+		if err := m.getNodesForUpdate(s, n); err != nil {
+			return err
+		}
+		if m.checkLink(n) {
+			return ELink
+		}
 		var c2 = chunk{Inode: inode, Indx: indx}
 		_, err := s.ForUpdate().MustCols("indx").Get(&c2)
 		if err != nil {
@@ -5086,7 +5093,7 @@ func (m *dbMeta) makeSnap0(ses *xorm.Session, inode Ino) (*dbSnap, error) {
 	return snap, nil
 }
 
-func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error {
+func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry, shared map[cchunk]bool) error {
 	err := m.dumpEntry(s, inode, 0, entry, nil)
 	if err != nil {
 		return err
@@ -5124,29 +5131,33 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error 
 	}
 
 	var allSlices []uint64
-	for _, c := range entry.Chunks {
-		for _, s := range c.Slices {
-			allSlices = append(allSlices, s.Id)
-		}
-	}
-	for _, e := range entry.Entries {
+	owners := make(map[uint64][]cchunk)
+	collect := func(e *DumpedEntry) {
 		for _, c := range e.Chunks {
-			for _, s := range c.Slices {
-				allSlices = append(allSlices, s.Id)
+			for _, sli := range c.Slices {
+				if sli.Id != 0 {
+					allSlices = append(allSlices, sli.Id)
+					owners[sli.Id] = append(owners[sli.Id], cchunk{inode: e.Attr.Inode, indx: c.Index})
+				}
 			}
 		}
 	}
+	collect(entry)
+	for _, e := range entry.Entries {
+		collect(e)
+	}
 	for len(allSlices) > 0 {
-		var sliceRefs []sliceRef
+		var refs []sliceRef
 		batch := allSlices[:min(len(allSlices), 900)]
-		err = s.In("chunkid", batch).Where("refs > ?", 1).Find(&sliceRefs)
-		if err != nil {
+		if err := s.In("chunkid", batch).Where("refs > ?", 1).Find(&refs); err != nil {
 			return err
 		}
-		for _, c := range sliceRefs {
-			if c.Refs > 1 {
-				logger.Infof("dumpTree: inode=%d, chunk has slice with refs=%d, id=%d", inode, c.Refs, c.Id)
-				return syscall.EPERM
+		for _, ref := range refs {
+			if shared == nil {
+				return syscall.EAGAIN
+			}
+			for _, c := range owners[ref.Id] {
+				shared[c] = true
 			}
 		}
 		allSlices = allSlices[len(batch):]
@@ -5155,14 +5166,28 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry) error 
 }
 
 func (m *dbMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
-	return errno(m.roTxn(Background(), func(s *xorm.Session) error {
-		return m.dumpTree(s, inode, entry)
-	}))
+	for attempt := 0; attempt < 6; attempt++ {
+		var shared map[cchunk]bool
+		if err := m.roTxn(Background(), func(s *xorm.Session) error {
+			*entry = DumpedEntry{}
+			shared = make(map[cchunk]bool)
+			return m.dumpTree(s, inode, entry, shared)
+		}); err != nil {
+			return errno(err)
+		}
+		if len(shared) == 0 {
+			return 0
+		}
+		for c := range shared {
+			m.compactChunk0(c.inode, c.indx, false, false, -1, true)
+		}
+	}
+	return syscall.EAGAIN
 }
 
 func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) error {
 	var entry2 = DumpedEntry{Attr: &DumpedAttr{}}
-	err := m.dumpTree(s, inode, &entry2)
+	err := m.dumpTree(s, inode, &entry2, nil)
 	if err != nil {
 		return err
 	}
@@ -5213,8 +5238,8 @@ func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, map
 		}
 		for _, c := range e.Chunks {
 			for _, s := range c.Slices {
-				if s.Chunkid > 0 {
-					slices = append(slices, s.Chunkid)
+				if s.Id > 0 {
+					slices = append(slices, s.Id)
 				}
 			}
 		}
@@ -5315,7 +5340,7 @@ func (m *dbMeta) PrepareHardlink(ctx Context, inode Ino, entry *DumpedEntry) ([]
 	err := m.roTxn(ctx, func(s *xorm.Session) error {
 		*entry = DumpedEntry{}
 		links = nil
-		if err := m.dumpTree(s, inode, entry); err != nil {
+		if err := m.dumpTree(s, inode, entry, nil); err != nil {
 			return err
 		}
 		if entry.Attr.Type == "link" {

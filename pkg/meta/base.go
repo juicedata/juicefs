@@ -2919,6 +2919,10 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 }
 
 func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID int) {
+	m.compactChunk0(inode, indx, once, force, tierID, false)
+}
+
+func (m *baseMeta) compactChunk0(inode Ino, indx uint32, once, force bool, tierID int, rewrite bool) {
 	if m.conf.NoCompact {
 		return
 	}
@@ -2929,7 +2933,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 		m.Unlock()
 		return
 	}
-	if once || force {
+	if once || force || rewrite {
 		for m.compacting[k] {
 			m.Unlock()
 			time.Sleep(time.Millisecond * 10)
@@ -2958,13 +2962,16 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 	if once && len(ss) < maxSlices {
 		return
 	}
-	if len(ss) > maxCompactSlices {
+	if !rewrite && len(ss) > maxCompactSlices {
 		ss = ss[:maxCompactSlices]
 	}
-	skipped := skipSome(ss)
+	var skipped int
+	if !rewrite {
+		skipped = skipSome(ss)
+	}
 	compacted := ss[skipped:]
 	pos, size, slices := compactChunk(compacted)
-	if len(compacted) < 2 || size == 0 {
+	if (!rewrite && len(compacted) < 2) || size == 0 {
 		return
 	}
 	for _, s := range ss[:skipped] {
@@ -3022,7 +3029,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 			inode, indx, st, id, size)
 	}
 
-	if force {
+	if force && !rewrite {
 		m.Lock()
 		delete(m.compacting, k)
 		m.Unlock()
