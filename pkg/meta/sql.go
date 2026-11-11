@@ -1589,6 +1589,12 @@ func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 			return err
 		}
 		if !exist {
+			pn := node{Inode: parent}
+			if ok, err := s.Get(&pn); err != nil {
+				return err
+			} else if ok && m.checkLink(&pn) {
+				return ELink
+			}
 			return syscall.ENOENT
 		}
 		*inode = nn.Node.Inode
