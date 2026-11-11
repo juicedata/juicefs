@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,6 +84,56 @@ func getStdoutWithInput(args []string, input string) ([]byte, error) {
 		err = readErr
 	}
 	return data, err
+}
+
+func TestConfigRejectsConcurrentUpdate(t *testing.T) {
+	for _, enableQuota := range []bool{false, true} {
+		name := "ordinary"
+		if enableQuota {
+			name = "user-group-quota"
+		}
+		t.Run(name, func(t *testing.T) {
+			uri := "sqlite3://" + filepath.Join(t.TempDir(), "meta.db")
+			bucket := filepath.Join(t.TempDir(), "objects")
+			if _, err := getStdoutWithInput([]string{"", "format", uri, "--bucket", bucket,
+				"--capacity", "1", "--trash-days", "1", testVolume}, ""); err != nil {
+				t.Fatal(err)
+			}
+			writer := meta.NewClient(uri, nil)
+			defer writer.Shutdown()
+			confirmed := false
+			// Only the user's confirmation is replaced. Both writers use the
+			// real SQLite backend, after config has loaded its original snapshot.
+			patch := gomonkey.ApplyFunc(userConfirmed, func() bool {
+				confirmed = true
+				current, err := writer.Load(false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				current.Capacity = 2 << 30
+				if err = writer.Init(current, false); err != nil {
+					t.Fatal(err)
+				}
+				return true
+			})
+			defer patch.Reset()
+			args := []string{"", "config", uri, "--trash-days", "0"}
+			if enableQuota {
+				args = append(args, "--user-group-quota")
+			}
+			_, err := getStdoutWithInput(args, "y\n")
+			if !confirmed || !errors.Is(err, meta.ErrFormatChanged) {
+				t.Fatalf("confirmed=%v config error=%v", confirmed, err)
+			}
+			stored, err := writer.Load(false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stored.Capacity != 2<<30 || stored.TrashDays != 1 || stored.UserGroupQuota {
+				t.Fatalf("rejected config changed settings: %s", stored)
+			}
+		})
+	}
 }
 
 func TestConfig(t *testing.T) {

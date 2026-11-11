@@ -539,9 +539,10 @@ func config(ctx *cli.Context) error {
 			logger.Fatalf("Format encrypt: %s", err)
 		}
 	}
-	if err = m.Init(format, false); err == nil {
-		fmt.Println(msg.String()[:msg.Len()-1])
+	if err = m.Init(format, false); err != nil {
+		return err
 	}
+	fmt.Println(msg.String()[:msg.Len()-1])
 
 	if !originUGQuota && format.UserGroupQuota {
 		if err = m.ScanUserGroupUsage(meta.Background()); err != nil {
