@@ -242,6 +242,15 @@ func (n *jfsObjects) isValidBucketName(bucket string) error {
 	return nil
 }
 
+func checkObjectPath(bucket, object string) error {
+	for _, part := range strings.Split(object, sep) {
+		if part == "." || part == ".." {
+			return minio.ObjectNameInvalid{Bucket: bucket, Object: object}
+		}
+	}
+	return nil
+}
+
 func (n *jfsObjects) path(p ...string) string {
 	if !n.gConf.MultiBucket && len(p) > 0 && p[0] == n.gConf.Bucket {
 		p = p[1:]
@@ -572,6 +581,9 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
+	if err = checkObjectPath(bucket, object); err != nil {
+		return
+	}
 	err = n.delObj(bucket, object)
 	info.Bucket = bucket
 	info.Name = object
@@ -633,6 +645,9 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 	}
 	delMap := make(map[string][]int)
 	for idx, o := range objects {
+		if errs[idx] = checkObjectPath(bucket, o.ObjectName); errs[idx] != nil {
+			continue
+		}
 		p := path.Dir(path.Clean(n.path(bucket, o.ObjectName)))
 		delMap[p] = append(delMap[p], idx)
 	}
@@ -705,6 +720,12 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		return
 	}
 	if err = n.checkBucket(ctx, dstBucket); err != nil {
+		return
+	}
+	if err = checkObjectPath(srcBucket, srcObject); err != nil {
+		return
+	}
+	if err = checkObjectPath(dstBucket, dstObject); err != nil {
 		return
 	}
 	dst := n.path(dstBucket, dstObject)
@@ -814,6 +835,9 @@ var buffPool = sync.Pool{
 
 func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
+		return
+	}
+	if err = checkObjectPath(bucket, object); err != nil {
 		return
 	}
 	fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
@@ -1004,6 +1028,9 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	defer unlock()
 
 	if err = n.checkBucket(ctx, bucket); err != nil {
+		return
+	}
+	if err = checkObjectPath(bucket, object); err != nil {
 		return
 	}
 	var tagStr string
