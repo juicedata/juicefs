@@ -186,6 +186,7 @@ func testMeta(t *testing.T, m Meta) {
 	testConcurrentWrite(t, m)
 	testRace(t, m)
 	testXattr(t, m)
+	t.Run("CleanupOrphanXattrs", func(t *testing.T) { testCleanupOrphanXattrs(t, m) })
 	testCompaction(t, m, false)
 	time.Sleep(time.Second)
 	testCompaction(t, m, true)
@@ -757,6 +758,200 @@ func testKerberosToken(t *testing.T, m Meta) {
 	if tokens[id1] != nil || tokens[id2] != nil {
 		t.Fatalf("tokens not deleted")
 	}
+}
+
+func TestCleanupOrphanXattrs(t *testing.T) {
+	for _, driver := range []string{"sqlite3", "sqlite3-prefixed", "memkv", "badger"} {
+		t.Run(driver, func(t *testing.T) {
+			conf := testConfig()
+			conf.NoBGJob = true
+			var m Meta
+			var err error
+			if strings.HasPrefix(driver, "sqlite3") {
+				addr := t.TempDir() + "/meta.db"
+				if driver == "sqlite3-prefixed" {
+					addr += "?table_prefix=gc"
+				}
+				m, err = newSQLMeta("sqlite3", addr, conf)
+			} else {
+				m, err = newKVMeta(driver, t.TempDir(), conf)
+			}
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, m.Shutdown()) })
+			require.NoError(t, m.Init(testFormat(), true))
+			testCleanupOrphanXattrs(t, m)
+			testCleanupOrphanXattrsRecheck(t, m)
+		})
+	}
+}
+
+func testCleanupOrphanXattrs(t *testing.T, m Meta) {
+	t.Helper()
+	ctx := Background()
+	require.NoError(t, m.NewSession(true))
+	defer m.CloseSession() //nolint:errcheck
+	value := []byte{0, 255, 42}
+	var linked, opened Ino
+	require.Zero(t, m.Mknod(ctx, RootInode, "gc-xattr-linked", TypeFile, 0600, 0, 0, "", &linked, nil))
+	defer m.Unlink(ctx, RootInode, "gc-xattr-linked", true) //nolint:errcheck
+	require.Zero(t, m.Create(ctx, RootInode, "gc-xattr-open", 0600, 0, 0, &opened, nil))
+	defer m.Close(ctx, opened) //nolint:errcheck
+	for _, inode := range []Ino{RootInode, linked, opened} {
+		require.Zero(t, m.SetXattr(ctx, inode, "user.gc-live", value, XattrCreate))
+	}
+	defer m.RemoveXattr(ctx, RootInode, "user.gc-live") //nolint:errcheck
+	require.Zero(t, m.Unlink(ctx, RootInode, "gc-xattr-open", true))
+	var attr Attr
+	require.Zero(t, m.GetAttr(ctx, opened, &attr))
+	require.Zero(t, attr.Nlink)
+
+	const orphan = Ino(1 << 55)
+	const count = 1025 // Cross the SQL scan's page boundary.
+	names := make([]string, count)
+	for i := range names {
+		names[i] = fmt.Sprintf("user.gc-orphan-%04d", i)
+	}
+	// Reproduce metadata left by an older client's sustained-inode cleanup.
+	switch m := m.(type) {
+	case *redisMeta:
+		values := make(map[string]interface{}, count)
+		for _, name := range names {
+			values[name] = value
+		}
+		require.NoError(t, m.rdb.HSet(ctx, m.xattrKey(orphan), values).Err())
+	case *dbMeta:
+		require.NoError(t, m.txn(func(s *xorm.Session) error {
+			for _, name := range names {
+				if err := mustInsert(s, &xattr{Inode: orphan, Name: name, Value: value}); err != nil {
+					return err
+				}
+			}
+			return nil
+		}))
+	case *kvMeta:
+		require.NoError(t, m.client.txn(ctx, func(tx *kvTxn) error {
+			for _, name := range names {
+				tx.set(m.xattrKey(orphan, name), value)
+			}
+			return nil
+		}, 0))
+	default:
+		t.Fatalf("unsupported test engine %T", m)
+	}
+	check := func(want syscall.Errno) {
+		t.Helper()
+		for _, name := range names {
+			var got []byte
+			require.Equal(t, want, m.GetXattr(ctx, orphan, name, &got), name)
+			if want == 0 {
+				require.Equal(t, value, got)
+			}
+		}
+		for _, inode := range []Ino{RootInode, linked, opened} {
+			var got []byte
+			require.Zero(t, m.GetXattr(ctx, inode, "user.gc-live", &got))
+			require.Equal(t, value, got)
+		}
+	}
+	observed := 0
+	progress := func(n int) { observed += n }
+	require.NoError(t, m.CleanupOrphanXattrs(ctx, false, progress))
+	require.Equal(t, count, observed)
+	check(0)
+	// Keep the live session's configuration immutable while checking the public read-only guard.
+	readOnly := &baseMeta{conf: &Config{ReadOnly: true}, en: m.getBase().en}
+	observed = 0
+	require.NoError(t, readOnly.CleanupOrphanXattrs(ctx, false, progress))
+	require.Equal(t, count, observed)
+	require.ErrorIs(t, readOnly.CleanupOrphanXattrs(ctx, true, nil), syscall.EROFS)
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.ErrorIs(t, m.CleanupOrphanXattrs(WrapContext(cancelled), true, nil), context.Canceled)
+	check(0)
+	observed = 0
+	require.NoError(t, m.CleanupOrphanXattrs(ctx, true, progress))
+	require.Equal(t, count, observed)
+	check(ENOATTR)
+	observed = 0
+	require.NoError(t, m.CleanupOrphanXattrs(ctx, true, progress))
+	require.Zero(t, observed)
+	check(ENOATTR)
+}
+
+func testCleanupOrphanXattrsRecheck(t *testing.T, m Meta) {
+	t.Helper()
+	ctx := Background()
+	inodes := []Ino{1 << 54, (1 << 54) + 1}
+	const name = "user.gc-restored"
+	value := []byte("restored")
+	write := func(restore bool) {
+		t.Helper()
+		switch m := m.(type) {
+		case *dbMeta:
+			require.NoError(t, m.txn(func(s *xorm.Session) error {
+				for _, inode := range inodes {
+					var err error
+					if restore {
+						err = mustInsert(s, &node{Inode: inode, Type: TypeFile, Mode: 0600, Nlink: 1, Parent: RootInode})
+					} else {
+						err = mustInsert(s, &xattr{Inode: inode, Name: name, Value: value})
+					}
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			}))
+		case *redisMeta:
+			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				for _, inode := range inodes {
+					if restore {
+						pipe.Set(ctx, m.inodeKey(inode), m.marshal(&Attr{Typ: TypeFile, Mode: 0600, Nlink: 1, Parent: RootInode}), 0)
+					} else {
+						pipe.HSet(ctx, m.xattrKey(inode), name, value)
+					}
+				}
+				return nil
+			})
+			require.NoError(t, err)
+		case *kvMeta:
+			require.NoError(t, m.client.txn(ctx, func(tx *kvTxn) error {
+				for _, inode := range inodes {
+					if restore {
+						tx.set(m.inodeKey(inode), m.marshal(&Attr{Typ: TypeFile, Mode: 0600, Nlink: 1, Parent: RootInode}))
+					} else {
+						tx.set(m.xattrKey(inode, name), value)
+					}
+				}
+				return nil
+			}, 0))
+		}
+	}
+	write(false)
+	removed := 0
+	require.NoError(t, m.CleanupOrphanXattrs(ctx, true, func(n int) {
+		removed += n
+		if removed == 1 {
+			// Scan results can become stale before the next candidate is deleted.
+			write(true)
+		}
+	}))
+	require.Equal(t, 1, removed)
+	retained := 0
+	for _, inode := range inodes {
+		var got []byte
+		st := m.GetXattr(ctx, inode, name, &got)
+		if st == 0 {
+			require.Equal(t, value, got)
+			retained++
+		} else {
+			require.Equal(t, ENOATTR, st)
+		}
+	}
+	require.Equal(t, 1, retained)
+	removed = 0
+	require.NoError(t, m.CleanupOrphanXattrs(ctx, true, func(n int) { removed += n }))
+	require.Zero(t, removed)
 }
 
 func testMetaClient(t *testing.T, m Meta) {

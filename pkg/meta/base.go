@@ -91,6 +91,7 @@ type engine interface {
 	doCleanStaleSession(sid uint64) error
 	doInit(format *Format, force bool) error
 
+	doCleanupOrphanXattrs(ctx Context, delete bool, progress func(int)) error
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
 	doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
@@ -3401,6 +3402,16 @@ func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int, count *uint64) er
 		}
 	}
 	return err
+}
+
+func (m *baseMeta) CleanupOrphanXattrs(ctx Context, delete bool, progress func(int)) error {
+	if delete && m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return m.en.doCleanupOrphanXattrs(ctx, delete, progress)
 }
 
 func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendingSliceScan, tfs trashFileScan, pfs pendingFileScan) error {

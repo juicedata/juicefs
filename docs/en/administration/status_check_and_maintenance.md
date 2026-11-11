@@ -151,6 +151,8 @@ objects:
 
 The `juicefs gc` command handles "object leaks" and runs compaction on data fragments created by file overwrites. It scans metadata and compares it with object storage to find or clean up any object storage blocks that need processing.
 
+GC also reports extended attributes whose inode no longer exists. These records can remain after stale-session cleanup by an older client. Add `--delete` to remove them. This check classifies attributes as orphaned only when their inode is absent; a file that is unlinked but still open retains its inode. This scans the metadata engine and can add work on volumes with many attributes.
+
 :::info
 An **object leak** is a situation where a block of data is in the object storage, but there is no corresponding record in the metadata engine. Object leaks are rare and can be caused by program bugs, unanticipated problems with the metadata engine or object storage, power outages, and network disconnections.
 :::

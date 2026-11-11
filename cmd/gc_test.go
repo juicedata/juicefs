@@ -19,8 +19,10 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -28,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/stretchr/testify/require"
@@ -138,6 +141,67 @@ func TestGc(t *testing.T) {
 	entries, err := os.ReadDir(workDir)
 	require.NoError(t, err)
 	require.Empty(t, entries)
+}
+
+func TestGcOrphanXattrs(t *testing.T) {
+	if os.Getenv("JFS_TEST_GC_SUBPROCESS") == "1" {
+		args := []string{"", "gc"}
+		if os.Getenv("JFS_TEST_GC_DELETE") == "1" {
+			args = append(args, "--delete")
+		}
+		args = append(args, os.Getenv("JFS_TEST_GC_META_URL"))
+		require.NoError(t, Main(args))
+		return
+	}
+	dir := t.TempDir()
+	metaPath := filepath.Join(dir, "meta.db")
+	metaURL := "sqlite3://" + metaPath
+	m := meta.NewClient(metaURL, meta.DefaultConf())
+	t.Cleanup(func() { require.NoError(t, m.Shutdown()) })
+	require.NoError(t, m.Init(&meta.Format{
+		Name: "gc-orphan-xattrs", UUID: "orphan-xattrs-test",
+		Storage: "file", Bucket: filepath.Join(dir, "objects") + string(os.PathSeparator),
+		BlockSize: 4096, Compression: "none",
+	}, true))
+
+	db, err := sql.Open("sqlite3", metaPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	_, err = db.Exec("INSERT INTO jfs_xattr (inode, name, value) VALUES (?, ?, ?), (?, ?, ?)",
+		meta.RootInode, "user.retained", []byte("live"),
+		999999, "user.orphan", []byte("orphan"))
+	require.NoError(t, err)
+	check := func(orphanCount int) {
+		t.Helper()
+		var count int
+		require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM jfs_xattr WHERE inode = ?", 999999).Scan(&count))
+		require.Equal(t, orphanCount, count, "orphan attributes")
+		var value []byte
+		require.NoError(t, db.QueryRow("SELECT value FROM jfs_xattr WHERE inode = ? AND name = ?",
+			meta.RootInode, "user.retained").Scan(&value))
+		require.Equal(t, []byte("live"), value)
+	}
+
+	// Each CLI invocation owns its process-wide setup and background goroutines.
+	runGC := func(delete bool) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestGcOrphanXattrs$", "-test.timeout=30s")
+		flag := "0"
+		if delete {
+			flag = "1"
+		}
+		command.Env = append(os.Environ(), "JFS_TEST_GC_SUBPROCESS=1", "JFS_TEST_GC_META_URL="+metaURL, "JFS_TEST_GC_DELETE="+flag)
+		out, err := command.CombinedOutput()
+		require.NoError(t, err, "%s", out)
+	}
+	runGC(false)
+	check(1)
+	runGC(true)
+	check(0)
+	runGC(true)
+	check(0)
 }
 
 func TestMergeGcSortedRecords(t *testing.T) {
