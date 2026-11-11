@@ -107,8 +107,16 @@ func TestCond(t *testing.T) {
 // Hold waiters between releasing the lock and receiving their notification.
 type condTestLocker struct {
 	sync.Mutex
-	unlocked chan struct{}
-	resume   chan struct{}
+	unlocked  chan struct{}
+	resume    chan struct{}
+	relocking chan struct{}
+}
+
+func (m *condTestLocker) Lock() {
+	if m.relocking != nil {
+		m.relocking <- struct{}{}
+	}
+	m.Mutex.Lock()
 }
 
 func (m *condTestLocker) Unlock() {
@@ -181,6 +189,46 @@ func TestCondNotificationBeforeReceive(t *testing.T) {
 			}
 			if notified != want {
 				t.Fatalf("notified %d waiters, want %d", notified, want)
+			}
+		})
+	}
+}
+
+func TestCondNotificationAfterTimeoutBeforeRelock(t *testing.T) {
+	for _, name := range []string{"Signal", "Broadcast", "Timeout"} {
+		t.Run(name, func(t *testing.T) {
+			m := &condTestLocker{
+				unlocked:  make(chan struct{}),
+				resume:    make(chan struct{}),
+				relocking: make(chan struct{}),
+			}
+			c := NewCond(m)
+			done := make(chan bool, 1)
+			go func() {
+				m.Mutex.Lock()
+				timedOut := c.WaitWithTimeout(0)
+				m.Mutex.Unlock()
+				done <- timedOut
+			}()
+			<-m.unlocked
+			m.Mutex.Lock()
+			close(m.resume)
+			// The waiter has selected the timeout branch but cannot re-acquire L yet.
+			<-m.relocking
+			switch name {
+			case "Signal":
+				c.Signal()
+			case "Broadcast":
+				c.Broadcast()
+			}
+			m.Mutex.Unlock()
+			if timedOut := <-done; timedOut != (name == "Timeout") {
+				t.Errorf("timedOut = %v, want %v", timedOut, name == "Timeout")
+			}
+			m.Mutex.Lock()
+			defer m.Mutex.Unlock()
+			if c.waiters.Len() != 0 {
+				t.Fatalf("got %d remaining waiters, want 0", c.waiters.Len())
 			}
 		})
 	}

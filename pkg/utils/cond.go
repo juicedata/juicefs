@@ -60,20 +60,26 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 		t = e.(*time.Timer)
 		t.Reset(d)
 	}
-	defer func() {
-		timerPool.Put(t)
-		c.L.Lock()
-		c.waiters.Remove(waiter)
-	}()
+	timeout := false
 	select {
 	case <-ch:
 		if !t.Stop() {
 			<-t.C
 		}
-		return false
 	case <-t.C:
-		return true
+		timeout = true
 	}
+	timerPool.Put(t)
+	c.L.Lock()
+	if timeout {
+		select {
+		case <-ch:
+			timeout = false // Signaled after timing out but before re-acquiring L.
+		default:
+			c.waiters.Remove(waiter)
+		}
+	}
+	return timeout
 }
 
 // NewCond creates a Cond.
