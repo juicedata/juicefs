@@ -430,6 +430,40 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 	return m.rdb.Set(ctx, m.inodeKey(RootInode), m.marshal(attr), 0).Err()
 }
 
+func (m *redisMeta) doEnableQuota(ctx Context, qtype uint32) (format *Format, changed bool, err error) {
+	err = m.txn(ctx, func(tx *redis.Tx) error {
+		body, err := tx.Get(ctx, m.setting()).Bytes()
+		if err == redis.Nil {
+			return ErrNotFormatted
+		} else if err != nil {
+			return err
+		}
+		var data []byte
+		format, data, err = quotaEnableFormat(body, m.getFormat(), qtype)
+		changed = data != nil
+		if err != nil || !changed {
+			return err
+		}
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			op := "INIT_ENABLE_USERGROUPQUOTA()"
+			if qtype == DirQuotaType {
+				pipe.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey())
+				op = "INIT_ENABLE_DIRSTATS()"
+			} else {
+				pipe.Del(ctx, m.userQuotaKey(), m.userQuotaUsedSpaceKey(), m.userQuotaUsedInodesKey(),
+					m.groupQuotaKey(), m.groupQuotaUsedSpaceKey(), m.groupQuotaUsedInodesKey())
+			}
+			pipe.Set(ctx, m.setting(), data, 0)
+			if format.ChangeLog {
+				m.doGenLog(ctx, pipe, time.Now(), op)
+			}
+			return nil
+		})
+		return err
+	}, m.setting())
+	return
+}
+
 func (m *redisMeta) cacheACLs(ctx Context) error {
 	if !m.getFormat().EnableACL {
 		return nil

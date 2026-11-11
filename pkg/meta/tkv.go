@@ -616,6 +616,37 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 	return nil
 }
 
+func (m *kvMeta) doEnableQuota(ctx Context, qtype uint32) (format *Format, changed bool, err error) {
+	err = m.txn(ctx, func(tx *kvTxn) error {
+		var data []byte
+		format, data, err = quotaEnableFormat(tx.get(m.fmtKey("setting")), m.getFormat(), qtype)
+		changed = data != nil
+		if err != nil || !changed {
+			return err
+		}
+		op := "INIT_ENABLE_USERGROUPQUOTA()"
+		if qtype == DirQuotaType {
+			prefix := m.fmtKey("U")
+			tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
+				if len(k) == 9 {
+					tx.delete(k)
+				}
+				return true
+			})
+			op = "INIT_ENABLE_DIRSTATS()"
+		} else {
+			tx.deleteKeys(m.fmtKey("QU"))
+			tx.deleteKeys(m.fmtKey("QG"))
+		}
+		tx.set(m.fmtKey("setting"), data)
+		if format.ChangeLog {
+			m.doGenLog(tx, time.Now(), op)
+		}
+		return nil
+	})
+	return
+}
+
 func (m *kvMeta) cacheACLs(ctx Context) error {
 	if !m.getFormat().EnableACL {
 		return nil
