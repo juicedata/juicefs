@@ -3961,7 +3961,7 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 	cutoff := time.Now().Add(time.Hour * -1)
 	prefix := len(m.prefix)
 
-	_ = m.scan(ctx, "d[0-9]*", func(keys []string) error {
+	if err := m.scan(ctx, "d[0-9]*", func(keys []string) error {
 		for _, key := range keys {
 			ino, _ := strconv.Atoi(key[prefix+1:])
 			var entries []*Entry
@@ -3975,7 +3975,27 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		logger.Warnf("Skip cleaning up leaked inodes: scan directories: %s", err)
+		return
+	}
+	if err := m.scan(ctx, "session[0-9]*", func(keys []string) error {
+		for _, key := range keys {
+			inodes, err := m.rdb.SMembers(ctx, key).Result()
+			if err != nil {
+				logger.Errorf("SMembers %s: %s", key, err)
+				return err
+			}
+			for _, s := range inodes {
+				ino, _ := strconv.Atoi(s)
+				foundInodes[Ino(ino)] = struct{}{}
+			}
+		}
+		return nil
+	}); err != nil {
+		logger.Warnf("Skip cleaning up leaked inodes: scan sustained inodes: %s", err)
+		return
+	}
 	_ = m.scan(ctx, "i*", func(keys []string) error {
 		values, err := m.rdb.MGet(ctx, keys...).Result()
 		if err != nil {
