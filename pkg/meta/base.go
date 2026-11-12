@@ -1856,6 +1856,10 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
 			return st
 		}
+		if attr.Typ == TypeLink {
+			m.newMsg(ExternalLink, inode, attr.Length)
+			return ELink
+		}
 		if attr.Typ != TypeSymlink {
 			return syscall.EINVAL
 		}
@@ -3692,6 +3696,9 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 }
 
 func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr, now time.Time, rule *aclAPI.Rule) (*Attr, syscall.Errno) {
+	if cur.Flags&FlagImmutable != 0 && set & ^uint16(SetAttrFlag|SetAttrLinuxFlags|SetAttrWindowsFlags) != 0 {
+		return nil, syscall.EPERM
+	}
 	dirtyAttr := *cur
 	if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 		attr.Mode |= (cur.Mode & 06000)
@@ -4314,4 +4321,8 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	}
 	wg.Wait()
 	return ctx.Err()
+}
+
+func (m *baseMeta) FreezeRoot(ctx Context, freeze bool) syscall.Errno {
+	return syscall.ENOTSUP
 }

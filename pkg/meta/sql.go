@@ -1626,6 +1626,56 @@ func (m *dbMeta) checkLink(n *node) bool {
 	return false
 }
 
+func (m *dbMeta) lockRoot(s *xorm.Session, inodes ...Ino) error {
+	for _, inode := range inodes {
+		if inode != RootInode {
+			continue
+		}
+		n := node{Inode: RootInode}
+		if err := m.getNodesForUpdate(s, &n); err != nil {
+			return err
+		}
+		if m.checkLink(&n) {
+			return ELink
+		}
+		if n.Flags&FlagImmutable != 0 {
+			return syscall.EPERM
+		}
+		break
+	}
+	return nil
+}
+
+func (m *dbMeta) FreezeRoot(ctx Context, freeze bool) syscall.Errno {
+	if ctx.Uid() != 0 {
+		return syscall.EPERM
+	}
+	if m.root != RootInode {
+		return syscall.ENOTSUP
+	}
+	r := errno(m.txn(func(s *xorm.Session) error {
+		n := node{Inode: RootInode}
+		if err := m.getNodesForUpdate(s, &n); err != nil {
+			return err
+		}
+		if freeze && m.checkLink(&n) {
+			return ELink
+		}
+		if freeze {
+			if n.Flags&FlagImmutable != 0 {
+				return syscall.EPERM
+			}
+			n.Flags |= FlagImmutable
+		} else {
+			n.Flags &^= FlagImmutable
+		}
+		_, err := s.Cols("flags").Update(&n, &node{Inode: RootInode})
+		return err
+	}, RootInode))
+	m.of.InvalidateChunk(RootInode, invalidateAttrOnly)
+	return r
+}
+
 func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var cur = node{Inode: inode}
@@ -1954,6 +2004,9 @@ func (m *dbMeta) nextTrashInode(ctx Context, s *xorm.Session, inode *Ino) error 
 
 func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
+		if err := m.lockRoot(s, parent); err != nil {
+			return err
+		}
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
 		if err != nil {
@@ -2208,6 +2261,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	var newSpace, newInode int64
 	requestedTrash := trash
 	err := m.txn(func(s *xorm.Session) error {
+		if err := m.lockRoot(s, parent); err != nil {
+			return err
+		}
 		opened = false
 		newSpace, newInode = 0, 0
 		trash = requestedTrash
@@ -2393,6 +2449,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 	var n node
 	requestedTrash := trash
 	err := m.txn(func(s *xorm.Session) error {
+		if err := m.lockRoot(s, parent); err != nil {
+			return err
+		}
 		trash = requestedTrash
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
@@ -2554,6 +2613,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	requestedTrash := trash
 	err := m.txn(func(s *xorm.Session) error {
+		if err := m.lockRoot(s, parentSrc, parentDst); err != nil {
+			return err
+		}
 		opened = false
 		dino = 0
 		*tInode, *tAttr = 0, Attr{}
@@ -2920,6 +2982,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 
 func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
+		if err := m.lockRoot(s, parent); err != nil {
+			return err
+		}
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
 		if err != nil {
@@ -3095,6 +3160,9 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		var batchDelNodes map[Ino]*dNode
 		var invalidatedInodes map[Ino]struct{}
 		err := m.txn(func(s *xorm.Session) error {
+			if err := m.lockRoot(s, parent); err != nil {
+				return err
+			}
 			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
 			batchFsSpace, batchFsInodes = 0, 0
 			batchTrashLength, batchTrashSpace, batchTrashInodes = 0, 0, 0
@@ -4612,6 +4680,9 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 
 func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
+		if err := m.lockRoot(s, inode); err != nil {
+			return err
+		}
 		if err := m.getNodesForUpdate(s, &node{Inode: inode}); err != nil {
 			return err
 		}
@@ -4663,6 +4734,9 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 
 func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
+		if err := m.lockRoot(s, inode); err != nil {
+			return err
+		}
 		if err := m.getNodesForUpdate(s, &node{Inode: inode}); err != nil {
 			return err
 		}
@@ -5291,6 +5365,18 @@ func (m *dbMeta) replaceTree(s *xorm.Session, inode Ino, entry *DumpedEntry, map
 
 func (m *dbMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
 	r := errno(m.txn(func(s *xorm.Session) error {
+		if inode == RootInode {
+			n := node{Inode: inode}
+			if err := m.getNodesForUpdate(s, &n); err != nil {
+				return err
+			}
+			if n.Type == TypeLink {
+				if n.Length == mapping[inode] {
+					return nil
+				}
+				return syscall.EINVAL
+			}
+		}
 		inodes := map[Ino]bool{inode: true}
 		for _, e := range entry.Entries {
 			inodes[e.Attr.Inode] = true
@@ -6218,6 +6304,9 @@ func (m *dbMeta) validateCloneTarget(ctx Context, s xorm.Interface, ino Ino) (no
 
 func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, attr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
+		if err := m.lockRoot(s, parent); err != nil {
+			return err
+		}
 		n := node{Inode: srcIno}
 		ok, err := s.ForUpdate().Get(&n)
 		if err != nil {
@@ -6377,6 +6466,9 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	}
 
 	err := m.txn(func(s *xorm.Session) error {
+		if err := m.lockRoot(s, dstParent); err != nil {
+			return err
+		}
 		nowNano := m.now().UnixNano()
 		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
@@ -6668,7 +6760,7 @@ func (m *dbMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 			return ELink
 		}
 		m.parseAttr(&curNode, attr)
-		if !m.atimeNeedsUpdate(attr, now) {
+		if attr.Flags&FlagImmutable != 0 || !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		curNode.setAtime(now.UnixNano())

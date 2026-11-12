@@ -609,6 +609,7 @@ type Meta interface {
 
 	ScanChangelog(ctx Context, opt *ChangelogScanOption, handler func(ver int64, entry string) error) error
 
+	FreezeRoot(ctx Context, freeze bool) syscall.Errno
 	DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno
 	Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno
 	PrepareHardlink(ctx Context, inode Ino, entry *DumpedEntry) ([]HardlinkEntry, syscall.Errno)
