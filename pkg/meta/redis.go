@@ -444,6 +444,11 @@ func (m *redisMeta) doEnableQuota(ctx Context, qtype uint32) (format *Format, ch
 		if err != nil || !changed {
 			return err
 		}
+		if format.ChangeLog {
+			if err = m.checkFormatChangeLog(ctx, tx, 1); err != nil {
+				return err
+			}
+		}
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			op := "INIT_ENABLE_USERGROUPQUOTA()"
 			if qtype == DirQuotaType {

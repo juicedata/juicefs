@@ -5236,6 +5236,11 @@ func testQuotaFeatureEnable(t *testing.T, m Meta) {
 			t.Fatalf("failed update changed persisted or published format: %s, %v", after, err)
 		}
 	})
+	if r, ok := m.(*redisMeta); ok {
+		t.Run("ChangeLogErrors", func(t *testing.T) {
+			testQuotaEnableChangeLogErrors(t, r)
+		})
+	}
 }
 
 func testQuota(t *testing.T, m Meta) {
