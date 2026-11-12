@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/redis/go-redis/v9"
@@ -109,9 +110,23 @@ func testFormatUpdates(t *testing.T, m Meta) {
 				t.Fatal("editing a loaded snapshot changed the published format")
 			}
 			if action == "concurrent" {
+				writers := []Meta{m, m}
+				if db, ok := m.(*dbMeta); ok {
+					peer, err := newSQLMeta(db.Name(), strings.TrimPrefix(db.addr, "postgres://"), testConfig())
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer peer.Shutdown()
+					b, err = peer.Load(false)
+					if err != nil {
+						t.Fatal(err)
+					}
+					b.TrashDays = 0
+					writers[1] = peer // A separate Init mutex must not protect this write.
+				}
 				start, results := make(chan struct{}), make(chan error, 2)
-				for _, f := range []*Format{a, b} {
-					go func() { <-start; results <- m.Init(f, false) }()
+				for i, f := range []*Format{a, b} {
+					go func(writer Meta) { <-start; results <- writer.Init(f, false) }(writers[i])
 				}
 				close(start)
 				var succeeded, conflicted int
