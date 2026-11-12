@@ -7367,6 +7367,61 @@ func newFuseDefaultCtx(uid, primaryGid uint32) *fuseDefaultCtx {
 	}
 }
 
+func TestRedisCleanupLeakedInodes(t *testing.T) {
+	m := newTestRedisMeta(t, 8)
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	ctx := Background()
+	var inode Ino
+	if st := m.Mknod(ctx, RootInode, "held", TypeFile, 0644, 022, 0, "", &inode, nil); st != 0 {
+		t.Fatalf("create file: %s", st)
+	}
+	if st := m.Open(ctx, inode, syscall.O_RDWR, &Attr{}); st != 0 {
+		t.Fatalf("open file: %s", st)
+	}
+
+	if st := m.Unlink(ctx, RootInode, "held", true); st != 0 {
+		t.Fatalf("unlink held: %s", st)
+	}
+	if held, err := m.rdb.SIsMember(ctx, m.sustained(m.sid), inode.String()).Result(); err != nil || !held {
+		t.Fatalf("sustained inode: held=%t, err=%v", held, err)
+	}
+
+	var leaked Ino
+	if st := m.Mknod(ctx, RootInode, "leaked", TypeFile, 0644, 022, 0, "", &leaked, nil); st != 0 {
+		t.Fatalf("create leaked file: %s", st)
+	}
+	if err := m.rdb.HDel(ctx, m.entryKey(RootInode), "leaked").Err(); err != nil {
+		t.Fatalf("remove leaked entry: %s", err)
+	}
+	for _, ino := range []Ino{inode, leaked} {
+		data, err := m.rdb.Get(ctx, m.inodeKey(ino)).Bytes()
+		if err != nil {
+			t.Fatalf("get inode %d: %s", ino, err)
+		}
+		var attr Attr
+		m.parseAttr(data, &attr)
+		attr.Ctime = time.Now().Add(-2 * time.Hour).Unix()
+		if err := m.rdb.Set(ctx, m.inodeKey(ino), m.marshal(&attr), 0).Err(); err != nil {
+			t.Fatalf("set inode %d: %s", ino, err)
+		}
+	}
+
+	m.cleanupLeakedInodes(true)
+	if exists, err := m.rdb.Exists(ctx, m.inodeKey(inode)).Result(); err != nil || exists != 1 {
+		t.Fatalf("sustained inode was deleted: exists=%d, err=%v", exists, err)
+	}
+	if exists, err := m.rdb.Exists(ctx, m.inodeKey(leaked)).Result(); err != nil || exists != 0 {
+		t.Fatalf("leaked inode was not deleted: exists=%d, err=%v", exists, err)
+	}
+	if st := m.Close(ctx, inode); st != 0 {
+		t.Fatalf("close file: %s", st)
+	}
+}
+
 // TestRedisStaleReadLockCleanup is a regression test for the gateway outage:
 // a read-lock whose holder crashed (no F_UNLCK) used to survive stale-session
 // cleanup, because F_RDLCK never added the inode to locked$<sid>, which is the
