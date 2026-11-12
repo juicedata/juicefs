@@ -141,6 +141,7 @@ type Config struct {
 	Subdir               string `json:",omitempty"`
 	PrefixInternal       bool
 	HideInternal         bool
+	NoInternal           bool
 	RootSquash           *AnonymousAccount `json:",omitempty"`
 	AllSquash            *AnonymousAccount `json:",omitempty"`
 	NonDefaultPermission bool              `json:",omitempty"`
@@ -175,11 +176,17 @@ var (
 )
 
 func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
+	if v.Conf.NoInternal && IsSpecialNode(parent) {
+		return nil, syscall.ENOENT
+	}
 	var inode Ino
 	var attr = &Attr{}
 	if parent == rootID || name == internalNodes[0].name { // 0 is the control file
 		n := getInternalNodeByName(name)
 		if n != nil {
+			if v.Conf.NoInternal && n.inode != ConfigInode {
+				return nil, syscall.ENOENT
+			}
 			entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
 			return
 		}
@@ -205,6 +212,9 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 }
 
 func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, err syscall.Errno) {
+	if v.Conf.NoInternal && IsSpecialNode(ino) && ino != ConfigInode {
+		return nil, syscall.ENOENT
+	}
 	if IsSpecialNode(ino) && getInternalNode(ino) != nil {
 		n := getInternalNode(ino)
 		entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
@@ -409,6 +419,9 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 
 func (v *VFS) Opendir(ctx Context, ino Ino, flags uint32) (fh uint64, err syscall.Errno) {
 	defer func() { logit(ctx, "opendir", err, "(%d) [fh:%d]", ino, fh) }()
+	if v.Conf.NoInternal && IsSpecialNode(ino) {
+		return 0, syscall.ENOENT
+	}
 	if ctx.CheckPermission() {
 		var mmask uint8 = 0
 		switch flags & (syscall.O_RDONLY | syscall.O_WRONLY | syscall.O_RDWR) {
@@ -453,7 +466,7 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 			h.dirHandler = nil
 		}
 		var initEntries []*meta.Entry
-		if ino == rootID && !v.Conf.HideInternal {
+		if ino == rootID && !v.Conf.HideInternal && !v.Conf.NoInternal {
 			for _, node := range internalNodes[1:] {
 				initEntries = append(initEntries, &meta.Entry{
 					Inode: node.inode,
@@ -548,6 +561,9 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 }
 
 func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err syscall.Errno) {
+	if v.Conf.NoInternal && IsSpecialNode(ino) && ino != ConfigInode {
+		return nil, 0, syscall.ENOENT
+	}
 	defer func() {
 		if entry != nil {
 			logit(ctx, "open", err, "(%d,%#x) [fh:%d]", ino, flags, fh)
