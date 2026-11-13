@@ -1588,3 +1588,82 @@ func TestCopyDataWithoutProgress(t *testing.T) {
 		t.Fatalf("leaked %d goroutines after %d CopyData calls", leaked, cycles)
 	}
 }
+
+// TestSyncFiltersFromConfig covers programmatic callers: the include/exclude
+// patterns are set on Config and never appear in os.Args, yet they must still
+// be applied. Before the fix, Config.Exclude was ignored unless the same
+// pattern also happened to be on the command line.
+func TestSyncFiltersFromConfig(t *testing.T) {
+	saved := os.Args
+	defer func() { os.Args = saved }()
+	os.Args = []string{"juicefs", "sync"} // no --include/--exclude flags
+
+	tmpA := t.TempDir() + "/"
+	tmpB := t.TempDir() + "/"
+	a, _ := object.CreateStorage("file", tmpA, "", "", "")
+	a.Put(ctx, "a1", bytes.NewReader([]byte("a1")))
+	a.Put(ctx, "b1", bytes.NewReader([]byte("b1")))
+
+	b, _ := object.CreateStorage("file", tmpB, "", "", "")
+	config := &Config{
+		Threads:     2,
+		ListThreads: 1,
+		Limit:       -1,
+		MaxSize:     math.MaxInt64,
+		Quiet:       true,
+		Exclude:     []string{"b*"},
+	}
+	if err := Sync(a, b, config); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+
+	var got []string
+	ch, err := ListAll(b, "", "", "", true)
+	if err != nil {
+		t.Fatalf("list dst: %s", err)
+	}
+	for o := range ch {
+		if o != nil && !o.IsDir() {
+			got = append(got, o.Key())
+		}
+	}
+	if len(got) != 1 || got[0] != "a1" {
+		t.Fatalf("dst keys = %v, want [a1]: Config.Exclude was ignored", got)
+	}
+}
+
+func TestParseIncludeRules(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []rule
+	}{
+		{
+			name: "flag with value",
+			args: []string{"sync", "--exclude", "b*", "--include", "a*"},
+			want: []rule{{pattern: "b*"}, {pattern: "a*", include: true}},
+		},
+		{
+			name: "value that looks like a flag is not re-parsed",
+			args: []string{"--exclude", "-include", "x"},
+			want: []rule{{pattern: "-include"}},
+		},
+		{
+			name: "pattern containing equals sign",
+			args: []string{"--exclude=a=b"},
+			want: []rule{{pattern: "a=b"}},
+		},
+		{
+			name: "invalid pattern is skipped",
+			args: []string{"--exclude", "["},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseIncludeRules(tt.args); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("parseIncludeRules(%v) = %+v, want %+v", tt.args, got, tt.want)
+			}
+		})
+	}
+}

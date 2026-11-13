@@ -1592,19 +1592,24 @@ func parseRule(name, p string) rule {
 }
 
 func parseIncludeRules(args []string) (rules []rule) {
-	l := len(args)
-	for i, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		if strings.HasPrefix(a, "--") {
 			a = a[1:]
 		}
-		if l-1 > i && (a == "-include" || a == "-exclude") {
-			if _, err := path.Match(args[i+1], "xxxx"); err != nil {
-				logger.Warnf("ignore invalid pattern: %q %q", a, args[i+1])
+		if i+1 < len(args) && (a == "-include" || a == "-exclude") {
+			pattern := args[i+1]
+			// Consume the value: a pattern that happens to be "-include" or
+			// "-exclude" must not be re-parsed as a flag on the next round.
+			i++
+			if _, err := path.Match(pattern, "xxxx"); err != nil {
+				logger.Warnf("ignore invalid pattern: %q %q", a, pattern)
 				continue
 			}
-			rules = append(rules, parseRule(a, args[i+1]))
+			rules = append(rules, parseRule(a, pattern))
 		} else if strings.HasPrefix(a, "-include=") || strings.HasPrefix(a, "-exclude=") {
-			if s := strings.Split(a, "="); len(s) == 2 && s[1] != "" {
+			// SplitN so patterns containing '=' are kept intact.
+			if s := strings.SplitN(a, "=", 2); len(s) == 2 && s[1] != "" {
 				if _, err := path.Match(s[1], "xxxx"); err != nil {
 					logger.Warnf("ignore invalid pattern: %q", a)
 					continue
@@ -1612,6 +1617,27 @@ func parseIncludeRules(args []string) (rules []rule) {
 				rules = append(rules, parseRule(s[0], s[1]))
 			}
 		}
+	}
+	return
+}
+
+// rulesFromConfig derives rsync-style rules from Config.Include/Config.Exclude.
+// It is the fallback for callers that build a Config programmatically, where
+// the patterns never appear in os.Args.
+func rulesFromConfig(config *Config) (rules []rule) {
+	for _, pattern := range config.Include {
+		if _, err := path.Match(pattern, "xxxx"); err != nil {
+			logger.Warnf("ignore invalid include pattern: %q", pattern)
+			continue
+		}
+		rules = append(rules, rule{pattern: pattern, include: true})
+	}
+	for _, pattern := range config.Exclude {
+		if _, err := path.Match(pattern, "xxxx"); err != nil {
+			logger.Warnf("ignore invalid exclude pattern: %q", pattern)
+			continue
+		}
+		rules = append(rules, rule{pattern: pattern, include: false})
 	}
 	return
 }
@@ -2370,8 +2396,15 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}()
 	}
 
-	if len(config.Exclude) > 0 {
+	if len(config.Include) > 0 || len(config.Exclude) > 0 {
+		// The command line keeps the relative order of --include/--exclude,
+		// which rsync-style matching depends on, so prefer it when present.
+		// Programmatic callers have no such flags in os.Args: fall back to the
+		// Config fields instead of silently dropping the filters.
 		config.rules = parseIncludeRules(os.Args)
+		if len(config.rules) == 0 {
+			config.rules = rulesFromConfig(config)
+		}
 	}
 
 	if config.Manager == "" {
