@@ -33,7 +33,7 @@ type Cond struct {
 func (c *Cond) Signal() {
 	if e := c.waiters.Front(); e != nil {
 		c.waiters.Remove(e)
-		close(e.Value.(chan struct{}))
+		e.Value.(chan struct{}) <- struct{}{}
 	}
 }
 
@@ -47,10 +47,14 @@ func (c *Cond) Broadcast() {
 
 var timerPool = sync.Pool{}
 
+// waiterPool holds empty notification channels with capacity 1, so that Signal
+// can wake a waiter without blocking while holding L.
+var waiterPool = sync.Pool{New: func() interface{} { return make(chan struct{}, 1) }}
+
 // WaitWithTimeout wait for a signal or a period of timeout eclipsed.
 // returns true in case of timeout else false
 func (c *Cond) WaitWithTimeout(d time.Duration) bool {
-	ch := make(chan struct{})
+	ch := waiterPool.Get().(chan struct{})
 	waiter := c.waiters.PushBack(ch)
 	c.L.Unlock()
 	var t *time.Timer
@@ -79,6 +83,7 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 			c.waiters.Remove(waiter)
 		}
 	}
+	waiterPool.Put(ch)
 	return timeout
 }
 
