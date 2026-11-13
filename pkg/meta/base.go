@@ -1418,7 +1418,9 @@ func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 	case "linux":
 		// same as ext
 		if cur.Typ != TypeDirectory {
-			if ctx.Uid() != 0 || (cur.Mode>>3)&1 != 0 {
+			// Only permission-checking contexts provide the full supplementary groups.
+			keepSGID := ctx.Uid() == 0 || (ctx.CheckPermission() && containsGid(ctx, cur.Gid))
+			if !keepSGID || (cur.Mode>>3)&1 != 0 {
 				// clear SUID and SGID
 				cur.Mode &= 01777
 				set.Mode &= 01777
@@ -3691,12 +3693,14 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 			changed = true
 		}
 	}
-	if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-		if m.checkPermission(ctx) && ctx.Uid() != 0 {
+	if set&SetAttrUID != 0 {
+		if m.checkPermission(ctx) && ctx.Uid() != 0 && (ctx.Uid() != cur.Uid || attr.Uid != cur.Uid) {
 			return nil, syscall.EPERM
 		}
-		dirtyAttr.Uid = attr.Uid
-		changed = true
+		if cur.Uid != attr.Uid {
+			dirtyAttr.Uid = attr.Uid
+			changed = true
+		}
 	}
 	if set&SetAttrMode != 0 {
 		if m.checkPermission(ctx) && ctx.Uid() != 0 && (attr.Mode&02000) != 0 {

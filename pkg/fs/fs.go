@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"runtime/trace"
@@ -1441,16 +1442,20 @@ func (f *File) Chmod(ctx meta.Context, mode uint16) (err syscall.Errno) {
 	return
 }
 
+// Chown changes ownership, leaving IDs set to math.MaxUint32 unchanged.
 func (f *File) Chown(ctx meta.Context, uid uint32, gid uint32) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Chown").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chown (%s,%d,%d): %s", f.path, uid, gid, errstr(err)) }()
 	var flag uint16
-	if uid != uint32(f.info.Uid()) {
+	if uid != math.MaxUint32 {
 		flag |= meta.SetAttrUID
 	}
-	if gid != uint32(f.info.Gid()) {
+	if gid != math.MaxUint32 {
 		flag |= meta.SetAttrGID
+	}
+	if flag == 0 {
+		return 0
 	}
 	var attr = Attr{Uid: uid, Gid: gid}
 	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
