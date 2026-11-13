@@ -118,7 +118,7 @@ func compareSortedObject(a, b Object) int {
 	return strings.Compare(a.Key(), b.Key())
 }
 
-// SortObjects returns the objects from in sorted by key, dropping duplicated keys.
+// SortObjects returns the objects from in sorted by key.
 // They are sorted in memory if they fit in one chunk, otherwise on disk under dir.
 // A nil from in marks a failed listing: the output then contains only a nil, so
 // partial results are never returned. Nothing is returned before in is closed.
@@ -193,16 +193,8 @@ func SortObjects(ctx context.Context, dir string, in <-chan Object) <-chan Objec
 		defer func() {
 			cancel(nil)
 			<-inputDone
-			// wait for the sorter to stop and release its temporary files
-			for {
-				if _, ok, err := sorter.Next(context.Background()); !ok || err != nil {
-					break
-				}
-			}
 		}()
 
-		var last string
-		first := true
 		for {
 			o, ok, err := sorter.Next(sortCtx)
 			if err != nil {
@@ -215,10 +207,6 @@ func SortObjects(ctx context.Context, dir string, in <-chan Object) <-chan Objec
 			if !ok {
 				return
 			}
-			if !first && o.Key() == last {
-				continue
-			}
-			first, last = false, o.Key()
 			if !send(o) {
 				return
 			}

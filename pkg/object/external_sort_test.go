@@ -77,7 +77,6 @@ func TestSortObjects(t *testing.T) {
 	add(&file{obj{key: "f/file", size: 4, mtime: mtime}, "alice", "staff", 0640, false})
 	add(&file{obj{key: "f/link", mtime: mtime}, "", "", os.ModeSymlink | 0777, true})
 	add(&file{obj{key: "f/dir/", isDir: true, mtime: mtime}, "root", "root", os.ModeDir | 0755, false})
-	objs = append(objs, &obj{key: "dir/0042", size: 42, mtime: mtime.Add(42 * time.Second)}) // duplicate
 	var wantKeys []string
 	for k := range want {
 		wantKeys = append(wantKeys, k)

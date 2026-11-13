@@ -296,10 +296,7 @@ func (c *ceph) iterKeys(ctx context.Context, prefix, marker string, emit func(st
 				return err
 			}
 		}
-		if err := iter.Err(); err != nil {
-			return fmt.Errorf("iterate pool %s: %w", c.name, err)
-		}
-		return nil
+		return iter.Err()
 	})
 }
 
