@@ -553,6 +553,7 @@ type Config struct {
 	CacheLargeWrite        bool
 	BufferSize             uint64
 	Readahead              int
+	InitReadahead          int
 	Prefetch               int
 }
 
