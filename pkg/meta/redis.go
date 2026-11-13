@@ -2493,6 +2493,37 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 	return errno(err)
 }
 
+func (m *redisMeta) checkRenameCycle(ctx Context, tx *redis.Tx, inode, parent Ino, parentAttr *Attr) error {
+	first := parent
+	return checkRenameCycle(inode, parent, func(parent Ino) (Ino, error) {
+		// The first parent was read under the transaction's initial WATCH.
+		if parent == first {
+			return parentAttr.Parent, nil
+		}
+		key := m.inodeKey(parent)
+		var get *redis.StringCmd
+		_, err := tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+			// Preserve WATCH-before-read on the transaction's sticky connection.
+			pipe.Do(ctx, "WATCH", key)
+			get = pipe.Get(ctx, key)
+			return nil
+		})
+		if err != nil {
+			return 0, err
+		}
+		buf, err := get.Bytes()
+		if err != nil {
+			return 0, err
+		}
+		var attr Attr
+		m.parseAttr(buf, &attr)
+		if attr.Typ != TypeDirectory {
+			return 0, syscall.ENOTDIR
+		}
+		return attr.Parent, nil
+	})
+}
+
 func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
 	exchange := flags == RenameExchange
 	var opened bool
@@ -2599,9 +2630,10 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
 			return st
 		}
-		// TODO: check parentDst is a subdir of source node
-		if ino == parentDst || ino == dattr.Parent {
-			return syscall.EPERM
+		if parentSrc != parentDst && typ == TypeDirectory {
+			if err := m.checkRenameCycle(ctx, tx, ino, parentDst, &dattr); err != nil {
+				return err
+			}
 		}
 		m.parseAttr([]byte(rs[2].(string)), &iattr)
 		if (sattr.Flags&FlagAppend) != 0 || (sattr.Flags&FlagImmutable) != 0 || (dattr.Flags&FlagImmutable) != 0 || (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
@@ -2648,6 +2680,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			}
 			if !exchange && trash > 0 && tattr.Nlink > 1 && tx.HExists(ctx, m.entryKey(trash), m.trashEntry(parentDst, dino, nameDst)).Val() {
 				trash = 0
+			}
+			if exchange && parentSrc != parentDst && dtyp == TypeDirectory {
+				if err := m.checkRenameCycle(ctx, tx, dino, parentSrc, &sattr); err != nil {
+					return err
+				}
 			}
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())

@@ -177,6 +177,7 @@ func testMeta(t *testing.T, m Meta) {
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)
 	testRenameOverRelinkedHardlink(t, m)
+	testRenameDirectoryCycles(t, m)
 	testParents(t, m)
 	testRemove(t, m)
 	testResolve(t, m)
@@ -3088,6 +3089,72 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
 	}
+}
+
+func testRenameDirectoryCycles(t *testing.T, m Meta) {
+	t.Run("RenameDirectoryCycles", func(t *testing.T) {
+		ctx := Background()
+		for _, scenario := range []string{"descendant", "exchange-source-ancestor", "exchange-target-ancestor", "legal-move"} {
+			t.Run(scenario, func(t *testing.T) {
+				mkdir := func(parent Ino, name string) Ino {
+					t.Helper()
+					var inode Ino
+					if st := m.Mkdir(ctx, parent, name, 0755, 0, 0, &inode, nil); st != 0 {
+						t.Fatal(st)
+					}
+					return inode
+				}
+				lookup := func(parent Ino, name string, want Ino) {
+					t.Helper()
+					var inode Ino
+					var attr Attr
+					if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 || inode != want {
+						t.Fatalf("lookup %d/%s: inode=%d, want=%d, status=%s", parent, name, inode, want, st)
+					}
+				}
+				base := mkdir(RootInode, "rename-cycle-"+scenario)
+				a := mkdir(base, "a")
+				b := mkdir(a, "b")
+				c := mkdir(b, "c")
+				var st syscall.Errno
+				switch scenario {
+				case "descendant":
+					st = m.Rename(ctx, base, "a", c, "moved", 0, nil, nil)
+				case "exchange-source-ancestor":
+					st = m.Rename(ctx, base, "a", b, "c", RenameExchange, nil, nil)
+				case "exchange-target-ancestor":
+					st = m.Rename(ctx, b, "c", base, "a", RenameExchange, nil, nil)
+				case "legal-move":
+					st = m.Rename(ctx, a, "b", base, "b", 0, nil, nil)
+				}
+				if scenario == "legal-move" {
+					if st != 0 {
+						t.Fatalf("legal rename: %s", st)
+					}
+					lookup(base, "b", b)
+				} else {
+					if st != syscall.EINVAL {
+						t.Fatalf("directory cycle: got %s, want EINVAL", st)
+					}
+					lookup(a, "b", b)
+				}
+				lookup(base, "a", a)
+				lookup(b, "c", c)
+				parentB := a
+				if scenario == "legal-move" {
+					parentB = base
+				}
+				for _, entry := range []struct {
+					parent Ino
+					name   string
+				}{{b, "c"}, {parentB, "b"}, {base, "a"}, {RootInode, "rename-cycle-" + scenario}} {
+					if st := m.Rmdir(ctx, entry.parent, entry.name, true); st != 0 {
+						t.Fatal(st)
+					}
+				}
+			})
+		}
+	})
 }
 
 func testRenameOverRelinkedHardlink(t *testing.T, m Meta) {

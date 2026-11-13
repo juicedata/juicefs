@@ -1966,6 +1966,26 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	return st
 }
 
+// readParent must participate in the rename transaction's conflict detection.
+func checkRenameCycle(inode, parent Ino, readParent func(Ino) (Ino, error)) error {
+	seen := make(map[Ino]bool)
+	for parent != RootInode {
+		if parent == inode {
+			return syscall.EINVAL
+		}
+		if parent == 0 || seen[parent] {
+			return syscall.EIO
+		}
+		seen[parent] = true
+		var err error
+		parent, err = readParent(parent)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
