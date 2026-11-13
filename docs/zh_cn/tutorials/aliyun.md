@@ -177,7 +177,7 @@ $ juicefs format \
 2021/07/13 16:37:14.277632 juicefs[22290] <WARNING>: maxmemory_policy is "volatile-lru", please set it to 'noeviction'.
 2021/07/13 16:37:14.281432 juicefs[22290] <INFO>: Ping redis: 3.609453ms
 2021/07/13 16:37:14.527879 juicefs[22290] <INFO>: Data uses oss://mytest/mystor/
-2021/07/13 16:37:14.593450 juicefs[22290] <INFO>: Volume is formatted as {Name:mystor UUID:4ad0bb86-6ef5-4861-9ce2-a16ac5dea81b Storage:oss Bucket:https://mytest340 AccessKey:LTAI4G4v6ioGzQXy56m3XDkG SecretKey:removed BlockSize:4096 Compression:none Shards:0 Partitions:0 Capacity:0 Inodes:0 EncryptKey:}
+2021/07/13 16:37:14.593450 juicefs[22290] <INFO>: Volume is formatted as {Name:mystor UUID:4ad0bb86-6ef5-4861-9ce2-a16ac5dea81b Storage:oss Bucket:https://mytest340 AccessKey:<your-access-key-id> SecretKey:removed BlockSize:4096 Compression:none Shards:0 Partitions:0 Capacity:0 Inodes:0 EncryptKey:}
 ```
 
 ## 挂载 JuiceFS 存储
