@@ -30,6 +30,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -112,11 +113,22 @@ func TestGc(t *testing.T) {
 	require.NoError(t, os.WriteFile(leaked, leakedData, 0644))
 	time.Sleep(time.Second * 3)
 
+	// a read flock left by a session that no longer exists
+	ino, err := utils.GetFileInode(filepath.Join(testMountPoint, "f0.txt"))
+	require.NoError(t, err)
+	opt, err := redis.ParseURL(testMeta)
+	require.NoError(t, err)
+	rdb := redis.NewClient(opt)
+	defer rdb.Close()
+	lockKey, lockField := fmt.Sprintf("lockf%d", ino), "999999_0000000000000001"
+	require.NoError(t, rdb.HSet(context.Background(), lockKey, lockField, "R").Err())
+
 	if err := Main([]string{"", "gc", "--delete", testMeta}); err != nil {
 		t.Fatalf("gc delete failed: %s", err)
 	}
 
 	require.False(t, utils.Exists(leaked))
+	require.False(t, rdb.HExists(context.Background(), lockKey, lockField).Val())
 
 	if err := Main([]string{"", "gc", testMeta}); err != nil {
 		t.Fatalf("gc failed: %s", err)
