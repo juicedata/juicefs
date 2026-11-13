@@ -2494,6 +2494,23 @@ func (m *dbMeta) getNodes(s *xorm.Session, nodes ...*node) error {
 	return nil
 }
 
+func (m *dbMeta) checkRenameCycle(s *xorm.Session, inode, parent Ino) error {
+	return checkRenameCycle(inode, parent, func(parent Ino) (Ino, error) {
+		n := node{Inode: parent}
+		ok, err := s.ForUpdate().Get(&n)
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			return 0, syscall.ENOENT
+		}
+		if n.Type != TypeDirectory {
+			return 0, syscall.ENOTDIR
+		}
+		return n.Parent, nil
+	})
+}
+
 func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parentDst, &trash); st != 0 {
@@ -2552,9 +2569,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			return nil
 		}
-		// TODO: check parentDst is a subdir of source node
-		if se.Inode == parentDst || se.Inode == dpattr.Parent {
-			return syscall.EPERM
+		if parentSrc != parentDst && se.Type == TypeDirectory {
+			if err := m.checkRenameCycle(s, se.Inode, parentDst); err != nil {
+				return err
+			}
 		}
 		var sn = node{Inode: se.Inode}
 		ok, err = s.Get(&sn)
@@ -2613,6 +2631,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if !exchange && trash > 0 && dn.Nlink > 1 {
 				if o, e := s.Get(&edge{Parent: trash, Name: []byte(m.trashEntry(parentDst, dino, string(de.Name))), Inode: dino, Type: de.Type}); e == nil && o {
 					trash = 0
+				}
+			}
+			if exchange && parentSrc != parentDst && de.Type == TypeDirectory {
+				if err := m.checkRenameCycle(s, de.Inode, parentSrc); err != nil {
+					return err
 				}
 			}
 			dn.setCtime(now)

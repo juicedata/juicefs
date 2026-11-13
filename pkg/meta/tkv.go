@@ -2223,6 +2223,24 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 	return errno(err)
 }
 
+func (m *kvMeta) checkRenameCycle(tx *kvTxn, inode, parent Ino) error {
+	return checkRenameCycle(inode, parent, func(parent Ino) (Ino, error) {
+		key := m.inodeKey(parent)
+		buf := tx.get(key)
+		if buf == nil {
+			return 0, syscall.ENOENT
+		}
+		var attr Attr
+		m.parseAttr(buf, &attr)
+		if attr.Typ != TypeDirectory {
+			return 0, syscall.ENOTDIR
+		}
+		// Snapshot-isolated backends need a write conflict, not just a read.
+		tx.set(key, buf)
+		return attr.Parent, nil
+	})
+}
+
 func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parentDst, &trash); st != 0 {
@@ -2285,9 +2303,10 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
 			return st
 		}
-		// TODO: check parentDst is a subdir of source node
-		if ino == parentDst || ino == dattr.Parent {
-			return syscall.EPERM
+		if parentSrc != parentDst && typ == TypeDirectory {
+			if err := m.checkRenameCycle(tx, ino, parentDst); err != nil {
+				return err
+			}
 		}
 		m.parseAttr(rs[2], &iattr)
 		if (sattr.Flags&FlagAppend) != 0 || (sattr.Flags&FlagImmutable) != 0 || (dattr.Flags&FlagImmutable) != 0 || (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
@@ -2328,6 +2347,11 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			if !exchange && trash > 0 && tattr.Nlink > 1 && tx.get(m.entryKey(trash, m.trashEntry(parentDst, dino, nameDst))) != nil {
 				trash = 0
+			}
+			if exchange && parentSrc != parentDst && dtyp == TypeDirectory {
+				if err := m.checkRenameCycle(tx, dino, parentSrc); err != nil {
+					return err
+				}
 			}
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())

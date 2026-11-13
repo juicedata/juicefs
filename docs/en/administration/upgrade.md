@@ -6,6 +6,12 @@ sidebar_position: 9
 
 Upgrade methods vary with different JuiceFS clients.
 
+## Directory rename cycle protection
+
+Directory renames validate inode ancestry in the metadata transaction, including both directions of `RENAME_EXCHANGE`. Path checks in an SDK do not replace this protection: a symlink alias can hide an ancestor relationship. Cross-parent directory moves require extra ancestry reads, whose cost grows with directory depth.
+
+When upgrading to a release containing this protection, upgrade or stop every older client that can modify the volume, including SDK and gateway processes. A client without the fix can still create a directory cycle even when another client is upgraded. Raising [`--min-client-version`](../reference/command_reference.mdx#config-management-options) prevents older clients from connecting; it does not stop writes from an existing session. Do not rely only on a session listing to find all writers, because SDK clients may run without a recorded session. Set the minimum to the actual release containing the fix after all older writers have exited; do not lower it during rollback.
+
 ## Mount point
 
 ### Normal upgrade
