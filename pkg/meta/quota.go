@@ -17,9 +17,11 @@
 package meta
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -621,33 +623,92 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 	}
 }
 
+// quotaEnableFormat changes only the requested feature in the stored document.
+// Keeping unknown JSON fields avoids dropping settings written by newer clients.
+func quotaEnableFormat(body []byte, expected *Format, qtype uint32) (*Format, []byte, error) {
+	if len(body) == 0 {
+		return nil, nil, ErrNotFormatted
+	}
+	var format Format
+	if err := json.Unmarshal(body, &format); err != nil {
+		return nil, nil, err
+	}
+	if format.UUID != expected.UUID || format.Name != expected.Name {
+		return nil, nil, errors.New("volume changed while enabling quota")
+	}
+	if err := format.CheckVersion(); err != nil {
+		return nil, nil, err
+	}
+	var field string
+	switch qtype {
+	case DirQuotaType:
+		if format.DirStats {
+			return &format, nil, nil
+		}
+		field, format.DirStats = "DirStats", true
+	case UserQuotaType, GroupQuotaType:
+		if format.UserGroupQuota {
+			return &format, nil, nil
+		}
+		field, format.UserGroupQuota = "UserGroupQuota", true
+	default:
+		return nil, nil, syscall.EINVAL
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(body, &document); err != nil {
+		return nil, nil, err
+	}
+	if document == nil {
+		return nil, nil, errors.New("invalid stored format")
+	}
+	for key := range document {
+		if strings.EqualFold(key, field) {
+			delete(document, key)
+		}
+	}
+	document[field] = json.RawMessage("true")
+	data, err := json.Marshal(document)
+	return &format, data, err
+}
+
+func (m *baseMeta) enableQuota(ctx Context, qtype uint32) (bool, error) {
+	m.quotaEnableMu.Lock()
+	defer m.quotaEnableMu.Unlock()
+	format, changed, err := m.en.doEnableQuota(ctx, qtype)
+	if err == nil {
+		// Leave unrelated cached settings for reloadFormat and its callbacks.
+		for {
+			current := m.getFormat()
+			updated := current.Clone()
+			if qtype == DirQuotaType {
+				updated.DirStats = format.DirStats
+			} else {
+				updated.UserGroupQuota = format.UserGroupQuota
+			}
+			if m.fmt.CompareAndSwap(current, updated) {
+				break
+			}
+		}
+	}
+	return changed, err
+}
+
 func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath string, quotas map[string]*Quota, strict bool) error {
-	format := m.getFormat().Clone()
+	format := m.getFormat()
 	var quota *Quota
 	var scan bool = false
 	switch qtype {
 	case DirQuotaType:
 		if !format.DirStats {
-			format.DirStats = true
-			if err := m.en.doInit(format, false); err != nil {
+			if _, err := m.enableQuota(ctx, qtype); err != nil {
 				return fmt.Errorf("enable dir stats: %s (%w)", err, syscall.EIO)
 			}
 		}
 		quota = quotas[dpath]
-	case UserQuotaType:
+	case UserQuotaType, GroupQuotaType:
 		if !format.UserGroupQuota {
-			format.UserGroupQuota = true
 			scan = true
-			if err := m.en.doInit(format, false); err != nil {
-				return fmt.Errorf("enable user group quota: %s (%w)", err, syscall.EIO)
-			}
-		}
-		quota = quotas[fmt.Sprintf("%d", key)]
-	case GroupQuotaType:
-		if !format.UserGroupQuota {
-			format.UserGroupQuota = true
-			scan = true
-			if err := m.en.doInit(format, false); err != nil {
+			if _, err := m.enableQuota(ctx, qtype); err != nil {
 				return fmt.Errorf("enable user group quota: %s (%w)", err, syscall.EIO)
 			}
 		}

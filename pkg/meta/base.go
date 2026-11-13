@@ -90,6 +90,7 @@ type engine interface {
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
 	doInit(format *Format, force bool) error
+	doEnableQuota(ctx Context, qtype uint32) (*Format, bool, error)
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
 	doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) error
@@ -316,6 +317,7 @@ type baseMeta struct {
 	parentMu        sync.Mutex        // protect dirParents
 	quotaMu         sync.RWMutex      // protect dirQuotas
 	quotasFlushLock sync.Mutex        // prevent concurrent doFlushQuotas
+	quotaEnableMu   sync.Mutex        // order local quota-feature publication
 	dirParents      map[Ino]Ino       // directory inode -> parent inode
 	dirQuotas       map[uint64]*Quota // directory inode -> quota
 	userQuotas      map[uint64]*Quota // uid -> quota

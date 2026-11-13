@@ -9,6 +9,8 @@ JuiceFS supports both total file system quota and subdirectory quota, both of wh
 The storage quota settings are stored in the metadata engine for all mount points to read, and the client of each mount point will also cache its own used capacity and inodes and synchronize them with the metadata engine once per second. Meanwhile the client will read the latest usage value from the metadata engine every 10 seconds to synchronize the usage information among each mount point, but this information synchronization mechanism cannot guarantee that the usage data is counted accurately.
 :::
 
+Setting the first directory or user/group quota enables the required metadata feature. This update preserves the current stored storage configuration and other enabled quota features, even when the command's client has not yet reloaded those settings. It does not change the usage synchronization interval described above.
+
 ## File system quota {#file-system-quota}
 
 For Linux, the default capacity of a JuiceFS type file system is identified as `1.0P` by using the `df` command.

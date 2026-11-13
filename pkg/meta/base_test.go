@@ -33,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -171,6 +172,14 @@ func testMeta(t *testing.T, m Meta) {
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
+	t.Run("QuotaFeatureEnable", func(t *testing.T) {
+		t.Cleanup(func() {
+			if err := m.Reset(); err != nil {
+				t.Errorf("reset quota feature test: %s", err)
+			}
+		})
+		testQuotaFeatureEnable(t, m)
+	})
 
 	testMetaClient(t, m)
 	testSubdirOperations(t, m)
@@ -5116,6 +5125,121 @@ func checkEntry(t *testing.T, m Meta, srcEntry, dstEntry *Entry, dstParentIno In
 		if !bytes.Equal(v1, v2) {
 			t.Fatalf("xattr not equal")
 		}
+	}
+}
+
+func testQuotaFeatureEnable(t *testing.T, m Meta) {
+	for _, qtype := range []uint32{DirQuotaType, UserQuotaType, GroupQuotaType} {
+		t.Run(fmt.Sprint(qtype), func(t *testing.T) {
+			format := testFormat()
+			format.DirStats = false
+			format.Bucket = "before-quota-enable"
+			format.Tiers = object.NewTiers("standard")
+			if err := m.Init(format, false); err != nil {
+				t.Fatal(err)
+			}
+			stale := m.getBase().getFormat().Clone()
+			latest := stale.Clone()
+			latest.Bucket = "updated-before-reload"
+			latest.DirStats = qtype != DirQuotaType
+			latest.UserGroupQuota = qtype == DirQuotaType
+			if err := m.Init(latest, false); err != nil {
+				t.Fatal(err)
+			}
+			// Simulate a client's published configuration before its next heartbeat.
+			m.getBase().setFormat(stale)
+			var reloadedBucket atomic.Value
+			m.OnReload(func(format *Format) error {
+				reloadedBucket.Store(format.Bucket)
+				return nil
+			})
+			key := "12345"
+			if qtype == DirQuotaType {
+				key = "/"
+			}
+			for range 2 {
+				if err := m.HandleQuota(Background(), QuotaSet, key, qtype,
+					map[string]*Quota{key: {MaxSpace: 1 << 30, MaxInodes: 10}}, false, false, false); err != nil {
+					t.Fatal(err)
+				}
+				stored, err := m.getBase().loadFormat(false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if stored.Bucket != latest.Bucket || !stored.DirStats || !stored.UserGroupQuota {
+					t.Fatalf("quota enable overwrote stored configuration: %s", stored)
+				}
+				quotas := make(map[string]*Quota)
+				if err := m.HandleQuota(Background(), QuotaGet, key, qtype, quotas, false, false, false); err != nil {
+					t.Fatal(err)
+				}
+				if q := quotas[key]; q == nil || q.MaxSpace != 1<<30 || q.MaxInodes != 10 {
+					t.Fatalf("quota limits changed: %+v", q)
+				}
+				m.getBase().reloadFormat()
+				if got := reloadedBucket.Load(); got != latest.Bucket {
+					t.Fatalf("quota enable hid a storage change from reload callbacks: %v", got)
+				}
+				m.getBase().setFormat(stale)
+			}
+			if err := m.Reset(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	t.Run("Concurrent", func(t *testing.T) {
+		format := testFormat()
+		format.DirStats = false
+		if err := m.Init(format, false); err != nil {
+			t.Fatal(err)
+		}
+		start := make(chan struct{})
+		results := make(chan error, 2)
+		for _, qtype := range []uint32{DirQuotaType, UserQuotaType} {
+			go func() {
+				<-start
+				_, _, err := m.getBase().en.doEnableQuota(Background(), qtype)
+				results <- err
+			}()
+		}
+		close(start)
+		for range 2 {
+			if err := <-results; err != nil {
+				t.Fatal(err)
+			}
+		}
+		stored, err := m.getBase().loadFormat(false)
+		if err != nil || !stored.DirStats || !stored.UserGroupQuota {
+			t.Fatalf("concurrent feature lost: %v, %v", stored, err)
+		}
+		if err := m.Reset(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("Canceled", func(t *testing.T) {
+		format := testFormat()
+		format.DirStats = false
+		if err := m.Init(format, false); err != nil {
+			t.Fatal(err)
+		}
+		before, err := m.getBase().en.doLoad()
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx := NewContext(1, 0, []uint32{0})
+		ctx.Cancel()
+		if _, err := m.getBase().enableQuota(ctx, DirQuotaType); err == nil {
+			t.Fatal("canceled feature update succeeded")
+		}
+		after, err := m.getBase().en.doLoad()
+		if err != nil || !bytes.Equal(before, after) || m.getBase().getFormat().DirStats {
+			t.Fatalf("failed update changed persisted or published format: %s, %v", after, err)
+		}
+	})
+	if r, ok := m.(*redisMeta); ok {
+		t.Run("ChangeLogErrors", func(t *testing.T) {
+			testQuotaEnableChangeLogErrors(t, r)
+		})
 	}
 }
 

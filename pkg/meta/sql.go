@@ -644,6 +644,43 @@ func (m *dbMeta) syncAllTables() error {
 	return nil
 }
 
+func (m *dbMeta) doEnableQuota(ctx Context, qtype uint32) (format *Format, changed bool, err error) {
+	err = m.txn(func(s *xorm.Session) error {
+		s = s.Context(ctx)
+		stored := setting{Name: "format"}
+		ok, err := s.ForUpdate().Get(&stored)
+		if err != nil {
+			return err
+		} else if !ok {
+			return ErrNotFormatted
+		}
+		var data []byte
+		format, data, err = quotaEnableFormat([]byte(stored.Value), m.getFormat(), qtype)
+		changed = data != nil
+		if err != nil || !changed {
+			return err
+		}
+		op := "INIT_ENABLE_USERGROUPQUOTA()"
+		if qtype == DirQuotaType {
+			_, err = s.Where("TRUE").Delete(new(dirStats))
+			op = "INIT_ENABLE_DIRSTATS()"
+		} else {
+			_, err = s.Where("TRUE").Delete(new(userGroupQuota))
+		}
+		if err != nil {
+			return err
+		}
+		if _, err = s.Update(&setting{"format", string(data)}, &setting{Name: "format"}); err != nil {
+			return err
+		}
+		if format.ChangeLog {
+			m.doGenLog(ctx, s, time.Now().UnixNano(), op)
+		}
+		return nil
+	})
+	return
+}
+
 func (m *dbMeta) doInit(format *Format, force bool) error {
 	if err := m.syncAllTables(); err != nil {
 		return err
