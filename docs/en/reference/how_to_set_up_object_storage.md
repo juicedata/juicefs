@@ -967,6 +967,10 @@ The `--bucket` option format is `http://<container>.<endpoint>` or `http://<endp
 
 JuiceFS uses [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html) against `<endpoint>/auth/v1.0` by default. To use Keystone V2 or V3 authentication, add the Keystone settings to the `--bucket` query: `auth-url` (required), `auth-version`, `tenant`, `tenant-id`, `domain`, `domain-id`, `tenant-domain`, `tenant-domain-id` and `region`. They are stored with the volume, so every client uses them; OpenStack environment variables such as `OS_AUTH_URL` are not read.
 
+:::note
+The `http://<endpoint>/<container>` form and the Keystone settings require JuiceFS v1.5 or later. Older clients parse such a `--bucket` as `http://<container>.<endpoint>` and ignore the query, so they fail to authenticate. Upgrade every client that accesses the volume first.
+:::
+
 The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
 ```bash

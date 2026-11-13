@@ -925,6 +925,10 @@ juicefs format \
 
 JuiceFS 默认使用 [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html)，认证地址为 `<endpoint>/auth/v1.0`。如需使用 Keystone V2 或 V3 认证，请在 `--bucket` 的查询参数中设置 Keystone 配置：`auth-url`（必填）、`auth-version`、`tenant`、`tenant-id`、`domain`、`domain-id`、`tenant-domain`、`tenant-domain-id` 和 `region`。这些配置随文件系统一起保存，所有客户端都会使用；JuiceFS 不读取 `OS_AUTH_URL` 等 OpenStack 环境变量。
 
+:::note 注意
+`http://<endpoint>/<container>` 格式和 Keystone 配置需要 JuiceFS v1.5 及以上版本。旧版本客户端会按 `http://<container>.<endpoint>` 格式解析 `--bucket` 并忽略查询参数，导致认证失败，因此需要先升级所有访问该文件系统的客户端。
+:::
+
 `--access-key` 选项的值是用户名，`--secret-key` 选项的值是密码。例如：
 
 ```bash
