@@ -17,6 +17,7 @@
 package vfs
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -872,6 +873,130 @@ func TestInternalFile(t *testing.T) {
 	} else if resp[0] != uint8(syscall.EIO) {
 		t.Fatalf("result: %s", string(resp[:n]))
 	}
+}
+
+func TestInternalMsgWithSubdir(t *testing.T) {
+	v, _ := createTestVFS(nil, "")
+	ctx := meta.Background() // root passes every permission check
+	var tenantA, tenantB, inside, outside Ino
+	var attr meta.Attr
+	if st := v.Meta.Mkdir(ctx, meta.RootInode, "tenantA", 0755, 0, 0, &tenantA, &attr); st != 0 {
+		t.Fatalf("mkdir tenantA: %s", st)
+	}
+	if st := v.Meta.Mkdir(ctx, meta.RootInode, "tenantB", 0755, 0, 0, &tenantB, &attr); st != 0 {
+		t.Fatalf("mkdir tenantB: %s", st)
+	}
+	if st := v.Meta.Create(ctx, tenantA, "a", 0644, 0, 0, &inside, &attr); st != 0 {
+		t.Fatalf("create tenantA/a: %s", st)
+	}
+	if st := v.Meta.Create(ctx, tenantB, "b", 0644, 0, 0, &outside, &attr); st != 0 {
+		t.Fatalf("create tenantB/b: %s", st)
+	}
+	if st := v.Meta.Chroot(ctx, "tenantA"); st != 0 {
+		t.Fatalf("chroot tenantA: %s", st)
+	}
+
+	send := func(cmd uint32, payload []byte) []byte {
+		out := &bytes.Buffer{}
+		v.handleInternalMsg(ctx, cmd, utils.FromBuffer(payload), out)
+		return out.Bytes()
+	}
+	decode := func(out []byte, resp interface{}) syscall.Errno {
+		data, eno := decodeControlOutput(out)
+		if eno == 0 {
+			require.NoError(t, json.Unmarshal(data, resp))
+		}
+		return eno
+	}
+	info := func(inode Ino) syscall.Errno {
+		w := utils.NewBuffer(8)
+		w.Put64(uint64(inode))
+		var resp InfoResponse
+		if eno := decode(send(meta.InfoV2, w.Bytes()), &resp); eno != 0 || !resp.Failed {
+			return eno
+		}
+		require.Equal(t, syscall.ENOENT.Error(), resp.Reason)
+		return syscall.ENOENT
+	}
+	legacyInfo := func(inode Ino) syscall.Errno {
+		w := utils.NewBuffer(8)
+		w.Put64(uint64(inode))
+		if out := send(meta.LegacyInfo, w.Bytes()); string(out[4:]) == syscall.ENOENT.Error() {
+			return syscall.ENOENT
+		}
+		return 0
+	}
+	summary := func(inode Ino) syscall.Errno {
+		w := utils.NewBuffer(8)
+		w.Put64(uint64(inode))
+		var resp SummaryReponse
+		if eno := decode(send(meta.OpSummary, w.Bytes()), &resp); eno != 0 {
+			return eno
+		}
+		return resp.Errno
+	}
+	rmr := func(parent Ino, name string) syscall.Errno {
+		w := utils.NewBuffer(8 + 1 + uint32(len(name)))
+		w.Put64(uint64(parent))
+		w.Put8(uint8(len(name)))
+		w.Put([]byte(name))
+		_, eno := decodeControlOutput(send(meta.Rmr, w.Bytes()))
+		return eno
+	}
+	clone := func(src, srcParent, dstParent Ino, name string) syscall.Errno {
+		w := utils.NewBuffer(8 + 8 + 8 + 1 + uint32(len(name)) + 2 + 1)
+		w.Put64(uint64(src))
+		w.Put64(uint64(srcParent))
+		w.Put64(uint64(dstParent))
+		w.Put8(uint8(len(name)))
+		w.Put([]byte(name))
+		w.Put16(022)
+		w.Put8(0)
+		_, eno := decodeControlOutput(send(meta.Clone, w.Bytes()))
+		return eno
+	}
+	compact := func(inode Ino) syscall.Errno {
+		w := utils.NewBuffer(8 + 2)
+		w.Put64(uint64(inode))
+		w.Put16(1)
+		_, eno := decodeControlOutput(send(meta.CompactPath, w.Bytes()))
+		return eno
+	}
+	warmup := func(inode Ino) uint64 {
+		p := fmt.Sprintf("inode:%d", inode)
+		w := utils.NewBuffer(4 + uint32(len(p)) + 2 + 1)
+		w.Put32(uint32(len(p)))
+		w.Put([]byte(p))
+		w.Put16(1)
+		w.Put8(0)
+		var resp CacheResponse
+		require.Equal(t, syscall.Errno(0), decode(send(meta.FillCache, w.Bytes()), &resp))
+		return resp.FileCount
+	}
+
+	// inodes outside of the mounted root are refused
+	for _, inode := range []Ino{0, tenantB, outside} {
+		require.Equal(t, syscall.ENOENT, info(inode), "info %d", inode)
+		require.Equal(t, syscall.ENOENT, legacyInfo(inode), "legacy info %d", inode)
+		require.Equal(t, syscall.ENOENT, summary(inode), "summary %d", inode)
+		require.Equal(t, syscall.ENOENT, compact(inode), "compact %d", inode)
+		require.Zero(t, warmup(inode), "warmup %d", inode)
+	}
+	require.Equal(t, syscall.ENOENT, clone(outside, tenantB, meta.RootInode, "copy"))
+	require.Equal(t, syscall.ENOENT, clone(inside, meta.RootInode, tenantB, "copy"))
+	require.Equal(t, syscall.ENOENT, rmr(tenantB, "b"))
+	require.Equal(t, syscall.Errno(0), v.Meta.Lookup(ctx, tenantB, "b", &outside, &attr, false))
+
+	// inodes inside of the mounted root still work
+	for _, inode := range []Ino{meta.RootInode, tenantA, inside} {
+		require.Equal(t, syscall.Errno(0), info(inode), "info %d", inode)
+		require.Equal(t, syscall.Errno(0), legacyInfo(inode), "legacy info %d", inode)
+		require.Equal(t, syscall.Errno(0), summary(inode), "summary %d", inode)
+		require.Equal(t, syscall.Errno(0), compact(inode), "compact %d", inode)
+	}
+	require.Equal(t, uint64(1), warmup(inside))
+	require.Equal(t, syscall.Errno(0), clone(inside, meta.RootInode, meta.RootInode, "copy"))
+	require.Equal(t, syscall.Errno(0), rmr(meta.RootInode, "copy"))
 }
 
 func TestHideInternal(t *testing.T) {
