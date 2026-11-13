@@ -163,6 +163,7 @@ juicefs format \
 | [Vultr 对象存储](#vultr-对象存储)           | `s3`       |
 | [Cloudflare R2](#r2)                        | `s3`       |
 | [Neon Object Storage](#neon)                | `s3`       |
+| [Hippius](#hippius)                         | `s3`       |
 | [阿里云 OSS](#阿里云-oss)                   | `oss`      |
 | [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
 | [华为云 OBS](#华为云-obs)                   | `obs`      |
@@ -570,6 +571,22 @@ juicefs config "postgres://<user>:<password>@<branch-db-host>/<database>?sslmode
 
 如果跳过这一步，新分支的写入会进入父分支的 bucket。由于两份元数据会分配相同的 slice ID，这些写入可能覆盖父分支之后写入的数据块。
 :::
+
+### Hippius {#hippius}
+
+[Hippius](https://hippius.com) 的对象存储兼容 S3 API，存储类型使用 `s3`。请参考[文档](https://docs.hippius.com/use/console/s3)了解如何创建 Access Key 和 Secret Key。
+
+Hippius 仅支持 path-style 请求，因此 `--bucket` 选项的设置格式为 `https://s3.hippius.com/<bucket>`。例如：
+
+```shell
+juicefs format \
+    --storage s3 \
+    --bucket https://s3.hippius.com/<bucket> \
+    --access-key <your-access-key> \
+    --secret-key <your-secret-key> \
+    ... \
+    myjfs
+```
 
 ### 阿里云 OSS
 
