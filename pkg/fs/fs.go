@@ -1442,11 +1442,12 @@ func (f *File) Chmod(ctx meta.Context, mode uint16) (err syscall.Errno) {
 	return
 }
 
+// Chown changes ownership, leaving IDs set to math.MaxUint32 unchanged.
 func (f *File) Chown(ctx meta.Context, uid uint32, gid uint32) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Chown").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chown (%s,%d,%d): %s", f.path, uid, gid, errstr(err)) }()
-	flag := uint16(meta.SetAttrChown)
+	var flag uint16
 	if uid != math.MaxUint32 {
 		flag |= meta.SetAttrUID
 	}
@@ -1455,6 +1456,11 @@ func (f *File) Chown(ctx meta.Context, uid uint32, gid uint32) (err syscall.Errn
 	}
 	var attr = Attr{Uid: uid, Gid: gid}
 	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
+	// Preserve the ownership check when both IDs are omitted. SetAttr returns
+	// current attributes without applying ownership checks for an empty flag.
+	if err == 0 && flag == 0 && ctx.Uid() != 0 && ctx.Uid() != attr.Uid {
+		err = syscall.EPERM
+	}
 	f.fs.InvalidateAttr(f.inode)
 	return
 }

@@ -1326,7 +1326,7 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(inode), m.marshal(dirtyAttr))
 		*attr = *dirtyAttr
-		m.genLog(tx, now, "SETATTR(%d,%d,%d,%s)", inode, setAttrLogFlags(set), sugidclearmode, attr.logFields())
+		m.genLog(tx, now, "SETATTR(%d,%d,%d,%s)", inode, set, sugidclearmode, attr.logFields())
 		return nil
 	}, inode))
 }

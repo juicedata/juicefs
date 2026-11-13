@@ -36,16 +36,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/protobuf/proto"
-
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -1408,7 +1407,7 @@ func (m *baseMeta) decodeDelayedSlices(buf []byte, ss *[]Slice) {
 	}
 }
 
-func clearSUGID(ctx Context, cur *Attr, set *Attr, chown bool) {
+func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 	switch runtime.GOOS {
 	case "darwin":
 		if ctx.Uid() != 0 {
@@ -1419,12 +1418,14 @@ func clearSUGID(ctx Context, cur *Attr, set *Attr, chown bool) {
 	case "linux":
 		// same as ext
 		if cur.Typ != TypeDirectory {
-			if (cur.Mode>>3)&1 != 0 || (ctx.Uid() != 0 && (!chown || !containsGid(ctx, cur.Gid))) {
+			// Only permission-checking contexts provide the full supplementary groups.
+			keepSGID := ctx.Uid() == 0 || (ctx.CheckPermission() && containsGid(ctx, cur.Gid))
+			if !keepSGID || (cur.Mode>>3)&1 != 0 {
 				// clear SUID and SGID
 				cur.Mode &= 01777
 				set.Mode &= 01777
 			} else {
-				// Explicit chown also keeps non-executable SGID for group members.
+				// keep SGID if the file is non-group-executable
 				cur.Mode &= 03777
 				set.Mode &= 03777
 			}
@@ -3671,26 +3672,18 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 }
 
 func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr, now time.Time, rule *aclAPI.Rule) (*Attr, syscall.Errno) {
+	// Replay must still apply ownership changes recorded by older clients.
+	if set&(SetAttrUID|SetAttrGID) != 0 && cur.Flags&(FlagImmutable|FlagAppend) != 0 && m.replay.Load() == nil {
+		return nil, syscall.EPERM
+	}
 	dirtyAttr := *cur
 	if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 		attr.Mode |= (cur.Mode & 06000)
 	}
-	chown := set&SetAttrChown != 0
-	changed := chown || set&SetAttrCtimeNow != 0
-	if (cur.Mode&06000) != 0 && (chown || set&(SetAttrUID|SetAttrGID) != 0) {
-		clearSUGID(ctx, &dirtyAttr, attr, chown)
+	var changed bool
+	if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
+		clearSUGID(ctx, &dirtyAttr, attr)
 		changed = true
-	}
-	if chown {
-		if cur.Flags&(FlagImmutable|FlagAppend) != 0 {
-			return nil, syscall.EPERM
-		}
-		// Check ownership when an unchanged ID is explicitly supplied,
-		// or when chown(-1, -1) would clear set-ID bits.
-		if ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
-			(set&(SetAttrUID|SetAttrGID) != 0 || dirtyAttr.Mode != cur.Mode) {
-			return nil, syscall.EPERM
-		}
 	}
 	if set&SetAttrGID != 0 {
 		if ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
@@ -3704,12 +3697,14 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 			changed = true
 		}
 	}
-	if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-		if m.checkPermission(ctx) && ctx.Uid() != 0 {
+	if set&SetAttrUID != 0 {
+		if m.checkPermission(ctx) && ctx.Uid() != 0 && (ctx.Uid() != cur.Uid || attr.Uid != cur.Uid) {
 			return nil, syscall.EPERM
 		}
-		dirtyAttr.Uid = attr.Uid
-		changed = true
+		if cur.Uid != attr.Uid {
+			dirtyAttr.Uid = attr.Uid
+			changed = true
+		}
 	}
 	if set&SetAttrMode != 0 {
 		if m.checkPermission(ctx) && ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
@@ -3801,13 +3796,6 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	// Keep last: replay pins the mode recorded by the source.
 	dirtyAttr.Mode = m.finalMode(dirtyAttr.Mode)
 	return &dirtyAttr, 0
-}
-
-func setAttrLogFlags(set uint16) uint16 {
-	if set&SetAttrChown != 0 {
-		return set&^SetAttrChown | SetAttrMode | SetAttrUID | SetAttrGID | SetAttrCtimeNow
-	}
-	return set
 }
 
 func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) syscall.Errno {

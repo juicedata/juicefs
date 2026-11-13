@@ -1654,6 +1654,13 @@ func setOwner(w *wrapper, ctx meta.Context, path string, owner, group string) in
 		return errno(err)
 	}
 	defer f.Close(ctx)
+	// An empty Java request historically submitted no ownership changes.
+	if owner == "" && group == "" {
+		var attr meta.Attr
+		err := w.Meta().SetAttr(ctx, f.Inode(), 0, 0, &attr)
+		w.InvalidateAttr(f.Inode())
+		return errno(err)
+	}
 	uid, gid := uint32(math.MaxUint32), uint32(math.MaxUint32)
 	if owner != "" {
 		uid = w.lookupUid(owner)
