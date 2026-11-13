@@ -710,6 +710,35 @@ func TestInternalFile(t *testing.T) {
 	_ = v.Flush(ctx, fe.Inode, fh, 0)
 	v.Release(ctx, fe.Inode, fh)
 
+	// reserved names
+	dir, e := v.Mkdir(ctx, 1, "reserved", 0755, 0)
+	require.Zero(t, e)
+	src, e := v.Mknod(ctx, dir.Inode, "src", 0644, 0, 0)
+	require.Zero(t, e)
+	for _, c := range []struct {
+		parent Ino
+		name   string
+	}{{1, ".config"}, {1, ".trash"}, {1, ".control"}, {dir.Inode, ".control"}} {
+		_, e = v.Mknod(ctx, c.parent, c.name, 0644, 0, 0)
+		require.Equal(t, syscall.EEXIST, e, "mknod %d/%s", c.parent, c.name)
+		_, e = v.Mkdir(ctx, c.parent, c.name, 0755, 0)
+		require.Equal(t, syscall.EEXIST, e, "mkdir %d/%s", c.parent, c.name)
+		_, e = v.Symlink(ctx, "src", c.parent, c.name)
+		require.Equal(t, syscall.EEXIST, e, "symlink %d/%s", c.parent, c.name)
+		_, _, e = v.Create(ctx, c.parent, c.name, 0644, 0, syscall.O_RDWR)
+		require.Equal(t, syscall.EEXIST, e, "create %d/%s", c.parent, c.name)
+		_, e = v.Link(ctx, src.Inode, c.parent, c.name)
+		require.Equal(t, syscall.EPERM, e, "link %d/%s", c.parent, c.name)
+		e = v.Rename(ctx, dir.Inode, "src", c.parent, c.name, 0)
+		require.Equal(t, syscall.EPERM, e, "rename %d/%s", c.parent, c.name)
+	}
+	// other internal names are only reserved in the root
+	_, e = v.Mknod(ctx, dir.Inode, ".stats", 0644, 0, 0)
+	require.Zero(t, e)
+	require.Zero(t, v.Unlink(ctx, dir.Inode, ".stats"))
+	require.Zero(t, v.Unlink(ctx, dir.Inode, "src"))
+	require.Zero(t, v.Rmdir(ctx, 1, "reserved"))
+
 	// control messages
 	fe, e = v.Lookup(ctx, 1, ".control")
 	if e != 0 {
