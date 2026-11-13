@@ -420,12 +420,90 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 	}
 	summary.Dirs++
 	summary.Size += uint64(align4K(0))
+	scanCtx := WrapWithCancel(ctx, ctx.Pid(), ctx.Uid(), ctx.Gids())
+	defer scanCtx.Cancel()
+	scan := &summaryScanState{ctx: scanCtx, parent: ctx}
 	concurrent := make(chan struct{}, 50)
 	inode = m.checkRoot(inode)
-	return m.getDirSummary(ctx, inode, summary, recursive, strict, concurrent, nil)
+	return m.getDirSummaryWithScan(scanCtx, inode, summary, recursive, strict, concurrent, nil, scan)
+}
+
+type summaryScanState struct {
+	ctx    Context
+	parent Context
+	mu     sync.Mutex
+	err    syscall.Errno
+}
+
+func (s *summaryScanState) result() syscall.Errno {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := s.err
+	if err != 0 {
+		return err
+	}
+	if s.parent.Err() != nil {
+		return syscall.EINTR
+	}
+	if s.ctx.Err() != nil {
+		return syscall.EINTR
+	}
+	return 0
+}
+
+func (s *summaryScanState) fail(err syscall.Errno) syscall.Errno {
+	if err == 0 || err == syscall.ENOENT {
+		return err
+	}
+	s.mu.Lock()
+	cancel := false
+	if s.err == 0 {
+		if s.parent.Err() != nil {
+			s.mu.Unlock()
+			return syscall.EINTR
+		}
+		s.err = err
+		cancel = true
+	}
+	err = s.err
+	s.mu.Unlock()
+	if cancel {
+		s.ctx.Cancel()
+	}
+	return err
+}
+
+func (s *summaryScanState) begin() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.err == 0 && s.ctx.Err() == nil
+}
+
+// start serializes task dispatch with publishing the first scan error.
+func (s *summaryScanState) start(fn func()) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != 0 || s.ctx.Err() != nil {
+		return false
+	}
+	fn()
+	return true
 }
 
 func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{}, updateProgress func(count uint64, bytes uint64)) syscall.Errno {
+	return m.getDirSummaryInternal(ctx, inode, summary, recursive, strict, concurrent, updateProgress, nil)
+}
+
+func (m *baseMeta) getDirSummaryWithScan(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{}, updateProgress func(count uint64, bytes uint64), scan *summaryScanState) syscall.Errno {
+	return m.getDirSummaryInternal(ctx, inode, summary, recursive, strict, concurrent, updateProgress, scan)
+}
+
+func (m *baseMeta) getDirSummaryInternal(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{}, updateProgress func(count uint64, bytes uint64), scan *summaryScanState) syscall.Errno {
+	if scan != nil {
+		if st := scan.result(); st != 0 {
+			return st
+		}
+	}
 	var entries []*Entry
 	var err syscall.Errno
 	format := m.getFormat()
@@ -435,6 +513,9 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 		var st *dirStat
 		st, err = m.GetDirStat(ctx, inode)
 		if err != 0 {
+			if scan != nil {
+				return scan.fail(err)
+			}
 			return err
 		}
 		atomic.AddUint64(&summary.Size, uint64(st.space))
@@ -453,13 +534,24 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 		}
 	}
 	if err != 0 {
+		if scan != nil {
+			return scan.fail(err)
+		}
 		return err
 	}
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
-	var errCh = make(chan syscall.Errno, 1)
+	var errCh chan syscall.Errno
+	if scan == nil {
+		errCh = make(chan syscall.Errno, 1)
+	}
 	for _, e := range entries {
+		if scan != nil {
+			if st := scan.result(); st != 0 {
+				return st
+			}
+		}
 		if e.Attr.Typ == TypeDirectory {
 			atomic.AddUint64(&summary.Dirs, 1)
 		} else {
@@ -477,37 +569,69 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 		if e.Attr.Typ != TypeDirectory || !recursive {
 			continue
 		}
+		if scan == nil {
+			select {
+			case <-ctx.Done():
+				return syscall.EINTR
+			case err := <-errCh:
+				return err
+			case concurrent <- struct{}{}:
+				wg.Add(1)
+				go func(e *Entry) {
+					defer wg.Done()
+					err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress)
+					<-concurrent
+					if err != 0 && err != syscall.ENOENT {
+						select {
+						case errCh <- err:
+						default:
+						}
+					}
+				}(e)
+			default:
+				if err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress); err != 0 && err != syscall.ENOENT {
+					return err
+				}
+			}
+			continue
+		}
 		select {
 		case <-ctx.Done():
-			return syscall.EINTR
-		case err := <-errCh:
-			// TODO: cancel others
-			return err
+			return scan.result()
 		case concurrent <- struct{}{}:
-			wg.Add(1)
-			go func(e *Entry) {
-				defer wg.Done()
-				err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress)
-				<-concurrent
-				if err != 0 && err != syscall.ENOENT {
-					select {
-					case errCh <- err:
-					default:
+			started := scan.start(func() {
+				wg.Add(1)
+				go func(e *Entry) {
+					defer wg.Done()
+					defer func() { <-concurrent }()
+					if err := m.getDirSummaryWithScan(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress, scan); err != 0 && err != syscall.ENOENT {
+						scan.fail(err)
 					}
-				}
-			}(e)
+				}(e)
+			})
+			if !started {
+				<-concurrent
+				return scan.result()
+			}
 		default:
-			if err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress); err != 0 && err != syscall.ENOENT {
-				return err
+			if !scan.begin() {
+				return scan.result()
+			}
+			if err := m.getDirSummaryWithScan(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress, scan); err != 0 && err != syscall.ENOENT {
+				return scan.fail(err)
 			}
 		}
 	}
 	wg.Wait()
-	select {
-	case err = <-errCh:
-	default:
+	if scan != nil {
+		return scan.result()
 	}
-	return err
+	select {
+	case err := <-errCh:
+		return err
+	default:
+		return 0
+	}
 }
 
 func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, sortBy TreeSort,
