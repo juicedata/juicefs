@@ -516,103 +516,56 @@ func (m *kvMeta) scan(startKey, endKey []byte, limit int, filter func(k, v []byt
 }
 
 func (m *kvMeta) doInit(format *Format, force bool) error {
-	body, err := m.get(m.fmtKey("setting"))
-	if err != nil {
-		return err
-	}
-
-	if body != nil {
-		var old Format
-		err = json.Unmarshal(body, &old)
+	requested := format.Clone()
+	var committed *formatUpdate
+	err := m.txn(Background(), func(tx *kvTxn) error {
+		body := tx.get(m.fmtKey("setting"))
+		u, err := requested.prepareUpdate(body, force)
 		if err != nil {
-			return fmt.Errorf("json: %s", err)
+			return err
 		}
-		if !old.DirStats && format.DirStats {
-			// remove dir stats as they are outdated
-			var keys [][]byte
-			prefix := m.fmtKey("U")
-			err := m.client.txn(Background(), func(tx *kvTxn) error {
+		if old := u.previous; old != nil {
+			if !old.DirStats && u.next.DirStats {
+				prefix := m.fmtKey("U")
 				tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
 					if len(k) == 9 {
-						keys = append(keys, k)
+						tx.delete(k)
 					}
 					return true
 				})
-				return nil
-			}, 0)
-			if err != nil {
-				return errors.Wrap(err, "scan dir stats")
-			}
-			err = m.txn(Background(), func(tx *kvTxn) error {
-				for _, key := range keys {
-					tx.delete(key)
-				}
-				if format.ChangeLog {
+				if u.next.ChangeLog {
 					m.doGenLog(tx, time.Now(), "INIT_ENABLE_DIRSTATS()")
 				}
-				return nil
-			})
-			if err != nil {
-				return errors.Wrap(err, "delete dir stats")
 			}
-		}
-		if !old.UserGroupQuota && format.UserGroupQuota {
-			// remove user group quota as they are outdated
-			userPrefix := m.fmtKey("QU")
-			groupPrefix := m.fmtKey("QG")
-			err := m.txn(Background(), func(tx *kvTxn) error {
-				tx.deleteKeys(userPrefix)
-				tx.deleteKeys(groupPrefix)
-				if format.ChangeLog {
+			if !old.UserGroupQuota && u.next.UserGroupQuota {
+				tx.deleteKeys(m.fmtKey("QU"))
+				tx.deleteKeys(m.fmtKey("QG"))
+				if u.next.ChangeLog {
 					m.doGenLog(tx, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
 				}
-				return nil
-			})
-			if err != nil {
-				return errors.Wrap(err, "delete user group quota")
 			}
 		}
-		if err = format.update(&old, force); err != nil {
-			return errors.Wrap(err, "update format")
+		ts := time.Now().Unix()
+		attr := &Attr{Typ: TypeDirectory, Atime: ts, Mtime: ts, Ctime: ts,
+			Nlink: 2, Length: 4 << 10, Parent: RootInode}
+		if u.next.TrashDays > 0 && tx.get(m.inodeKey(TrashInode)) == nil {
+			attr.Mode = 0555
+			tx.set(m.inodeKey(TrashInode), m.marshal(attr))
 		}
-	}
-
-	data, err := json.MarshalIndent(format, "", "")
-	if err != nil {
-		return fmt.Errorf("json: %s", err)
-	}
-
-	ts := time.Now().Unix()
-	attr := &Attr{
-		Typ:    TypeDirectory,
-		Atime:  ts,
-		Mtime:  ts,
-		Ctime:  ts,
-		Nlink:  2,
-		Length: 4 << 10,
-		Parent: RootInode,
-	}
-	err = m.txn(Background(), func(tx *kvTxn) error {
-		if format.TrashDays > 0 {
-			buf := tx.get(m.inodeKey(TrashInode))
-			if buf == nil {
-				attr.Mode = 0555
-				tx.set(m.inodeKey(TrashInode), m.marshal(attr))
-			}
-		}
-		tx.set(m.fmtKey("setting"), data)
-		if body == nil || m.client.name() == "memkv" {
+		tx.set(m.fmtKey("setting"), u.data)
+		if u.previous == nil || m.client.name() == "memkv" {
 			attr.Mode = 0777
 			tx.set(m.inodeKey(RootInode), m.marshal(attr))
 			tx.incrBy(m.counterKey("nextInode"), 2)
 			tx.incrBy(m.counterKey("nextChunk"), 1)
 		}
+		committed = u
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	m.setFormat(format)
+	m.publishFormatUpdate(format, committed)
 	return nil
 }
 
