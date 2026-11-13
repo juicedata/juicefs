@@ -921,9 +921,9 @@ juicefs format \
 
 [OpenStack Swift](https://github.com/openstack/swift) 是一种分布式对象存储系统，旨在从一台计算机扩展到数千台服务器。Swift 已针对多租户和高并发进行了优化。Swift 广泛适用于备份、Web 和移动内容的理想选择，可以无限量存储任何非结构化数据。
 
-`--bucket` 选项格式为 `http://<container>.<endpoint>`，`container` 用来设定对象的命名空间。
+`--bucket` 选项格式为 `http://<container>.<endpoint>`，`container` 用来设定对象的命名空间。容器名称包含点或 `@` 时，请改用 `http://<endpoint>/<container>` 格式。
 
-**当前，JuiceFS 仅支持  [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html)。**
+JuiceFS 默认使用 [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html)，认证地址为 `<endpoint>/auth/v1.0`。如需使用 Keystone V2 或 V3 认证，请在 `--bucket` 的查询参数中设置 Keystone 配置：`auth-url`（必填）、`auth-version`、`tenant`、`tenant-id`、`domain`、`domain-id`、`tenant-domain`、`tenant-domain-id` 和 `region`。这些配置随文件系统一起保存，所有客户端都会使用；JuiceFS 不读取 `OS_AUTH_URL` 等 OpenStack 环境变量。
 
 `--access-key` 选项的值是用户名，`--secret-key` 选项的值是密码。例如：
 
@@ -936,6 +936,20 @@ juicefs format \
     ... \
     myjfs
 ```
+
+例如，[Blomp](https://www.blomp.com) 为每个账户提供一个以邮箱地址命名的容器，并使用 Keystone V3 认证：
+
+```bash
+juicefs format \
+    --storage swift \
+    --bucket "https://storage.blomp.com/<email>?auth-url=https://authenticate.blomp.com/v3&auth-version=3&tenant=storage&domain-id=default&tenant-domain-id=default" \
+    --access-key <email> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+使用 `juicefs sync` 时，容器名取自主机名（`swift://<container>.<endpoint>/<prefix>`）；添加 `path-style=true` 可改为从路径中读取容器名，例如 `swift://<access-key>:<secret-key>@<endpoint>/<container>/<prefix>?path-style=true`。Keystone 配置也放在同一查询参数中。容器名中的 `@` 需写作 `%40`。
 
 ### MinIO
 

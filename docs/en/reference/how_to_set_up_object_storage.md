@@ -963,9 +963,9 @@ The format of `--bucket` option is `<host[,host...]>/<volume_name>`. Please note
 
 [OpenStack Swift](https://github.com/openstack/swift) is a distributed object storage system designed to scale from a single machine to thousands of servers. Swift is optimized for multi-tenancy and high concurrency. Swift is ideal for backups, web and mobile content, and any other unstructured data that can grow without bound.
 
-The `--bucket` option format is `http://<container>.<endpoint>`. A container defines a namespace for objects.
+The `--bucket` option format is `http://<container>.<endpoint>` or `http://<endpoint>/<container>`. A container defines a namespace for objects. Use the second form if the container name contains dots or `@`.
 
-**Currently, JuiceFS only supports [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html).**
+JuiceFS uses [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html) against `<endpoint>/auth/v1.0` by default. To use Keystone V2 or V3 authentication, add the Keystone settings to the `--bucket` query: `auth-url` (required), `auth-version`, `tenant`, `tenant-id`, `domain`, `domain-id`, `tenant-domain`, `tenant-domain-id` and `region`. They are stored with the volume, so every client uses them; OpenStack environment variables such as `OS_AUTH_URL` are not read.
 
 The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
@@ -978,6 +978,20 @@ juicefs format \
     ... \
     myjfs
 ```
+
+For example, [Blomp](https://www.blomp.com) gives each account one container named after its email address and uses Keystone V3:
+
+```bash
+juicefs format \
+    --storage swift \
+    --bucket "https://storage.blomp.com/<email>?auth-url=https://authenticate.blomp.com/v3&auth-version=3&tenant=storage&domain-id=default&tenant-domain-id=default" \
+    --access-key <email> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+With `juicefs sync`, the container is taken from the host (`swift://<container>.<endpoint>/<prefix>`); add `path-style=true` to put it in the path instead, for example `swift://<access-key>:<secret-key>@<endpoint>/<container>/<prefix>?path-style=true`. The Keystone settings go in the same query. Write any `@` in the container name as `%40`.
 
 ### MinIO
 
