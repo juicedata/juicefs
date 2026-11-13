@@ -41,6 +41,9 @@ import (
 
 var (
 	stagingDir          = "rawstaging"
+	stagingScanInterval = time.Minute * 10
+	// a staged block older than this may have lost the client that staged it
+	stagingOrphanAge    = time.Minute * 10
 	cacheDir            = "raw"
 	maxIODur            = time.Second * 30
 	stagingBlocks       atomic.Int64
@@ -86,6 +89,10 @@ type diskCache struct {
 	rawFull   bool
 	checksum  string // checksum level
 	uploader  func(key, path string, force bool) bool
+
+	// blocks in the staging dir that are counted in the metrics of this client
+	stagedKeys map[string]struct{}
+	stagedMu   sync.Mutex
 
 	opTs map[time.Duration]func() error
 	opMu sync.Mutex
@@ -155,7 +162,13 @@ func newDiskCache(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64,
 		go c.cleanupExpire()
 	}
 	go c.refreshCacheKeys()
-	go c.scanStaging()
+	go func() {
+		c.scanStaging(0)
+		for config.Writeback {
+			time.Sleep(stagingScanInterval)
+			c.scanStaging(stagingOrphanAge)
+		}
+	}()
 	go c.checkTimeout()
 	return c
 }
@@ -421,9 +434,8 @@ func (cache *diskCache) refreshCacheKeys() {
 
 func (cache *diskCache) removeStage(key string) error {
 	var err error
-	if err = cache.removeFile(cache.stagePath(key)); err == nil {
-		cache.m.stageBlocks.Sub(1)
-		cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
+	if err = cache.removeFile(cache.stagePath(key)); err == nil || os.IsNotExist(err) {
+		cache.untrackStaged(key)
 	}
 	// ignore ENOENT error
 	if err != nil && os.IsNotExist(err) {
@@ -783,8 +795,7 @@ func (cache *diskCache) stage(key string, data []byte, tierID uint8) (string, er
 	defer stagingBlocks.Add(-1)
 	err := cache.flushPage(stagingPath, data, false, tierID)
 	if err == nil {
-		cache.m.stageBlocks.Add(1)
-		cache.m.stageBlockBytes.Add(float64(len(data)))
+		cache.trackStaged(key)
 		cache.m.stageWriteBytes.Add(float64(len(data)))
 		if cache.enabled() {
 			path := cache.cachePath(key)
@@ -1004,7 +1015,37 @@ func (cache *diskCache) scanCached(fast bool) {
 
 var pathReg, _ = regexp.Compile(`^chunks/((\d+)|([0-9a-fA-F]{2}))/\d+/\d+_\d+_\d+$`)
 
-func (cache *diskCache) scanStaging() {
+// trackStaged counts a block of the staging dir in the metrics, it returns
+// false if the block is already counted.
+func (cache *diskCache) trackStaged(key string) bool {
+	cache.stagedMu.Lock()
+	defer cache.stagedMu.Unlock()
+	if _, ok := cache.stagedKeys[key]; ok {
+		return false
+	}
+	if cache.stagedKeys == nil {
+		cache.stagedKeys = make(map[string]struct{})
+	}
+	cache.stagedKeys[key] = struct{}{}
+	cache.m.stageBlocks.Add(1)
+	cache.m.stageBlockBytes.Add(float64(parseObjOrigSize(key)))
+	return true
+}
+
+func (cache *diskCache) untrackStaged(key string) {
+	cache.stagedMu.Lock()
+	defer cache.stagedMu.Unlock()
+	if _, ok := cache.stagedKeys[key]; ok {
+		delete(cache.stagedKeys, key)
+		cache.m.stageBlocks.Sub(1)
+		cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
+	}
+}
+
+// scanStaging hands the blocks found in the staging dir to the uploader. It
+// skips the blocks that are already known, and the ones modified within
+// minAge, which are likely to be owned by a running client.
+func (cache *diskCache) scanStaging(minAge time.Duration) {
 	if cache.uploader == nil {
 		return
 	}
@@ -1044,9 +1085,16 @@ func (cache *diskCache) scanStaging() {
 				logger.Warnf("Ignore file with zero size: %s", path)
 				return nil
 			}
+			if minAge > 0 {
+				fi, err := d.Info()
+				if err != nil || fi.ModTime().After(start.Add(-minAge)) {
+					return nil
+				}
+			}
+			if !cache.trackStaged(key) {
+				return nil
+			}
 			logger.Debugf("Found staging block: %s", path)
-			cache.m.stageBlocks.Add(1)
-			cache.m.stageBlockBytes.Add(float64(origSize))
 			cache.uploader(key, path, false)
 			atomic.AddUint64(&count, 1)
 			atomic.AddUint64(&usage, uint64(origSize))
