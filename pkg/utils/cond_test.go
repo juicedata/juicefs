@@ -194,41 +194,91 @@ func TestCondNotificationBeforeReceive(t *testing.T) {
 	}
 }
 
-func TestCondNotificationAfterTimeoutBeforeRelock(t *testing.T) {
-	for _, name := range []string{"Signal", "Broadcast", "Timeout"} {
-		t.Run(name, func(t *testing.T) {
+func TestCondTimerReuse(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		broadcast    bool
+		afterTimeout bool
+		timeout      bool
+	}{
+		{name: "Signal"},
+		{name: "Broadcast", broadcast: true},
+		{name: "SignalAfterTimeout", afterTimeout: true},
+		{name: "BroadcastAfterTimeout", broadcast: true, afterTimeout: true},
+		{name: "Timeout", afterTimeout: true, timeout: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			timer := time.NewTimer(time.Hour)
+			timer.Stop()
+			// Reuse the same timer even when sync.Pool drops entries under -race.
+			// Only one WaitWithTimeout call is active at a time in this test.
+			timerPool = sync.Pool{New: func() interface{} { return timer }}
+			t.Cleanup(func() {
+				timerPool = sync.Pool{}
+				timer.Stop()
+			})
 			m := &condTestLocker{
 				unlocked:  make(chan struct{}),
 				resume:    make(chan struct{}),
 				relocking: make(chan struct{}),
 			}
 			c := NewCond(m)
+			d := time.Hour
+			if tc.afterTimeout {
+				d = 0
+			}
 			done := make(chan bool, 1)
 			go func() {
 				m.Mutex.Lock()
-				timedOut := c.WaitWithTimeout(0)
+				timedOut := c.WaitWithTimeout(d)
 				m.Mutex.Unlock()
 				done <- timedOut
 			}()
 			<-m.unlocked
 			m.Mutex.Lock()
-			close(m.resume)
-			// The waiter has selected the timeout branch but cannot re-acquire L yet.
-			<-m.relocking
-			switch name {
-			case "Signal":
-				c.Signal()
-			case "Broadcast":
+			if tc.afterTimeout {
+				close(m.resume)
+				// The timer event was consumed, but the waiter cannot re-acquire L.
+				<-m.relocking
+			}
+			if tc.broadcast {
 				c.Broadcast()
+			} else if !tc.timeout {
+				c.Signal()
+			}
+			if !tc.afterTimeout {
+				close(m.resume)
+				<-m.relocking
 			}
 			m.Mutex.Unlock()
-			if timedOut := <-done; timedOut != (name == "Timeout") {
-				t.Errorf("timedOut = %v, want %v", timedOut, name == "Timeout")
+			if timedOut := <-done; timedOut != tc.timeout {
+				t.Errorf("timedOut = %v, want %v", timedOut, tc.timeout)
 			}
 			m.Mutex.Lock()
 			defer m.Mutex.Unlock()
 			if c.waiters.Len() != 0 {
 				t.Fatalf("got %d remaining waiters, want 0", c.waiters.Len())
+			}
+			if timer.Stop() {
+				t.Fatal("pooled timer is still active")
+			}
+			select {
+			case <-timer.C:
+				t.Fatal("pooled timer has an unread event")
+			default:
+			}
+
+			// A notification from the previous wait must not wake a subsequent wait.
+			var nextLock sync.Mutex
+			next := NewCond(&nextLock)
+			nextLock.Lock()
+			defer nextLock.Unlock()
+			start := time.Now()
+			if !next.WaitWithTimeout(time.Millisecond) {
+				t.Fatal("previous notification was delivered to the next waiter")
+			}
+			if time.Since(start) < time.Millisecond {
+				t.Fatal("reused timer delivered a stale event")
 			}
 		})
 	}

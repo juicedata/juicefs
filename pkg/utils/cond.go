@@ -32,8 +32,12 @@ type Cond struct {
 // It's required for the caller to hold L.
 func (c *Cond) Signal() {
 	if e := c.waiters.Front(); e != nil {
+		t := e.Value.(*time.Timer)
 		c.waiters.Remove(e)
-		close(e.Value.(chan struct{}))
+		e.Value = nil
+		if t.Stop() {
+			t.Reset(0)
+		}
 	}
 }
 
@@ -50,9 +54,6 @@ var timerPool = sync.Pool{}
 // WaitWithTimeout wait for a signal or a period of timeout eclipsed.
 // returns true in case of timeout else false
 func (c *Cond) WaitWithTimeout(d time.Duration) bool {
-	ch := make(chan struct{})
-	waiter := c.waiters.PushBack(ch)
-	c.L.Unlock()
 	var t *time.Timer
 	if e := timerPool.Get(); e == nil {
 		t = time.NewTimer(d)
@@ -60,25 +61,15 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 		t = e.(*time.Timer)
 		t.Reset(d)
 	}
-	timeout := false
-	select {
-	case <-ch:
-		if !t.Stop() {
-			<-t.C
-		}
-	case <-t.C:
-		timeout = true
+	waiter := c.waiters.PushBack(t)
+	c.L.Unlock()
+	<-t.C
+	c.L.Lock()
+	timeout := waiter.Value != nil
+	if timeout {
+		c.waiters.Remove(waiter)
 	}
 	timerPool.Put(t)
-	c.L.Lock()
-	if timeout {
-		select {
-		case <-ch:
-			timeout = false // Signaled after timing out but before re-acquiring L.
-		default:
-			c.waiters.Remove(waiter)
-		}
-	}
 	return timeout
 }
 
