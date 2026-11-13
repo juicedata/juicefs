@@ -21,6 +21,8 @@ Common application scenarios for JuiceFS S3 Gateway include:
 - **Managing files in JuiceFS:** JuiceFS S3 Gateway provides a web-based file manager to manage files in JuiceFS directly from a browser.
 - **Cluster replication:** In scenarios requiring cross-cluster data replication, JuiceFS S3 Gateway serves as a unified data export for clusters. This avoids cross-region metadata access and enhances data transfer performance. For details, see [Sync across regions using JuiceFS S3 Gateway](../guide/sync.md#sync-across-region).
 
+Object keys containing a path component equal to `.` or `..` are rejected rather than normalized, including copy sources, POST upload keys, and keys in batch delete requests. Names such as `.hidden` and `file..txt`, remain supported.
+
 ## Quick start
 
 JuiceFS S3 Gateway enables access to an existing JuiceFS volume. If you do not have one, follow the steps in this [guide](../getting-started/standalone.md) to create a JuiceFS file system.
