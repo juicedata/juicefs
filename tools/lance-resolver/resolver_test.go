@@ -1111,6 +1111,100 @@ func TestDeletionFileRoot(t *testing.T) {
 	}
 }
 
+// A zero-length CMO entry used to be accepted (empty proto unmarshal) and
+// produced a tail-only warmup range: a silent partial warmup. It must fall
+// back to the full file like every other corrupt-metadata case.
+func TestColumnWarmupPath_EmptyColumnMetadataFallback(t *testing.T) {
+	dir := t.TempDir()
+	dsPath := filepath.Join(dir, "ds.lance")
+	dataDir := filepath.Join(dsPath, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	buf := make([]byte, 128)
+	// CMO table at 16: one entry {cm_pos=32, cm_len=0}.
+	binary.LittleEndian.PutUint64(buf[16:24], 32)
+	binary.LittleEndian.PutUint64(buf[24:32], 0)
+
+	addGBOTable(buf, 64, 48, 16)                  // valid global buffer table at 64
+	binary.LittleEndian.PutUint64(buf[96:104], 16) // column metadata offsets start
+	binary.LittleEndian.PutUint32(buf[116:120], 1) // num_columns
+	binary.LittleEndian.PutUint16(buf[120:122], 2) // major
+	binary.LittleEndian.PutUint16(buf[122:124], 1) // minor
+	copy(buf[124:128], lanceMagic)
+
+	if err := os.WriteFile(filepath.Join(dataDir, "data_0.lance"), buf, 0644); err != nil {
+		t.Fatalf("write data file: %v", err)
+	}
+	manifest := &lancepb.Manifest{
+		Fields: []*lancepb.Field{{Id: 0, Name: "id", ParentId: -1}},
+	}
+	dataFile := &lancepb.DataFile{
+		Path:             "data_0.lance",
+		FileMajorVersion: 2,
+		Fields:           []int32{0},
+		ColumnIndices:    []int32{0},
+	}
+
+	_, ok, err := columnWarmupPath(dsPath, manifest, dataFile, []string{"id"}, false)
+	if err != nil {
+		t.Fatalf("columnWarmupPath: %v", err)
+	}
+	if ok {
+		t.Fatal("expected ok=false (full-file fallback) for empty column metadata")
+	}
+}
+
+// An unresolvable deletion-file base must not abort the whole plan: warmup is
+// best-effort, so it degrades to the dataset root and keeps the other files.
+func TestResolveLanceDataset_DeletionFileUnresolvable(t *testing.T) {
+	dir := t.TempDir()
+	dsPath := filepath.Join(dir, "test.lance")
+	versionsDir := filepath.Join(dsPath, "_versions")
+	if err := os.MkdirAll(versionsDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	baseID := uint32(2)
+	manifest := &lancepb.Manifest{
+		Version: 1,
+		BasePaths: []*lancepb.BasePath{
+			// Not a dataset root, so a deletion file cannot live there.
+			{Id: baseID, Path: "/mnt/imported", IsDatasetRoot: false},
+		},
+		Fragments: []*lancepb.DataFragment{
+			{
+				Id:           4,
+				Files:        []*lancepb.DataFile{{Path: "data_0.lance"}},
+				DeletionFile: &lancepb.DeletionFile{
+					FileType:    lancepb.DeletionFile_ARROW_ARRAY,
+					ReadVersion: 3,
+					Id:          1,
+					BaseId:      &baseID,
+				},
+			},
+		},
+	}
+	writeManifestFile(t, filepath.Join(versionsDir, "1.manifest"), manifest)
+	os.WriteFile(filepath.Join(versionsDir, "latest_version_hint.json"), []byte(`{"version":1}`), 0644)
+
+	paths, err := resolveLanceDataset(dsPath, "", false, false, nil, false)
+	if err != nil {
+		t.Fatalf("resolveLanceDataset must degrade instead of failing: %v", err)
+	}
+	want := filepath.ToSlash(path.Join(dsPath, "_deletions", "4-3-1.arrow"))
+	found := false
+	for _, p := range paths {
+		if filepath.ToSlash(p) == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("deletion file path %q not in %v", want, paths)
+	}
+}
+
 func TestFindLatestManifestByListing_V1(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "1.manifest"), []byte("v1"), 0644)

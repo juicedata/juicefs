@@ -194,7 +194,11 @@ func resolveLanceDataset(datasetPath, version string, manifestOnly bool, include
 			if delPath != "" {
 				root, err := deletionFileRoot(datasetPath, manifest, frag.DeletionFile.BaseId)
 				if err != nil {
-					return nil, fmt.Errorf("resolve deletion file for fragment %d: %w", frag.GetId(), err)
+					// Warmup is best-effort: one unresolvable deletion file must not
+					// abort the whole plan. Fall back to the dataset root, which is
+					// where deletion files live unless a base path says otherwise.
+					fmt.Fprintf(os.Stderr, "warning: resolve deletion file for fragment %d: %v; assuming dataset root\n", frag.GetId(), err)
+					root = datasetPath
 				}
 				paths = append(paths, path.Join(root, delPath))
 			}
@@ -792,6 +796,14 @@ func columnWarmupPath(datasetPath string, manifest *lancepb.Manifest, dataFile *
 		cmPos := binary.LittleEndian.Uint64(entry[0:8])
 		cmLen := binary.LittleEndian.Uint64(entry[8:16])
 		fileLimit := uint64(fileSize - lanceFileFooterLen)
+		// A zero-length column metadata record is never legitimate: every
+		// column carries at least an encoding. Proto unmarshalling would accept
+		// it silently and the caller would warm a tail-only range, i.e. a
+		// partial warmup with no warning. Treat it as corruption instead.
+		if cmLen == 0 {
+			fmt.Fprintf(os.Stderr, "warning: empty column metadata in %s; warming full file instead\n", dataFile.Path)
+			return "", false, nil
+		}
 		// Avoid uint64 overflow in cmPos+cmLen: validate with subtraction so a
 		// corrupt CMO entry cannot wrap the sum and defeat this bounds check.
 		if cmLen > fileLimit || cmPos > fileLimit-cmLen {
