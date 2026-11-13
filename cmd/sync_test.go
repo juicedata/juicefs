@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -222,5 +224,40 @@ func TestSyncWorkerRestoresUmaskBeforeConfigInitialization(t *testing.T) {
 	}
 	if got := utils.GetUmask(); got != 0077 {
 		t.Fatalf("worker umask was not restored before config initialization: %04o", got)
+	}
+}
+
+func TestCreateSyncStorageSwiftPathStyle(t *testing.T) {
+	var authed []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/v1.0" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		authed = append(authed, r.Header.Get("X-Auth-User"))
+		w.Header().Set("X-Storage-Url", "http://"+r.Host+"/v1/AUTH_test")
+		w.Header().Set("X-Auth-Token", "tk")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	host := strings.TrimPrefix(srv.URL, "http://")
+	conf := &juicesync.Config{NoHTTPS: true}
+	for _, c := range []struct{ uri, want string }{
+		{"swift://u:p@" + host + "/me%40example.com/a/b/?path-style=true", "swift://me@example.com/a/b/"},
+		{"swift://u:p@" + host + "/me%40example.com?path-style=true", "swift://me@example.com/"},
+	} {
+		store, err := createSyncStorage(c.uri, conf)
+		if err != nil {
+			t.Fatalf("%s: %s", c.uri, err)
+		}
+		if store.String() != c.want {
+			t.Errorf("%s: got %s, want %s", c.uri, store.String(), c.want)
+		}
+	}
+	if _, err := createSyncStorage("swift://u:p@"+host+"/?path-style=true", conf); err == nil {
+		t.Error("expected an error for a path-style URL without a container")
+	}
+	if len(authed) != 2 || authed[0] != "u" {
+		t.Errorf("unexpected auth requests: %v", authed)
 	}
 }

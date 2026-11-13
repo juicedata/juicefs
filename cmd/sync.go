@@ -435,6 +435,28 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		// bucket name is part of path
 		endpoint += u.Path
 	}
+	// swift://<container>.<host>/prefix, or swift://<host>/<container>/prefix?path-style=true
+	// for a container whose name contains dots or "@". Keystone settings
+	// (auth-url, ...) are passed through in the query.
+	swiftPrefix := u.Path
+	if name == "swift" {
+		q := u.Query()
+		if pathStyle, _ := strconv.ParseBool(q.Get("path-style")); pathStyle {
+			parts := strings.SplitN(strings.TrimPrefix(u.Path, "/"), "/", 2)
+			if parts[0] == "" {
+				return nil, fmt.Errorf("path-style swift URL %s has no container", utils.RemovePassword(uri))
+			}
+			endpoint += "/" + parts[0]
+			swiftPrefix = "/"
+			if len(parts) == 2 {
+				swiftPrefix += parts[1]
+			}
+		}
+		q.Del("path-style")
+		if len(q) > 0 {
+			endpoint += "?" + q.Encode()
+		}
+	}
 
 	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token)
 	if name == "nfs" && err != nil {
@@ -470,6 +492,10 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		if strings.Count(u.Path, "/") > 1 {
 			// skip bucket name
 			store = object.WithPrefix(store, strings.SplitN(u.Path[1:], "/", 2)[1])
+		}
+	case "swift":
+		if len(swiftPrefix) > 1 {
+			store = object.WithPrefix(store, swiftPrefix[1:])
 		}
 	case "s3":
 		if isS3PathTypeUrl && strings.Count(u.Path, "/") > 1 {

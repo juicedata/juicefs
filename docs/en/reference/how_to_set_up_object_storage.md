@@ -965,7 +965,7 @@ The format of `--bucket` option is `<host[,host...]>/<volume_name>`. Please note
 
 The `--bucket` option format is `http://<container>.<endpoint>` or `http://<endpoint>/<container>`. A container defines a namespace for objects. Use the second form if the container name contains dots or `@`.
 
-JuiceFS uses [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html) by default. To use Keystone V2 or V3 authentication, set the standard OpenStack environment variables, such as `OS_AUTH_URL`, `OS_TENANT_NAME` or `OS_PROJECT_NAME`, and for V3 `OS_USER_DOMAIN_ID` and `OS_PROJECT_DOMAIN_ID`, in the environment of every JuiceFS command.
+JuiceFS uses [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html) against `<endpoint>/auth/v1.0` by default. To use Keystone V2 or V3 authentication, add the Keystone settings to the `--bucket` query: `auth-url` (required), `auth-version`, `tenant`, `tenant-id`, `domain`, `domain-id`, `tenant-domain`, `tenant-domain-id` and `region`. They are stored with the volume, so every client uses them; OpenStack environment variables such as `OS_AUTH_URL` are not read.
 
 The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
@@ -979,19 +979,19 @@ juicefs format \
     myjfs
 ```
 
-For example, [Blomp](https://www.blomp.com) gives each account one container named after its email address and uses Keystone:
+For example, [Blomp](https://www.blomp.com) gives each account one container named after its email address and uses Keystone V3:
 
 ```bash
-export OS_AUTH_URL=https://authenticate.blomp.com/v3
-export OS_USER_DOMAIN_ID=default OS_PROJECT_NAME=storage OS_PROJECT_DOMAIN_ID=default
 juicefs format \
     --storage swift \
-    --bucket https://storage.blomp.com/<email> \
+    --bucket "https://storage.blomp.com/<email>?auth-url=https://authenticate.blomp.com/v3&auth-version=3&tenant=storage&domain-id=default&tenant-domain-id=default" \
     --access-key <email> \
     --secret-key <password> \
     ... \
     myjfs
 ```
+
+With `juicefs sync`, the container is taken from the host (`swift://<container>.<endpoint>/<prefix>`); add `path-style=true` to put it in the path instead, for example `swift://<access-key>:<secret-key>@<endpoint>/<container>/<prefix>?path-style=true`. The Keystone settings go in the same query. Write any `@` in the container name as `%40`.
 
 ### MinIO
 
