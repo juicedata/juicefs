@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -31,6 +32,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -453,12 +455,93 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 }
 
 type storageHolder struct {
+	storage atomic.Pointer[storageSnapshot]
+	fmt     meta.Format
+}
+
+// Each operation keeps one store while reload publishes a replacement.
+type storageSnapshot struct {
 	object.ObjectStorage
-	fmt meta.Format
+}
+
+func (h *storageHolder) current() object.ObjectStorage {
+	return h.storage.Load().ObjectStorage
+}
+
+func (h *storageHolder) replace(storage object.ObjectStorage) {
+	h.storage.Store(&storageSnapshot{storage})
+}
+
+func (h *storageHolder) String() string {
+	return h.current().String()
+}
+
+func (h *storageHolder) Limits() object.Limits {
+	return h.current().Limits()
+}
+
+func (h *storageHolder) Create(ctx context.Context) error {
+	return h.current().Create(ctx)
+}
+
+func (h *storageHolder) Get(ctx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	return h.current().Get(ctx, key, off, limit, getters...)
+}
+
+func (h *storageHolder) Put(ctx context.Context, key string, in io.Reader, getters ...object.AttrGetter) error {
+	return h.current().Put(ctx, key, in, getters...)
+}
+
+func (h *storageHolder) Copy(ctx context.Context, dst, src string) error {
+	return h.current().Copy(ctx, dst, src)
+}
+
+func (h *storageHolder) Delete(ctx context.Context, key string, getters ...object.AttrGetter) error {
+	return h.current().Delete(ctx, key, getters...)
+}
+
+func (h *storageHolder) Head(ctx context.Context, key string) (object.Object, error) {
+	return h.current().Head(ctx, key)
+}
+
+func (h *storageHolder) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
+	return h.current().List(ctx, prefix, startAfter, token, delimiter, limit, followLink)
+}
+
+func (h *storageHolder) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan object.Object, error) {
+	return h.current().ListAll(ctx, prefix, marker, followLink)
+}
+
+func (h *storageHolder) CreateMultipartUpload(ctx context.Context, key string) (*object.MultipartUpload, error) {
+	return h.current().CreateMultipartUpload(ctx, key)
+}
+
+func (h *storageHolder) UploadPart(ctx context.Context, key, uploadID string, num int, body []byte) (*object.Part, error) {
+	return h.current().UploadPart(ctx, key, uploadID, num, body)
+}
+
+func (h *storageHolder) UploadPartCopy(ctx context.Context, key, uploadID string, num int, srcKey string, off, size int64) (*object.Part, error) {
+	return h.current().UploadPartCopy(ctx, key, uploadID, num, srcKey, off, size)
+}
+
+func (h *storageHolder) AbortUpload(ctx context.Context, key, uploadID string) {
+	h.current().AbortUpload(ctx, key, uploadID)
+}
+
+func (h *storageHolder) CompleteUpload(ctx context.Context, key, uploadID string, parts []*object.Part) error {
+	return h.current().CompleteUpload(ctx, key, uploadID, parts)
+}
+
+func (h *storageHolder) ListUploads(ctx context.Context, marker string) ([]*object.PendingPart, string, error) {
+	return h.current().ListUploads(ctx, marker)
+}
+
+func (h *storageHolder) Restore(ctx context.Context, key string, days int32) error {
+	return h.current().Restore(ctx, key, days)
 }
 
 func (h *storageHolder) Shutdown() {
-	object.Shutdown(h.ObjectStorage)
+	object.Shutdown(h.current())
 }
 
 func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.Format)) (object.ObjectStorage, error) {
@@ -471,9 +554,9 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 		return nil, err
 	}
 	holder := &storageHolder{
-		ObjectStorage: blob,
-		fmt:           *format, // keep a copy to find the change
+		fmt: *format, // keep a copy to find the change
 	}
+	holder.replace(blob)
 	cli.OnReload(func(new *meta.Format) error {
 		if patch != nil {
 			patch(new)
@@ -485,7 +568,7 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 			if err != nil {
 				return fmt.Errorf("object storage: %w", err)
 			}
-			holder.ObjectStorage = newBlob
+			holder.replace(newBlob)
 			holder.fmt = *new
 		}
 		return nil
