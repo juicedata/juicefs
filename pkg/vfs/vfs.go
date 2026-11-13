@@ -253,7 +253,7 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	defer func() {
 		logit(ctx, "mknod", err, "(%d,%s,%s:0%04o,0x%08X):%s", parent, name, smode(mode), mode, rdev, (*Entry)(entry))
 	}()
-	if parent == rootID && IsSpecialName(name) {
+	if isReservedName(parent, name) {
 		err = syscall.EEXIST
 		return
 	}
@@ -302,7 +302,7 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	defer func() {
 		logit(ctx, "mkdir", err, "(%d,%s,%s:0%04o):%s", parent, name, smode(mode), mode, (*Entry)(entry))
 	}()
-	if parent == rootID && IsSpecialName(name) {
+	if isReservedName(parent, name) {
 		err = syscall.EEXIST
 		return
 	}
@@ -338,7 +338,7 @@ func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry 
 	defer func() {
 		logit(ctx, "symlink", err, "(%d,%s,%s):%s", parent, name, path, (*Entry)(entry))
 	}()
-	if parent == rootID && IsSpecialName(name) {
+	if isReservedName(parent, name) {
 		err = syscall.EEXIST
 		return
 	}
@@ -371,7 +371,7 @@ func (v *VFS) Rename(ctx Context, parent Ino, name string, newparent Ino, newnam
 		err = syscall.EPERM
 		return
 	}
-	if newparent == rootID && IsSpecialName(newname) {
+	if isReservedName(newparent, newname) {
 		err = syscall.EPERM
 		return
 	}
@@ -399,7 +399,7 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 		err = syscall.EPERM
 		return
 	}
-	if newparent == rootID && IsSpecialName(newname) {
+	if isReservedName(newparent, newname) {
 		err = syscall.EPERM
 		return
 	}
@@ -526,7 +526,7 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 	if doUnlink {
 		name = fmt.Sprintf("tmpfile_%s", uuid.New().String())
 	}
-	if parent == rootID && IsSpecialName(name) {
+	if isReservedName(parent, name) {
 		err = syscall.EEXIST
 		return
 	}
