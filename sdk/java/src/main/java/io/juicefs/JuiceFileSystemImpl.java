@@ -1977,7 +1977,9 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public void close() throws IOException {
     super.close();
-    RangerPermissionChecker.release(name, handle);
+    if (rangerPermissionChecker != null) {
+      RangerPermissionChecker.release(name, handle);
+    }
     BgTaskUtil.unregister(name, handle, () -> {
       cachedHostsForName.clear();
       hashForName.clear();
