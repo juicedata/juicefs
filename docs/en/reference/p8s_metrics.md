@@ -160,8 +160,8 @@ The wait counters help identify pool contention when metadata operations slow do
 
 | Name                                    | Description                                 | Unit   |
 |:----------------------------------------|---------------------------------------------|--------|
-| `juicefs_blockcache_blocks`             | Number of cached blocks                     |        |
-| `juicefs_blockcache_bytes`              | Size of cached blocks                       | byte   |
+| `juicefs_blockcache_blocks`             | Number of cached blocks (staging excluded)  |        |
+| `juicefs_blockcache_bytes`              | Size of cached blocks (staging excluded)    | byte   |
 | `juicefs_blockcache_hits`               | Count of cached block hits                  |        |
 | `juicefs_blockcache_miss`               | Count of cached block miss                  |        |
 | `juicefs_blockcache_writes`             | Count of cached block writes                |        |
