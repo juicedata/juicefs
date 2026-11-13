@@ -229,6 +229,16 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
+### 对无序对象列表排序 {#external-sort}
+
+对于不按字典序列举对象的存储，例如 Ceph 或启用分层命名空间的 TOS，可以使用 `--external-sort-dir` 在本地对列表排序：
+
+```shell
+juicefs sync --external-sort-dir /data/juicefs-sync-sort SRC DST
+```
+
+该选项默认关闭。启用后会对源端和目标端的列表排序，列表超过内存排序缓冲区时，会在指定的本地目录中写入临时文件，请确保该目录有足够的可用空间。每次列表操作需要完成列举后才能处理排序结果，因此可能延迟开始复制的时间。
+
 ### 使用 checkpoint 断点续传 {#checkpoint}
 
 对于耗时较长的同步任务，可以通过 `--enable-checkpoint` 将同步进度保存到目标存储中，任务中断后可从最近一次 checkpoint 继续：

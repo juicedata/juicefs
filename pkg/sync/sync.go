@@ -299,10 +299,8 @@ func listAll(ctx context.Context, store object.ObjectStorage, prefix, start, end
 		}
 	}
 
-	listCtx, cancel := context.WithCancel(ctx)
-	if ch, err := store.ListAll(listCtx, prefix, start, followLink); err == nil {
+	if ch, err := store.ListAll(ctx, prefix, start, followLink); err == nil {
 		go func() {
-			defer cancel()
 			for obj := range ch {
 				if obj != nil && end != "" && obj.Key() > end {
 					break
@@ -313,10 +311,8 @@ func listAll(ctx context.Context, store object.ObjectStorage, prefix, start, end
 		}()
 		return out, nil
 	} else if !errors.Is(err, utils.ErrNotSUP) {
-		cancel()
 		return nil, err
 	}
-	cancel()
 
 	marker := start
 	logger.Debugf("Listing objects from %s marker %q", store, marker)

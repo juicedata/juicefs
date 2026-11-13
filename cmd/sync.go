@@ -274,7 +274,7 @@ func syncStorageFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "external-sort-dir",
-			Usage: "sort listings under this directory instead of trusting the order returned by storages, for those not listing keys in lexicographic order (e.g. Ceph, TOS with hierarchical namespace)",
+			Usage: "directory for external sorting of unordered object listings",
 		},
 		&cli.BoolFlag{
 			Name:  "no-https",
