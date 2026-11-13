@@ -1454,13 +1454,11 @@ func (f *File) Chown(ctx meta.Context, uid uint32, gid uint32) (err syscall.Errn
 	if gid != math.MaxUint32 {
 		flag |= meta.SetAttrGID
 	}
+	if flag == 0 {
+		return 0
+	}
 	var attr = Attr{Uid: uid, Gid: gid}
 	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
-	// Preserve the ownership check when both IDs are omitted. SetAttr returns
-	// current attributes without applying ownership checks for an empty flag.
-	if err == 0 && flag == 0 && ctx.Uid() != 0 && ctx.Uid() != attr.Uid {
-		err = syscall.EPERM
-	}
 	f.fs.InvalidateAttr(f.inode)
 	return
 }

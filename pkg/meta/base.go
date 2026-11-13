@@ -3672,10 +3672,6 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 }
 
 func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr, now time.Time, rule *aclAPI.Rule) (*Attr, syscall.Errno) {
-	// Replay must still apply ownership changes recorded by older clients.
-	if set&(SetAttrUID|SetAttrGID) != 0 && cur.Flags&(FlagImmutable|FlagAppend) != 0 && m.replay.Load() == nil {
-		return nil, syscall.EPERM
-	}
 	dirtyAttr := *cur
 	if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 		attr.Mode |= (cur.Mode & 06000)
