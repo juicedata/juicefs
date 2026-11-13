@@ -79,6 +79,11 @@ func TestHandleSysMountArgs(t *testing.T) {
 			false,
 		},
 		{
+			[]string{"/mount.juicefs", "memkv://", "/jfs", "-o", "no-internal"},
+			"juicefs mount -d --no-internal memkv:// /jfs",
+			false,
+		},
+		{
 			[]string{"/mount.juicefs", "memkv://", "/jfs", "-o", "cache-size=204800"},
 			"juicefs mount -d --cache-size=204800 memkv:// /jfs",
 			false,

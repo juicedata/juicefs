@@ -298,6 +298,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		PPid:            os.Getppid(),
 		UMask:           0xFFFF,
 		HideInternal:    c.Bool("hide-internal"),
+		NoInternal:      c.Bool("no-internal"),
 	}
 
 	if c.IsSet("umask") {

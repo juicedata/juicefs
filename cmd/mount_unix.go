@@ -489,6 +489,10 @@ func mountFlags() []cli.Flag {
 			Name:  "hide-internal",
 			Usage: "hide all internal files (.accesslog, .stats, etc.)",
 		},
+		&cli.BoolFlag{
+			Name:  "no-internal",
+			Usage: "disable access to all internal files and directories except .config",
+		},
 	}
 	if runtime.GOOS == "linux" {
 		selfFlags = append(selfFlags, &cli.BoolFlag{
