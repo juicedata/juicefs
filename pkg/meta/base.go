@@ -244,6 +244,12 @@ func (symCache *symlinkCache) Store(inode Ino, path []byte) {
 	}
 }
 
+func (symCache *symlinkCache) Remove(inode Ino) {
+	if _, loaded := symCache.LoadAndDelete(inode); loaded {
+		symCache.size.Add(-1)
+	}
+}
+
 func (symCache *symlinkCache) clean(ctx Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	ticker := time.NewTicker(time.Minute)
@@ -1672,7 +1678,7 @@ func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, paren
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	if _type < TypeFile || _type > TypeSocket {
+	if _type < TypeFile || _type > TypeLink {
 		return syscall.EINVAL
 	}
 	parent = m.checkRoot(parent)
@@ -1721,7 +1727,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 		attr.Nlink = 1
 		if _type == TypeSymlink {
 			attr.Length = uint64(len(path))
-		} else {
+		} else if _type != TypeLink {
 			attr.Length = 0
 			attr.Rdev = rdev
 		}
@@ -1849,6 +1855,10 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		var attr Attr
 		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
 			return st
+		}
+		if attr.Typ == TypeLink {
+			m.newMsg(ExternalLink, inode, attr.Length)
+			return ELink
 		}
 		if attr.Typ != TypeSymlink {
 			return syscall.EINVAL
@@ -2130,6 +2140,11 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st sy
 		}
 	}()
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
+		if attr != nil && attr.Typ == TypeLink {
+			m.of.Close(inode) // undo the reference added by OpenCheck
+			m.newMsg(ExternalLink, inode, attr.Length)
+			return ELink
+		}
 		return 0
 	}
 	// attr may be valid, see fs.Open()
@@ -2137,6 +2152,10 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st sy
 		if st = m.GetAttr(ctx, inode, attr); st != 0 {
 			return
 		}
+	}
+	if attr != nil && attr.Typ == TypeLink {
+		m.newMsg(ExternalLink, inode, attr.Length)
+		return ELink
 	}
 	var mmask uint8 = 0
 	switch flags & (syscall.O_RDONLY | syscall.O_WRONLY | syscall.O_RDWR) {
@@ -2904,6 +2923,10 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 }
 
 func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID int) {
+	m.compactChunk0(inode, indx, once, force, tierID, false)
+}
+
+func (m *baseMeta) compactChunk0(inode Ino, indx uint32, once, force bool, tierID int, rewrite bool) {
 	if m.conf.NoCompact {
 		return
 	}
@@ -2914,7 +2937,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 		m.Unlock()
 		return
 	}
-	if once || force {
+	if once || force || rewrite {
 		for m.compacting[k] {
 			m.Unlock()
 			time.Sleep(time.Millisecond * 10)
@@ -2943,13 +2966,16 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 	if once && len(ss) < maxSlices {
 		return
 	}
-	if len(ss) > maxCompactSlices {
+	if !rewrite && len(ss) > maxCompactSlices {
 		ss = ss[:maxCompactSlices]
 	}
-	skipped := skipSome(ss)
+	var skipped int
+	if !rewrite {
+		skipped = skipSome(ss)
+	}
 	compacted := ss[skipped:]
 	pos, size, slices := compactChunk(compacted)
-	if len(compacted) < 2 || size == 0 {
+	if (!rewrite && len(compacted) < 2) || size == 0 {
 		return
 	}
 	for _, s := range ss[:skipped] {
@@ -3007,7 +3033,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 			inode, indx, st, id, size)
 	}
 
-	if force {
+	if force && !rewrite {
 		m.Lock()
 		delete(m.compacting, k)
 		m.Unlock()
@@ -3670,6 +3696,9 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 }
 
 func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr, now time.Time, rule *aclAPI.Rule) (*Attr, syscall.Errno) {
+	if cur.Flags&FlagImmutable != 0 && set & ^uint16(SetAttrFlag|SetAttrLinuxFlags|SetAttrWindowsFlags) != 0 {
+		return nil, syscall.EPERM
+	}
 	dirtyAttr := *cur
 	if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 		attr.Mode |= (cur.Mode & 06000)
@@ -4292,4 +4321,8 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	}
 	wg.Wait()
 	return ctx.Err()
+}
+
+func (m *baseMeta) FreezeRoot(ctx Context, freeze bool) syscall.Errno {
+	return syscall.ENOTSUP
 }
