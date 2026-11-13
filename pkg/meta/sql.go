@@ -4182,6 +4182,48 @@ func dup(b []byte) []byte {
 	return r
 }
 
+func (m *dbMeta) doCleanupOrphanXattrs(ctx Context, delete bool, progress func(int)) error {
+	var lastID int64
+	for {
+		var attrs []xattr
+		if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
+			attrs = nil
+			return s.Table(new(xattr)).Alias("x").
+				Join("LEFT", []string{m.tablePrefix + "node", "n"}, "x.inode = n.inode").
+				Where("x.id > ? AND n.inode IS NULL", lastID).
+				Select("x.id, x.inode, x.name").OrderBy("x.id").Limit(1000).Find(&attrs)
+		}); err != nil {
+			return err
+		}
+		if len(attrs) == 0 {
+			return nil
+		}
+		for _, attr := range attrs {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			count := int64(1)
+			if delete {
+				if err := m.txn(func(s *xorm.Session) error {
+					count = 0
+					live, err := s.Context(ctx).ForUpdate().Get(&node{Inode: attr.Inode})
+					if err != nil || live {
+						return err
+					}
+					count, err = s.ID(attr.Id).Delete(new(xattr))
+					return err
+				}, attr.Inode); err != nil {
+					return err
+				}
+			}
+			if count > 0 && progress != nil {
+				progress(int(count))
+			}
+		}
+		lastID = attrs[len(attrs)-1].Id
+	}
+}
+
 func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
 	return m.roTxn(ctx, func(s *xorm.Session) error {
 		return s.Table(&chunk{}).Iterate(new(chunk), func(idx int, bean interface{}) error {

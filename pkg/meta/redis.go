@@ -3962,6 +3962,61 @@ func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar)
 	})
 }
 
+func (m *redisMeta) doCleanupOrphanXattrs(ctx Context, delete bool, progress func(int)) error {
+	return m.scan(ctx, "x[0-9]*", func(keys []string) error {
+		inodes := make([]Ino, len(keys))
+		p := m.rdb.Pipeline()
+		exists := make([]*redis.IntCmd, len(keys))
+		counts := make([]*redis.IntCmd, len(keys))
+		for i, key := range keys {
+			ino, err := strconv.ParseUint(key[len(m.prefix)+1:], 10, 64)
+			if err != nil || m.xattrKey(Ino(ino)) != key {
+				return fmt.Errorf("invalid xattr key %q", key)
+			}
+			inodes[i] = Ino(ino)
+			exists[i] = p.Exists(ctx, m.inodeKey(inodes[i]))
+			counts[i] = p.HLen(ctx, key)
+		}
+		if _, err := p.Exec(ctx); err != nil {
+			return err
+		}
+		for i, key := range keys {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if exists[i].Val() != 0 || counts[i].Val() == 0 {
+				continue
+			}
+			count := counts[i].Val()
+			if delete {
+				inodeKey := m.inodeKey(inodes[i])
+				if err := m.txn(ctx, func(tx *redis.Tx) error {
+					count = 0
+					live, err := tx.Exists(ctx, inodeKey).Result()
+					if err != nil || live != 0 {
+						return err
+					}
+					count, err = tx.HLen(ctx, key).Result()
+					if err != nil || count == 0 {
+						return err
+					}
+					_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+						pipe.Del(ctx, key)
+						return nil
+					})
+					return err
+				}, inodeKey, key); err != nil {
+					return err
+				}
+			}
+			if count > 0 && progress != nil {
+				progress(int(count))
+			}
+		}
+		return nil
+	})
+}
+
 func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 	var ctx = Background()
 	var foundInodes = make(map[Ino]struct{})

@@ -3280,6 +3280,47 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 	return st
 }
 
+func (m *kvMeta) doCleanupOrphanXattrs(ctx Context, delete bool, progress func(int)) error {
+	var scanErr error
+	err := m.client.scan(m.fmtKey("A"), func(key, _ []byte) bool {
+		if scanErr = ctx.Err(); scanErr != nil {
+			return false
+		}
+		if len(key) <= 10 || key[9] != 'X' {
+			return true
+		}
+		inode := m.decodeInode(key[1:9])
+		found := false
+		inspect := func(tx *kvTxn) error {
+			found = false
+			if tx.get(m.inodeKey(inode)) != nil || tx.get(key) == nil {
+				return nil
+			}
+			found = true
+			if delete {
+				tx.delete(key)
+			}
+			return nil
+		}
+		if delete {
+			scanErr = m.txn(ctx, inspect, inode)
+		} else {
+			scanErr = m.client.simpleTxn(ctx, inspect, 0)
+		}
+		if scanErr != nil {
+			return false
+		}
+		if found && progress != nil {
+			progress(1)
+		}
+		return true
+	})
+	if err != nil {
+		return err
+	}
+	return scanErr
+}
+
 func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
