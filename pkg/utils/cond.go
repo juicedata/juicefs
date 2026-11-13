@@ -32,8 +32,10 @@ type Cond struct {
 // It's required for the caller to hold L.
 func (c *Cond) Signal() {
 	if e := c.waiters.Front(); e != nil {
+		w := e.Value.(*condWaiter)
 		c.waiters.Remove(e)
-		close(e.Value.(chan struct{}))
+		w.notified = true
+		w.notify <- struct{}{}
 	}
 }
 
@@ -45,40 +47,46 @@ func (c *Cond) Broadcast() {
 	}
 }
 
-var timerPool = sync.Pool{}
+type condWaiter struct {
+	timer    *time.Timer
+	notify   chan struct{}
+	notified bool
+}
+
+var waiterPool = sync.Pool{}
 
 // WaitWithTimeout wait for a signal or a period of timeout eclipsed.
 // returns true in case of timeout else false
 func (c *Cond) WaitWithTimeout(d time.Duration) bool {
-	ch := make(chan struct{})
-	waiter := c.waiters.PushBack(ch)
-	c.L.Unlock()
-	var t *time.Timer
-	if e := timerPool.Get(); e == nil {
-		t = time.NewTimer(d)
+	var w *condWaiter
+	if e := waiterPool.Get(); e == nil {
+		w = &condWaiter{timer: time.NewTimer(d), notify: make(chan struct{}, 1)}
 	} else {
-		t = e.(*time.Timer)
-		t.Reset(d)
+		w = e.(*condWaiter)
+		w.timer.Reset(d)
 	}
+	waiter := c.waiters.PushBack(w)
+	c.L.Unlock()
 	timeout := false
 	select {
-	case <-ch:
-		if !t.Stop() {
-			<-t.C
+	case <-w.notify:
+		if !w.timer.Stop() {
+			<-w.timer.C
 		}
-	case <-t.C:
+	case <-w.timer.C:
 		timeout = true
 	}
-	timerPool.Put(t)
 	c.L.Lock()
-	if timeout {
-		select {
-		case <-ch:
-			timeout = false // Signaled after timing out but before re-acquiring L.
-		default:
-			c.waiters.Remove(waiter)
+	if w.notified {
+		if timeout {
+			<-w.notify
 		}
+		timeout = false
+	} else {
+		c.waiters.Remove(waiter)
 	}
+	w.notified = false
+	waiterPool.Put(w)
 	return timeout
 }
 
