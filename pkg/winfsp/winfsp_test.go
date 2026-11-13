@@ -146,3 +146,20 @@ func TestReaddirBatch(t *testing.T) {
 		}
 	}
 }
+
+// TestAttrToStatResetsFlags verifies that attrToStat does not leak Windows
+// attribute flags between entries when the same Stat_t is reused, as Readdir does.
+func TestAttrToStatResetsFlags(t *testing.T) {
+	j := &juice{}
+	var st fuse.Stat_t
+	hidden := &meta.Attr{Typ: meta.TypeFile, Flags: meta.FlagWindowsHidden | meta.FlagWindowsSystem | meta.FlagWindowsArchive | meta.FlagImmutable}
+	j.attrToStat(2, hidden, &st)
+	want := uint32(fuse.UF_HIDDEN | fuse.UF_SYSTEM | fuse.UF_ARCHIVE | fuse.UF_READONLY)
+	if st.Flags != want {
+		t.Fatalf("hidden entry flags = %#x, want %#x", st.Flags, want)
+	}
+	j.attrToStat(3, &meta.Attr{Typ: meta.TypeFile}, &st)
+	if st.Flags != 0 {
+		t.Fatalf("plain entry inherited flags %#x from previous entry", st.Flags)
+	}
+}
