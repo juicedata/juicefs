@@ -456,7 +456,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			if container == "" {
 				return nil, fmt.Errorf("path-style swift URL %s has no container", utils.RemovePassword(uri))
 			}
-			endpoint += "/" + container
+			endpoint += "/" + url.PathEscape(container)
 			u.Path = "/" + prefix
 		}
 		q.Del("path-style")

@@ -245,6 +245,7 @@ func TestCreateSyncStorageSwiftPathStyle(t *testing.T) {
 	for _, c := range []struct{ uri, want string }{
 		{"swift://u:p@" + host + "/me%40example.com/a/b/?path-style=true", "swift://me@example.com/a/b/"},
 		{"swift://u:p@" + host + "/me%40example.com?path-style=true", "swift://me@example.com/"},
+		{"swift://u:p@" + host + "/a%25b%3Fc/x/?path-style=true", "swift://a%b?c/x/"},
 	} {
 		store, err := createSyncStorage(c.uri, conf)
 		if err != nil {
@@ -257,7 +258,7 @@ func TestCreateSyncStorageSwiftPathStyle(t *testing.T) {
 	if _, err := createSyncStorage("swift://u:p@"+host+"/?path-style=true", conf); err == nil {
 		t.Error("expected an error for a path-style URL without a container")
 	}
-	if len(authed) != 2 || authed[0] != "u" {
+	if len(authed) != 3 || authed[0] != "u" {
 		t.Errorf("unexpected auth requests: %v", authed)
 	}
 
