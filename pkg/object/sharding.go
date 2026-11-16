@@ -261,10 +261,15 @@ func (s *sharded) Restore(ctx context.Context, key string, days int32) error {
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {
 	stores := make([]ObjectStorage, shards)
 	var err error
+	// only format the part before the query, whose values may be percent-encoded
+	base, query, hasQuery := strings.Cut(endpoint, "?")
 	for i := range stores {
-		ep := fmt.Sprintf(endpoint, i)
+		ep := fmt.Sprintf(base, i)
 		if strings.HasSuffix(ep, "%!(EXTRA int=0)") {
 			return nil, fmt.Errorf("can not generate different endpoint using %s", endpoint)
+		}
+		if hasQuery {
+			ep += "?" + query
 		}
 		stores[i], err = CreateStorage(name, ep, ak, sk, token)
 		if err != nil {

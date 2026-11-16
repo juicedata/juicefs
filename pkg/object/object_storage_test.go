@@ -1022,6 +1022,21 @@ func TestMarsharl(t *testing.T) {
 func TestSharding(t *testing.T) {
 	s, _ := NewSharded("mem", "%d", "", "", "", 10)
 	testStorage(t, s)
+
+	// percent-encoded query values must not be taken as formatting verbs
+	query := "auth-url=https%3A%2F%2Fa.com%2Fv3"
+	s, err := NewSharded("mem", "jfs%d?"+query, "", "", "", 2)
+	if err != nil {
+		t.Fatalf("create sharded storage: %s", err)
+	}
+	for i, store := range s.(*sharded).stores {
+		if want := fmt.Sprintf("mem://jfs%d?%s/", i, query); store.String() != want {
+			t.Fatalf("shard %d: got %s, want %s", i, store, want)
+		}
+	}
+	if _, err := NewSharded("mem", "jfs?"+query, "", "", "", 2); err == nil {
+		t.Fatal("expected an error for an endpoint without a shard placeholder outside the query")
+	}
 }
 
 // tokenPagedStore pages by continuation token only and treats startAfter as a
