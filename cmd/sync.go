@@ -359,6 +359,17 @@ func isFilePath(uri string) bool {
 	return !strings.Contains(uri, ":")
 }
 
+// hasTrailingSlash reports whether the path of a sync URL ends with "/",
+// ignoring any query such as swift's path-style=true or Keystone settings.
+func hasTrailingSlash(uri string) bool {
+	if strings.Contains(uri, "://") {
+		if u, err := url.Parse(uri); err == nil && u.RawQuery != "" {
+			return strings.HasSuffix(u.Path, "/")
+		}
+	}
+	return strings.HasSuffix(uri, "/")
+}
+
 func extractToken(uri string) (string, string) {
 	if submatch := regexp.MustCompile(`^.*:.*:.*(:.*)@.*$`).FindStringSubmatch(uri); len(submatch) == 2 {
 		return strings.ReplaceAll(uri, submatch[1], ""), strings.TrimLeft(submatch[1], ":")
@@ -438,6 +449,24 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	if name == "minio" || name == "s3" && isS3PathTypeUrl {
 		// bucket name is part of path
 		endpoint += u.Path
+	}
+	// swift://<container>.<host>/prefix, or swift://<host>/<container>/prefix?path-style=true
+	// for a container whose name contains dots or "@". Keystone settings
+	// (auth-url, ...) are passed through in the query.
+	if name == "swift" {
+		q := u.Query()
+		if pathStyle, _ := strconv.ParseBool(q.Get("path-style")); pathStyle {
+			container, prefix, _ := strings.Cut(strings.TrimPrefix(u.Path, "/"), "/")
+			if container == "" {
+				return nil, fmt.Errorf("path-style swift URL %s has no container", utils.RemovePassword(uri))
+			}
+			endpoint += "/" + url.PathEscape(container)
+			u.Path = "/" + prefix
+		}
+		q.Del("path-style")
+		if len(q) > 0 {
+			endpoint += "?" + q.Encode()
+		}
 	}
 
 	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token)
@@ -567,7 +596,7 @@ func doSync(c *cli.Context) error {
 			dstURL = strings.ReplaceAll(dstURL, "\\", "/")
 		}
 	}
-	if strings.HasSuffix(srcURL, "/") != strings.HasSuffix(dstURL, "/") {
+	if hasTrailingSlash(srcURL) != hasTrailingSlash(dstURL) {
 		logger.Fatalf("SRC and DST should both end with path separator or not!")
 	}
 	src, err := createSyncStorage(srcURL, config)
