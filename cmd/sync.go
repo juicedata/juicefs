@@ -355,6 +355,17 @@ func isFilePath(uri string) bool {
 	return !strings.Contains(uri, ":")
 }
 
+// hasTrailingSlash reports whether the path of a sync URL ends with "/",
+// ignoring any query such as swift's path-style=true or Keystone settings.
+func hasTrailingSlash(uri string) bool {
+	if strings.Contains(uri, "://") {
+		if u, err := url.Parse(uri); err == nil && u.RawQuery != "" {
+			return strings.HasSuffix(u.Path, "/")
+		}
+	}
+	return strings.HasSuffix(uri, "/")
+}
+
 func extractToken(uri string) (string, string) {
 	if submatch := regexp.MustCompile(`^.*:.*:.*(:.*)@.*$`).FindStringSubmatch(uri); len(submatch) == 2 {
 		return strings.ReplaceAll(uri, submatch[1], ""), strings.TrimLeft(submatch[1], ":")
@@ -581,7 +592,7 @@ func doSync(c *cli.Context) error {
 			dstURL = strings.ReplaceAll(dstURL, "\\", "/")
 		}
 	}
-	if strings.HasSuffix(srcURL, "/") != strings.HasSuffix(dstURL, "/") {
+	if hasTrailingSlash(srcURL) != hasTrailingSlash(dstURL) {
 		logger.Fatalf("SRC and DST should both end with path separator or not!")
 	}
 	src, err := createSyncStorage(srcURL, config)

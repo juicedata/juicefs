@@ -260,4 +260,19 @@ func TestCreateSyncStorageSwiftPathStyle(t *testing.T) {
 	if len(authed) != 2 || authed[0] != "u" {
 		t.Errorf("unexpected auth requests: %v", authed)
 	}
+
+	for uri, want := range map[string]bool{
+		"swift://u:p@host/c/dir/?path-style=true":    true,
+		"swift://u:p@host/c/dir?path-style=true":     false,
+		"swift://c.host/?auth-url=https://k:5000/v3": true,
+		"swift://c.host?auth-url=https://k:5000/v3":  false,
+		"s3://bucket/prefix/":                        true,
+		"s3://bucket/prefix":                         false,
+		"/tmp/dir/":                                  true,
+		"/tmp/dir":                                   false,
+	} {
+		if got := hasTrailingSlash(uri); got != want {
+			t.Errorf("hasTrailingSlash(%s) = %v, want %v", uri, got, want)
+		}
+	}
 }
