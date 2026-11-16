@@ -23,51 +23,49 @@ import (
 	"time"
 )
 
-// The expected values are the defaults of Client.__init__ in juicefs.py, as
-// libjfs parses them.
 func TestDefaultConfig(t *testing.T) {
 	want := &Config{
-		Bucket:              "",                     // bucket=""
-		StorageClass:        "",                     // storage_class=""
-		ReadOnly:            false,                  // read_only=False
-		NoSession:           false,                  // no_session=False
-		NoBGJob:             true,                   // no_bgjob=True
-		OpenCache:           0,                      // open_cache="0"
-		BackupMeta:          time.Hour,              // backup_meta="3600"
-		BackupSkipTrash:     false,                  // backup_skip_trash=False
-		Heartbeat:           12 * time.Second,       // heartbeat="12"
-		CacheDir:            "memory",               // cache_dir="memory"
-		CacheSize:           100 << 20,              // cache_size="100M"
-		FreeSpaceRatio:      0.1,                    // free_space_ratio="0.1"
-		CachePartialOnly:    false,                  // cache_partial_only=False
-		VerifyCacheChecksum: "extend",               // verify_cache_checksum="extend"
-		CacheEviction:       "2-random",             // cache_eviction="2-random"
-		CacheScanInterval:   time.Hour,              // cache_scan_interval="3600"
-		CacheExpire:         0,                      // cache_expire="0"
-		Writeback:           false,                  // writeback=False
-		BufferSize:          300 << 20,              // buffer_size="300M"
-		Prefetch:            1,                      // prefetch=1
-		MaxReadahead:        0,                      // max_readahead="0"
-		UploadLimit:         0,                      // upload_limit="0"
-		DownloadLimit:       0,                      // download_limit="0"
-		MaxUploads:          20,                     // max_uploads=20
-		MaxDeletes:          10,                     // max_deletes=10
-		SkipDirNlink:        20,                     // skip_dir_nlink=20
-		SkipDirMtime:        100 * time.Millisecond, // skip_dir_mtime="100ms"
-		IORetries:           10,                     // io_retries=10
-		GetTimeout:          5 * time.Second,        // get_timeout="5"
-		PutTimeout:          60 * time.Second,       // put_timeout="60"
-		FastResolve:         false,                  // fast_resolve=False
-		AttrCache:           time.Second,            // attr_cache="1s"
-		EntryCache:          0,                      // entry_cache="0s"
-		DirEntryCache:       time.Second,            // dir_entry_cache="1s"
-		Debug:               false,                  // debug=False
-		NoUsageReport:       false,                  // no_usage_report=False
-		AccessLog:           "",                     // access_log=""
-		PushGateway:         "",                     // push_gateway=""
-		PushInterval:        10 * time.Second,       // push_interval="10"
-		PushAuth:            "",                     // push_auth=""
-		PushLabels:          "",                     // push_labels=""
+		Bucket:              "",
+		StorageClass:        "",
+		ReadOnly:            false,
+		NoSession:           false,
+		NoBGJob:             true,
+		OpenCache:           0,
+		BackupMeta:          time.Hour,
+		BackupSkipTrash:     false,
+		Heartbeat:           12 * time.Second,
+		CacheDir:            "memory",
+		CacheSize:           100 << 20,
+		FreeSpaceRatio:      0.1,
+		CachePartialOnly:    false,
+		VerifyCacheChecksum: "extend",
+		CacheEviction:       "2-random",
+		CacheScanInterval:   time.Hour,
+		CacheExpire:         0,
+		Writeback:           false,
+		BufferSize:          300 << 20,
+		Prefetch:            1,
+		MaxReadahead:        0,
+		UploadLimit:         0,
+		DownloadLimit:       0,
+		MaxUploads:          20,
+		MaxDeletes:          10,
+		SkipDirNlink:        20,
+		SkipDirMtime:        100 * time.Millisecond,
+		IORetries:           10,
+		GetTimeout:          5 * time.Second,
+		PutTimeout:          60 * time.Second,
+		FastResolve:         false,
+		AttrCache:           time.Second,
+		EntryCache:          0,
+		DirEntryCache:       time.Second,
+		Debug:               false,
+		NoUsageReport:       false,
+		AccessLog:           "",
+		PushGateway:         "",
+		PushInterval:        10 * time.Second,
+		PushAuth:            "",
+		PushLabels:          "",
 	}
 	if got := DefaultConfig(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("DefaultConfig() = %+v\nwant %+v", got, want)

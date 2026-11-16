@@ -42,7 +42,6 @@ type fileInfo struct {
 	st   *Stat
 }
 
-// newFileInfo names the file by the last element of name, as os does.
 func newFileInfo(name string, st *Stat) *fileInfo {
 	return &fileInfo{name: path.Base(name), st: st}
 }
@@ -54,7 +53,6 @@ func (fi *fileInfo) ModTime() time.Time { return fi.st.Mtime }
 func (fi *fileInfo) IsDir() bool        { return fi.Mode().IsDir() }
 func (fi *fileInfo) Sys() any           { return fi.st }
 
-// fileMode is fillFileStatFromSys of os on Unix.
 func fileMode(mode uint32) fs.FileMode {
 	m := fs.FileMode(mode & 0777)
 	switch mode & syscall.S_IFMT {

@@ -22,9 +22,7 @@ import (
 	"time"
 )
 
-// Config holds the client options, which match the keyword arguments of the
-// Python SDK's Client. Start from DefaultConfig: a zero field means zero, not
-// the default.
+// Start from DefaultConfig: a zero field means zero, not the default.
 type Config struct {
 	Bucket          string
 	StorageClass    string
@@ -134,7 +132,6 @@ func (c *Config) validate() error {
 	if c.PushGateway != "" && c.PushInterval == 0 {
 		return fmt.Errorf("invalid config: PushInterval must be positive when PushGateway is set")
 	}
-	// "key1:value1;key2:value2", as jfs_init accepts.
 	if c.PushLabels != "" {
 		for _, kv := range strings.Split(c.PushLabels, ";") {
 			if _, v, ok := strings.Cut(kv, ":"); !ok || strings.Contains(v, ":") {

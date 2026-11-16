@@ -93,7 +93,7 @@ func TestPushGateway(t *testing.T) {
 			t.Fatalf("push path %q has no %q", last, want)
 		}
 	}
-	// "user:pass:word" is split at the first colon (P31).
+	// "user:pass:word" is split at the first colon.
 	req := httptest.NewRequest("GET", "/", nil)
 	req.SetBasicAuth("user", "pass:word")
 	if auth != req.Header.Get("Authorization") {

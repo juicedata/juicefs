@@ -25,9 +25,6 @@ import (
 	"time"
 )
 
-// Paths are passed to the backend unchanged; only the semantics that os adds
-// on top of the system calls are implemented here (design 6.2, 6.5).
-
 func (c *Client) check() error {
 	if c.closed.Load() {
 		return fs.ErrClosed
@@ -142,7 +139,6 @@ func (c *Client) rename(oldname, newname string) error {
 	if err := c.check(); err != nil {
 		return err
 	}
-	// Same check as os.Rename.
 	if nst, err := c.backend.stat(newname, false); err == nil && isDir(nst) {
 		ost, err := c.backend.stat(oldname, false)
 		if err != nil {
@@ -164,8 +160,8 @@ func (c *Client) Link(oldname, newname string) error {
 	return linkError("link", oldname, newname, err)
 }
 
-// Symlink stores an absolute oldname relative to the directory of newname, as
-// the Python SDK does, so that the link works wherever the volume is mounted.
+// Symlink stores an absolute oldname relative to the directory of newname,
+// so that the link works wherever the volume is mounted.
 func (c *Client) Symlink(oldname, newname string) error {
 	err := c.check()
 	if err == nil {

@@ -122,7 +122,6 @@ func TestFileInfo(t *testing.T) {
 		t.Fatalf("file: dir %v size %d mode %v", file.IsDir(), file.Size(), file.Mode())
 	}
 
-	// As os.Stat.
 	for name, want := range map[string]string{
 		"/":     "/",
 		"//":    "/",

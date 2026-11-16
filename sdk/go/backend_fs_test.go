@@ -135,7 +135,6 @@ func TestToStat(t *testing.T) {
 	}
 }
 
-// The expected values follow jfs_init in sdk/java/libjfs/main.go.
 func TestConfigConversion(t *testing.T) {
 	conf := DefaultConfig()
 	conf.ReadOnly = true
@@ -162,7 +161,6 @@ func TestConfigConversion(t *testing.T) {
 	if !mc.NoBGJob {
 		t.Fatal("NoSession must imply NoBGJob")
 	}
-	// Fields not set by jfs_init keep the values of meta.DefaultConf.
 	if def := meta.DefaultConf(); mc.AtimeMode != def.AtimeMode || mc.DirStatFlushPeriod != def.DirStatFlushPeriod {
 		t.Fatalf("meta config defaults changed: %+v", mc)
 	}

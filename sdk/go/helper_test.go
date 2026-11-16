@@ -24,7 +24,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 )
 
-// newTestVolume formats a volume on SQLite and a local directory.
 func newTestVolume(t testing.TB) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -62,7 +61,6 @@ func newTestClient(t testing.TB) *Client {
 	return c
 }
 
-// createFile creates an empty file, or truncates an existing one.
 func createFile(t testing.TB, c *Client, name string) {
 	t.Helper()
 	if err := c.WriteFile(name, nil, 0666); err != nil {

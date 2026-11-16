@@ -63,8 +63,6 @@ func isPathError(err error, op string, want error) bool {
 	return errors.As(err, &pe) && pe.Op == op && errors.Is(err, want)
 }
 
-// TestOpenModes opens the flags of the Python modes (design 7.1) on an
-// existing file, a missing file and a directory; want is that of os on Linux.
 func TestOpenModes(t *testing.T) {
 	c := newTestClient(t)
 	const (
@@ -130,8 +128,6 @@ func TestOpenModes(t *testing.T) {
 	}
 }
 
-// TestOpenPaths checks design 7.1: want is the result of os.OpenFile on Linux
-// in a tree made by newTree.
 func TestOpenPaths(t *testing.T) {
 	c := newTestClient(t)
 	const (
@@ -173,8 +169,8 @@ func TestOpenPaths(t *testing.T) {
 		{"lnf", wo | cr | ex, syscall.EEXIST, ""},
 		{"nonexist", ro, syscall.ENOENT, ""},
 		{"f", ro | ex, 0, ""},
-		{"f", wo | os.O_RDWR, syscall.EINVAL, ""}, // Q7; Linux opens it
-		{"f", wo | os.O_SYNC, syscall.EINVAL, ""}, // Q7
+		{"f", wo | os.O_RDWR, syscall.EINVAL, ""}, // Linux opens it
+		{"f", wo | os.O_SYNC, syscall.EINVAL, ""},
 		{"f", ro | syscall.O_NOFOLLOW, syscall.EINVAL, ""},
 	} {
 		desc := fmt.Sprintf("OpenFile(%s, %#o)", x.name, x.flag)
@@ -287,8 +283,6 @@ func TestOpenPerm(t *testing.T) {
 	}
 }
 
-// TestOpenCreateConcurrently covers P5: a file created by others between open
-// and create is opened.
 func TestOpenCreateConcurrently(t *testing.T) {
 	c := newTestClient(t)
 	for i := range 10 {
@@ -310,7 +304,6 @@ func TestOpenCreateConcurrently(t *testing.T) {
 	}
 }
 
-// TestReadWrite follows the reads and writes in test() of the Python SDK.
 func TestReadWrite(t *testing.T) {
 	c := newTestClient(t)
 	if err := c.MkdirAll("d", 0755); err != nil {
@@ -394,7 +387,6 @@ func TestReadAt(t *testing.T) {
 	if _, err := f.ReadAt(buf, -1); !errors.As(err, &pe) || pe.Op != "readat" || pe.Err.Error() != "negative offset" {
 		t.Errorf("ReadAt(-1): %#v", err)
 	}
-	// ReadAt does not change the offset
 	if n, err := f.Read(buf); n != 5 || string(buf) != "01234" || err != nil {
 		t.Fatalf("Read: %d %q %v", n, buf, err)
 	}
@@ -413,7 +405,7 @@ func TestReadAt(t *testing.T) {
 }
 
 // TestZeroLength checks that os does not check the file for empty reads and
-// for an empty WriteAt, but does for an empty Write (design 7.2).
+// for an empty WriteAt, but does for an empty Write.
 func TestZeroLength(t *testing.T) {
 	c := newTestClient(t)
 	writeFile(t, c, "f", "hello")
@@ -537,7 +529,6 @@ func TestAppend(t *testing.T) {
 	if n != 0 || err == nil || errors.As(err, &pe) || err.Error() != "os: invalid use of WriteAt on file opened with O_APPEND" {
 		t.Fatalf("WriteAt with O_APPEND: %d %#v", n, err)
 	}
-	// reads follow the offset
 	if _, err := f.Seek(5, io.SeekStart); err != nil {
 		t.Fatal(err)
 	}
@@ -569,7 +560,6 @@ func TestFileStat(t *testing.T) {
 	if st.Sys().(*Stat).Inode != lst.Sys().(*Stat).Inode {
 		t.Fatal("inode differs from Lstat")
 	}
-	// fstat sees the writes of others
 	g := openFile(t, c, "d/f", os.O_WRONLY)
 	if _, err := g.Write([]byte("0123456789")); err != nil {
 		t.Fatal(err)
@@ -767,7 +757,6 @@ func TestDirHandle(t *testing.T) {
 		t.Fatalf("Readdir(1) at end: %v %v", infos, err)
 	}
 
-	// Seek reads the directory again
 	writeFile(t, c, "d/0", "")
 	if off, err := d.Seek(0, io.SeekStart); off != 0 || err != nil {
 		t.Fatalf("Seek(0): %d %v", off, err)
@@ -814,8 +803,6 @@ func TestDirHandle(t *testing.T) {
 	}
 }
 
-// TestDirByHandle checks Q22 and Q23: an open directory is bound to its
-// inode, as os does with fstat, fchmod, fchown and getdents.
 func TestDirByHandle(t *testing.T) {
 	c := newTestClient(t)
 	if err := c.Mkdir("a", 0755); err != nil {
@@ -937,8 +924,6 @@ func TestFileClosed(t *testing.T) {
 	}
 }
 
-// TestClientCloseFiles checks that Client.Close closes the open files and
-// that the data is kept (design 9).
 func TestClientCloseFiles(t *testing.T) {
 	metaURL := newTestVolume(t)
 	c, err := New("test", metaURL, testConfig())
@@ -1025,7 +1010,7 @@ func TestFileConcurrently(t *testing.T) {
 		})
 	}
 	// Fewer than 5 slices in the chunk: more make reads start a compaction,
-	// which outlives Client.Close (design 13.2).
+	// which outlives Client.Close.
 	wg.Go(func() {
 		for j := range 3 {
 			if _, err := f.WriteAt([]byte("0123456789"), int64(j*10)); err != nil {
@@ -1077,7 +1062,6 @@ func TestFileConcurrently(t *testing.T) {
 	}
 }
 
-// blockingFile blocks reads and writes until release is closed.
 type blockingFile struct {
 	fileBackend
 	started chan struct{}
@@ -1096,8 +1080,6 @@ func (b *blockingFile) pwrite(p []byte, off int64) (int, error) {
 
 func (b *blockingFile) close() error { return nil }
 
-// TestFileNotSerialized checks that the calls on a File are not serialized
-// by the SDK, and that Close does not wait for them (design 7.2).
 func TestFileNotSerialized(t *testing.T) {
 	b := &blockingFile{started: make(chan struct{}), release: make(chan struct{})}
 	f := &File{c: &Client{files: map[*File]struct{}{}}, f: b, name: "f", readable: true, writable: true}
@@ -1137,7 +1119,6 @@ func TestFileNotSerialized(t *testing.T) {
 	if _, err := f.ReadAt(make([]byte, 1), 0); !errors.Is(err, fs.ErrClosed) {
 		t.Fatalf("ReadAt after Close: %v", err)
 	}
-	// the offset has moved by the two reads and the write
 	if off := f.off.Load(); off != 30 {
 		t.Fatalf("offset %d, want 30", off)
 	}

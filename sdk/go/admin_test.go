@@ -123,7 +123,7 @@ func TestXattr(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	// The largest value on Linux, which jfs_getXattr returned as zeros (P16).
+	// Maximum xattr value size on Linux.
 	big := bytes.Repeat([]byte("ab\x00"), 64<<10/3+1)[:64<<10]
 	if err := c.Setxattr("f", "user.big", big, 0); err != nil {
 		t.Fatal(err)
@@ -165,7 +165,6 @@ func TestXattr(t *testing.T) {
 	}
 }
 
-// TestXattrLimits expects the checks of Linux (design P50).
 func TestXattrLimits(t *testing.T) {
 	t.Skip("P50: pkg/fs does not check the xattr limits and permissions")
 	c := newTestClient(t)
@@ -472,7 +471,6 @@ func TestUserGroupQuota(t *testing.T) {
 		if err := c.DelQuota(name); err != nil {
 			t.Fatalf("DelQuota(%s): %v", name, err)
 		}
-		// The usage is still kept (P53).
 		if q, err := c.GetQuota(name); err != nil || q != nil && (q.MaxSpace > 0 || q.MaxInodes > 0) {
 			t.Fatalf("GetQuota(%s) after DelQuota: %+v, %v", name, q, err)
 		}

@@ -30,8 +30,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 )
 
-// newRegistry creates a registry per client, as libjfs does for the Python
-// SDK, because /.stats is gathered from it.
 func newRegistry() (*prometheus.Registry, prometheus.Registerer) {
 	registry := prometheus.NewRegistry()
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_", registry)
@@ -40,7 +38,6 @@ func newRegistry() (*prometheus.Registry, prometheus.Registerer) {
 	return registry, registerer
 }
 
-// pushLabels builds the labels as jfs_init does; extra is validated.
 func pushLabels(name, extra string) map[string]string {
 	labels := map[string]string{"vol_name": name, "mp": "sdk-" + strconv.Itoa(os.Getpid())}
 	if h, err := os.Hostname(); err == nil {
@@ -61,7 +58,6 @@ func pushLabels(name, extra string) map[string]string {
 	return labels
 }
 
-// pushGateway is push2Gateway of libjfs that can be stopped.
 type pushGateway struct {
 	pusher *push.Pusher
 	stop   chan struct{}
@@ -102,7 +98,6 @@ func (g *pushGateway) push() {
 	}
 }
 
-// close pushes once more, as jfs_term does.
 func (g *pushGateway) close() {
 	close(g.stop)
 	<-g.done
