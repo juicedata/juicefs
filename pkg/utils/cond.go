@@ -34,7 +34,6 @@ func (c *Cond) Signal() {
 	if e := c.waiters.Front(); e != nil {
 		w := e.Value.(*condWaiter)
 		c.waiters.Remove(e)
-		w.notified = true
 		w.notify <- struct{}{}
 	}
 }
@@ -48,9 +47,8 @@ func (c *Cond) Broadcast() {
 }
 
 type condWaiter struct {
-	timer    *time.Timer
-	notify   chan struct{}
-	notified bool
+	timer  *time.Timer
+	notify chan struct{}
 }
 
 var waiterPool = sync.Pool{}
@@ -77,15 +75,14 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 		timeout = true
 	}
 	c.L.Lock()
-	if w.notified {
-		if timeout {
-			<-w.notify
+	if timeout {
+		select {
+		case <-w.notify:
+			timeout = false // Signaled after timing out but before re-acquiring L.
+		default:
+			c.waiters.Remove(waiter)
 		}
-		timeout = false
-	} else {
-		c.waiters.Remove(waiter)
 	}
-	w.notified = false
 	waiterPool.Put(w)
 	return timeout
 }
