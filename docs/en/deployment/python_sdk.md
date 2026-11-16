@@ -96,6 +96,12 @@ jfs = Client(name='', meta='redis://192.168.1.8/0')
 jfs.listdir('/')
 ```
 
+For binary streams returned by `Client.open`, `seek()` accepts integer offsets
+(including objects implementing `__index__`). The resulting position must be
+nonnegative and fit in a signed 64-bit integer. Invalid arguments leave the
+current position unchanged; negative relative offsets remain valid when the
+resulting position is within range.
+
 ### Using fsspec
 
 JuiceFS Python SDK also supports the `fsspec` interface to operate the JuiceFS file system.

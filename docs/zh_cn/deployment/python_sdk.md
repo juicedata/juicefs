@@ -109,6 +109,8 @@ jfs = Client(name='', meta='redis://192.168.1.8/0')
 jfs.listdir('/')
 ```
 
+对于 `Client.open` 返回的二进制文件流，`seek()` 接受整数偏移量（包括实现 `__index__` 的对象）。结果位置必须非负且处于有符号 64 位整数范围内。无效参数不会改变当前位置；只要结果位置有效，仍可使用负的相对偏移量。
+
 ### 使用 fsspec
 
 JuiceFS 的 Python SDK 还支持 `fsspec` 接口来操作 JuiceFS 文件系统。
