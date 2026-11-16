@@ -316,13 +316,6 @@ func (j *juice) Chown(path string, uid uint32, gid uint32) (e int) {
 		// FIXME: don't change ownership in windows
 		return 0
 	}
-	info, _ := f.Stat()
-	if uid == 0xffffffff {
-		uid = uint32(info.(*fs.FileStat).Uid())
-	}
-	if gid == 0xffffffff {
-		gid = uint32(info.(*fs.FileStat).Gid())
-	}
 	e = errorconv(f.Chown(ctx, uid, gid))
 	return
 }

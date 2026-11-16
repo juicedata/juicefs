@@ -198,6 +198,7 @@ func testMeta(t *testing.T, m Meta) {
 	testUserGroupQuota(t, m)
 	testAtime(t, m)
 	testAccess(t, m)
+	testChownPermission(t, m)
 	base := m.getBase()
 	base.conf.OpenCache = time.Second
 	base.of.expire = time.Second
@@ -3212,6 +3213,53 @@ func testParents(t *testing.T, m Meta) {
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)
 	}
+}
+
+func testChownPermission(t *testing.T, m Meta) {
+	root := Background()
+	var inode Ino
+	var attr Attr
+	if st := m.Create(root, RootInode, "chownf", 0644, 0, syscall.O_EXCL, &inode, &attr); st != 0 {
+		t.Fatalf("create chownf: %s", st)
+	}
+	defer m.Unlink(root, RootInode, "chownf")
+	setMode := func(mode uint16) {
+		attr = Attr{Uid: 1000, Gid: 3000, Mode: mode}
+		if st := m.SetAttr(root, inode, SetAttrUID|SetAttrGID|SetAttrMode, 0, &attr); st != 0 {
+			t.Fatalf("setattr chownf: %s", st)
+		}
+	}
+	checkMode := func(want uint16) {
+		if st := m.GetAttr(root, inode, &attr); st != 0 || attr.Mode&07777 != want {
+			t.Fatalf("mode %o, want %o (%s)", attr.Mode&07777, want, st)
+		}
+	}
+
+	// A non-owner can't clear set-ID bits with an unchanged UID.
+	setMode(06644)
+	other := NewContext(1, 2000, []uint32{2000})
+	if st := m.SetAttr(other, inode, SetAttrUID, 0, &Attr{Uid: 1000}); st != syscall.EPERM {
+		t.Fatalf("non-owner chown: %s", st)
+	}
+	checkMode(06644)
+
+	// A group member keeps SGID on a non-group-executable file on Linux.
+	owner := NewContext(1, 1000, []uint32{1000, 3000})
+	if st := m.SetAttr(owner, inode, SetAttrUID, 0, &Attr{Uid: 1000}); st != 0 {
+		t.Fatalf("owner chown: %s", st)
+	}
+	if runtime.GOOS == "linux" {
+		checkMode(02644)
+	} else {
+		checkMode(0644)
+	}
+
+	// SGID is cleared on a group-executable file.
+	setMode(02654)
+	if st := m.SetAttr(owner, inode, SetAttrUID, 0, &Attr{Uid: 1000}); st != 0 {
+		t.Fatalf("owner chown: %s", st)
+	}
+	checkMode(0654)
 }
 
 func testOpenCache(t *testing.T, m Meta) {
@@ -7364,6 +7412,61 @@ func newFuseDefaultCtx(uid, primaryGid uint32) *fuseDefaultCtx {
 		Context: context.Background(),
 		uid:     uid,
 		gid:     primaryGid,
+	}
+}
+
+func TestRedisCleanupLeakedInodes(t *testing.T) {
+	m := newTestRedisMeta(t, 8)
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	ctx := Background()
+	var inode Ino
+	if st := m.Mknod(ctx, RootInode, "held", TypeFile, 0644, 022, 0, "", &inode, nil); st != 0 {
+		t.Fatalf("create file: %s", st)
+	}
+	if st := m.Open(ctx, inode, syscall.O_RDWR, &Attr{}); st != 0 {
+		t.Fatalf("open file: %s", st)
+	}
+
+	if st := m.Unlink(ctx, RootInode, "held", true); st != 0 {
+		t.Fatalf("unlink held: %s", st)
+	}
+	if held, err := m.rdb.SIsMember(ctx, m.sustained(m.sid), inode.String()).Result(); err != nil || !held {
+		t.Fatalf("sustained inode: held=%t, err=%v", held, err)
+	}
+
+	var leaked Ino
+	if st := m.Mknod(ctx, RootInode, "leaked", TypeFile, 0644, 022, 0, "", &leaked, nil); st != 0 {
+		t.Fatalf("create leaked file: %s", st)
+	}
+	if err := m.rdb.HDel(ctx, m.entryKey(RootInode), "leaked").Err(); err != nil {
+		t.Fatalf("remove leaked entry: %s", err)
+	}
+	for _, ino := range []Ino{inode, leaked} {
+		data, err := m.rdb.Get(ctx, m.inodeKey(ino)).Bytes()
+		if err != nil {
+			t.Fatalf("get inode %d: %s", ino, err)
+		}
+		var attr Attr
+		m.parseAttr(data, &attr)
+		attr.Ctime = time.Now().Add(-2 * time.Hour).Unix()
+		if err := m.rdb.Set(ctx, m.inodeKey(ino), m.marshal(&attr), 0).Err(); err != nil {
+			t.Fatalf("set inode %d: %s", ino, err)
+		}
+	}
+
+	m.cleanupLeakedInodes(true)
+	if exists, err := m.rdb.Exists(ctx, m.inodeKey(inode)).Result(); err != nil || exists != 1 {
+		t.Fatalf("sustained inode was deleted: exists=%d, err=%v", exists, err)
+	}
+	if exists, err := m.rdb.Exists(ctx, m.inodeKey(leaked)).Result(); err != nil || exists != 0 {
+		t.Fatalf("leaked inode was not deleted: exists=%d, err=%v", exists, err)
+	}
+	if st := m.Close(ctx, inode); st != 0 {
+		t.Fatalf("close file: %s", st)
 	}
 }
 

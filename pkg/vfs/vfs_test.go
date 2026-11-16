@@ -710,6 +710,35 @@ func TestInternalFile(t *testing.T) {
 	_ = v.Flush(ctx, fe.Inode, fh, 0)
 	v.Release(ctx, fe.Inode, fh)
 
+	// reserved names
+	dir, e := v.Mkdir(ctx, 1, "reserved", 0755, 0)
+	require.Zero(t, e)
+	src, e := v.Mknod(ctx, dir.Inode, "src", 0644, 0, 0)
+	require.Zero(t, e)
+	for _, c := range []struct {
+		parent Ino
+		name   string
+	}{{1, ".config"}, {1, ".trash"}, {1, ".control"}, {dir.Inode, ".control"}} {
+		_, e = v.Mknod(ctx, c.parent, c.name, 0644, 0, 0)
+		require.Equal(t, syscall.EEXIST, e, "mknod %d/%s", c.parent, c.name)
+		_, e = v.Mkdir(ctx, c.parent, c.name, 0755, 0)
+		require.Equal(t, syscall.EEXIST, e, "mkdir %d/%s", c.parent, c.name)
+		_, e = v.Symlink(ctx, "src", c.parent, c.name)
+		require.Equal(t, syscall.EEXIST, e, "symlink %d/%s", c.parent, c.name)
+		_, _, e = v.Create(ctx, c.parent, c.name, 0644, 0, syscall.O_RDWR)
+		require.Equal(t, syscall.EEXIST, e, "create %d/%s", c.parent, c.name)
+		_, e = v.Link(ctx, src.Inode, c.parent, c.name)
+		require.Equal(t, syscall.EPERM, e, "link %d/%s", c.parent, c.name)
+		e = v.Rename(ctx, dir.Inode, "src", c.parent, c.name, 0)
+		require.Equal(t, syscall.EPERM, e, "rename %d/%s", c.parent, c.name)
+	}
+	// other internal names are only reserved in the root
+	_, e = v.Mknod(ctx, dir.Inode, ".stats", 0644, 0, 0)
+	require.Zero(t, e)
+	require.Zero(t, v.Unlink(ctx, dir.Inode, ".stats"))
+	require.Zero(t, v.Unlink(ctx, dir.Inode, "src"))
+	require.Zero(t, v.Rmdir(ctx, 1, "reserved"))
+
 	// control messages
 	fe, e = v.Lookup(ctx, 1, ".control")
 	if e != 0 {
@@ -915,6 +944,95 @@ func TestHideInternal(t *testing.T) {
 	}
 	if _, e := v2.Lookup(ctx, 1, ".config"); e != 0 {
 		t.Fatalf("should still be able to lookup .config with HideInternal: %s", e)
+	}
+}
+
+func TestNoInternal(t *testing.T) {
+	for _, prefix := range []string{"", ".jfs"} {
+		t.Run("prefix="+prefix, func(t *testing.T) {
+			oldNodes := internalNodes
+			t.Cleanup(func() { internalNodes = oldNodes })
+			internalNodes = make([]*internalNode, len(oldNodes))
+			for i, node := range oldNodes {
+				n := *node
+				n.name = prefix + n.name
+				internalNodes[i] = &n
+			}
+
+			v, _ := createTestVFS(nil, "")
+			v.Conf.NoInternal = true
+			v.Conf.PrefixInternal = prefix != ""
+			ctx := NewLogContext(meta.Background())
+			for _, node := range internalNodes {
+				if node.inode == ConfigInode {
+					continue
+				}
+				entry, e := v.Lookup(ctx, rootID, node.name)
+				require.Equal(t, syscall.ENOENT, e, "lookup %s", node.name)
+				require.Nil(t, entry)
+				entry, e = v.GetAttr(ctx, node.inode, 0)
+				require.Equal(t, syscall.ENOENT, e, "getattr %s", node.name)
+				require.Nil(t, entry)
+				for _, flags := range []uint32{syscall.O_RDONLY, syscall.O_WRONLY, syscall.O_RDWR} {
+					entry, fh, e := v.Open(ctx, node.inode, flags)
+					require.Equal(t, syscall.ENOENT, e, "open %s flags=%d", node.name, flags)
+					require.Nil(t, entry)
+					require.Zero(t, fh)
+				}
+			}
+
+			entry, e := v.Lookup(ctx, rootID, prefix+".config")
+			require.Zero(t, e)
+			require.Equal(t, Ino(ConfigInode), entry.Inode)
+			_, e = v.GetAttr(ctx, ConfigInode, 0)
+			require.Zero(t, e)
+			_, fh, e := v.Open(ctx, ConfigInode, syscall.O_RDONLY)
+			require.Zero(t, e)
+			defer v.Release(ctx, ConfigInode, fh)
+			buf := make([]byte, 10240)
+			n, e := v.Read(ctx, ConfigInode, buf, 0, fh)
+			require.Zero(t, e)
+			var conf Config
+			require.NoError(t, json.Unmarshal(buf[:n], &conf))
+			require.True(t, conf.NoInternal)
+			require.Equal(t, v.Conf.Format.UUID, conf.Format.UUID)
+
+			dir, e := v.Mkdir(ctx, rootID, "no-internal", 0755, 0)
+			require.Zero(t, e)
+			defer v.Rmdir(ctx, rootID, "no-internal")
+			_, e = v.Lookup(ctx, dir.Inode, prefix+".control")
+			require.Equal(t, syscall.ENOENT, e)
+			file, e := v.Mknod(ctx, dir.Inode, prefix+".stats", 0644, 0, 0)
+			require.Zero(t, e)
+			defer v.Unlink(ctx, dir.Inode, prefix+".stats")
+			entry, e = v.Lookup(ctx, dir.Inode, prefix+".stats")
+			require.Zero(t, e)
+			require.Equal(t, file.Inode, entry.Inode)
+			_, filefh, e := v.Open(ctx, file.Inode, syscall.O_RDONLY)
+			require.Zero(t, e)
+			v.Release(ctx, file.Inode, filefh)
+
+			for _, ino := range []Ino{trashInode, trashInode + 1} {
+				_, e = v.Lookup(ctx, ino, "child")
+				require.Equal(t, syscall.ENOENT, e)
+				_, e = v.Opendir(ctx, ino, syscall.O_RDONLY)
+				require.Equal(t, syscall.ENOENT, e)
+			}
+
+			dirfh, e := v.Opendir(ctx, rootID, syscall.O_RDONLY)
+			require.Zero(t, e)
+			defer v.Releasedir(ctx, rootID, dirfh)
+			for _, plus := range []bool{false, true} {
+				entries, _, e := v.Readdir(ctx, rootID, 1024, 0, dirfh, plus)
+				require.Zero(t, e)
+				var names []string
+				for _, entry := range entries {
+					require.False(t, IsSpecialNode(entry.Inode), "listed internal entry %s", entry.Name)
+					names = append(names, string(entry.Name))
+				}
+				require.Contains(t, names, "no-internal")
+			}
+		})
 	}
 }
 

@@ -1025,18 +1025,18 @@ func TestSharding(t *testing.T) {
 }
 
 // tokenPagedStore pages by continuation token only and treats startAfter as a
-// client-side filter, like qiniu; a continuation call fails once.
+// client-side filter, like qiniu; the first failures continuation calls fail.
 type tokenPagedStore struct {
 	ObjectStorage
-	keys   []string
-	failed bool
+	keys     []string
+	failures int
 }
 
 func (s *tokenPagedStore) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	var start int
 	if token != "" {
-		if !s.failed {
-			s.failed = true
+		if s.failures > 0 {
+			s.failures--
 			return nil, false, "", errors.New("transient list error")
 		}
 		_, _ = fmt.Sscanf(token, "%d", &start)
@@ -1063,7 +1063,7 @@ func (s *tokenPagedStore) List(ctx context.Context, prefix, startAfter, token, d
 func TestShardingListRetryKeepsToken(t *testing.T) {
 	keys := []string{"k0", "k1", "k2", "k3", "k4", "k5"}
 	mem, _ := newMem("paged", "", "", "")
-	s := &sharded{stores: []ObjectStorage{&tokenPagedStore{ObjectStorage: mem, keys: keys}}}
+	s := &sharded{stores: []ObjectStorage{&tokenPagedStore{ObjectStorage: mem, keys: keys, failures: 1}}}
 	ch, err := s.ListAll(context.Background(), "", "", false)
 	if err != nil {
 		t.Fatalf("list all: %s", err)
@@ -1077,6 +1077,46 @@ func TestShardingListRetryKeepsToken(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, keys) {
 		t.Fatalf("unexpected keys: got %v, want %v", got, keys)
+	}
+}
+
+func TestListAllRetryLimit(t *testing.T) {
+	keys := []string{"k0", "k1", "k2", "k3"}
+	mem, _ := newMem("paged", "", "", "")
+	for _, c := range []struct {
+		failures int
+		want     []string
+		failed   bool
+	}{
+		{maxListRetries, keys, false},
+		{maxListRetries + 1, keys[:2], true},
+	} {
+		t.Run(fmt.Sprintf("failures=%d", c.failures), func(t *testing.T) {
+			ch, err := ListAll(context.Background(), &tokenPagedStore{ObjectStorage: mem, keys: keys, failures: c.failures}, "", "", false, true)
+			if err != nil {
+				t.Fatalf("list all: %s", err)
+			}
+			var got []string
+			var failed bool
+			timeout := time.After(10 * time.Second)
+			for done := false; !done; {
+				select {
+				case o, ok := <-ch:
+					if !ok {
+						done = true
+					} else if o == nil {
+						failed = true
+					} else {
+						got = append(got, o.Key())
+					}
+				case <-timeout:
+					t.Fatalf("list all does not stop after %d failures, got %v", c.failures, got)
+				}
+			}
+			if failed != c.failed || !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("got %v (failed %v), want %v (failed %v)", got, failed, c.want, c.failed)
+			}
+		})
 	}
 }
 

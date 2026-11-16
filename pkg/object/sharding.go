@@ -97,7 +97,10 @@ func (s *sharded) GetTier(ctx context.Context) Tier {
 	return Tier{}
 }
 
-const maxResults = 10000
+const (
+	maxResults     = 10000
+	maxListRetries = 3
+)
 
 // ListAll lists all keys that starts at marker from object storage.
 func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink, sort bool) (<-chan Object, error) {
@@ -144,8 +147,8 @@ func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, fo
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			var nextToken2 string
 			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
-			for err != nil {
-				if ctx.Err() != nil {
+			for retry := 0; err != nil; retry++ {
+				if ctx.Err() != nil || retry >= maxListRetries {
 					logger.Errorf("Stop listing %s at marker %q: %s", store, marker, err)
 					out <- nil
 					return

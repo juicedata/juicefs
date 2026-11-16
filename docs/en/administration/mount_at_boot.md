@@ -41,11 +41,11 @@ sudo chkconfig --add netfs
 
 ### Automating Mounting with systemd.mount
 
-If you're using JuiceFS and need to apply settings like database access password, S3 access key, and secret key, which are hidden from the command line using environment variables for security reason, it may not be easy to configure them in the `/etc/fstab` file. In such cases, you can utilize systemd to mount your JuiceFS instance.
-
-Here's how you can set up your systemd configuration file:
+Use `systemd.mount` to mount JuiceFS at boot when database passwords or object storage credentials need to be passed through environment variables.
 
 1. Create the file `/etc/systemd/system/juicefs.mount` and add the following content:
+
+    The unit filename must match `Where=`. For a different mount point, update `Where=` and use `systemd-escape -p --suffix=mount <MOUNTPOINT>` to generate the matching filename. Use that name in the commands below as well.
 
     ```conf
     [Unit]
@@ -57,14 +57,14 @@ Here's how you can set up your systemd configuration file:
     What=mysql://juicefs@(mysql.host:3306)/juicefs
     Where=/juicefs
     Type=juicefs
-    Options=_netdev,allow_other,writeback_cache
+    Options=_netdev,allow_other,writeback_cache,max-uploads=50
 
     [Install]
     WantedBy=remote-fs.target
     WantedBy=multi-user.target
     ```
 
-    Feel free to modify the options and environments according to your needs.
+    Write `Options=` as a comma-separated list, using the same syntax as the options column in `/etc/fstab`: remove `--` from JuiceFS flags (e.g. `max-uploads=50`, `writeback`) and keep FUSE options such as `allow_other`. Keep `_netdev` to order the mount after `network-online.target`; write a literal `%` as `%%`.
 
 2. Enable and start the JuiceFS mount using the following commands:
 
@@ -75,6 +75,8 @@ Here's how you can set up your systemd configuration file:
     ```
 
 After completing these steps, you will be able to access `/juicefs` and store your files there.
+
+After changing the mount options or environment variables, run `systemctl daemon-reload` and then `systemctl restart <unit>`.
 
 ## macOS
 

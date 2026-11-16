@@ -17,30 +17,32 @@
 package utils
 
 import (
+	"container/list"
 	"sync"
 	"time"
 )
 
 // Cond is similar to sync.Cond, but you can wait with a timeout.
 type Cond struct {
-	L      sync.Locker
-	signal chan struct{}
+	L       sync.Locker
+	waiters list.List
 }
 
 // Signal wakes up a waiter.
 // It's required for the caller to hold L.
 func (c *Cond) Signal() {
-	select {
-	case c.signal <- struct{}{}:
-	default:
+	if e := c.waiters.Front(); e != nil {
+		c.waiters.Remove(e)
+		close(e.Value.(chan struct{}))
 	}
 }
 
 // Broadcast wake up all the waiters.
 // It's required for the caller to hold L.
 func (c *Cond) Broadcast() {
-	close(c.signal)
-	c.signal = make(chan struct{})
+	for c.waiters.Len() > 0 {
+		c.Signal()
+	}
 }
 
 var timerPool = sync.Pool{}
@@ -48,7 +50,8 @@ var timerPool = sync.Pool{}
 // WaitWithTimeout wait for a signal or a period of timeout eclipsed.
 // returns true in case of timeout else false
 func (c *Cond) WaitWithTimeout(d time.Duration) bool {
-	ch := c.signal
+	ch := make(chan struct{})
+	waiter := c.waiters.PushBack(ch)
 	c.L.Unlock()
 	var t *time.Timer
 	if e := timerPool.Get(); e == nil {
@@ -57,22 +60,29 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 		t = e.(*time.Timer)
 		t.Reset(d)
 	}
-	defer func() {
-		timerPool.Put(t)
-		c.L.Lock()
-	}()
+	timeout := false
 	select {
 	case <-ch:
 		if !t.Stop() {
 			<-t.C
 		}
-		return false
 	case <-t.C:
-		return true
+		timeout = true
 	}
+	timerPool.Put(t)
+	c.L.Lock()
+	if timeout {
+		select {
+		case <-ch:
+			timeout = false // Signaled after timing out but before re-acquiring L.
+		default:
+			c.waiters.Remove(waiter)
+		}
+	}
+	return timeout
 }
 
 // NewCond creates a Cond.
 func NewCond(lock sync.Locker) *Cond {
-	return &Cond{lock, make(chan struct{})}
+	return &Cond{L: lock}
 }

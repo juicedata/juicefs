@@ -124,7 +124,8 @@ install_tikv(){
     # Pin 8.5.7: the tiup mirror currently serves tikv/pd tarballs for 8.5.3-8.5.6
     # that no longer match their (republished) manifest checksums, so playground
     # aborts with "sha256 checksum mismatch". 8.5.7 is consistent.
-    $tiup playground 8.5.7 --mode tikv-slim > tikv.log 2>&1  &
+    # Pin playground to skip the background update check racing with root manifest updates.
+    $tiup playground:v1.17.1 8.5.7 --mode tikv-slim > tikv.log 2>&1  &
     pid=$!
     timeout=60
     count=0
@@ -188,7 +189,7 @@ install_tidb(){
     # manifest version instead of a pruned one, see https://github.com/pingcap/tiup/issues/2057
     rm -f "$tiup_home/manifests/snapshot.json" "$tiup_home/manifests/timestamp.json"
     # Pin 8.5.7, see the note in install_tikv (mirror checksum mismatch on 8.5.3-8.5.6).
-    $tiup playground 8.5.7 > tidb.log 2>&1  &
+    $tiup playground:v1.17.1 8.5.7 > tidb.log 2>&1  &
     pid=$!
     timeout=60
     count=0
