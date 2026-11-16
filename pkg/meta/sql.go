@@ -5240,23 +5240,24 @@ func (m *dbMeta) dumpTree(s *xorm.Session, inode Ino, entry *DumpedEntry, shared
 }
 
 func (m *dbMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
-	for attempt := 0; attempt < 6; attempt++ {
-		var shared map[cchunk]bool
-		if err := m.roTxn(Background(), func(s *xorm.Session) error {
-			*entry = DumpedEntry{}
-			shared = make(map[cchunk]bool)
-			return m.dumpTree(s, inode, entry, shared)
-		}); err != nil {
-			return errno(err)
-		}
-		if len(shared) == 0 {
-			return 0
-		}
-		for c := range shared {
-			m.compactChunk0(c.inode, c.indx, false, false, -1, true)
-		}
+	var shared map[cchunk]bool
+	if err := m.roTxn(Background(), func(s *xorm.Session) error {
+		*entry = DumpedEntry{}
+		shared = make(map[cchunk]bool)
+		return m.dumpTree(s, inode, entry, shared)
+	}); err != nil {
+		return errno(err)
 	}
-	return syscall.EAGAIN
+	if len(shared) == 0 {
+		return 0
+	}
+	for c := range shared {
+		m.compactChunk0(c.inode, c.indx, false, false, -1, true)
+	}
+	return errno(m.roTxn(Background(), func(s *xorm.Session) error {
+		*entry = DumpedEntry{}
+		return m.dumpTree(s, inode, entry, nil)
+	}))
 }
 
 func (m *dbMeta) checkEntry(s *xorm.Session, inode Ino, entry *DumpedEntry) error {

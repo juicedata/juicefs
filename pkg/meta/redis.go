@@ -1118,6 +1118,63 @@ func (m *redisMeta) checkLink(inode Ino, attr *Attr) bool {
 	return false
 }
 
+func (m *redisMeta) checkRootMutable(ctx Context, tx *redis.Tx, inodes ...Ino) error {
+	for _, inode := range inodes {
+		if inode != RootInode {
+			continue
+		}
+		value, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
+		if err != nil {
+			return err
+		}
+		var attr Attr
+		m.parseAttr(value, &attr)
+		if m.checkLink(inode, &attr) {
+			return ELink
+		}
+		if attr.Flags&FlagImmutable != 0 {
+			return syscall.EPERM
+		}
+		break
+	}
+	return nil
+}
+
+func (m *redisMeta) FreezeRoot(ctx Context, freeze bool) syscall.Errno {
+	if ctx.Uid() != 0 {
+		return syscall.EPERM
+	}
+	if m.root != RootInode {
+		return syscall.ENOTSUP
+	}
+	r := errno(m.txn(ctx, func(tx *redis.Tx) error {
+		value, err := tx.Get(ctx, m.inodeKey(RootInode)).Bytes()
+		if err != nil {
+			return err
+		}
+		var attr Attr
+		m.parseAttr(value, &attr)
+		if freeze && m.checkLink(RootInode, &attr) {
+			return ELink
+		}
+		if freeze {
+			if attr.Flags&FlagImmutable != 0 {
+				return syscall.EPERM
+			}
+			attr.Flags |= FlagImmutable
+		} else {
+			attr.Flags &^= FlagImmutable
+		}
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, m.inodeKey(RootInode), m.marshal(&attr), 0)
+			return nil
+		})
+		return err
+	}, m.inodeKey(RootInode)))
+	m.of.InvalidateChunk(RootInode, invalidateAttrOnly)
+	return r
+}
+
 type timeoutError interface {
 	Timeout() bool
 }
@@ -1863,6 +1920,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 	var newSpace, newInode int64
 	requestedTrash := trash
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		if err := m.checkRootMutable(ctx, tx, parent); err != nil {
+			return err
+		}
 		trash = requestedTrash
 		opened = false
 		*attr = Attr{}
@@ -2073,6 +2133,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 		watchKeys := []string{m.inodeKey(parent), m.entryKey(parent)}
 
 		err := m.txn(ctx, func(tx *redis.Tx) error {
+			if err := m.checkRootMutable(ctx, tx, parent); err != nil {
+				return err
+			}
 			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
 			batchTrashLength, batchTrashSpace, batchTrashInodes = 0, 0, 0
 			batchFsSpace, batchFsInodes = 0, 0
@@ -2445,6 +2508,9 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 	var attr Attr
 	requestedTrash := trash
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		if err := m.checkRootMutable(ctx, tx, parent); err != nil {
+			return err
+		}
 		trash = requestedTrash
 		buf, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
@@ -2584,6 +2650,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 	}
 	requestedTrash := trash
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		if err := m.checkRootMutable(ctx, tx, parentSrc, parentDst); err != nil {
+			return err
+		}
 		trash = requestedTrash
 		opened = false
 		dino, dtyp = 0, 0
@@ -2955,6 +3024,9 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 			updateParent = true
 		}
 		m.parseAttr([]byte(rs[1].(string)), &iattr)
+		if m.checkLink(inode, &iattr) {
+			return ELink
+		}
 		if iattr.Typ == TypeDirectory {
 			return syscall.EPERM
 		}
@@ -4531,6 +4603,9 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 	inodeKey := m.inodeKey(inode)
 	xattrKey := m.xattrKey(inode)
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		if err := m.checkRootMutable(ctx, tx, inode); err != nil {
+			return err
+		}
 		val, err := tx.Get(ctx, inodeKey).Bytes()
 		if err != nil {
 			return err
@@ -4571,6 +4646,9 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	inodeKey := m.inodeKey(inode)
 	xattrKey := m.xattrKey(inode)
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		if err := m.checkRootMutable(ctx, tx, inode); err != nil {
+			return err
+		}
 		val, err := tx.Get(ctx, inodeKey).Bytes()
 		if err != nil {
 			return err
@@ -5190,7 +5268,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	return nil
 }
 
-func (m *redisMeta) dumpTree(ctx Context, tx *redis.Tx, inode Ino, entry *DumpedEntry, prewatched bool) (map[Ino]*Attr, error) {
+func (m *redisMeta) dumpTree(ctx Context, tx *redis.Tx, inode Ino, entry *DumpedEntry, prewatched bool, shared map[cchunk]bool) (map[Ino]*Attr, error) {
 	var cmd redis.Cmdable = m.rdb
 	if tx != nil {
 		cmd = tx
@@ -5470,12 +5548,13 @@ func (m *redisMeta) dumpTree(ctx Context, tx *redis.Tx, inode Ino, entry *Dumped
 		lockedKeys = lockedKeys[len(batch):]
 	}
 
-	fields := make(map[string]struct{})
+	fields := make(map[string][]cchunk)
 	collectSlices := func(e *DumpedEntry) {
 		for _, c := range e.Chunks {
 			for _, s := range c.Slices {
 				if s.Id > 0 {
-					fields[m.sliceKey(s.Id, s.Size)] = struct{}{}
+					key := m.sliceKey(s.Id, s.Size)
+					fields[key] = append(fields[key], cchunk{inode: e.Attr.Inode, indx: c.Index})
 				}
 			}
 		}
@@ -5508,8 +5587,12 @@ func (m *redisMeta) dumpTree(ctx Context, tx *redis.Tx, inode Ino, entry *Dumped
 				return nil, err
 			}
 			if refs > 0 {
-				logger.Infof("dumpTree: inode=%d, slice has extra refs=%d, key=%s", inode, refs, batch[i])
-				return nil, syscall.EPERM
+				if shared == nil {
+					return nil, syscall.EAGAIN
+				}
+				for _, c := range fields[batch[i]] {
+					shared[c] = true
+				}
 			}
 		}
 		refFields = refFields[len(batch):]
@@ -5519,7 +5602,7 @@ func (m *redisMeta) dumpTree(ctx Context, tx *redis.Tx, inode Ino, entry *Dumped
 
 func (m *redisMeta) checkEntry(ctx Context, tx *redis.Tx, inode Ino, entry *DumpedEntry, prewatched bool) (map[Ino]*Attr, error) {
 	entry2 := &DumpedEntry{Attr: &DumpedAttr{}}
-	attrs, err := m.dumpTree(ctx, tx, inode, entry2, prewatched)
+	attrs, err := m.dumpTree(ctx, tx, inode, entry2, prewatched, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -5624,20 +5707,203 @@ func (m *redisMeta) replaceTree(ctx context.Context, pipe redis.Pipeliner, entry
 }
 
 func (m *redisMeta) PrepareHardlink(ctx Context, inode Ino, entry *DumpedEntry) ([]HardlinkEntry, syscall.Errno) {
-	return nil, syscall.ENOTSUP
+	var links []HardlinkEntry
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		*entry = DumpedEntry{}
+		links = nil
+		attrs, err := m.dumpTree(ctx, tx, inode, entry, false, nil)
+		if err != nil {
+			return err
+		}
+		if entry.Attr.Type == "link" {
+			return ELink
+		}
+		if entry.Attr.Type != "regular" || entry.Attr.Nlink < 2 {
+			return syscall.EAGAIN
+		}
+		parents, err := tx.HGetAll(ctx, m.parentKey(inode)).Result()
+		if err != nil {
+			return err
+		}
+		if parent := attrs[inode].Parent; parent != 0 {
+			parents = map[string]string{parent.String(): "1"}
+		}
+		for p, count := range parents {
+			n, err := strconv.Atoi(count)
+			if err != nil {
+				return err
+			}
+			if n <= 0 {
+				continue
+			}
+			parent, err := strconv.ParseUint(p, 10, 64)
+			if err != nil {
+				return err
+			}
+			key := m.entryKey(Ino(parent))
+			if err := tx.Watch(ctx, key).Err(); err != nil {
+				return err
+			}
+			entries, err := tx.HGetAll(ctx, key).Result()
+			if err != nil {
+				return err
+			}
+			for name, value := range entries {
+				typ, ino := m.parseEntry([]byte(value))
+				if ino != inode {
+					continue
+				}
+				if typ != TypeFile {
+					return syscall.EAGAIN
+				}
+				links = append(links, HardlinkEntry{Parent: Ino(parent), Name: name})
+			}
+		}
+		if len(links) != int(entry.Attr.Nlink) {
+			return syscall.EAGAIN
+		}
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Exists(ctx, m.inodeKey(inode))
+			return nil
+		})
+		return err
+	}, m.inodeKey(inode), m.parentKey(inode))
+	if err != nil {
+		return nil, errno(err)
+	}
+	sort.Slice(links, func(i, j int) bool {
+		if links[i].Parent != links[j].Parent {
+			return links[i].Parent < links[j].Parent
+		}
+		return links[i].Name < links[j].Name
+	})
+	links[0].Link = inode
+	for i := 1; i < len(links); i++ {
+		ino, err := m.nextInode()
+		if err != nil {
+			return nil, errno(err)
+		}
+		links[i].Link = ino
+	}
+	return links, 0
 }
 
 func (m *redisMeta) ReplaceHardlink(ctx Context, inode Ino, entry *DumpedEntry, links []HardlinkEntry, target uint64) syscall.Errno {
-	return syscall.ENOTSUP
+	if entry == nil || entry.Attr == nil || entry.Attr.Inode != inode || entry.Attr.Type != "regular" ||
+		entry.Attr.Nlink < 2 || len(links) != int(entry.Attr.Nlink) || links[0].Link != inode || target == 0 {
+		return syscall.EINVAL
+	}
+	mapping := map[Ino]uint64{inode: target}
+	keys, err := m.replaceKeys(entry, mapping)
+	if err != nil {
+		return errno(err)
+	}
+	keys = append(keys, m.parentKey(inode))
+	reserved := make(map[Ino]bool)
+	parents := make(map[Ino]map[string]bool)
+	for _, l := range links {
+		if l.Link <= RootInode || reserved[l.Link] || l.Parent == 0 || l.Name == "" || parents[l.Parent][l.Name] {
+			return syscall.EINVAL
+		}
+		reserved[l.Link] = true
+		if parents[l.Parent] == nil {
+			parents[l.Parent] = make(map[string]bool)
+			keys = append(keys, m.inodeKey(l.Parent), m.entryKey(l.Parent))
+		}
+		parents[l.Parent][l.Name] = true
+		keys = append(keys, m.inodeKey(l.Link))
+	}
+	err = m.txn(ctx, func(tx *redis.Tx) error {
+		value, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
+		if err != nil {
+			return err
+		}
+		var attr Attr
+		m.parseAttr(value, &attr)
+		if m.checkLink(inode, &attr) {
+			return ELink
+		}
+		for parent := range parents {
+			value, err := tx.Get(ctx, m.inodeKey(parent)).Bytes()
+			if err != nil {
+				return err
+			}
+			var pattr Attr
+			m.parseAttr(value, &pattr)
+			if pattr.Typ != TypeDirectory {
+				return syscall.EAGAIN
+			}
+		}
+		for _, l := range links {
+			value, err := tx.HGet(ctx, m.entryKey(l.Parent), l.Name).Bytes()
+			if err == redis.Nil {
+				return syscall.EAGAIN
+			}
+			if err != nil {
+				return err
+			}
+			typ, ino := m.parseEntry(value)
+			if typ != TypeFile || ino != inode {
+				return syscall.EAGAIN
+			}
+			if l.Link != inode {
+				n, err := tx.Exists(ctx, m.inodeKey(l.Link)).Result()
+				if err != nil {
+					return err
+				}
+				if n != 0 {
+					return syscall.EAGAIN
+				}
+			}
+		}
+		attrs, err := m.checkEntry(ctx, tx, inode, entry, true)
+		if err != nil {
+			return err
+		}
+		data, err := json.Marshal(links)
+		if err != nil {
+			return err
+		}
+		now := time.Now()
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			m.replaceTree(ctx, pipe, entry, attrs, mapping, now)
+			for _, l := range links {
+				attr := *attrs[inode]
+				attr.Parent, attr.Nlink = l.Parent, 1
+				pipe.Set(ctx, m.inodeKey(l.Link), m.marshal(&attr), 0)
+				pipe.HSet(ctx, m.entryKey(l.Parent), l.Name, m.packEntry(TypeLink, l.Link))
+			}
+			pipe.Del(ctx, m.parentKey(inode))
+			pipe.IncrBy(ctx, m.usedSpaceKey(), int64(len(links)-1)*align4K(0))
+			pipe.IncrBy(ctx, m.totalInodesKey(), int64(len(links)-1))
+			m.genLog(ctx, pipe, now, "REPLACEHARDLINK(%d,%d,%s)", inode, target, logEncode(data))
+			return nil
+		})
+		return err
+	}, keys...)
+	if err == nil {
+		m.of.InvalidateChunk(inode, invalidateAllChunks)
+		m.updateStats(int64(len(links)-1)*align4K(0), int64(len(links)-1))
+		m.updateUserGroupStat(ctx, entry.Attr.Uid, entry.Attr.Gid, int64(len(links)-1)*align4K(0), int64(len(links)-1))
+		m.newMsg(ExternalLink, inode, target)
+	}
+	return errno(err)
 }
 
 func (m *redisMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
-	ctx := Background()
-	dumped := &DumpedEntry{Attr: &DumpedAttr{}}
-	_, err := m.dumpTree(ctx, nil, inode, dumped, false)
-	if err == nil {
-		*entry = *dumped
+	*entry = DumpedEntry{}
+	shared := make(map[cchunk]bool)
+	if _, err := m.dumpTree(Background(), nil, inode, entry, false, shared); err != nil {
+		return errno(err)
 	}
+	if len(shared) == 0 {
+		return 0
+	}
+	for c := range shared {
+		m.compactChunk0(c.inode, c.indx, false, false, -1, true)
+	}
+	*entry = DumpedEntry{}
+	_, err := m.dumpTree(Background(), nil, inode, entry, false, nil)
 	return errno(err)
 }
 
@@ -5647,6 +5913,20 @@ func (m *redisMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping 
 		return errno(err)
 	}
 	r := errno(m.txn(ctx, func(tx *redis.Tx) error {
+		if inode == RootInode {
+			value, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
+			if err != nil {
+				return err
+			}
+			var attr Attr
+			m.parseAttr(value, &attr)
+			if attr.Typ == TypeLink {
+				if attr.Length == mapping[inode] {
+					return nil
+				}
+				return syscall.EINVAL
+			}
+		}
 		for remain := keys[1:]; len(remain) > 0; {
 			batch := remain[:min(len(remain), 1000)]
 			if err := tx.Watch(ctx, batch...).Err(); err != nil {
@@ -5657,6 +5937,11 @@ func (m *redisMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping 
 		attrs, err := m.checkEntry(ctx, tx, inode, entry, true)
 		if err != nil {
 			return err
+		}
+		for _, attr := range attrs {
+			if attr.Typ == TypeFile && attr.Nlink > 1 {
+				return syscall.EAGAIN
+			}
 		}
 		now := time.Now()
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -6064,6 +6349,10 @@ func (m *redisMeta) loadQuotasForDump(ctx Context, quotaKey string) map[uint64]*
 }
 
 func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, originAttr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
+	keys := []string{m.inodeKey(srcIno), m.xattrKey(srcIno)}
+	if top {
+		keys = append(keys, m.inodeKey(parent), m.entryKey(parent))
+	}
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		a, err := tx.Get(ctx, m.inodeKey(srcIno)).Bytes()
 		if err != nil {
@@ -6197,7 +6486,7 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 		}
 		*originAttr = attr
 		return nil
-	}, m.inodeKey(srcIno), m.xattrKey(srcIno)))
+	}, keys...))
 }
 
 func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno {
@@ -6624,7 +6913,7 @@ func (m *redisMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Ti
 		if m.checkLink(inode, attr) {
 			return ELink
 		}
-		if !m.atimeNeedsUpdate(attr, now) {
+		if attr.Flags&FlagImmutable != 0 || !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()
