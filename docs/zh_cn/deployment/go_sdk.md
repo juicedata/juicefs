@@ -5,23 +5,18 @@ sidebar_position: 6
 
 Go SDK 让 Go 程序直接通过元数据引擎和对象存储访问 JuiceFS 文件系统，不依赖 FUSE 挂载。适合无法使用 FUSE 的容器化环境，以及需要在进程内读写 JuiceFS 的 Go 服务。
 
-API 遵循 Go 标准库：`Client` 是绑定到一个文件系统的句柄，以 [`os.Root`](https://pkg.go.dev/os#Root) 为模型；`File` 对应 [`os.File`](https://pkg.go.dev/os#File)；`Client.FS()` 返回 [`io/fs`](https://pkg.go.dev/io/fs) 文件系统。基于 `os` 和 `io/fs` 编写的代码只需少量修改即可使用。
+API 遵循 Go 标准库：`Client` 是绑定到一个文件系统的句柄，以 [`os.Root`](https://pkg.go.dev/os#Root) 为模型；`File` 对应 [`os.File`](https://pkg.go.dev/os#File)；`Client.FS()` 返回 [`io/fs`](https://pkg.go.dev/io/fs) 文件系统。支持的操作及与标准库的行为差异见下文。
 
-## 环境要求
+## 快速上手
 
-- Go 1.25 及以上版本。SDK 是 JuiceFS 模块中的一个包 `github.com/juicedata/juicefs/sdk/go`（包名为 `juicefs`），因此会引入 JuiceFS 的全部依赖。
-- 需要启用 cgo 并安装 C 编译器：部分依赖（如 SQLite 驱动、压缩算法）使用 cgo 实现。
-- 支持 Linux 和 macOS，不支持 Windows。
-- 构建时需要加上 `nogspt` 标签。否则程序启动后，JuiceFS 的一个依赖会清空 `ps` 中显示的进程命令行。
+使用 Go 1.25.10 及以上版本，启用 cgo 并安装 C 编译器。SDK 的包路径为 `github.com/juicedata/juicefs/sdk/go`，包名为 `juicefs`。
 
 ```shell
 go get github.com/juicedata/juicefs@<version>
 go build -tags nogspt ./...
 ```
 
-使用前需要先用 [`juicefs format`](../reference/command_reference.mdx#format) 创建文件系统。
-
-## 快速上手
+`nogspt` 构建标签用于防止 JuiceFS 的依赖修改进程命令行。连接前请先用 [`juicefs format`](../reference/command_reference.mdx#format) 创建文件系统。
 
 ```go
 package main
@@ -62,7 +57,7 @@ func main() {
 }
 ```
 
-`Client` 的所有方法都可以并发调用，每个文件系统创建一个 `Client` 并共享使用即可。路径相对于文件系统的根目录，开头有没有 `/` 都可以。`Close` 会关闭尚未关闭的文件、上传缓冲中的数据并结束会话，程序退出前务必调用。
+`Client` 的所有方法都可以并发调用，每个文件系统创建一个 `Client` 并共享使用即可。路径相对于文件系统的根目录，开头有没有 `/` 都可以。`Close` 会关闭尚未关闭的文件、刷新缓冲中的写入并结束会话。关闭前应等待正在执行的操作完成，并检查返回的错误。
 
 更多可运行的示例（包括基于 `Client.FS()` 的 HTTP 文件服务）见 [`sdk/go/examples`](https://github.com/juicedata/juicefs/tree/main/sdk/go/examples)。
 
@@ -73,7 +68,7 @@ func New(name, metaURL string, conf *Config) (*Client, error)
 func DefaultConfig() *Config
 ```
 
-- `name` 只用于指标标签和日志，不会与文件系统的实际名称比对，不一致时只打印警告日志。
+- `name` 只用于指标标签和日志，会与文件系统的实际名称比较；不一致时打印警告日志，但不影响连接。
 - `metaURL` 是元数据引擎的地址，与 [`juicefs mount`](../reference/command_reference.mdx#mount) 相同。
 - `conf` 为 `nil` 时使用 `DefaultConfig()`。修改配置时请从 `DefaultConfig()` 开始：`Config` 中字段的零值表示 0，而不是默认值。
 
@@ -85,7 +80,7 @@ conf.MaxReadahead = 32 << 20 // 为顺序读开启预读
 c, err := juicefs.New("myjfs", metaURL, conf)
 ```
 
-各配置项及其默认值与 [Python SDK](./python_sdk.md) 相同。容量的单位为字节，时长为 `time.Duration`。
+下表列出 `DefaultConfig()` 返回的默认值。容量的单位为字节，时长为 `time.Duration`。
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -133,11 +128,11 @@ c, err := juicefs.New("myjfs", metaURL, conf)
 
 ### 预读
 
-与 Python SDK 一样，预读默认关闭（`MaxReadahead` 为 0）。顺序读取大文件时可以设置 `MaxReadahead`，例如设为文件系统块大小的 8 倍（默认块大小 4 MiB 时为 32 MiB）。预读还会占用 `BufferSize`，最多使用其中的 80%。
+预读默认关闭（`MaxReadahead` 为 0）。顺序读取大文件时可以设置 `MaxReadahead`，例如设为文件系统块大小的 8 倍（默认块大小 4 MiB 时为 32 MiB）。预读还会占用 `BufferSize`，最多使用其中的 80%。
 
 ### 身份与 umask
 
-所有操作以进程的有效用户和组的身份执行，按 POSIX 规则检查权限；root（euid 为 0）为超级用户。`New` 读取一次进程的 umask，并应用于之后新建的文件和目录。
+所有操作使用调用 `New` 时获取的进程有效用户和组身份执行，按 POSIX 规则检查权限；root（euid 为 0）为超级用户。`New` 读取一次进程的 umask，并应用于之后新建的文件和目录。
 
 ### 日志
 
@@ -147,7 +142,7 @@ JuiceFS 的日志是进程全局的，所有 `Client` 共用。设置了 `Config
 
 ### 文件与目录
 
-`Client` 的方法与 `os.Root` 或 `os` 包中的同名方法名称、签名和语义相同：
+`Client` 参考 `os.Root` 和 `os` 包提供以下操作。`Rmdir` 是额外提供的方法，只用于删除目录。行为差异见下文的已知限制：
 
 | 类别 | 方法 |
 | --- | --- |
@@ -156,15 +151,15 @@ JuiceFS 的日志是进程全局的，所有 `Client` 共用。设置了 `Config
 | 名称 | `Rename`、`Link`、`Symlink`、`Readlink` |
 | 属性 | `Stat`、`Lstat`、`Chmod`、`Chown`、`Lchown`、`Chtimes` |
 
-`*File` 提供 `*os.File` 的方法，包括 `Read`、`ReadAt`、`Write`、`WriteAt`、`Seek`、`Stat`、`Sync`、`Truncate`、`Chmod`、`Chown`、`ReadDir`、`Readdir`、`Readdirnames` 和 `Close`，并实现了 `io.Reader`、`io.Writer`、`io.Seeker`、`io.ReaderAt`、`io.WriterAt` 和 `fs.ReadDirFile`。`OpenFile` 支持 `O_RDONLY`、`O_WRONLY`、`O_RDWR`、`O_CREATE`、`O_EXCL`、`O_TRUNC` 和 `O_APPEND`，其他 flag 返回 `EINVAL`。
+`*File` 提供 `*os.File` 的常用操作，包括 `Read`、`ReadAt`、`Write`、`WriteAt`、`Seek`、`Stat`、`Sync`、`Truncate`、`Chmod`、`Chown`、`ReadDir`、`Readdir`、`Readdirnames` 和 `Close`，并实现了 `io.Reader`、`io.Writer`、`io.Seeker`、`io.ReaderAt`、`io.WriterAt` 和 `fs.ReadDirFile`。`OpenFile` 支持 `O_RDONLY`、`O_WRONLY`、`O_RDWR`、`O_CREATE`、`O_EXCL`、`O_TRUNC` 和 `O_APPEND`，其他 flag 返回 `EINVAL`。
 
 `Stat`、`Lstat` 和 `File.Stat` 返回的 `fs.FileInfo` 的 `Sys` 方法返回 `*juicefs.Stat`，其中包含 inode、属主、链接数和各时间戳。
 
-与 `os` 一样，错误为包装了 `syscall.Errno` 的 `*fs.PathError` 或 `*os.LinkError`；不针对单个路径的 `ListQuota`、`Warmup`、`Status` 和 `SessionInfo` 返回 `*os.SyscallError`。请用 `errors.Is` 判断，例如 `errors.Is(err, fs.ErrNotExist)`、`errors.Is(err, syscall.ENOTDIR)`。`Close` 之后，各方法返回包装了 `fs.ErrClosed` 的错误。
+文件系统错误通常为包装了 `syscall.Errno` 的 `*fs.PathError` 或 `*os.LinkError`；不针对单个路径的 `ListQuota`、`Warmup`、`Status` 和 `SessionInfo` 返回 `*os.SyscallError`。请用 `errors.Is` 判断，例如 `errors.Is(err, fs.ErrNotExist)`、`errors.Is(err, syscall.ENOTDIR)`。`Client.Close` 之后，文件系统操作通常返回包装了 `fs.ErrClosed` 的错误。`Name`、`FS` 和 `Gatherer` 仍可调用；重复调用 `Client.Close` 以及调用 `RemoveAll("")` 返回 nil。
 
 ### io/fs
 
-`Client.FS()` 返回文件系统的只读 `fs.FS`，与 `os.Root.FS()` 相同，同时实现了 `fs.StatFS`、`fs.ReadDirFS`、`fs.ReadFileFS` 和 `fs.ReadLinkFS`。其中的路径须符合 `fs.ValidPath`：不以 `/` 开头，`"."` 表示根目录。
+`Client.FS()` 返回文件系统的 `fs.FS` 视图，同时实现了 `fs.StatFS`、`fs.ReadDirFS`、`fs.ReadFileFS` 和 `fs.ReadLinkFS`。它以只读方式打开文件，但不会限制底层 `*File` 的所有修改操作；如需只读客户端，请设置 `Config.ReadOnly`。其中的路径须符合 `fs.ValidPath`：不以 `/` 开头，`"."` 表示根目录。
 
 ```go
 fsys := c.FS()
@@ -239,11 +234,11 @@ done
 
 ## 已知限制
 
-- **并发使用同一个 `File`**：SDK 不对同一个 `*File` 上的调用做同步。并发的 `Read` 或 `Write` 共享偏移量且没有顺序保证，请在应用中自行同步，或改用 `ReadAt` 和 `WriteAt`。同一个句柄上的读写在 JuiceFS 内部仍然是串行执行的。
-- **已打开文件的长度**：`Read` 和 `Seek(0, io.SeekEnd)` 所用的文件末尾是打开时的长度加上通过该句柄写入的数据。其他句柄或客户端追加的数据要重新打开文件后才能看到。
+- **并发使用同一个 `File`**：并发的 `Read`、`Write` 和 `Seek` 共享偏移量且没有顺序保证。请在应用中自行同步，或使用 `ReadAt` 和 `WriteAt` 显式指定偏移量。同一个句柄上的读写在 JuiceFS 内部串行执行。`Close` 不会等待正在执行的操作完成。
+- **已打开文件的长度**：`Read` 和 `Seek(0, io.SeekEnd)` 所用的文件末尾为打开时的长度，随后由该句柄的写入和截断操作更新。其他句柄或客户端追加的数据要重新打开文件后才能看到。
+- **追加与截断**：`O_APPEND` 使用句柄已知的文件末尾，多个句柄的追加写入不具备原子性。`O_TRUNC` 在打开文件后单独执行截断操作。
 - **属性缓存**：使用默认的 `AttrCache` 和 `DirEntryCache` 时，目录中的条目变化后，最多 1 秒内对该目录调用 `Stat` 可能返回旧的修改时间和链接数。如有需要可将它们设为 0。
 - **大目录**：`ReadDir` 和 `File.ReadDir` 会把整个目录一次性读入内存。
-- **符号链接**：与 Python SDK 一样，`Symlink` 会把绝对路径的目标保存为相对于链接的路径，`Readlink` 返回保存的路径。
-- **空路径**：空路径会被当作根目录，而不是返回 `ENOENT`。请不要传入空路径。
+- **符号链接**：`Symlink` 会把绝对路径的目标保存为相对于链接的路径，`Readlink` 返回保存的路径。
 - **生命周期**：`Close` 不会停止所有后台 goroutine，长期运行的进程应避免反复创建和关闭 `Client`。与 `juicefs mount` 一样，元数据引擎不可用时初始化可能导致进程退出。
 - **终端输出**：标准输出为终端时，`Status(true)` 会绘制进度条。

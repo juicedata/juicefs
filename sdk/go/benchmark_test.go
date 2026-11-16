@@ -74,7 +74,6 @@ func BenchmarkClientMetadata(b *testing.B) {
 				names := make([]string, b.N)
 				for i := range names {
 					names[i] = "file-" + strconv.Itoa(i)
-					// WriteFile closes and flushes each file before timing.
 					if err := c.WriteFile(names[i], data, 0644); err != nil {
 						b.Fatal(err)
 					}
@@ -98,7 +97,6 @@ func BenchmarkClientMetadata(b *testing.B) {
 	})
 	b.Run("RemoveDir", func(b *testing.B) {
 		c := newTestClient(b)
-		// Prepare one directory per removal before starting the timer.
 		names := make([]string, b.N)
 		for i := range names {
 			names[i] = "dir-" + strconv.Itoa(i)
@@ -148,8 +146,6 @@ func BenchmarkClientMetadata(b *testing.B) {
 	})
 }
 
-// Prepare distinct files and their names before timing. Each operation visits
-// the next file, restarting the traversal after the whole batch is visited.
 func prepareMetadataBenchmarkFiles(b *testing.B, c *Client) []string {
 	b.Helper()
 	names := make([]string, 1024)
@@ -173,7 +169,6 @@ func BenchmarkClientSmallFiles(b *testing.B) {
 		b.ReportAllocs()
 		i := 0
 		for b.Loop() {
-			// Each iteration creates a new file and includes close/flush.
 			if err := c.WriteFile("file-"+strconv.Itoa(i), data, 0644); err != nil {
 				b.Fatal(err)
 			}
@@ -234,7 +229,6 @@ func newLargeBenchmarkClient(b *testing.B) *Client {
 
 func benchmarkLargeData() []byte {
 	data := make([]byte, 1<<20)
-	// A reproducible, nontrivial payload, prepared outside the timed loop.
 	_, _ = rand.New(rand.NewSource(1)).Read(data)
 	return data
 }

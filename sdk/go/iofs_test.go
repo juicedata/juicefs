@@ -33,7 +33,7 @@ var (
 )
 
 // newFSTree disables the attribute cache, which keeps the old mtime of a
-// directory after its entries change (P55).
+// directory after its entries change.
 func newFSTree(t *testing.T) *Client {
 	t.Helper()
 	conf := testConfig()

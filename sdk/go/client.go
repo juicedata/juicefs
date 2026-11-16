@@ -37,7 +37,7 @@ type Client struct {
 
 	closed atomic.Bool
 	mu     sync.Mutex
-	files  map[*File]struct{} // open files, closed by Close
+	files  map[*File]struct{}
 }
 
 // New connects to the volume at metaURL. name is only used in metric labels
@@ -56,7 +56,6 @@ func New(name, metaURL string, conf *Config) (*Client, error) {
 	return &Client{name: name, backend: b, umask: getUmask(), files: make(map[*File]struct{})}, nil
 }
 
-// getUmask reads the umask, which syscall.Umask can only read by setting it.
 func getUmask() uint16 {
 	mask := syscall.Umask(0)
 	syscall.Umask(mask)
@@ -72,8 +71,7 @@ func (c *Client) Gatherer() prometheus.Gatherer {
 }
 
 // Close closes the files left open, then flushes and closes the session, and
-// returns the errors of both. Later calls of other methods return
-// fs.ErrClosed; later calls of Close return nil.
+// returns the errors of both. Later calls of Close return nil.
 func (c *Client) Close() error {
 	if !c.closed.CompareAndSwap(false, true) {
 		return nil
@@ -88,7 +86,6 @@ func (c *Client) Close() error {
 	var wg sync.WaitGroup
 	for i, f := range files {
 		wg.Go(func() {
-			// Files closed meanwhile by the caller give fs.ErrClosed.
 			if err := f.close(); err != fs.ErrClosed {
 				errs[i] = f.wrap("close", err)
 			}
@@ -99,8 +96,6 @@ func (c *Client) Close() error {
 	return errors.Join(errs...)
 }
 
-// track records f unless c is closed, which Close sets before it collects the
-// files.
 func (c *Client) track(f *File) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()

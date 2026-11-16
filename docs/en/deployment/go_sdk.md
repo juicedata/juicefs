@@ -5,23 +5,18 @@ sidebar_position: 6
 
 The Go SDK lets a Go program access a JuiceFS volume directly through the metadata engine and the object storage, without a FUSE mount. It suits containerized environments where FUSE is not available, and Go services that want to read and write JuiceFS in process.
 
-The API follows the Go standard library: a `Client` is a handle to one volume modeled on [`os.Root`](https://pkg.go.dev/os#Root), a `File` mirrors [`os.File`](https://pkg.go.dev/os#File), and `Client.FS()` returns an [`io/fs`](https://pkg.go.dev/io/fs) file system. Code written against `os` and `io/fs` works with few changes.
+The API follows the Go standard library: a `Client` is a handle to one volume modeled on [`os.Root`](https://pkg.go.dev/os#Root), a `File` mirrors [`os.File`](https://pkg.go.dev/os#File), and `Client.FS()` returns an [`io/fs`](https://pkg.go.dev/io/fs) file system. The supported operations and differences from the standard library are described below.
 
-## Requirements
+## Quick start
 
-- Go 1.25 or later. The SDK is a package of the JuiceFS module, `github.com/juicedata/juicefs/sdk/go` (package name `juicefs`), so it brings in the dependencies of JuiceFS.
-- cgo and a C compiler: some dependencies, such as the SQLite driver and the compressors, are implemented with cgo.
-- Linux or macOS. Windows is not supported.
-- Build with the `nogspt` tag. Without it, a dependency of JuiceFS clears the command line of the process shown by `ps` as soon as the program starts.
+Use Go 1.25.10 or later, with cgo enabled and a C compiler installed. The SDK package is `github.com/juicedata/juicefs/sdk/go`, named `juicefs`.
 
 ```shell
 go get github.com/juicedata/juicefs@<version>
 go build -tags nogspt ./...
 ```
 
-The volume must have been created with [`juicefs format`](../reference/command_reference.mdx#format).
-
-## Quick start
+The `nogspt` build tag prevents a JuiceFS dependency from modifying the process command line. Create a volume with [`juicefs format`](../reference/command_reference.mdx#format) before connecting.
 
 ```go
 package main
@@ -62,7 +57,7 @@ func main() {
 }
 ```
 
-All methods of a `Client` are safe for concurrent use; create one `Client` per volume and share it. Paths are relative to the root of the volume, with or without a leading `/`. `Close` closes the files left open, uploads the buffered data and ends the session, so always call it before the program exits.
+All methods of a `Client` are safe for concurrent use; create one `Client` per volume and share it. Paths are relative to the root of the volume, with or without a leading `/`. `Close` closes the files left open, flushes buffered writes and ends the session. Finish ongoing operations before closing the client, and check the returned error.
 
 More runnable programs, including an HTTP file server built on `Client.FS()`, are in [`sdk/go/examples`](https://github.com/juicedata/juicefs/tree/main/sdk/go/examples).
 
@@ -73,7 +68,7 @@ func New(name, metaURL string, conf *Config) (*Client, error)
 func DefaultConfig() *Config
 ```
 
-- `name` is only used in metric labels and logs. It is not checked against the name of the volume; a mismatch only logs a warning.
+- `name` is only used in metric labels and logs. It is compared with the volume name; a mismatch logs a warning but does not prevent connecting.
 - `metaURL` is the URL of the metadata engine, the same as for [`juicefs mount`](../reference/command_reference.mdx#mount).
 - A `nil` `conf` means `DefaultConfig()`. To change options, start from `DefaultConfig()`: a zero field of `Config` means zero, not the default.
 
@@ -85,7 +80,7 @@ conf.MaxReadahead = 32 << 20 // enable readahead for sequential reads
 c, err := juicefs.New("myjfs", metaURL, conf)
 ```
 
-The options and their defaults are the same as those of the [Python SDK](./python_sdk.md). Sizes are in bytes and durations are `time.Duration`.
+The table lists the defaults returned by `DefaultConfig()`. Sizes are in bytes and durations are `time.Duration`.
 
 | Field | Default | Description |
 | --- | --- | --- |
@@ -133,11 +128,11 @@ The options and their defaults are the same as those of the [Python SDK](./pytho
 
 ### Readahead
 
-Readahead is disabled by default (`MaxReadahead` is 0), as in the Python SDK. For sequential reads of large files, set `MaxReadahead`, for example to 8 times the block size of the volume (32 MiB for the default 4 MiB block). The readahead also needs room in `BufferSize`, of which it uses at most 80%.
+Readahead is disabled by default (`MaxReadahead` is 0). For sequential reads of large files, set `MaxReadahead`, for example to 8 times the block size of the volume (32 MiB for the default 4 MiB block). The readahead also needs room in `BufferSize`, of which it uses at most 80%.
 
 ### Identity and umask
 
-Operations run as the effective user and groups of the process, and permissions are checked as in POSIX; root (euid 0) is the superuser. `New` reads the umask of the process once and applies it to new files and directories.
+Operations use the effective user and groups captured when `New` is called, and permissions are checked as in POSIX; root (euid 0) is the superuser. `New` reads the umask of the process once and applies it to new files and directories.
 
 ### Logs
 
@@ -147,7 +142,7 @@ Logs of JuiceFS are global to the process and shared by all clients. The level i
 
 ### Files and directories
 
-The methods of `Client` have the same names, signatures and semantics as those of `os.Root` or the `os` package:
+`Client` provides the following operations, modeled on `os.Root` and the `os` package. `Rmdir` is an additional method that only removes directories. See the known limitations below for differences in behavior:
 
 | Group | Methods |
 | --- | --- |
@@ -156,15 +151,15 @@ The methods of `Client` have the same names, signatures and semantics as those o
 | Names | `Rename`, `Link`, `Symlink`, `Readlink` |
 | Attributes | `Stat`, `Lstat`, `Chmod`, `Chown`, `Lchown`, `Chtimes` |
 
-`*File` provides the methods of `*os.File`, including `Read`, `ReadAt`, `Write`, `WriteAt`, `Seek`, `Stat`, `Sync`, `Truncate`, `Chmod`, `Chown`, `ReadDir`, `Readdir`, `Readdirnames` and `Close`, and implements `io.Reader`, `io.Writer`, `io.Seeker`, `io.ReaderAt`, `io.WriterAt` and `fs.ReadDirFile`. `OpenFile` supports the flags `O_RDONLY`, `O_WRONLY`, `O_RDWR`, `O_CREATE`, `O_EXCL`, `O_TRUNC` and `O_APPEND`; other flags give `EINVAL`.
+`*File` provides common `*os.File` operations, including `Read`, `ReadAt`, `Write`, `WriteAt`, `Seek`, `Stat`, `Sync`, `Truncate`, `Chmod`, `Chown`, `ReadDir`, `Readdir`, `Readdirnames` and `Close`, and implements `io.Reader`, `io.Writer`, `io.Seeker`, `io.ReaderAt`, `io.WriterAt` and `fs.ReadDirFile`. `OpenFile` supports the flags `O_RDONLY`, `O_WRONLY`, `O_RDWR`, `O_CREATE`, `O_EXCL`, `O_TRUNC` and `O_APPEND`; other flags give `EINVAL`.
 
 The `Sys` method of the `fs.FileInfo` returned by `Stat`, `Lstat` and `File.Stat` returns a `*juicefs.Stat` with the inode, the owner, the link count and the timestamps.
 
-Errors are `*fs.PathError` or `*os.LinkError` wrapping a `syscall.Errno`, as in `os`; `ListQuota`, `Warmup`, `Status` and `SessionInfo`, which take no single name, return `*os.SyscallError`. Check them with `errors.Is`, for example `errors.Is(err, fs.ErrNotExist)` or `errors.Is(err, syscall.ENOTDIR)`. After `Close`, methods return errors wrapping `fs.ErrClosed`.
+Filesystem errors are generally `*fs.PathError` or `*os.LinkError` wrapping a `syscall.Errno`; `ListQuota`, `Warmup`, `Status` and `SessionInfo`, which take no single name, return `*os.SyscallError`. Check them with `errors.Is`, for example `errors.Is(err, fs.ErrNotExist)` or `errors.Is(err, syscall.ENOTDIR)`. After `Client.Close`, filesystem operations generally return errors wrapping `fs.ErrClosed`. `Name`, `FS` and `Gatherer` remain callable; repeated `Client.Close` and `RemoveAll("")` return nil.
 
 ### io/fs
 
-`Client.FS()` returns a read-only `fs.FS` of the volume, like `os.Root.FS()`. It also implements `fs.StatFS`, `fs.ReadDirFS`, `fs.ReadFileFS` and `fs.ReadLinkFS`. Its names follow `fs.ValidPath`: no leading `/`, and `"."` is the root of the volume.
+`Client.FS()` returns an `fs.FS` view of the volume. It opens files for reading, but does not enforce read-only access through all methods of the underlying `*File`; use `Config.ReadOnly` for a read-only client. It also implements `fs.StatFS`, `fs.ReadDirFS`, `fs.ReadFileFS` and `fs.ReadLinkFS`. Its names follow `fs.ValidPath`: no leading `/`, and `"."` is the root of the volume.
 
 ```go
 fsys := c.FS()
@@ -239,11 +234,11 @@ done
 
 ## Known limitations
 
-- **Concurrent use of a `File`**: the SDK does not synchronize calls on the same `*File`. Concurrent `Read` or `Write` calls share the offset without ordering, so synchronize them in the application, or use `ReadAt` and `WriteAt`. Reads and writes on the same handle are still serialized inside JuiceFS.
-- **Length of an open file**: the end of a file for `Read` and `Seek(0, io.SeekEnd)` is its length at open plus the writes through the same handle. Data appended by other handles or clients is not visible until the file is opened again.
+- **Concurrent use of a `File`**: concurrent `Read`, `Write` and `Seek` calls share the offset without ordering. Synchronize them in the application, or use `ReadAt` and `WriteAt` for explicit offsets. Reads and writes on the same handle are serialized inside JuiceFS. `Close` does not wait for operations in progress.
+- **Length of an open file**: the end of a file for `Read` and `Seek(0, io.SeekEnd)` is the length at open, updated by writes and truncation through the same handle. Data appended by other handles or clients is not visible until the file is opened again.
+- **Append and truncation**: `O_APPEND` uses the end of the file known by the handle; appends from multiple handles are not atomic. `O_TRUNC` truncates after opening, in a separate operation.
 - **Attribute cache**: with the default `AttrCache` and `DirEntryCache`, `Stat` of a directory may return the old modification time and link count for up to one second after its entries change. Set them to 0 if this matters.
 - **Large directories**: `ReadDir` and `File.ReadDir` load the whole directory into memory.
-- **Symbolic links**: `Symlink` with an absolute target stores it as a path relative to the link, as the Python SDK does, and `Readlink` returns the stored path.
-- **Empty names**: an empty name refers to the root of the volume instead of giving `ENOENT`. Do not pass empty names.
+- **Symbolic links**: `Symlink` with an absolute target stores it as a path relative to the link, and `Readlink` returns the stored path.
 - **Lifecycle**: `Close` does not stop all background goroutines, so avoid creating and closing clients repeatedly in a long-running process. Initialization may exit the process when the metadata engine is not available, as `juicefs mount` does.
 - **Terminal output**: `Status(true)` draws a progress bar when the standard output is a terminal.

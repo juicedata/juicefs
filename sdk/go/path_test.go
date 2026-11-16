@@ -29,7 +29,6 @@ import (
 	"time"
 )
 
-// errnoOf returns 0 for nil and notErrno for errors without an errno.
 func errnoOf(err error) syscall.Errno {
 	if err == nil {
 		return 0
@@ -52,8 +51,6 @@ func exists(t *testing.T, c *Client, name string) bool {
 	return err == nil
 }
 
-// newTree creates files d/sub/x, d/g and f, empty directories e and e2, and
-// lnd -> d, lnf -> f, dang -> nonexist, lnx -> d/sub.
 func newTree(t *testing.T, c *Client, dir string) {
 	t.Helper()
 	for _, d := range []string{dir, dir + "/d", dir + "/d/sub", dir + "/e", dir + "/e2"} {
@@ -71,8 +68,6 @@ func newTree(t *testing.T, c *Client, dir string) {
 	}
 }
 
-// pathCase is a call in a tree made by newTree. want is the result of os on
-// Linux; a case with a known issue (design 13.11) is skipped.
 type pathCase struct {
 	op    string
 	args  []string
@@ -80,8 +75,6 @@ type pathCase struct {
 	known string
 }
 
-// TestPathForms checks that the backend resolves names as Linux does. TKV
-// engines differ from SQLite for Rmdir and Rename (P41).
 func TestPathForms(t *testing.T) {
 	c := newTestClient(t)
 	ops := map[string]func(p []string) error{
@@ -263,7 +256,6 @@ func TestPathResolve(t *testing.T) {
 	}
 }
 
-// TestNotDir checks that a name through a file gives ENOTDIR whatever its mode.
 func TestNotDir(t *testing.T) {
 	c := newTestClient(t)
 	for _, mode := range []fs.FileMode{0644, 0755} {
@@ -382,8 +374,6 @@ func TestEmptyName(t *testing.T) {
 	if err := c.RemoveAll(""); err != nil {
 		t.Fatalf("RemoveAll(\"\"): %v", err)
 	}
-	// pkg/fs resolves "" as the root, so these would change the root or,
-	// for Rename("a", ""), lose a.
 	for _, x := range []struct {
 		desc string
 		call func() error
@@ -408,8 +398,6 @@ func TestEmptyName(t *testing.T) {
 		{"Chtimes", func() error { return c.Chtimes("", time.Now(), time.Now()) }},
 		{"ReadDir", func() error { return second(c.ReadDir("")) }},
 	} {
-		// pkg/fs resolves "" as the root (P27); the target of Symlink is not
-		// resolved, and Linux gives ENOENT (P39).
 		known := "P27"
 		switch x.desc {
 		case "Rename old":
@@ -541,8 +529,6 @@ func TestStatAttrs(t *testing.T) {
 	}
 }
 
-// TestStatDirChanged expects the attributes of a directory to change with its
-// entries at once, as the FUSE kernel invalidates them.
 func TestStatDirChanged(t *testing.T) {
 	t.Skip("P55: pkg/fs keeps the cached attributes of a directory after its entries change")
 	c := newTestClient(t)
@@ -731,9 +717,9 @@ func TestSymlink(t *testing.T) {
 		{"/nonexist", "/d/link", "../nonexist"},
 		{"file", "/d/link", "file"},
 		{"../x/file", "/d/link", "../x/file"},
-		{"/d/file", "d/link", "file"},      // P28: same as "/d/link"
-		{"file", "d/link", "file"},         // P28: kept, not "../file"
-		{"sub/file", "d/link", "sub/file"}, // P28
+		{"/d/file", "d/link", "file"},
+		{"file", "d/link", "file"},
+		{"sub/file", "d/link", "sub/file"},
 		{"/", "/d/link", ".."},
 		{"x\x00", "/d/link", ""},
 	} {
@@ -772,7 +758,7 @@ func TestTruncate(t *testing.T) {
 		}
 	}
 	if err := c.Truncate("f", -1); !errors.Is(err, syscall.EINVAL) {
-		t.Fatalf("negative size: %v", err) // P34
+		t.Fatalf("negative size: %v", err)
 	}
 }
 

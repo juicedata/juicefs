@@ -181,7 +181,6 @@ func setLogLevel(debug bool) {
 	utils.SetLogLevel(logrus.WarnLevel)
 }
 
-// ctx creates a context per call, as withPid in libjfs.
 func (b *fsBackend) ctx() meta.Context {
 	return meta.NewContext(b.pid, b.uid, b.gids)
 }
@@ -288,8 +287,7 @@ func (b *fsBackend) truncate(p string, size uint64) error {
 	return errno(b.fs.Truncate(b.ctx(), p, size))
 }
 
-// withFile opens p with flags 0, which does not register p as opened, as
-// libjfs does.
+// Opening with flags 0 avoids registering the file as open in metadata.
 func (b *fsBackend) withFile(p string, follow bool, fn func(meta.Context, *jfs.File) syscall.Errno) error {
 	ctx := b.ctx()
 	var f *jfs.File
@@ -467,18 +465,17 @@ func (c *Config) chunkConfig(format *meta.Format) *chunk.Config {
 		CacheExpire:       c.CacheExpire,
 		OSCache:           true,
 		MaxUpload:         c.MaxUploads,
-		// The value SelfCheck sets for libjfs's 0, without its warning.
-		MaxDownload:   200,
-		MaxRetries:    c.IORetries,
-		UploadLimit:   c.UploadLimit * 1e6 / 8,
-		DownloadLimit: c.DownloadLimit * 1e6 / 8,
-		Prefetch:      c.Prefetch,
-		Writeback:     c.Writeback,
-		HashPrefix:    format.HashPrefix,
-		GetTimeout:    c.GetTimeout,
-		PutTimeout:    c.PutTimeout,
-		BufferSize:    c.BufferSize,
-		Readahead:     int(c.MaxReadahead),
+		MaxDownload:       200,
+		MaxRetries:        c.IORetries,
+		UploadLimit:       c.UploadLimit * 1e6 / 8,
+		DownloadLimit:     c.DownloadLimit * 1e6 / 8,
+		Prefetch:          c.Prefetch,
+		Writeback:         c.Writeback,
+		HashPrefix:        format.HashPrefix,
+		GetTimeout:        c.GetTimeout,
+		PutTimeout:        c.PutTimeout,
+		BufferSize:        c.BufferSize,
+		Readahead:         int(c.MaxReadahead),
 	}
 	if conf.UploadLimit == 0 {
 		conf.UploadLimit = format.UploadLimit * 1e6 / 8

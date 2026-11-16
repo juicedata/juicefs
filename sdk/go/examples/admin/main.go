@@ -59,7 +59,6 @@ func run(c *juicefs.Client) error {
 		return err
 	}
 
-	// Extended attributes.
 	if err := c.Setxattr(file, "user.owner", []byte("go-sdk"), 0); err != nil {
 		return err
 	}
@@ -76,7 +75,6 @@ func run(c *juicefs.Client) error {
 		return err
 	}
 
-	// Usage of the directory, as juicefs info and juicefs summary.
 	info, err := c.Info(dir, &juicefs.InfoOptions{Recursive: true})
 	if err != nil {
 		return err
@@ -105,7 +103,6 @@ func run(c *juicefs.Client) error {
 		return err
 	}
 
-	// Cache warmup, then a check of the cache.
 	r, err := c.Warmup([]string{dir}, nil)
 	if err != nil {
 		return err
@@ -117,7 +114,6 @@ func run(c *juicefs.Client) error {
 	}
 	fmt.Printf("cache: missing=%d bytes, cached=%v\n", r.MissBytes, r.Locations)
 
-	// Status of the volume and of this session.
 	st, err := c.Status(false)
 	if err != nil {
 		return err

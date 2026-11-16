@@ -22,10 +22,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// backend accesses the volume: pkg/fs by default, libjfs with -tags libjfs.
-// Each backend also provides newBackend(name, metaURL string, conf *Config).
-// Both must give the same semantics: paths are passed as given and resolved
-// as POSIX on Linux does (design 6.2), errors are syscall.Errno or nil.
+// Backends resolve paths without cleaning them first and return syscall.Errno
+// or nil for filesystem operations.
 type backend interface {
 	stat(path string, follow bool) (*Stat, error)
 	// readdir returns all entries without "." and "..", unsorted.

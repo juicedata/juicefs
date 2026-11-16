@@ -63,12 +63,10 @@ const openFlags = os.O_RDONLY | os.O_WRONLY | os.O_RDWR | os.O_CREATE | os.O_EXC
 // The same text as that of os, whose error is not exported.
 var errWriteAtInAppendMode = errors.New("os: invalid use of WriteAt on file opened with O_APPEND")
 
-// Open opens name for reading.
 func (c *Client) Open(name string) (*File, error) {
 	return c.OpenFile(name, os.O_RDONLY, 0)
 }
 
-// Create is os.Create.
 func (c *Client) Create(name string) (*File, error) {
 	return c.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 }
@@ -128,7 +126,7 @@ func (c *Client) openFile(name string, flag int, perm fs.FileMode) (*File, error
 		if f.isDir && (f.writable || create || trunc) {
 			err = syscall.EISDIR
 		} else if trunc && !f.isDir {
-			// Not atomic with open, as in the Python SDK.
+			// Truncation is not atomic with open.
 			if err = f.f.truncate(0); err == nil {
 				f.size.Store(0)
 			}
@@ -195,8 +193,8 @@ func (f *File) wrap(op string, err error) error {
 	return pathError(op, f.name, err)
 }
 
-// Read reads at most len(b) bytes. The end of the file is its length at open
-// plus the writes of this handle.
+// Read uses the length at open, updated by writes and truncation through
+// this handle. Appends through other handles are not visible.
 func (f *File) Read(b []byte) (n int, err error) {
 	if f == nil {
 		return 0, fs.ErrInvalid
@@ -206,7 +204,6 @@ func (f *File) Read(b []byte) (n int, err error) {
 	return n, f.wrap("read", err)
 }
 
-// ReadAt does not change the offset.
 func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
 	if f == nil {
 		return 0, fs.ErrInvalid
@@ -230,7 +227,6 @@ func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
 	return n, err
 }
 
-// pread checks the length first, as os does.
 func (f *File) pread(b []byte, off int64) (int, error) {
 	switch {
 	case f.closed.Load():
@@ -331,7 +327,6 @@ func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
 	return ret, nil
 }
 
-// seekOffset sets off to offset relative to whence, where end is the end.
 func seekOffset(off *atomic.Int64, offset int64, whence int, end int64) (int64, error) {
 	var base int64
 	switch whence {
@@ -426,7 +421,6 @@ func (f *File) Close() error {
 	return f.wrap("close", f.close())
 }
 
-// close closes f once; later calls return fs.ErrClosed.
 func (f *File) close() error {
 	if !f.closed.CompareAndSwap(false, true) {
 		return fs.ErrClosed
@@ -435,7 +429,6 @@ func (f *File) close() error {
 	return f.f.close()
 }
 
-// Chmod changes the mode of the open file, as Client.Chmod.
 func (f *File) Chmod(mode fs.FileMode) error {
 	if f == nil {
 		return fs.ErrInvalid
@@ -502,8 +495,6 @@ func (f *File) Readdirnames(n int) (names []string, err error) {
 	return names, f.wrap("readdir", err)
 }
 
-// readdir returns up to n entries after those returned, or all of them if
-// n <= 0, reading the directory first if needed.
 func (f *File) readdir(n int) ([]*fileInfo, error) {
 	if f.closed.Load() {
 		return nil, fs.ErrClosed
@@ -537,7 +528,6 @@ func (f *File) readdir(n int) ([]*fileInfo, error) {
 	return rest, nil
 }
 
-// listDir reads the directory sorted by name, never nil.
 func (f *File) listDir() ([]*fileInfo, error) {
 	infos, err := f.f.readdir()
 	if err != nil {
