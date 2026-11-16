@@ -144,6 +144,53 @@ class SeekTests(FileTests):
             self.assertEqual(stream.read(), b'f')
 
 
+class TruncateTests(FileTests):
+    def test_truncate_invalid_size_preserves_data(self):
+        content = b'abcdef'
+        cases = ((-1, OSError), (1 << 63, OverflowError),
+                 (1 << 64, OverflowError), ((1 << 64) + 3, OverflowError),
+                 (-(1 << 64) + 3, OverflowError), (1.5, TypeError), ('3', TypeError))
+        for buffering in (None, 0, 8):
+            for index, (size, error) in enumerate(cases):
+                with self.subTest(buffering=buffering, size=size):
+                    path = f'{TESTFILE}-{buffering}-{index}'
+                    self.create_file(path, content)
+                    if buffering is None:
+                        with self.assertRaises(error) as raised:
+                            self.v.truncate(path, size)
+                    else:
+                        with self.v.open(path, 'r+b', buffering) as stream:
+                            stream.seek(2)
+                            with self.assertRaises(error) as raised:
+                                stream.truncate(size)
+                            self.assertEqual(stream.tell(), 2)
+                    if size == -1:
+                        self.assertEqual(raised.exception.errno, errno.EINVAL)
+                    with self.v.open(path, 'rb', 0) as stream:
+                        self.assertEqual(stream.read(), content)
+
+    def test_truncate_valid_sizes(self):
+        class Index:
+            def __index__(self):
+                return 3
+
+        for buffering in (0, 8):
+            with self.subTest(buffering=buffering):
+                path = f'{TESTFILE}-{buffering}'
+                self.create_file(path, b'abcdef')
+                with self.v.open(path, 'r+b', buffering) as stream:
+                    stream.seek(2)
+                    self.assertEqual(stream.truncate(Index()), 3)
+                    self.assertEqual(stream.tell(), 2)
+                    self.assertEqual(stream.truncate(), 2)
+                    self.assertEqual(stream.tell(), 2)
+                self.v.truncate(path, Index())
+                with self.v.open(path, 'rb', 0) as stream:
+                    self.assertEqual(stream.read(), b'ab\x00')
+                self.v.truncate(path, False)
+                self.assertEqual(self.v.stat(path).st_size, 0)
+
+
 class UtimeTests(FileTests):
     def setUp(self):
         super().setUp()

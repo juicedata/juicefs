@@ -74,6 +74,16 @@ def _tid():
 def _bin(s):
     return six.ensure_binary(s)
 
+
+def _truncate_size(size):
+    size = operator.index(size)
+    if not -(1 << 63) <= size < (1 << 63):
+        raise OverflowError('truncate size does not fit in a signed 64-bit integer')
+    if size < 0:
+        raise OSError(errno.EINVAL, os.strerror(errno.EINVAL))
+    return size
+
+
 def unpack(fmt, buf):
     if not fmt.startswith("!"):
         fmt = "!" + fmt
@@ -257,7 +267,7 @@ class Client(object):
 
     def truncate(self, path, size):
         """Truncate a file to a specified size."""
-        self.lib.jfs_truncate(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint64(size))
+        self.lib.jfs_truncate(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint64(_truncate_size(size)))
 
     def remove(self, path):
         """Remove a file."""
@@ -605,6 +615,7 @@ class _File(object):
             raise io.UnsupportedOperation('File not open for writing')
         if size is None:
             size = self.tell()
+        size = _truncate_size(size)
         self.lib.jfs_ftruncate(c_int64(_tid()), c_int32(self.fd), c_uint64(size))
         self.length = size
         return size
