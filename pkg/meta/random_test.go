@@ -1922,8 +1922,8 @@ func (m *fsMachine) chown(inode Ino, flag uint16, uid, gid uint32) syscall.Errno
 	if n == nil {
 		return syscall.ENOENT
 	}
-	if flag&SetAttrUID != 0 && n.uid != uid {
-		if m.ctx.Uid() != 0 {
+	if flag&SetAttrUID != 0 {
+		if m.ctx.Uid() != 0 && (m.ctx.Uid() != n.uid || uid != n.uid) {
 			return syscall.EPERM
 		}
 		n.uid = uid
