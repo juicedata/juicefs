@@ -37,6 +37,7 @@ type Config struct {
 	Name     string
 	Threads  int
 	Checksum bool
+	ChunkSize int
 }
 
 const (
@@ -45,19 +46,21 @@ const (
 )
 
 type Sorter[T any] struct {
-	input   chan T
-	sorter  *lanratextsort.GenericSorter[T]
-	errCh   <-chan error
-	workDir string
+	input  chan T
+	sorter *lanratextsort.GenericSorter[T]
 }
 
 func New[T any](ctx context.Context, cfg Config, codec Codec[T]) (*Sorter[T], error) {
 	if cfg.Threads <= 0 {
 		cfg.Threads = defaultThreads
 	}
-	workDir, err := os.MkdirTemp(cfg.WorkDir, cfg.Name+"-")
-	if err != nil {
-		return nil, err
+	if cfg.ChunkSize <= 0 {
+		cfg.ChunkSize = defaultChunkSize
+	}
+	if cfg.WorkDir != "" {
+		if err := os.MkdirAll(cfg.WorkDir, 0755); err != nil {
+			return nil, fmt.Errorf("external sort %s: %w", cfg.Name, err)
+		}
 	}
 	input := make(chan T, cfg.Threads*128)
 	sorter, _, errCh := lanratextsort.Generic(
@@ -66,20 +69,18 @@ func New[T any](ctx context.Context, cfg Config, codec Codec[T]) (*Sorter[T], er
 		codec.ToBytes,
 		codec.Compare,
 		&lanratextsort.Config{
-			ChunkSize:          defaultChunkSize,
+			ChunkSize:          cfg.ChunkSize,
 			NumWorkers:         cfg.Threads,
 			ChanBuffSize:       cfg.Threads,
 			SortedChanBuffSize: cfg.Threads * 32,
-			TempFilesDir:       workDir,
+			TempFilesDir:       cfg.WorkDir,
 			Checksum:           cfg.Checksum,
 		},
 	)
 	if sorter == nil {
-		err := <-errCh
-		_ = os.RemoveAll(workDir)
-		return nil, fmt.Errorf("create external sorter: %w", err)
+		return nil, fmt.Errorf("create external sorter: %w", <-errCh)
 	}
-	s := &Sorter[T]{input: input, sorter: sorter, errCh: errCh, workDir: workDir}
+	s := &Sorter[T]{input: input, sorter: sorter}
 	go sorter.Sort(ctx)
 	return s, nil
 }
@@ -94,17 +95,4 @@ func (s *Sorter[T]) CloseInput() {
 
 func (s *Sorter[T]) Next(ctx context.Context) (T, bool, error) {
 	return s.sorter.Next(ctx)
-}
-
-func (s *Sorter[T]) Done() error {
-	var err error
-	select {
-	case err = <-s.errCh:
-	default:
-	}
-	removeErr := os.RemoveAll(s.workDir)
-	if err != nil {
-		return err
-	}
-	return removeErr
 }

@@ -262,7 +262,10 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", rawKey)
 		}
-		if !strings.HasPrefix(oKey, prefix) || oKey < start {
+		// StartAfter is ignored on continued requests, and some servers (e.g. TOS with
+		// hierarchical namespace) don't list in lexicographic order, which is
+		// tolerated if the caller doesn't need the order.
+		if !strings.HasPrefix(oKey, prefix) || ((token == "" || !isUnorderedList(ctx)) && oKey < start) {
 			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, start)
 		}
 		objs[i] = &obj{

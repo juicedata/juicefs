@@ -1017,6 +1017,7 @@ In which:
 |`--threads=10, -p 10`|Number of concurrent threads, default to 10.|
 |`--list-threads=1` <VersionAdd>1.1</VersionAdd> |Number of `list` threads, default to 1. Read [concurrent `list`](../guide/sync.md#concurrent-list) to learn its usage.|
 |`--list-depth=1` <VersionAdd>1.1</VersionAdd> |Depth of concurrent `list` operation, default to 1. Read [concurrent `list`](../guide/sync.md#concurrent-list) to learn its usage.|
+|`--external-sort-dir=DIR`|Enable external sorting of unordered object listings, using `DIR` for temporary files. Disabled by default. See [unordered object listings](../guide/sync.md#external-sort).|
 |`--no-https`|Do not use HTTPS, default to false.|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |the storage class for destination|
 |`--bwlimit=0`|Limits bandwidth in Mbps. The default is 0, which means unlimited. When used together with `--traffic-control-url`, it acts as a per-process fallback when the global traffic control service is unavailable. Fallback waits already in progress remain under `--bwlimit`, and subsequent waits return to the global limit after recovery. Set it to a smaller value than the global cap to make the fallback meaningful.|

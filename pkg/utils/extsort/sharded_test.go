@@ -20,34 +20,79 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
 
 func TestSorterSortsRecords(t *testing.T) {
-	s, err := New(context.Background(), Config{
-		WorkDir: t.TempDir(),
-		Threads: 2,
-	}, Codec[testRecord]{
-		FromBytes: decodeTestRecord,
-		ToBytes:   encodeTestRecord,
-		Compare:   compareTestRecord,
-	})
-	if err != nil {
-		t.Fatalf("new sorter: %s", err)
+	for _, tc := range []struct {
+		name      string
+		chunkSize int
+	}{
+		{"default chunk", 0},
+		{"multiple chunks", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			workDir := filepath.Join(t.TempDir(), "sort")
+			s, err := New(context.Background(), Config{
+				WorkDir:   workDir,
+				Threads:   2,
+				ChunkSize: tc.chunkSize,
+			}, Codec[testRecord]{
+				FromBytes: decodeTestRecord,
+				ToBytes:   encodeTestRecord,
+				Compare:   compareTestRecord,
+			})
+			if err != nil {
+				t.Fatalf("new sorter: %s", err)
+			}
+
+			for _, id := range []uint64{34, 17, 2, 33, 18, 1, 9} {
+				s.Input() <- testRecord{id: id}
+			}
+			s.CloseInput()
+
+			got, err := readOutput(context.Background(), s)
+			if err != nil {
+				t.Fatalf("read output: %s", err)
+			}
+			if want := []uint64{1, 2, 9, 17, 18, 33, 34}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("output = %v, want %v", got, want)
+			}
+			// nothing is created in the work dir for records fitting in one chunk
+			if entries, _ := os.ReadDir(workDir); tc.chunkSize == 0 && len(entries) > 0 {
+				t.Fatalf("files are created in the work dir: %v", entries)
+			}
+			if entries, _ := os.ReadDir(workDir); len(entries) > 0 {
+				t.Fatalf("files are left in the work dir: %v", entries)
+			}
+		})
 	}
 
-	for _, id := range []uint64{34, 17, 2, 33, 18, 1} {
-		s.Input() <- testRecord{id: id}
-	}
-	s.CloseInput()
-
-	got, err := readOutput(context.Background(), s)
-	if err != nil {
-		t.Fatalf("read output: %s", err)
-	}
-	if want := []uint64{1, 2, 17, 18, 33, 34}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("output = %v, want %v", got, want)
+	for _, tc := range []struct {
+		name    string
+		workDir func(t *testing.T) string
+	}{
+		{"work dir is a file", func(t *testing.T) string {
+			p := filepath.Join(t.TempDir(), "file")
+			if err := os.WriteFile(p, nil, 0644); err != nil {
+				t.Fatalf("write file: %s", err)
+			}
+			return p
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			workDir := tc.workDir(t)
+			if _, err := New(context.Background(), Config{WorkDir: workDir}, Codec[testRecord]{
+				FromBytes: decodeTestRecord,
+				ToBytes:   encodeTestRecord,
+				Compare:   compareTestRecord,
+			}); err == nil {
+				t.Fatalf("new sorter in %s should fail", workDir)
+			}
+		})
 	}
 }
 
