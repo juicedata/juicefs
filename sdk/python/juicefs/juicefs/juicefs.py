@@ -19,6 +19,7 @@ import grp
 import io
 import json
 import locale
+import operator
 import os
 import pwd
 import sys
@@ -72,6 +73,16 @@ def _tid():
 
 def _bin(s):
     return six.ensure_binary(s)
+
+
+def _truncate_size(size):
+    size = operator.index(size)
+    if not -(1 << 63) <= size < (1 << 63):
+        raise OverflowError('truncate size does not fit in a signed 64-bit integer')
+    if size < 0:
+        raise OSError(errno.EINVAL, os.strerror(errno.EINVAL))
+    return size
+
 
 def unpack(fmt, buf):
     if not fmt.startswith("!"):
@@ -256,7 +267,7 @@ class Client(object):
 
     def truncate(self, path, size):
         """Truncate a file to a specified size."""
-        self.lib.jfs_truncate(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint64(size))
+        self.lib.jfs_truncate(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint64(_truncate_size(size)))
 
     def remove(self, path):
         """Remove a file."""
@@ -568,16 +579,27 @@ class _File(object):
     def seek(self, offset, whence=0):
         """Set the stream position to the given byte offset.
         offset is interpreted relative to the position indicated by whence.
-        The default value for whence is SEEK_SET."""
+        The default value for whence is SEEK_SET. The resulting position must
+        be nonnegative and fit in a signed 64-bit integer. Invalid arguments
+        leave the current position unchanged."""
         self._check_closed()
+        offset = operator.index(offset)
+        whence = operator.index(whence)
         if whence not in (os.SEEK_SET, os.SEEK_CUR, os.SEEK_END):
             raise ValueError(f'invalid whence ({whence}, should be {os.SEEK_SET}, {os.SEEK_CUR} or {os.SEEK_END})')
+        if not -(1 << 63) <= offset < (1 << 63):
+            raise OverflowError('seek offset does not fit in a signed 64-bit integer')
         if whence == os.SEEK_SET:
-            self.off = offset
+            position = offset
         elif whence == os.SEEK_CUR:
-            self.off += offset
+            position = self.off + offset
         else:
-            self.off = self.length + offset
+            position = self.length + offset
+        if position < 0:
+            raise OSError(errno.EINVAL, os.strerror(errno.EINVAL))
+        if position >= (1 << 63):
+            raise OverflowError('seek position does not fit in a signed 64-bit integer')
+        self.off = position
         return self.off
 
     def tell(self):
@@ -593,6 +615,7 @@ class _File(object):
             raise io.UnsupportedOperation('File not open for writing')
         if size is None:
             size = self.tell()
+        size = _truncate_size(size)
         self.lib.jfs_ftruncate(c_int64(_tid()), c_int32(self.fd), c_uint64(size))
         self.length = size
         return size

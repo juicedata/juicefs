@@ -94,6 +94,103 @@ class ReadintoTests(FileTests):
                         self.assertEqual(stream.read(), content[position:])
 
 
+class SeekTests(FileTests):
+    def test_seek_invalid_position_preserves_stream(self):
+        content = b'abcdef'
+        self.create_file(TESTFILE, content)
+        for buffering in (0, 8):
+            for offset, whence in ((-1, os.SEEK_SET), (-3, os.SEEK_CUR), (-7, os.SEEK_END)):
+                with self.subTest(buffering=buffering, offset=offset, whence=whence):
+                    with self.v.open(TESTFILE, 'r+b', buffering) as stream:
+                        stream.seek(2)
+                        with self.assertRaises(OSError):
+                            stream.seek(offset, whence)
+                        self.assertEqual(stream.tell(), 2)
+                        self.assertEqual(stream.read(1), b'c')
+
+    def test_seek_overflow_does_not_wrap_native_offset(self):
+        self.create_file(TESTFILE, b'abcdef')
+        with self.v.open(TESTFILE, 'r+b', 0) as stream:
+            stream.seek(2)
+            for offset, whence in (((1 << 64), os.SEEK_SET),
+                                   ((1 << 63), os.SEEK_SET),
+                                   (-(1 << 63) - 1, os.SEEK_SET),
+                                   ((1 << 63) - 1, os.SEEK_CUR),
+                                   ((1 << 63) - 1, os.SEEK_END)):
+                with self.subTest(offset=offset, whence=whence):
+                    with self.assertRaises(OverflowError):
+                        stream.seek(offset, whence)
+                    self.assertEqual(stream.tell(), 2)
+            stream.write(b'Z')
+            stream.seek(0)
+            self.assertEqual(stream.read(), b'abZdef')
+
+    def test_seek_requires_integer_arguments(self):
+        class Index:
+            def __index__(self):
+                return 1
+
+        self.create_file(TESTFILE, b'abcdef')
+        with self.v.open(TESTFILE, 'rb', 0) as stream:
+            stream.seek(2)
+            for offset, whence in ((1.5, 0), (1, 0.0), (1, 3)):
+                with self.subTest(offset=offset, whence=whence):
+                    with self.assertRaises((TypeError, ValueError)):
+                        stream.seek(offset, whence)
+                    self.assertEqual(stream.tell(), 2)
+            self.assertEqual(stream.seek(Index(), Index()), 3)
+            self.assertEqual(stream.read(1), b'd')
+            self.assertEqual(stream.seek(-1, os.SEEK_END), 5)
+            self.assertEqual(stream.read(), b'f')
+
+
+class TruncateTests(FileTests):
+    def test_truncate_invalid_size_preserves_data(self):
+        content = b'abcdef'
+        cases = ((-1, OSError), (1 << 63, OverflowError),
+                 (1 << 64, OverflowError), ((1 << 64) + 3, OverflowError),
+                 (-(1 << 64) + 3, OverflowError), (1.5, TypeError), ('3', TypeError))
+        for buffering in (None, 0, 8):
+            for index, (size, error) in enumerate(cases):
+                with self.subTest(buffering=buffering, size=size):
+                    path = f'{TESTFILE}-{buffering}-{index}'
+                    self.create_file(path, content)
+                    if buffering is None:
+                        with self.assertRaises(error) as raised:
+                            self.v.truncate(path, size)
+                    else:
+                        with self.v.open(path, 'r+b', buffering) as stream:
+                            stream.seek(2)
+                            with self.assertRaises(error) as raised:
+                                stream.truncate(size)
+                            self.assertEqual(stream.tell(), 2)
+                    if size == -1:
+                        self.assertEqual(raised.exception.errno, errno.EINVAL)
+                    with self.v.open(path, 'rb', 0) as stream:
+                        self.assertEqual(stream.read(), content)
+
+    def test_truncate_valid_sizes(self):
+        class Index:
+            def __index__(self):
+                return 3
+
+        for buffering in (0, 8):
+            with self.subTest(buffering=buffering):
+                path = f'{TESTFILE}-{buffering}'
+                self.create_file(path, b'abcdef')
+                with self.v.open(path, 'r+b', buffering) as stream:
+                    stream.seek(2)
+                    self.assertEqual(stream.truncate(Index()), 3)
+                    self.assertEqual(stream.tell(), 2)
+                    self.assertEqual(stream.truncate(), 2)
+                    self.assertEqual(stream.tell(), 2)
+                self.v.truncate(path, Index())
+                with self.v.open(path, 'rb', 0) as stream:
+                    self.assertEqual(stream.read(), b'ab\x00')
+                self.v.truncate(path, False)
+                self.assertEqual(self.v.stat(path).st_size, 0)
+
+
 class UtimeTests(FileTests):
     def setUp(self):
         super().setUp()
