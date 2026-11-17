@@ -70,8 +70,9 @@ func (c *Client) Gatherer() prometheus.Gatherer {
 	return c.backend.gatherer()
 }
 
-// Close closes the files left open, then flushes and closes the session, and
-// returns the errors of both. Later calls of Close return nil.
+// Close closes the files left open, flushes and closes the session, and closes
+// the metadata connection. It returns any errors joined together.
+// Later calls of Close return nil.
 func (c *Client) Close() error {
 	if !c.closed.CompareAndSwap(false, true) {
 		return nil

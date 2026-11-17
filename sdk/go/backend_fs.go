@@ -433,7 +433,7 @@ func (b *fsBackend) close() error {
 	if b.pusher != nil {
 		b.pusher.close()
 	}
-	return err
+	return errors.Join(err, b.fs.Meta().Shutdown())
 }
 
 func (c *Config) metaConfig() *meta.Config {
