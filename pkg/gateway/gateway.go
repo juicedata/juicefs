@@ -625,6 +625,12 @@ func (n *jfsObjects) delObj(bucket string, object string) error {
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
 	objs = make([]minio.DeletedObject, len(objects))
 	errs = make([]error, len(objects))
+	// objs must be filled even on error: the minio handler maps each result
+	// back to its request index via the fields of objs[idx], so a zero-value
+	// entry makes the lookup miss and collapses every result onto index 0.
+	for idx, object := range objects {
+		objs[idx] = minio.DeletedObject{ObjectName: object.ObjectName, VersionID: object.VersionID}
+	}
 	if err := n.checkBucket(ctx, bucket); err != nil {
 		for idx := range objects {
 			errs[idx] = minio.BucketNotFound{Bucket: bucket}
