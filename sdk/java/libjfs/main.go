@@ -49,6 +49,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -352,6 +353,7 @@ type javaConf struct {
 	BackupMeta          string `json:"backupMeta"`
 	BackupSkipTrash     bool   `json:"backupSkipTrash"`
 	Heartbeat           string `json:"heartbeat"`
+	SessionTimeout      string `json:"sessionTimeout"`
 	CacheDir            string `json:"cacheDir"`
 	CacheSize           string `json:"cacheSize"`
 	CacheItems          int64  `json:"cacheItems"`
@@ -625,6 +627,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 		metaConf.NoBGJob = jConf.NoBGJob || jConf.NoSession
 		metaConf.OpenCache = utils.Duration(jConf.OpenCache)
 		metaConf.Heartbeat = utils.Duration(jConf.Heartbeat)
+		metaConf.SessionTimeout = utils.Duration(jConf.SessionTimeout)
 		m := meta.NewClient(jConf.MetaURL, metaConf)
 		format, err := m.Load(true)
 		if err != nil {
@@ -1653,9 +1656,7 @@ func setOwner(w *wrapper, ctx meta.Context, path string, owner, group string) in
 		return errno(err)
 	}
 	defer f.Close(ctx)
-	st, _ := f.Stat()
-	uid := uint32(st.(*fs.FileStat).Uid())
-	gid := uint32(st.(*fs.FileStat).Gid())
+	uid, gid := uint32(math.MaxUint32), uint32(math.MaxUint32)
 	if owner != "" {
 		uid = w.lookupUid(owner)
 	}

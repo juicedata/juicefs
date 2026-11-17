@@ -683,6 +683,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`-d, --background`|run in background (default: false)|
 |`--no-syslog`|disable syslog (default: false)|
 |`--hide-internal` <VersionAdd>1.4</VersionAdd> |hide all internal files (`.accesslog`, `.stats`, `.config`, `.control`) from directory listings, these files are still accessible via their full path (default: false)|
+|`--no-internal` <VersionAdd>1.5</VersionAdd>|hide all internal entries from directory listings and disable access to internal files and directories, including `.control`, `.accesslog`, `.stats`, and `.trash`; only `.config` remains accessible by path (also applies to names changed by `--prefix-internal`; default: false)|
 |`--log=path`|path of log file when running in background (default: `$HOME/.juicefs/juicefs.log` or `/var/log/juicefs.log`)|
 |`--force`|force to mount even if the mount point is already mounted by the same filesystem.|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd> |add / update entry in `/etc/fstab`, will create a symlink from `/sbin/mount.juicefs` to JuiceFS executable if not existing (default: false)|
@@ -1016,6 +1017,7 @@ In which:
 |`--threads=10, -p 10`|Number of concurrent threads, default to 10.|
 |`--list-threads=1` <VersionAdd>1.1</VersionAdd> |Number of `list` threads, default to 1. Read [concurrent `list`](../guide/sync.md#concurrent-list) to learn its usage.|
 |`--list-depth=1` <VersionAdd>1.1</VersionAdd> |Depth of concurrent `list` operation, default to 1. Read [concurrent `list`](../guide/sync.md#concurrent-list) to learn its usage.|
+|`--external-sort-dir=DIR`|Enable external sorting of unordered object listings, using `DIR` for temporary files. Disabled by default. See [unordered object listings](../guide/sync.md#external-sort).|
 |`--no-https`|Do not use HTTPS, default to false.|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |the storage class for destination|
 |`--bwlimit=0`|Limits bandwidth in Mbps. The default is 0, which means unlimited. When used together with `--traffic-control-url`, it acts as a per-process fallback when the global traffic control service is unavailable. Fallback waits already in progress remain under `--bwlimit`, and subsequent waits return to the global limit after recovery. Set it to a smaller value than the global cap to make the fallback meaningful.|

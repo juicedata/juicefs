@@ -1022,21 +1022,36 @@ func TestMarsharl(t *testing.T) {
 func TestSharding(t *testing.T) {
 	s, _ := NewSharded("mem", "%d", "", "", "", 10)
 	testStorage(t, s)
+
+	// percent-encoded query values must not be taken as formatting verbs
+	query := "auth-url=https%3A%2F%2Fa.com%2Fv3"
+	s, err := NewSharded("mem", "jfs%d?"+query, "", "", "", 2)
+	if err != nil {
+		t.Fatalf("create sharded storage: %s", err)
+	}
+	for i, store := range s.(*sharded).stores {
+		if want := fmt.Sprintf("mem://jfs%d?%s/", i, query); store.String() != want {
+			t.Fatalf("shard %d: got %s, want %s", i, store, want)
+		}
+	}
+	if _, err := NewSharded("mem", "jfs?"+query, "", "", "", 2); err == nil {
+		t.Fatal("expected an error for an endpoint without a shard placeholder outside the query")
+	}
 }
 
 // tokenPagedStore pages by continuation token only and treats startAfter as a
-// client-side filter, like qiniu; a continuation call fails once.
+// client-side filter, like qiniu; the first failures continuation calls fail.
 type tokenPagedStore struct {
 	ObjectStorage
-	keys   []string
-	failed bool
+	keys     []string
+	failures int
 }
 
 func (s *tokenPagedStore) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	var start int
 	if token != "" {
-		if !s.failed {
-			s.failed = true
+		if s.failures > 0 {
+			s.failures--
 			return nil, false, "", errors.New("transient list error")
 		}
 		_, _ = fmt.Sscanf(token, "%d", &start)
@@ -1063,7 +1078,7 @@ func (s *tokenPagedStore) List(ctx context.Context, prefix, startAfter, token, d
 func TestShardingListRetryKeepsToken(t *testing.T) {
 	keys := []string{"k0", "k1", "k2", "k3", "k4", "k5"}
 	mem, _ := newMem("paged", "", "", "")
-	s := &sharded{stores: []ObjectStorage{&tokenPagedStore{ObjectStorage: mem, keys: keys}}}
+	s := &sharded{stores: []ObjectStorage{&tokenPagedStore{ObjectStorage: mem, keys: keys, failures: 1}}}
 	ch, err := s.ListAll(context.Background(), "", "", false)
 	if err != nil {
 		t.Fatalf("list all: %s", err)
@@ -1077,6 +1092,125 @@ func TestShardingListRetryKeepsToken(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, keys) {
 		t.Fatalf("unexpected keys: got %v, want %v", got, keys)
+	}
+}
+
+func TestListAllRetryLimit(t *testing.T) {
+	keys := []string{"k0", "k1", "k2", "k3"}
+	mem, _ := newMem("paged", "", "", "")
+	for _, c := range []struct {
+		failures int
+		want     []string
+		failed   bool
+	}{
+		{maxListRetries, keys, false},
+		{maxListRetries + 1, keys[:2], true},
+	} {
+		t.Run(fmt.Sprintf("failures=%d", c.failures), func(t *testing.T) {
+			ch, err := ListAll(context.Background(), &tokenPagedStore{ObjectStorage: mem, keys: keys, failures: c.failures}, "", "", false, true)
+			if err != nil {
+				t.Fatalf("list all: %s", err)
+			}
+			var got []string
+			var failed bool
+			timeout := time.After(10 * time.Second)
+			for done := false; !done; {
+				select {
+				case o, ok := <-ch:
+					if !ok {
+						done = true
+					} else if o == nil {
+						failed = true
+					} else {
+						got = append(got, o.Key())
+					}
+				case <-timeout:
+					t.Fatalf("list all does not stop after %d failures, got %v", c.failures, got)
+				}
+			}
+			if failed != c.failed || !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("got %v (failed %v), want %v (failed %v)", got, failed, c.want, c.failed)
+			}
+		})
+	}
+}
+
+// listStub sends keys (then a nil if fail is set) on an unbuffered channel and
+// closes done when its producer exits.
+type listStub struct {
+	ObjectStorage
+	keys []string
+	fail bool
+	done chan struct{}
+}
+
+func (s *listStub) String() string { return "stub://" }
+
+func (s *listStub) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
+	ch := make(chan Object)
+	go func() {
+		defer close(s.done)
+		defer close(ch)
+		for _, k := range s.keys {
+			ch <- &obj{key: k}
+		}
+		if s.fail {
+			ch <- nil
+		}
+	}()
+	return ch, nil
+}
+
+func TestShardingListFailedShard(t *testing.T) {
+	var goodKeys []string
+	for i := 0; i < 100; i++ {
+		goodKeys = append(goodKeys, fmt.Sprintf("k%03d", i))
+	}
+	cases := []struct {
+		name    string
+		badKeys []string
+		wantErr bool
+		want    []string
+	}{
+		{name: "first", wantErr: true},
+		{name: "merging", badKeys: []string{"a"}, want: []string{"a"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bad := &listStub{keys: c.badKeys, fail: true, done: make(chan struct{})}
+			good := &listStub{keys: goodKeys, done: make(chan struct{})}
+			s := &sharded{stores: []ObjectStorage{good, bad}}
+			ch, err := s.ListAll(context.Background(), "", "", false)
+			if c.wantErr {
+				if err == nil {
+					t.Fatal("expect error for a failed shard")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("list all: %s", err)
+				}
+				var got []string
+				var sawNil bool
+				for o := range ch {
+					if o == nil {
+						sawNil = true
+						break
+					}
+					got = append(got, o.Key())
+				}
+				if !sawNil {
+					t.Fatalf("failed shard not reported, got %v", got)
+				}
+				if !reflect.DeepEqual(got, c.want) {
+					t.Fatalf("got %v, want %v", got, c.want)
+				}
+			}
+			select {
+			case <-good.done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("listing of the healthy shard is leaked")
+			}
+		})
 	}
 }
 

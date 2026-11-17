@@ -298,6 +298,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		PPid:            os.Getppid(),
 		UMask:           0xFFFF,
 		HideInternal:    c.Bool("hide-internal"),
+		NoInternal:      c.Bool("no-internal"),
 	}
 
 	if c.IsSet("umask") {
@@ -342,6 +343,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.OpenCache = utils.Duration(c.String("open-cache"))
 	conf.OpenCacheLimit = c.Uint64("open-cache-limit")
 	conf.Heartbeat = utils.Duration(c.String("heartbeat"))
+	conf.SessionTimeout = utils.Duration(c.String("session-timeout"))
 	conf.MountPoint = mp
 	conf.Subdir = c.String("subdir")
 	conf.SkipDirMtime = utils.Duration(c.String("skip-dir-mtime"))

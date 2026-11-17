@@ -19,6 +19,7 @@ package fs
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -1050,6 +1051,52 @@ func TestRevalidateStaleCache(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestChownStaleAttr(t *testing.T) {
+	fs := createTestFS(t)
+	ctx := meta.NewContext(1, 0, []uint32{0})
+	f, err := fs.Create(ctx, "/chown", 0644, 022)
+	if err != 0 {
+		t.Fatalf("create: %s", err)
+	}
+	_ = f.Close(ctx)
+	check := func(name string, uid, gid uint32) {
+		var attr meta.Attr
+		if st := fs.m.GetAttr(ctx, f.inode, &attr); st != 0 || attr.Uid != uid || attr.Gid != gid {
+			t.Fatalf("%s: uid=%d gid=%d, want %d %d (%s)", name, attr.Uid, attr.Gid, uid, gid, st)
+		}
+	}
+
+	f, _ = fs.Open(ctx, "/chown", 0)
+	defer f.Close(ctx)
+	if e := f.Chown(ctx, 1000, 1000); e != 0 {
+		t.Fatalf("chown: %s", e)
+	}
+	if e := f.Chown(ctx, 0, 0); e != 0 {
+		t.Fatalf("chown back: %s", e)
+	}
+	check("same handle", 0, 0)
+
+	_, _ = fs.Stat(ctx, "/chown")
+	if st := fs.m.SetAttr(ctx, f.inode, meta.SetAttrUID|meta.SetAttrGID, 0, &meta.Attr{Uid: 2000, Gid: 2000}); st != 0 {
+		t.Fatalf("setattr: %s", st)
+	}
+	g, _ := fs.Open(ctx, "/chown", 0)
+	defer g.Close(ctx)
+	if e := g.Chown(ctx, 0, 0); e != 0 {
+		t.Fatalf("chown with stale attr: %s", e)
+	}
+	check("stale attr", 0, 0)
+
+	if e := g.Chown(ctx, math.MaxUint32, 7); e != 0 {
+		t.Fatalf("chown(-1, 7): %s", e)
+	}
+	check("chown(-1, 7)", 0, 7)
+	if e := g.Chown(ctx, math.MaxUint32, math.MaxUint32); e != 0 {
+		t.Fatalf("chown(-1, -1): %s", e)
+	}
+	check("chown(-1, -1)", 0, 7)
 }
 
 func createTestFS(t testing.TB) *FileSystem {

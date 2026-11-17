@@ -198,6 +198,7 @@ func testMeta(t *testing.T, m Meta) {
 	testUserGroupQuota(t, m)
 	testAtime(t, m)
 	testAccess(t, m)
+	testChownPermission(t, m)
 	base := m.getBase()
 	base.conf.OpenCache = time.Second
 	base.of.expire = time.Second
@@ -235,6 +236,76 @@ func testXattr(t *testing.T, m Meta) {
 		if st := m.RemoveXattr(ctx, inode, "user.test"); st != syscall.ENOENT {
 			t.Fatalf("removexattr after unlink: got %s, want %s", st, syscall.ENOENT)
 		}
+	})
+
+	// An open file keeps its xattrs after its last name is removed, the same as its data and attributes.
+	// The xattrs go away with the inode at the last close, also the ones set after the removal.
+	t.Run("OpenFileKeepsXattrsAfterLastNameRemoved", func(t *testing.T) {
+		ctx := Background()
+		check := func(t *testing.T, inode Ino, removeLastName func() syscall.Errno) {
+			t.Helper()
+			if st := m.SetXattr(ctx, inode, "user.before", []byte("b"), XattrCreate); st != 0 {
+				t.Fatalf("setxattr before the removal: %s", st)
+			}
+			var attr Attr
+			if st := m.Open(ctx, inode, syscall.O_RDWR, &attr); st != 0 {
+				t.Fatalf("open: %s", st)
+			}
+			if st := removeLastName(); st != 0 {
+				t.Fatalf("remove the last name: %s", st)
+			}
+			var value []byte
+			if st := m.GetXattr(ctx, inode, "user.before", &value); st != 0 || string(value) != "b" {
+				t.Fatalf("getxattr after the removal: %q, %s; want %q", value, st, "b")
+			}
+			if st := m.SetXattr(ctx, inode, "user.after", []byte("a"), XattrCreate); st != 0 {
+				t.Fatalf("setxattr after the removal: %s", st)
+			}
+			if st := m.Close(ctx, inode); st != 0 {
+				t.Fatalf("close: %s", st)
+			}
+			for _, name := range []string{"user.before", "user.after"} {
+				value = nil
+				if st := m.GetXattr(ctx, inode, name, &value); st != ENOATTR {
+					t.Fatalf("getxattr %s after the last close: %q, %s; want it removed with the inode", name, value, st)
+				}
+			}
+		}
+		mknod := func(t *testing.T, parent Ino, name string) Ino {
+			t.Helper()
+			var inode Ino
+			if st := m.Mknod(ctx, parent, name, TypeFile, 0644, 022, 0, "", &inode, nil); st != 0 {
+				t.Fatalf("mknod %s: %s", name, st)
+			}
+			return inode
+		}
+		t.Run("Unlink", func(t *testing.T) {
+			inode := mknod(t, RootInode, "xattr-open-unlink")
+			check(t, inode, func() syscall.Errno { return m.Unlink(ctx, RootInode, "xattr-open-unlink") })
+		})
+		t.Run("RenameOver", func(t *testing.T) {
+			mknod(t, RootInode, "xattr-open-rename-src")
+			inode := mknod(t, RootInode, "xattr-open-rename-dst")
+			check(t, inode, func() syscall.Errno {
+				var ino Ino
+				var attr Attr
+				return m.Rename(ctx, RootInode, "xattr-open-rename-src", RootInode, "xattr-open-rename-dst", 0, &ino, &attr)
+			})
+			if st := m.Unlink(ctx, RootInode, "xattr-open-rename-dst"); st != 0 {
+				t.Fatalf("unlink the renamed file: %s", st)
+			}
+		})
+		t.Run("Remove", func(t *testing.T) {
+			var dir Ino
+			if st := m.Mkdir(ctx, RootInode, "xattr-open-remove", 0755, 022, 0, &dir, nil); st != 0 {
+				t.Fatalf("mkdir: %s", st)
+			}
+			inode := mknod(t, dir, "f")
+			check(t, inode, func() syscall.Errno {
+				var count uint64
+				return m.Remove(ctx, RootInode, "xattr-open-remove", false, 1, &count)
+			})
+		})
 	})
 }
 
@@ -305,6 +376,19 @@ type aclCacheWithMissCount struct {
 func (c *aclCacheWithMissCount) GetMissIds() []uint32 {
 	c.missCalls++
 	return c.Cache.GetMissIds()
+}
+
+func TestExpireTime(t *testing.T) {
+	for _, c := range []struct{ heartbeat, timeout, expected time.Duration }{
+		{12 * time.Second, 0, time.Minute},
+		{12 * time.Second, 30 * time.Second, time.Minute},
+		{12 * time.Second, 5 * time.Minute, 5 * time.Minute},
+	} {
+		m := &baseMeta{conf: &Config{Heartbeat: c.heartbeat, SessionTimeout: c.timeout}}
+		if ttl := time.Until(time.Unix(m.expireTime(), 0)); ttl < c.expected-2*time.Second || ttl > c.expected {
+			t.Fatalf("heartbeat %s, session timeout %s: expires in %s, expected %s", c.heartbeat, c.timeout, ttl, c.expected)
+		}
+	}
 }
 
 func TestMergeFacl(t *testing.T) {
@@ -708,6 +792,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	base := m.getBase()
 	if base.sid != ses[0].Sid {
 		t.Fatalf("my sid %d != registered sid %d", base.sid, ses[0].Sid)
+	}
+	if ttl, expected := time.Until(ses[0].Expire), max(base.conf.SessionTimeout, base.conf.Heartbeat*5); ttl < expected-10*time.Second || ttl > expected {
+		t.Fatalf("session expires in %s, expected %s", ttl, expected)
 	}
 	if err = base.en.doCleanStaleSession(base.sid); err != nil {
 		t.Fatalf("clean session: %s", err)
@@ -2630,6 +2717,9 @@ func testCloseSession(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
+	if st := m.SetXattr(ctx, inode, "user.k", []byte("v"), XattrCreate); st != 0 {
+		t.Fatalf("setxattr f: %s", st)
+	}
 	if st := m.Flock(ctx, inode, 1, syscall.F_WRLCK, false); st != 0 {
 		t.Fatalf("flock wlock: %s", st)
 	}
@@ -2641,6 +2731,10 @@ func testCloseSession(t *testing.T, m Meta) {
 	}
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
+	}
+	var value []byte
+	if st := m.GetXattr(ctx, inode, "user.k", &value); st != 0 || string(value) != "v" {
+		t.Fatalf("getxattr f after unlink: %q, %s; want %q", value, st, "v")
 	}
 	time.Sleep(10 * time.Millisecond)
 	sid := m.getBase().sid
@@ -2657,6 +2751,9 @@ func testCloseSession(t *testing.T, m Meta) {
 	}
 	if _, err = m.GetSession(sid, true); err == nil {
 		t.Fatalf("get a deleted session: %s", err)
+	}
+	if st := m.GetXattr(ctx, inode, "user.k", &value); st != ENOATTR {
+		t.Fatalf("getxattr f after close session: %s; want %s", st, ENOATTR)
 	}
 	switch m := m.(type) {
 	case *redisMeta:
@@ -3116,6 +3213,53 @@ func testParents(t *testing.T, m Meta) {
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)
 	}
+}
+
+func testChownPermission(t *testing.T, m Meta) {
+	root := Background()
+	var inode Ino
+	var attr Attr
+	if st := m.Create(root, RootInode, "chownf", 0644, 0, syscall.O_EXCL, &inode, &attr); st != 0 {
+		t.Fatalf("create chownf: %s", st)
+	}
+	defer m.Unlink(root, RootInode, "chownf")
+	setMode := func(mode uint16) {
+		attr = Attr{Uid: 1000, Gid: 3000, Mode: mode}
+		if st := m.SetAttr(root, inode, SetAttrUID|SetAttrGID|SetAttrMode, 0, &attr); st != 0 {
+			t.Fatalf("setattr chownf: %s", st)
+		}
+	}
+	checkMode := func(want uint16) {
+		if st := m.GetAttr(root, inode, &attr); st != 0 || attr.Mode&07777 != want {
+			t.Fatalf("mode %o, want %o (%s)", attr.Mode&07777, want, st)
+		}
+	}
+
+	// A non-owner can't clear set-ID bits with an unchanged UID.
+	setMode(06644)
+	other := NewContext(1, 2000, []uint32{2000})
+	if st := m.SetAttr(other, inode, SetAttrUID, 0, &Attr{Uid: 1000}); st != syscall.EPERM {
+		t.Fatalf("non-owner chown: %s", st)
+	}
+	checkMode(06644)
+
+	// A group member keeps SGID on a non-group-executable file on Linux.
+	owner := NewContext(1, 1000, []uint32{1000, 3000})
+	if st := m.SetAttr(owner, inode, SetAttrUID, 0, &Attr{Uid: 1000}); st != 0 {
+		t.Fatalf("owner chown: %s", st)
+	}
+	if runtime.GOOS == "linux" {
+		checkMode(02644)
+	} else {
+		checkMode(0644)
+	}
+
+	// SGID is cleared on a group-executable file.
+	setMode(02654)
+	if st := m.SetAttr(owner, inode, SetAttrUID, 0, &Attr{Uid: 1000}); st != 0 {
+		t.Fatalf("owner chown: %s", st)
+	}
+	checkMode(0654)
 }
 
 func testOpenCache(t *testing.T, m Meta) {
@@ -7268,6 +7412,61 @@ func newFuseDefaultCtx(uid, primaryGid uint32) *fuseDefaultCtx {
 		Context: context.Background(),
 		uid:     uid,
 		gid:     primaryGid,
+	}
+}
+
+func TestRedisCleanupLeakedInodes(t *testing.T) {
+	m := newTestRedisMeta(t, 8)
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	ctx := Background()
+	var inode Ino
+	if st := m.Mknod(ctx, RootInode, "held", TypeFile, 0644, 022, 0, "", &inode, nil); st != 0 {
+		t.Fatalf("create file: %s", st)
+	}
+	if st := m.Open(ctx, inode, syscall.O_RDWR, &Attr{}); st != 0 {
+		t.Fatalf("open file: %s", st)
+	}
+
+	if st := m.Unlink(ctx, RootInode, "held", true); st != 0 {
+		t.Fatalf("unlink held: %s", st)
+	}
+	if held, err := m.rdb.SIsMember(ctx, m.sustained(m.sid), inode.String()).Result(); err != nil || !held {
+		t.Fatalf("sustained inode: held=%t, err=%v", held, err)
+	}
+
+	var leaked Ino
+	if st := m.Mknod(ctx, RootInode, "leaked", TypeFile, 0644, 022, 0, "", &leaked, nil); st != 0 {
+		t.Fatalf("create leaked file: %s", st)
+	}
+	if err := m.rdb.HDel(ctx, m.entryKey(RootInode), "leaked").Err(); err != nil {
+		t.Fatalf("remove leaked entry: %s", err)
+	}
+	for _, ino := range []Ino{inode, leaked} {
+		data, err := m.rdb.Get(ctx, m.inodeKey(ino)).Bytes()
+		if err != nil {
+			t.Fatalf("get inode %d: %s", ino, err)
+		}
+		var attr Attr
+		m.parseAttr(data, &attr)
+		attr.Ctime = time.Now().Add(-2 * time.Hour).Unix()
+		if err := m.rdb.Set(ctx, m.inodeKey(ino), m.marshal(&attr), 0).Err(); err != nil {
+			t.Fatalf("set inode %d: %s", ino, err)
+		}
+	}
+
+	m.cleanupLeakedInodes(true)
+	if exists, err := m.rdb.Exists(ctx, m.inodeKey(inode)).Result(); err != nil || exists != 1 {
+		t.Fatalf("sustained inode was deleted: exists=%d, err=%v", exists, err)
+	}
+	if exists, err := m.rdb.Exists(ctx, m.inodeKey(leaked)).Result(); err != nil || exists != 0 {
+		t.Fatalf("leaked inode was not deleted: exists=%d, err=%v", exists, err)
+	}
+	if st := m.Close(ctx, inode); st != 0 {
+		t.Fatalf("close file: %s", st)
 	}
 }
 

@@ -121,6 +121,12 @@ func IsSpecialName(name string) bool {
 	return false
 }
 
+// isReservedName reports whether name can not be created under parent.
+// The control file name is reserved in every directory because Lookup never resolves it to a regular entry.
+func isReservedName(parent Ino, name string) bool {
+	return name == internalNodes[0].name || parent == rootID && IsSpecialName(name)
+}
+
 func getInternalNode(ino Ino) *internalNode {
 	for _, n := range internalNodes {
 		if ino == n.inode {
