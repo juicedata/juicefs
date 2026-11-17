@@ -301,6 +301,132 @@ func TestBucketLifecycleLockCancellation(t *testing.T) {
 	next.Unlock()
 }
 
+type copyHookMeta struct {
+	meta.Meta
+	mu     sync.Mutex
+	calls  int
+	onCopy func(call int, delegate func() syscall.Errno) syscall.Errno
+}
+
+func (m *copyHookMeta) CopyFileRange(ctx meta.Context, fin meta.Ino, offIn uint64, fout meta.Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
+	m.mu.Lock()
+	m.calls++
+	call, hook := m.calls, m.onCopy
+	m.mu.Unlock()
+	delegate := func() syscall.Errno {
+		return m.Meta.CopyFileRange(ctx, fin, offIn, fout, offOut, size, flags, copied, outLength)
+	}
+	if hook == nil {
+		return delegate()
+	}
+	return hook(call, delegate)
+}
+
+// Two gateway instances share the same volume but not the in-process object
+// locks, so a retried CompleteMultipartUpload can run on both at once.
+func TestCompleteMultipartUploadAcrossGateways(t *testing.T) {
+	m := &copyHookMeta{Meta: meta.NewClient("memkv://", nil)}
+	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
+	if err := m.Init(format, true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+	g1, jfs := newTestGatewayWithMeta(t, m, format, Config{})
+	g2 := &jfsObjects{fs: g1.fs, conf: g1.conf, listPool: g1.listPool, nsMutex: minio.NewNSLock(false), gConf: g1.gConf}
+	ctx := context.Background()
+	bucket, object := format.Name, "target"
+
+	uploadID, err := g1.NewMultipartUpload(ctx, bucket, object, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []byte
+	var parts []minio.CompletePart
+	for i := 1; i <= 3; i++ {
+		data := bytes.Repeat([]byte{byte('a' + i)}, 1024)
+		part, err := g1.PutObjectPart(ctx, bucket, object, uploadID, i, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		parts = append(parts, minio.CompletePart{PartNumber: i, ETag: part.ETag})
+		want = append(want, data...)
+	}
+
+	// Pause the first gateway after it merges part 1 and the second gateway
+	// before it merges anything, then let the first gateway finish.
+	firstPaused, resumeFirst := make(chan struct{}), make(chan struct{})
+	secondPaused, resumeSecond := make(chan struct{}), make(chan struct{})
+	m.onCopy = func(call int, delegate func() syscall.Errno) syscall.Errno {
+		switch call {
+		case 1:
+			eno := delegate()
+			close(firstPaused)
+			<-resumeFirst
+			return eno
+		case 2:
+			close(secondPaused)
+			<-resumeSecond
+		}
+		return delegate()
+	}
+	complete := func(g *jfsObjects) <-chan error {
+		done := make(chan error, 1)
+		go func() {
+			_, err := g.CompleteMultipartUpload(ctx, bucket, object, uploadID, parts, minio.ObjectOptions{})
+			done <- err
+		}()
+		return done
+	}
+	waitFor := func(ch <-chan struct{}, what string) {
+		t.Helper()
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timed out waiting for %s", what)
+		}
+	}
+	readObject := func() []byte {
+		t.Helper()
+		f, eno := jfs.Open(mctx, g1.path(bucket, object), vfs.MODE_MASK_R)
+		if eno != 0 {
+			t.Fatalf("open object: %s", eno)
+		}
+		defer f.Close(mctx)
+		buf := make([]byte, len(want)+1)
+		n, err := f.Pread(mctx, buf, 0)
+		if err != nil && err != io.EOF {
+			t.Fatalf("read object: %s", err)
+		}
+		return buf[:n]
+	}
+
+	first := complete(g1)
+	waitFor(firstPaused, "first gateway to merge part 1")
+	second := complete(g2)
+	waitFor(secondPaused, "second gateway to start merging")
+	close(resumeFirst)
+	select {
+	case err := <-first:
+		if err != nil {
+			t.Fatalf("first complete: %s", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("first complete did not finish")
+	}
+	if got := readObject(); !bytes.Equal(got, want) {
+		t.Fatalf("object corrupted by concurrent complete: got %d bytes, md5 %x, want md5 %x", len(got), md5.Sum(got), md5.Sum(want))
+	}
+
+	close(resumeSecond)
+	select {
+	case <-second: // may fail with NoSuchUpload once the first complete removed the parts
+	case <-time.After(5 * time.Second):
+		t.Fatal("second complete did not finish")
+	}
+	if got := readObject(); !bytes.Equal(got, want) {
+		t.Fatalf("object changed by the second complete: got %d bytes, md5 %x, want md5 %x", len(got), md5.Sum(got), md5.Sum(want))
+	}
+}
+
 func TestBucketLifecycleLockAcrossGateways(t *testing.T) {
 	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "gateway-lock.db")
 	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
