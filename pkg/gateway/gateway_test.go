@@ -975,4 +975,38 @@ func TestDeleteObjects(t *testing.T) {
 			t.Fatalf("sibling bucket dir /jmrqfoo must not be pruned, got: %s", eno)
 		}
 	})
+
+	t.Run("fill deleted object for every key", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		bucket := "bkt3"
+		if eno := jfs.Mkdir(mctx, "/"+bucket, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir bucket: %s", eno)
+		}
+		createTestFile(t, jfs, "/"+bucket+"/ok1")
+		createTestFile(t, jfs, "/"+bucket+"/ok2")
+
+		reqs := []minio.ObjectToDelete{
+			{ObjectName: "ok1"},
+			{ObjectName: "missing-dir/child"}, // parent was never created, so this one fails
+			{ObjectName: "ok2"},
+		}
+		objs, errs := jfsObj.DeleteObjects(context.Background(), bucket, reqs, minio.ObjectOptions{})
+		if len(objs) != len(reqs) {
+			t.Fatalf("got %d objs, want %d", len(objs), len(reqs))
+		}
+		// The minio handler maps each result back to its request index via the
+		// fields of objs[idx], so every entry must carry its key even when the
+		// delete fails.
+		for i, req := range reqs {
+			if objs[i].ObjectName != req.ObjectName {
+				t.Fatalf("objs[%d].ObjectName = %q, want %q", i, objs[i].ObjectName, req.ObjectName)
+			}
+		}
+		if errs[0] != nil || errs[2] != nil {
+			t.Fatalf("ok keys should succeed: errs[0]=%v, errs[2]=%v", errs[0], errs[2])
+		}
+		if errs[1] == nil {
+			t.Fatalf("key under missing parent should fail")
+		}
+	})
 }
