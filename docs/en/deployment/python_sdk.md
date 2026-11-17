@@ -84,6 +84,8 @@ Let's assume there is a pre-created file system named `myfs` with metadata engin
 
 The `Client` class implementation is similar to Python's io module.
 
+File writes larger than 1 GiB are split across native calls to respect the library's buffer limit.
+
 You can instantiate a JuiceFS client with the following code, where the `name` parameter is the file system name and the `meta` parameter is the URL of the metadata engine. The `name` parameter must exist but can be an empty string or `None`.
 
 ```python

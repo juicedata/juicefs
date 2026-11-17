@@ -2,6 +2,7 @@ import errno
 from array import array
 import fractions
 import grp
+import hashlib
 import io
 import unittest
 from unittest.mock import patch
@@ -10,6 +11,7 @@ import pwd
 import stat
 from os.path import dirname
 import sys
+import tempfile
 import time
 sys.path.append('.')
 from sdk.python.juicefs.juicefs import juicefs
@@ -423,6 +425,35 @@ class ExtendedAttributeTests(FileTests):
             with self.v.open(path, "rb") as fp:
                 return self.v.listxattr(fp.fileno(), *args)
         self._check_xattrs(getxattr, setxattr, removexattr, listxattr)
+
+
+class LargeWriteTests(FileTests):
+    def test_write_larger_than_native_buffer(self):
+        size = (1 << 30) + 1
+        with tempfile.TemporaryFile(buffering=0) as reference:
+            reference.truncate(size)
+            reference.write(b'head')
+            reference.seek(size - 4)
+            reference.write(b'tail')
+            reference.seek(0)
+            data = reference.read(size)
+        self.assertEqual(len(data), size)
+
+        expected = hashlib.sha256(data).digest()
+        for buffering in (0, 8):
+            with self.subTest(buffering=buffering):
+                with self.v.open(TESTFILE, 'wb', buffering) as stream:
+                    self.assertEqual(stream.write(data), size)
+                    self.assertEqual(stream.tell(), size)
+                self.assertEqual(self.v.stat(TESTFILE).st_size, size)
+                actual = hashlib.sha256()
+                with self.v.open(TESTFILE, 'rb', 0) as stream:
+                    while True:
+                        block = stream.read(4 << 20)
+                        if not block:
+                            break
+                        actual.update(block)
+                self.assertEqual(actual.digest(), expected)
 
 
 class BenchTests(FileTests):
