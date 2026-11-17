@@ -96,16 +96,6 @@ jfs = Client(name='', meta='redis://192.168.1.8/0')
 jfs.listdir('/')
 ```
 
-For binary streams returned by `Client.open`, `seek()` accepts integer offsets
-(including objects implementing `__index__`). The resulting position must be
-nonnegative and fit in a signed 64-bit integer. Invalid arguments leave the
-current position unchanged; negative relative offsets remain valid when the
-resulting position is within range.
-
-`Client.truncate(path, size)` and binary stream `truncate(size)` require a
-nonnegative integer size that fits in a signed 64-bit integer. Invalid sizes
-are rejected before the native call and leave the file's data unchanged.
-
 ### Using fsspec
 
 JuiceFS Python SDK also supports the `fsspec` interface to operate the JuiceFS file system.
