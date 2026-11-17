@@ -109,7 +109,7 @@ class Client(object):
                  download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
                  io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=False, attr_cache="1s",
                  entry_cache="0s", dir_entry_cache="1s", debug=False, no_usage_report=False, access_log="",
-                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", push_remote_write="", 
+                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", push_remote_write="",
                  push_remote_write_auth=""):
         self.lib = JuiceFSLib()
         kwargs = {}
@@ -178,7 +178,7 @@ class Client(object):
 
     def close(self, terminate=False):
         """Close the JuiceFS client.
-        
+
         Args:
             terminate: If True, fully close the filesystem and stop
                        background goroutines. If False (default), only
@@ -541,9 +541,22 @@ class _File(object):
             if view.readonly:
                 raise TypeError('readinto() argument must be a writable bytes-like object')
             with view.cast('B') as byte_view:
-                data = self.read(len(byte_view))
-                byte_view[:len(data)] = data
-                return len(data)
+                if not self.readable():
+                    raise io.UnsupportedOperation('not readable')
+                got = 0
+                while got < len(byte_view):
+                    count = min(len(byte_view) - got, 4 << 20)
+                    buf = (c_char * count).from_buffer(byte_view, got)
+                    try:
+                        # Keep the export local if ctypes retains its call arguments.
+                        n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), c_void_p(addressof(buf)), c_int32(count), c_int64(self.off+got))
+                    finally:
+                        del buf
+                    if n == 0:
+                        break
+                    got += n
+                self.off += got
+                return got
 
     def write(self, data):
         """Write the string data to the file."""

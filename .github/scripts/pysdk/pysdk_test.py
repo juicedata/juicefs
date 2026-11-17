@@ -2,6 +2,7 @@ import errno
 from array import array
 import fractions
 import grp
+import hashlib
 import io
 import unittest
 from unittest.mock import patch
@@ -57,6 +58,54 @@ class FileTests(unittest.TestCase):
 
 
 class ReadintoTests(FileTests):
+    def test_readinto_large_sliced_buffer(self):
+        content = bytes(range(256)) * (1 << 15) + b'end'
+        self.create_file(TESTFILE, content)
+        expected = hashlib.sha256(content).digest()
+        for buffering in (0, 8192):
+            with self.subTest(buffering=buffering):
+                storage = bytearray(b'x' * (len(content) + 11))
+                with memoryview(storage)[3:-8] as target:
+                    with self.v.open(TESTFILE, 'rb', buffering) as stream:
+                        self.assertEqual(stream.readinto(target), len(content))
+                        self.assertEqual(stream.tell(), len(content))
+                        self.assertEqual(stream.readinto(target), 0)
+                    self.assertEqual(hashlib.sha256(target).digest(), expected)
+                self.assertEqual(storage[:3], b'xxx')
+                self.assertEqual(storage[-8:], b'xxxxxxxx')
+                storage.extend(b'!')
+
+    def test_readinto_releases_buffer_after_error(self):
+        self.create_file(TESTFILE, b'abcdefgh')
+        data = bytearray(8)
+        with self.v.open(TESTFILE, 'rb', 0) as stream:
+            self.assertEqual(stream.readinto(data), 8)
+            data.extend(b'x')
+            stream.seek(0)
+            error = OSError(errno.EIO, 'read failure')
+            with patch.object(stream.lib, 'jfs_pread', side_effect=error):
+                with self.assertRaises(OSError) as caught:
+                    stream.readinto(data)
+                self.assertEqual(caught.exception.errno, errno.EIO)
+                self.assertEqual(stream.tell(), 0)
+                data.extend(b'y')
+            stream.seek(0)
+            data = bytearray(16)
+            native_read = stream.lib.jfs_pread
+            calls = [0]
+
+            def fail_after_partial(*args):
+                if calls[0]:
+                    raise OSError(errno.EIO, 'read failure after partial data')
+                calls[0] += 1
+                return native_read(*args)
+
+            with patch.object(stream.lib, 'jfs_pread', side_effect=fail_after_partial):
+                with self.assertRaises(OSError):
+                    stream.readinto(data)
+                self.assertEqual(stream.tell(), 0)
+                data.extend(b'z')
+
     def test_readinto_writable_buffers(self):
         content = b"abcdefghijk"
         self.create_file(TESTFILE, content)
