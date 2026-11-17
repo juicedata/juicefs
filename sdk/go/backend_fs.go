@@ -88,7 +88,7 @@ func newBackend(name, metaURL string, conf *Config) (backend, error) {
 			f.Bucket = conf.Bucket
 		}
 		if conf.StorageClass != "" {
-			f.Tiers[0] = object.Tier{ID: 0, Sc: conf.StorageClass}
+			f.Tiers[0] = object.Tier{ID: 0, Sc: conf.StorageClass, Tag: f.Tiers[0].Tag}
 		}
 	})
 	if err != nil {
