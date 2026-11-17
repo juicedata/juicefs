@@ -23,6 +23,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -140,4 +141,134 @@ func Test_s3client_copy_source_encoding(t *testing.T) {
 			assert.Equal(t, tt.want, <-got, "UploadPartCopy")
 		})
 	}
+}
+
+const s3NotSupportedListXML = `<Error><Code>NotSupported</Code><Message>This bucket does not support start-after query parameter for ListObjectsV2 API.</Message></Error>`
+
+func writeS3ListPage(w http.ResponseWriter, key string, truncated bool, token string) {
+	w.Header().Set("Content-Type", "application/xml")
+	next := ""
+	trunc := "false"
+	if truncated {
+		trunc = "true"
+		next = "<NextContinuationToken>" + token + "</NextContinuationToken>"
+	}
+	_, _ = w.Write([]byte(`<ListBucketResult><IsTruncated>` + trunc + `</IsTruncated>` + next +
+		`<Contents><Key>` + key + `</Key><Size>1</Size></Contents></ListBucketResult>`))
+}
+
+func TestS3DirectoryBucketList(t *testing.T) {
+	var badStartAfter int
+	var generalStartAfter string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		// Directory-bucket clients take a session before ListObjectsV2.
+		if _, ok := q["session"]; ok {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<CreateSessionResult><Credentials><AccessKeyId>ak</AccessKeyId><SecretAccessKey>sk</SecretAccessKey><SessionToken>token</SessionToken><Expiration>2099-01-01T00:00:00Z</Expiration></Credentials></CreateSessionResult>`))
+			return
+		}
+		if q.Get("list-type") != "2" {
+			http.Error(w, "expected ListObjectsV2", http.StatusBadRequest)
+			return
+		}
+		bucket := strings.Trim(r.URL.Path, "/")
+		startAfter := q.Get("start-after")
+		if bucket == "general" {
+			generalStartAfter = startAfter
+			if startAfter == "" {
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(http.StatusNotImplemented)
+				_, _ = w.Write([]byte(s3NotSupportedListXML))
+				return
+			}
+			writeS3ListPage(w, "chunks/z", false, "")
+			return
+		}
+		if startAfter != "" {
+			badStartAfter++
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusNotImplemented)
+			_, _ = w.Write([]byte(s3NotSupportedListXML))
+			return
+		}
+		if q.Get("continuation-token") == "t2" {
+			writeS3ListPage(w, "chunks/a", false, "")
+			return
+		}
+		writeS3ListPage(w, "chunks/m", true, "t2")
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	stor, err := newS3(srv.URL+"/vol--use1-az4--x-s3", "ak", "sk", "")
+	require.NoError(t, err)
+
+	ch, err := ListAll(ctx, WithPrefix(stor, "chunks/"), "", "", true, false)
+	require.NoError(t, err)
+	var keys []string
+	for o := range ch {
+		require.NotNil(t, o)
+		keys = append(keys, o.Key())
+	}
+	assert.Equal(t, []string{"m", "a"}, keys)
+	assert.Zero(t, badStartAfter)
+
+	objs, _, _, err := stor.List(ctx, "chunks/", "chunks/m", "t2", "", 1000, true)
+	require.NoError(t, err)
+	require.Len(t, objs, 1)
+	assert.Equal(t, "chunks/a", objs[0].Key())
+
+	// A non-empty initial marker cannot be expressed with StartAfter. Keys that
+	// sort before it are still returned, and start-after stays unset.
+	objs, _, _, err = stor.List(ctx, "chunks/", "chunks/z", "", "", 1000, true)
+	require.NoError(t, err)
+	require.Len(t, objs, 1)
+	assert.Equal(t, "chunks/m", objs[0].Key())
+	assert.Zero(t, badStartAfter)
+
+	general, err := newS3(srv.URL+"/general", "ak", "sk", "")
+	require.NoError(t, err)
+	objs, _, _, err = general.List(ctx, "chunks/", "chunks/m", "", "", 1000, true)
+	require.NoError(t, err)
+	require.Len(t, objs, 1)
+	assert.Equal(t, "chunks/z", objs[0].Key())
+	assert.Equal(t, "chunks/m", generalStartAfter)
+	assert.Zero(t, badStartAfter)
+}
+
+func TestS3ListPermanentNotSupported(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("list-type") != "2" {
+			http.Error(w, "expected ListObjectsV2", http.StatusBadRequest)
+			return
+		}
+		calls++
+		w.Header().Set("Content-Type", "application/xml")
+		if calls == 1 {
+			writeS3ListPage(w, "k0", true, "t2")
+			return
+		}
+		w.WriteHeader(http.StatusNotImplemented)
+		_, _ = w.Write([]byte(s3NotSupportedListXML))
+	}))
+	defer srv.Close()
+
+	stor, err := newS3(srv.URL+"/general", "ak", "sk", "")
+	require.NoError(t, err)
+	ch, err := ListAll(context.Background(), stor, "", "", true, false)
+	require.NoError(t, err)
+	var keys []string
+	var sawNil bool
+	for o := range ch {
+		if o == nil {
+			sawNil = true
+			continue
+		}
+		keys = append(keys, o.Key())
+	}
+	assert.Equal(t, []string{"k0"}, keys)
+	assert.True(t, sawNil)
+	assert.Equal(t, 2, calls)
 }

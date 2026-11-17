@@ -102,6 +102,10 @@ const (
 	maxListRetries = 3
 )
 
+// errPermanentList marks a list failure that will not succeed if retried,
+// such as S3 Express rejecting StartAfter with HTTP 501 NotSupported.
+var errPermanentList = errors.New("permanent list error")
+
 // ListAll lists all keys that starts at marker from object storage.
 func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink, sort bool) (<-chan Object, error) {
 	if ch, err := store.ListAll(ctx, prefix, marker, followLink); err == nil {
@@ -148,7 +152,7 @@ func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, fo
 			var nextToken2 string
 			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
 			for retry := 0; err != nil; retry++ {
-				if ctx.Err() != nil || retry >= maxListRetries {
+				if errors.Is(err, errPermanentList) || ctx.Err() != nil || retry >= maxListRetries {
 					logger.Errorf("Stop listing %s at marker %q: %s", store, marker, err)
 					out <- nil
 					return

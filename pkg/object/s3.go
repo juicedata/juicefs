@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"regexp"
@@ -234,23 +235,50 @@ func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter
 	return err
 }
 
+// permanentS3ListError reports a ListObjectsV2 failure that retrying will not fix.
+// Directory buckets answer StartAfter with NotSupported / HTTP 501.
+func permanentS3ListError(err error) bool {
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NotSupported" {
+		return true
+	}
+	var re s3.ResponseError
+	if errors.As(err, &re) {
+		type httpStatus interface{ HTTPStatusCode() int }
+		if hs, ok := re.(httpStatus); ok && hs.HTTPStatusCode() == http.StatusNotImplemented {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
+	// S3 Express directory buckets (<base>--<azid>--x-s3) reject a non-empty
+	// start-after and return keys in no lexicographic order. Omit StartAfter on
+	// every page and do not treat start as a lower bound. ContinuationToken still
+	// pages the listing. Other buckets keep StartAfter, including an empty one.
+	directoryBucket := strings.HasSuffix(s.bucket, "--x-s3")
 	param := s3.ListObjectsV2Input{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
 		MaxKeys:      aws.Int32(int32(limit)),
 		EncodingType: types.EncodingTypeUrl,
-		StartAfter:   aws.String(start),
 		Delimiter:    aws.String(delimiter),
+	}
+	if !directoryBucket {
+		param.StartAfter = aws.String(start)
 	}
 	if token != "" {
 		param.ContinuationToken = aws.String(token)
 	}
 	resp, err := s.s3.ListObjectsV2(ctx, &param)
 	if err != nil {
+		if permanentS3ListError(err) {
+			err = fmt.Errorf("%w: %s", errPermanentList, err.Error())
+		}
 		return nil, false, "", err
 	}
 	n := len(resp.Contents)
@@ -264,8 +292,9 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 		}
 		// StartAfter is ignored on continued requests, and some servers (e.g. TOS with
 		// hierarchical namespace) don't list in lexicographic order, which is
-		// tolerated if the caller doesn't need the order.
-		if !strings.HasPrefix(oKey, prefix) || ((token == "" || !isUnorderedList(ctx)) && oKey < start) {
+		// tolerated if the caller doesn't need the order. Directory buckets are always
+		// unordered, so a key that sorts before start is still a live object.
+		if !strings.HasPrefix(oKey, prefix) || (!directoryBucket && (token == "" || !isUnorderedList(ctx)) && oKey < start) {
 			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, start)
 		}
 		objs[i] = &obj{
