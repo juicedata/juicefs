@@ -35,6 +35,26 @@ MODE_READ = 4
 XATTR_CREATE = 1
 XATTR_REPLACE = 2
 
+# Fixed libjfs error codes from sdk/java/libjfs/main.go.
+_LIBJFS_ERRNO_MAP = {
+    0x01: errno.EPERM,
+    0x02: errno.ENOENT,
+    0x04: errno.EINTR,
+    0x05: errno.EIO,
+    0x0d: errno.EACCES,
+    0x11: errno.EEXIST,
+    0x14: errno.ENOTDIR,
+    0x15: errno.EISDIR,
+    0x16: errno.EINVAL,
+    0x1c: errno.ENOSPC,
+    0x45: errno.EDQUOT,
+    0x1e: errno.EROFS,
+    0x27: errno.ENOTEMPTY,
+    0x3d: errno.ENODATA,
+    0x5f: errno.ENOTSUP,
+    0x28: errno.ELOOP,
+}
+
 def check_error(r, fn, args):
     if fn.__name__ == "jfs_init" and r == 0:
         name = args[0].decode()
@@ -42,6 +62,7 @@ def check_error(r, fn, args):
         e.errno = 1
         raise e
     elif r < 0:
+        code = _LIBJFS_ERRNO_MAP.get(-r, -r)
         formatted_args = []
         for arg in args[2:]:
             if isinstance(arg, (bytes, bytearray)) and len(arg) > 1024:
@@ -49,8 +70,8 @@ def check_error(r, fn, args):
             else:
                 formatted_args.append(repr(arg))
 
-        e = OSError(f'call {fn.__name__} failed: [Errno {-r}] {os.strerror(-r)}: {formatted_args}')
-        e.errno = -r
+        e = OSError(f'call {fn.__name__} failed: [Errno {code}] {os.strerror(code)}: {formatted_args}')
+        e.errno = code
         raise e
     return r
 
