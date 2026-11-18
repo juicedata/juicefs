@@ -71,9 +71,7 @@ def check_error(r, fn, args):
             else:
                 formatted_args.append(repr(arg))
 
-        e = OSError(f'call {fn.__name__} failed: [Errno {code}] {os.strerror(code)}: {formatted_args}')
-        e.errno = code
-        raise e
+        raise OSError(code, f'call {fn.__name__} failed: {os.strerror(code)}: {formatted_args}')
     return r
 
 class FileInfo(Structure):

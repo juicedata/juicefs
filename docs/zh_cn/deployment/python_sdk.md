@@ -109,6 +109,10 @@ jfs = Client(name='', meta='redis://192.168.1.8/0')
 jfs.listdir('/')
 ```
 
+当 libjfs 调用返回负错误码时，SDK 会根据 errno 抛出对应的 `OSError` 子类，例如 `ENOENT` 对应 `FileNotFoundError`，`EACCES` 对应 `PermissionError`，`EEXIST` 对应 `FileExistsError`。如果 Python 没有为该 errno 定义子类，SDK 会抛出 `OSError`。可以用 `except OSError as e` 统一捕获这些异常。
+
+`e.errno` 是错误编号。`e.strerror` 包含 libjfs 函数名、系统错误描述和格式化后的调用参数。`e.args` 是二元组 `(e.errno, e.strerror)`，`str(e)` 的格式为 `[Errno N]` 加上一个空格和 `e.strerror`。
+
 ### 使用 fsspec
 
 JuiceFS 的 Python SDK 还支持 `fsspec` 接口来操作 JuiceFS 文件系统。
