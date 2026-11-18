@@ -24,7 +24,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"regexp"
@@ -81,7 +80,7 @@ func (s *s3client) Limits() Limits {
 }
 
 func (s *s3client) Create(ctx context.Context) error {
-	if _, _, _, err := s.List(ctx, "", "", "", "", 1, true); err == nil {
+	if _, _, _, err := s.List(WithUnorderedList(ctx), "", "", "", "", 1, true); err == nil {
 		return nil
 	}
 	_, err := s.s3.CreateBucket(ctx, &s3.CreateBucketInput{
@@ -235,32 +234,26 @@ func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter
 	return err
 }
 
-// permanentS3ListError reports a ListObjectsV2 failure that retrying will not fix.
-// Directory buckets answer StartAfter with NotSupported / HTTP 501.
-func permanentS3ListError(err error) bool {
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NotSupported" {
-		return true
-	}
-	var re s3.ResponseError
-	if errors.As(err, &re) {
-		type httpStatus interface{ HTTPStatusCode() int }
-		if hs, ok := re.(httpStatus); ok && hs.HTTPStatusCode() == http.StatusNotImplemented {
-			return true
-		}
-	}
-	return false
-}
+// s3DirectoryBucketSuffix is the name suffix of S3 Express One Zone directory buckets
+// (<base>--<zone-id>--x-s3). See
+// https://docs.aws.amazon.com/AmazonS3/latest/userguide/directory-bucket-naming-rules.html
+const s3DirectoryBucketSuffix = "--x-s3"
 
 func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	// S3 Express directory buckets (<base>--<azid>--x-s3) reject a non-empty
-	// start-after and return keys in no lexicographic order. Omit StartAfter on
-	// every page and do not treat start as a lower bound. ContinuationToken still
-	// pages the listing. Other buckets keep StartAfter, including an empty one.
-	directoryBucket := strings.HasSuffix(s.bucket, "--x-s3")
+	// S3 Express directory buckets don't list keys in lexicographic order, reject
+	// a non-empty start-after and page only with ContinuationToken.
+	directoryBucket := strings.HasSuffix(s.bucket, s3DirectoryBucketSuffix)
+	if directoryBucket {
+		if !isUnorderedList(ctx) {
+			return nil, false, "", fmt.Errorf("directory bucket %s can't list keys in order, try --external-sort-dir", s.bucket)
+		}
+		if start != "" && token == "" {
+			return nil, false, "", fmt.Errorf("directory bucket %s can't list after %q", s.bucket, start)
+		}
+	}
 	param := s3.ListObjectsV2Input{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
@@ -276,9 +269,6 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 	}
 	resp, err := s.s3.ListObjectsV2(ctx, &param)
 	if err != nil {
-		if permanentS3ListError(err) {
-			err = fmt.Errorf("%w: %s", errPermanentList, err.Error())
-		}
 		return nil, false, "", err
 	}
 	n := len(resp.Contents)
@@ -292,9 +282,8 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 		}
 		// StartAfter is ignored on continued requests, and some servers (e.g. TOS with
 		// hierarchical namespace) don't list in lexicographic order, which is
-		// tolerated if the caller doesn't need the order. Directory buckets are always
-		// unordered, so a key that sorts before start is still a live object.
-		if !strings.HasPrefix(oKey, prefix) || (!directoryBucket && (token == "" || !isUnorderedList(ctx)) && oKey < start) {
+		// tolerated if the caller doesn't need the order.
+		if !strings.HasPrefix(oKey, prefix) || ((token == "" || !isUnorderedList(ctx)) && oKey < start) {
 			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, start)
 		}
 		objs[i] = &obj{

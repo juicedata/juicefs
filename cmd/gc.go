@@ -484,6 +484,8 @@ const gcObjectListBatch = 10000
 
 func scanGcChunkObjects(ctx context.Context, blob object.ObjectStorage, threads int, hashPrefix bool, prefixSpin *utils.Bar, handle func(object.Object) error) error {
 	defer prefixSpin.Done()
+	// Each object is checked on its own, so keys may come in any order.
+	ctx = object.WithUnorderedList(ctx)
 	prefixes := make(chan string, threads)
 	eg, scanCtx := errgroup.WithContext(ctx)
 	eg.Go(func() error {

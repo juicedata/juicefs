@@ -102,12 +102,12 @@ const (
 	maxListRetries = 3
 )
 
-// errPermanentList marks a list failure that will not succeed if retried,
-// such as S3 Express rejecting StartAfter with HTTP 501 NotSupported.
-var errPermanentList = errors.New("permanent list error")
-
-// ListAll lists all keys that starts at marker from object storage.
+// ListAll lists all keys that starts at marker from object storage. Unless sort is
+// set, the caller accepts the keys in any order.
 func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink, sort bool) (<-chan Object, error) {
+	if !sort {
+		ctx = WithUnorderedList(ctx)
+	}
 	if ch, err := store.ListAll(ctx, prefix, marker, followLink); err == nil {
 		return ch, nil
 	} else if !errors.Is(err, notSupported) {
@@ -152,7 +152,7 @@ func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, fo
 			var nextToken2 string
 			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
 			for retry := 0; err != nil; retry++ {
-				if errors.Is(err, errPermanentList) || ctx.Err() != nil || retry >= maxListRetries {
+				if ctx.Err() != nil || retry >= maxListRetries {
 					logger.Errorf("Stop listing %s at marker %q: %s", store, marker, err)
 					out <- nil
 					return
@@ -189,6 +189,7 @@ func (s *nextObjects) Pop() interface{} {
 }
 
 func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
+	unordered := isUnorderedList(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	heads := &nextObjects{make([]nextKey, 0, len(s.stores))}
 	// abort stops the remaining shard listings and drains their channels,
@@ -203,7 +204,7 @@ func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink
 		}
 	}
 	for i := range s.stores {
-		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink, true)
+		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink, !unordered)
 		if err != nil {
 			abort()
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
@@ -218,9 +219,28 @@ func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink
 		}
 		heads.Push(nextKey{first, ch})
 	}
-	heap.Init(heads)
-
 	out := make(chan Object, 1000)
+	if unordered {
+		// The caller doesn't need the order, so output the shards one by one
+		// instead of merging them, which requires each shard to be ordered.
+		go func() {
+			defer close(out)
+			defer cancel()
+			for _, h := range heads.os {
+				out <- h.o
+				for o := range h.ch {
+					out <- o
+					if o == nil {
+						abort()
+						return
+					}
+				}
+			}
+		}()
+		return out, nil
+	}
+
+	heap.Init(heads)
 	go func() {
 		defer close(out)
 		defer cancel()

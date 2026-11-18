@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -158,7 +159,7 @@ func writeS3ListPage(w http.ResponseWriter, key string, truncated bool, token st
 }
 
 func TestS3DirectoryBucketList(t *testing.T) {
-	var badStartAfter int
+	var dirLists, badStartAfter atomic.Int32
 	var generalStartAfter string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -185,8 +186,9 @@ func TestS3DirectoryBucketList(t *testing.T) {
 			writeS3ListPage(w, "chunks/z", false, "")
 			return
 		}
+		dirLists.Add(1)
 		if startAfter != "" {
-			badStartAfter++
+			badStartAfter.Add(1)
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusNotImplemented)
 			_, _ = w.Write([]byte(s3NotSupportedListXML))
@@ -204,28 +206,42 @@ func TestS3DirectoryBucketList(t *testing.T) {
 	stor, err := newS3(srv.URL+"/vol--use1-az4--x-s3", "ak", "sk", "")
 	require.NoError(t, err)
 
-	ch, err := ListAll(ctx, WithPrefix(stor, "chunks/"), "", "", true, false)
+	stor2, err := newS3(srv.URL+"/vol2--use1-az4--x-s3", "ak", "sk", "")
 	require.NoError(t, err)
-	var keys []string
-	for o := range ch {
-		require.NotNil(t, o)
-		keys = append(keys, o.Key())
-	}
-	assert.Equal(t, []string{"m", "a"}, keys)
-	assert.Zero(t, badStartAfter)
+	shards := WithPrefix(&sharded{stores: []ObjectStorage{stor, stor2}}, "chunks/")
 
-	objs, _, _, err := stor.List(ctx, "chunks/", "chunks/m", "t2", "", 1000, true)
+	// Directory buckets don't list keys in order, so ordered listings fail before any request.
+	_, err = ListAll(ctx, WithPrefix(stor, "chunks/"), "", "", true, true)
+	require.ErrorContains(t, err, "can't list keys in order")
+	_, err = ListAll(ctx, shards, "", "", true, true)
+	require.ErrorContains(t, err, "can't list keys in order")
+	_, _, _, err = stor.List(ctx, "chunks/", "chunks/m", "t2", "", 1000, true)
+	require.ErrorContains(t, err, "can't list keys in order")
+	assert.Zero(t, dirLists.Load())
+
+	listAll := func(store ObjectStorage) []string {
+		ch, err := ListAll(ctx, store, "", "", true, false)
+		require.NoError(t, err)
+		var keys []string
+		for o := range ch {
+			require.NotNil(t, o)
+			keys = append(keys, o.Key())
+		}
+		return keys
+	}
+	assert.Equal(t, []string{"m", "a"}, listAll(WithPrefix(stor, "chunks/")))
+	// Sharded volumes can't merge unordered shards, so they list the shards one by one.
+	assert.Equal(t, []string{"m", "a", "m", "a"}, listAll(shards))
+
+	objs, _, _, err := stor.List(WithUnorderedList(ctx), "chunks/", "chunks/m", "t2", "", 1000, true)
 	require.NoError(t, err)
 	require.Len(t, objs, 1)
 	assert.Equal(t, "chunks/a", objs[0].Key())
 
-	// A non-empty initial marker cannot be expressed with StartAfter. Keys that
-	// sort before it are still returned, and start-after stays unset.
-	objs, _, _, err = stor.List(ctx, "chunks/", "chunks/z", "", "", 1000, true)
-	require.NoError(t, err)
-	require.Len(t, objs, 1)
-	assert.Equal(t, "chunks/m", objs[0].Key())
-	assert.Zero(t, badStartAfter)
+	// A listing can't start after a key, so it fails instead of listing from the beginning.
+	_, _, _, err = stor.List(WithUnorderedList(ctx), "chunks/", "chunks/z", "", "", 1000, true)
+	require.ErrorContains(t, err, "can't list after")
+	assert.Zero(t, badStartAfter.Load())
 
 	general, err := newS3(srv.URL+"/general", "ak", "sk", "")
 	require.NoError(t, err)
@@ -234,41 +250,5 @@ func TestS3DirectoryBucketList(t *testing.T) {
 	require.Len(t, objs, 1)
 	assert.Equal(t, "chunks/z", objs[0].Key())
 	assert.Equal(t, "chunks/m", generalStartAfter)
-	assert.Zero(t, badStartAfter)
-}
-
-func TestS3ListPermanentNotSupported(t *testing.T) {
-	var calls int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("list-type") != "2" {
-			http.Error(w, "expected ListObjectsV2", http.StatusBadRequest)
-			return
-		}
-		calls++
-		w.Header().Set("Content-Type", "application/xml")
-		if calls == 1 {
-			writeS3ListPage(w, "k0", true, "t2")
-			return
-		}
-		w.WriteHeader(http.StatusNotImplemented)
-		_, _ = w.Write([]byte(s3NotSupportedListXML))
-	}))
-	defer srv.Close()
-
-	stor, err := newS3(srv.URL+"/general", "ak", "sk", "")
-	require.NoError(t, err)
-	ch, err := ListAll(context.Background(), stor, "", "", true, false)
-	require.NoError(t, err)
-	var keys []string
-	var sawNil bool
-	for o := range ch {
-		if o == nil {
-			sawNil = true
-			continue
-		}
-		keys = append(keys, o.Key())
-	}
-	assert.Equal(t, []string{"k0"}, keys)
-	assert.True(t, sawNil)
-	assert.Equal(t, 2, calls)
+	assert.Zero(t, badStartAfter.Load())
 }

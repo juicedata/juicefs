@@ -1167,20 +1167,31 @@ func TestShardingListFailedShard(t *testing.T) {
 		goodKeys = append(goodKeys, fmt.Sprintf("k%03d", i))
 	}
 	cases := []struct {
-		name    string
-		badKeys []string
-		wantErr bool
-		want    []string
+		name      string
+		unordered bool
+		badFirst  bool
+		badKeys   []string
+		wantErr   bool
+		want      []string
 	}{
 		{name: "first", wantErr: true},
 		{name: "merging", badKeys: []string{"a"}, want: []string{"a"}},
+		{name: "unordered-first", unordered: true, wantErr: true},
+		{name: "unordered-midway", unordered: true, badFirst: true, badKeys: []string{"a"}, want: []string{"a"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			bad := &listStub{keys: c.badKeys, fail: true, done: make(chan struct{})}
 			good := &listStub{keys: goodKeys, done: make(chan struct{})}
 			s := &sharded{stores: []ObjectStorage{good, bad}}
-			ch, err := s.ListAll(context.Background(), "", "", false)
+			if c.badFirst {
+				s.stores = []ObjectStorage{bad, good}
+			}
+			ctx := context.Background()
+			if c.unordered {
+				ctx = WithUnorderedList(ctx)
+			}
+			ch, err := s.ListAll(ctx, "", "", false)
 			if c.wantErr {
 				if err == nil {
 					t.Fatal("expect error for a failed shard")
