@@ -11,6 +11,7 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
+    - 'sdk/python/juicefs/juicefs/spec.py'
     - 'sdk/python/juicefs/tests/**'
     - '**/pysdk.yml'
   pull_request:
@@ -23,6 +24,7 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
+    - 'sdk/python/juicefs/juicefs/spec.py'
     - 'sdk/python/juicefs/tests/**'
     - '**/pysdk.yml'
   schedule:
@@ -118,14 +120,14 @@ jobs:
           else
             echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Build
         uses: ./.github/actions/build
-        with: 
+        with:
           target: ${{steps.vars.outputs.target}}
 
       - name: Prepare meta db
-        run: | 
+        run: |
           chmod +x .github/scripts/start_meta_engine.sh
           source .github/scripts/start_meta_engine.sh
           start_meta_engine ${{matrix.meta}}
@@ -159,6 +161,13 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo JFS_VOLUME=test-volume JFS_META=$meta_url python3 sdk/python/juicefs/juicefs/juicefs.py
           df -h
+
+      - name: Run fsspec transaction regressions
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo python3 -m pip install pytest fsspec
+          sudo PYTHONPATH=sdk/python/juicefs JUICEFS_META=$meta_url python3 -m pytest -q sdk/python/juicefs/tests/test_fsspec_transaction.py
 
       - name: Run pysdk_test.py
         run: |
@@ -198,7 +207,7 @@ jobs:
       - name: Run fs.py
         timeout-minutes: 60
         run: |
-          if [[ -n "${{ github.event.inputs.seed }}" ]]; then 
+          if [[ -n "${{ github.event.inputs.seed }}" ]]; then
             seed=${{ github.event.inputs.seed }}
           elif [[ "${{github.event_name}}" == "pull_request" || "${{github.event_name}}" == "push" ]]; then
             seed=0
@@ -275,5 +284,5 @@ jobs:
           workflow_name: ${{ github.workflow }}
 
       - name: Success
-        if: success() 
+        if: success()
         run: echo "All Done"

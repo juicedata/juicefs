@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import datetime
+import errno
 import logging
 import uuid
 import os
@@ -261,12 +262,26 @@ class JuiceFile(AbstractBufferedFile):
     def commit(self):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
-        self.fs.fs.rename(self.temp, self.path)
+        self.close()
+        temporary = os.path.join(os.path.dirname(self.path) or "/", ".fsspec-" + str(uuid.uuid4()))
+        try:
+            # Bypass this transaction while uploading, then publish by rename.
+            self.fs.put_file(self.temp, temporary, autocommit=True)
+            self.fs.fs.rename(temporary, self.path)
+        except Exception:
+            try:
+                self.fs.fs.remove(temporary)
+            except OSError as error:
+                if error.errno != errno.ENOENT:
+                    logger.warning("Failed to remove temporary file %s: %s", temporary, error)
+            raise
+        os.remove(self.temp)
 
     def discard(self):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
-        self.fs.fs.remove(self.temp)
+        self.close()
+        os.remove(self.temp)
 
     def tell(self):
         return self.f.tell()

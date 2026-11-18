@@ -119,6 +119,20 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+Write-mode transactions stage data in a local directory (`temppath`, default
+`/tmp`). On commit, each staged file is uploaded to a temporary file in the
+destination directory, then renamed to its final path. An exception inside the
+transaction discards the staged writes.
+
+```python
+with jfs.transaction:
+    with jfs.open('/transaction-example', 'wb') as f:
+        f.write(b'committed on successful exit')
+```
+
+This applies to `wb` writes. Multiple files are committed individually, not as
+one atomic operation; a failed commit may leave earlier files committed.
+
 ### Getting Help Information
 
 You can use the `help()` function to get help information for classes and methods.
