@@ -23,7 +23,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -1131,4 +1133,44 @@ func createTestFS(t testing.TB) *FileSystem {
 	jfs.rotateAccessLog = 500
 	t.Cleanup(func() { _ = jfs.Close() })
 	return jfs
+}
+
+func TestCloseStopsGoroutines(t *testing.T) {
+	countBackground := func() int {
+		buf := make([]byte, 1<<20)
+		for {
+			n := runtime.Stack(buf, true)
+			if n < len(buf) {
+				buf = buf[:n]
+				break
+			}
+			buf = make([]byte, len(buf)*2)
+		}
+		var cnt int
+		for _, fn := range []string{"cleanupAttrCache(", "cleanupEntryCache(", "flushLog("} {
+			cnt += strings.Count(string(buf), fn)
+		}
+		return cnt
+	}
+	before := countBackground()
+	jfs := createTestFS(t)
+	jfs.rotateAccessLog = 1 << 30
+	ctx := meta.NewContext(1, 0, []uint32{0})
+	if _, e := jfs.Stat(ctx, "/"); e != 0 {
+		t.Fatalf("stat /: %s", e)
+	}
+	if err := jfs.Close(); err != nil {
+		t.Fatalf("close: %s", err)
+	}
+	if c := countBackground(); c != before {
+		t.Fatalf("%d background goroutines left after close", c-before)
+	}
+	data, err := os.ReadFile(jfs.conf.AccessLog)
+	if err != nil {
+		t.Fatalf("read access log: %s", err)
+	}
+	if !strings.Contains(string(data), "Stat (/)") {
+		t.Fatalf("access log is not flushed after close: %q", data)
+	}
+	_ = jfs.Close() // closing twice should be safe
 }
