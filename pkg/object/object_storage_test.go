@@ -92,7 +92,7 @@ func TestTierStorageInitTiersIsolatesRuntimeState(t *testing.T) {
 }
 
 func listAll(ctx context.Context, s ObjectStorage, prefix, marker string, limit int64, followLink bool) ([]Object, error) {
-	ch, err := ListAll(ctx, s, prefix, marker, followLink, true)
+	ch, err := ListAll(ctx, s, prefix, marker, followLink)
 	if err == nil {
 		objs := make([]Object, 0)
 		for obj := range ch {
@@ -1107,7 +1107,7 @@ func TestListAllRetryLimit(t *testing.T) {
 		{maxListRetries + 1, keys[:2], true},
 	} {
 		t.Run(fmt.Sprintf("failures=%d", c.failures), func(t *testing.T) {
-			ch, err := ListAll(context.Background(), &tokenPagedStore{ObjectStorage: mem, keys: keys, failures: c.failures}, "", "", false, true)
+			ch, err := ListAll(context.Background(), &tokenPagedStore{ObjectStorage: mem, keys: keys, failures: c.failures}, "", "", false)
 			if err != nil {
 				t.Fatalf("list all: %s", err)
 			}

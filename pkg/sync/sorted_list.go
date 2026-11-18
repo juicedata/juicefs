@@ -39,7 +39,7 @@ func inListRange(key, start, end string, includeStart bool) bool {
 // listAllWithExternalSort is listAll for storages whose listing order can't be trusted.
 func listAllWithExternalSort(ctx context.Context, store object.ObjectStorage, prefix, start, end string, followLink, includeStart bool, sortDir string) (<-chan object.Object, error) {
 	logger.Debugf("Iterating objects from %s with prefix %s start %q, sorted under %s", store, prefix, start, sortDir)
-	raw, err := object.ListAll(object.WithUnorderedList(ctx), store, prefix, "", followLink, false)
+	raw, err := object.ListAll(object.WithUnorderedList(ctx), store, prefix, "", followLink)
 	if err != nil {
 		return nil, err
 	}

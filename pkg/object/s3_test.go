@@ -211,16 +211,16 @@ func TestS3DirectoryBucketList(t *testing.T) {
 	shards := WithPrefix(&sharded{stores: []ObjectStorage{stor, stor2}}, "chunks/")
 
 	// Directory buckets don't list keys in order, so ordered listings fail before any request.
-	_, err = ListAll(ctx, WithPrefix(stor, "chunks/"), "", "", true, true)
+	_, err = ListAll(ctx, WithPrefix(stor, "chunks/"), "", "", true)
 	require.ErrorContains(t, err, "can't list keys in order")
-	_, err = ListAll(ctx, shards, "", "", true, true)
+	_, err = ListAll(ctx, shards, "", "", true)
 	require.ErrorContains(t, err, "can't list keys in order")
 	_, _, _, err = stor.List(ctx, "chunks/", "chunks/m", "t2", "", 1000, true)
 	require.ErrorContains(t, err, "can't list keys in order")
 	assert.Zero(t, dirLists.Load())
 
 	listAll := func(store ObjectStorage) []string {
-		ch, err := ListAll(ctx, store, "", "", true, false)
+		ch, err := ListAll(WithUnorderedList(ctx), store, "", "", true)
 		require.NoError(t, err)
 		var keys []string
 		for o := range ch {
