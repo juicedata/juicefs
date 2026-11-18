@@ -1399,8 +1399,9 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	if err = g.Wait(); err != nil {
 		return objInfo, err
 	}
-	tmp := n.ppath(bucket, uploadID, "complete")
-	_ = n.fs.Delete(mctx, tmp)
+	// Gateways sharing a volume do not share writeLocks, so a retried Complete
+	// can run on two instances at once; each attempt merges into its own file.
+	tmp := n.ppath(bucket, uploadID, "complete-"+minio.MustGetUUID())
 	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
@@ -1409,6 +1410,9 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	}
 	defer func() {
 		_ = f.Close(mctx)
+		if err != nil {
+			_ = n.fs.Delete(mctx, tmp)
+		}
 	}()
 	var total uint64
 	for _, part := range parts {
@@ -1468,14 +1472,12 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	if eno == syscall.ENOENT {
 		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(name)); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(name), err)
-			_ = n.fs.Delete(mctx, tmp)
 			err = n.objectCommitErr(ctx, err, bucket, object, uploadID)
 			return
 		}
 		eno = n.fs.Rename(mctx, tmp, name, 0)
 	}
 	if eno != 0 {
-		_ = n.fs.Delete(mctx, tmp)
 		err = n.objectCommitErr(ctx, eno, bucket, object, uploadID)
 		logger.Errorf("Rename %s -> %s: %s", tmp, name, err)
 		return
