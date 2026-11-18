@@ -153,6 +153,9 @@ type FileSystem struct {
 	checkAccessFile time.Duration
 	rotateAccessLog int64
 	logBuffer       chan string
+	done            chan struct{}
+	wg              sync.WaitGroup
+	closeOnce       sync.Once
 
 	readSizeHistogram     prometheus.Histogram
 	writtenSizeHistogram  prometheus.Histogram
@@ -193,6 +196,7 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *
 		attrs:           make(map[meta.Ino]*attrCache),
 		checkAccessFile: time.Minute,
 		rotateAccessLog: 300 << 20, // 300 MiB
+		done:            make(chan struct{}),
 
 		readSizeHistogram: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "sdk_read_size_bytes",
@@ -224,6 +228,7 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *
 		}
 	}
 
+	fs.wg.Add(2)
 	go fs.cleanupAttrCache()
 	go fs.cleanupEntryCache()
 	if conf.AccessLog != "" {
@@ -233,6 +238,7 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *
 		} else {
 			_ = os.Chmod(conf.AccessLog, 0666)
 			fs.logBuffer = make(chan string, 1024)
+			fs.wg.Add(1)
 			go fs.flushLog(f, fs.logBuffer, conf.AccessLog)
 		}
 	}
@@ -249,6 +255,7 @@ func (fs *FileSystem) InitMetrics(reg prometheus.Registerer) {
 }
 
 func (fs *FileSystem) cleanupAttrCache() {
+	defer fs.wg.Done()
 	for {
 		now := time.Now()
 		var cnt, del int
@@ -264,11 +271,16 @@ func (fs *FileSystem) cleanupAttrCache() {
 			}
 		}
 		fs.cacheM.Unlock()
-		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-del*2)/(cnt+1)))
+		select {
+		case <-fs.done:
+			return
+		case <-time.After(time.Millisecond * time.Duration(1000*(cnt+1-del*2)/(cnt+1))):
+		}
 	}
 }
 
 func (fs *FileSystem) cleanupEntryCache() {
+	defer fs.wg.Done()
 	for {
 		now := time.Now()
 		var cnt, del int
@@ -290,7 +302,11 @@ func (fs *FileSystem) cleanupEntryCache() {
 			}
 		}
 		fs.cacheM.Unlock()
-		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-del*2)/(cnt+1)))
+		select {
+		case <-fs.done:
+			return
+		case <-time.After(time.Millisecond * time.Duration(1000*(cnt+1-del*2)/(cnt+1))):
+		}
 	}
 }
 
@@ -331,6 +347,7 @@ func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
 }
 
 func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
+	defer fs.wg.Done()
 	buf := make([]byte, 0, 128<<10)
 	var lastcheck = time.Now()
 	defer func() {
@@ -1308,6 +1325,10 @@ func (fs *FileSystem) Close() error {
 		fs.logBuffer = nil
 		close(buffer)
 	}
+	fs.closeOnce.Do(func() {
+		close(fs.done)
+		fs.wg.Wait()
+	})
 	return fs.Meta().CloseSession()
 }
 
