@@ -610,11 +610,12 @@ func (n *jfsObjects) delObj(bucket string, object string) error {
 		return nil
 	}
 	if strings.HasSuffix(object, sep) {
-		// reset atime
-		n.setFileAtime(p, time.Now().Unix())
-	}
-	if eno := n.fs.Delete(mctx, p); eno != 0 {
-		if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) {
+		removed, err := n.deleteDirObject(p)
+		if err != nil || !removed {
+			return err
+		}
+	} else if eno := n.fs.Unlink(mctx, p); eno != 0 {
+		if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) || eno == syscall.ENOTDIR || eno == syscall.EISDIR {
 			return nil
 		}
 		return eno
@@ -624,6 +625,34 @@ func (n *jfsObjects) delObj(bucket string, object string) error {
 		logger.Warnf("prune empty dirs of %s: %s", p, err)
 	}
 	return nil
+}
+
+// deleteDirObject reports whether it removed the directory itself.
+func (n *jfsObjects) deleteDirObject(p string) (bool, error) {
+	dir, eno := n.fs.Lopen(mctx, p, 0)
+	if eno == 0 {
+		defer dir.Close(mctx)
+		fi, _ := dir.Stat()
+		explicit := fi.(*fs.FileStat).Atime() == 0
+		if !fi.IsDir() || (!explicit && !n.gConf.HeadDir) {
+			return false, nil
+		}
+		eno = n.fs.Rmdir(mctx, p)
+		if fs.IsNotEmpty(eno) && explicit {
+			// Keep the children and clear only the explicit directory marker.
+			if err := dir.Utime(mctx, time.Now().UnixMilli(), -1); err != 0 {
+				return false, err
+			}
+		}
+	}
+	switch eno {
+	case 0:
+		return true, nil
+	case syscall.ENOENT, syscall.ENOTDIR, syscall.EISDIR, syscall.ENOTEMPTY:
+		return false, nil
+	default:
+		return false, eno
+	}
 }
 
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
@@ -643,6 +672,9 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 	}
 	delMap := make(map[string][]int)
 	for idx, o := range objects {
+		if strings.HasSuffix(o.ObjectName, sep) {
+			continue
+		}
 		p := path.Dir(path.Clean(n.path(bucket, o.ObjectName)))
 		delMap[p] = append(delMap[p], idx)
 	}
@@ -674,6 +706,12 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 		})
 	}
 	_ = g.Wait()
+	// A directory emptied by the file batch needs no marker update.
+	for idx, o := range objects {
+		if strings.HasSuffix(o.ObjectName, sep) {
+			errs[idx] = jfsToObjectErr(ctx, n.delObj(bucket, o.ObjectName), bucket, o.ObjectName)
+		}
+	}
 	return
 }
 
