@@ -5,6 +5,8 @@ sidebar_position: 6
 
 JuiceFS 社区版从 v1.3.0 引入 Python SDK，适合无法使用 FUSE 挂载的容器化或虚拟化环境使用。并且 Python SDK 实现了 fsspec 的接口规范，可方便的对接 Ray 等框架。
 
+`fsspec` 适配层的 `mkdir()` 默认使用 `0o777` 权限，并应用客户端的 umask。需要更严格的权限时，可显式指定 `mode`。
+
 ## 快速上手视频
 
 <div className="video-container">

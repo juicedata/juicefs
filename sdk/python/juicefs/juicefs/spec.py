@@ -50,7 +50,7 @@ class JuiceFS(AbstractFileSystem):
             raise FileExistsError(f"File exists: {path}")
         self.fs.makedirs(self._strip_protocol(path), mode, exist_ok=exist_ok)
 
-    def mkdir(self, path, create_parents=True, mode=0o511):
+    def mkdir(self, path, create_parents=True, mode=0o777):
         if self.exists(path):
             raise FileExistsError(f"File exists: {path}")
         if create_parents:
