@@ -303,35 +303,36 @@ func TestBucketLifecycleLockCancellation(t *testing.T) {
 
 type copyHookMeta struct {
 	meta.Meta
-	mu     sync.Mutex
-	calls  int
-	onCopy func(call int, delegate func() syscall.Errno) syscall.Errno
+	hook func(copy func() syscall.Errno) syscall.Errno
 }
 
 func (m *copyHookMeta) CopyFileRange(ctx meta.Context, fin meta.Ino, offIn uint64, fout meta.Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
-	m.mu.Lock()
-	m.calls++
-	call, hook := m.calls, m.onCopy
-	m.mu.Unlock()
-	delegate := func() syscall.Errno {
+	return m.hook(func() syscall.Errno {
 		return m.Meta.CopyFileRange(ctx, fin, offIn, fout, offOut, size, flags, copied, outLength)
-	}
-	if hook == nil {
-		return delegate()
-	}
-	return hook(call, delegate)
+	})
 }
 
 // Two gateway instances share the same volume but not the in-process object
 // locks, so a retried CompleteMultipartUpload can run on both at once.
 func TestCompleteMultipartUploadAcrossGateways(t *testing.T) {
-	m := &copyHookMeta{Meta: meta.NewClient("memkv://", nil)}
+	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "gateway-complete.db")
 	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
-	if err := m.Init(format, true); err != nil {
+	m1 := &copyHookMeta{Meta: meta.NewClient(metaURL, nil)}
+	if err := m1.Init(format, true); err != nil {
 		t.Fatalf("init meta: %s", err)
 	}
-	g1, jfs := newTestGatewayWithMeta(t, m, format, Config{})
-	g2 := &jfsObjects{fs: g1.fs, conf: g1.conf, listPool: g1.listPool, nsMutex: minio.NewNSLock(false), gConf: g1.gConf}
+	m2 := &copyHookMeta{Meta: meta.NewClient(metaURL, nil)}
+	if _, err := m2.Load(true); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+	for _, m := range []meta.Meta{m1, m2} {
+		if err := m.NewSession(true); err != nil {
+			t.Fatalf("new session: %s", err)
+		}
+		defer m.CloseSession()
+	}
+	g1, _ := newTestGatewayWithMeta(t, m1, format, Config{})
+	g2, _ := newTestGatewayWithMeta(t, m2, format, Config{})
 	ctx := context.Background()
 	bucket, object := format.Name, "target"
 
@@ -351,22 +352,19 @@ func TestCompleteMultipartUploadAcrossGateways(t *testing.T) {
 		want = append(want, data...)
 	}
 
-	// Pause the first gateway after it merges part 1 and the second gateway
-	// before it merges anything, then let the first gateway finish.
-	firstPaused, resumeFirst := make(chan struct{}), make(chan struct{})
-	secondPaused, resumeSecond := make(chan struct{}), make(chan struct{})
-	m.onCopy = func(call int, delegate func() syscall.Errno) syscall.Errno {
-		switch call {
-		case 1:
-			eno := delegate()
-			close(firstPaused)
-			<-resumeFirst
-			return eno
-		case 2:
-			close(secondPaused)
-			<-resumeSecond
-		}
-		return delegate()
+	// Pause the first gateway after its first merge copy and the second gateway
+	// before its first one, then let the first gateway finish.
+	firstPaused, resumeFirst := make(chan error), make(chan struct{})
+	secondPaused, resumeSecond := make(chan error), make(chan struct{})
+	var once1, once2 sync.Once
+	m1.hook = func(copy func() syscall.Errno) syscall.Errno {
+		eno := copy()
+		once1.Do(func() { close(firstPaused); <-resumeFirst })
+		return eno
+	}
+	m2.hook = func(copy func() syscall.Errno) syscall.Errno {
+		once2.Do(func() { close(secondPaused); <-resumeSecond })
+		return copy()
 	}
 	complete := func(g *jfsObjects) <-chan error {
 		done := make(chan error, 1)
@@ -376,55 +374,41 @@ func TestCompleteMultipartUploadAcrossGateways(t *testing.T) {
 		}()
 		return done
 	}
-	waitFor := func(ch <-chan struct{}, what string) {
+	wait := func(ch <-chan error, what string) error {
 		t.Helper()
 		select {
-		case <-ch:
+		case err := <-ch:
+			return err
 		case <-time.After(5 * time.Second):
 			t.Fatalf("timed out waiting for %s", what)
+			return nil
 		}
 	}
-	readObject := func() []byte {
+	checkObject := func(when string) {
 		t.Helper()
-		f, eno := jfs.Open(mctx, g1.path(bucket, object), vfs.MODE_MASK_R)
-		if eno != 0 {
-			t.Fatalf("open object: %s", eno)
+		r, err := g1.GetObjectNInfo(ctx, bucket, object, nil, nil, 0, minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("get object %s: %s", when, err)
 		}
-		defer f.Close(mctx)
-		buf := make([]byte, len(want)+1)
-		n, err := f.Pread(mctx, buf, 0)
-		if err != nil && err != io.EOF {
-			t.Fatalf("read object: %s", err)
+		defer r.Close()
+		if got, _ := io.ReadAll(r); !bytes.Equal(got, want) {
+			t.Fatalf("object corrupted %s: got %d bytes, md5 %x, want md5 %x", when, len(got), md5.Sum(got), md5.Sum(want))
 		}
-		return buf[:n]
 	}
 
 	first := complete(g1)
-	waitFor(firstPaused, "first gateway to merge part 1")
+	wait(firstPaused, "first gateway to merge part 1")
 	second := complete(g2)
-	waitFor(secondPaused, "second gateway to start merging")
+	wait(secondPaused, "second gateway to start merging")
 	close(resumeFirst)
-	select {
-	case err := <-first:
-		if err != nil {
-			t.Fatalf("first complete: %s", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("first complete did not finish")
+	if err := wait(first, "first complete"); err != nil {
+		t.Fatalf("first complete: %s", err)
 	}
-	if got := readObject(); !bytes.Equal(got, want) {
-		t.Fatalf("object corrupted by concurrent complete: got %d bytes, md5 %x, want md5 %x", len(got), md5.Sum(got), md5.Sum(want))
-	}
+	checkObject("after first complete")
 
 	close(resumeSecond)
-	select {
-	case <-second: // may fail with NoSuchUpload once the first complete removed the parts
-	case <-time.After(5 * time.Second):
-		t.Fatal("second complete did not finish")
-	}
-	if got := readObject(); !bytes.Equal(got, want) {
-		t.Fatalf("object changed by the second complete: got %d bytes, md5 %x, want md5 %x", len(got), md5.Sum(got), md5.Sum(want))
-	}
+	_ = wait(second, "second complete") // may fail with NoSuchUpload once the first complete removed the parts
+	checkObject("after second complete")
 }
 
 func TestBucketLifecycleLockAcrossGateways(t *testing.T) {
