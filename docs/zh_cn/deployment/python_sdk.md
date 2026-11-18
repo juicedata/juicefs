@@ -132,6 +132,11 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+`jfs.copy(source, destination)` 会替换已有的目标文件。替换时先克隆到目标的同级临时文件，
+再重命名到目标路径，因此克隆或重命名失败不会预先删除旧目标。源文件不存在时抛出
+`FileNotFoundError`；列表到列表的复制可用 `on_error="ignore"` 跳过缺失源，且不会创建对应的
+目标目录。批量复制不是事务。
+
 ### 获取帮助信息
 
 可以使用 `help()` 函数获取类和方法的帮助信息。
