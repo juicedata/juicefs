@@ -40,6 +40,7 @@ func TestNewCacheStore(t *testing.T) {
 	conf := testConf()
 	defer os.RemoveAll(conf.CacheDir)
 	s := newDiskCache(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+	shutdownOnCleanup(t, s)
 	if s == nil {
 		t.Fatalf("Create new cache store failed")
 	}
@@ -169,6 +170,7 @@ func TestAtimeNotLost(t *testing.T) {
 		cfg.CacheEviction = eviction
 		cfg.FreeSpace = 0.03
 		m := newCacheManager(&cfg, nil, nil)
+		shutdownOnCleanup(t, m)
 		key := "0_0_10"
 
 		p := NewPage([]byte("helloworld"))
@@ -196,6 +198,7 @@ func TestSetlimitByFreeRatio(t *testing.T) {
 	conf := testConf()
 	defer os.RemoveAll(conf.CacheDir)
 	cache := newDiskCache(nil, conf.CacheDir, 1<<30, 1000, 1, &conf, nil)
+	shutdownOnCleanup(t, cache)
 
 	usage := DiskFreeRatio{
 		spaceCap: 1 << 30,
@@ -218,6 +221,7 @@ func TestSetLimitByFreeRatioUnknownInodesKeepExplicitMaxItems(t *testing.T) {
 	conf := testConf()
 	defer os.RemoveAll(conf.CacheDir)
 	cache := newDiskCache(nil, conf.CacheDir, 1<<30, 1000, 1, &conf, nil)
+	shutdownOnCleanup(t, cache)
 
 	usage := DiskFreeRatio{
 		spaceCap: 1 << 30,
@@ -240,6 +244,7 @@ func Test2RandomEviction(t *testing.T) {
 		m := new(cacheManagerMetrics)
 		m.initMetrics()
 		s := newDiskCache(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		shutdownOnCleanup(t, s)
 		require.NotNil(t, s)
 		if _, ok := s.keys.(*randomEviction); !ok {
 			t.Fatalf("Expected randomEviction, but got %T", s.keys)
@@ -269,6 +274,7 @@ func TestLruEviction(t *testing.T) {
 		m := new(cacheManagerMetrics)
 		m.initMetrics()
 		s := newDiskCache(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		shutdownOnCleanup(t, s)
 		require.NotNil(t, s)
 		le := s.keys.(*lruEviction)
 
@@ -324,6 +330,7 @@ func TestLruEviction(t *testing.T) {
 		m := new(cacheManagerMetrics)
 		m.initMetrics()
 		s := newDiskCache(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		shutdownOnCleanup(t, s)
 		require.NotNil(t, s)
 		le := s.keys.(*lruEviction)
 
@@ -365,6 +372,7 @@ func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
 	m := new(cacheManagerMetrics)
 	m.initMetrics()
 	cache := newDiskCache(m, dir, 1<<30, 1000, 1, &conf, nil)
+	shutdownOnCleanup(t, cache)
 	cache.scanned = true
 	key := "0_0_4"
 

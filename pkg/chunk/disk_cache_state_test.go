@@ -53,6 +53,7 @@ func testDiskCacheState(t *testing.T, cacheNum int) {
 	conf.AutoCreate = true
 
 	manager := newCacheManager(&conf, nil, nil)
+	shutdownOnCleanup(t, manager)
 	require.False(t, manager.isEmpty())
 
 	m, ok := manager.(*cacheManager)

@@ -126,6 +126,7 @@ func TestStoreDefault(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	_ = os.RemoveAll(defaultConf.CacheDir)
 	store := NewCachedStore(mem, defaultConf, nil)
+	shutdownOnCleanup(t, store)
 	testStore(t, store)
 	if used := store.UsedMemory(); used != 0 {
 		t.Fatalf("used memory %d != expect 0", used)
@@ -154,6 +155,7 @@ func TestStoreCompressed(t *testing.T) {
 	conf.Compress = "lz4"
 	conf.AutoCreate = false
 	store := NewCachedStore(mem, conf, nil)
+	shutdownOnCleanup(t, store)
 	testStore(t, store)
 }
 
@@ -163,6 +165,7 @@ func TestStoreLimited(t *testing.T) {
 	conf.UploadLimit = 1e6
 	conf.DownloadLimit = 1e6
 	store := NewCachedStore(mem, conf, nil)
+	shutdownOnCleanup(t, store)
 	testStore(t, store)
 }
 
@@ -171,6 +174,7 @@ func TestStoreFull(t *testing.T) {
 	conf := defaultConf
 	conf.FreeSpace = 0.9999
 	store := NewCachedStore(mem, conf, nil)
+	shutdownOnCleanup(t, store)
 	testStore(t, store)
 }
 
@@ -179,6 +183,7 @@ func TestStoreSmallBuffer(t *testing.T) {
 	conf := defaultConf
 	conf.BufferSize = 1 << 20
 	store := NewCachedStore(mem, conf, nil)
+	shutdownOnCleanup(t, store)
 	testStore(t, store)
 }
 
@@ -266,6 +271,7 @@ func TestStoreAsync(t *testing.T) {
 			require.NoError(t, os.MkdirAll(filepath.Dir(p), 0744))
 			require.NoError(t, os.WriteFile(p, []byte("good"), 0600))
 			store := NewCachedStore(mem, conf, nil).(*cachedStore)
+			shutdownOnCleanup(t, store)
 			if !writeback {
 				cache := store.bcache.(*cacheManager)
 				for _, force := range []bool{false, true} {
@@ -314,6 +320,7 @@ func TestForceUpload(t *testing.T) {
 	config.UploadDelay = time.Hour
 	config.BlockSize = 4 << 20
 	store := NewCachedStore(blob, config, nil)
+	shutdownOnCleanup(t, store)
 	cleanCache := func() {
 		rSlice := sliceForRead(1, 1024, store.(*cachedStore))
 		for _, i := range rSlice.blockIndexes(nil) {
@@ -361,6 +368,7 @@ func TestStoreDelayed(t *testing.T) {
 	conf.Writeback = true
 	conf.UploadDelay = time.Millisecond * 200
 	store := NewCachedStore(mem, conf, nil)
+	shutdownOnCleanup(t, store)
 	time.Sleep(time.Second) // waiting for cache scanned
 	testStore(t, store)
 	if err := forgetSlice(store, 10, 1024); err != nil {
@@ -378,6 +386,7 @@ func TestStoreMultiBuckets(t *testing.T) {
 	conf := defaultConf
 	conf.HashPrefix = true
 	store := NewCachedStore(mem, conf, nil)
+	shutdownOnCleanup(t, store)
 	testStore(t, store)
 }
 
@@ -388,6 +397,7 @@ func TestFillCache(t *testing.T) {
 	conf.FreeSpace = 0.01
 	_ = os.RemoveAll(conf.CacheDir)
 	store := NewCachedStore(mem, conf, nil)
+	shutdownOnCleanup(t, store)
 	if err := forgetSlice(store, 10, 1024); err != nil {
 		t.Fatalf("forge slice 10 1024: %s", err)
 	}
@@ -506,6 +516,7 @@ func (s *dStore) Get(ctx context.Context, key string, off, limit int64, getters 
 func TestStoreRetry(t *testing.T) {
 	s := &dStore{}
 	cs := NewCachedStore(s, defaultConf, nil)
+	shutdownOnCleanup(t, cs)
 	p := NewPage(nil)
 	defer p.Release()
 	cs.(*cachedStore).load(context.TODO(), "non", p, false, false) // wont retry
@@ -603,6 +614,7 @@ func TestReadAtNeverReportsSuccessWithUnfilledBuffer(t *testing.T) {
 	conf.MaxRetries = 1
 	slow := &lateStore{ObjectStorage: mem, data: want, delay: conf.GetTimeout}
 	store := NewCachedStore(slow, conf, nil)
+	shutdownOnCleanup(t, store)
 
 	var bad, ok, failed atomic.Int64
 	var wg sync.WaitGroup

@@ -72,6 +72,7 @@ func TestMetrics(t *testing.T) {
 	conf := testConf()
 	defer os.RemoveAll(conf.CacheDir)
 	m := newCacheManager(&conf, nil, nil)
+	shutdownOnCleanup(t, m)
 	metrics := m.(*cacheManager).metrics
 	s := m.(*cacheManager).stores[0]
 	content := []byte("helloworld")
@@ -150,6 +151,28 @@ func shutdownStore(s *diskCache) {
 	defer s.stateLock.Unlock()
 	s.state.stop()
 	s.state = newDCState(dcDown, s)
+}
+
+// shutdownOnCleanup shuts down the disk caches behind c when the test ends, so their
+// background goroutines won't run into functions patched by mockey in later tests.
+func shutdownOnCleanup(t *testing.T, c interface{}) {
+	if s, ok := c.(*cachedStore); ok {
+		c = s.bcache
+	}
+	var stores []*diskCache
+	switch v := c.(type) {
+	case *cacheManager:
+		stores = append(stores, v.stores...)
+	case *diskCache:
+		stores = append(stores, v)
+	}
+	t.Cleanup(func() {
+		for _, s := range stores {
+			if s != nil {
+				shutdownStore(s)
+			}
+		}
+	})
 }
 
 func TestCacheManager(t *testing.T) {
