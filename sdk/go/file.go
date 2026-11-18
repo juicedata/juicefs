@@ -38,7 +38,6 @@ type File struct {
 	name string
 
 	off    atomic.Int64 // offset of a file, or entries returned of a directory
-	size   atomic.Int64 // length at open, updated by the writes of this handle
 	closed atomic.Bool
 
 	// dirMu guards dirents and the offset of a directory; it is not held
@@ -74,7 +73,7 @@ func (c *Client) Create(name string) (*File, error) {
 // OpenFile is os.OpenFile, which supports only the flags O_RDONLY, O_WRONLY,
 // O_RDWR, O_CREATE, O_EXCL, O_TRUNC and O_APPEND; others give EINVAL. perm
 // applies with the umask read by New. Writes with O_APPEND go to the end of
-// the file as known by this handle, not atomically. A file open when the
+// the file read before each write, not atomically. A file open when the
 // Client is closed is closed with it.
 func (c *Client) OpenFile(name string, flag int, perm fs.FileMode) (*File, error) {
 	f, err := c.openFile(name, flag, perm)
@@ -122,14 +121,11 @@ func (c *Client) openFile(name string, flag int, perm fs.FileMode) (*File, error
 	}
 	if st != nil {
 		f.isDir = isDir(st)
-		f.size.Store(int64(st.Size))
 		if f.isDir && (f.writable || create || trunc) {
 			err = syscall.EISDIR
 		} else if trunc && !f.isDir {
 			// Truncation is not atomic with open.
-			if err = f.f.truncate(0); err == nil {
-				f.size.Store(0)
-			}
+			err = f.f.truncate(0)
 		}
 	}
 	if err == nil && !c.track(f) {
@@ -149,9 +145,12 @@ func (c *Client) ReadFile(name string) ([]byte, error) {
 	}
 	defer f.Close()
 
-	// As readFileContents of os, sized by the length at open instead of Stat.
+	// As readFileContents of os, sized by the current length.
 	const minBuf = 512
-	statSize := f.size.Load()
+	var statSize int64
+	if st, e := f.f.stat(); e == nil {
+		statSize = int64(st.Size)
+	}
 	size := minBuf
 	if n := statSize + 1; int64(int(n)) == n && int(n) > size {
 		size = int(n)
@@ -241,7 +240,7 @@ func (f *File) pread(b []byte, off int64) (int, error) {
 	return f.f.pread(b, off)
 }
 
-// Write writes b at the offset, or at the end known by this handle with
+// Write writes b at the offset, or at the current end of the file with
 // O_APPEND.
 func (f *File) Write(b []byte) (n int, err error) {
 	if f == nil {
@@ -249,11 +248,14 @@ func (f *File) Write(b []byte) (n int, err error) {
 	}
 	if err = f.checkWrite(); err == nil && len(b) > 0 {
 		if f.append {
-			off := f.size.Load()
-			n, err = f.pwrite(b, off)
-			f.off.Store(off + int64(n))
+			var st *Stat
+			if st, err = f.f.stat(); err == nil {
+				off := int64(st.Size)
+				n, err = f.f.pwrite(b, off)
+				f.off.Store(off + int64(n))
+			}
 		} else {
-			n, err = f.pwrite(b, f.off.Load())
+			n, err = f.f.pwrite(b, f.off.Load())
 			f.off.Add(int64(n))
 		}
 	}
@@ -276,7 +278,7 @@ func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 		return 0, nil
 	}
 	if err = f.checkWrite(); err == nil {
-		n, err = f.pwrite(b, off)
+		n, err = f.f.pwrite(b, off)
 	}
 	return n, f.wrap("write", err)
 }
@@ -295,21 +297,10 @@ func (f *File) checkWrite() error {
 	return nil
 }
 
-func (f *File) pwrite(b []byte, off int64) (int, error) {
-	n, err := f.f.pwrite(b, off)
-	end := off + int64(n)
-	for {
-		size := f.size.Load()
-		if end <= size || f.size.CompareAndSwap(size, end) {
-			break
-		}
-	}
-	return n, err
-}
-
-// Seek sets the offset; io.SeekEnd is relative to the length known by this
-// handle. On a directory it restarts reading from the backend, and the
-// offset counts entries in the order of names.
+// Seek sets the offset; io.SeekEnd is relative to the current length of the
+// file, including the writes of this client that are not flushed. On a
+// directory it restarts reading from the backend, and the offset counts
+// entries in the order of names.
 func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
 	if f == nil {
 		return 0, fs.ErrInvalid
@@ -319,7 +310,16 @@ func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
 	} else if f.isDir {
 		ret, err = f.seekDir(offset, whence)
 	} else {
-		ret, err = seekOffset(&f.off, offset, whence, f.size.Load())
+		var end int64
+		if whence == io.SeekEnd {
+			var st *Stat
+			if st, err = f.f.stat(); err == nil {
+				end = int64(st.Size)
+			}
+		}
+		if err == nil {
+			ret, err = seekOffset(&f.off, offset, whence, end)
+		}
 	}
 	if err != nil {
 		return 0, f.wrap("seek", err)
@@ -363,7 +363,7 @@ func (f *File) seekDir(offset int64, whence int) (int64, error) {
 }
 
 // Stat returns the current attributes of the open file; Size includes the
-// writes of this handle that are not flushed.
+// writes of this client that are not flushed.
 func (f *File) Stat() (fs.FileInfo, error) {
 	if f == nil {
 		return nil, fs.ErrInvalid
@@ -374,9 +374,6 @@ func (f *File) Stat() (fs.FileInfo, error) {
 	st, err := f.f.stat()
 	if err != nil {
 		return nil, f.wrap("stat", err)
-	}
-	if size := f.size.Load(); !f.isDir && size > int64(st.Size) {
-		st.Size = uint64(size)
 	}
 	return newFileInfo(f.name, st), nil
 }
@@ -392,9 +389,7 @@ func (f *File) Truncate(size int64) error {
 	case !f.writable || size < 0:
 		err = syscall.EINVAL
 	default:
-		if err = f.f.truncate(size); err == nil {
-			f.size.Store(size)
-		}
+		err = f.f.truncate(size)
 	}
 	return f.wrap("truncate", err)
 }

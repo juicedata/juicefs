@@ -403,7 +403,6 @@ func (h *fsFile) fsync() error {
 	return errno(h.f.Fsync(h.b.ctx()))
 }
 
-// stat reads the attributes from meta, as fs.File.Stat returns those at open.
 func (h *fsFile) stat() (*Stat, error) {
 	inode := h.f.Inode()
 	if vfs.IsSpecialNode(inode) {
@@ -413,6 +412,7 @@ func (h *fsFile) stat() (*Stat, error) {
 	if e := h.b.fs.Meta().GetAttr(h.b.ctx(), inode, &attr); e != 0 {
 		return nil, e
 	}
+	h.b.fs.UpdateLength(inode, &attr)
 	return toStat(inode, &attr), nil
 }
 
