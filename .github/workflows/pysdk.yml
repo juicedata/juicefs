@@ -165,6 +165,7 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
+          sudo python3 -m pip install pytest fsspec
           sudo JUICEFS_META=$meta_url python3 -m pytest -q sdk/python/juicefs/tests/test_fsspec_copy.py
           df -h
 
