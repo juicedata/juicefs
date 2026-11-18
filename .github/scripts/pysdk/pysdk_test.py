@@ -2,6 +2,7 @@ import errno
 from array import array
 import fractions
 import grp
+import hashlib
 import io
 import unittest
 from unittest.mock import patch
@@ -57,6 +58,48 @@ class FileTests(unittest.TestCase):
 
 
 class ReadintoTests(FileTests):
+    def test_readinto_large_sliced_buffer(self):
+        content = bytes(range(256)) * (1 << 15) + b'end'
+        self.create_file(TESTFILE, content)
+        expected = hashlib.sha256(content).digest()
+        for buffering in (0, 8192):
+            with self.subTest(buffering=buffering):
+                storage = bytearray(b'x' * (len(content) + 11))
+                with memoryview(storage) as view, view[3:-8] as target:
+                    with self.v.open(TESTFILE, 'rb', buffering) as stream:
+                        self.assertEqual(stream.readinto(target), len(content))
+                        self.assertEqual(stream.tell(), len(content))
+                        self.assertEqual(stream.readinto(target), 0)
+                    self.assertEqual(hashlib.sha256(target).digest(), expected)
+                self.assertEqual(storage[:3], b'xxx')
+                self.assertEqual(storage[-8:], b'xxxxxxxx')
+                storage.extend(b'!')
+
+    def test_readinto_releases_buffer_after_error(self):
+        self.create_file(TESTFILE, b'abcdefgh')
+        for buffering in (0, 8192):
+            # ok_calls=1 fails after a partial native read.
+            for ok_calls in (0, 1):
+                with self.subTest(buffering=buffering, ok_calls=ok_calls):
+                    data = bytearray(16)
+                    with self.v.open(TESTFILE, 'rb', buffering) as stream:
+                        lib = stream._file.lib
+                        native_read = lib.jfs_pread
+                        calls = [0]
+
+                        def flaky_read(*args):
+                            if calls[0] >= ok_calls:
+                                raise OSError(errno.EIO, 'read failure')
+                            calls[0] += 1
+                            return native_read(*args)
+
+                        with patch.object(lib, 'jfs_pread', side_effect=flaky_read):
+                            with self.assertRaises(OSError) as caught:
+                                stream.readinto(data)
+                        self.assertEqual(caught.exception.errno, errno.EIO)
+                        self.assertEqual(stream.tell(), 0)
+                    data.extend(b'x')
+
     def test_readinto_writable_buffers(self):
         content = b"abcdefghijk"
         self.create_file(TESTFILE, content)
