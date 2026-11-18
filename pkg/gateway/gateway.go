@@ -619,7 +619,11 @@ func (n *jfsObjects) delObj(bucket string, object string) error {
 		}
 		return eno
 	}
-	return n.pruneEmptyDirs(root, path.Dir(p))
+	// the object is already gone, so a leftover empty directory must not fail the delete
+	if err := n.pruneEmptyDirs(root, path.Dir(p)); err != nil {
+		logger.Warnf("prune empty dirs of %s: %s", p, err)
+	}
+	return nil
 }
 
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
@@ -654,20 +658,19 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 		}
 		g.Go(func() error {
 			// will ignore dir
-			err := n.fs.BatchDeleteEntries(mctx, ppath, ps)
-			if err != 0 {
+			if eno := n.fs.BatchDeleteEntries(mctx, ppath, ps); eno != 0 {
+				// The batch may be partially committed or aborted by a single entry,
+				// so retry one by one to give each key its own result.
 				for _, idx := range idxs {
-					errs[idx] = jfsToObjectErr(ctx, err, bucket, objects[idx].ObjectName)
+					name := objects[idx].ObjectName
+					errs[idx] = jfsToObjectErr(ctx, n.delObj(bucket, name), bucket, name)
 				}
-				return err
+				return nil
 			}
-			if e := n.pruneEmptyDirs(root, ppath); e != nil {
-				for _, idx := range idxs {
-					errs[idx] = e
-				}
-				return err
+			if err := n.pruneEmptyDirs(root, ppath); err != nil {
+				logger.Warnf("prune empty dirs of %s: %s", ppath, err)
 			}
-			return err
+			return nil
 		})
 	}
 	_ = g.Wait()

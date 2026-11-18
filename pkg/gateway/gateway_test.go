@@ -987,7 +987,7 @@ func TestDeleteObjects(t *testing.T) {
 
 		reqs := []minio.ObjectToDelete{
 			{ObjectName: "ok1"},
-			{ObjectName: "missing-dir/child"}, // parent was never created, so this one fails
+			{ObjectName: "missing-dir/child"}, // parent was never created, so it is already gone
 			{ObjectName: "ok2"},
 		}
 		objs, errs := jfsObj.DeleteObjects(context.Background(), bucket, reqs, minio.ObjectOptions{})
@@ -1002,11 +1002,71 @@ func TestDeleteObjects(t *testing.T) {
 				t.Fatalf("objs[%d].ObjectName = %q, want %q", i, objs[i].ObjectName, req.ObjectName)
 			}
 		}
+		for i, e := range errs {
+			if e != nil {
+				t.Fatalf("delete %s: %s", reqs[i].ObjectName, e)
+			}
+		}
+	})
+
+	setImmutable := func(t *testing.T, jfs *fs.FileSystem, p string) {
+		t.Helper()
+		fi, eno := jfs.Stat(mctx, p)
+		if eno != 0 {
+			t.Fatalf("stat %s: %s", p, eno)
+		}
+		if eno = jfs.Meta().SetAttr(mctx, fi.Inode(), meta.SetAttrFlag, 0, &meta.Attr{Flags: meta.FlagImmutable}); eno != 0 {
+			t.Fatalf("set immutable %s: %s", p, eno)
+		}
+	}
+
+	t.Run("report errors per key when batch fails", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		bucket := "bkt4"
+		if eno := jfs.Mkdir(mctx, "/"+bucket, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir bucket: %s", eno)
+		}
+		for _, name := range []string{"ok1", "locked", "ok2"} {
+			createTestFile(t, jfs, "/"+bucket+"/"+name)
+		}
+		setImmutable(t, jfs, "/"+bucket+"/locked") // aborts the whole BatchUnlink with EPERM
+
+		reqs := []minio.ObjectToDelete{{ObjectName: "ok1"}, {ObjectName: "locked"}, {ObjectName: "ok2"}}
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket, reqs, minio.ObjectOptions{})
 		if errs[0] != nil || errs[2] != nil {
 			t.Fatalf("ok keys should succeed: errs[0]=%v, errs[2]=%v", errs[0], errs[2])
 		}
 		if errs[1] == nil {
-			t.Fatalf("key under missing parent should fail")
+			t.Fatalf("immutable key should fail")
 		}
+		assertHeadObject(t, jfsObj, bucket, "ok1", false)
+		assertHeadObject(t, jfsObj, bucket, "ok2", false)
+		assertHeadObject(t, jfsObj, bucket, "locked", true)
+	})
+
+	t.Run("prune failure does not fail delete", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		bucket := "bkt5"
+		if eno := jfs.Mkdir(mctx, "/"+bucket, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir bucket: %s", eno)
+		}
+		for _, dir := range []string{"x", "y"} {
+			if eno := jfs.Mkdir(mctx, "/"+bucket+"/"+dir, 0777, 022); eno != 0 {
+				t.Fatalf("mkdir %s: %s", dir, eno)
+			}
+			createTestFile(t, jfs, "/"+bucket+"/"+dir+"/f")
+		}
+		setImmutable(t, jfs, "/"+bucket) // pruning the emptied x and y fails with EPERM
+
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "x/f"}}, minio.ObjectOptions{})
+		if errs[0] != nil {
+			t.Fatalf("DeleteObjects x/f: %s", errs[0])
+		}
+		if _, err := jfsObj.DeleteObject(context.Background(), bucket, "y/f", minio.ObjectOptions{}); err != nil {
+			t.Fatalf("DeleteObject y/f: %s", err)
+		}
+		assertHeadObject(t, jfsObj, bucket, "x/f", false)
+		assertHeadObject(t, jfsObj, bucket, "y/f", false)
 	})
 }
