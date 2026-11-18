@@ -248,7 +248,7 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 	directoryBucket := strings.HasSuffix(s.bucket, s3DirectoryBucketSuffix)
 	if directoryBucket {
 		if !isUnorderedList(ctx) {
-			return nil, false, "", fmt.Errorf("directory bucket %s can't list keys in order, try --external-sort-dir", s.bucket)
+			return nil, false, "", fmt.Errorf("directory bucket %s can't list keys in order", s.bucket)
 		}
 		if start != "" && token == "" {
 			return nil, false, "", fmt.Errorf("directory bucket %s can't list after %q", s.bucket, start)

@@ -230,8 +230,8 @@ func TestS3DirectoryBucketList(t *testing.T) {
 		return keys
 	}
 	assert.Equal(t, []string{"m", "a"}, listAll(WithPrefix(stor, "chunks/")))
-	// Sharded volumes can't merge unordered shards, so they list the shards one by one.
-	assert.Equal(t, []string{"m", "a", "m", "a"}, listAll(shards))
+	// Merging unordered shards keeps every key, though not in order.
+	assert.ElementsMatch(t, []string{"m", "a", "m", "a"}, listAll(shards))
 
 	objs, _, _, err := stor.List(WithUnorderedList(ctx), "chunks/", "chunks/m", "t2", "", 1000, true)
 	require.NoError(t, err)

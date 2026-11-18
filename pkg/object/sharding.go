@@ -189,7 +189,6 @@ func (s *nextObjects) Pop() interface{} {
 }
 
 func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
-	unordered := isUnorderedList(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	heads := &nextObjects{make([]nextKey, 0, len(s.stores))}
 	// abort stops the remaining shard listings and drains their channels,
@@ -204,7 +203,7 @@ func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink
 		}
 	}
 	for i := range s.stores {
-		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink, !unordered)
+		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink, !isUnorderedList(ctx))
 		if err != nil {
 			abort()
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
@@ -219,28 +218,9 @@ func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink
 		}
 		heads.Push(nextKey{first, ch})
 	}
-	out := make(chan Object, 1000)
-	if unordered {
-		// The caller doesn't need the order, so output the shards one by one
-		// instead of merging them, which requires each shard to be ordered.
-		go func() {
-			defer close(out)
-			defer cancel()
-			for _, h := range heads.os {
-				out <- h.o
-				for o := range h.ch {
-					out <- o
-					if o == nil {
-						abort()
-						return
-					}
-				}
-			}
-		}()
-		return out, nil
-	}
-
 	heap.Init(heads)
+
+	out := make(chan Object, 1000)
 	go func() {
 		defer close(out)
 		defer cancel()
