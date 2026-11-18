@@ -543,15 +543,17 @@ class _File(object):
             with view.cast('B') as byte_view:
                 if not self.readable():
                     raise io.UnsupportedOperation('not readable')
+                size = len(byte_view)
+                if size == 0:
+                    return 0
+                # byte_view keeps the buffer exported, so its address stays valid.
+                head = c_char.from_buffer(byte_view)
+                base = addressof(head)
+                del head
                 got = 0
-                while got < len(byte_view):
-                    count = min(len(byte_view) - got, 4 << 20)
-                    buf = (c_char * count).from_buffer(byte_view, got)
-                    try:
-                        # Keep the export local if ctypes retains its call arguments.
-                        n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), c_void_p(addressof(buf)), c_int32(count), c_int64(self.off+got))
-                    finally:
-                        del buf
+                while got < size:
+                    count = min(size - got, 4 << 20)
+                    n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), c_void_p(base+got), c_int32(count), c_int64(self.off+got))
                     if n == 0:
                         break
                     got += n
