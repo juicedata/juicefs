@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test: [ 'test.meta.core','test.meta.non-core','test.pkg','test.cmd', 'test.fdb', 'test.sdk.go' ]
+        test: [ 'test.meta.core','test.meta.non-core','test.pkg','test.cmd', 'test.fdb', 'test.sdk.go', 'test.sdk.go.libjfs' ]
     timeout-minutes: 60
     runs-on: ubuntu-22.04
     env:

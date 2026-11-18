@@ -17,6 +17,9 @@
 package juicefs
 
 import (
+	"fmt"
+	"os"
+	"slices"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -74,4 +77,20 @@ type fileBackend interface {
 	chmod(mode uint16) error
 	chown(uid, gid uint32) error
 	close() error
+}
+
+// identity returns the euid and the groups with the egid first, which both
+// backends use for all calls.
+func identity() (uint32, []uint32, error) {
+	groups, err := os.Getgroups()
+	if err != nil {
+		return 0, nil, fmt.Errorf("get groups: %w", err)
+	}
+	gids := []uint32{uint32(os.Getegid())}
+	for _, g := range groups {
+		if !slices.Contains(gids, uint32(g)) {
+			gids = append(gids, uint32(g))
+		}
+	}
+	return uint32(os.Geteuid()), gids, nil
 }

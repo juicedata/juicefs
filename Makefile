@@ -127,6 +127,15 @@ test.fdb:
 test.sdk.go:
 	go test -tags nogspt -race -v -cover -count=1 -failfast -timeout=12m ./sdk/go/... -args -test.gocoverdir="$(shell realpath cover/)"
 
+# Builds libjfs of this repository and runs the Go SDK tests with it.
+LIBJFS_DIR ?= /tmp/juicefs-sdk-go-libjfs
+LIBJFS_EXT := $(if $(filter Darwin,$(shell uname -s)),dylib,so)
+test.sdk.go.libjfs:
+	mkdir -p $(LIBJFS_DIR)
+	go build -tags nogspt -buildmode=c-shared -o $(LIBJFS_DIR)/libjfs.$(LIBJFS_EXT) ./sdk/java/libjfs
+	CGO_LDFLAGS="-L$(LIBJFS_DIR)" LD_LIBRARY_PATH="$(LIBJFS_DIR)" DYLD_LIBRARY_PATH="$(LIBJFS_DIR)" \
+		go test -tags libjfs -race -v -cover -count=1 -failfast -timeout=12m ./sdk/go/... -args -test.gocoverdir="$(shell realpath cover/)"
+
 unit-random-test:
 	echo "Using meta:$(meta), seed: $(seed), checks:${checks}, steps: $(steps)"
 	go test ./pkg/meta/... -rapid.meta="$(meta)" -rapid.seed=$(seed) -rapid.checks=$(checks) -rapid.steps=$(steps) -run "TestFSOps" -v -failfast -count=1 -timeout=60m -cover -coverpkg=./pkg/... -args -test.gocoverdir="$(shell realpath cover/)"

@@ -17,6 +17,7 @@ package juicefs
 
 import (
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -26,8 +27,19 @@ func TestNewAndClose(t *testing.T) {
 	if c.Name() != "test" {
 		t.Fatalf("Name() = %q", c.Name())
 	}
-	if c.Gatherer() == nil {
-		t.Fatal("Gatherer() = nil")
+	mfs, err := c.Gatherer().Gather()
+	if err != nil {
+		t.Fatalf("Gather: %s", err)
+	}
+	var found bool
+	for _, mf := range mfs {
+		if !strings.HasPrefix(mf.GetName(), "juicefs_") {
+			t.Fatalf("metric %s has no juicefs_ prefix", mf.GetName())
+		}
+		found = found || mf.GetName() == "juicefs_go_goroutines"
+	}
+	if !found {
+		t.Fatal("juicefs_go_goroutines not gathered")
 	}
 	if err := c.Close(); err != nil {
 		t.Fatalf("Close: %s", err)

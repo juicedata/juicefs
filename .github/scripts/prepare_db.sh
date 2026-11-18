@@ -111,7 +111,7 @@ prepare_db() {
     "test.fdb")
         install_fdb
         ;;
-    "test.sdk.go")
+    "test.sdk.go"|"test.sdk.go.libjfs")
         # SQLite and a local directory only
         ;;
     "test.pkg")

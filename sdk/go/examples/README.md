@@ -37,3 +37,20 @@ go run -tags nogspt ./sdk/go/examples/http -addr 127.0.0.1:8080 go-sdk-demo
 - The directory of `iofs` and `http` is in the form of `fs.ValidPath`: no leading `/`, and `.` is the root of the volume.
 - `basic` and `admin` write into `/go-sdk-demo` and leave it for inspection, for example from a FUSE mount of the same volume. Remove it with `juicefs rmr` or `Client.RemoveAll` when done.
 - `admin` sets and deletes a quota on `/go-sdk-demo/admin`. Quotas are managed as root without permission checks, as in `juicefs quota`.
+
+## Run with libjfs
+
+With `-tags libjfs`, the examples call the libjfs shared library instead of compiling JuiceFS. Build the library from the repository, then pass its directory at build time and at run time. On Linux:
+
+```shell
+go build -tags nogspt -buildmode=c-shared -o /tmp/jfs-demo/lib/libjfs.so ./sdk/java/libjfs
+CGO_LDFLAGS="-L/tmp/jfs-demo/lib" LD_LIBRARY_PATH=/tmp/jfs-demo/lib go run -tags libjfs ./sdk/go/examples/basic
+```
+
+On macOS, programs started by `go run` do not get `DYLD_LIBRARY_PATH`, so record the directory in the program with an rpath instead (`ld` may warn about a duplicate `-rpath`, which is harmless):
+
+```shell
+go build -tags nogspt -buildmode=c-shared -ldflags=-extldflags=-Wl,-install_name,@rpath/libjfs.dylib \
+    -o /tmp/jfs-demo/lib/libjfs.dylib ./sdk/java/libjfs
+CGO_LDFLAGS="-L/tmp/jfs-demo/lib -Wl,-rpath,/tmp/jfs-demo/lib" go run -tags libjfs ./sdk/go/examples/basic
+```
