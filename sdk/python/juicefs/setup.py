@@ -15,7 +15,7 @@ setup(
     install_requires=['six'],
     entry_points={
         'fsspec.specs': [
-            'jfs = juicefs.JuiceFS',
+            'jfs = juicefs.spec:JuiceFS',
         ],
     },
 )

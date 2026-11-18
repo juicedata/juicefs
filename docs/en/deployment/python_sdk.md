@@ -7,6 +7,8 @@ The JuiceFS Community Edition introduced the Python SDK in v1.3.0, making it sui
 
 The `fsspec` adapter's `mkdir()` defaults to mode `0o777`, filtered by the client's umask. Pass `mode` explicitly to request more restrictive permissions.
 
+After installing `fsspec`, `fsspec.filesystem("jfs", name="myjfs", meta="redis://localhost")` loads the adapter through the installed SDK's entry point; no manual adapter import is needed.
+
 ## Compilation
 
 You can compile the Python SDK directly in your current working environment or use a Docker container. Both methods require you to first clone the repository and navigate to the SDK directory.

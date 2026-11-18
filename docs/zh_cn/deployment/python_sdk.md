@@ -7,6 +7,8 @@ JuiceFS 社区版从 v1.3.0 引入 Python SDK，适合无法使用 FUSE 挂载�
 
 `fsspec` 适配层的 `mkdir()` 默认使用 `0o777` 权限，并应用客户端的 umask。需要更严格的权限时，可显式指定 `mode`。
 
+安装 `fsspec` 后，调用 `fsspec.filesystem("jfs", name="myjfs", meta="redis://localhost")` 即可通过已安装 SDK 的入口加载适配层，无需手动导入适配模块。
+
 ## 快速上手视频
 
 <div className="video-container">

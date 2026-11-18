@@ -12,6 +12,7 @@ on:
     - '**/pysdk_test.py'
     - '**/juicefs.py'
     - 'sdk/python/juicefs/juicefs/spec.py'
+    - 'sdk/python/juicefs/setup.py'
     - 'sdk/python/juicefs/tests/**'
     - '**/pysdk.yml'
   pull_request:
@@ -25,6 +26,7 @@ on:
     - '**/pysdk_test.py'
     - '**/juicefs.py'
     - 'sdk/python/juicefs/juicefs/spec.py'
+    - 'sdk/python/juicefs/setup.py'
     - 'sdk/python/juicefs/tests/**'
     - '**/pysdk.yml'
   schedule:
@@ -169,12 +171,14 @@ jobs:
           sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
           df -h
 
-      - name: Run fsspec mkdir regressions
+      - name: Run fsspec regressions
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo python3 -m pip install pytest fsspec
-          sudo PYTHONPATH=sdk/python/juicefs JUICEFS_META=$meta_url python3 -m pytest -q sdk/python/juicefs/tests/test_fsspec_mkdir.py
+          sudo PYTHONPATH=sdk/python/juicefs JUICEFS_META=$meta_url python3 -m pytest -q \
+            sdk/python/juicefs/tests/test_fsspec_mkdir.py \
+            sdk/python/juicefs/tests/test_fsspec_entrypoint.py
 
       - name: Run file_test.py
         run: |
