@@ -224,7 +224,8 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *
 		}
 	}
 
-	go fs.cleanupCache()
+	go fs.cleanupAttrCache()
+	go fs.cleanupEntryCache()
 	if conf.AccessLog != "" {
 		f, err := os.OpenFile(conf.AccessLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
@@ -247,26 +248,37 @@ func (fs *FileSystem) InitMetrics(reg prometheus.Registerer) {
 	}
 }
 
-func (fs *FileSystem) cleanupCache() {
+func (fs *FileSystem) cleanupAttrCache() {
 	for {
-		fs.cacheM.Lock()
 		now := time.Now()
-		var cnt int
+		var cnt, del int
+		fs.cacheM.Lock()
 		for inode, it := range fs.attrs {
 			if now.After(it.expire) {
 				delete(fs.attrs, inode)
+				del++
 			}
 			cnt++
 			if cnt > 1000 {
 				break
 			}
 		}
-		cnt = 0
+		fs.cacheM.Unlock()
+		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-del*2)/(cnt+1)))
+	}
+}
+
+func (fs *FileSystem) cleanupEntryCache() {
+	for {
+		now := time.Now()
+		var cnt, del int
+		fs.cacheM.Lock()
 	OUTER:
 		for inode, es := range fs.entries {
 			for n, e := range es {
 				if now.After(e.expire) {
 					delete(es, n)
+					del++
 					if len(es) == 0 {
 						delete(fs.entries, inode)
 					}
@@ -278,7 +290,7 @@ func (fs *FileSystem) cleanupCache() {
 			}
 		}
 		fs.cacheM.Unlock()
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-del*2)/(cnt+1)))
 	}
 }
 
