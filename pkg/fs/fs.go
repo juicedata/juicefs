@@ -859,7 +859,16 @@ func (fs *FileSystem) Truncate(ctx meta.Context, path string, length uint64) (er
 	if fi.IsDir() {
 		return syscall.EISDIR
 	}
+	// Commit pending writes before they can extend the truncated file.
+	if err = fs.writer.Flush(ctx, fi.inode); err != 0 {
+		return
+	}
 	err = fs.m.Truncate(ctx, fi.inode, 0, length, nil, false)
+	if err == 0 {
+		fs.writer.Truncate(fi.inode, length)
+		fs.reader.Truncate(fi.inode, length)
+		fs.InvalidateAttr(fi.inode)
+	}
 	return
 }
 
