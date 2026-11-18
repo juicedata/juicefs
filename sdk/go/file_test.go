@@ -541,6 +541,31 @@ func TestAppend(t *testing.T) {
 	if got := readFile(t, c, "f"); got != "helloabcd" {
 		t.Fatalf("content %q", got)
 	}
+	// The end is read before each write: appends go after a truncation by
+	// path and the unflushed writes of other handles.
+	f = openFile(t, c, "f", os.O_WRONLY|os.O_APPEND)
+	if err := c.Truncate("f", 4); err != nil {
+		t.Fatal(err)
+	}
+	if o, err := f.Seek(0, io.SeekEnd); o != 4 || err != nil {
+		t.Fatalf("Seek end after Truncate by path: %d %v", o, err)
+	}
+	g := openFile(t, c, "f", os.O_WRONLY)
+	if _, err := g.WriteAt([]byte("xxxx"), 4); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write([]byte("yy")); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, c, "f"); got != "hellxxxxyy" {
+		t.Fatalf("content after appends: %q", got)
+	}
 }
 
 func TestFileStat(t *testing.T) {
@@ -569,6 +594,16 @@ func TestFileStat(t *testing.T) {
 	}
 	if st, err := f.Stat(); err != nil || st.Size() != 10 {
 		t.Fatalf("Stat after the write of another handle: %v %v", st, err)
+	}
+	if err := c.WriteFile("d/t", make([]byte, 100), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ro := openFile(t, c, "d/t", os.O_RDONLY)
+	if err := c.Truncate("d/t", 0); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := ro.Stat(); err != nil || st.Size() != 0 {
+		t.Fatalf("Stat after Truncate by path: %v %v", st, err)
 	}
 	if err := f.Chmod(0600); err != nil {
 		t.Fatal(err)
@@ -1083,7 +1118,6 @@ func (b *blockingFile) close() error { return nil }
 func TestFileNotSerialized(t *testing.T) {
 	b := &blockingFile{started: make(chan struct{}), release: make(chan struct{})}
 	f := &File{c: &Client{files: map[*File]struct{}{}}, f: b, name: "f", readable: true, writable: true}
-	f.size.Store(100)
 	calls := []func(){
 		func() { _, _ = f.ReadAt(make([]byte, 10), 0) },
 		func() { _, _ = f.ReadAt(make([]byte, 10), 50) },

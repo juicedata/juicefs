@@ -300,6 +300,14 @@ func (fs *FileSystem) InvalidateAttr(ino Ino) {
 	delete(fs.attrs, ino)
 }
 
+func (fs *FileSystem) UpdateLength(inode Ino, attr *Attr) {
+	if attr.Full && attr.Typ == meta.TypeFile {
+		if length := fs.writer.GetLength(inode); length > attr.Length {
+			attr.Length = length
+		}
+	}
+}
+
 func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
 	used := ctx.Duration()
 	fs.opsDurationsHistogram.Observe(used.Seconds())
