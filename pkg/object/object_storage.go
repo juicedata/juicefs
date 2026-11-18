@@ -37,6 +37,8 @@ import (
 	"time"
 
 	"github.com/aws/smithy-go/encoding/httpbinding"
+	jfscred "github.com/juicedata/juicefs/pkg/object/credentials"
+	jfssts "github.com/juicedata/juicefs/pkg/object/credentials/sts"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 )
@@ -282,10 +284,25 @@ func CreateVolumeStorage(config VolumeConfig) (ObjectStorage, error) {
 		}
 	}
 
+	provider, err := jfssts.NewProviderFromEnv(config.AccessKey, config.SecretKey, config.SessionToken)
+	if err != nil {
+		return nil, err
+	}
+	storageName := strings.ToLower(config.Storage)
+	if provider != nil && !SupportsProvider(storageName) {
+		logger.Warnf("storage %s does not support dynamic credentials, falling back to static credentials", storageName)
+		provider = nil
+	}
 	if config.Shards > 1 {
-		blob, err = NewSharded(strings.ToLower(config.Storage), config.Bucket, config.AccessKey, config.SecretKey, config.SessionToken, config.Shards)
+		if provider != nil {
+			blob, err = NewShardedWithProvider(storageName, config.Bucket, provider, config.Shards)
+		} else {
+			blob, err = NewSharded(storageName, config.Bucket, config.AccessKey, config.SecretKey, config.SessionToken, config.Shards)
+		}
+	} else if provider != nil {
+		blob, err = CreateStorageWithProvider(storageName, config.Bucket, provider)
 	} else {
-		blob, err = CreateStorage(strings.ToLower(config.Storage), config.Bucket, config.AccessKey, config.SecretKey, config.SessionToken)
+		blob, err = CreateStorage(storageName, config.Bucket, config.AccessKey, config.SecretKey, config.SessionToken)
 	}
 	if err != nil {
 		return nil, err
@@ -309,6 +326,44 @@ func CreateVolumeStorage(config VolumeConfig) (ObjectStorage, error) {
 		blob = NewEncrypted(blob, encryptor)
 	}
 	return blob, nil
+}
+
+// ProviderCreator creates an object storage that obtains credentials from a
+// dynamic provider instead of a fixed access key.
+type ProviderCreator func(bucket string, provider jfscred.Provider) (ObjectStorage, error)
+
+var providerStorages = make(map[string]ProviderCreator)
+
+// RegisterProvider registers a storage backend that supports refreshing
+// credentials. Backends that do not register a provider creator still work:
+// CreateStorageWithProvider asks the provider once and falls back to the
+// traditional static configuration.
+func RegisterProvider(name string, register ProviderCreator) {
+	providerStorages[name] = register
+}
+
+// SupportsProvider reports whether the storage backend can refresh credentials
+// while the client is running.
+func SupportsProvider(name string) bool {
+	_, ok := providerStorages[name]
+	return ok
+}
+
+// CreateStorageWithProvider creates an object storage that gets its
+// credentials from provider.
+func CreateStorageWithProvider(name, endpoint string, provider jfscred.Provider) (ObjectStorage, error) {
+	if provider == nil {
+		return nil, fmt.Errorf("nil credential provider")
+	}
+	if f, ok := providerStorages[name]; ok {
+		logger.Debugf("Creating %s storage at endpoint %s with dynamic credentials", name, endpoint)
+		return f(endpoint, provider)
+	}
+	cred, err := provider.Get(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("get credentials for %s: %w", name, err)
+	}
+	return CreateStorage(name, endpoint, cred.AccessKeyID, cred.AccessKeySecret, cred.SecurityToken)
 }
 
 var bufPool = sync.Pool{

@@ -25,6 +25,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	jfscred "github.com/juicedata/juicefs/pkg/object/credentials"
 )
 
 type sharded struct {
@@ -262,16 +264,10 @@ func (s *sharded) Restore(ctx context.Context, key string, days int32) error {
 
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {
 	stores := make([]ObjectStorage, shards)
-	var err error
-	// only format the part before the query, whose values may be percent-encoded
-	base, query, hasQuery := strings.Cut(endpoint, "?")
 	for i := range stores {
-		ep := fmt.Sprintf(base, i)
-		if strings.HasSuffix(ep, "%!(EXTRA int=0)") {
-			return nil, fmt.Errorf("can not generate different endpoint using %s", endpoint)
-		}
-		if hasQuery {
-			ep += "?" + query
+		ep, err := shardEndpoint(endpoint, i)
+		if err != nil {
+			return nil, err
 		}
 		stores[i], err = CreateStorage(name, ep, ak, sk, token)
 		if err != nil {
@@ -282,6 +278,39 @@ func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage
 		}
 	}
 	return &sharded{stores: stores}, nil
+}
+
+// NewShardedWithProvider is like NewSharded but uses a dynamic credential
+// provider for every shard.
+func NewShardedWithProvider(name, endpoint string, provider jfscred.Provider, shards int) (ObjectStorage, error) {
+	stores := make([]ObjectStorage, shards)
+	for i := range stores {
+		ep, err := shardEndpoint(endpoint, i)
+		if err != nil {
+			return nil, err
+		}
+		stores[i], err = CreateStorageWithProvider(name, ep, provider)
+		if err != nil {
+			for _, s := range stores[:i] {
+				Shutdown(s)
+			}
+			return nil, err
+		}
+	}
+	return &sharded{stores: stores}, nil
+}
+
+func shardEndpoint(endpoint string, i int) (string, error) {
+	// only format the part before the query, whose values may be percent-encoded
+	base, query, hasQuery := strings.Cut(endpoint, "?")
+	ep := fmt.Sprintf(base, i)
+	if strings.HasSuffix(ep, "%!(EXTRA int=0)") {
+		return "", fmt.Errorf("can not generate different endpoint using %s", endpoint)
+	}
+	if hasQuery {
+		ep += "?" + query
+	}
+	return ep, nil
 }
 
 var _ SupportTier = (*sharded)(nil)

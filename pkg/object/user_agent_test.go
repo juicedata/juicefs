@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/qiniu/go-sdk/v7/auth"
 	qiniuclient "github.com/qiniu/go-sdk/v7/client"
 	"github.com/stretchr/testify/assert"
@@ -110,7 +111,7 @@ func TestS3RegionProbeDoesNotSendUserAgent(t *testing.T) {
 	t.Setenv("AWS_DEFAULT_REGION", awsDefaultRegion)
 
 	userAgent := captureUserAgent(t, http.StatusNotFound, func() {
-		_, _ = autoS3Region("bucket", "access-key", "secret-key", "")
+		_, _ = autoS3Region("bucket", credentials.NewStaticCredentialsProvider("access-key", "secret-key", ""))
 	})
 	assert.NotContains(t, userAgent, UserAgent)
 }

@@ -40,6 +40,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
+	jfscred "github.com/juicedata/juicefs/pkg/object/credentials"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -434,17 +435,14 @@ func defaultChecksumOpts() []func(*config.LoadOptions) error {
 	return opts
 }
 
-func autoS3Region(bucketName, accessKey, secretKey, token string) (string, error) {
+func autoS3Region(bucketName string, provider aws.CredentialsProvider) (string, error) {
 	var cfg aws.Config
 	var err error
-	if accessKey != "" {
-		var loadOpts []func(*config.LoadOptions) error
-		loadOpts = append(loadOpts, defaultChecksumOpts()...)
-		loadOpts = append(loadOpts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
-		cfg, err = config.LoadDefaultConfig(ctx, loadOpts...)
-	} else {
-		cfg, err = config.LoadDefaultConfig(ctx, defaultChecksumOpts()...)
+	loadOpts := defaultChecksumOpts()
+	if provider != nil {
+		loadOpts = append(loadOpts, config.WithCredentialsProvider(provider))
 	}
+	cfg, err = config.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {
 		return "", err
 	}
@@ -512,6 +510,39 @@ func parseOCIEndpoint(host string) (string, bool) {
 }
 
 func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+	var provider aws.CredentialsProvider
+	if accessKey == "anonymous" {
+		provider = aws.AnonymousCredentials{}
+	} else if accessKey != "" {
+		provider = credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)
+	}
+	return newS3WithCredentialProvider(endpoint, provider)
+}
+
+func newS3WithProvider(endpoint string, provider jfscred.Provider) (ObjectStorage, error) {
+	return newS3WithCredentialProvider(endpoint, aws.NewCredentialsCache(awsCredProvider{provider: provider}))
+}
+
+type awsCredProvider struct {
+	provider jfscred.Provider
+}
+
+func (p awsCredProvider) Retrieve(ctx context.Context) (aws.Credentials, error) {
+	cred, err := p.provider.Get(ctx)
+	if err != nil {
+		return aws.Credentials{}, err
+	}
+	return aws.Credentials{
+		AccessKeyID:     cred.AccessKeyID,
+		SecretAccessKey: cred.AccessKeySecret,
+		SessionToken:    cred.SecurityToken,
+		CanExpire:       !cred.Expires.IsZero(),
+		Expires:         cred.Expires,
+		Source:          "juicefs-sts",
+	}, nil
+}
+
+func newS3WithCredentialProvider(endpoint string, credProvider aws.CredentialsProvider) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		if len(strings.Split(endpoint, ".")) > 1 && !strings.HasSuffix(endpoint, ".amazonaws.com") {
 			endpoint = fmt.Sprintf("http://%s", endpoint)
@@ -553,7 +584,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		if len(hostParts) == 1 {
 			// take endpoint as bucketname
 			bucketName = hostParts[0]
-			if region, err = autoS3Region(bucketName, accessKey, secretKey, token); err != nil {
+			if region, err = autoS3Region(bucketName, credProvider); err != nil {
 				return nil, fmt.Errorf("Can't guess your region for bucket %s: %s", bucketName, err)
 			}
 		} else {
@@ -632,12 +663,9 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		})
 	}
 	var cfg aws.Config
-	var loadOpts []func(*config.LoadOptions) error
-	loadOpts = append(loadOpts, defaultChecksumOpts()...)
-	if accessKey == "anonymous" {
-		loadOpts = append(loadOpts, config.WithCredentialsProvider(aws.AnonymousCredentials{}))
-	} else if accessKey != "" {
-		loadOpts = append(loadOpts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
+	loadOpts := defaultChecksumOpts()
+	if credProvider != nil {
+		loadOpts = append(loadOpts, config.WithCredentialsProvider(credProvider))
 	}
 	cfg, err = config.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {
@@ -651,4 +679,5 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 
 func init() {
 	Register("s3", newS3)
+	RegisterProvider("s3", newS3WithProvider)
 }

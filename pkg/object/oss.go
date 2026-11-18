@@ -33,8 +33,10 @@ import (
 	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
-	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
+	osscred "github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	openapicred "github.com/aliyun/credentials-go/credentials"
+
+	jfscred "github.com/juicedata/juicefs/pkg/object/credentials"
 )
 
 const ossDefaultRegionID = "cn-hangzhou"
@@ -329,7 +331,7 @@ func (o *ossClient) ListUploads(ctx context.Context, marker string) ([]*PendingP
 	return parts, string(result.NextPartNumberMarker), nil
 }
 
-func autoOSSEndpoint(bucketName string, provider credentials.CredentialsProvider) (string, error) {
+func autoOSSEndpoint(bucketName string, provider osscred.CredentialsProvider) (string, error) {
 	var err error
 	regionID := ossDefaultRegionID
 	if rid := os.Getenv("ALICLOUD_REGION_ID"); rid != "" {
@@ -358,6 +360,55 @@ func autoOSSEndpoint(bucketName string, provider credentials.CredentialsProvider
 }
 
 func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+	// try environment variable
+	if accessKey == "" {
+		accessKey = os.Getenv("ALICLOUD_ACCESS_KEY_ID")
+		secretKey = os.Getenv("ALICLOUD_ACCESS_KEY_SECRET")
+		token = os.Getenv("SECURITY_TOKEN")
+	}
+	var provider osscred.CredentialsProvider
+	if accessKey == "" {
+		// use default credential chain https://github.com/aliyun/credentials-go?tab=readme-ov-file#credential-provider-chain
+		defaultCred, _ := openapicred.NewCredential(nil)
+		provider = osscred.CredentialsProviderFunc(func(ctx context.Context) (osscred.Credentials, error) {
+			// return the old certificate before its expiration and obtain a new certificate when the old certificate expires
+			cred, err := defaultCred.GetCredential()
+			if err != nil {
+				return osscred.Credentials{}, err
+			}
+			return osscred.Credentials{
+				AccessKeyID:     *cred.AccessKeyId,
+				AccessKeySecret: *cred.AccessKeySecret,
+				SecurityToken:   *cred.SecurityToken,
+			}, nil
+		})
+	} else {
+		provider = osscred.NewStaticCredentialsProvider(accessKey, secretKey, token)
+	}
+	return newOSSWithCredentialsProvider(endpoint, provider)
+}
+
+func newOSSWithProvider(endpoint string, provider jfscred.Provider) (ObjectStorage, error) {
+	ossProvider := osscred.CredentialsProviderFunc(func(ctx context.Context) (osscred.Credentials, error) {
+		cred, err := provider.Get(ctx)
+		if err != nil {
+			return osscred.Credentials{}, err
+		}
+		var expires *time.Time
+		if !cred.Expires.IsZero() {
+			expires = &cred.Expires
+		}
+		return osscred.Credentials{
+			AccessKeyID:     cred.AccessKeyID,
+			AccessKeySecret: cred.AccessKeySecret,
+			SecurityToken:   cred.SecurityToken,
+			Expires:         expires,
+		}, nil
+	})
+	return newOSSWithCredentialsProvider(endpoint, ossProvider)
+}
+
+func newOSSWithCredentialsProvider(endpoint string, provider osscred.CredentialsProvider) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -371,31 +422,6 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	var domain string
 	if len(hostParts) > 1 {
 		domain = uri.Scheme + "://" + hostParts[1]
-	}
-	// try environment variable
-	if accessKey == "" {
-		accessKey = os.Getenv("ALICLOUD_ACCESS_KEY_ID")
-		secretKey = os.Getenv("ALICLOUD_ACCESS_KEY_SECRET")
-		token = os.Getenv("SECURITY_TOKEN")
-	}
-	var provider credentials.CredentialsProvider
-	if accessKey == "" {
-		// use default credential chain https://github.com/aliyun/credentials-go?tab=readme-ov-file#credential-provider-chain
-		defaultCred, _ := openapicred.NewCredential(nil)
-		provider = credentials.CredentialsProviderFunc(func(ctx context.Context) (credentials.Credentials, error) {
-			// return the old certificate before its expiration and obtain a new certificate when the old certificate expires
-			cred, err := defaultCred.GetCredential()
-			if err != nil {
-				return credentials.Credentials{}, err
-			}
-			return credentials.Credentials{
-				AccessKeyID:     *cred.AccessKeyId,
-				AccessKeySecret: *cred.AccessKeySecret,
-				SecurityToken:   *cred.SecurityToken,
-			}, nil
-		})
-	} else {
-		provider = credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)
 	}
 
 	if domain == "" {
@@ -459,4 +485,5 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 
 func init() {
 	Register("oss", newOSS)
+	RegisterProvider("oss", newOSSWithProvider)
 }
