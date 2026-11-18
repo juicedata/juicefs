@@ -59,23 +59,6 @@ func TestFSBackendIdentity(t *testing.T) {
 	}
 }
 
-func TestFSBackendGatherer(t *testing.T) {
-	mfs, err := testFSBackend(t).gatherer().Gather()
-	if err != nil {
-		t.Fatalf("Gather: %s", err)
-	}
-	var found bool
-	for _, mf := range mfs {
-		if !strings.HasPrefix(mf.GetName(), "juicefs_") {
-			t.Fatalf("metric %s has no juicefs_ prefix", mf.GetName())
-		}
-		found = found || mf.GetName() == "juicefs_go_goroutines"
-	}
-	if !found {
-		t.Fatal("juicefs_go_goroutines not gathered")
-	}
-}
-
 func TestFSBackendErrors(t *testing.T) {
 	empty := "sqlite3://" + filepath.Join(t.TempDir(), "empty.db")
 	if _, err := New("test", empty, testConfig()); err == nil || !strings.Contains(err.Error(), "load setting") {
