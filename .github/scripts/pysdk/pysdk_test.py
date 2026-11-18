@@ -11,7 +11,6 @@ import pwd
 import stat
 from os.path import dirname
 import sys
-import tempfile
 import time
 sys.path.append('.')
 from sdk.python.juicefs.juicefs import juicefs
@@ -430,14 +429,7 @@ class ExtendedAttributeTests(FileTests):
 class LargeWriteTests(FileTests):
     def test_write_larger_than_native_buffer(self):
         size = (1 << 30) + 1
-        with tempfile.TemporaryFile(buffering=0) as reference:
-            reference.truncate(size)
-            reference.write(b'head')
-            reference.seek(size - 4)
-            reference.write(b'tail')
-            reference.seek(0)
-            data = reference.read(size)
-        self.assertEqual(len(data), size)
+        data = b''.join((b'head', bytes(size - 8), b'tail'))
 
         expected = hashlib.sha256(data).digest()
         for buffering in (0, 8):

@@ -97,8 +97,6 @@ JuiceFS 的 Python SDK 暂不支持格式化文件系统，因此在使用之前
 
 `Client` 类的实现与 Python 的 io 模块类似。
 
-文件写入超过 1 GiB 时，SDK 会拆分原生调用，避免超过原生库的缓冲区上限。
-
 可以使用以下代码实例化一个 JuiceFS 客户端，`name` 参数为文件系统名称，`meta` 参数为元数据引擎的 URL。其中，`name`参数必须存在，但允许使用空字符串或 `None`。
 
 ```python

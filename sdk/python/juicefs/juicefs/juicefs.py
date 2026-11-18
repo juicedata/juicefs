@@ -109,7 +109,7 @@ class Client(object):
                  download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
                  io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=False, attr_cache="1s",
                  entry_cache="0s", dir_entry_cache="1s", debug=False, no_usage_report=False, access_log="",
-                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", push_remote_write="",
+                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", push_remote_write="", 
                  push_remote_write_auth=""):
         self.lib = JuiceFSLib()
         kwargs = {}
@@ -178,7 +178,7 @@ class Client(object):
 
     def close(self, terminate=False):
         """Close the JuiceFS client.
-
+        
         Args:
             terminate: If True, fully close the filesystem and stop
                        background goroutines. If False (default), only
@@ -559,12 +559,17 @@ class _File(object):
             return 0
         if self.append:
             self.off = self.length
+        # libjfs.toBuf exposes at most 1 GiB; small chunks also bound native buffer memory.
+        base = cast(c_char_p(data), c_void_p).value
         written = 0
         while written < len(data):
-            # libjfs.toBuf exposes at most 1 GiB, even though count is int32.
-            count = min(len(data) - written, 1 << 30)
-            buf = data if written == 0 else c_void_p(cast(c_char_p(data), c_void_p).value + written)
-            n = self.lib.jfs_pwrite(c_int64(_tid()), c_int32(self.fd), buf, c_int32(count), c_int64(self.off))
+            count = min(len(data) - written, 4 << 20)
+            try:
+                n = self.lib.jfs_pwrite(c_int64(_tid()), c_int32(self.fd), c_void_p(base + written), c_int32(count), c_int64(self.off))
+            except OSError:
+                if written == 0:
+                    raise
+                break
             self.off += n
             if self.off > self.length:
                 self.length = self.off
