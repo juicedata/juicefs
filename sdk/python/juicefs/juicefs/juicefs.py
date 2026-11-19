@@ -559,7 +559,6 @@ class _File(object):
             return 0
         if self.append:
             self.off = self.length
-        # libjfs.toBuf exposes at most 1 GiB; small chunks also bound native buffer memory.
         base = cast(c_char_p(data), c_void_p).value
         tid, fd = c_int64(_tid()), c_int32(self.fd)
         written = 0

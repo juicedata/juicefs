@@ -2,7 +2,6 @@ import errno
 from array import array
 import fractions
 import grp
-import hashlib
 import io
 import unittest
 from unittest.mock import patch
@@ -428,25 +427,25 @@ class ExtendedAttributeTests(FileTests):
 
 
 class LargeWriteTests(FileTests):
-    def test_write_larger_than_native_buffer(self):
-        size = (1 << 30) + 1
-        data = b''.join((b'head', bytes(size - 8), b'tail'))
-
-        expected = hashlib.sha256(data).digest()
+    def test_write_splits_into_chunks(self):
+        chunk = 4 << 20
+        data = os.urandom(2 * chunk + 1)
         for buffering in (0, 8):
             with self.subTest(buffering=buffering):
+                counts = []
                 with self.v.open(TESTFILE, 'wb', buffering) as stream:
-                    self.assertEqual(stream.write(data), size)
-                    self.assertEqual(stream.tell(), size)
-                self.assertEqual(self.v.stat(TESTFILE).st_size, size)
-                actual = hashlib.sha256()
-                with self.v.open(TESTFILE, 'rb', 0) as stream:
-                    while True:
-                        block = stream.read(4 << 20)
-                        if not block:
-                            break
-                        actual.update(block)
-                self.assertEqual(actual.digest(), expected)
+                    f = stream._file
+                    lib = f.lib
+                    def pwrite(tid, fd, buf, count, off):
+                        counts.append(count.value)
+                        return lib.jfs_pwrite(tid, fd, buf, count, off)
+                    with patch.object(f, 'lib', types.SimpleNamespace(jfs_pwrite=pwrite)):
+                        self.assertEqual(stream.write(data), len(data))
+                    self.assertEqual(stream.tell(), len(data))
+                self.assertEqual(sum(counts), len(data))
+                self.assertLessEqual(max(counts), chunk)
+                with self.v.open(TESTFILE, 'rb') as stream:
+                    self.assertEqual(stream.read(), data)
 
     def test_write_chunk_failure_keeps_position(self):
         chunk = 4 << 20
