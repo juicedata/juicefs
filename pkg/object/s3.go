@@ -80,7 +80,7 @@ func (s *s3client) Limits() Limits {
 }
 
 func (s *s3client) Create(ctx context.Context) error {
-	if _, _, _, err := s.List(ctx, "", "", "", "", 1, true); err == nil {
+	if _, _, _, err := s.List(WithUnorderedList(ctx), "", "", "", "", 1, true); err == nil {
 		return nil
 	}
 	_, err := s.s3.CreateBucket(ctx, &s3.CreateBucketInput{
@@ -234,17 +234,35 @@ func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter
 	return err
 }
 
+// s3DirectoryBucketSuffix is the name suffix of S3 Express One Zone directory buckets
+// (<base>--<zone-id>--x-s3). See
+// https://docs.aws.amazon.com/AmazonS3/latest/userguide/directory-bucket-naming-rules.html
+const s3DirectoryBucketSuffix = "--x-s3"
+
 func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
+	}
+	// S3 Express directory buckets don't list keys in lexicographic order, reject
+	// a non-empty start-after and page only with ContinuationToken.
+	directoryBucket := strings.HasSuffix(s.bucket, s3DirectoryBucketSuffix)
+	if directoryBucket {
+		if !isUnorderedList(ctx) {
+			return nil, false, "", fmt.Errorf("directory bucket %s can't list keys in order", s.bucket)
+		}
+		if start != "" && token == "" {
+			return nil, false, "", fmt.Errorf("directory bucket %s can't list after %q", s.bucket, start)
+		}
 	}
 	param := s3.ListObjectsV2Input{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
 		MaxKeys:      aws.Int32(int32(limit)),
 		EncodingType: types.EncodingTypeUrl,
-		StartAfter:   aws.String(start),
 		Delimiter:    aws.String(delimiter),
+	}
+	if !directoryBucket {
+		param.StartAfter = aws.String(start)
 	}
 	if token != "" {
 		param.ContinuationToken = aws.String(token)

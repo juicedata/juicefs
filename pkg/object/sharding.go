@@ -102,8 +102,10 @@ const (
 	maxListRetries = 3
 )
 
-// ListAll lists all keys that starts at marker from object storage.
-func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink, sort bool) (<-chan Object, error) {
+// ListAll lists all keys that starts at marker from object storage. The keys are
+// in order unless ctx is marked by WithUnorderedList.
+func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink bool) (<-chan Object, error) {
+	sort := !isUnorderedList(ctx)
 	if ch, err := store.ListAll(ctx, prefix, marker, followLink); err == nil {
 		return ch, nil
 	} else if !errors.Is(err, notSupported) {
@@ -199,7 +201,7 @@ func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink
 		}
 	}
 	for i := range s.stores {
-		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink, true)
+		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink)
 		if err != nil {
 			abort()
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
