@@ -27,6 +27,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -896,6 +897,39 @@ func newTestGatewayWithMeta(t *testing.T, m meta.Meta, format *meta.Format, conf
 		}
 	}
 	return jfsObj, jfs
+}
+
+func TestShutdownStopsCleanup(t *testing.T) {
+	countCleanup := func() int {
+		buf := make([]byte, 1<<20)
+		for {
+			n := runtime.Stack(buf, true)
+			if n < len(buf) {
+				return strings.Count(string(buf[:n]), "(*jfsObjects).cleanup(")
+			}
+			buf = make([]byte, len(buf)*2)
+		}
+	}
+	before := countCleanup()
+	tmp, jfs, bucket := newTestGateway(t, Config{})
+	gw, err := NewJFSGateway(jfs, tmp.conf, &Config{Bucket: bucket, Umask: 022})
+	if err != nil {
+		t.Fatalf("new gateway: %s", err)
+	}
+	if c := countCleanup(); c != before+1 {
+		t.Fatalf("expect 1 cleanup goroutine, got %d", c-before)
+	}
+	if err := gw.Shutdown(context.Background()); err != nil {
+		t.Fatalf("shutdown: %s", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for countCleanup() != before {
+		if time.Now().After(deadline) {
+			t.Fatalf("cleanup goroutine still running after shutdown")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	_ = gw.Shutdown(context.Background()) // shutting down twice should be safe
 }
 
 func TestMkdirAllInBucket(t *testing.T) {

@@ -78,12 +78,13 @@ type Config struct {
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
-	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Second * 10), gConf: gConf, nsMutex: minio.NewNSLock(false)}
+	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Second * 10), gConf: gConf, nsMutex: minio.NewNSLock(false), done: make(chan struct{})}
 	if gConf.MultiBucket && !gConf.ReadOnly {
 		if eno := jfs.MkdirAll(mctx, jfsObj.tpath(bucketTrashDir), 0777, gConf.Umask); eno != 0 {
 			return nil, fmt.Errorf("create bucket trash directory: %w", eno)
 		}
 	}
+	jfsObj.wg.Add(1)
 	go jfsObj.cleanup()
 	return jfsObj, nil
 }
@@ -95,6 +96,9 @@ type jfsObjects struct {
 	nsMutex    *minio.NsLockMap
 	gConf      *Config
 	writeLocks objectLocks
+	done       chan struct{}
+	wg         sync.WaitGroup
+	closeOnce  sync.Once
 }
 
 type objectLocks struct {
@@ -148,6 +152,10 @@ func (n *jfsObjects) IsReady(_ context.Context) bool {
 }
 
 func (n *jfsObjects) Shutdown(ctx context.Context) error {
+	n.closeOnce.Do(func() {
+		close(n.done)
+		n.wg.Wait()
+	})
 	return n.fs.Close()
 }
 
@@ -1508,7 +1516,15 @@ func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 }
 
 func (n *jfsObjects) cleanup() {
-	for range time.Tick(24 * time.Hour) {
+	defer n.wg.Done()
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-n.done:
+			return
+		case <-ticker.C:
+		}
 		// default bucket tmp dirs
 		tmpDirs := []string{".sys/tmp/", ".sys/uploads/", path.Join(metaBucket, bucketTrashDir)}
 		if n.gConf.MultiBucket {
@@ -1538,6 +1554,11 @@ func (n *jfsObjects) cleanupDir(dir string) bool {
 	now := time.Now()
 	deleted := 0
 	for _, entry := range entries {
+		select {
+		case <-n.done:
+			return false
+		default:
+		}
 		dirPath := n.path(dir, string(entry.Name))
 		if entry.Attr.Typ == meta.TypeDirectory && len(entry.Name) == subDirPrefix {
 			if !n.cleanupDir(strings.TrimPrefix(dirPath, "/")) {
