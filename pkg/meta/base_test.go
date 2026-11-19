@@ -4024,6 +4024,30 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("test dir usage rmdir: %v", err)
 	}
 
+	// test write to an open file after its last unlink
+	var openInode Ino
+	if st := m.Create(Background(), testInode, "open", 0640, 022, 0, &openInode, nil); st != 0 {
+		t.Fatalf("create open: %s", st)
+	}
+	if st := m.Unlink(Background(), testInode, "open"); st != 0 {
+		t.Fatalf("unlink open: %s", st)
+	}
+	var openSlice uint64
+	if st := m.NewSlice(Background(), &openSlice); st != 0 {
+		t.Fatalf("new slice: %s", st)
+	}
+	if st := m.Write(Background(), openInode, 0, 0, Slice{Id: openSlice, Size: 4097, Len: 4097}, time.Now()); st != 0 {
+		t.Fatalf("write unlinked open: %s", st)
+	}
+	if st := m.Close(Background(), openInode); st != 0 {
+		t.Fatalf("close open: %s", st)
+	}
+	if err := waitCheckResult(m, dirStat{0, 0, 0}, func() (*dirStat, syscall.Errno) {
+		return m.GetDirStat(Background(), testInode)
+	}); err != nil {
+		t.Fatalf("test dir usage write after unlink: %v", err)
+	}
+
 	// test BatchUnlink with duplicate hardlink names
 	dupFileName := "batch-dup-file"
 	dupLinkName := "batch-dup-link"
@@ -5374,6 +5398,24 @@ func testQuota(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, parent, "f2"); st != 0 {
 		t.Fatalf("Unlink quota/d2/f2 err: %s", st)
 	}
+
+	// the unlinked file no longer counts against /quota
+	p = "/quota"
+	if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 64 << 10, MaxInodes: 6}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set %s: %s", p, err)
+	}
+	m.getBase().loadQuotas()
+	var sliceId uint64
+	if st := m.NewSlice(ctx, &sliceId); st != 0 {
+		t.Fatalf("NewSlice: %s", st)
+	}
+	if st := m.Write(ctx, nInode, 0, 0, Slice{Id: sliceId, Size: 1 << 20, Len: 1 << 20}, time.Now()); st != 0 {
+		t.Fatalf("Write unlinked quota/d2/f2: %s", st)
+	}
+	if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 2 << 30, MaxInodes: 6}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set %s: %s", p, err)
+	}
+	m.getBase().loadQuotas()
 
 	if st := m.Close(ctx, nInode); st != 0 {
 		t.Fatalf("Close quota/d2/f2: %s", st)

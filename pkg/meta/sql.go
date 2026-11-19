@@ -1729,7 +1729,7 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		delta.length = int64(length) - int64(nodeAttr.Length)
 		delta.space = align4K(length) - align4K(nodeAttr.Length)
-		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent, nodeAttr.Nlink)...); err != 0 {
 			return err
 		}
 		var zeroChunks []chunk
@@ -1811,7 +1811,7 @@ func (m *dbMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		old := nodeAttr.Length
 		delta.length = int64(length) - int64(old)
 		delta.space = align4K(length) - align4K(old)
-		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent, nodeAttr.Nlink)...); err != 0 {
 			return err
 		}
 		now := m.now().UnixNano()
@@ -3589,7 +3589,7 @@ func (m *dbMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 			delta.space = align4K(newleng) - align4K(nodeAttr.Length)
 			nodeAttr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent, nodeAttr.Nlink)...); err != 0 {
 			return err
 		}
 		now := m.now().UnixNano()
@@ -3662,7 +3662,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, nout.Uid, nout.Gid, m.getParents(s, fout, nout.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, newSpace, 0, nout.Uid, nout.Gid, m.getParents(s, fout, nout.Parent, nout.Nlink)...); err != 0 {
 			return err
 		}
 		now := m.now().UnixNano()
@@ -3748,13 +3748,16 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		return nil
 	}, fout)
 	if err == nil {
-		m.updateParentStat(ctx, fout, nout.Parent, newLength, newSpace)
+		m.updateParentStat(ctx, fout, nout.Parent, nout.Nlink, newLength, newSpace)
 		m.updateUserGroupStat(ctx, nout.Uid, nout.Gid, newSpace, 0)
 	}
 	return errno(err)
 }
 
-func (m *dbMeta) getParents(s *xorm.Session, inode, parent Ino) []Ino {
+func (m *dbMeta) getParents(s *xorm.Session, inode, parent Ino, nlink uint32) []Ino {
+	if nlink == 0 { // an open file without links belongs to no directory
+		return nil
+	}
 	if parent > 0 {
 		return []Ino{parent}
 	}
