@@ -84,8 +84,10 @@ func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.O
 			return nil, fmt.Errorf("create bucket trash directory: %w", eno)
 		}
 	}
-	jfsObj.wg.Add(1)
-	go jfsObj.cleanup()
+	if !gConf.ReadOnly {
+		jfsObj.wg.Add(1)
+		go jfsObj.cleanup()
+	}
 	return jfsObj, nil
 }
 
@@ -1520,27 +1522,31 @@ func (n *jfsObjects) cleanup() {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for {
+		n.cleanupOnce()
 		select {
 		case <-n.done:
 			return
 		case <-ticker.C:
 		}
-		// default bucket tmp dirs
-		tmpDirs := []string{".sys/tmp/", ".sys/uploads/", path.Join(metaBucket, bucketTrashDir)}
-		if n.gConf.MultiBucket {
-			buckets, err := n.ListBuckets(context.Background())
-			if err != nil {
-				logger.Errorf("list buckets error: %v", err)
-				continue
-			}
-			for _, bucket := range buckets {
-				tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/tmp", bucket.Name))
-				tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/uploads", bucket.Name))
-			}
+	}
+}
+
+func (n *jfsObjects) cleanupOnce() {
+	// default bucket tmp dirs
+	tmpDirs := []string{".sys/tmp/", ".sys/uploads/", path.Join(metaBucket, bucketTrashDir)}
+	if n.gConf.MultiBucket {
+		buckets, err := n.ListBuckets(context.Background())
+		if err != nil {
+			logger.Errorf("list buckets error: %v", err)
+			return
 		}
-		for _, dir := range tmpDirs {
-			n.cleanupDir(dir)
+		for _, bucket := range buckets {
+			tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/tmp", bucket.Name))
+			tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/uploads", bucket.Name))
 		}
+	}
+	for _, dir := range tmpDirs {
+		n.cleanupDir(dir)
 	}
 }
 
