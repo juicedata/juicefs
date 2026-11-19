@@ -609,12 +609,27 @@ func (n *jfsObjects) delObj(bucket string, object string) error {
 	if p == root {
 		return nil
 	}
+	var eno syscall.Errno
 	if strings.HasSuffix(object, sep) {
-		removed, err := n.deleteDirObject(p)
-		if err != nil || !removed {
-			return err
+		var dir *fs.File
+		if dir, eno = n.fs.Lopen(mctx, p, 0); eno == 0 {
+			defer dir.Close(mctx)
+			fi, _ := dir.Stat()
+			explicit := fi.(*fs.FileStat).Atime() == 0
+			if !fi.IsDir() || (!explicit && !n.gConf.HeadDir) {
+				return nil
+			}
+			if eno = n.fs.Rmdir(mctx, p); fs.IsNotEmpty(eno) && explicit {
+				// Keep the children and clear only the explicit directory marker.
+				if e := dir.Utime(mctx, time.Now().UnixMilli(), -1); e != 0 {
+					return e
+				}
+			}
 		}
-	} else if eno := n.fs.Unlink(mctx, p); eno != 0 {
+	} else {
+		eno = n.fs.Unlink(mctx, p)
+	}
+	if eno != 0 {
 		if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) || eno == syscall.ENOTDIR || eno == syscall.EISDIR {
 			return nil
 		}
@@ -625,34 +640,6 @@ func (n *jfsObjects) delObj(bucket string, object string) error {
 		logger.Warnf("prune empty dirs of %s: %s", p, err)
 	}
 	return nil
-}
-
-// deleteDirObject reports whether it removed the directory itself.
-func (n *jfsObjects) deleteDirObject(p string) (bool, error) {
-	dir, eno := n.fs.Lopen(mctx, p, 0)
-	if eno == 0 {
-		defer dir.Close(mctx)
-		fi, _ := dir.Stat()
-		explicit := fi.(*fs.FileStat).Atime() == 0
-		if !fi.IsDir() || (!explicit && !n.gConf.HeadDir) {
-			return false, nil
-		}
-		eno = n.fs.Rmdir(mctx, p)
-		if fs.IsNotEmpty(eno) && explicit {
-			// Keep the children and clear only the explicit directory marker.
-			if err := dir.Utime(mctx, time.Now().UnixMilli(), -1); err != 0 {
-				return false, err
-			}
-		}
-	}
-	switch eno {
-	case 0:
-		return true, nil
-	case syscall.ENOENT, syscall.ENOTDIR, syscall.EISDIR, syscall.ENOTEMPTY:
-		return false, nil
-	default:
-		return false, eno
-	}
 }
 
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
