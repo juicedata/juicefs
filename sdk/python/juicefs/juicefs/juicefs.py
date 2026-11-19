@@ -561,14 +561,18 @@ class _File(object):
             self.off = self.length
         # libjfs.toBuf exposes at most 1 GiB; small chunks also bound native buffer memory.
         base = cast(c_char_p(data), c_void_p).value
+        tid, fd = c_int64(_tid()), c_int32(self.fd)
         written = 0
         try:
             while written < len(data):
                 count = min(len(data) - written, 4 << 20)
-                written += self.lib.jfs_pwrite(c_int64(_tid()), c_int32(self.fd), c_void_p(base + written), c_int32(count), c_int64(self.off + written))
+                n = self.lib.jfs_pwrite(tid, fd, c_void_p(base + written), c_int32(count), c_int64(self.off + written))
+                if n == 0:
+                    raise OSError(errno.EIO, f'jfs_pwrite wrote 0 of {count} bytes')
+                written += n
         finally:
-            self.length = max(self.length, self.off + written)
-        self.off += written
+            self.off += written
+            self.length = max(self.length, self.off)
         return written
 
     def seek(self, offset, whence=0):
