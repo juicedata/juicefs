@@ -152,6 +152,12 @@ func gc(ctx *cli.Context) error {
 		cleanDetachedNodeSpin := progress.AddCountSpinner("Cleaned detached nodes")
 		m.CleanupDetachedNodesBefore(c, time.Now().Add(-time.Hour*24), cleanDetachedNodeSpin.Increment)
 		cleanDetachedNodeSpin.Done()
+
+		cleanLeakedLockSpin := progress.AddCountSpinner("Cleaned leaked locks")
+		if err := m.CleanupLeakedLocks(c, cleanLeakedLockSpin.Increment); err != nil {
+			logger.Warnf("cleanup leaked locks: %s", err)
+		}
+		cleanLeakedLockSpin.Done()
 	}
 
 	err = m.ScanDeletedObject(

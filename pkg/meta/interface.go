@@ -446,6 +446,8 @@ type Meta interface {
 	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *CleanupTrashStats) syscall.Errno
 	// CleanupDetachedNodesBefore deletes all detached nodes before the given time.
 	CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func())
+	// CleanupLeakedLocks deletes locks held by sessions that no longer exist.
+	CleanupLeakedLocks(ctx Context, increProgress func()) error
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, ino Ino, totalspace, availspace, iused, iavail *uint64) syscall.Errno
