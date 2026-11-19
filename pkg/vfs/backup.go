@@ -116,11 +116,10 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 	if m.Name() == "tikv" {
 		threads = 10
 	}
-	err = m.DumpMeta(zw, 0, threads, false, fast, skipTrash) // force dump the whole tree
-	if closeErr := zw.Close(); err == nil {
-		err = closeErr
+	if err = m.DumpMeta(zw, 0, threads, false, fast, skipTrash); err != nil { // force dump the whole tree
+		return "", err
 	}
-	if err != nil {
+	if err = zw.Close(); err != nil {
 		return "", err
 	}
 	size, err := fp.Seek(0, io.SeekCurrent)
