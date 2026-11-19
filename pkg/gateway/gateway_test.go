@@ -1179,4 +1179,69 @@ func TestDeleteObjects(t *testing.T) {
 		assertHeadObject(t, jfsObj, bucket, "x/f", false)
 		assertHeadObject(t, jfsObj, bucket, "y/f", false)
 	})
+
+	mkdirObject := func(t *testing.T, jfsObj *jfsObjects, jfs *fs.FileSystem, p string) {
+		t.Helper()
+		if eno := jfs.Mkdir(mctx, p, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir %s: %s", p, eno)
+		}
+		jfsObj.setFileAtime(p, 0)
+	}
+
+	t.Run("match trailing slash of the key", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		mkdirObject(t, jfsObj, jfs, "/dir")
+		createTestFile(t, jfs, "/file")
+
+		for _, key := range []string{"dir", "file/"} {
+			if _, err := jfsObj.DeleteObject(context.Background(), bucket, key, minio.ObjectOptions{}); err != nil {
+				t.Fatalf("DeleteObject %s: %s", key, err)
+			}
+		}
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "dir"}, {ObjectName: "file/"}}, minio.ObjectOptions{})
+		for _, e := range errs {
+			if e != nil {
+				t.Fatalf("DeleteObjects: %s", e)
+			}
+		}
+		assertHeadObject(t, jfsObj, bucket, "dir/", true)
+		assertHeadObject(t, jfsObj, bucket, "file", true)
+	})
+
+	t.Run("keep directory object when batch retries", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		mkdirObject(t, jfsObj, jfs, "/dir")
+		createTestFile(t, jfs, "/locked")
+		setImmutable(t, jfs, "/locked") // forces the per-key retry
+
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "dir"}, {ObjectName: "locked"}}, minio.ObjectOptions{})
+		if errs[0] != nil || errs[1] == nil {
+			t.Fatalf("got errs %v, want only locked to fail", errs)
+		}
+		assertHeadObject(t, jfsObj, bucket, "dir/", true)
+	})
+
+	t.Run("delete directory objects", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		mkdirObject(t, jfsObj, jfs, "/a")
+		mkdirObject(t, jfsObj, jfs, "/b")
+		createTestFile(t, jfs, "/a/f")
+		createTestFile(t, jfs, "/b/f")
+
+		// a/ keeps its child; b/ is emptied by the same batch and removed.
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "a/"}, {ObjectName: "b/"}, {ObjectName: "b/f"}}, minio.ObjectOptions{})
+		for _, e := range errs {
+			if e != nil {
+				t.Fatalf("DeleteObjects: %s", e)
+			}
+		}
+		assertHeadObject(t, jfsObj, bucket, "a/", false)
+		assertHeadObject(t, jfsObj, bucket, "a/f", true)
+		if _, eno := jfs.Stat(mctx, "/b"); eno != syscall.ENOENT {
+			t.Fatalf("stat /b: got %s, want ENOENT", eno)
+		}
+	})
 }
