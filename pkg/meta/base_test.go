@@ -2234,6 +2234,46 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	if len(slices) != 1 || slices[0].Len != 2338508 {
 		t.Fatalf("inode %d should be compacted, but have %d slices, size %d", inode, len(slices), slices[0].Len)
 	}
+
+	// compacting the mounted root of a subdir mount only scans the subdir
+	var inDir, outDir, inFile, outFile Ino
+	if st := m.Mkdir(ctx, RootInode, "compact-in", 0755, 022, 0, &inDir, attr); st != 0 {
+		t.Fatalf("mkdir compact-in: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "compact-out", 0755, 022, 0, &outDir, attr); st != 0 {
+		t.Fatalf("mkdir compact-out: %s", st)
+	}
+	for _, f := range []struct {
+		parent Ino
+		inode  *Ino
+	}{{inDir, &inFile}, {outDir, &outFile}} {
+		if st := m.Create(ctx, f.parent, "f", 0644, 022, 0, f.inode, attr); st != 0 {
+			t.Fatalf("create file: %s", st)
+		}
+		if st := m.Truncate(ctx, *f.inode, 0, 1, attr, false); st != 0 {
+			t.Fatalf("truncate file: %s", st)
+		}
+	}
+	m.chroot(inDir)
+	var scanned int
+	st := m.Compact(ctx, RootInode, 1, func() { scanned++ }, func() {})
+	m.chroot(RootInode)
+	if st != 0 {
+		t.Fatalf("compact mounted root: %s", st)
+	}
+	if scanned != 1 {
+		t.Fatalf("compact mounted root should scan 1 chunk, but scanned %d", scanned)
+	}
+	for _, dir := range []Ino{inDir, outDir} {
+		if st := m.Unlink(ctx, dir, "f"); st != 0 {
+			t.Fatalf("unlink file: %s", st)
+		}
+	}
+	for _, name := range []string{"compact-in", "compact-out"} {
+		if st := m.Rmdir(ctx, RootInode, name); st != 0 {
+			t.Fatalf("rmdir %s: %s", name, st)
+		}
+	}
 }
 
 func testConcurrentWrite(t *testing.T, m Meta) {

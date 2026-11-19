@@ -3018,6 +3018,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 }
 
 func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno {
+	inode = m.checkRoot(inode)
 	var attr Attr
 	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
 		logger.Errorf("get attr error [inode %v]: %v", inode, st)
