@@ -30,6 +30,7 @@ import (
 )
 
 func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, block bool) syscall.Errno {
+	inode = m.checkRoot(inode)
 	owner := int64(owner_)
 	if ltype == F_UNLCK {
 		return errno(m.txn(func(s *xorm.Session) error {
@@ -112,6 +113,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 }
 
 func (m *dbMeta) Getlk(ctx Context, inode Ino, owner_ uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
+	inode = m.checkRoot(inode)
 	if *ltype == F_UNLCK {
 		*start = 0
 		*end = 0
@@ -163,6 +165,7 @@ func (m *dbMeta) Getlk(ctx Context, inode Ino, owner_ uint64, ltype *uint32, sta
 }
 
 func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
+	inode = m.checkRoot(inode)
 	var err syscall.Errno
 	lock := plockRecord{ltype, pid, start, end}
 	owner := int64(owner_)
@@ -266,6 +269,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 }
 
 func (r *dbMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+	inode = r.checkRoot(inode)
 	var fs []flock
 	if err := r.db.Find(&fs, &flock{Inode: inode}); err != nil {
 		return nil, nil, err
