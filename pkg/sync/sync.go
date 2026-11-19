@@ -1124,6 +1124,17 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 		key := obj.Key()
 		var taskErr error
 
+		if unsafeKey(key) {
+			logger.Errorf("Refuse to sync object %q: %s", key, errUnsafeKey)
+			if failed != nil {
+				failed.Increment()
+			}
+			trackCheckpointCompletion(key, errUnsafeKey, checkpointMgr, config)
+			incrHandled(1)
+			done()
+			continue
+		}
+
 		switch obj.Size() {
 		case markDeleteSrc:
 			taskErr = deleteObj(src, key, config.Dry)
@@ -1446,6 +1457,23 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 		}
 	}
 	return produce(tasks, srckeys, dstkeys, config, checkpointMgr, prefix)
+}
+
+var errUnsafeKey = errors.New("key contains a \"..\" path element or NUL")
+
+// unsafeKey reports whether a key could escape the storage root once it is
+// mapped to a path by a file-based storage. Any ".." element is rejected rather
+// than cleaned lexically, because the parent may be a symlink on the target.
+func unsafeKey(key string) bool {
+	if strings.IndexByte(key, 0) >= 0 {
+		return true
+	}
+	for _, e := range strings.FieldsFunc(key, func(r rune) bool { return r == '/' || runtime.GOOS == "windows" && r == '\\' }) {
+		if e == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, config *Config, checkpointMgr *CheckpointManager, prefix string) (retErr error) {
@@ -1955,6 +1983,9 @@ var errDirSuffix = errors.New("dir miss suffix '/'")
 var ignoreFiles int64
 
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config, checkpointMgr *CheckpointManager) error {
+	if unsafeKey(key) {
+		return errUnsafeKey
+	}
 	obj, err := src.Head(ctx, key)
 	if err != nil {
 		if config.Links && (errors.Is(err, utils.ErrExtlink) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, os.ErrNotExist)) {
@@ -2017,6 +2048,9 @@ func restoreFromCheckpoint(tasks chan<- object.Object, src, dst object.ObjectSto
 }
 
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config, checkpointMgr *CheckpointManager) error {
+	if unsafeKey(prefix) {
+		return errUnsafeKey
+	}
 	config.concurrentList <- 1
 	defer func() {
 		<-config.concurrentList

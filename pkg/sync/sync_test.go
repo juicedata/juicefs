@@ -293,6 +293,133 @@ func TestSyncDirsWithStartAndListThreads(t *testing.T) {
 	}
 }
 
+func TestSyncRejectEscapingKeys(t *testing.T) {
+	safe := []string{"ok", "a/ok", "x..y"}
+	escaping := []string{"../evil1", "a/../../evil2", "b/..", "c/x\x00y"}
+	if runtime.GOOS == "windows" {
+		escaping = append(escaping, "..\\evil3")
+	} else {
+		safe = append(safe, "..\\evil3")
+	}
+	for _, mode := range []string{"list", "parallel-list", "files-from"} {
+		t.Run(mode, func(t *testing.T) {
+			tmp := t.TempDir()
+			src, _ := object.CreateStorage("mem", "", "", "", "")
+			putObjects(t, src, append(safe, escaping...)...)
+			dst, _ := object.CreateStorage("file", tmp+"/root/sub/", "", "", "")
+			config := &Config{
+				Threads:     4,
+				ListThreads: 1,
+				Limit:       -1,
+				MaxSize:     math.MaxInt64,
+				Quiet:       true,
+			}
+			switch mode {
+			case "parallel-list":
+				config.ListThreads, config.ListDepth = 2, 2
+			case "files-from":
+				config.FilesFrom = tmp + "/files"
+				list := strings.Join(append(safe, escaping...), "\n")
+				if err := os.WriteFile(config.FilesFrom, []byte(list), 0644); err != nil {
+					t.Fatalf("write files-from: %s", err)
+				}
+			}
+			if err := Sync(src, dst, config); err == nil {
+				t.Fatalf("sync should fail on escaping keys")
+			}
+			if n := failed.Current(); n != int64(len(escaping)) {
+				t.Fatalf("failed objects: got %d, want %d", n, len(escaping))
+			}
+			for _, key := range safe {
+				if _, err := os.Stat(tmp + "/root/sub/" + key); err != nil {
+					t.Fatalf("%s should be synced: %s", key, err)
+				}
+			}
+			for _, p := range []string{"/root/evil1", "/root/evil2"} {
+				if _, err := os.Stat(tmp + p); !os.IsNotExist(err) {
+					t.Fatalf("%s should not exist: %v", p, err)
+				}
+			}
+		})
+	}
+
+	t.Run("delete-dst keeps paired object", func(t *testing.T) {
+		src, _ := object.CreateStorage("mem", "", "", "", "")
+		dst, _ := object.CreateStorage("mem", "", "", "", "")
+		putObjects(t, src, "../same", "ok")
+		putObjects(t, dst, "../same", "ok")
+		config := &Config{Threads: 2, ListThreads: 1, Limit: -1, MaxSize: math.MaxInt64, Quiet: true, DeleteDst: true, ForceUpdate: true}
+		if err := Sync(src, dst, config); err == nil {
+			t.Fatalf("sync should fail on escaping keys")
+		}
+		if _, err := dst.Head(ctx, "../same"); err != nil {
+			t.Fatalf("../same in dst should not be deleted: %s", err)
+		}
+	})
+
+	t.Run("limit", func(t *testing.T) {
+		src, _ := object.CreateStorage("mem", "", "", "", "")
+		dst, _ := object.CreateStorage("mem", "", "", "", "")
+		putObjects(t, src, "../evil1", "ok")
+		config := &Config{Threads: 2, ListThreads: 1, Limit: 0, MaxSize: math.MaxInt64, Quiet: true}
+		if err := Sync(src, dst, config); err != nil {
+			t.Fatalf("sync with limit 0: %s", err)
+		}
+	})
+
+	t.Run("checkpoint", func(t *testing.T) {
+		src, _ := object.CreateStorage("mem", "reject-ckpt-src", "", "", "")
+		dst, _ := object.CreateStorage("mem", "reject-ckpt-dst", "", "", "")
+		putObjects(t, src, "../evil1", "ok")
+		config := newTestConfig()
+		config.ListThreads = 1
+		for i := range 2 {
+			if err := Sync(src, dst, config); err == nil {
+				t.Fatalf("run %d: sync should fail on escaping keys", i)
+			}
+			if n := failed.Current(); n != 1 {
+				t.Fatalf("run %d: failed objects: got %d, want 1", i, n)
+			}
+			// an interrupted run resumes after LastListedKey, so the key must be kept as failed
+			ckpt, err := NewCheckpointManager(src, dst, config).Load()
+			if err != nil || ckpt == nil {
+				t.Fatalf("run %d: load checkpoint: %v", i, err)
+			}
+			if st := ckpt.PrefixState[""]; st == nil || st.FailedKeys["../evil1"] == nil {
+				t.Fatalf("run %d: ../evil1 should be recorded as failed in checkpoint", i)
+			}
+		}
+	})
+
+	t.Run("pending key from old checkpoint", func(t *testing.T) {
+		src, _ := object.CreateStorage("mem", "reject-oldckpt-src", "", "", "")
+		dst, _ := object.CreateStorage("mem", "reject-oldckpt-dst", "", "", "")
+		putObjects(t, src, "../evil1", "ok")
+		evil, err := src.Head(ctx, "../evil1")
+		if err != nil {
+			t.Fatalf("head: %s", err)
+		}
+		config := newTestConfig()
+		config.ListThreads = 1
+		if err := NewCheckpointManager(src, dst, config).Save(&Checkpoint{
+			PrefixState: map[string]*PrefixState{"": {
+				ListDone:    true,
+				PendingKeys: map[string]object.Object{"../evil1": evil},
+				FailedKeys:  make(map[string]object.Object),
+			}},
+			Config: config,
+		}); err != nil {
+			t.Fatalf("save checkpoint: %s", err)
+		}
+		if err := Sync(src, dst, config); err == nil {
+			t.Fatalf("sync should fail on escaping keys")
+		}
+		if _, err := dst.Head(ctx, "../evil1"); !os.IsNotExist(err) {
+			t.Fatalf("../evil1 should not be synced: %v", err)
+		}
+	})
+}
+
 // nolint:errcheck
 func TestSyncIncludeAndExclude(t *testing.T) {
 	tmpA := t.TempDir() + "/"
