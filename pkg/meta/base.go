@@ -3469,6 +3469,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 
 	parent = m.checkRoot(parent)
 	srcIno = m.checkRoot(srcIno)
+	srcParentIno = m.checkRoot(srcParentIno)
 	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
 	}
