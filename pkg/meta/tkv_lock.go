@@ -59,6 +59,16 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 	lkey := lockOwner{m.sid, owner}
 	for {
 		err = m.txn(ctx, func(tx *kvTxn) error {
+			value := tx.get(m.inodeKey(inode))
+			if value == nil {
+				return syscall.ENOENT
+			}
+			var attr Attr
+			m.parseAttr(value, &attr)
+			if m.checkLink(inode, &attr) {
+				return ELink
+			}
+			tx.set(m.inodeKey(inode), value)
 			v := tx.get(ikey)
 			ls := unmarshalFlock(v)
 			switch ltype {
@@ -134,6 +144,18 @@ func unmarshalPlock(buf []byte) map[lockOwner][]byte {
 }
 
 func (m *kvMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
+	value, err := m.get(m.inodeKey(inode))
+	if err != nil {
+		return errno(err)
+	}
+	if value == nil {
+		return syscall.ENOENT
+	}
+	var attr Attr
+	m.parseAttr(value, &attr)
+	if m.checkLink(inode, &attr) {
+		return ELink
+	}
 	if *ltype == F_UNLCK {
 		*start = 0
 		*end = 0
@@ -178,6 +200,16 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 	lkey := lockOwner{m.sid, owner}
 	for {
 		err = m.txn(ctx, func(tx *kvTxn) error {
+			value := tx.get(m.inodeKey(inode))
+			if value == nil {
+				return syscall.ENOENT
+			}
+			var attr Attr
+			m.parseAttr(value, &attr)
+			if m.checkLink(inode, &attr) {
+				return ELink
+			}
+			tx.set(m.inodeKey(inode), value)
 			owners := unmarshalPlock(tx.get(ikey))
 			if ltype == F_UNLCK {
 				records := owners[lkey]

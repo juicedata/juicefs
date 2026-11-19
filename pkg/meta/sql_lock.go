@@ -43,11 +43,15 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 	var err syscall.Errno
 	for {
 		err = errno(m.txn(func(s *xorm.Session) error {
-			if exists, err := s.ForUpdate().Get(&node{Inode: inode}); err != nil || !exists {
+			nd := node{Inode: inode}
+			if exists, err := s.ForUpdate().Get(&nd); err != nil || !exists {
 				if err == nil && !exists {
 					err = syscall.ENOENT
 				}
 				return err
+			}
+			if m.checkLink(&nd) {
+				return ELink
 			}
 			var fs []flock
 			err := s.ForUpdate().Find(&fs, &flock{Inode: inode})
@@ -168,11 +172,15 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 	owner := int64(owner_)
 	for {
 		err = errno(m.txn(func(s *xorm.Session) error {
-			if exists, err := s.ForUpdate().Get(&node{Inode: inode}); err != nil || !exists {
+			nd := node{Inode: inode}
+			if exists, err := s.ForUpdate().Get(&nd); err != nil || !exists {
 				if err == nil && !exists {
 					err = syscall.ENOENT
 				}
 				return err
+			}
+			if m.checkLink(&nd) {
+				return ELink
 			}
 			if ltype == F_UNLCK {
 				var l = plock{Inode: inode, Owner: owner, Sid: m.sid}
