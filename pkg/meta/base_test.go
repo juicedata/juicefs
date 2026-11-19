@@ -1553,6 +1553,45 @@ func testListLocks(t *testing.T, m Meta) {
 	if plocks, flocks, err := m.ListLocks(ctx, inode); err != nil || len(plocks) != 0 || len(flocks) != 0 {
 		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
 	}
+
+	// locks on the mounted root of a subdir mount are taken on the subdir
+	var dir Ino
+	if st := m.Mkdir(ctx, RootInode, "lockdir", 0755, 022, 0, &dir, attr); st != 0 {
+		t.Fatalf("mkdir lockdir: %s", st)
+	}
+	defer m.Rmdir(ctx, RootInode, "lockdir")
+	m.chroot(dir)
+	if st := m.Flock(ctx, RootInode, o1, syscall.F_WRLCK, false); st != 0 {
+		t.Fatalf("flock mounted root: %s", st)
+	}
+	if st := m.Setlk(ctx, RootInode, o1, false, syscall.F_WRLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("plock mounted root: %s", st)
+	}
+	m.chroot(RootInode)
+	if plocks, flocks, err := m.ListLocks(ctx, dir); err != nil || len(plocks) != 1 || len(flocks) != 1 {
+		t.Fatalf("list locks of subdir: %v %v %v", plocks, flocks, err)
+	}
+	if plocks, flocks, err := m.ListLocks(ctx, RootInode); err != nil || len(plocks) != 0 || len(flocks) != 0 {
+		t.Fatalf("list locks of volume root: %v %v %v", plocks, flocks, err)
+	}
+	m.chroot(dir)
+	if plocks, flocks, err := m.ListLocks(ctx, RootInode); err != nil || len(plocks) != 1 || len(flocks) != 1 {
+		t.Fatalf("list locks of mounted root: %v %v %v", plocks, flocks, err)
+	}
+	ltype, start, end, pid := uint32(syscall.F_WRLCK), uint64(0), uint64(0xFFFF), uint32(2)
+	if st := m.Getlk(ctx, RootInode, 2, &ltype, &start, &end, &pid); st != 0 || ltype != syscall.F_WRLCK {
+		t.Fatalf("getlk mounted root: %s, ltype %d", st, ltype)
+	}
+	if st := m.Flock(ctx, RootInode, o1, syscall.F_UNLCK, false); st != 0 {
+		t.Fatalf("flock unlock mounted root: %s", st)
+	}
+	if st := m.Setlk(ctx, RootInode, o1, false, syscall.F_UNLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("plock unlock mounted root: %s", st)
+	}
+	m.chroot(RootInode)
+	if plocks, flocks, err := m.ListLocks(ctx, dir); err != nil || len(plocks) != 0 || len(flocks) != 0 {
+		t.Fatalf("list locks of subdir: %v %v %v", plocks, flocks, err)
+	}
 }
 
 func testLocks(t *testing.T, m Meta) {
@@ -5055,6 +5094,31 @@ func testClone(t *testing.T, m Meta) {
 	}
 	if eno := m.Clone(Background(), TrashInode+1, 1000, cloneDir, "xxx", 0, 022, 4, &count, &total); !errors.Is(eno, syscall.EPERM) {
 		t.Fatalf("cloning files in the trash is not supported")
+	}
+
+	// cloning the mounted root of a subdir mount copies the subdir, not the volume root
+	var subdir Ino
+	if eno := m.Mkdir(Background(), RootInode, "cloneSubdir", 0700, 0, 0, &subdir, &attr); eno != 0 {
+		t.Fatalf("mkdir: %s", eno)
+	}
+	if eno := m.GetAttr(Background(), RootInode, &attr); eno != 0 || attr.Mode == 0700 {
+		t.Fatalf("volume root should not have mode 0700: %s %o", eno, attr.Mode)
+	}
+	m.chroot(subdir)
+	eno := m.Clone(Background(), RootInode, RootInode, RootInode, "copy", CLONE_MODE_PRESERVE_ATTR, 0, 4, &count, &total)
+	m.chroot(RootInode)
+	if eno != 0 {
+		t.Fatalf("clone mounted root: %s", eno)
+	}
+	var copyIno Ino
+	if eno := m.Lookup(Background(), subdir, "copy", &copyIno, &attr, false); eno != 0 || attr.Mode != 0700 {
+		t.Fatalf("clone of mounted root should have mode 0700: %s %o", eno, attr.Mode)
+	}
+	if eno := m.Rmdir(Background(), subdir, "copy"); eno != 0 {
+		t.Fatalf("rmdir copy: %s", eno)
+	}
+	if eno := m.Rmdir(Background(), RootInode, "cloneSubdir"); eno != 0 {
+		t.Fatalf("rmdir cloneSubdir: %s", eno)
 	}
 }
 

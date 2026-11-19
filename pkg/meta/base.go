@@ -3018,12 +3018,12 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 }
 
 func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno {
-	inode = m.checkRoot(inode)
 	var attr Attr
 	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
 		logger.Errorf("get attr error [inode %v]: %v", inode, st)
 		return st
 	}
+	inode = m.checkRoot(inode)
 	var wg sync.WaitGroup
 	// compact
 	chunkChan := make(chan cchunk, 10000)
@@ -3468,6 +3468,7 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno {
 
 	parent = m.checkRoot(parent)
+	srcIno = m.checkRoot(srcIno)
 	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
 	}

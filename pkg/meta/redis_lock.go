@@ -40,6 +40,7 @@ func (r *redisMeta) lastLockOfSession(lkeys []string, lkey string) bool {
 }
 
 func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
+	inode = r.checkRoot(inode)
 	ikey := r.flockKey(inode)
 	lkey := r.ownerKey(owner)
 	ctx = ctx.WithValue(txMethodKey{}, "Flock"+strconv.Itoa(int(ltype)))
@@ -110,6 +111,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 }
 
 func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
+	inode = r.checkRoot(inode)
 	if *ltype == F_UNLCK {
 		*start = 0
 		*end = 0
@@ -148,6 +150,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 }
 
 func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
+	inode = r.checkRoot(inode)
 	ikey := r.plockKey(inode)
 	lkey := r.ownerKey(owner)
 	ctx = ctx.WithValue(txMethodKey{}, "Setlk"+strconv.Itoa(int(ltype)))
@@ -231,6 +234,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 }
 
 func (r *redisMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+	inode = r.checkRoot(inode)
 	fKey := r.flockKey(inode)
 	pKey := r.plockKey(inode)
 
