@@ -119,6 +119,10 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+`ls()` follows the fsspec convention: entry names are full paths without a
+protocol, including with `detail=False`. This allows `DirFileSystem` to make
+them relative to its root. The low-level `Client.listdir()` still returns basenames.
+
 ### Getting Help Information
 
 You can use the `help()` function to get help information for classes and methods.

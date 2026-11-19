@@ -62,9 +62,10 @@ class JuiceFS(AbstractFileSystem):
         self.fs.rmdir(self._strip_protocol(path))
 
     def ls(self, path, detail=False, **kwargs):
-        infos = self.fs.listdir(self._strip_protocol(path), detail)
+        path = self._strip_protocol(path)
+        infos = self.fs.listdir(path, detail)
         if not detail:
-            return infos
+            return [os.path.join(path, name) for name in infos]
         stats = []
         for name, st in infos:
             info = {

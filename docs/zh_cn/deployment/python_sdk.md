@@ -132,6 +132,9 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+`ls()` 遵循 fsspec 约定，返回不带协议前缀的完整路径，`detail=False` 时也一样，
+使 `DirFileSystem` 能将其转换为相对于根目录的路径。底层 `Client.listdir()` 仍返回文件名。
+
 ### 获取帮助信息
 
 可以使用 `help()` 函数获取类和方法的帮助信息。
