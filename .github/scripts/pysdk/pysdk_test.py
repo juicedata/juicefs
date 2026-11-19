@@ -12,6 +12,7 @@ import stat
 from os.path import dirname
 import sys
 import time
+import types
 sys.path.append('.')
 from sdk.python.juicefs.juicefs import juicefs
 from bench import seq_write, random_write, seq_read, random_read
@@ -563,6 +564,49 @@ class ExtendedAttributeTests(FileTests):
             with self.v.open(path, "rb") as fp:
                 return self.v.listxattr(fp.fileno(), *args)
         self._check_xattrs(getxattr, setxattr, removexattr, listxattr)
+
+
+class LargeWriteTests(FileTests):
+    def test_write_splits_into_chunks(self):
+        chunk = 4 << 20
+        data = os.urandom(2 * chunk + 1)
+        for buffering in (0, 8):
+            with self.subTest(buffering=buffering):
+                counts = []
+                with self.v.open(TESTFILE, 'wb', buffering) as stream:
+                    f = stream._file
+                    lib = f.lib
+                    def pwrite(tid, fd, buf, count, off):
+                        counts.append(count.value)
+                        return lib.jfs_pwrite(tid, fd, buf, count, off)
+                    with patch.object(f, 'lib', types.SimpleNamespace(jfs_pwrite=pwrite)):
+                        self.assertEqual(stream.write(data), len(data))
+                    self.assertEqual(stream.tell(), len(data))
+                self.assertEqual(sum(counts), len(data))
+                self.assertLessEqual(max(counts), chunk)
+                with self.v.open(TESTFILE, 'rb') as stream:
+                    self.assertEqual(stream.read(), data)
+
+    def test_write_chunk_failure_keeps_position(self):
+        chunk = 4 << 20
+        def raise_eio():
+            raise OSError(errno.EIO, 'injected')
+        for name, fail in (('error', raise_eio), ('zero', lambda: 0)):
+            with self.subTest(failure=name):
+                with self.v.open(TESTFILE, 'wb', 0) as stream:
+                    f = stream._file
+                    lib = f.lib
+                    def pwrite(tid, fd, buf, count, off):
+                        if off.value >= chunk:
+                            return fail()
+                        return lib.jfs_pwrite(tid, fd, buf, count, off)
+                    with patch.object(f, 'lib', types.SimpleNamespace(jfs_pwrite=pwrite)):
+                        with self.assertRaises(OSError) as cm:
+                            stream.write(bytes(2 * chunk + 1))
+                    self.assertEqual(cm.exception.errno, errno.EIO)
+                    self.assertEqual(stream.tell(), chunk)
+                    self.assertEqual(f.length, chunk)
+                self.assertEqual(self.v.stat(TESTFILE).st_size, chunk)
 
 
 class BenchTests(FileTests):
