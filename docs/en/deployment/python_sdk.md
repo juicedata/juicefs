@@ -7,7 +7,7 @@ The JuiceFS Community Edition introduced the Python SDK in v1.3.0, making it sui
 
 The `fsspec` adapter's `mkdir()` defaults to mode `0o777`, filtered by the client's umask. Pass `mode` explicitly to request more restrictive permissions.
 
-Set `auto_mkdir=True` to create missing parent directories when opening files for writing, appending or exclusive creation (`wb`, `ab`, `xb`). Opening a file for reading does not create directories.
+Set `auto_mkdir=True` to create missing parent directories when opening files for writing, appending or exclusive creation (`wb`, `ab`, `xb`). A filename without a directory component, such as `file.bin`, uses the volume root as its parent. Opening a file for reading does not create directories.
 
 After installing `fsspec`, `fsspec.filesystem("jfs", name="myjfs", meta="redis://localhost")` loads the adapter through the installed SDK's entry point; no manual adapter import is needed.
 

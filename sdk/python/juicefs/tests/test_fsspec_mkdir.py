@@ -118,3 +118,22 @@ def test_auto_mkdir_exclusive_preserves_existing(fs, fs_path):
         assert fs.cat_file(path) == b"original"
     finally:
         fs.auto_mkdir = previous
+
+
+@pytest.mark.parametrize("protocol", ["", "jfs://", "juicefs://"],
+                         ids=["plain", "jfs", "juicefs"])
+@pytest.mark.parametrize("mode", ["wb", "ab", "xb"])
+def test_auto_mkdir_bare_filename(fs, fs_path, protocol, mode):
+    fs.makedirs(fs_path, exist_ok=True)
+    path = fs_path.rsplit("/", 1)[-1] + "-bare"
+    previous = fs.auto_mkdir
+    fs.auto_mkdir = True
+    try:
+        with fs.open(protocol + path, mode) as stream:
+            stream.write(b"content")
+        assert fs.isfile(path)
+        assert fs.cat_file(path) == b"content"
+    finally:
+        fs.auto_mkdir = previous
+        if fs.lexists(path):
+            fs.rm(path, recursive=True)

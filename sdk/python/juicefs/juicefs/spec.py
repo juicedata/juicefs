@@ -180,7 +180,7 @@ class JuiceFS(AbstractFileSystem):
         path = cls._strip_protocol(path)
         if os.sep == "/":
             # posix native
-            return path.rsplit("/", 1)[0] or "/"
+            return path.rpartition("/")[0] or "/"
         else:
             # NT
             path_ = path.rsplit("/", 1)[0]
