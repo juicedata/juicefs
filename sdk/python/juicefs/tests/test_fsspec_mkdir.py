@@ -58,3 +58,63 @@ def test_explicit_mode(fs, fs_path, create_parents, mode):
     path = f"{fs_path}/directory"
     fs.mkdir(path, create_parents=create_parents, mode=mode)
     assert fs.fs.stat(path).st_mode & 0o777 == mode & ~fs.fs.umask
+
+
+@pytest.mark.parametrize("mode", ["wb", "ab", "xb"])
+@pytest.mark.parametrize("auto_mkdir", [False, True])
+def test_auto_mkdir_write_modes(fs, fs_path, mode, auto_mkdir):
+    fs.makedirs(fs_path, exist_ok=True)
+    path = f"{fs_path}/nested/file"
+    previous = fs.auto_mkdir
+    fs.auto_mkdir = auto_mkdir
+    try:
+        if auto_mkdir:
+            with fs.open(path, mode) as stream:
+                stream.write(b"content")
+            assert fs.cat_file(path) == b"content"
+        else:
+            with pytest.raises(OSError):
+                fs.open(path, mode)
+            assert not fs.exists(f"{fs_path}/nested")
+    finally:
+        fs.auto_mkdir = previous
+
+
+def test_auto_mkdir_does_not_create_read_paths(fs, fs_path):
+    fs.makedirs(fs_path, exist_ok=True)
+    previous = fs.auto_mkdir
+    fs.auto_mkdir = True
+    try:
+        with pytest.raises(OSError):
+            fs.open(f"{fs_path}/nested/file", "rb")
+        assert not fs.exists(f"{fs_path}/nested")
+    finally:
+        fs.auto_mkdir = previous
+
+
+def test_auto_mkdir_append_existing(fs, fs_path):
+    fs.makedirs(fs_path, exist_ok=True)
+    path = f"{fs_path}/file"
+    fs.pipe_file(path, b"original")
+    previous = fs.auto_mkdir
+    fs.auto_mkdir = True
+    try:
+        with fs.open(path, "ab") as stream:
+            stream.write(b"-appended")
+        assert fs.cat_file(path) == b"original-appended"
+    finally:
+        fs.auto_mkdir = previous
+
+
+def test_auto_mkdir_exclusive_preserves_existing(fs, fs_path):
+    fs.makedirs(fs_path, exist_ok=True)
+    path = f"{fs_path}/file"
+    fs.pipe_file(path, b"original")
+    previous = fs.auto_mkdir
+    fs.auto_mkdir = True
+    try:
+        with pytest.raises(OSError):
+            fs.open(path, "xb")
+        assert fs.cat_file(path) == b"original"
+    finally:
+        fs.auto_mkdir = previous

@@ -161,7 +161,7 @@ class JuiceFS(AbstractFileSystem):
 
     def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
         path = self._strip_protocol(path)
-        if self.auto_mkdir and "w" in mode:
+        if self.auto_mkdir and ("w" in mode or "a" in mode or "x" in mode):
             self.makedirs(self._parent(path), exist_ok=True)
         return JuiceFile(self, path, mode, block_size, autocommit, **kwargs)
 
