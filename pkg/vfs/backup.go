@@ -117,7 +117,9 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 		threads = 10
 	}
 	err = m.DumpMeta(zw, 0, threads, false, fast, skipTrash) // force dump the whole tree
-	_ = zw.Close()
+	if closeErr := zw.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return "", err
 	}

@@ -88,6 +88,8 @@ JuiceFS maintains a global timestamp to ensure that only one client performs the
 
 #### Backup cleanup policy
 
+Automatic JSON backups are uploaded only after the local gzip stream finishes successfully. A local write or compression-finalization error fails that backup and skips cleanup for that attempt.
+
 JuiceFS periodically cleans up backups according to the following rules.
 
 - Keep all backups up to 2 days.
