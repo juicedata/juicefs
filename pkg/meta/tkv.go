@@ -93,6 +93,35 @@ type kvTxn struct {
 
 type txDisableAsyncCommitKey struct{}
 
+func (tx *kvTxn) disableBatch() {
+	if t, ok := tx.kvtxn.(interface{ disableBatch() }); ok {
+		t.disableBatch()
+	}
+}
+
+type rootTxn struct {
+	kvtxn
+	root []byte
+}
+
+func (tx *rootTxn) gets(keys ...[]byte) [][]byte {
+	if len(keys) == 0 {
+		return nil
+	}
+	for i, key := range keys {
+		if bytes.Equal(key, tx.root) {
+			values := make([][]byte, len(keys))
+			values[i] = tx.get(key)
+			if i > 0 {
+				copy(values, tx.kvtxn.gets(keys[:i]...))
+			}
+			copy(values[i+1:], tx.gets(keys[i+1:]...))
+			return values
+		}
+	}
+	return tx.kvtxn.gets(keys...)
+}
+
 func (tx *kvTxn) deleteKeys(prefix []byte) {
 	tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
 		tx.delete(k)
@@ -1304,6 +1333,67 @@ func (m *kvMeta) checkLink(inode Ino, attr *Attr) bool {
 	return false
 }
 
+func (m *kvMeta) checkRootMutable(tx *kvTxn, inodes ...Ino) error {
+	for _, inode := range inodes {
+		if inode != RootInode {
+			continue
+		}
+		value := tx.get(m.inodeKey(inode))
+		if value == nil {
+			return syscall.ENOENT
+		}
+		var attr Attr
+		m.parseAttr(value, &attr)
+		if m.checkLink(inode, &attr) {
+			return ELink
+		}
+		if attr.Flags&FlagImmutable != 0 {
+			return syscall.EPERM
+		}
+		tx.disableBatch()
+		tx.set(m.inodeKey(inode), value)
+		if m.Name() == "etcd" {
+			tx.kvtxn = &rootTxn{tx.kvtxn, m.inodeKey(inode)}
+		}
+		break
+	}
+	return nil
+}
+
+func (m *kvMeta) FreezeRoot(ctx Context, freeze bool) syscall.Errno {
+	if ctx.Uid() != 0 {
+		return syscall.EPERM
+	}
+	if m.root != RootInode {
+		return syscall.ENOTSUP
+	}
+	ctx = ctx.WithValue(txDisableAsyncCommitKey{}, true)
+	r := errno(m.txn(ctx, func(tx *kvTxn) error {
+		tx.disableBatch()
+		value := tx.get(m.inodeKey(RootInode))
+		if value == nil {
+			return syscall.ENOENT
+		}
+		var attr Attr
+		m.parseAttr(value, &attr)
+		if freeze && m.checkLink(RootInode, &attr) {
+			return ELink
+		}
+		if freeze {
+			if attr.Flags&FlagImmutable != 0 {
+				return syscall.EPERM
+			}
+			attr.Flags |= FlagImmutable
+		} else {
+			attr.Flags &^= FlagImmutable
+		}
+		tx.set(m.inodeKey(RootInode), m.marshal(&attr))
+		return nil
+	}, RootInode))
+	m.of.InvalidateChunk(RootInode, invalidateAttrOnly)
+	return r
+}
+
 func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
 		var cur Attr
@@ -1541,6 +1631,9 @@ func (m *kvMeta) nextTrashInode(ctx Context, tx *kvTxn, inode *Ino) {
 
 func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if err := m.checkRootMutable(tx, parent); err != nil {
+			return err
+		}
 		var pattr Attr
 		rs := tx.gets(m.inodeKey(parent), m.entryKey(parent, name))
 		if rs[0] == nil {
@@ -1689,6 +1782,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	var newSpace, newInode int64
 	requestedTrash := trash
 	err := m.txn(ctx, func(tx *kvTxn) error {
+		if err := m.checkRootMutable(tx, parent); err != nil {
+			return err
+		}
 		trash = requestedTrash
 		opened = false
 		*attr = Attr{}
@@ -1892,6 +1988,9 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 		var unrefs map[Ino]uint64
 
 		err := m.txn(ctx, func(tx *kvTxn) error {
+			if err := m.checkRootMutable(tx, parent); err != nil {
+				return err
+			}
 			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
 			batchTrashLength, batchTrashSpace, batchTrashInodes = 0, 0, 0
 			batchFsSpace, batchFsInodes = 0, 0
@@ -2189,6 +2288,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 	}
 	requestedTrash := trash
 	err := m.txn(ctx, func(tx *kvTxn) error {
+		if err := m.checkRootMutable(tx, parent); err != nil {
+			return err
+		}
 		trash = requestedTrash
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil && m.conf.CaseInsensi {
@@ -2314,6 +2416,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	requestedTrash := trash
 	err := m.txn(ctx, func(tx *kvTxn) error {
+		if err := m.checkRootMutable(tx, parentSrc, parentDst); err != nil {
+			return err
+		}
 		trash = requestedTrash
 		opened = false
 		dino, dtyp = 0, 0
@@ -2617,6 +2722,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 
 func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if err := m.checkRootMutable(tx, parent); err != nil {
+			return err
+		}
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode), m.entryKey(parent, name))
 		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
@@ -2639,6 +2747,9 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			return syscall.EPERM
 		}
 		m.parseAttr(rs[1], &iattr)
+		if m.checkLink(inode, &iattr) {
+			return ELink
+		}
 		if iattr.Typ == TypeDirectory {
 			return syscall.EPERM
 		}
@@ -3671,6 +3782,9 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 	}
 	key := m.xattrKey(inode, name)
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if err := m.checkRootMutable(tx, inode); err != nil {
+			return err
+		}
 		rawAttr := tx.get(m.inodeKey(inode))
 		if rawAttr == nil {
 			return syscall.ENOENT
@@ -3703,6 +3817,9 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	key := m.xattrKey(inode, name)
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if err := m.checkRootMutable(tx, inode); err != nil {
+			return err
+		}
 		value := tx.get(m.inodeKey(inode))
 		if value == nil {
 			return syscall.ENOENT
@@ -4181,7 +4298,7 @@ type kvTreeSnap struct {
 	rootEntries map[string]kvTreeEdge
 }
 
-func (m *kvMeta) makeSnap0(tx *kvTxn, inode Ino) (*kvTreeSnap, error) {
+func (m *kvMeta) makeSnap0(tx *kvTxn, inode Ino, shared map[cchunk]bool) (*kvTreeSnap, error) {
 	start := time.Now()
 	snap := &kvTreeSnap{
 		attrs:       make(map[Ino]*Attr),
@@ -4338,29 +4455,30 @@ func (m *kvMeta) makeSnap0(tx *kvTxn, inode Ino) (*kvTreeSnap, error) {
 	}
 
 	var sliceKeys [][]byte
-	var sliceIDs []uint64
-	seenSlices := make(map[string]struct{})
-	for _, chunks := range snap.chunks {
+	owners := make(map[string][]cchunk)
+	for ino, chunks := range snap.chunks {
 		for _, chunk := range chunks {
 			for _, slice := range chunk.Slices {
 				if slice.Id == 0 {
 					continue
 				}
 				key := m.sliceKey(slice.Id, slice.Size)
-				if _, ok := seenSlices[string(key)]; ok {
-					continue
+				if _, ok := owners[string(key)]; !ok {
+					sliceKeys = append(sliceKeys, key)
 				}
-				seenSlices[string(key)] = struct{}{}
-				sliceKeys = append(sliceKeys, key)
-				sliceIDs = append(sliceIDs, slice.Id)
+				owners[string(key)] = append(owners[string(key)], cchunk{inode: ino, indx: chunk.Index})
 			}
 		}
 	}
 	if len(sliceKeys) > 0 {
 		for i, value := range tx.gets(sliceKeys...) {
 			if refs := parseCounter(value); refs > 0 {
-				logger.Infof("dumpTree: inode=%d, slice has extra refs=%d, id=%d", inode, refs, sliceIDs[i])
-				return nil, syscall.EPERM
+				if shared == nil {
+					return nil, syscall.EAGAIN
+				}
+				for _, c := range owners[string(sliceKeys[i])] {
+					shared[c] = true
+				}
 			}
 		}
 	}
@@ -4388,8 +4506,8 @@ func (m *kvMeta) dumpEntryFast(snap *kvTreeSnap, inode Ino, entry *DumpedEntry) 
 	return nil
 }
 
-func (m *kvMeta) dumpTree(tx *kvTxn, inode Ino, entry *DumpedEntry) (map[Ino]*Attr, error) {
-	snap, err := m.makeSnap0(tx, inode)
+func (m *kvMeta) dumpTree(tx *kvTxn, inode Ino, entry *DumpedEntry, shared map[cchunk]bool) (map[Ino]*Attr, error) {
+	snap, err := m.makeSnap0(tx, inode, shared)
 	if err != nil {
 		return nil, err
 	}
@@ -4410,29 +4528,186 @@ func (m *kvMeta) dumpTree(tx *kvTxn, inode Ino, entry *DumpedEntry) (map[Ino]*At
 }
 
 func (m *kvMeta) PrepareHardlink(ctx Context, inode Ino, entry *DumpedEntry) ([]HardlinkEntry, syscall.Errno) {
-	return nil, syscall.ENOTSUP
+	var links []HardlinkEntry
+	err := m.client.txn(ctx, func(tx *kvTxn) error {
+		*entry = DumpedEntry{}
+		links = nil
+		attrs, err := m.dumpTree(tx, inode, entry, nil)
+		if err != nil {
+			return err
+		}
+		if entry.Attr.Type == "link" {
+			return ELink
+		}
+		if entry.Attr.Type != "regular" || entry.Attr.Nlink < 2 {
+			return syscall.EAGAIN
+		}
+		parents := make(map[Ino]bool)
+		if parent := attrs[inode].Parent; parent != 0 {
+			parents[parent] = true
+		} else {
+			prefix := m.fmtKey("A", inode, "P")
+			tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
+				if parseCounter(v) > 0 {
+					parents[m.decodeInode(k[len(prefix):])] = true
+				}
+				return true
+			})
+		}
+		for parent := range parents {
+			prefix := m.entryKey(parent, "")
+			tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
+				typ, ino := m.parseEntry(v)
+				if ino == inode {
+					if typ != TypeFile {
+						err = syscall.EAGAIN
+						return false
+					}
+					links = append(links, HardlinkEntry{Parent: parent, Name: string(k[len(prefix):])})
+				}
+				return true
+			})
+			if err != nil {
+				return err
+			}
+		}
+		if len(links) != int(entry.Attr.Nlink) {
+			return syscall.EAGAIN
+		}
+		return nil
+	}, 0)
+	if err != nil {
+		return nil, errno(err)
+	}
+	sort.Slice(links, func(i, j int) bool {
+		if links[i].Parent != links[j].Parent {
+			return links[i].Parent < links[j].Parent
+		}
+		return links[i].Name < links[j].Name
+	})
+	links[0].Link = inode
+	for i := 1; i < len(links); i++ {
+		ino, err := m.nextInode()
+		if err != nil {
+			return nil, errno(err)
+		}
+		links[i].Link = ino
+	}
+	return links, 0
 }
 
 func (m *kvMeta) ReplaceHardlink(ctx Context, inode Ino, entry *DumpedEntry, links []HardlinkEntry, target uint64) syscall.Errno {
-	return syscall.ENOTSUP
-}
-
-func (m *kvMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
-	ctx := Background()
-	dumped := &DumpedEntry{Attr: &DumpedAttr{}}
-	err := m.client.txn(ctx, func(tx *kvTxn) error {
-		_, err := m.dumpTree(tx, inode, dumped)
-		return err
-	}, 0)
+	if entry == nil || entry.Attr == nil || entry.Attr.Inode != inode || entry.Attr.Type != "regular" ||
+		entry.Attr.Nlink < 2 || len(links) != int(entry.Attr.Nlink) || links[0].Link != inode || target == 0 {
+		return syscall.EINVAL
+	}
+	reserved := make(map[Ino]bool)
+	parents := make(map[Ino]map[string]bool)
+	for _, l := range links {
+		if l.Link <= RootInode || reserved[l.Link] || l.Parent == 0 || l.Name == "" || parents[l.Parent][l.Name] {
+			return syscall.EINVAL
+		}
+		reserved[l.Link] = true
+		if parents[l.Parent] == nil {
+			parents[l.Parent] = make(map[string]bool)
+		}
+		parents[l.Parent][l.Name] = true
+	}
+	ctx = ctx.WithValue(txDisableAsyncCommitKey{}, true)
+	err := m.txn(ctx, func(tx *kvTxn) error {
+		tx.disableBatch()
+		value := tx.get(m.inodeKey(inode))
+		if value == nil {
+			return syscall.ENOENT
+		}
+		var attr Attr
+		m.parseAttr(value, &attr)
+		if m.checkLink(inode, &attr) {
+			return ELink
+		}
+		for parent := range parents {
+			value := tx.get(m.inodeKey(parent))
+			if value == nil {
+				return syscall.EAGAIN
+			}
+			var pattr Attr
+			m.parseAttr(value, &pattr)
+			if pattr.Typ != TypeDirectory {
+				return syscall.EAGAIN
+			}
+			tx.set(m.inodeKey(parent), value)
+		}
+		for _, l := range links {
+			value := tx.get(m.entryKey(l.Parent, l.Name))
+			if value == nil {
+				return syscall.EAGAIN
+			}
+			typ, ino := m.parseEntry(value)
+			if typ != TypeFile || ino != inode {
+				return syscall.EAGAIN
+			}
+			if l.Link != inode && tx.get(m.inodeKey(l.Link)) != nil {
+				return syscall.EAGAIN
+			}
+		}
+		attrs, err := m.checkEntry(tx, inode, entry)
+		if err != nil {
+			return err
+		}
+		now := time.Now()
+		if err := m.replaceTree(tx, entry, attrs, map[Ino]uint64{inode: target}, now); err != nil {
+			return err
+		}
+		for _, l := range links {
+			attr := *attrs[inode]
+			attr.Parent, attr.Nlink = l.Parent, 1
+			tx.set(m.inodeKey(l.Link), m.marshal(&attr))
+			tx.set(m.entryKey(l.Parent, l.Name), m.packEntry(TypeLink, l.Link))
+		}
+		tx.deleteKeys(m.fmtKey("A", inode, "P"))
+		data, err := json.Marshal(links)
+		if err != nil {
+			return err
+		}
+		m.genLog(tx, now, "REPLACEHARDLINK(%d,%d,%s)", inode, target, logEncode(data))
+		return nil
+	}, inode)
 	if err == nil {
-		*entry = *dumped
+		m.of.InvalidateChunk(inode, invalidateAllChunks)
+		m.updateStats(int64(len(links)-1)*align4K(0), int64(len(links)-1))
+		m.updateUserGroupStat(ctx, entry.Attr.Uid, entry.Attr.Gid, int64(len(links)-1)*align4K(0), int64(len(links)-1))
+		m.newMsg(ExternalLink, inode, target)
 	}
 	return errno(err)
 }
 
+func (m *kvMeta) DumpTree(inode Ino, entry *DumpedEntry) syscall.Errno {
+	ctx := Background()
+	var shared map[cchunk]bool
+	if err := m.client.txn(ctx, func(tx *kvTxn) error {
+		*entry = DumpedEntry{}
+		shared = make(map[cchunk]bool)
+		_, err := m.dumpTree(tx, inode, entry, shared)
+		return err
+	}, 0); err != nil {
+		return errno(err)
+	}
+	if len(shared) == 0 {
+		return 0
+	}
+	for c := range shared {
+		m.compactChunk0(c.inode, c.indx, false, false, -1, true)
+	}
+	return errno(m.client.txn(ctx, func(tx *kvTxn) error {
+		*entry = DumpedEntry{}
+		_, err := m.dumpTree(tx, inode, entry, nil)
+		return err
+	}, 0))
+}
+
 func (m *kvMeta) checkEntry(tx *kvTxn, inode Ino, entry *DumpedEntry) (map[Ino]*Attr, error) {
 	actual := &DumpedEntry{Attr: &DumpedAttr{}}
-	attrs, err := m.dumpTree(tx, inode, actual)
+	attrs, err := m.dumpTree(tx, inode, actual, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -4500,9 +4775,29 @@ func (m *kvMeta) replaceTree(tx *kvTxn, entry *DumpedEntry, attrs map[Ino]*Attr,
 func (m *kvMeta) Replace(ctx Context, inode Ino, entry *DumpedEntry, mapping map[Ino]uint64) syscall.Errno {
 	ctx = ctx.WithValue(txDisableAsyncCommitKey{}, true)
 	r := errno(m.txn(ctx, func(tx *kvTxn) error {
+		tx.disableBatch()
+		if inode == RootInode {
+			value := tx.get(m.inodeKey(inode))
+			if value == nil {
+				return syscall.ENOENT
+			}
+			var attr Attr
+			m.parseAttr(value, &attr)
+			if attr.Typ == TypeLink {
+				if attr.Length == mapping[inode] {
+					return nil
+				}
+				return syscall.EINVAL
+			}
+		}
 		attrs, err := m.checkEntry(tx, inode, entry)
 		if err != nil {
 			return err
+		}
+		for _, attr := range attrs {
+			if attr.Typ == TypeFile && attr.Nlink > 1 {
+				return syscall.EAGAIN
+			}
 		}
 		now := time.Now()
 		if err = m.replaceTree(tx, entry, attrs, mapping, now); err != nil {
@@ -5037,6 +5332,9 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, originAttr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if err := m.checkRootMutable(tx, parent); err != nil {
+			return err
+		}
 		a := tx.get(m.inodeKey(srcIno))
 		if a == nil {
 			return syscall.ENOENT
@@ -5211,6 +5509,9 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	}
 
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if err := m.checkRootMutable(tx, dstParent); err != nil {
+			return err
+		}
 		now := m.now()
 		*result = batchCloneResult{deltas: make(ugQuotaDeltas)}
 
@@ -5390,6 +5691,9 @@ func (m *kvMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 
 func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if err := m.checkRootMutable(tx, parent); err != nil {
+			return err
+		}
 		a := tx.get(m.inodeKey(parent))
 		if a == nil {
 			return syscall.ENOENT
@@ -5434,7 +5738,7 @@ func (m *kvMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 		if m.checkLink(inode, attr) {
 			return ELink
 		}
-		if !m.atimeNeedsUpdate(attr, now) {
+		if attr.Flags&FlagImmutable != 0 || !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()

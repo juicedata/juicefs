@@ -39,6 +39,11 @@ type etcdTxn struct {
 	kv       etcd.KV
 	observed map[string]int64
 	buffer   map[string][]byte
+	noBatch  bool
+}
+
+func (tx *etcdTxn) disableBatch() {
+	tx.noBatch = true
 }
 
 func (tx *etcdTxn) get(key []byte) []byte {
@@ -134,7 +139,7 @@ func (tx *etcdTxn) exist(prefix []byte) bool {
 
 func (tx *etcdTxn) set(key, value []byte) {
 	tx.buffer[string(key)] = value
-	if len(tx.buffer) >= 128 {
+	if len(tx.buffer) >= 128 && !tx.noBatch {
 		err := tx.commmit()
 		if err != nil {
 			panic(err)
@@ -227,6 +232,7 @@ func (c *etcdClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (
 		c.kv,
 		make(map[string]int64),
 		make(map[string][]byte),
+		false,
 	}
 	defer func() {
 		if r := recover(); r != nil {
