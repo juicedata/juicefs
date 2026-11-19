@@ -1783,7 +1783,7 @@ func jfs_listdir2(pid int64, h int64, cpath *C.char, plus bool, buf **byte, size
 }
 
 func toBuf(s uintptr, sz int32) []byte {
-	return (*[1 << 30]byte)(unsafe.Pointer(s))[:sz:sz]
+	return unsafe.Slice((*byte)(unsafe.Pointer(s)), sz)
 }
 
 //export jfs_concat
