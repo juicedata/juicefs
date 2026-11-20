@@ -273,10 +273,33 @@ func (p *withPrefix) Restore(ctx context.Context, key string, days int32) error 
 var _ ObjectStorage = (*withPrefix)(nil)
 var _ SupportTier = (*withPrefix)(nil)
 
-func IsFileSystem(object ObjectStorage) bool {
-	if o, ok := object.(*withPrefix); ok {
-		object = o.os
+func unwrap(o ObjectStorage) ObjectStorage {
+	switch s := o.(type) {
+	case *withPrefix:
+		return unwrap(s.os)
+	case *encrypted:
+		return unwrap(s.ObjectStorage)
+	case *chunkedEncrypted:
+		return unwrap(s.ObjectStorage)
+	case *chunkedEncryptedFS:
+		return unwrap(s.chunkedEncrypted.ObjectStorage)
+	case *chunkedEncryptedFSSymlink:
+		return unwrap(s.chunkedEncryptedFS.chunkedEncrypted.ObjectStorage)
 	}
-	_, ok := object.(FileSystem)
+	return o
+}
+
+func IsFileSystem(o ObjectStorage) bool {
+	_, ok := unwrap(o).(FileSystem)
+	return ok
+}
+
+// IsPathBased reports whether the storage maps keys to paths.
+func IsPathBased(o ObjectStorage) bool {
+	o = unwrap(o)
+	if _, ok := o.(*webdav); ok {
+		return true
+	}
+	_, ok := o.(FileSystem)
 	return ok
 }

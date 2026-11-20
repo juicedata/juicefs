@@ -1124,7 +1124,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 		key := obj.Key()
 		var taskErr error
 
-		if unsafeKey(key) {
+		if unsafeKey(dst, key) {
 			logger.Errorf("Refuse to sync object %q: %s", key, errUnsafeKey)
 			if failed != nil {
 				failed.Increment()
@@ -1461,10 +1461,11 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 
 var errUnsafeKey = errors.New("key contains a \"..\" path element or NUL")
 
-// unsafeKey reports whether a key could escape the storage root once it is
-// mapped to a path by a file-based storage. Any ".." element is rejected rather
-// than cleaned lexically, because the parent may be a symlink on the target.
-func unsafeKey(key string) bool {
+// unsafeKey reports whether key could escape the root of a path-based dst.
+func unsafeKey(dst object.ObjectStorage, key string) bool {
+	if !object.IsPathBased(dst) {
+		return false
+	}
 	if strings.IndexByte(key, 0) >= 0 {
 		return true
 	}
@@ -1983,7 +1984,7 @@ var errDirSuffix = errors.New("dir miss suffix '/'")
 var ignoreFiles int64
 
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config, checkpointMgr *CheckpointManager) error {
-	if unsafeKey(key) {
+	if unsafeKey(dst, key) {
 		return errUnsafeKey
 	}
 	obj, err := src.Head(ctx, key)
@@ -2048,7 +2049,7 @@ func restoreFromCheckpoint(tasks chan<- object.Object, src, dst object.ObjectSto
 }
 
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config, checkpointMgr *CheckpointManager) error {
-	if unsafeKey(prefix) {
+	if unsafeKey(dst, prefix) {
 		return errUnsafeKey
 	}
 	config.concurrentList <- 1

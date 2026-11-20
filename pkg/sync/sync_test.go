@@ -37,6 +37,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juju/ratelimit"
+	"golang.org/x/net/webdav"
 )
 
 func collectAll(c <-chan object.Object) []string {
@@ -301,7 +302,15 @@ func TestSyncRejectEscapingKeys(t *testing.T) {
 	} else {
 		safe = append(safe, "..\\evil3")
 	}
-	for _, mode := range []string{"list", "parallel-list", "files-from"} {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate RSA key: %s", err)
+	}
+	enc, err := object.NewDataEncryptor(object.NewRSAEncryptor(rsaKey), object.AES256GCM_RSA)
+	if err != nil {
+		t.Fatalf("create encryptor: %s", err)
+	}
+	for _, mode := range []string{"list", "parallel-list", "files-from", "encrypted-dst", "webdav-dst"} {
 		t.Run(mode, func(t *testing.T) {
 			tmp := t.TempDir()
 			src, _ := object.CreateStorage("mem", "", "", "", "")
@@ -323,6 +332,19 @@ func TestSyncRejectEscapingKeys(t *testing.T) {
 				if err := os.WriteFile(config.FilesFrom, []byte(list), 0644); err != nil {
 					t.Fatalf("write files-from: %s", err)
 				}
+			case "encrypted-dst":
+				dst = object.NewChunkedEncrypted(object.WithPrefix(dst, ""), enc)
+			case "webdav-dst":
+				if err := os.MkdirAll(tmp+"/root/sub", 0755); err != nil {
+					t.Fatalf("mkdir: %s", err)
+				}
+				srv := httptest.NewServer(&webdav.Handler{FileSystem: webdav.Dir(tmp + "/root"), LockSystem: webdav.NewMemLS()})
+				defer srv.Close()
+				dav, err := object.CreateStorage("webdav", srv.URL, "", "", "")
+				if err != nil {
+					t.Fatalf("create webdav: %s", err)
+				}
+				dst = object.WithPrefix(dav, "sub/")
 			}
 			if err := Sync(src, dst, config); err == nil {
 				t.Fatalf("sync should fail on escaping keys")
@@ -343,23 +365,21 @@ func TestSyncRejectEscapingKeys(t *testing.T) {
 		})
 	}
 
-	t.Run("delete-dst keeps paired object", func(t *testing.T) {
+	t.Run("object storage dst keeps keys", func(t *testing.T) {
 		src, _ := object.CreateStorage("mem", "", "", "", "")
 		dst, _ := object.CreateStorage("mem", "", "", "", "")
-		putObjects(t, src, "../same", "ok")
+		putObjects(t, src, "../same", "../new", "ok")
 		putObjects(t, dst, "../same", "ok")
 		config := &Config{Threads: 2, ListThreads: 1, Limit: -1, MaxSize: math.MaxInt64, Quiet: true, DeleteDst: true, ForceUpdate: true}
-		if err := Sync(src, dst, config); err == nil {
-			t.Fatalf("sync should fail on escaping keys")
+		if err := Sync(src, dst, config); err != nil {
+			t.Fatalf("sync: %s", err)
 		}
-		if _, err := dst.Head(ctx, "../same"); err != nil {
-			t.Fatalf("../same in dst should not be deleted: %s", err)
-		}
+		assertDstHasKeys(t, dst, "../same", "../new", "ok")
 	})
 
 	t.Run("limit", func(t *testing.T) {
 		src, _ := object.CreateStorage("mem", "", "", "", "")
-		dst, _ := object.CreateStorage("mem", "", "", "", "")
+		dst, _ := object.CreateStorage("file", t.TempDir()+"/", "", "", "")
 		putObjects(t, src, "../evil1", "ok")
 		config := &Config{Threads: 2, ListThreads: 1, Limit: 0, MaxSize: math.MaxInt64, Quiet: true}
 		if err := Sync(src, dst, config); err != nil {
@@ -369,7 +389,7 @@ func TestSyncRejectEscapingKeys(t *testing.T) {
 
 	t.Run("checkpoint", func(t *testing.T) {
 		src, _ := object.CreateStorage("mem", "reject-ckpt-src", "", "", "")
-		dst, _ := object.CreateStorage("mem", "reject-ckpt-dst", "", "", "")
+		dst, _ := object.CreateStorage("file", t.TempDir()+"/dst/", "", "", "")
 		putObjects(t, src, "../evil1", "ok")
 		config := newTestConfig()
 		config.ListThreads = 1
@@ -392,8 +412,9 @@ func TestSyncRejectEscapingKeys(t *testing.T) {
 	})
 
 	t.Run("pending key from old checkpoint", func(t *testing.T) {
+		tmp := t.TempDir()
 		src, _ := object.CreateStorage("mem", "reject-oldckpt-src", "", "", "")
-		dst, _ := object.CreateStorage("mem", "reject-oldckpt-dst", "", "", "")
+		dst, _ := object.CreateStorage("file", tmp+"/dst/", "", "", "")
 		putObjects(t, src, "../evil1", "ok")
 		evil, err := src.Head(ctx, "../evil1")
 		if err != nil {
@@ -414,7 +435,7 @@ func TestSyncRejectEscapingKeys(t *testing.T) {
 		if err := Sync(src, dst, config); err == nil {
 			t.Fatalf("sync should fail on escaping keys")
 		}
-		if _, err := dst.Head(ctx, "../evil1"); !os.IsNotExist(err) {
+		if _, err := os.Stat(tmp + "/evil1"); !os.IsNotExist(err) {
 			t.Fatalf("../evil1 should not be synced: %v", err)
 		}
 	})
