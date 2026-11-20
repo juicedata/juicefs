@@ -2018,8 +2018,11 @@ func restoreFromCheckpoint(tasks chan<- object.Object, src, dst object.ObjectSto
 
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config, checkpointMgr *CheckpointManager) error {
 	config.concurrentList <- 1
+	holdsListingSlot := true
 	defer func() {
-		<-config.concurrentList
+		if holdsListingSlot {
+			<-config.concurrentList
+		}
 	}()
 	if config.Limit == 1 && len(config.rules) == 0 {
 		if produceSingleObject(tasks, src, dst, prefix, config, checkpointMgr) == nil {
@@ -2059,9 +2062,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 				logger.Infof("ignore prefix %s", c.Key())
 				continue
 			}
-			wg.Add(1)
-			go func(prefix string) {
-				defer wg.Done()
+			processPrefix := func(prefix string) {
 				// In the produceFromList, only the top-level prefix from the file gets restored.
 				// Child prefixes in the checkpoint must be restored here, otherwise their pending/failed keys are lost.
 				if restorePrefixFromCheckpoint(tasks, src, dst, prefix, config, checkpointMgr) {
@@ -2072,7 +2073,20 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 					logger.Errorf("list prefix %s: %s", prefix, err)
 					failed.Increment()
 				}
-			}(c.Key())
+			}
+			select {
+			case config.concurrentProducers <- struct{}{}:
+				wg.Add(1)
+				go func(prefix string) {
+					defer wg.Done()
+					defer func() { <-config.concurrentProducers }()
+					processPrefix(prefix)
+				}(c.Key())
+			default:
+				// Recurse inline when all producers are busy. Waiting to acquire
+				// a producer slot here would deadlock nested directory listings.
+				processPrefix(c.Key())
+			}
 		}
 	}()
 
@@ -2114,6 +2128,10 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			return fmt.Errorf("list %s with delimiter: %s", dst, err)
 		}
 	}
+	// Delimiter listings are ready. Release their slot before waiting for
+	// children, including any child being processed inline under backpressure.
+	<-config.concurrentList
+	holdsListingSlot = false
 	// sync returned objects
 	if err := produce(tasks, srckeys, dstkeys, config, checkpointMgr, prefix); err != nil {
 		return err
@@ -2123,9 +2141,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	}
 	close(commonPrefix)
 
-	<-config.concurrentList
 	<-done
-	config.concurrentList <- 1
 	return nil
 }
 
@@ -2409,6 +2425,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			logger.Infof("last key: %q", config.End)
 		}
 		config.concurrentList = make(chan int, config.ListThreads)
+		config.concurrentProducers = make(chan struct{}, config.ListThreads)
 
 		var err error
 		if config.FilesFrom != "" {
