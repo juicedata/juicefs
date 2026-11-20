@@ -132,6 +132,10 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+`jfs.du(path)` 递归汇总目录内文件的逻辑长度，而非目录自身的元数据大小或对象存储的物理用量。
+使用 `maxdepth=1` 只统计当前目录的文件，`total=False` 返回各路径的大小，
+`withdirs=True` 则额外计入目录自身的大小。
+
 ### 获取帮助信息
 
 可以使用 `help()` 函数获取类和方法的帮助信息。

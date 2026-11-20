@@ -87,7 +87,8 @@ class JuiceFS(AbstractFileSystem):
     def du(self, path, total=True, maxdepth=None, withdirs=False, **kwargs):
         if total:
             info = self.info(path)
-            return info["size"]
+            if info["type"] != "directory":
+                return info["size"]
         return super().du(path, total=total, maxdepth=maxdepth, withdirs=withdirs, **kwargs)
 
     def info(self, path):
