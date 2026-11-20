@@ -116,6 +116,9 @@ type Format struct {
 
 	//kerberos
 	KerbConf string `json:",omitempty"`
+
+	// revision identifies the stored bytes read by Load, not a persisted field.
+	revision string
 }
 
 // Clone returns a deep copy of the format.

@@ -355,79 +355,71 @@ func (m *redisMeta) Name() string {
 
 func (m *redisMeta) doInit(format *Format, force bool) error {
 	ctx := Background()
-	body, err := m.rdb.Get(ctx, m.setting()).Bytes()
-	if err != nil && err != redis.Nil {
-		return err
-	}
-	if err == nil {
-		var old Format
-		err = json.Unmarshal(body, &old)
-		if err != nil {
-			return fmt.Errorf("existing format is broken: %s", err)
-		}
-		if !old.DirStats && format.DirStats {
-			// remove dir stats as they are outdated
-			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey())
-				if format.ChangeLog {
-					m.doGenLog(ctx, pipe, time.Now(), "INIT_ENABLE_DIRSTATS()")
-				}
-				return nil
-			})
-			if err != nil {
-				return errors.Wrap(err, "remove dir stats")
-			}
-		}
-		if !old.UserGroupQuota && format.UserGroupQuota {
-			// remove user group quota as they are outdated
-			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Del(ctx, m.userQuotaKey(), m.userQuotaUsedSpaceKey(), m.userQuotaUsedInodesKey(),
-					m.groupQuotaKey(), m.groupQuotaUsedSpaceKey(), m.groupQuotaUsedInodesKey())
-				if format.ChangeLog {
-					m.doGenLog(ctx, pipe, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
-				}
-				return nil
-			})
-			if err != nil {
-				return errors.Wrap(err, "remove user group quota")
-			}
-		}
-		if err = format.update(&old, force); err != nil {
-			return errors.Wrap(err, "update format")
-		}
-	}
-
-	data, err := json.MarshalIndent(format, "", "")
-	if err != nil {
-		return fmt.Errorf("json: %s", err)
-	}
-	ts := time.Now().Unix()
-	attr := &Attr{
-		Typ:    TypeDirectory,
-		Atime:  ts,
-		Mtime:  ts,
-		Ctime:  ts,
-		Nlink:  2,
-		Length: 4 << 10,
-		Parent: RootInode,
-	}
-	if format.TrashDays > 0 {
-		attr.Mode = 0555
-		if err = m.rdb.SetNX(ctx, m.inodeKey(TrashInode), m.marshal(attr), 0).Err(); err != nil {
+	requested := format.Clone()
+	var committed *formatUpdate
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		body, err := tx.Get(ctx, m.setting()).Bytes()
+		if err != nil && err != redis.Nil {
 			return err
 		}
-	}
-	if err = m.rdb.Set(ctx, m.setting(), data, 0).Err(); err != nil {
+		u, err := requested.prepareUpdate(body, force)
+		if err != nil {
+			return err
+		}
+		var logEntries int64
+		if old := u.previous; old != nil && u.next.ChangeLog {
+			if !old.DirStats && u.next.DirStats {
+				logEntries++
+			}
+			if !old.UserGroupQuota && u.next.UserGroupQuota {
+				logEntries++
+			}
+		}
+		if logEntries > 0 {
+			if err = m.checkFormatChangeLog(ctx, tx, logEntries); err != nil {
+				return err
+			}
+		}
+		ts := time.Now().Unix()
+		attr := &Attr{Typ: TypeDirectory, Atime: ts, Mtime: ts, Ctime: ts,
+			Nlink: 2, Length: 4 << 10, Parent: RootInode}
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			if old := u.previous; old != nil {
+				if !old.DirStats && u.next.DirStats {
+					pipe.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey())
+					if u.next.ChangeLog {
+						m.doGenLog(ctx, pipe, time.Now(), "INIT_ENABLE_DIRSTATS()")
+					}
+				}
+				if !old.UserGroupQuota && u.next.UserGroupQuota {
+					pipe.Del(ctx, m.userQuotaKey(), m.userQuotaUsedSpaceKey(), m.userQuotaUsedInodesKey(),
+						m.groupQuotaKey(), m.groupQuotaUsedSpaceKey(), m.groupQuotaUsedInodesKey())
+					if u.next.ChangeLog {
+						m.doGenLog(ctx, pipe, time.Now(), "INIT_ENABLE_USERGROUPQUOTA()")
+					}
+				}
+			}
+			if u.next.TrashDays > 0 {
+				attr.Mode = 0555
+				pipe.SetNX(ctx, m.inodeKey(TrashInode), m.marshal(attr), 0)
+			}
+			pipe.Set(ctx, m.setting(), u.data, 0)
+			if u.previous == nil {
+				attr.Mode = 0777
+				pipe.Set(ctx, m.inodeKey(RootInode), m.marshal(attr), 0)
+			}
+			return nil
+		})
+		if err == nil {
+			committed = u
+		}
+		return err
+	}, m.setting())
+	if err != nil {
 		return err
 	}
-	m.setFormat(format)
-	if body != nil {
-		return nil
-	}
-
-	// root inode
-	attr.Mode = 0777
-	return m.rdb.Set(ctx, m.inodeKey(RootInode), m.marshal(attr), 0).Err()
+	m.publishFormatUpdate(format, committed)
+	return nil
 }
 
 func (m *redisMeta) cacheACLs(ctx Context) error {

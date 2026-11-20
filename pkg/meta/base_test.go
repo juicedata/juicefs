@@ -172,6 +172,10 @@ func testMeta(t *testing.T, m Meta) {
 		t.Fatalf("reset meta: %s", err)
 	}
 
+	t.Run("FormatUpdate", func(t *testing.T) { testFormatUpdates(t, m) })
+	if r, ok := m.(*redisMeta); ok {
+		t.Run("FormatUpdateChangeLog", func(t *testing.T) { testFormatChangeLogErrors(t, r) })
+	}
 	testMetaClient(t, m)
 	testSubdirOperations(t, m)
 	testTruncateAndDelete(t, m)
