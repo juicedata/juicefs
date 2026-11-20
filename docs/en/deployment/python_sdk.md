@@ -98,6 +98,8 @@ jfs.listdir('/')
 
 Use `readinto()` to fill an existing writable, contiguous buffer without creating a full-size temporary Python `bytes` object. The buffer can be reused between calls. An I/O error may leave partial data in the buffer.
 
+Large buffered writes convert contiguous input views in 4 MiB chunks instead of copying the entire input into a temporary `bytes` object. This bounds Python conversion overhead; the input buffer and native write caches still consume memory. Non-contiguous views still require a full copy.
+
 ### Using fsspec
 
 JuiceFS Python SDK also supports the `fsspec` interface to operate the JuiceFS file system.
