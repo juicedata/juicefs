@@ -109,6 +109,8 @@ jfs = Client(name='', meta='redis://192.168.1.8/0')
 jfs.listdir('/')
 ```
 
+`Client.open()` 的 `buffering` 参数必须遵循 Python 的整数 `__index__` 协议，`errors` 参数必须为字符串或 `None`。类型无效时，会在创建或截断文件之前抛出 `TypeError`。
+
 可以使用 `readinto()` 直接填充已有的可写连续缓冲区，避免创建与读取数据等大的临时 Python `bytes` 对象。缓冲区可在多次调用之间复用。I/O 错误发生时，缓冲区可能已包含部分数据。
 
 ### 使用 fsspec

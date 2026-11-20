@@ -58,6 +58,69 @@ class FileTests(unittest.TestCase):
             self.assertEqual(fobj.read().splitlines(), [b"bacon"])
 
 
+class OpenArgumentTests(FileTests):
+    invalid_options = (
+        ('buffering', None), ('buffering', 1.5), ('buffering', 'invalid'),
+        ('buffering', 0.0), ('buffering', -1.0),
+        ('errors', 1), ('errors', 0), ('errors', []), ('errors', b'strict'),
+    )
+
+    def test_invalid_options_preserve_existing_file(self):
+        content = b'keep this data'
+        for option, value in self.invalid_options:
+            modes = ('wb', 'w+b') if option == 'buffering' else ('w', 'w+')
+            for mode in modes:
+                with self.subTest(option=option, value=value, mode=mode):
+                    with self.v.open(TESTFILE, 'wb') as stream:
+                        stream.write(content)
+                    with self.assertRaises(TypeError):
+                        with self.v.open(TESTFILE, mode, **{option: value}):
+                            pass
+                    with self.v.open(TESTFILE, 'rb') as stream:
+                        self.assertEqual(stream.read(), content)
+
+    def test_invalid_options_do_not_create_file(self):
+        for index, (option, value) in enumerate(self.invalid_options):
+            modes = ('wb', 'ab', 'xb') if option == 'buffering' else ('w', 'a', 'x')
+            for mode in modes:
+                with self.subTest(option=option, value=value, mode=mode):
+                    path = f'{TESTFN}/missing-{index}-{mode}'
+                    with self.assertRaises(TypeError):
+                        with self.v.open(path, mode, **{option: value}):
+                            pass
+                    self.assertFalse(self.v.exists(path))
+
+    def test_integer_buffering(self):
+        for buffering in (-1, 0, 8):
+            with self.subTest(buffering=buffering):
+                with self.v.open(TESTFILE, 'w+b', buffering=buffering) as stream:
+                    self.assertEqual(stream.write(b'buffered'), 8)
+                    stream.seek(0)
+                    self.assertEqual(stream.read(), b'buffered')
+
+    def test_buffering_index_protocol(self):
+        class BufferSize:
+            def __index__(self):
+                return 8
+
+        with self.v.open(TESTFILE, 'w+b', buffering=BufferSize()) as stream:
+            stream.write(b'index')
+            stream.seek(0)
+            self.assertEqual(stream.read(), b'index')
+
+    def test_text_error_handlers(self):
+        self.create_file(TESTFILE, b'a\xffb')
+        for errors, expected in (('replace', 'a\ufffdb'), ('ignore', 'ab')):
+            with self.subTest(errors=errors):
+                with self.v.open(TESTFILE, 'r', encoding='utf-8', errors=errors) as stream:
+                    self.assertEqual(stream.read(), expected)
+        for errors in (None, 'strict'):
+            with self.subTest(errors=errors):
+                with self.v.open(TESTFILE, 'r', encoding='utf-8', errors=errors) as stream:
+                    with self.assertRaises(UnicodeDecodeError):
+                        stream.read()
+
+
 class ReadintoTests(FileTests):
     def test_readinto_large_sliced_buffer(self):
         content = bytes(range(256)) * (1 << 15) + b'end'
