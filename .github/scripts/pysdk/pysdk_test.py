@@ -12,6 +12,7 @@ import stat
 from os.path import dirname
 import sys
 import time
+import tracemalloc
 import types
 sys.path.append('.')
 from sdk.python.juicefs.juicefs import juicefs
@@ -56,6 +57,51 @@ class FileTests(unittest.TestCase):
         fd.close()
         with self.v.open(TESTFILE, "rb") as fobj:
             self.assertEqual(fobj.read().splitlines(), [b"bacon"])
+
+
+class WriteBufferTests(FileTests):
+    def test_large_buffered_write_copy_is_bounded(self):
+        content = bytes(range(256)) * (1 << 17)
+        with self.v.open(TESTFILE, 'wb') as stream:
+            tracemalloc.start()
+            try:
+                self.assertEqual(stream.write(content), len(content))
+                stream.flush()
+                _, peak = tracemalloc.get_traced_memory()
+            finally:
+                tracemalloc.stop()
+            self.assertLess(peak, 12 << 20)
+            self.assertEqual(stream.tell(), len(content))
+        with self.v.open(TESTFILE, 'rb') as stream:
+            self.assertEqual(hashlib.sha256(stream.read()).digest(), hashlib.sha256(content).digest())
+
+    def test_memoryview_layouts(self):
+        content = bytes(range(256)) * ((1 << 14) + 1)
+        views = [
+            memoryview(content),
+            memoryview(bytearray(b'head' + content + b'tail'))[4:-4],
+            memoryview(array('I', range((1 << 20) + 1))),
+            memoryview(content).cast('B', shape=[256, (1 << 14) + 1]),
+            memoryview(content + content)[::2],
+            memoryview(b''),
+            memoryview(array('I')),
+        ]
+        for view in views:
+            with view:
+                expected = view.tobytes()
+                for buffering in (0, 8192):
+                    with self.subTest(format=view.format, ndim=view.ndim,
+                                      contiguous=view.c_contiguous, buffering=buffering):
+                        with self.v.open(TESTFILE, 'wb', buffering) as stream:
+                            if buffering and not view.c_contiguous:
+                                with self.assertRaises(BufferError):
+                                    stream.write(view)
+                                self.assertEqual(stream.tell(), 0)
+                                continue
+                            self.assertEqual(stream.write(view), len(expected))
+                            self.assertEqual(stream.tell(), len(expected))
+                        with self.v.open(TESTFILE, 'rb') as stream:
+                            self.assertEqual(stream.read(), expected)
 
 
 class ReadintoTests(FileTests):
@@ -591,22 +637,23 @@ class LargeWriteTests(FileTests):
         chunk = 4 << 20
         def raise_eio():
             raise OSError(errno.EIO, 'injected')
-        for name, fail in (('error', raise_eio), ('zero', lambda: 0)):
-            with self.subTest(failure=name):
-                with self.v.open(TESTFILE, 'wb', 0) as stream:
-                    f = stream._file
-                    lib = f.lib
-                    def pwrite(tid, fd, buf, count, off):
-                        if off.value >= chunk:
-                            return fail()
-                        return lib.jfs_pwrite(tid, fd, buf, count, off)
-                    with patch.object(f, 'lib', types.SimpleNamespace(jfs_pwrite=pwrite)):
-                        with self.assertRaises(OSError) as cm:
-                            stream.write(bytes(2 * chunk + 1))
-                    self.assertEqual(cm.exception.errno, errno.EIO)
-                    self.assertEqual(stream.tell(), chunk)
-                    self.assertEqual(f.length, chunk)
-                self.assertEqual(self.v.stat(TESTFILE).st_size, chunk)
+        for make_buffer in (bytes, memoryview):
+            for name, fail in (('error', raise_eio), ('zero', lambda: 0)):
+                with self.subTest(failure=name, buffer=make_buffer.__name__):
+                    with self.v.open(TESTFILE, 'wb', 0) as stream:
+                        f = stream._file
+                        lib = f.lib
+                        def pwrite(tid, fd, buf, count, off):
+                            if off.value >= chunk:
+                                return fail()
+                            return lib.jfs_pwrite(tid, fd, buf, count, off)
+                        with patch.object(f, 'lib', types.SimpleNamespace(jfs_pwrite=pwrite)):
+                            with self.assertRaises(OSError) as cm:
+                                stream.write(make_buffer(bytes(2 * chunk + 1)))
+                        self.assertEqual(cm.exception.errno, errno.EIO)
+                        self.assertEqual(stream.tell(), chunk)
+                        self.assertEqual(f.length, chunk)
+                    self.assertEqual(self.v.stat(TESTFILE).st_size, chunk)
 
 
 class BenchTests(FileTests):
