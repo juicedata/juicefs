@@ -5,6 +5,12 @@ sidebar_position: 6
 
 JuiceFS 社区版从 v1.3.0 引入 Python SDK，适合无法使用 FUSE 挂载的容器化或虚拟化环境使用。并且 Python SDK 实现了 fsspec 的接口规范，可方便的对接 Ray 等框架。
 
+`fsspec` 适配层的 `mkdir()` 默认使用 `0o777` 权限，并应用客户端的 umask。需要更严格的权限时，可显式指定 `mode`。
+
+设置 `auto_mkdir=True` 后，以写入、追加或排他创建模式（`wb`、`ab`、`xb`）打开文件时会创建缺失的父目录。不含目录部分的文件名（如 `file.bin`）以卷根目录为父目录；读取文件不会创建目录。
+
+安装 `fsspec` 后，调用 `fsspec.filesystem("jfs", name="myjfs", meta="redis://localhost")` 即可通过已安装 SDK 的入口加载适配层，无需手动导入适配模块。
+
 ## 快速上手视频
 
 <div className="video-container">

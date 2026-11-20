@@ -50,7 +50,7 @@ class JuiceFS(AbstractFileSystem):
             raise FileExistsError(f"File exists: {path}")
         self.fs.makedirs(self._strip_protocol(path), mode, exist_ok=exist_ok)
 
-    def mkdir(self, path, create_parents=True, mode=0o511):
+    def mkdir(self, path, create_parents=True, mode=0o777):
         if self.exists(path):
             raise FileExistsError(f"File exists: {path}")
         if create_parents:
@@ -161,7 +161,7 @@ class JuiceFS(AbstractFileSystem):
 
     def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
         path = self._strip_protocol(path)
-        if self.auto_mkdir and "w" in mode:
+        if self.auto_mkdir and ("w" in mode or "a" in mode or "x" in mode):
             self.makedirs(self._parent(path), exist_ok=True)
         return JuiceFile(self, path, mode, block_size, autocommit, **kwargs)
 
@@ -180,7 +180,7 @@ class JuiceFS(AbstractFileSystem):
         path = cls._strip_protocol(path)
         if os.sep == "/":
             # posix native
-            return path.rsplit("/", 1)[0] or "/"
+            return path.rpartition("/")[0] or "/"
         else:
             # NT
             path_ = path.rsplit("/", 1)[0]
