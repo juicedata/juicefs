@@ -108,6 +108,8 @@ func GetSysInfo() string {
 
 func GetUmask() int { return 0 }
 
+func ReadUmask() (int, error) { return 0, nil }
+
 func SetUmask(umask int) int {
 	return 0
 }

@@ -18,7 +18,9 @@ package utils
 
 import (
 	"context"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -55,6 +57,35 @@ func TestGetInode(t *testing.T) {
 	} else if ino > 2 {
 		t.Fatalf("inode of root should be 1/2, but got %d", ino)
 	}
+}
+
+func TestGetUmask(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires a process umask")
+	}
+	const want = 0o027
+	old := SetUmask(want)
+	t.Cleanup(func() { SetUmask(old) })
+
+	reads := 4
+	if runtime.GOOS == "linux" {
+		reads = 256
+	}
+	start := make(chan struct{})
+	var readers sync.WaitGroup
+	for range 8 {
+		readers.Go(func() {
+			<-start
+			for range reads {
+				if got := GetUmask(); got != want {
+					t.Errorf("GetUmask() = %04o, want %04o", got, want)
+					return
+				}
+			}
+		})
+	}
+	close(start)
+	readers.Wait()
 }
 
 func TestLocalIp(t *testing.T) {
