@@ -522,7 +522,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	if err != nil {
 		return nil, fmt.Errorf("load setting: %s", err)
 	}
-	blob, err := NewReloadableStorage(format, metaCli, nil)
+	blob, err := fs.NewReloadableStorage(format, metaCli, nil)
 	if err != nil {
 		return nil, fmt.Errorf("object storage: %s", err)
 	}

@@ -19,13 +19,18 @@ package object
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,6 +39,7 @@ import (
 
 	"github.com/aws/smithy-go/encoding/httpbinding"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 )
 
 var ctx = context.Background()
@@ -203,6 +209,131 @@ func CreateStorage(name, endpoint, accessKey, secretKey, token string) (ObjectSt
 		return f(endpoint, accessKey, secretKey, token)
 	}
 	return nil, fmt.Errorf("invalid storage: %s", name)
+}
+
+// VolumeStorageConfig contains the settings used to create a volume's object
+// storage. SecretKey, SessionToken and EncryptKey must already be decrypted.
+type VolumeStorageConfig struct {
+	Name         string
+	Storage      string
+	Bucket       string
+	AccessKey    string
+	SecretKey    string
+	SessionToken string
+	Shards       int
+	Tiers        Tiers
+	EncryptKey   string
+	EncryptAlgo  string
+}
+
+// CreateVolumeStorage creates storage with the volume's prefix, tiers and encryption.
+func CreateVolumeStorage(config VolumeStorageConfig) (ObjectStorage, error) {
+	UserAgent = "JuiceFS-" + version.Version()
+	var blob ObjectStorage
+	var err error
+	if u, err := url.Parse(config.Bucket); err == nil {
+		values := u.Query()
+		if values.Get("tls-insecure-skip-verify") != "" {
+			var tlsSkipVerify bool
+			if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
+				return nil, err
+			}
+			GetHttpClient().Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = tlsSkipVerify
+			values.Del("tls-insecure-skip-verify")
+			u.RawQuery = values.Encode()
+			config.Bucket = u.String()
+		}
+
+		// Configure client TLS when params are provided
+		if values.Get("ca-certs") != "" && values.Get("ssl-cert") != "" && values.Get("ssl-key") != "" {
+
+			clientTLSCert, err := tls.LoadX509KeyPair(values.Get("ssl-cert"), values.Get("ssl-key"))
+			if err != nil {
+				return nil, fmt.Errorf("error loading certificate and key file: %s", err.Error())
+			}
+
+			certPool := x509.NewCertPool()
+			caCertPEM, err := os.ReadFile(values.Get("ca-certs"))
+			if err != nil {
+				return nil, fmt.Errorf("error loading CA cert file: %s", err.Error())
+			}
+
+			if certAdded := certPool.AppendCertsFromPEM(caCertPEM); !certAdded {
+				return nil, fmt.Errorf("error appending CA cert to pool")
+			}
+
+			GetHttpClient().Transport.(*http.Transport).TLSClientConfig.RootCAs = certPool
+			GetHttpClient().Transport.(*http.Transport).TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
+		}
+	}
+
+	if config.Shards > 1 {
+		blob, err = NewSharded(strings.ToLower(config.Storage), config.Bucket, config.AccessKey, config.SecretKey, config.SessionToken, config.Shards)
+	} else {
+		blob, err = CreateStorage(strings.ToLower(config.Storage), config.Bucket, config.AccessKey, config.SecretKey, config.SessionToken)
+	}
+	if err != nil {
+		return nil, err
+	}
+	blob = WithPrefix(blob, config.Name+"/")
+	InitStorageTiers(blob, config.Tiers)
+	if config.EncryptKey != "" {
+		privKey, err := ParsePrivateKeyFromPem([]byte(config.EncryptKey), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
+		if err != nil {
+			Shutdown(blob)
+			if errors.Is(err, ErrKeyNeedPasswd) {
+				return nil, fmt.Errorf("%w: please set the 'JFS_RSA_PASSPHRASE' environment variable", err)
+			}
+			return nil, fmt.Errorf("parse private key: %s", err)
+		}
+		encryptor, err := NewDataEncryptor(NewKeyEncryptor(privKey), config.EncryptAlgo)
+		if err != nil {
+			Shutdown(blob)
+			return nil, err
+		}
+		blob = NewEncrypted(blob, encryptor)
+	}
+	return blob, nil
+}
+
+// ReloadableStorage holds the current object storage and its last applied configuration.
+type ReloadableStorage struct {
+	ObjectStorage
+	config VolumeStorageConfig
+}
+
+// NewReloadableStorage creates a volume store that can be updated with Reload.
+func NewReloadableStorage(config VolumeStorageConfig) (*ReloadableStorage, error) {
+	blob, err := CreateVolumeStorage(config)
+	if err != nil {
+		return nil, err
+	}
+	config.Tiers = maps.Clone(config.Tiers)
+	return &ReloadableStorage{ObjectStorage: blob, config: config}, nil
+}
+
+// Reload replaces the backend when the storage type, bucket, credentials or tiers change.
+func (s *ReloadableStorage) Reload(config VolumeStorageConfig) error {
+	old := &s.config
+	if config.Storage == old.Storage && config.Bucket == old.Bucket &&
+		config.AccessKey == old.AccessKey && config.SecretKey == old.SecretKey &&
+		config.SessionToken == old.SessionToken && reflect.DeepEqual(config.Tiers, old.Tiers) {
+		return nil
+	}
+
+	logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q tiers=%v", config.Storage, config.Bucket, config.AccessKey, config.Tiers[0].Sc, config.Tiers)
+	blob, err := CreateVolumeStorage(config)
+	if err != nil {
+		return err
+	}
+	config.Tiers = maps.Clone(config.Tiers)
+	s.ObjectStorage = blob
+	s.config = config
+	return nil
+}
+
+func (s *ReloadableStorage) Shutdown() {
+	Shutdown(s.ObjectStorage)
 }
 
 var bufPool = sync.Pool{
@@ -383,6 +514,24 @@ const DefaultRestoreDays = 3
 type SupportTier interface {
 	InitTiers(init Tiers) error
 	GetTier(ctx context.Context) Tier
+}
+
+// InitStorageTiers applies tiers and warns if explicitly configured tiers cannot be set.
+func InitStorageTiers(storage ObjectStorage, tiers Tiers) {
+	if tierStorage, ok := storage.(SupportTier); ok {
+		if err := tierStorage.InitTiers(tiers); err != nil && hasConfiguredTiers(tiers) {
+			logger.Warnf("Set storage tier: %s", err)
+		}
+	}
+}
+
+func hasConfiguredTiers(tiers Tiers) bool {
+	for id, tier := range tiers {
+		if id != 0 || tier.Sc != "" || tier.Tag != "" {
+			return true
+		}
+	}
+	return false
 }
 
 type runtimeTier struct {

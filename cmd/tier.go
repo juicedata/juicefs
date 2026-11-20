@@ -163,7 +163,11 @@ func setTier(ctx *cli.Context) error {
 	}
 	oldTier := format.Tiers[attr.Tier]
 	logger.Infof("set storage tier of %q from %d(storage-class: %s;tag: %s) to %d(storage-class: %s;tag: %s)", path, attr.Tier, oldTier.Sc, oldTier.Tag, id, newTier.Sc, newTier.Tag)
-	blob, err := createStorage(*format)
+	storageConfig, err := format.VolumeStorageConfig()
+	if err != nil {
+		logger.Fatalf("object storage: %s", err)
+	}
+	blob, err := object.CreateVolumeStorage(storageConfig)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
@@ -237,7 +241,11 @@ func objRestore(ctx *cli.Context) error {
 	if attr.Typ != meta.TypeFile && attr.Typ != meta.TypeDirectory {
 		logger.Fatalf("only file and directory are supported to set storage tier")
 	}
-	blob, err := createStorage(*format)
+	storageConfig, err := format.VolumeStorageConfig()
+	if err != nil {
+		logger.Fatalf("object storage: %s", err)
+	}
+	blob, err := object.CreateVolumeStorage(storageConfig)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

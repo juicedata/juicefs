@@ -515,7 +515,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			store = object.WithPrefix(store, u.Path[1:])
 		}
 	}
-	initStorageTiers(store, object.NewTiers(""))
+	object.InitStorageTiers(store, object.NewTiers(""))
 	return store, nil
 }
 
@@ -612,7 +612,7 @@ func doSync(c *cli.Context) error {
 		object.Shutdown(dst)
 	}()
 	if config.StorageClass != "" {
-		initStorageTiers(dst, object.NewTiers(config.StorageClass))
+		object.InitStorageTiers(dst, object.NewTiers(config.StorageClass))
 	}
 	src, err = wrapSyncEncryptedStore(src, c.String("decrypt-rsa-key"), "JFS_DECRYPT_RSA_PASSPHRASE", "decrypt", c.String("decrypt-algo"))
 	if err != nil {

@@ -262,7 +262,7 @@ func initForSvc(c *cli.Context, mp string, svcType, metaUrl, listenAddr string) 
 	}
 	registerer, registry := wrapRegister(c, svcType, format.Name)
 
-	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
+	blob, err := fs.NewReloadableStorage(format, metaCli, updateFormat(c))
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

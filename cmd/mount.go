@@ -27,7 +27,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -40,6 +39,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
+	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/usage"
@@ -452,47 +452,6 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 	}
 }
 
-type storageHolder struct {
-	object.ObjectStorage
-	fmt meta.Format
-}
-
-func (h *storageHolder) Shutdown() {
-	object.Shutdown(h.ObjectStorage)
-}
-
-func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.Format)) (object.ObjectStorage, error) {
-	format = format.Clone()
-	if patch != nil {
-		patch(format)
-	}
-	blob, err := createStorage(*format)
-	if err != nil {
-		return nil, err
-	}
-	holder := &storageHolder{
-		ObjectStorage: blob,
-		fmt:           *format, // keep a copy to find the change
-	}
-	cli.OnReload(func(new *meta.Format) error {
-		if patch != nil {
-			patch(new)
-		}
-		old := &holder.fmt
-		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken || new.Tiers[0].Sc != old.Tiers[0].Sc || !reflect.DeepEqual(new.Tiers, old.Tiers) {
-			logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q tiers=%v", new.Storage, new.Bucket, new.AccessKey, new.Tiers[0].Sc, new.Tiers)
-			newBlob, err := createStorage(*new)
-			if err != nil {
-				return fmt.Errorf("object storage: %w", err)
-			}
-			holder.ObjectStorage = newBlob
-			holder.fmt = *new
-		}
-		return nil
-	})
-	return holder, nil
-}
-
 func insideContainer() bool {
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		return true
@@ -616,7 +575,7 @@ func mount(c *cli.Context) error {
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
 	setFuseOption(c, format, vfsConf)
 	if stage == 0 || stage == 3 {
-		blob, err = NewReloadableStorage(format, metaCli, updateFormat(c))
+		blob, err = fs.NewReloadableStorage(format, metaCli, updateFormat(c))
 		if err != nil {
 			return fmt.Errorf("object storage: %s", err)
 		}

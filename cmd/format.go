@@ -19,20 +19,15 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"math/rand"
-	"net/http"
 	_ "net/http/pprof"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -231,95 +226,6 @@ func fixObjectSize(s uint64) uint64 {
 		s = max
 	}
 	return s
-}
-
-func createStorage(format meta.Format) (object.ObjectStorage, error) {
-	if err := format.Decrypt(); err != nil {
-		return nil, fmt.Errorf("format decrypt: %s", err)
-	}
-	object.UserAgent = "JuiceFS-" + version.Version()
-	var blob object.ObjectStorage
-	var err error
-	if u, err := url.Parse(format.Bucket); err == nil {
-		values := u.Query()
-		if values.Get("tls-insecure-skip-verify") != "" {
-			var tlsSkipVerify bool
-			if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
-				return nil, err
-			}
-			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = tlsSkipVerify
-			values.Del("tls-insecure-skip-verify")
-			u.RawQuery = values.Encode()
-			format.Bucket = u.String()
-		}
-
-		// Configure client TLS when params are provided
-		if values.Get("ca-certs") != "" && values.Get("ssl-cert") != "" && values.Get("ssl-key") != "" {
-
-			clientTLSCert, err := tls.LoadX509KeyPair(values.Get("ssl-cert"), values.Get("ssl-key"))
-			if err != nil {
-				return nil, fmt.Errorf("error loading certificate and key file: %s", err.Error())
-			}
-
-			certPool := x509.NewCertPool()
-			caCertPEM, err := os.ReadFile(values.Get("ca-certs"))
-			if err != nil {
-				return nil, fmt.Errorf("error loading CA cert file: %s", err.Error())
-			}
-
-			if certAdded := certPool.AppendCertsFromPEM(caCertPEM); !certAdded {
-				return nil, fmt.Errorf("error appending CA cert to pool")
-			}
-
-			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.RootCAs = certPool
-			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
-		}
-	}
-
-	if format.Shards > 1 {
-		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
-	} else {
-		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken)
-	}
-	if err != nil {
-		return nil, err
-	}
-	blob = object.WithPrefix(blob, format.Name+"/")
-	initStorageTiers(blob, format.Tiers)
-	if format.EncryptKey != "" {
-		privKey, err := object.ParsePrivateKeyFromPem([]byte(format.EncryptKey), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
-		if err != nil {
-			object.Shutdown(blob)
-			if errors.Is(err, object.ErrKeyNeedPasswd) {
-				return nil, fmt.Errorf("%w: please set the 'JFS_RSA_PASSPHRASE' environment variable", err)
-			}
-			return nil, fmt.Errorf("parse private key: %s", err)
-		}
-		encryptor, err := object.NewDataEncryptor(object.NewKeyEncryptor(privKey), format.EncryptAlgo)
-		if err != nil {
-			object.Shutdown(blob)
-			return nil, err
-		}
-		blob = object.NewEncrypted(blob, encryptor)
-	}
-	return blob, nil
-}
-
-func initStorageTiers(storage object.ObjectStorage, tiers object.Tiers) {
-	if tierStorage, ok := storage.(object.SupportTier); ok {
-		if err := tierStorage.InitTiers(tiers); err != nil && hasConfiguredTiers(tiers) {
-			logger.Warnf("Set storage tier: %s", err)
-		}
-	}
-}
-
-func hasConfiguredTiers(tiers object.Tiers) bool {
-	for id, tier := range tiers {
-		if id != 0 || tier.Sc != "" || tier.Tag != "" {
-			return true
-		}
-	}
-	return false
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
@@ -597,7 +503,11 @@ func format(c *cli.Context) error {
 		}
 	}
 
-	blob, err := createStorage(*format)
+	storageConfig, err := format.VolumeStorageConfig()
+	if err != nil {
+		logger.Fatalf("object storage: %s", err)
+	}
+	blob, err := object.CreateVolumeStorage(storageConfig)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

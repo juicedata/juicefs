@@ -41,6 +41,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
@@ -181,6 +182,36 @@ type File struct {
 	dircache []os.FileInfo
 	entries  []*meta.Entry
 	data     []byte
+}
+
+// NewReloadableStorage creates object storage and subscribes it to format changes.
+func NewReloadableStorage(format *meta.Format, m meta.Meta, patch func(*meta.Format)) (object.ObjectStorage, error) {
+	format = format.Clone()
+	if patch != nil {
+		patch(format)
+	}
+	config, err := format.VolumeStorageConfig()
+	if err != nil {
+		return nil, err
+	}
+	blob, err := object.NewReloadableStorage(config)
+	if err != nil {
+		return nil, err
+	}
+	m.OnReload(func(format *meta.Format) error {
+		if patch != nil {
+			patch(format)
+		}
+		config, err := format.VolumeStorageConfig()
+		if err == nil {
+			err = blob.Reload(config)
+		}
+		if err != nil {
+			return fmt.Errorf("object storage: %w", err)
+		}
+		return nil
+	})
+	return blob, nil
 }
 
 func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *prometheus.Registry) (*FileSystem, error) {

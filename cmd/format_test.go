@@ -91,8 +91,8 @@ func TestCreateStorageTierWarning(t *testing.T) {
 	logger.SetOutput(&logs)
 	defer logger.SetOutput(originalOutput)
 
-	format := meta.Format{Name: "test", Storage: storageName, Tiers: object.NewTiers("")}
-	if _, err := createStorage(format); err != nil {
+	config := object.VolumeStorageConfig{Name: "test", Storage: storageName, Tiers: object.NewTiers("")}
+	if _, err := object.CreateVolumeStorage(config); err != nil {
 		t.Fatalf("create storage without configured tiers: %s", err)
 	}
 	if initCalls != 1 {
@@ -103,8 +103,8 @@ func TestCreateStorageTierWarning(t *testing.T) {
 	}
 
 	logs.Reset()
-	format.Tiers[0] = object.Tier{ID: 0, Sc: "STANDARD_IA"}
-	if _, err := createStorage(format); err != nil {
+	config.Tiers[0] = object.Tier{ID: 0, Sc: "STANDARD_IA"}
+	if _, err := object.CreateVolumeStorage(config); err != nil {
 		t.Fatalf("create storage with a configured tier: %s", err)
 	}
 	if initCalls != 2 {
