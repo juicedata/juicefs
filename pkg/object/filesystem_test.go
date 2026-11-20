@@ -107,6 +107,9 @@ func testUnsafeKeys(t *testing.T, s ObjectStorage) {
 	_, err = s.Get(ctx, bad, 0, -1)
 	unsafe("Get", err)
 	unsafe("Put", s.Put(ctx, bad, bytes.NewReader(nil)))
+	if _, ok := s.(*cifsStore); ok {
+		unsafe("Put SMB backslash", s.Put(ctx, `..\unsafe`, bytes.NewReader(nil)))
+	}
 	unsafe("Put NUL", s.Put(ctx, "x/\x00", bytes.NewReader(nil)))
 	unsafe("Delete", s.Delete(ctx, bad))
 	_, _, _, err = s.List(ctx, "../", "", "", "/", 10, true)

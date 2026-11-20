@@ -57,6 +57,11 @@ type cifsStore struct {
 	connIdleTimeout time.Duration
 }
 
+// checkCifsKey also treats `\` as a separator, since SMB uses it regardless of the client OS.
+func checkCifsKey(key string) error {
+	return utils.CheckKey(strings.ReplaceAll(key, "\\", "/"))
+}
+
 // Chmod changes the mode of the file to mode.
 //
 // Note: SAMBA protocol has limited support for Unix file permissions.
@@ -69,7 +74,7 @@ type cifsStore struct {
 // The returned mode from Stat() will always be either 0666 (writable) or 0444 (read-only)
 // regardless of the specific mode bits passed to this function.
 func (c *cifsStore) Chmod(path string, mode os.FileMode) error {
-	if err := utils.CheckKey(path); err != nil {
+	if err := checkCifsKey(path); err != nil {
 		return err
 	}
 	return c.withConn(context.Background(), func(share *smb2.Share) error {
@@ -84,7 +89,7 @@ func (c *cifsStore) Chown(path string, owner string, group string) error {
 
 // Chtimes implements MtimeChanger.
 func (c *cifsStore) Chtimes(path string, mtime time.Time) error {
-	if err := utils.CheckKey(path); err != nil {
+	if err := checkCifsKey(path); err != nil {
 		return err
 	}
 	return c.withConn(context.Background(), func(share *smb2.Share) error {
@@ -196,7 +201,7 @@ func (c *cifsStore) withConn(ctx context.Context, f func(*smb2.Share) error) (er
 }
 
 func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error) {
-	if err = utils.CheckKey(key); err != nil {
+	if err = checkCifsKey(key); err != nil {
 		return nil, err
 	}
 	err = c.withConn(ctx, func(share *smb2.Share) error {
@@ -232,7 +237,7 @@ func (r *cifsReadCloser) Close() error {
 }
 
 func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := checkCifsKey(key); err != nil {
 		return nil, err
 	}
 	if off < 0 {
@@ -290,7 +295,7 @@ func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	if err = utils.CheckKey(key); err != nil {
+	if err = checkCifsKey(key); err != nil {
 		return err
 	}
 	return c.withConn(ctx, func(share *smb2.Share) error {
@@ -353,7 +358,7 @@ func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters .
 }
 
 func (c *cifsStore) Delete(ctx context.Context, key string, getters ...AttrGetter) (err error) {
-	if err = utils.CheckKey(key); err != nil {
+	if err = checkCifsKey(key); err != nil {
 		return err
 	}
 	return c.withConn(ctx, func(share *smb2.Share) error {
@@ -387,7 +392,7 @@ func (c *cifsStore) List(ctx context.Context, prefix, marker, token, delimiter s
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
-	if err := utils.CheckKey(prefix); err != nil {
+	if err := checkCifsKey(prefix); err != nil {
 		return nil, false, "", err
 	}
 
