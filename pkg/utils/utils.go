@@ -287,3 +287,19 @@ func Duration(s string) time.Duration {
 	}
 	return d + time.Hour*time.Duration(v*24)
 }
+
+// CheckKey returns ErrUnsafeKey if key could escape the root of a storage that maps keys to paths.
+func CheckKey(key string) error {
+	if strings.IndexByte(key, 0) >= 0 {
+		return ErrUnsafeKey
+	}
+	if !strings.Contains(key, "..") {
+		return nil
+	}
+	for _, e := range strings.FieldsFunc(key, func(r rune) bool { return r == '/' || runtime.GOOS == "windows" && r == '\\' }) {
+		if e == ".." {
+			return ErrUnsafeKey
+		}
+	}
+	return nil
+}

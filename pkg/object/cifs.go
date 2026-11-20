@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/cloudsoda/go-smb2"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type cifsConn struct {
@@ -68,6 +69,9 @@ type cifsStore struct {
 // The returned mode from Stat() will always be either 0666 (writable) or 0444 (read-only)
 // regardless of the specific mode bits passed to this function.
 func (c *cifsStore) Chmod(path string, mode os.FileMode) error {
+	if err := utils.CheckKey(path); err != nil {
+		return err
+	}
 	return c.withConn(context.Background(), func(share *smb2.Share) error {
 		return share.Chmod(path, mode)
 	})
@@ -80,6 +84,9 @@ func (c *cifsStore) Chown(path string, owner string, group string) error {
 
 // Chtimes implements MtimeChanger.
 func (c *cifsStore) Chtimes(path string, mtime time.Time) error {
+	if err := utils.CheckKey(path); err != nil {
+		return err
+	}
 	return c.withConn(context.Background(), func(share *smb2.Share) error {
 		return share.Chtimes(path, time.Time{}, mtime)
 	})
@@ -189,6 +196,9 @@ func (c *cifsStore) withConn(ctx context.Context, f func(*smb2.Share) error) (er
 }
 
 func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error) {
+	if err = utils.CheckKey(key); err != nil {
+		return nil, err
+	}
 	err = c.withConn(ctx, func(share *smb2.Share) error {
 		fi, err := share.Lstat(key)
 		if err != nil {
@@ -222,6 +232,9 @@ func (r *cifsReadCloser) Close() error {
 }
 
 func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	if err := utils.CheckKey(key); err != nil {
+		return nil, err
+	}
 	if off < 0 {
 		off = 0
 	}
@@ -277,6 +290,9 @@ func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
+	if err = utils.CheckKey(key); err != nil {
+		return err
+	}
 	return c.withConn(ctx, func(share *smb2.Share) error {
 		p := key
 		if strings.HasSuffix(key, dirSuffix) {
@@ -337,6 +353,9 @@ func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters .
 }
 
 func (c *cifsStore) Delete(ctx context.Context, key string, getters ...AttrGetter) (err error) {
+	if err = utils.CheckKey(key); err != nil {
+		return err
+	}
 	return c.withConn(ctx, func(share *smb2.Share) error {
 		p := strings.TrimRight(key, dirSuffix)
 		err = share.Remove(p)
@@ -367,6 +386,9 @@ func (c *cifsStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object 
 func (c *cifsStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
+	}
+	if err := utils.CheckKey(prefix); err != nil {
+		return nil, false, "", err
 	}
 
 	dir := prefix

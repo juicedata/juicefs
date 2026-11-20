@@ -101,6 +101,9 @@ func (f *jFile) Close() error {
 }
 
 func (j *juiceFS) Get(rCtx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	if err := utils.CheckKey(key); err != nil {
+		return nil, err
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	f, err := j.jfs.Open(ctx, j.path(key), vfs.MODE_MASK_R)
 	if err != 0 {
@@ -123,6 +126,9 @@ var bufPool = sync.Pool{
 }
 
 func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ...object.AttrGetter) (err error) {
+	if err := utils.CheckKey(key); err != nil {
+		return err
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	if vfs.IsSpecialName(key) {
 		return fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
@@ -186,6 +192,9 @@ func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ..
 }
 
 func (j *juiceFS) Delete(rCtx context.Context, key string, getters ...object.AttrGetter) error {
+	if err := utils.CheckKey(key); err != nil {
+		return err
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	if key == "" {
 		return nil
@@ -221,6 +230,9 @@ func (o *jObj) StorageClass() string { return "" }
 func (o *jObj) Status() string       { return "" }
 
 func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) {
+	if err := utils.CheckKey(key); err != nil {
+		return nil, err
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	errConv := func(eno syscall.Errno) error {
 		if errors.Is(eno, syscall.ENOENT) {
@@ -244,6 +256,9 @@ func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) 
 }
 
 func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
+	if err := utils.CheckKey(prefix); err != nil {
+		return nil, false, "", err
+	}
 	if delimiter != "/" {
 		return nil, false, "", utils.ErrNotSUP
 	}
@@ -342,6 +357,9 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 }
 
 func (j *juiceFS) Chtimes(key string, mtime time.Time) error {
+	if err := utils.CheckKey(key); err != nil {
+		return err
+	}
 	f, err := j.jfs.Lopen(ctx, j.path(key), 0)
 	if err != 0 {
 		return err
@@ -367,6 +385,9 @@ func syscallMode(i os.FileMode) (o uint32) {
 }
 
 func (j *juiceFS) Chmod(key string, mode os.FileMode) error {
+	if err := utils.CheckKey(key); err != nil {
+		return err
+	}
 	f, err := j.jfs.Open(ctx, j.path(key), 0)
 	if err != 0 {
 		return err
@@ -376,6 +397,9 @@ func (j *juiceFS) Chmod(key string, mode os.FileMode) error {
 }
 
 func (j *juiceFS) Chown(key string, owner, group string) error {
+	if err := utils.CheckKey(key); err != nil {
+		return err
+	}
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
 	if uid == -1 || gid == -1 {
@@ -390,6 +414,9 @@ func (j *juiceFS) Chown(key string, owner, group string) error {
 }
 
 func (j *juiceFS) Symlink(oldName, newName string) error {
+	if err := utils.CheckKey(newName); err != nil {
+		return err
+	}
 	p := j.path(newName)
 	err := j.jfs.Symlink(ctx, oldName, p)
 	if err == syscall.ENOENT {
@@ -402,6 +429,9 @@ func (j *juiceFS) Symlink(oldName, newName string) error {
 }
 
 func (j *juiceFS) Readlink(name string) (string, error) {
+	if err := utils.CheckKey(name); err != nil {
+		return "", err
+	}
 	target, err := j.jfs.Readlink(ctx, j.path(name))
 	return string(target), toError(err)
 }
@@ -417,6 +447,9 @@ func (j *juiceFS) Limits() object.Limits {
 }
 
 func (j *juiceFS) CreateMultipartUpload(_ context.Context, key string) (*object.MultipartUpload, error) {
+	if err := utils.CheckKey(key); err != nil {
+		return nil, err
+	}
 	if vfs.IsSpecialName(key) {
 		return nil, fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
 	}
@@ -436,6 +469,9 @@ func (j *juiceFS) partDir(key, uploadID string) string {
 }
 
 func (j *juiceFS) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*object.Part, error) {
+	if err := utils.CheckKey(key); err != nil {
+		return nil, err
+	}
 	err := j.Put(context.Background(), path.Join(j.partDir(key, uploadID), strconv.Itoa(num)), in)
 	return &object.Part{
 		Num: num,
@@ -447,11 +483,17 @@ func (j *juiceFS) UploadPart(ctx context.Context, key string, uploadID string, n
 }
 
 func (j *juiceFS) AbortUpload(rCtx context.Context, key string, uploadID string) {
+	if utils.CheckKey(key) != nil {
+		return
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	_ = j.jfs.Rmr(ctx, j.path(j.partDir(key, uploadID)), true, meta.RmrDefaultThreads)
 }
 
 func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID string, parts []*object.Part) (err error) {
+	if err := utils.CheckKey(key); err != nil {
+		return err
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	tmp := j.path(path.Join(j.partDir(key, uploadID), "complete"))
 	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)

@@ -26,4 +26,5 @@ var (
 	ErrFuncTimeout = errors.New("function timeout")
 	ErrSkipped     = errors.New("skipped")
 	ErrExtlink     = syscall.Errno(1000)
+	ErrUnsafeKey   = errors.New("key contains a \"..\" path element or NUL")
 )

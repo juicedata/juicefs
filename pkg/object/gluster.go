@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/juicedata/gogfapi/gfapi"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type gluster struct {
@@ -58,6 +59,9 @@ func (g *gluster) vol() *gfapi.Volume {
 }
 
 func (g *gluster) Head(ctx context.Context, key string) (Object, error) {
+	if err := utils.CheckKey(key); err != nil {
+		return nil, err
+	}
 	fi, err := g.vol().Stat(key)
 	if err != nil {
 		return nil, err
@@ -88,6 +92,9 @@ func (g *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 }
 
 func (g *gluster) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	if err := utils.CheckKey(key); err != nil {
+		return nil, err
+	}
 	f, err := g.vol().Open(key)
 	if err != nil {
 		return nil, err
@@ -113,6 +120,9 @@ func (g *gluster) Get(ctx context.Context, key string, off, limit int64, getters
 }
 
 func (g *gluster) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+	if err := utils.CheckKey(key); err != nil {
+		return err
+	}
 	v := g.vol()
 	if strings.HasSuffix(key, dirSuffix) {
 		return v.MkdirAll(key, os.FileMode(0777))
@@ -149,6 +159,9 @@ func (g *gluster) Put(ctx context.Context, key string, in io.Reader, getters ...
 }
 
 func (g *gluster) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	if err := utils.CheckKey(key); err != nil {
+		return err
+	}
 	v := g.vol()
 	err := v.Unlink(key)
 	if err != nil && strings.Contains(err.Error(), "is a directory") {
@@ -212,6 +225,9 @@ func (g *gluster) List(ctx context.Context, prefix, marker, token, delimiter str
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
+	if err := utils.CheckKey(prefix); err != nil {
+		return nil, false, "", err
+	}
 	var dir string = prefix
 	var objs []Object
 	if !strings.HasSuffix(dir, dirSuffix) {
@@ -267,6 +283,9 @@ func (g *gluster) Chtimes(path string, mtime time.Time) error {
 }
 
 func (g *gluster) Chmod(path string, mode os.FileMode) error {
+	if err := utils.CheckKey(path); err != nil {
+		return err
+	}
 	return g.vol().Chmod(path, mode)
 }
 

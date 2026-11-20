@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/studio-b12/gowebdav"
 )
 
@@ -48,6 +49,9 @@ func (w *webdav) Create(ctx context.Context) error {
 }
 
 func (w *webdav) Head(ctx context.Context, key string) (Object, error) {
+	if err := utils.CheckKey(key); err != nil {
+		return nil, err
+	}
 	info, err := w.c.Stat(key)
 	if err != nil {
 		if gowebdav.IsErrNotFound(err) {
@@ -66,6 +70,9 @@ func (w *webdav) Head(ctx context.Context, key string) (Object, error) {
 }
 
 func (w *webdav) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	if err := utils.CheckKey(key); err != nil {
+		return nil, err
+	}
 	if off == 0 && limit <= 0 {
 		return w.c.ReadStream(key)
 	}
@@ -73,6 +80,9 @@ func (w *webdav) Get(ctx context.Context, key string, off, limit int64, getters 
 }
 
 func (w *webdav) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+	if err := utils.CheckKey(key); err != nil {
+		return err
+	}
 	if key == "" {
 		return nil
 	}
@@ -83,6 +93,9 @@ func (w *webdav) Put(ctx context.Context, key string, in io.Reader, getters ...A
 }
 
 func (w *webdav) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	if err := utils.CheckKey(key); err != nil {
+		return err
+	}
 	info, err := w.c.Stat(key)
 	if gowebdav.IsErrNotFound(err) {
 		return nil
@@ -106,6 +119,12 @@ func (w *webdav) Delete(ctx context.Context, key string, getters ...AttrGetter) 
 }
 
 func (w *webdav) Copy(ctx context.Context, dst, src string) error {
+	if err := utils.CheckKey(dst); err != nil {
+		return err
+	}
+	if err := utils.CheckKey(src); err != nil {
+		return err
+	}
 	return w.c.Copy(src, dst, true)
 }
 
@@ -121,6 +140,9 @@ func (w webDAVFile) Name() string {
 func (w *webdav) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
+	}
+	if err := utils.CheckKey(prefix); err != nil {
+		return nil, false, "", err
 	}
 
 	root := "/" + prefix
