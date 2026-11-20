@@ -96,6 +96,8 @@ jfs = Client(name='', meta='redis://192.168.1.8/0')
 jfs.listdir('/')
 ```
 
+`Client.open()` requires an integer `buffering` value, following Python's `__index__` protocol. Invalid types raise `TypeError` before creating or truncating a file.
+
 Use `readinto()` to fill an existing writable, contiguous buffer without creating a full-size temporary Python `bytes` object. The buffer can be reused between calls. An I/O error may leave partial data in the buffer.
 
 ### Using fsspec

@@ -58,6 +58,49 @@ class FileTests(unittest.TestCase):
             self.assertEqual(fobj.read().splitlines(), [b"bacon"])
 
 
+class OpenBufferingTests(FileTests):
+    def test_invalid_buffering_preserves_existing_file(self):
+        content = b'keep this data'
+        for buffering in (None, 1.5, 'invalid', 0.0, -1.0):
+            for mode in ('wb', 'w+b'):
+                with self.subTest(buffering=buffering, mode=mode):
+                    with self.v.open(TESTFILE, 'wb') as stream:
+                        stream.write(content)
+                    with self.assertRaises(TypeError):
+                        with self.v.open(TESTFILE, mode, buffering=buffering):
+                            pass
+                    with self.v.open(TESTFILE, 'rb') as stream:
+                        self.assertEqual(stream.read(), content)
+
+    def test_invalid_buffering_does_not_create_file(self):
+        for index, buffering in enumerate((None, 1.5, 'invalid', 0.0, -1.0)):
+            for mode in ('wb', 'ab', 'xb'):
+                with self.subTest(buffering=buffering, mode=mode):
+                    path = f'{TESTFN}/missing-{index}-{mode}'
+                    with self.assertRaises(TypeError):
+                        with self.v.open(path, mode, buffering=buffering):
+                            pass
+                    self.assertFalse(self.v.exists(path))
+
+    def test_integer_buffering(self):
+        for buffering in (-1, 0, 8):
+            with self.subTest(buffering=buffering):
+                with self.v.open(TESTFILE, 'w+b', buffering=buffering) as stream:
+                    self.assertEqual(stream.write(b'buffered'), 8)
+                    stream.seek(0)
+                    self.assertEqual(stream.read(), b'buffered')
+
+    def test_buffering_index_protocol(self):
+        class BufferSize:
+            def __index__(self):
+                return 8
+
+        with self.v.open(TESTFILE, 'w+b', buffering=BufferSize()) as stream:
+            stream.write(b'index')
+            stream.seek(0)
+            self.assertEqual(stream.read(), b'index')
+
+
 class ReadintoTests(FileTests):
     def test_readinto_large_sliced_buffer(self):
         content = bytes(range(256)) * (1 << 15) + b'end'

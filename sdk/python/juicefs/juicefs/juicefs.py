@@ -236,6 +236,7 @@ class Client(object):
 
     def open(self, path, mode='r', buffering=-1, encoding=None, errors=None):
         """Open a file, returns a filelike object."""
+        buffering = operator.index(buffering)
         if len(mode) != len(set(mode)):
             raise ValueError(f'invalid mode: {mode}')
         flag = 0
