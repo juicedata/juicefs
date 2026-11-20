@@ -132,6 +132,10 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+`jfs.rm(path, recursive=True, maxdepth=N)` 只删除指定深度内的条目。如果更深层
+仍有内容，会抛出目录非空错误；已经删除的条目不会恢复。不指定 `maxdepth` 时，
+仍执行不限深度的递归删除。目录符号链接只删除链接本身，不删除其目标。
+
 ### 获取帮助信息
 
 可以使用 `help()` 函数获取类和方法的帮助信息。
