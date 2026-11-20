@@ -20,8 +20,10 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -95,9 +97,39 @@ func GetKernelInfo() (string, error) {
 }
 
 func GetUmask() int {
-	umask := syscall.Umask(0)
-	syscall.Umask(umask)
+	umask, err := ReadUmask()
+	if err != nil {
+		logger.Warnf("read umask: %s, using 0777", err)
+		return 0o777
+	}
 	return umask
+}
+
+// ReadUmask returns the process umask without changing it.
+func ReadUmask() (int, error) {
+	if runtime.GOOS == "linux" {
+		if status, err := os.ReadFile("/proc/self/status"); err == nil {
+			if _, value, ok := strings.Cut(string(status), "\nUmask:"); ok {
+				line, _, _ := strings.Cut(value, "\n")
+				if mask, err := strconv.ParseUint(strings.TrimSpace(line), 8, 9); err == nil {
+					return int(mask), nil
+				}
+			}
+		}
+	}
+
+	// The child inherits the mask. An empty environment avoids shell startup overrides.
+	cmd := exec.Command("/bin/sh", "-c", "umask")
+	cmd.Env = []string{}
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("run /bin/sh -c umask: %w", err)
+	}
+	mask, err := strconv.ParseUint(strings.TrimSpace(string(out)), 8, 9)
+	if err != nil {
+		return 0, fmt.Errorf("parse output of /bin/sh -c umask: %w", err)
+	}
+	return int(mask), nil
 }
 
 func SetUmask(umask int) int {
