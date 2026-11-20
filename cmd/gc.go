@@ -154,6 +154,17 @@ func gc(ctx *cli.Context) error {
 		cleanDetachedNodeSpin.Done()
 	}
 
+	orphanLabel := "Orphan extended attributes"
+	if delFlag {
+		orphanLabel = "Cleaned orphan extended attributes"
+	}
+	orphanSpin := progress.AddCountSpinner(orphanLabel)
+	err = m.CleanupOrphanXattrs(c, delFlag, orphanSpin.IncrBy)
+	orphanSpin.Done()
+	if err != nil {
+		return errors.Wrap(err, "scan orphan extended attributes")
+	}
+
 	err = m.ScanDeletedObject(
 		c,
 		nil, nil, nil,

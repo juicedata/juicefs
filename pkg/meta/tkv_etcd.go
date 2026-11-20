@@ -258,7 +258,6 @@ func (c *etcdClient) scan(prefix []byte, handler func(key []byte, value []byte) 
 		return err
 	}
 	currentRev := resp.Header.Revision
-	var following bool
 	for {
 		resp, err := c.client.Get(context.Background(),
 			string(start),
@@ -269,9 +268,6 @@ func (c *etcdClient) scan(prefix []byte, handler func(key []byte, value []byte) 
 		if err != nil {
 			return fmt.Errorf("get start %v: %s", string(start), err)
 		}
-		if following && len(resp.Kvs) > 0 {
-			resp.Kvs = resp.Kvs[1:]
-		}
 		if len(resp.Kvs) == 0 {
 			break
 		}
@@ -280,8 +276,8 @@ func (c *etcdClient) scan(prefix []byte, handler func(key []byte, value []byte) 
 				return nil
 			}
 		}
-		start = resp.Kvs[len(resp.Kvs)-1].Key
-		following = true
+		// Resume after the last key even if the handler deleted or updated it.
+		start = append(bytes.Clone(resp.Kvs[len(resp.Kvs)-1].Key), 0)
 	}
 	return nil
 }

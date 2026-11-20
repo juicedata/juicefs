@@ -541,6 +541,67 @@ func TestEtcd(t *testing.T) { //skip mutate
 	testTKV(t, c)
 }
 
+func TestEtcdScanMutation(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
+	for _, operation := range []string{"keep", "delete", "update"} {
+		t.Run(operation, func(t *testing.T) {
+			c, err := newEtcdClient(fmt.Sprintf("%s/gc-scan/%s", os.Getenv("ETCD_ADDR"), operation))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.close()
+			if err := c.reset(nil); err != nil {
+				t.Fatal(err)
+			}
+			defer c.reset(nil)
+			keys := make([][]byte, 0, 1026)
+			for i := 0; i < 1025; i++ {
+				keys = append(keys, fmt.Appendf(nil, "key_%04d", i))
+			}
+			// The next key extends the last key in the first 1024-entry page.
+			keys = append(keys, []byte("key_1023/suffix"))
+			sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i], keys[j]) < 0 })
+			if err := c.txn(Background(), func(tx *kvTxn) error {
+				for _, key := range keys {
+					tx.set(key, []byte("value"))
+				}
+				return nil
+			}, 0); err != nil {
+				t.Fatal(err)
+			}
+			var scanned [][]byte
+			var mutationErr error
+			err = c.scan([]byte("key_"), func(key, value []byte) bool {
+				scanned = append(scanned, bytes.Clone(key))
+				if string(key) == "key_1023" && operation != "keep" {
+					mutationErr = c.txn(Background(), func(tx *kvTxn) error {
+						if operation == "delete" {
+							tx.delete(key)
+						} else {
+							tx.set(key, []byte("updated"))
+						}
+						return nil
+					}, 0)
+				}
+				return mutationErr == nil
+			})
+			if err != nil || mutationErr != nil {
+				t.Fatalf("scan: %v, mutation: %v", err, mutationErr)
+			}
+			if len(scanned) != len(keys) {
+				t.Fatalf("scanned %d keys, want %d", len(scanned), len(keys))
+			}
+			for i, key := range keys {
+				if !bytes.Equal(key, scanned[i]) {
+					t.Fatalf("key %d: got %q, want %q", i, scanned[i], key)
+				}
+			}
+		})
+	}
+}
+
 func TestMemKV(t *testing.T) {
 	c, _ := newTkvClient("memkv", "")
 	c = withPrefix(c, []byte("jfs"))
