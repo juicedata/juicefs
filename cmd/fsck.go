@@ -127,11 +127,7 @@ func fsck(ctx *cli.Context) error {
 	chunkConf := *getDefaultChunkConf(format)
 	chunkConf.CacheDir = "memory"
 
-	storageConfig, err := format.VolumeStorageConfig()
-	if err != nil {
-		logger.Fatalf("object storage: %s", err)
-	}
-	blob, err := object.CreateVolumeStorage(storageConfig)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

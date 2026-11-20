@@ -24,13 +24,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -294,46 +292,6 @@ func CreateVolumeStorage(config VolumeStorageConfig) (ObjectStorage, error) {
 		blob = NewEncrypted(blob, encryptor)
 	}
 	return blob, nil
-}
-
-// ReloadableStorage holds the current object storage and its last applied configuration.
-type ReloadableStorage struct {
-	ObjectStorage
-	config VolumeStorageConfig
-}
-
-// NewReloadableStorage creates a volume store that can be updated with Reload.
-func NewReloadableStorage(config VolumeStorageConfig) (*ReloadableStorage, error) {
-	blob, err := CreateVolumeStorage(config)
-	if err != nil {
-		return nil, err
-	}
-	config.Tiers = maps.Clone(config.Tiers)
-	return &ReloadableStorage{ObjectStorage: blob, config: config}, nil
-}
-
-// Reload replaces the backend when the storage type, bucket, credentials or tiers change.
-func (s *ReloadableStorage) Reload(config VolumeStorageConfig) error {
-	old := &s.config
-	if config.Storage == old.Storage && config.Bucket == old.Bucket &&
-		config.AccessKey == old.AccessKey && config.SecretKey == old.SecretKey &&
-		config.SessionToken == old.SessionToken && reflect.DeepEqual(config.Tiers, old.Tiers) {
-		return nil
-	}
-
-	logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q tiers=%v", config.Storage, config.Bucket, config.AccessKey, config.Tiers[0].Sc, config.Tiers)
-	blob, err := CreateVolumeStorage(config)
-	if err != nil {
-		return err
-	}
-	config.Tiers = maps.Clone(config.Tiers)
-	s.ObjectStorage = blob
-	s.config = config
-	return nil
-}
-
-func (s *ReloadableStorage) Shutdown() {
-	Shutdown(s.ObjectStorage)
 }
 
 var bufPool = sync.Pool{

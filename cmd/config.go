@@ -452,11 +452,7 @@ func config(ctx *cli.Context) error {
 	if !ctx.Bool("force") {
 		yes := ctx.Bool("yes")
 		if storage || tier {
-			storageConfig, err := format.VolumeStorageConfig()
-			if err != nil {
-				return err
-			}
-			blob, err := object.CreateVolumeStorage(storageConfig)
+			blob, err := createStorage(*format)
 			if err != nil {
 				return err
 			}

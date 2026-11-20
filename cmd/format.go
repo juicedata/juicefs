@@ -228,6 +228,14 @@ func fixObjectSize(s uint64) uint64 {
 	return s
 }
 
+func createStorage(format meta.Format) (object.ObjectStorage, error) {
+	config, err := format.VolumeStorageConfig()
+	if err != nil {
+		return nil, err
+	}
+	return object.CreateVolumeStorage(config)
+}
+
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
 func randSeq(n int) string {
@@ -503,11 +511,7 @@ func format(c *cli.Context) error {
 		}
 	}
 
-	storageConfig, err := format.VolumeStorageConfig()
-	if err != nil {
-		logger.Fatalf("object storage: %s", err)
-	}
-	blob, err := object.CreateVolumeStorage(storageConfig)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
