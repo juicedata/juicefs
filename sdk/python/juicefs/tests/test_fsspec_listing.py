@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import errno
 import os
 import uuid
+from stat import S_ISLNK
 
 import pytest
 from fsspec.implementations.dirfs import DirFileSystem
@@ -95,3 +97,64 @@ def test_detailed_listing_keeps_metadata(tree):
     assert entries[root + "/file"]["type"] == "file"
     assert entries[root + "/file"]["size"] == 5
     assert entries[root + "/nested"]["type"] == "directory"
+
+
+@pytest.mark.parametrize("protocol", ["", "jfs://", "juicefs://"],
+                         ids=["plain", "jfs", "juicefs"])
+@pytest.mark.parametrize("target", ["missing", "file/child"])
+def test_dangling_link_does_not_hide_directory_contents(tree, protocol, target):
+    fs, root = tree
+    fs.fs.symlink(target, root + "/broken")
+    entries = {info["name"]: info for info in fs.ls(protocol + root, detail=True)}
+    assert set(entries) == {root + "/file", root + "/nested", root + "/broken"}
+    link = entries[root + "/broken"]
+    assert link["type"] == "link"
+    assert S_ISLNK(link["mode"])
+    assert link["destination"] == target
+    assert fs.find(root) == [root + "/broken", root + "/file", root + "/nested/file"]
+    assert fs.glob(root + "/*") == [root + "/broken", root + "/file", root + "/nested"]
+    assert fs.cat(root + "/file") == b"outer"
+
+
+@pytest.mark.parametrize("target, target_type", [("file", "file"),
+                                                ("nested", "directory")])
+def test_listing_preserves_link_metadata_without_following_target(tree, target, target_type):
+    fs, root = tree
+    path = root + "/link"
+    fs.fs.symlink(target, path)
+    entry = next(info for info in fs.ls(root, detail=True) if info["name"] == path)
+    assert entry["type"] == "link"
+    assert S_ISLNK(entry["mode"])
+    assert entry["size"] == fs.fs.lstat(path).st_size
+    assert entry["destination"] == target
+    assert fs.info(path)["type"] == target_type
+
+
+def test_walk_does_not_recurse_into_directory_symlink(tree):
+    fs, root = tree
+    fs.fs.symlink(".", root + "/self")
+    # Bound both arms, so the old implementation cannot recurse indefinitely.
+    listing = list(fs.walk(root, maxdepth=3))
+    assert [path for path, _, _ in listing] == [root, root + "/nested"]
+    assert listing[0][1] == ["nested"]
+    assert sorted(listing[0][2]) == ["file", "self"]
+    assert fs.find(root, maxdepth=3) == [root + "/file", root + "/nested/file", root + "/self"]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="Root bypasses target directory permissions")
+def test_unreadable_link_target_does_not_hide_directory_contents(tree):
+    fs, root = tree
+    private = root + "/private"
+    fs.fs.mkdir(private, 0o700)
+    fs.pipe_file(private + "/secret", b"secret")
+    fs.fs.symlink("private/secret", root + "/restricted")
+    fs.fs.chmod(private, 0)
+    try:
+        entries = {info["name"]: info for info in fs.ls(root, detail=True)}
+        assert entries[root + "/restricted"]["destination"] == "private/secret"
+        assert fs.cat(root + "/file") == b"outer"
+        with pytest.raises(OSError) as error:
+            fs.info(root + "/restricted")
+        assert error.value.errno == errno.EACCES
+    finally:
+        fs.fs.chmod(private, 0o700)

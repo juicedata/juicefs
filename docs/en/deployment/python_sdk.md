@@ -123,6 +123,11 @@ jfs.ls('/')
 protocol, including with `detail=False`. This allows `DirFileSystem` to make
 them relative to its root. The low-level `Client.listdir()` still returns basenames.
 
+Detailed listings describe symbolic links themselves (`type="link"` and
+`destination`), so missing or inaccessible targets do not hide other entries,
+and `walk()` does not recurse through directory links. Direct `info()` and file
+opens still follow links and report target errors.
+
 ### Getting Help Information
 
 You can use the `help()` function to get help information for classes and methods.

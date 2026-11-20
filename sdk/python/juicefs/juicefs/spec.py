@@ -81,7 +81,7 @@ class JuiceFS(AbstractFileSystem):
                 "mtime": st.st_mtime,
             }
             if S_ISLNK(st.st_mode):
-                info.update(**self.info(f"{path}/{name}"))
+                info["destination"] = self.fs.readlink(f"{path}/{name}")
             stats.append(info)
         return stats
 
