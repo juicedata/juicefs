@@ -39,8 +39,6 @@ type webdav struct {
 	c        *gowebdav.Client
 }
 
-func (w *webdav) pathBased() {}
-
 func (w *webdav) String() string {
 	return fmt.Sprintf("webdav://%s/", w.endpoint.Host)
 }
