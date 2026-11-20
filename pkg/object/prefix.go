@@ -294,12 +294,14 @@ func IsFileSystem(o ObjectStorage) bool {
 	return ok
 }
 
+// pathBased marks storages that map keys to paths without being a FileSystem.
+type pathBased interface{ pathBased() }
+
 // IsPathBased reports whether the storage maps keys to paths.
 func IsPathBased(o ObjectStorage) bool {
-	o = unwrap(o)
-	if _, ok := o.(*webdav); ok {
+	switch unwrap(o).(type) {
+	case FileSystem, pathBased:
 		return true
 	}
-	_, ok := o.(FileSystem)
-	return ok
+	return false
 }
