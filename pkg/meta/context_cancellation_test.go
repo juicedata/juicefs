@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -27,6 +29,286 @@ func createSummaryTestTree(t *testing.T, m Meta, parent Ino, dirs, filesPerDir i
 				t.Fatalf("create %s/%s: %s", name, fname, st)
 			}
 		}
+	}
+}
+
+type summaryCancelTestEngine struct {
+	engine
+	failInode  Ino
+	waitInode  Ino
+	failErr    syscall.Errno
+	started    chan struct{}
+	canceled   chan struct{}
+	startOnce  sync.Once
+	cancelOnce sync.Once
+	active     atomic.Int32
+}
+
+func (e *summaryCancelTestEngine) waitForSibling(ctx Context, inode Ino) bool {
+	switch inode {
+	case e.failInode:
+		select {
+		case <-e.started:
+			return true
+		case <-time.After(time.Second):
+			return false
+		}
+	case e.waitInode:
+		e.startOnce.Do(func() { close(e.started) })
+		select {
+		case <-ctx.Done():
+			e.cancelOnce.Do(func() { close(e.canceled) })
+			return true
+		case <-time.After(time.Second):
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+func (e *summaryCancelTestEngine) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
+	if inode == e.failInode || inode == e.waitInode {
+		e.active.Add(1)
+		defer e.active.Add(-1)
+	}
+	if e.waitForSibling(ctx, inode) {
+		if inode == e.failInode {
+			return e.failure()
+		}
+		return syscall.EINTR
+	}
+	return e.engine.doReaddir(ctx, inode, plus, entries, limit)
+}
+
+func (e *summaryCancelTestEngine) doGetDirStat(ctx Context, inode Ino, trySync bool) (*dirStat, syscall.Errno) {
+	if inode == e.failInode || inode == e.waitInode {
+		e.active.Add(1)
+		defer e.active.Add(-1)
+	}
+	if e.waitForSibling(ctx, inode) {
+		if inode == e.failInode {
+			return nil, e.failure()
+		}
+		return nil, syscall.EINTR
+	}
+	return e.engine.doGetDirStat(ctx, inode, trySync)
+}
+
+func (e *summaryCancelTestEngine) failure() syscall.Errno {
+	if e.failErr == 0 {
+		return syscall.EIO
+	}
+	return e.failErr
+}
+
+func TestGetSummaryCancelsSiblingsOnChildError(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		strict bool
+	}{
+		{name: "strict", strict: true},
+		{name: "dir stats", strict: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestMemKV(t, "getsummary-cancel-"+tc.name, testFormat())
+			ctx := NewContext(1, 0, []uint32{0})
+			defer ctx.Cancel()
+
+			var failInode, waitInode Ino
+			for _, name := range []string{"fail", "wait"} {
+				var inode Ino
+				var attr Attr
+				if st := m.Mkdir(Background(), RootInode, name, 0755, 0, 0, &inode, &attr); st != 0 {
+					t.Fatalf("mkdir %s: %s", name, st)
+				}
+				if name == "fail" {
+					failInode = inode
+				} else {
+					waitInode = inode
+				}
+			}
+
+			base := m.getBase()
+			wrapped := &summaryCancelTestEngine{
+				engine:    base.en,
+				failInode: failInode,
+				waitInode: waitInode,
+				started:   make(chan struct{}),
+				canceled:  make(chan struct{}),
+			}
+			base.en = wrapped
+			defer func() { base.en = wrapped.engine }()
+
+			var summary Summary
+			if st := m.GetSummary(ctx, RootInode, &summary, true, tc.strict); st != syscall.EIO {
+				t.Fatalf("GetSummary returned %s, want %s", st, syscall.EIO)
+			}
+			select {
+			case <-wrapped.canceled:
+			default:
+				t.Fatal("sibling scan did not observe cancellation")
+			}
+			if ctx.Err() != nil {
+				t.Fatalf("caller context was canceled: %v", ctx.Err())
+			}
+			if active := wrapped.active.Load(); active != 0 {
+				t.Fatalf("%d sibling scans still active after GetSummary returned", active)
+			}
+		})
+	}
+}
+
+func TestGetSummaryScanStateStopsDispatchAfterError(t *testing.T) {
+	parent := Background()
+	defer parent.Cancel()
+	scanCtx := WrapWithCancel(parent, parent.Pid(), parent.Uid(), parent.Gids())
+	defer scanCtx.Cancel()
+	scan := &summaryScanState{ctx: scanCtx, parent: parent}
+
+	if !scan.begin() {
+		t.Fatal("scan should allow work before an error")
+	}
+	started := 0
+	if !scan.start(func() { started++ }) {
+		t.Fatal("scan should dispatch work before an error")
+	}
+	if got := scan.fail(syscall.EIO); got != syscall.EIO {
+		t.Fatalf("recorded error = %s, want %s", got, syscall.EIO)
+	}
+	if scan.begin() {
+		t.Fatal("scan allowed synchronous work after an error")
+	}
+	if scan.start(func() { started++ }) {
+		t.Fatal("scan allowed asynchronous work after an error")
+	}
+	if started != 1 {
+		t.Fatalf("dispatched work count = %d, want 1", started)
+	}
+}
+
+func TestGetSummaryCallerCancellation(t *testing.T) {
+	m := newTestMemKV(t, "getsummary-caller-cancel", testFormat())
+	var dirInode Ino
+	var attr Attr
+	if st := m.Mkdir(Background(), RootInode, "wait", 0755, 0, 0, &dirInode, &attr); st != 0 {
+		t.Fatalf("mkdir wait: %s", st)
+	}
+
+	base := m.getBase()
+	wrapped := &summaryCancelTestEngine{
+		engine:    base.en,
+		waitInode: dirInode,
+		started:   make(chan struct{}),
+		canceled:  make(chan struct{}),
+	}
+	base.en = wrapped
+	defer func() { base.en = wrapped.engine }()
+
+	ctx := NewContext(1, 0, []uint32{0})
+	defer ctx.Cancel()
+	result := make(chan syscall.Errno, 1)
+	go func() {
+		var summary Summary
+		result <- m.GetSummary(ctx, RootInode, &summary, true, true)
+	}()
+	select {
+	case <-wrapped.started:
+	case <-time.After(time.Second):
+		t.Fatal("child scan did not start")
+	}
+	ctx.Cancel()
+	select {
+	case st := <-result:
+		if st != syscall.EINTR {
+			t.Fatalf("GetSummary returned %s, want %s", st, syscall.EINTR)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("GetSummary did not return after caller cancellation")
+	}
+	select {
+	case <-wrapped.canceled:
+	default:
+		t.Fatal("child scan did not observe caller cancellation")
+	}
+	if active := wrapped.active.Load(); active != 0 {
+		t.Fatalf("%d child scans still active after GetSummary returned", active)
+	}
+}
+
+func TestGetSummaryIgnoresENOENTFromChild(t *testing.T) {
+	m := newTestMemKV(t, "getsummary-child-enoent", testFormat())
+	var failInode, waitInode Ino
+	for _, name := range []string{"fail", "wait"} {
+		var inode Ino
+		var attr Attr
+		if st := m.Mkdir(Background(), RootInode, name, 0755, 0, 0, &inode, &attr); st != 0 {
+			t.Fatalf("mkdir %s: %s", name, st)
+		}
+		if name == "fail" {
+			failInode = inode
+		} else {
+			waitInode = inode
+		}
+	}
+
+	base := m.getBase()
+	wrapped := &summaryCancelTestEngine{
+		engine:    base.en,
+		failInode: failInode,
+		waitInode: waitInode,
+		failErr:   syscall.ENOENT,
+		started:   make(chan struct{}),
+		canceled:  make(chan struct{}),
+	}
+	base.en = wrapped
+	defer func() { base.en = wrapped.engine }()
+
+	ctx := NewContext(1, 0, []uint32{0})
+	defer ctx.Cancel()
+	var summary Summary
+	if st := m.GetSummary(ctx, RootInode, &summary, true, true); st != 0 {
+		t.Fatalf("GetSummary returned %s, want success", st)
+	}
+	select {
+	case <-wrapped.canceled:
+		t.Fatal("ENOENT canceled a sibling scan")
+	default:
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("caller context was canceled: %v", ctx.Err())
+	}
+	if summary.Dirs != 3 {
+		t.Fatalf("summary dirs = %d, want 3", summary.Dirs)
+	}
+}
+
+func TestGetSummaryModesKeepExistingResults(t *testing.T) {
+	m := newTestMemKV(t, "getsummary-modes", testFormat())
+	createSummaryTestTree(t, m, RootInode, 2, 1)
+	ctx := Background()
+
+	// DirStats has existing size semantics that can differ from strict traversal.
+	for _, tc := range []struct {
+		name      string
+		recursive bool
+		strict    bool
+		want      Summary
+	}{
+		{name: "non-recursive strict", recursive: false, strict: true, want: Summary{Size: 3 * 4096, Dirs: 3}},
+		{name: "non-recursive dir stats", recursive: false, strict: false, want: Summary{Size: 5 * 4096, Dirs: 3}},
+		{name: "recursive strict", recursive: true, strict: true, want: Summary{Size: 5 * 4096, Files: 2, Dirs: 3}},
+		{name: "recursive dir stats", recursive: true, strict: false, want: Summary{Size: 7 * 4096, Files: 2, Dirs: 3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var summary Summary
+			if st := m.GetSummary(ctx, RootInode, &summary, tc.recursive, tc.strict); st != 0 {
+				t.Fatalf("GetSummary returned %s", st)
+			}
+			if summary != tc.want {
+				t.Fatalf("GetSummary = %+v, want %+v", summary, tc.want)
+			}
+		})
 	}
 }
 
