@@ -132,6 +132,22 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+写入事务先将数据暂存到本地目录（`temppath`，默认为 `/tmp`）。提交时，
+每个暂存文件先上传为目标目录中的临时文件，再重命名为目标路径。
+事务内抛出异常时，会丢弃暂存的写入。
+
+```python
+with jfs.transaction:
+    with jfs.open('/transaction-example', 'wb') as f:
+        f.write(b'committed on successful exit')
+```
+
+以上适用于 `wb` 写入。多个文件逐一提交，并非整体原子操作；
+提交失败时，先前的文件可能已经提交。
+
+请使用上下文管理器及时关闭文件。对象回收时也会刷新并关闭普通文件句柄，
+但不会提交暂存事务，也不保证进程崩溃后的持久性。不要依赖垃圾回收来及时写入。
+
 ### 获取帮助信息
 
 可以使用 `help()` 函数获取类和方法的帮助信息。
