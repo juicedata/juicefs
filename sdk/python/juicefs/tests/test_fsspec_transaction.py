@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import errno
+import gc
 import os
 from pathlib import Path
 import uuid
+import weakref
 
 import pytest
 
@@ -53,6 +55,28 @@ def test_direct_write(filesystem):
     with fs.open(path, "wb") as stream:
         stream.write(b"ordinary")
     assert fs.cat_file(path) == b"ordinary"
+
+
+@pytest.mark.parametrize("mode", ["wb", "w"])
+def test_direct_write_finalization(filesystem, mode):
+    fs, root, _ = filesystem
+    path = root + "/finalized"
+    stream = fs.open(path, mode, block_size=8192)
+    stream.write(b"buffered until finalization" if "b" in mode else "buffered until finalization")
+    reference = weakref.ref(stream)
+    del stream
+    gc.collect()
+    assert reference() is None
+    assert fs.cat_file(path) == b"buffered until finalization"
+
+
+@pytest.mark.filterwarnings("error::pytest.PytestUnraisableExceptionWarning")
+@pytest.mark.parametrize("mode,error", [("rb", FileNotFoundError), ("r+b", NotImplementedError)])
+def test_failed_open_finalization(filesystem, mode, error):
+    fs, root, _ = filesystem
+    with pytest.raises(error):
+        fs.open(root + "/missing", mode)
+    gc.collect()
 
 
 def test_transaction_commit(filesystem):

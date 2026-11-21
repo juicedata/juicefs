@@ -311,7 +311,8 @@ class JuiceFile(AbstractBufferedFile):
         return getattr(self.f, item)
 
     def __del__(self):
-        pass
+        if self.__dict__.get("f") is not None:
+            self.close()
 
 from fsspec.registry import register_implementation
 register_implementation("jfs", JuiceFS, True)

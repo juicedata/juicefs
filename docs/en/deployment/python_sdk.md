@@ -133,6 +133,10 @@ with jfs.transaction:
 This applies to `wb` writes. Multiple files are committed individually, not as
 one atomic operation; a failed commit may leave earlier files committed.
 
+Use a context manager to close file handles deterministically. Finalization also
+flushes and closes ordinary handles; it does not commit staged transactions or
+provide crash durability. Do not rely on garbage collection for timely writes.
+
 ### Getting Help Information
 
 You can use the `help()` function to get help information for classes and methods.
