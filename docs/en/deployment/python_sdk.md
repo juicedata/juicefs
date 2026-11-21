@@ -119,6 +119,16 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+`jfs.copy(source, destination)` replaces an existing destination file. The
+replacement is cloned to a temporary sibling and renamed into place, so a clone
+or rename failure does not first remove the old destination. Missing sources
+raise `FileNotFoundError`; for list-to-list copies, `on_error="ignore"` skips
+them without creating destination directories. A batch copy is not a transaction.
+File symlink sources are copied by reading their targets, so moving a relative
+link's contents to another directory produces an independent regular file.
+These copies are also staged before replacement; ordinary files retain the
+native clone path. The low-level `Client.clone` still preserves symlinks.
+
 ### Getting Help Information
 
 You can use the `help()` function to get help information for classes and methods.
