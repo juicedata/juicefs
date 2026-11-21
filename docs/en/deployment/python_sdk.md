@@ -122,6 +122,9 @@ jfs.ls('/')
 `ls()` follows the fsspec convention: entry names are full paths without a
 protocol, including with `detail=False`. This allows `DirFileSystem` to make
 them relative to its root. The low-level `Client.listdir()` still returns basenames.
+For a file path, `ls()` returns that file as a single entry, including metadata
+with `detail=True`. This also keeps file metadata available to `find()` and
+`DirFileSystem.find()`; `Client.listdir()` still requires a directory.
 
 Detailed listings describe symbolic links themselves (`type="link"` and
 `destination`), so missing or inaccessible targets do not hide other entries,

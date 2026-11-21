@@ -63,12 +63,35 @@ def test_root_listing_returns_absolute_paths(tree):
 
 
 @pytest.mark.parametrize("path, expected", [("", ["file", "nested"]),
-                                           ("nested", ["nested/file"])], ids=["root", "nested"])
+                                           ("nested", ["nested/file"]),
+                                           ("file", ["file"]),
+                                           ("nested/file", ["nested/file"])],
+                         ids=["root", "nested", "file", "nested-file"])
 def test_dirfs_listing(tree, path, expected):
     fs, root = tree
     wrapped = DirFileSystem(path=root, fs=fs)
     assert sorted(wrapped.ls(path, detail=False)) == expected
     assert sorted(info["name"] for info in wrapped.ls(path, detail=True)) == expected
+
+
+@pytest.mark.parametrize("path, size", [("file", 5), ("nested/file", 5)])
+def test_find_file_keeps_metadata(tree, path, size):
+    fs, root = tree
+    info = fs.find(root + "/" + path, detail=True)[root + "/" + path]
+    assert info["name"] == root + "/" + path
+    assert info["type"] == "file" and info["size"] == size
+    wrapped = DirFileSystem(path=root, fs=fs)
+    info = wrapped.find(path, detail=True)[path]
+    assert info["name"] == path
+    assert info["type"] == "file" and info["size"] == size
+
+
+@pytest.mark.parametrize("path", ["missing", "file/child"])
+@pytest.mark.parametrize("detail", [False, True])
+def test_listing_missing_path_does_not_return_an_entry(tree, path, detail):
+    fs, root = tree
+    with pytest.raises(OSError):
+        fs.ls(root + "/" + path, detail=detail)
 
 
 def test_empty_directory_listing(tree):
@@ -150,6 +173,10 @@ def test_unreadable_link_target_does_not_hide_directory_contents(tree):
     fs.fs.symlink("private/secret", root + "/restricted")
     fs.fs.chmod(private, 0)
     try:
+        for detail in (False, True):
+            with pytest.raises(OSError) as error:
+                fs.ls(private, detail=detail)
+            assert error.value.errno == errno.EACCES
         entries = {info["name"]: info for info in fs.ls(root, detail=True)}
         assert entries[root + "/restricted"]["destination"] == "private/secret"
         assert fs.cat(root + "/file") == b"outer"
