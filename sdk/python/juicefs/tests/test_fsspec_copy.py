@@ -14,6 +14,7 @@
 
 import errno
 import os
+import shutil
 import uuid
 
 import pytest
@@ -150,4 +151,40 @@ def test_copy_does_not_replace_destination_directory(tree):
         fs.cp_file(root + "/src/one", root + "/src")
     assert fs.isdir(root + "/src")
     assert fs.cat(root + "/src/two") == b"second payload"
+    assert not any(name.startswith(".jfs-copy-") for name in fs.fs.listdir(root))
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_copy_follows_relative_file_symlink(tree, existing):
+    fs, root = tree
+    payload = b"symlink target data" * 200000
+    fs.pipe(root + "/src/large", payload)
+    fs.fs.symlink("large", root + "/src/alias")
+    destination = root + ("/existing" if existing else "/fresh")
+
+    fs.copy(root + "/src/alias", destination)
+    fs.fs.remove(root + "/src/large")
+    assert not fs.islink(destination)
+    assert fs.cat(destination) == payload
+    assert not any(name.startswith(".jfs-copy-") for name in fs.fs.listdir(root))
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_copy_symlink_read_failure_preserves_destination(tree, monkeypatch, existing):
+    fs, root = tree
+    fs.fs.symlink("one", root + "/src/alias")
+    destination = root + ("/existing" if existing else "/fresh")
+
+    def fail_after_partial_copy(source, target, **kwargs):
+        target.write(source.read(3))
+        raise OSError(errno.EIO, "injected copy failure")
+
+    monkeypatch.setattr(shutil, "copyfileobj", fail_after_partial_copy)
+    with pytest.raises(OSError) as error:
+        fs.cp_file(root + "/src/alias", destination)
+    assert error.value.errno == errno.EIO
+    if existing:
+        assert fs.cat(destination) == b"old payload"
+    else:
+        assert not fs.exists(destination)
     assert not any(name.startswith(".jfs-copy-") for name in fs.fs.listdir(root))

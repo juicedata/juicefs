@@ -15,6 +15,7 @@
 
 import datetime
 import logging
+import shutil
 import uuid
 import os
 from stat import S_ISDIR, S_ISLNK, S_ISREG
@@ -125,10 +126,15 @@ class JuiceFS(AbstractFileSystem):
         if self.isfile(path1):
             if self.auto_mkdir:
                 self.makedirs(self._parent(path2), exist_ok=True)
-            if self.exists(path2):
+            source_is_link = self.islink(path1)
+            if self.exists(path2) or source_is_link:
                 temporary = os.path.join(self._parent(path2), ".jfs-copy-" + uuid.uuid4().hex)
                 try:
-                    self.fs.clone(path1, temporary)
+                    if source_is_link:
+                        with self.fs.open(path1, "rb") as source, self.fs.open(temporary, "wb") as destination:
+                            shutil.copyfileobj(source, destination, length=1024 * 1024)
+                    else:
+                        self.fs.clone(path1, temporary)
                     self.fs.rename(temporary, path2)
                 finally:
                     if self.exists(temporary):
