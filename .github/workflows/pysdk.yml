@@ -167,6 +167,13 @@ jobs:
           sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
           df -h
 
+      - name: Run fsspec listing regressions
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo python3 -m pip install pytest fsspec
+          sudo JUICEFS_META=$meta_url python3 -m pytest -q sdk/python/juicefs/tests/test_fsspec_listing.py
+
       - name: Run file_test.py
         run: |
           source .github/scripts/start_meta_engine.sh

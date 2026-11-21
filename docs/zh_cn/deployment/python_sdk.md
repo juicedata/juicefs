@@ -132,6 +132,15 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+`ls()` 遵循 fsspec 约定，返回不带协议前缀的完整路径，`detail=False` 时也一样，
+使 `DirFileSystem` 能将其转换为相对于根目录的路径。底层 `Client.listdir()` 仍返回文件名。
+路径为文件时，`ls()` 返回该文件的单项列表，`detail=True` 时包含元数据，
+使 `find()` 和 `DirFileSystem.find()` 也能保留文件元数据；`Client.listdir()` 仍只接受目录。
+
+详细列表描述软链接本身（`type="link"` 和 `destination`），因此目标不存在或不可访问时，
+不会影响其他条目，`walk()` 也不会递归进入目录软链接。直接调用 `info()` 或打开文件仍会
+跟随链接，并报告目标的错误。
+
 ### 获取帮助信息
 
 可以使用 `help()` 函数获取类和方法的帮助信息。

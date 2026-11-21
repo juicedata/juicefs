@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import datetime
+import errno
 import logging
 import uuid
 import os
@@ -62,9 +63,16 @@ class JuiceFS(AbstractFileSystem):
         self.fs.rmdir(self._strip_protocol(path))
 
     def ls(self, path, detail=False, **kwargs):
-        infos = self.fs.listdir(self._strip_protocol(path), detail)
+        path = self._strip_protocol(path)
+        try:
+            infos = self.fs.listdir(path, detail)
+        except OSError as error:
+            if error.errno != errno.ENOTDIR:
+                raise
+            info = self.info(path)
+            return [info] if detail else [info["name"]]
         if not detail:
-            return infos
+            return [os.path.join(path, name) for name in infos]
         stats = []
         for name, st in infos:
             info = {
@@ -80,7 +88,7 @@ class JuiceFS(AbstractFileSystem):
                 "mtime": st.st_mtime,
             }
             if S_ISLNK(st.st_mode):
-                info.update(**self.info(f"{path}/{name}"))
+                info["destination"] = self.fs.readlink(f"{path}/{name}")
             stats.append(info)
         return stats
 
