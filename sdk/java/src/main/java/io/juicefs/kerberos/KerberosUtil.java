@@ -25,13 +25,18 @@ import java.security.PrivilegedExceptionAction;
 
 public class KerberosUtil {
   public static byte[] genApReq(String spn) throws IOException, InterruptedException {
-    UserGroupInformation loginUser = UserGroupInformation.getLoginUser();
-    if (UserGroupInformation.isLoginKeytabBased()) {
-      loginUser.checkTGTAndReloginFromKeytab();
-    } else if (UserGroupInformation.isLoginTicketBased()) {
-      loginUser.reloginFromTicketCache();
+    // Like Hadoop's RPC client, authenticate as the caller (current user, or the real user behind a
+    // proxy user) rather than the JVM-wide login user, which other components may have replaced.
+    UserGroupInformation ugi = UserGroupInformation.getCurrentUser();
+    if (ugi.getAuthenticationMethod() == UserGroupInformation.AuthenticationMethod.PROXY && ugi.getRealUser() != null) {
+      ugi = ugi.getRealUser();
     }
-    return loginUser.doAs((PrivilegedExceptionAction<byte[]>) () -> {
+    if (ugi.isFromKeytab()) {
+      ugi.checkTGTAndReloginFromKeytab();
+    } else if (ugi.hasKerberosCredentials()) {
+      ugi.reloginFromTicketCache();
+    }
+    return ugi.doAs((PrivilegedExceptionAction<byte[]>) () -> {
       GSSManager manager = GSSManager.getInstance();
       GSSName serverName = manager.createName(spn, GSSName.NT_USER_NAME, org.apache.hadoop.security.authentication.util.KerberosUtil.GSS_KRB5_MECH_OID);
       GSSContext context = manager.createContext(serverName, org.apache.hadoop.security.authentication.util.KerberosUtil.GSS_KRB5_MECH_OID, null, GSSContext.DEFAULT_LIFETIME);
