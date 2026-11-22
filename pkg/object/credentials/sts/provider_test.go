@@ -19,6 +19,7 @@ package sts
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -140,5 +141,21 @@ func TestNewProviderFromEnvEnabled(t *testing.T) {
 	}
 	if p == nil {
 		t.Fatal("expected a provider")
+	}
+}
+
+func TestSanitizeError(t *testing.T) {
+	err := errors.New(`Post "https://sts.aliyuncs.com/?AccessKeyId=LTAI123&Action=AssumeRole&Signature=abc": connection refused`)
+	got := sanitizeError(err).Error()
+	if strings.Contains(got, "LTAI123") || strings.Contains(got, "Signature=abc") {
+		t.Fatalf("credentials were not redacted: %s", got)
+	}
+	if !strings.Contains(got, "<redacted>") {
+		t.Fatalf("expected redaction marker, got: %s", got)
+	}
+
+	got = sanitizeError(errors.New("failed with AccessKeyId=LTAI123&foo=bar")).Error()
+	if strings.Contains(got, "LTAI123") {
+		t.Fatalf("access key was not redacted: %s", got)
 	}
 }

@@ -18,7 +18,9 @@ package sts
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"sync"
 
 	"github.com/juicedata/juicefs/pkg/object/credentials"
@@ -66,9 +68,25 @@ func (p *Provider) Get(ctx context.Context) (credentials.Credentials, error) {
 
 	creds, err := p.client.AssumeRole(ctx, p.cfg)
 	if err != nil {
-		return credentials.Credentials{}, fmt.Errorf("assume role %s: %w", p.cfg.RoleARN, err)
+		return credentials.Credentials{}, fmt.Errorf("assume role %s: %w", p.cfg.RoleARN, sanitizeError(err))
 	}
 	return creds, nil
+}
+
+var (
+	urlQueryPattern  = regexp.MustCompile(`(https?://[^\s"?]+)\?[^\s"]*`)
+	accessKeyPattern = regexp.MustCompile(`(AccessKeyId=)[^&\s"]+`)
+)
+
+// sanitizeError removes credentials and signatures that some cloud SDKs put
+// into error messages (usually in request URLs) before the error is logged.
+func sanitizeError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := urlQueryPattern.ReplaceAllString(err.Error(), `$1?<redacted>`)
+	msg = accessKeyPattern.ReplaceAllString(msg, `${1}<redacted>`)
+	return errors.New(msg)
 }
 
 // NewClient creates the cloud-specific AssumeRole client.
