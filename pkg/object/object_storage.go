@@ -26,11 +26,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/aws/smithy-go/encoding/httpbinding"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -128,6 +131,22 @@ type FileSystem interface {
 }
 
 var notSupported = utils.ErrNotSUP
+
+// CheckKey returns an error wrapping utils.ErrUnsafeKey if key could escape the root of a storage that maps keys to paths.
+func CheckKey(key string) error {
+	if strings.IndexByte(key, 0) >= 0 {
+		return fmt.Errorf("%w: %q", utils.ErrUnsafeKey, key)
+	}
+	if !strings.Contains(key, "..") {
+		return nil
+	}
+	for _, e := range strings.FieldsFunc(key, func(r rune) bool { return r == '/' || runtime.GOOS == "windows" && r == '\\' }) {
+		if e == ".." {
+			return fmt.Errorf("%w: %q", utils.ErrUnsafeKey, key)
+		}
+	}
+	return nil
+}
 
 type DefaultObjectStorage struct{}
 
@@ -247,12 +266,17 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 	walk = func(prefix string, entries []Object) error {
 		var concurrent = 10
 		var err error
+		var stopped atomic.Bool
+		defer stopped.Store(true)
 		threads := make([]listThread, concurrent)
 		for c := 0; c < concurrent; c++ {
 			t := &threads[c]
 			t.cond = utils.NewCond(t)
 			go func(c int) {
 				for i := c; i < len(entries); i += concurrent {
+					if stopped.Load() {
+						return
+					}
 					key := entries[i].Key()
 					if end != "" && key >= end {
 						break
@@ -269,7 +293,7 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 					t.cond.Signal()
 					for t.ready {
 						t.cond.WaitWithTimeout(time.Second)
-						if err != nil {
+						if stopped.Load() {
 							t.Unlock()
 							return
 						}
@@ -456,6 +480,11 @@ func NewTiers(defaultSc string) Tiers {
 		Sc: defaultSc,
 	}
 	return t
+}
+
+// encodeCopySource escapes a copy-source header without encoding path separators.
+func encodeCopySource(bucket, key string) string {
+	return httpbinding.EscapePath(bucket+"/"+key, false)
 }
 
 func getOrDefaultScValue(v, defaultValue string) string {

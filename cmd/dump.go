@@ -19,6 +19,7 @@ package cmd
 import (
 	"compress/gzip"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -58,7 +59,7 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "subdir",
-				Usage: "only dump a sub-directory",
+				Usage: "only dump a sub-directory (must already exist)",
 			},
 			&cli.BoolFlag{
 				Name:  "keep-secret-key",
@@ -153,8 +154,8 @@ func dump(ctx *cli.Context) error {
 	if _, err := m.Load(true); err != nil {
 		return err
 	}
-	if st := m.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
-		return st
+	if st := m.Chroot(meta.Background(), metaConf.Subdir, true); st != 0 {
+		return fmt.Errorf("chroot to %q: %s", metaConf.Subdir, st)
 	}
 
 	threads := ctx.Int("threads")
@@ -163,7 +164,18 @@ func dump(ctx *cli.Context) error {
 		threads = 1
 	}
 
-	err := dumpMeta(m, dst, threads, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash"), ctx.Bool("binary"))
+	isBinary := ctx.Bool("binary")
+	if isBinary {
+		for _, flag := range []string{"subdir", "fast", "skip-trash"} {
+			if ctx.IsSet(flag) {
+				logger.Warnf("--%s is ignored with --binary", flag)
+			}
+		}
+	} else if strings.Trim(metaConf.Subdir, "/") != "" && ctx.Bool("fast") {
+		logger.Warnf("--fast is ignored with --subdir")
+	}
+
+	err := dumpMeta(m, dst, threads, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash"), isBinary)
 	if err == nil {
 		if dst == "" {
 			dst = "STDOUT"

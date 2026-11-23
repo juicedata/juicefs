@@ -75,7 +75,7 @@ func TestBackup(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 
 	blob = object.WithPrefix(blob, "meta/")
-	kc, _ := object.ListAll(context.TODO(), blob, "", "", true, false)
+	kc, _ := object.ListAll(object.WithUnorderedList(context.TODO()), blob, "", "", true)
 	var keys []string
 	for obj := range kc {
 		keys = append(keys, obj.Key())
@@ -111,7 +111,7 @@ func TestUsedInodesWithSubdir(t *testing.T) {
 
 	var dummy, want uint64
 	_ = m.StatFS(ctx, 0, &dummy, &dummy, &want, &dummy)
-	if st := m.Chroot(ctx, "sub"); st != 0 {
+	if st := m.Chroot(ctx, "sub", false); st != 0 {
 		t.Fatalf("chroot sub: %s", st)
 	}
 	var subUsed uint64

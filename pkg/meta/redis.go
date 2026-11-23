@@ -1247,7 +1247,7 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 		}
 		delta.length = int64(length) - int64(t.Length)
 		delta.space = align4K(length) - align4K(t.Length)
-		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(ctx, tx, inode, t.Parent, t.Nlink)...); err != 0 {
 			return err
 		}
 		var zeroChunks []uint32
@@ -1347,7 +1347,7 @@ func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, 
 		old := t.Length
 		delta.length = int64(length) - int64(old)
 		delta.space = align4K(length) - align4K(old)
-		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(ctx, tx, inode, t.Parent, t.Nlink)...); err != 0 {
 			return err
 		}
 		t.Length = length
@@ -1945,7 +1945,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 					pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 					pipe.Decr(ctx, m.totalInodesKey())
 				}
-				pipe.Del(ctx, m.xattrKey(inode))
+				if !opened { // an open file keeps its xattrs until doDeleteSustainedInode
+					pipe.Del(ctx, m.xattrKey(inode))
+				}
 				if attr.Parent == 0 {
 					pipe.Del(ctx, m.parentKey(inode))
 				}
@@ -2214,9 +2216,11 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 						}
 						inodes[info.inode] = info.attr
 					} else {
+						dnode := delNodes[info.inode]
+						opened := dnode != nil && dnode.opened
 						switch info.typ {
 						case TypeFile:
-							if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
+							if opened {
 								if inodes == nil {
 									inodes = make(map[Ino]*Attr)
 								}
@@ -2255,7 +2259,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 								Inodes: -1,
 							})
 						}
-						keys = append(keys, m.xattrKey(info.inode))
+						if !opened {
+							keys = append(keys, m.xattrKey(info.inode))
+						}
 						if info.attr.Parent == 0 {
 							keys = append(keys, m.parentKey(info.inode))
 						}
@@ -2780,7 +2786,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 							pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 							pipe.Decr(ctx, m.totalInodesKey())
 						}
-						pipe.Del(ctx, m.xattrKey(dino))
+						if !opened {
+							pipe.Del(ctx, m.xattrKey(dino))
+						}
 						if tattr.Parent == 0 {
 							pipe.Del(ctx, m.parentKey(dino))
 						}
@@ -2870,7 +2878,13 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 			return syscall.EPERM
 		}
 		oldParent := iattr.Parent
-		iattr.Parent = 0
+		// an open inode with no links left (O_TMPFILE) becomes a plain single-parent file
+		unlinked := iattr.Nlink == 0
+		if unlinked {
+			iattr.Parent = parent
+		} else {
+			iattr.Parent = 0
+		}
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
 		iattr.Nlink++
@@ -2890,10 +2904,14 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&iattr), 0)
-			if oldParent > 0 {
-				pipe.HIncrBy(ctx, m.parentKey(inode), oldParent.String(), 1)
+			if unlinked {
+				pipe.SRem(ctx, m.sustained(m.sessionID()), strconv.Itoa(int(inode)))
+			} else {
+				if oldParent > 0 {
+					pipe.HIncrBy(ctx, m.parentKey(inode), oldParent.String(), 1)
+				}
+				pipe.HIncrBy(ctx, m.parentKey(inode), parent.String(), 1)
 			}
-			pipe.HIncrBy(ctx, m.parentKey(inode), parent.String(), 1)
 			m.genLog(ctx, pipe, now, "LINK(%d,%d,%s,%t):%d", inode, parent, logEncode2(name), updateParent, iattr.Nlink)
 			return nil
 		})
@@ -3134,10 +3152,25 @@ func (m *redisMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) e
 			return err
 		}
 		m.parseAttr(a, &attr)
+		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold.
+		// sid 0 holds nothing; it comes from cleanupLeakedInodes, which deletes an unreachable inode anyway.
+		if attr.Nlink > 0 && sid > 0 {
+			held, err := tx.SIsMember(ctx, m.sustained(sid), strconv.Itoa(int(inode))).Result()
+			if err != nil || !held {
+				return err
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
+				m.genLog(ctx, pipe, m.now(), "DELSUSTAINED(%d,%d)", sid, inode)
+				return nil
+			})
+			return err
+		}
 		newSpace = -align4K(attr.Length)
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(m.now().Unix()), Member: m.toDelete(inode, attr.Length)})
 			pipe.Del(ctx, m.inodeKey(inode))
+			pipe.Del(ctx, m.xattrKey(inode))
 			pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 			pipe.Decr(ctx, m.totalInodesKey())
 			pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
@@ -3215,7 +3248,7 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 			delta.space = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, delta.space, 0, attr.Uid, attr.Gid, m.getParents(ctx, tx, inode, attr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, attr.Uid, attr.Gid, m.getParents(ctx, tx, inode, attr.Parent, attr.Nlink)...); err != 0 {
 			return err
 		}
 		now := m.now()
@@ -3292,7 +3325,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, attr.Uid, attr.Gid, m.getParents(ctx, tx, fout, attr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, newSpace, 0, attr.Uid, attr.Gid, m.getParents(ctx, tx, fout, attr.Parent, attr.Nlink)...); err != 0 {
 			return err
 		}
 		now := m.now()
@@ -3377,13 +3410,16 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		return err
 	}, m.inodeKey(fout), m.inodeKey(fin))
 	if err == nil {
-		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
+		m.updateParentStat(ctx, fout, attr.Parent, attr.Nlink, newLength, newSpace)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, 0)
 	}
 	return errno(err)
 }
 
-func (m *redisMeta) getParents(ctx Context, tx *redis.Tx, inode, parent Ino) []Ino {
+func (m *redisMeta) getParents(ctx Context, tx *redis.Tx, inode, parent Ino, nlink uint32) []Ino {
+	if nlink == 0 { // an open file without links belongs to no directory
+		return nil
+	}
 	if parent > 0 {
 		return []Ino{parent}
 	}
@@ -3961,7 +3997,7 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 	cutoff := time.Now().Add(time.Hour * -1)
 	prefix := len(m.prefix)
 
-	_ = m.scan(ctx, "d[0-9]*", func(keys []string) error {
+	if err := m.scan(ctx, "d[0-9]*", func(keys []string) error {
 		for _, key := range keys {
 			ino, _ := strconv.Atoi(key[prefix+1:])
 			var entries []*Entry
@@ -3975,7 +4011,27 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		logger.Warnf("Skip cleaning up leaked inodes: scan directories: %s", err)
+		return
+	}
+	if err := m.scan(ctx, "session[0-9]*", func(keys []string) error {
+		for _, key := range keys {
+			inodes, err := m.rdb.SMembers(ctx, key).Result()
+			if err != nil {
+				logger.Errorf("SMembers %s: %s", key, err)
+				return err
+			}
+			for _, s := range inodes {
+				ino, _ := strconv.Atoi(s)
+				foundInodes[Ino(ino)] = struct{}{}
+			}
+		}
+		return nil
+	}); err != nil {
+		logger.Warnf("Skip cleaning up leaked inodes: scan sustained inodes: %s", err)
+		return
+	}
 	_ = m.scan(ctx, "i*", func(keys []string) error {
 		values, err := m.rdb.MGet(ctx, keys...).Result()
 		if err != nil {
@@ -5147,10 +5203,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 		GroupQuotas: groupQuotas,
 	}
 	root = m.checkRoot(root)
-	if root != RootInode {
-		dm.UserQuotas = nil
-		dm.GroupQuotas = nil
-	}
+	scopeSubdirDump(dm, root, m.dumpParent(ctx))
 	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")

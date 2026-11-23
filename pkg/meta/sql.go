@@ -1729,7 +1729,7 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		delta.length = int64(length) - int64(nodeAttr.Length)
 		delta.space = align4K(length) - align4K(nodeAttr.Length)
-		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent, nodeAttr.Nlink)...); err != 0 {
 			return err
 		}
 		var zeroChunks []chunk
@@ -1811,7 +1811,7 @@ func (m *dbMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		old := nodeAttr.Length
 		delta.length = int64(length) - int64(old)
 		delta.space = align4K(length) - align4K(old)
-		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent, nodeAttr.Nlink)...); err != 0 {
 			return err
 		}
 		now := m.now().UnixNano()
@@ -2299,8 +2299,10 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				}
 				newSpace, newInode = -align4K(0), -1
 			}
-			if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
-				return err
+			if !opened { // an open file keeps its xattrs until doDeleteSustainedInode
+				if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
+					return err
+				}
 			}
 		}
 		if updateParent {
@@ -2770,8 +2772,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						}
 						newSpace, newInode = -align4K(0), -1
 					}
-					if _, err := s.Delete(&xattr{Inode: dino}); err != nil {
-						return err
+					if !opened {
+						if _, err := s.Delete(&xattr{Inode: dino}); err != nil {
+							return err
+						}
 					}
 				}
 				if err := deleteEdge(s, &de); err != nil {
@@ -2919,12 +2923,23 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			pn.setCtime(now)
 			updateParent = true
 		}
-		n.Parent = 0
+		// an open inode with no links left (O_TMPFILE) becomes a plain single-parent file
+		unlinked := n.Nlink == 0
+		if unlinked {
+			n.Parent = parent
+		} else {
+			n.Parent = 0
+		}
 		n.Nlink++
 		n.setCtime(now)
 
 		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: inode, Type: n.Type}); err != nil {
 			return err
+		}
+		if unlinked {
+			if _, err = s.Delete(&sustained{Sid: m.sessionID(), Inode: inode}); err != nil {
+				return err
+			}
 		}
 		if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(&n, node{Inode: inode}); err != nil {
 			return err
@@ -3188,10 +3203,12 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					} else {
 						// last link removed: prepare to delete inode and related rows
 						var entrySpace int64
+						dnode := batchDelNodes[info.n.Inode]
+						opened := dnode != nil && dnode.opened
 						switch info.n.Type {
 						case TypeFile:
 							entrySpace = align4K(info.n.Length)
-							if dnode, ok := batchDelNodes[info.n.Inode]; ok && dnode.opened {
+							if opened {
 								sustainedIns = append(sustainedIns, &sustained{Sid: m.sessionID(), Inode: info.e.Inode})
 								if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 									return err
@@ -3228,7 +3245,9 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 								})
 							}
 						}
-						xattrsDel = append(xattrsDel, info.e.Inode)
+						if !opened {
+							xattrsDel = append(xattrsDel, info.e.Inode)
+						}
 					}
 					invalidatedInodes[info.e.Inode] = struct{}{}
 				}
@@ -3507,12 +3526,23 @@ func (m *dbMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) erro
 		if !ok {
 			return nil
 		}
+		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold
+		if n.Nlink > 0 && sid > 0 {
+			held, err := s.Delete(&sustained{Sid: sid, Inode: inode})
+			if err == nil && held > 0 {
+				m.genLog(Background(), s, m.now().UnixNano(), "DELSUSTAINED(%d,%d)", sid, inode)
+			}
+			return err
+		}
 		newSpace = -align4K(n.Length)
 		if err = mustInsert(s, &delfile{inode, n.Length, m.now().Unix()}); err != nil {
 			return err
 		}
 		_, err = s.Delete(&sustained{Sid: sid, Inode: inode})
 		if err != nil {
+			return err
+		}
+		if _, err = s.Delete(&xattr{Inode: inode}); err != nil {
 			return err
 		}
 		_, err = s.Delete(&node{Inode: inode})
@@ -3578,7 +3608,7 @@ func (m *dbMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 			delta.space = align4K(newleng) - align4K(nodeAttr.Length)
 			nodeAttr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent, nodeAttr.Nlink)...); err != 0 {
 			return err
 		}
 		now := m.now().UnixNano()
@@ -3651,7 +3681,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, nout.Uid, nout.Gid, m.getParents(s, fout, nout.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, newSpace, 0, nout.Uid, nout.Gid, m.getParents(s, fout, nout.Parent, nout.Nlink)...); err != 0 {
 			return err
 		}
 		now := m.now().UnixNano()
@@ -3737,13 +3767,16 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		return nil
 	}, fout)
 	if err == nil {
-		m.updateParentStat(ctx, fout, nout.Parent, newLength, newSpace)
+		m.updateParentStat(ctx, fout, nout.Parent, nout.Nlink, newLength, newSpace)
 		m.updateUserGroupStat(ctx, nout.Uid, nout.Gid, newSpace, 0)
 	}
 	return errno(err)
 }
 
-func (m *dbMeta) getParents(s *xorm.Session, inode, parent Ino) []Ino {
+func (m *dbMeta) getParents(s *xorm.Session, inode, parent Ino, nlink uint32) []Ino {
+	if nlink == 0 { // an open file without links belongs to no directory
+		return nil
+	}
 	if parent > 0 {
 		return []Ino{parent}
 	}
@@ -5307,10 +5340,15 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			UserQuotas:  userQuotas,
 			GroupQuotas: groupQuotas,
 		}
-		if root != RootInode {
-			dm.UserQuotas = nil
-			dm.GroupQuotas = nil
-		}
+		scopeSubdirDump(&dm, root, func(inode Ino) (Ino, error) {
+			n := node{Inode: inode}
+			if ok, err := s.Get(&n); err != nil {
+				return 0, err
+			} else if !ok {
+				return 0, syscall.ENOENT
+			}
+			return n.Parent, nil
+		})
 		if !keepSecret && dm.Setting.SecretKey != "" {
 			dm.Setting.SecretKey = "removed"
 			logger.Warnf("Secret key is removed for the sake of safety")

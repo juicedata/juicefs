@@ -301,6 +301,116 @@ func TestBucketLifecycleLockCancellation(t *testing.T) {
 	next.Unlock()
 }
 
+type copyHookMeta struct {
+	meta.Meta
+	hook func(copy func() syscall.Errno) syscall.Errno
+}
+
+func (m *copyHookMeta) CopyFileRange(ctx meta.Context, fin meta.Ino, offIn uint64, fout meta.Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
+	return m.hook(func() syscall.Errno {
+		return m.Meta.CopyFileRange(ctx, fin, offIn, fout, offOut, size, flags, copied, outLength)
+	})
+}
+
+// Two gateway instances share the same volume but not the in-process object
+// locks, so a retried CompleteMultipartUpload can run on both at once.
+func TestCompleteMultipartUploadAcrossGateways(t *testing.T) {
+	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "gateway-complete.db")
+	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
+	m1 := &copyHookMeta{Meta: meta.NewClient(metaURL, nil)}
+	if err := m1.Init(format, true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+	m2 := &copyHookMeta{Meta: meta.NewClient(metaURL, nil)}
+	if _, err := m2.Load(true); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+	for _, m := range []meta.Meta{m1, m2} {
+		if err := m.NewSession(true); err != nil {
+			t.Fatalf("new session: %s", err)
+		}
+		defer m.CloseSession()
+	}
+	g1, _ := newTestGatewayWithMeta(t, m1, format, Config{})
+	g2, _ := newTestGatewayWithMeta(t, m2, format, Config{})
+	ctx := context.Background()
+	bucket, object := format.Name, "target"
+
+	uploadID, err := g1.NewMultipartUpload(ctx, bucket, object, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []byte
+	var parts []minio.CompletePart
+	for i := 1; i <= 3; i++ {
+		data := bytes.Repeat([]byte{byte('a' + i)}, 1024)
+		part, err := g1.PutObjectPart(ctx, bucket, object, uploadID, i, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		parts = append(parts, minio.CompletePart{PartNumber: i, ETag: part.ETag})
+		want = append(want, data...)
+	}
+
+	// Pause the first gateway after its first merge copy and the second gateway
+	// before its first one, then let the first gateway finish.
+	firstPaused, resumeFirst := make(chan error), make(chan struct{})
+	secondPaused, resumeSecond := make(chan error), make(chan struct{})
+	var once1, once2 sync.Once
+	m1.hook = func(copy func() syscall.Errno) syscall.Errno {
+		eno := copy()
+		once1.Do(func() { close(firstPaused); <-resumeFirst })
+		return eno
+	}
+	m2.hook = func(copy func() syscall.Errno) syscall.Errno {
+		once2.Do(func() { close(secondPaused); <-resumeSecond })
+		return copy()
+	}
+	complete := func(g *jfsObjects) <-chan error {
+		done := make(chan error, 1)
+		go func() {
+			_, err := g.CompleteMultipartUpload(ctx, bucket, object, uploadID, parts, minio.ObjectOptions{})
+			done <- err
+		}()
+		return done
+	}
+	wait := func(ch <-chan error, what string) error {
+		t.Helper()
+		select {
+		case err := <-ch:
+			return err
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timed out waiting for %s", what)
+			return nil
+		}
+	}
+	checkObject := func(when string) {
+		t.Helper()
+		r, err := g1.GetObjectNInfo(ctx, bucket, object, nil, nil, 0, minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("get object %s: %s", when, err)
+		}
+		defer r.Close()
+		if got, _ := io.ReadAll(r); !bytes.Equal(got, want) {
+			t.Fatalf("object corrupted %s: got %d bytes, md5 %x, want md5 %x", when, len(got), md5.Sum(got), md5.Sum(want))
+		}
+	}
+
+	first := complete(g1)
+	wait(firstPaused, "first gateway to merge part 1")
+	second := complete(g2)
+	wait(secondPaused, "second gateway to start merging")
+	close(resumeFirst)
+	if err := wait(first, "first complete"); err != nil {
+		t.Fatalf("first complete: %s", err)
+	}
+	checkObject("after first complete")
+
+	close(resumeSecond)
+	_ = wait(second, "second complete") // may fail with NoSuchUpload once the first complete removed the parts
+	checkObject("after second complete")
+}
+
 func TestBucketLifecycleLockAcrossGateways(t *testing.T) {
 	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "gateway-lock.db")
 	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
@@ -973,6 +1083,165 @@ func TestDeleteObjects(t *testing.T) {
 			[]minio.ObjectToDelete{{ObjectName: "../jmrqfoo/x"}}, minio.ObjectOptions{})
 		if _, eno := jfs.Stat(mctx, "/jmrqfoo"); eno != 0 {
 			t.Fatalf("sibling bucket dir /jmrqfoo must not be pruned, got: %s", eno)
+		}
+	})
+
+	t.Run("fill deleted object for every key", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		bucket := "bkt3"
+		if eno := jfs.Mkdir(mctx, "/"+bucket, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir bucket: %s", eno)
+		}
+		createTestFile(t, jfs, "/"+bucket+"/ok1")
+		createTestFile(t, jfs, "/"+bucket+"/ok2")
+
+		reqs := []minio.ObjectToDelete{
+			{ObjectName: "ok1"},
+			{ObjectName: "missing-dir/child"}, // parent was never created, so it is already gone
+			{ObjectName: "ok2"},
+		}
+		objs, errs := jfsObj.DeleteObjects(context.Background(), bucket, reqs, minio.ObjectOptions{})
+		if len(objs) != len(reqs) {
+			t.Fatalf("got %d objs, want %d", len(objs), len(reqs))
+		}
+		// The minio handler maps each result back to its request index via the
+		// fields of objs[idx], so every entry must carry its key even when the
+		// delete fails.
+		for i, req := range reqs {
+			if objs[i].ObjectName != req.ObjectName {
+				t.Fatalf("objs[%d].ObjectName = %q, want %q", i, objs[i].ObjectName, req.ObjectName)
+			}
+		}
+		for i, e := range errs {
+			if e != nil {
+				t.Fatalf("delete %s: %s", reqs[i].ObjectName, e)
+			}
+		}
+	})
+
+	setImmutable := func(t *testing.T, jfs *fs.FileSystem, p string) {
+		t.Helper()
+		fi, eno := jfs.Stat(mctx, p)
+		if eno != 0 {
+			t.Fatalf("stat %s: %s", p, eno)
+		}
+		if eno = jfs.Meta().SetAttr(mctx, fi.Inode(), meta.SetAttrFlag, 0, &meta.Attr{Flags: meta.FlagImmutable}); eno != 0 {
+			t.Fatalf("set immutable %s: %s", p, eno)
+		}
+	}
+
+	t.Run("report errors per key when batch fails", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		bucket := "bkt4"
+		if eno := jfs.Mkdir(mctx, "/"+bucket, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir bucket: %s", eno)
+		}
+		for _, name := range []string{"ok1", "locked", "ok2"} {
+			createTestFile(t, jfs, "/"+bucket+"/"+name)
+		}
+		setImmutable(t, jfs, "/"+bucket+"/locked") // aborts the whole BatchUnlink with EPERM
+
+		reqs := []minio.ObjectToDelete{{ObjectName: "ok1"}, {ObjectName: "locked"}, {ObjectName: "ok2"}}
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket, reqs, minio.ObjectOptions{})
+		if errs[0] != nil || errs[2] != nil {
+			t.Fatalf("ok keys should succeed: errs[0]=%v, errs[2]=%v", errs[0], errs[2])
+		}
+		if errs[1] == nil {
+			t.Fatalf("immutable key should fail")
+		}
+		assertHeadObject(t, jfsObj, bucket, "ok1", false)
+		assertHeadObject(t, jfsObj, bucket, "ok2", false)
+		assertHeadObject(t, jfsObj, bucket, "locked", true)
+	})
+
+	t.Run("prune failure does not fail delete", func(t *testing.T) {
+		jfsObj, jfs, _ := newTestGateway(t, Config{MultiBucket: true})
+		bucket := "bkt5"
+		if eno := jfs.Mkdir(mctx, "/"+bucket, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir bucket: %s", eno)
+		}
+		for _, dir := range []string{"x", "y"} {
+			if eno := jfs.Mkdir(mctx, "/"+bucket+"/"+dir, 0777, 022); eno != 0 {
+				t.Fatalf("mkdir %s: %s", dir, eno)
+			}
+			createTestFile(t, jfs, "/"+bucket+"/"+dir+"/f")
+		}
+		setImmutable(t, jfs, "/"+bucket) // pruning the emptied x and y fails with EPERM
+
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "x/f"}}, minio.ObjectOptions{})
+		if errs[0] != nil {
+			t.Fatalf("DeleteObjects x/f: %s", errs[0])
+		}
+		if _, err := jfsObj.DeleteObject(context.Background(), bucket, "y/f", minio.ObjectOptions{}); err != nil {
+			t.Fatalf("DeleteObject y/f: %s", err)
+		}
+		assertHeadObject(t, jfsObj, bucket, "x/f", false)
+		assertHeadObject(t, jfsObj, bucket, "y/f", false)
+	})
+
+	mkdirObject := func(t *testing.T, jfsObj *jfsObjects, jfs *fs.FileSystem, p string) {
+		t.Helper()
+		if eno := jfs.Mkdir(mctx, p, 0777, 022); eno != 0 {
+			t.Fatalf("mkdir %s: %s", p, eno)
+		}
+		jfsObj.setFileAtime(p, 0)
+	}
+
+	t.Run("match trailing slash of the key", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		mkdirObject(t, jfsObj, jfs, "/dir")
+		createTestFile(t, jfs, "/file")
+
+		for _, key := range []string{"dir", "file/"} {
+			if _, err := jfsObj.DeleteObject(context.Background(), bucket, key, minio.ObjectOptions{}); err != nil {
+				t.Fatalf("DeleteObject %s: %s", key, err)
+			}
+		}
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "dir"}, {ObjectName: "file/"}}, minio.ObjectOptions{})
+		for _, e := range errs {
+			if e != nil {
+				t.Fatalf("DeleteObjects: %s", e)
+			}
+		}
+		assertHeadObject(t, jfsObj, bucket, "dir/", true)
+		assertHeadObject(t, jfsObj, bucket, "file", true)
+	})
+
+	t.Run("keep directory object when batch retries", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		mkdirObject(t, jfsObj, jfs, "/dir")
+		createTestFile(t, jfs, "/locked")
+		setImmutable(t, jfs, "/locked") // forces the per-key retry
+
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "dir"}, {ObjectName: "locked"}}, minio.ObjectOptions{})
+		if errs[0] != nil || errs[1] == nil {
+			t.Fatalf("got errs %v, want only locked to fail", errs)
+		}
+		assertHeadObject(t, jfsObj, bucket, "dir/", true)
+	})
+
+	t.Run("delete directory objects", func(t *testing.T) {
+		jfsObj, jfs, bucket := newTestGateway(t, Config{})
+		mkdirObject(t, jfsObj, jfs, "/a")
+		mkdirObject(t, jfsObj, jfs, "/b")
+		createTestFile(t, jfs, "/a/f")
+		createTestFile(t, jfs, "/b/f")
+
+		// a/ keeps its child; b/ is emptied by the same batch and removed.
+		_, errs := jfsObj.DeleteObjects(context.Background(), bucket,
+			[]minio.ObjectToDelete{{ObjectName: "a/"}, {ObjectName: "b/"}, {ObjectName: "b/f"}}, minio.ObjectOptions{})
+		for _, e := range errs {
+			if e != nil {
+				t.Fatalf("DeleteObjects: %s", e)
+			}
+		}
+		assertHeadObject(t, jfsObj, bucket, "a/", false)
+		assertHeadObject(t, jfsObj, bucket, "a/f", true)
+		if _, eno := jfs.Stat(mctx, "/b"); eno != syscall.ENOENT {
+			t.Fatalf("stat /b: got %s, want ENOENT", eno)
 		}
 	})
 }

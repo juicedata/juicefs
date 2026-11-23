@@ -46,6 +46,7 @@ type Config struct {
 	OpenCache          time.Duration
 	OpenCacheLimit     uint64 // max number of files to cache (soft limit)
 	Heartbeat          time.Duration
+	SessionTimeout     time.Duration
 	MountPoint         string
 	Subdir             string
 	AtimeMode          string

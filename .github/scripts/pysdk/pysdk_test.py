@@ -1,14 +1,18 @@
 import errno
 from array import array
 import fractions
+import grp
+import hashlib
 import io
 import unittest
+from unittest.mock import patch
 import os
 import pwd
 import stat
 from os.path import dirname
 import sys
 import time
+import types
 sys.path.append('.')
 from sdk.python.juicefs.juicefs import juicefs
 from bench import seq_write, random_write, seq_read, random_read
@@ -20,8 +24,11 @@ meta_url=os.environ.get('META_URL', 'redis://localhost')
 
 
 class FileTests(unittest.TestCase):
+    def open_client(self):
+        return juicefs.Client("test-volume", meta=meta_url, access_log="/tmp/access.log")
+
     def setUp(self):
-        self.v = juicefs.Client("test-volume", meta=meta_url, access_log="/tmp/access.log")
+        self.v = self.open_client()
         if not self.v.exists(TESTFN):
             self.v.mkdir(TESTFN)
 
@@ -52,6 +59,48 @@ class FileTests(unittest.TestCase):
 
 
 class ReadintoTests(FileTests):
+    def test_readinto_large_sliced_buffer(self):
+        content = bytes(range(256)) * (1 << 15) + b'end'
+        self.create_file(TESTFILE, content)
+        expected = hashlib.sha256(content).digest()
+        for buffering in (0, 8192):
+            with self.subTest(buffering=buffering):
+                storage = bytearray(b'x' * (len(content) + 11))
+                with memoryview(storage) as view, view[3:-8] as target:
+                    with self.v.open(TESTFILE, 'rb', buffering) as stream:
+                        self.assertEqual(stream.readinto(target), len(content))
+                        self.assertEqual(stream.tell(), len(content))
+                        self.assertEqual(stream.readinto(target), 0)
+                    self.assertEqual(hashlib.sha256(target).digest(), expected)
+                self.assertEqual(storage[:3], b'xxx')
+                self.assertEqual(storage[-8:], b'xxxxxxxx')
+                storage.extend(b'!')
+
+    def test_readinto_releases_buffer_after_error(self):
+        self.create_file(TESTFILE, b'abcdefgh')
+        for buffering in (0, 8192):
+            # ok_calls=1 fails after a partial native read.
+            for ok_calls in (0, 1):
+                with self.subTest(buffering=buffering, ok_calls=ok_calls):
+                    data = bytearray(16)
+                    with self.v.open(TESTFILE, 'rb', buffering) as stream:
+                        lib = stream._file.lib
+                        native_read = lib.jfs_pread
+                        calls = [0]
+
+                        def flaky_read(*args):
+                            if calls[0] >= ok_calls:
+                                raise OSError(errno.EIO, 'read failure')
+                            calls[0] += 1
+                            return native_read(*args)
+
+                        with patch.object(lib, 'jfs_pread', side_effect=flaky_read):
+                            with self.assertRaises(OSError) as caught:
+                                stream.readinto(data)
+                        self.assertEqual(caught.exception.errno, errno.EIO)
+                        self.assertEqual(stream.tell(), 0)
+                    data.extend(b'x')
+
     def test_readinto_writable_buffers(self):
         content = b"abcdefghijk"
         self.create_file(TESTFILE, content)
@@ -87,6 +136,103 @@ class ReadintoTests(FileTests):
                             stream.readinto(buffer)
                         self.assertEqual(stream.tell(), position)
                         self.assertEqual(stream.read(), content[position:])
+
+
+class SeekTests(FileTests):
+    def test_seek_invalid_position_preserves_stream(self):
+        content = b'abcdef'
+        self.create_file(TESTFILE, content)
+        for buffering in (0, 8):
+            for offset, whence in ((-1, os.SEEK_SET), (-3, os.SEEK_CUR), (-7, os.SEEK_END)):
+                with self.subTest(buffering=buffering, offset=offset, whence=whence):
+                    with self.v.open(TESTFILE, 'r+b', buffering) as stream:
+                        stream.seek(2)
+                        with self.assertRaises(OSError):
+                            stream.seek(offset, whence)
+                        self.assertEqual(stream.tell(), 2)
+                        self.assertEqual(stream.read(1), b'c')
+
+    def test_seek_overflow_does_not_wrap_native_offset(self):
+        self.create_file(TESTFILE, b'abcdef')
+        with self.v.open(TESTFILE, 'r+b', 0) as stream:
+            stream.seek(2)
+            for offset, whence in (((1 << 64), os.SEEK_SET),
+                                   ((1 << 63), os.SEEK_SET),
+                                   (-(1 << 63) - 1, os.SEEK_SET),
+                                   ((1 << 63) - 1, os.SEEK_CUR),
+                                   ((1 << 63) - 1, os.SEEK_END)):
+                with self.subTest(offset=offset, whence=whence):
+                    with self.assertRaises(OverflowError):
+                        stream.seek(offset, whence)
+                    self.assertEqual(stream.tell(), 2)
+            stream.write(b'Z')
+            stream.seek(0)
+            self.assertEqual(stream.read(), b'abZdef')
+
+    def test_seek_requires_integer_arguments(self):
+        class Index:
+            def __index__(self):
+                return 1
+
+        self.create_file(TESTFILE, b'abcdef')
+        with self.v.open(TESTFILE, 'rb', 0) as stream:
+            stream.seek(2)
+            for offset, whence in ((1.5, 0), (1, 0.0), (1, 3)):
+                with self.subTest(offset=offset, whence=whence):
+                    with self.assertRaises((TypeError, ValueError)):
+                        stream.seek(offset, whence)
+                    self.assertEqual(stream.tell(), 2)
+            self.assertEqual(stream.seek(Index(), Index()), 3)
+            self.assertEqual(stream.read(1), b'd')
+            self.assertEqual(stream.seek(-1, os.SEEK_END), 5)
+            self.assertEqual(stream.read(), b'f')
+
+
+class TruncateTests(FileTests):
+    def test_truncate_invalid_size_preserves_data(self):
+        content = b'abcdef'
+        cases = ((-1, OSError), (1 << 63, OverflowError),
+                 (1 << 64, OverflowError), ((1 << 64) + 3, OverflowError),
+                 (-(1 << 64) + 3, OverflowError), (1.5, TypeError), ('3', TypeError))
+        for buffering in (None, 0, 8):
+            for index, (size, error) in enumerate(cases):
+                with self.subTest(buffering=buffering, size=size):
+                    path = f'{TESTFILE}-{buffering}-{index}'
+                    self.create_file(path, content)
+                    if buffering is None:
+                        with self.assertRaises(error) as raised:
+                            self.v.truncate(path, size)
+                    else:
+                        with self.v.open(path, 'r+b', buffering) as stream:
+                            stream.seek(2)
+                            with self.assertRaises(error) as raised:
+                                stream.truncate(size)
+                            self.assertEqual(stream.tell(), 2)
+                    if size == -1:
+                        self.assertEqual(raised.exception.errno, errno.EINVAL)
+                    with self.v.open(path, 'rb', 0) as stream:
+                        self.assertEqual(stream.read(), content)
+
+    def test_truncate_valid_sizes(self):
+        class Index:
+            def __index__(self):
+                return 3
+
+        for buffering in (0, 8):
+            with self.subTest(buffering=buffering):
+                path = f'{TESTFILE}-{buffering}'
+                self.create_file(path, b'abcdef')
+                with self.v.open(path, 'r+b', buffering) as stream:
+                    stream.seek(2)
+                    self.assertEqual(stream.truncate(Index()), 3)
+                    self.assertEqual(stream.tell(), 2)
+                    self.assertEqual(stream.truncate(), 2)
+                    self.assertEqual(stream.tell(), 2)
+                self.v.truncate(path, Index())
+                with self.v.open(path, 'rb', 0) as stream:
+                    self.assertEqual(stream.read(), b'ab\x00')
+                self.v.truncate(path, False)
+                self.assertEqual(self.v.stat(path).st_size, 0)
 
 
 class UtimeTests(FileTests):
@@ -130,6 +276,37 @@ class MakedirTests(FileTests):
 
 
 class ChownFileTests(FileTests):
+    def test_root_group_read_permissions(self):
+        self.v.chmod(TESTFN, 0o755)
+        self.create_file(TESTFILE)
+        users = {0: pwd.struct_passwd(("root", "x", 0, 0, "", "/", "")),
+                 1001: pwd.struct_passwd(("sdk-member", "x", 1001, 1001, "", "/", ""))}
+        groups = {gid: grp.struct_group((name, "x", gid, []))
+                  for gid, name in [(0, "root"), (1, "adm"), (1001, "sdk-members")]}
+        # Legacy hash of "root" on "test-volume"; SQL engines use a 31-bit GID.
+        legacy_gid = 2730912965
+        if meta_url.startswith(("sqlite3://", "mysql://", "postgres://")):
+            legacy_gid &= 0x7fffffff
+        for root_groups, file_gid, denied_mode in [([0], 0, 0o400), ([0, 1], legacy_gid, 0o404)]:
+            with self.subTest(root_groups=root_groups):
+                self.v.chown(TESTFILE, 0, file_gid)
+                self.v.chmod(TESTFILE, denied_mode)
+                memberships = {"root": root_groups, "sdk-member": [1001, 0]}
+                with patch.object(os, "geteuid", return_value=1001), \
+                        patch.object(pwd, "getpwuid", side_effect=users.__getitem__), \
+                        patch.object(grp, "getgrgid", side_effect=groups.__getitem__), \
+                        patch.object(os, "getgrouplist", side_effect=lambda name, gid: memberships[name]):
+                    member = self.open_client()
+                self.addCleanup(member.close)
+                with self.assertRaises(OSError) as denied:
+                    with member.open(TESTFILE, "rb") as f:
+                        f.read()
+                self.assertEqual(denied.exception.errno, errno.EACCES)
+
+                self.v.chmod(TESTFILE, 0o440)
+                with member.open(TESTFILE, "rb") as f:
+                    self.assertEqual(f.read(), b"content")
+
     def test_chown_uid_gid_arguments_must_be_index(self):
         stat = self.v.stat(TESTFN)
         uid = stat.st_uid
@@ -387,6 +564,49 @@ class ExtendedAttributeTests(FileTests):
             with self.v.open(path, "rb") as fp:
                 return self.v.listxattr(fp.fileno(), *args)
         self._check_xattrs(getxattr, setxattr, removexattr, listxattr)
+
+
+class LargeWriteTests(FileTests):
+    def test_write_splits_into_chunks(self):
+        chunk = 4 << 20
+        data = os.urandom(2 * chunk + 1)
+        for buffering in (0, 8):
+            with self.subTest(buffering=buffering):
+                counts = []
+                with self.v.open(TESTFILE, 'wb', buffering) as stream:
+                    f = stream._file
+                    lib = f.lib
+                    def pwrite(tid, fd, buf, count, off):
+                        counts.append(count.value)
+                        return lib.jfs_pwrite(tid, fd, buf, count, off)
+                    with patch.object(f, 'lib', types.SimpleNamespace(jfs_pwrite=pwrite)):
+                        self.assertEqual(stream.write(data), len(data))
+                    self.assertEqual(stream.tell(), len(data))
+                self.assertEqual(sum(counts), len(data))
+                self.assertLessEqual(max(counts), chunk)
+                with self.v.open(TESTFILE, 'rb') as stream:
+                    self.assertEqual(stream.read(), data)
+
+    def test_write_chunk_failure_keeps_position(self):
+        chunk = 4 << 20
+        def raise_eio():
+            raise OSError(errno.EIO, 'injected')
+        for name, fail in (('error', raise_eio), ('zero', lambda: 0)):
+            with self.subTest(failure=name):
+                with self.v.open(TESTFILE, 'wb', 0) as stream:
+                    f = stream._file
+                    lib = f.lib
+                    def pwrite(tid, fd, buf, count, off):
+                        if off.value >= chunk:
+                            return fail()
+                        return lib.jfs_pwrite(tid, fd, buf, count, off)
+                    with patch.object(f, 'lib', types.SimpleNamespace(jfs_pwrite=pwrite)):
+                        with self.assertRaises(OSError) as cm:
+                            stream.write(bytes(2 * chunk + 1))
+                    self.assertEqual(cm.exception.errno, errno.EIO)
+                    self.assertEqual(stream.tell(), chunk)
+                    self.assertEqual(f.length, chunk)
+                self.assertEqual(self.v.stat(TESTFILE).st_size, chunk)
 
 
 class BenchTests(FileTests):

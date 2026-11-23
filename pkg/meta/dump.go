@@ -366,6 +366,59 @@ func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	return bw, nil
 }
 
+// scopeSubdirDump drops quotas that do not belong to a dump of the subtree at
+// root. Load maps root to RootInode, so its directory quota is moved there.
+func scopeSubdirDump(dm *DumpedMeta, root Ino, getParent func(Ino) (Ino, error)) {
+	if root == RootInode {
+		return
+	}
+	dm.UserQuotas = nil
+	dm.GroupQuotas = nil
+	quotas := make(map[Ino]*DumpedQuota)
+	for inode, q := range dm.Quotas {
+		if inode == root {
+			quotas[RootInode] = q
+			continue
+		}
+		in, err := inSubtree(inode, root, getParent)
+		if err != nil {
+			logger.Warnf("Skip quota of inode %d: %s", inode, err)
+		} else if in {
+			quotas[inode] = q
+		}
+	}
+	dm.Quotas = quotas
+}
+
+func inSubtree(inode, root Ino, getParent func(Ino) (Ino, error)) (bool, error) {
+	visited := make(map[Ino]struct{})
+	for inode != root {
+		if inode <= RootInode || inode.IsTrash() {
+			return false, nil
+		}
+		if _, ok := visited[inode]; ok {
+			return false, fmt.Errorf("loop in parents of inode %d", inode)
+		}
+		visited[inode] = struct{}{}
+		parent, err := getParent(inode)
+		if err != nil {
+			return false, err
+		}
+		inode = parent
+	}
+	return true, nil
+}
+
+func (m *baseMeta) dumpParent(ctx Context) func(Ino) (Ino, error) {
+	return func(inode Ino) (Ino, error) {
+		var attr Attr
+		if st := m.en.doGetAttr(ctx, inode, &attr); st != 0 {
+			return 0, st
+		}
+		return attr.Parent, nil
+	}
+}
+
 func (m *baseMeta) loadDumpedQuotas(ctx Context, dm *DumpedMeta) {
 	for inode, q := range dm.Quotas {
 		if _, err := m.en.doSetQuota(ctx, DirQuotaType, uint64(inode), &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}); err != nil {
@@ -503,6 +556,9 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 	if err = dm.validate(); err != nil {
 		return
 	}
+	// Inodes and slices not in the tree (e.g. pending deleted files) may still be referenced.
+	counters.NextInode = max(counters.NextInode, dm.Counters.NextInode)
+	counters.NextChunk = max(counters.NextChunk, dm.Counters.NextChunk)
 
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)

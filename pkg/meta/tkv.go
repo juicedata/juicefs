@@ -1354,7 +1354,7 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		delta.length = int64(length) - int64(t.Length)
 		delta.space = align4K(length) - align4K(t.Length)
-		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(tx, inode, t.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(tx, inode, t.Parent, t.Nlink)...); err != 0 {
 			return err
 		}
 		var left, right = t.Length, length
@@ -1422,7 +1422,7 @@ func (m *kvMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		old := t.Length
 		delta.length = int64(length) - int64(t.Length)
 		delta.space = align4K(length) - align4K(t.Length)
-		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(tx, inode, t.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(tx, inode, t.Parent, t.Nlink)...); err != 0 {
 			return err
 		}
 		t.Length = length
@@ -1762,7 +1762,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				tx.delete(m.inodeKey(inode))
 				newSpace, newInode = -align4K(0), -1
 			}
-			tx.deleteKeys(m.xattrKey(inode, ""))
+			if !opened { // an open file keeps its xattrs until doDeleteSustainedInode
+				tx.deleteKeys(m.xattrKey(inode, ""))
+			}
 			if attr.Parent == 0 {
 				tx.deleteKeys(m.fmtKey("A", inode, "P"))
 			}
@@ -1998,9 +2000,11 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 					if info.attr.Nlink > 0 {
 						tx.set(m.inodeKey(info.inode), m.marshal(info.attr))
 					} else {
+						dnode := delNodes[info.inode]
+						opened := dnode != nil && dnode.opened
 						switch info.typ {
 						case TypeFile:
-							if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
+							if opened {
 								tx.set(m.inodeKey(info.inode), m.marshal(info.attr))
 								tx.set(m.sustainedKey(m.sessionID(), info.inode), []byte{1})
 							} else {
@@ -2030,7 +2034,9 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta 
 							})
 						}
 						// Delete xattrs and parent keys
-						tx.deleteKeys(m.xattrKey(info.inode, ""))
+						if !opened {
+							tx.deleteKeys(m.xattrKey(info.inode, ""))
+						}
 						if info.attr.Parent == 0 {
 							tx.deleteKeys(m.fmtKey("A", info.inode, "P"))
 						}
@@ -2474,7 +2480,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tx.delete(m.inodeKey(dino))
 						newSpace, newInode = -align4K(0), -1
 					}
-					tx.deleteKeys(m.xattrKey(dino, ""))
+					if !opened {
+						tx.deleteKeys(m.xattrKey(dino, ""))
+					}
 					if tattr.Parent == 0 {
 						tx.deleteKeys(m.fmtKey("A", dino, "P"))
 					}
@@ -2564,7 +2572,13 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			updateParent = true
 		}
 		oldParent := iattr.Parent
-		iattr.Parent = 0
+		// an open inode with no links left (O_TMPFILE) becomes a plain single-parent file
+		unlinked := iattr.Nlink == 0
+		if unlinked {
+			iattr.Parent = parent
+		} else {
+			iattr.Parent = 0
+		}
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
 		iattr.Nlink++
@@ -2573,10 +2587,14 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 		tx.set(m.inodeKey(inode), m.marshal(&iattr))
-		if oldParent > 0 {
-			tx.incrBy(m.parentKey(inode, oldParent), 1)
+		if unlinked {
+			tx.delete(m.sustainedKey(m.sessionID(), inode))
+		} else {
+			if oldParent > 0 {
+				tx.incrBy(m.parentKey(inode, oldParent), 1)
+			}
+			tx.incrBy(m.parentKey(inode, parent), 1)
 		}
-		tx.incrBy(m.parentKey(inode, parent), 1)
 		if attr != nil {
 			*attr = iattr
 		}
@@ -2706,9 +2724,18 @@ func (m *kvMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) erro
 			return nil
 		}
 		m.parseAttr(a, &attr)
+		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold
+		if attr.Nlink > 0 && sid > 0 {
+			if tx.get(m.sustainedKey(sid, inode)) != nil {
+				tx.delete(m.sustainedKey(sid, inode))
+				m.genLog(tx, m.now(), "DELSUSTAINED(%d,%d)", sid, inode)
+			}
+			return nil
+		}
 		newSpace = -align4K(attr.Length)
 		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(m.now().Unix()))
 		tx.delete(m.inodeKey(inode))
+		tx.deleteKeys(m.xattrKey(inode, ""))
 		tx.delete(m.sustainedKey(sid, inode))
 		m.genLog(tx, m.now(), "DELSUSTAINED(%d,%d)", sid, inode)
 		return nil
@@ -2769,7 +2796,7 @@ func (m *kvMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 			delta.space = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, delta.space, 0, attr.Uid, attr.Gid, m.getParents(tx, inode, attr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, attr.Uid, attr.Gid, m.getParents(tx, inode, attr.Parent, attr.Nlink)...); err != 0 {
 			return err
 		}
 		now := m.now()
@@ -2839,7 +2866,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, attr.Uid, attr.Gid, m.getParents(tx, fout, attr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, newSpace, 0, attr.Uid, attr.Gid, m.getParents(tx, fout, attr.Parent, attr.Nlink)...); err != 0 {
 			return err
 		}
 		now := m.now()
@@ -2923,13 +2950,16 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		return nil
 	}, fout)
 	if err == nil {
-		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
+		m.updateParentStat(ctx, fout, attr.Parent, attr.Nlink, newLength, newSpace)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, 0)
 	}
 	return errno(err)
 }
 
-func (m *kvMeta) getParents(tx *kvTxn, inode, parent Ino) []Ino {
+func (m *kvMeta) getParents(tx *kvTxn, inode, parent Ino, nlink uint32) []Ino {
+	if nlink == 0 { // an open file without links belongs to no directory
+		return nil
+	}
 	if parent > 0 {
 		return []Ino{parent}
 	}
@@ -4294,10 +4324,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		UserQuotas:  ugQuotas["QU"],
 		GroupQuotas: ugQuotas["QG"],
 	}
-	if root != RootInode {
-		dm.UserQuotas = nil
-		dm.GroupQuotas = nil
-	}
+	scopeSubdirDump(&dm, root, m.dumpParent(ctx))
 	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")

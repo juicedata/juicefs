@@ -557,23 +557,22 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	return nil
 }
 
-func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, maxWrite int) fuse.MountOptions {
+func GenFuseOpt(name, options string, enableXattr, enableACL bool, maxWrite int, readDirPlusAuto bool) fuse.MountOptions {
 	var opt fuse.MountOptions
-	opt.FsName = "JuiceFS:" + conf.Format.Name
+	opt.FsName = "JuiceFS:" + name
 	opt.Name = "juicefs"
-	opt.SingleThreaded = mt == 0
 	opt.MaxBackground = 200
 	opt.EnableLocks = true
 	opt.EnableSymlinkCaching = true
-	opt.DisableXAttrs = noxattr
-	opt.EnableAcl = !noacl
+	opt.DisableXAttrs = !enableXattr
+	opt.EnableAcl = enableACL
 	opt.IgnoreSecurityLabels = false
 	opt.MaxWrite = maxWrite
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.DontUmask = true
 	opt.Timeout = time.Minute * 15
-	opt.EnableReadDirPlusAuto = true
+	opt.EnableReadDirPlusAuto = readDirPlusAuto
 	for _, n := range strings.Split(options, ",") {
 		// TODO allow_root
 		if n == "allow_other" {
@@ -591,7 +590,7 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, m
 	}
 	opt.Options = append(opt.Options, "default_permissions")
 	if runtime.GOOS == "darwin" {
-		opt.Options = append(opt.Options, "fssubtype=juicefs", "volname="+conf.Format.Name)
+		opt.Options = append(opt.Options, "fssubtype=juicefs", "volname="+name)
 		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
 	}
 	return opt

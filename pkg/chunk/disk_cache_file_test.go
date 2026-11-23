@@ -37,6 +37,7 @@ func TestChecksum(t *testing.T) {
 	m := new(cacheManagerMetrics)
 	m.initMetrics()
 	s := newDiskCache(m, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
+	shutdownOnCleanup(t, s)
 	k1 := "0_0_10" // no checksum
 	k2 := "1_0_10"
 	k3 := "2_1_102400"

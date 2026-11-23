@@ -17,6 +17,7 @@
 package vfs
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -710,6 +711,35 @@ func TestInternalFile(t *testing.T) {
 	_ = v.Flush(ctx, fe.Inode, fh, 0)
 	v.Release(ctx, fe.Inode, fh)
 
+	// reserved names
+	dir, e := v.Mkdir(ctx, 1, "reserved", 0755, 0)
+	require.Zero(t, e)
+	src, e := v.Mknod(ctx, dir.Inode, "src", 0644, 0, 0)
+	require.Zero(t, e)
+	for _, c := range []struct {
+		parent Ino
+		name   string
+	}{{1, ".config"}, {1, ".trash"}, {1, ".control"}, {dir.Inode, ".control"}} {
+		_, e = v.Mknod(ctx, c.parent, c.name, 0644, 0, 0)
+		require.Equal(t, syscall.EEXIST, e, "mknod %d/%s", c.parent, c.name)
+		_, e = v.Mkdir(ctx, c.parent, c.name, 0755, 0)
+		require.Equal(t, syscall.EEXIST, e, "mkdir %d/%s", c.parent, c.name)
+		_, e = v.Symlink(ctx, "src", c.parent, c.name)
+		require.Equal(t, syscall.EEXIST, e, "symlink %d/%s", c.parent, c.name)
+		_, _, e = v.Create(ctx, c.parent, c.name, 0644, 0, syscall.O_RDWR)
+		require.Equal(t, syscall.EEXIST, e, "create %d/%s", c.parent, c.name)
+		_, e = v.Link(ctx, src.Inode, c.parent, c.name)
+		require.Equal(t, syscall.EPERM, e, "link %d/%s", c.parent, c.name)
+		e = v.Rename(ctx, dir.Inode, "src", c.parent, c.name, 0)
+		require.Equal(t, syscall.EPERM, e, "rename %d/%s", c.parent, c.name)
+	}
+	// other internal names are only reserved in the root
+	_, e = v.Mknod(ctx, dir.Inode, ".stats", 0644, 0, 0)
+	require.Zero(t, e)
+	require.Zero(t, v.Unlink(ctx, dir.Inode, ".stats"))
+	require.Zero(t, v.Unlink(ctx, dir.Inode, "src"))
+	require.Zero(t, v.Rmdir(ctx, 1, "reserved"))
+
 	// control messages
 	fe, e = v.Lookup(ctx, 1, ".control")
 	if e != 0 {
@@ -874,6 +904,130 @@ func TestInternalFile(t *testing.T) {
 	}
 }
 
+func TestInternalMsgWithSubdir(t *testing.T) {
+	v, _ := createTestVFS(nil, "")
+	ctx := meta.Background() // root passes every permission check
+	var tenantA, tenantB, inside, outside Ino
+	var attr meta.Attr
+	if st := v.Meta.Mkdir(ctx, meta.RootInode, "tenantA", 0755, 0, 0, &tenantA, &attr); st != 0 {
+		t.Fatalf("mkdir tenantA: %s", st)
+	}
+	if st := v.Meta.Mkdir(ctx, meta.RootInode, "tenantB", 0755, 0, 0, &tenantB, &attr); st != 0 {
+		t.Fatalf("mkdir tenantB: %s", st)
+	}
+	if st := v.Meta.Create(ctx, tenantA, "a", 0644, 0, 0, &inside, &attr); st != 0 {
+		t.Fatalf("create tenantA/a: %s", st)
+	}
+	if st := v.Meta.Create(ctx, tenantB, "b", 0644, 0, 0, &outside, &attr); st != 0 {
+		t.Fatalf("create tenantB/b: %s", st)
+	}
+	if st := v.Meta.Chroot(ctx, "tenantA", false); st != 0 {
+		t.Fatalf("chroot tenantA: %s", st)
+	}
+
+	send := func(cmd uint32, payload []byte) []byte {
+		out := &bytes.Buffer{}
+		v.handleInternalMsg(ctx, cmd, utils.FromBuffer(payload), out)
+		return out.Bytes()
+	}
+	decode := func(out []byte, resp interface{}) syscall.Errno {
+		data, eno := decodeControlOutput(out)
+		if eno == 0 {
+			require.NoError(t, json.Unmarshal(data, resp))
+		}
+		return eno
+	}
+	info := func(inode Ino) syscall.Errno {
+		w := utils.NewBuffer(8)
+		w.Put64(uint64(inode))
+		var resp InfoResponse
+		if eno := decode(send(meta.InfoV2, w.Bytes()), &resp); eno != 0 || !resp.Failed {
+			return eno
+		}
+		require.Equal(t, syscall.ENOENT.Error(), resp.Reason)
+		return syscall.ENOENT
+	}
+	legacyInfo := func(inode Ino) syscall.Errno {
+		w := utils.NewBuffer(8)
+		w.Put64(uint64(inode))
+		if out := send(meta.LegacyInfo, w.Bytes()); string(out[4:]) == syscall.ENOENT.Error() {
+			return syscall.ENOENT
+		}
+		return 0
+	}
+	summary := func(inode Ino) syscall.Errno {
+		w := utils.NewBuffer(8)
+		w.Put64(uint64(inode))
+		var resp SummaryReponse
+		if eno := decode(send(meta.OpSummary, w.Bytes()), &resp); eno != 0 {
+			return eno
+		}
+		return resp.Errno
+	}
+	rmr := func(parent Ino, name string) syscall.Errno {
+		w := utils.NewBuffer(8 + 1 + uint32(len(name)))
+		w.Put64(uint64(parent))
+		w.Put8(uint8(len(name)))
+		w.Put([]byte(name))
+		_, eno := decodeControlOutput(send(meta.Rmr, w.Bytes()))
+		return eno
+	}
+	clone := func(src, srcParent, dstParent Ino, name string) syscall.Errno {
+		w := utils.NewBuffer(8 + 8 + 8 + 1 + uint32(len(name)) + 2 + 1)
+		w.Put64(uint64(src))
+		w.Put64(uint64(srcParent))
+		w.Put64(uint64(dstParent))
+		w.Put8(uint8(len(name)))
+		w.Put([]byte(name))
+		w.Put16(022)
+		w.Put8(0)
+		_, eno := decodeControlOutput(send(meta.Clone, w.Bytes()))
+		return eno
+	}
+	compact := func(inode Ino) syscall.Errno {
+		w := utils.NewBuffer(8 + 2)
+		w.Put64(uint64(inode))
+		w.Put16(1)
+		_, eno := decodeControlOutput(send(meta.CompactPath, w.Bytes()))
+		return eno
+	}
+	warmup := func(inode Ino) uint64 {
+		p := fmt.Sprintf("inode:%d", inode)
+		w := utils.NewBuffer(4 + uint32(len(p)) + 2 + 1)
+		w.Put32(uint32(len(p)))
+		w.Put([]byte(p))
+		w.Put16(1)
+		w.Put8(0)
+		var resp CacheResponse
+		require.Equal(t, syscall.Errno(0), decode(send(meta.FillCache, w.Bytes()), &resp))
+		return resp.FileCount
+	}
+
+	// inodes outside of the mounted root are refused
+	for _, inode := range []Ino{0, tenantB, outside} {
+		require.Equal(t, syscall.ENOENT, info(inode), "info %d", inode)
+		require.Equal(t, syscall.ENOENT, legacyInfo(inode), "legacy info %d", inode)
+		require.Equal(t, syscall.ENOENT, summary(inode), "summary %d", inode)
+		require.Equal(t, syscall.ENOENT, compact(inode), "compact %d", inode)
+		require.Zero(t, warmup(inode), "warmup %d", inode)
+	}
+	require.Equal(t, syscall.ENOENT, clone(outside, tenantB, meta.RootInode, "copy"))
+	require.Equal(t, syscall.ENOENT, clone(inside, meta.RootInode, tenantB, "copy"))
+	require.Equal(t, syscall.ENOENT, rmr(tenantB, "b"))
+	require.Equal(t, syscall.Errno(0), v.Meta.Lookup(ctx, tenantB, "b", &outside, &attr, false))
+
+	// inodes inside of the mounted root still work
+	for _, inode := range []Ino{meta.RootInode, tenantA, inside} {
+		require.Equal(t, syscall.Errno(0), info(inode), "info %d", inode)
+		require.Equal(t, syscall.Errno(0), legacyInfo(inode), "legacy info %d", inode)
+		require.Equal(t, syscall.Errno(0), summary(inode), "summary %d", inode)
+		require.Equal(t, syscall.Errno(0), compact(inode), "compact %d", inode)
+	}
+	require.Equal(t, uint64(1), warmup(inside))
+	require.Equal(t, syscall.Errno(0), clone(inside, meta.RootInode, meta.RootInode, "copy"))
+	require.Equal(t, syscall.Errno(0), rmr(meta.RootInode, "copy"))
+}
+
 func TestHideInternal(t *testing.T) {
 	// Without HideInternal: internal files should appear in readdir
 	v1, _ := createTestVFS(nil, "")
@@ -915,6 +1069,95 @@ func TestHideInternal(t *testing.T) {
 	}
 	if _, e := v2.Lookup(ctx, 1, ".config"); e != 0 {
 		t.Fatalf("should still be able to lookup .config with HideInternal: %s", e)
+	}
+}
+
+func TestNoInternal(t *testing.T) {
+	for _, prefix := range []string{"", ".jfs"} {
+		t.Run("prefix="+prefix, func(t *testing.T) {
+			oldNodes := internalNodes
+			t.Cleanup(func() { internalNodes = oldNodes })
+			internalNodes = make([]*internalNode, len(oldNodes))
+			for i, node := range oldNodes {
+				n := *node
+				n.name = prefix + n.name
+				internalNodes[i] = &n
+			}
+
+			v, _ := createTestVFS(nil, "")
+			v.Conf.NoInternal = true
+			v.Conf.PrefixInternal = prefix != ""
+			ctx := NewLogContext(meta.Background())
+			for _, node := range internalNodes {
+				if node.inode == ConfigInode {
+					continue
+				}
+				entry, e := v.Lookup(ctx, rootID, node.name)
+				require.Equal(t, syscall.ENOENT, e, "lookup %s", node.name)
+				require.Nil(t, entry)
+				entry, e = v.GetAttr(ctx, node.inode, 0)
+				require.Equal(t, syscall.ENOENT, e, "getattr %s", node.name)
+				require.Nil(t, entry)
+				for _, flags := range []uint32{syscall.O_RDONLY, syscall.O_WRONLY, syscall.O_RDWR} {
+					entry, fh, e := v.Open(ctx, node.inode, flags)
+					require.Equal(t, syscall.ENOENT, e, "open %s flags=%d", node.name, flags)
+					require.Nil(t, entry)
+					require.Zero(t, fh)
+				}
+			}
+
+			entry, e := v.Lookup(ctx, rootID, prefix+".config")
+			require.Zero(t, e)
+			require.Equal(t, Ino(ConfigInode), entry.Inode)
+			_, e = v.GetAttr(ctx, ConfigInode, 0)
+			require.Zero(t, e)
+			_, fh, e := v.Open(ctx, ConfigInode, syscall.O_RDONLY)
+			require.Zero(t, e)
+			defer v.Release(ctx, ConfigInode, fh)
+			buf := make([]byte, 10240)
+			n, e := v.Read(ctx, ConfigInode, buf, 0, fh)
+			require.Zero(t, e)
+			var conf Config
+			require.NoError(t, json.Unmarshal(buf[:n], &conf))
+			require.True(t, conf.NoInternal)
+			require.Equal(t, v.Conf.Format.UUID, conf.Format.UUID)
+
+			dir, e := v.Mkdir(ctx, rootID, "no-internal", 0755, 0)
+			require.Zero(t, e)
+			defer v.Rmdir(ctx, rootID, "no-internal")
+			_, e = v.Lookup(ctx, dir.Inode, prefix+".control")
+			require.Equal(t, syscall.ENOENT, e)
+			file, e := v.Mknod(ctx, dir.Inode, prefix+".stats", 0644, 0, 0)
+			require.Zero(t, e)
+			defer v.Unlink(ctx, dir.Inode, prefix+".stats")
+			entry, e = v.Lookup(ctx, dir.Inode, prefix+".stats")
+			require.Zero(t, e)
+			require.Equal(t, file.Inode, entry.Inode)
+			_, filefh, e := v.Open(ctx, file.Inode, syscall.O_RDONLY)
+			require.Zero(t, e)
+			v.Release(ctx, file.Inode, filefh)
+
+			for _, ino := range []Ino{trashInode, trashInode + 1} {
+				_, e = v.Lookup(ctx, ino, "child")
+				require.Equal(t, syscall.ENOENT, e)
+				_, e = v.Opendir(ctx, ino, syscall.O_RDONLY)
+				require.Equal(t, syscall.ENOENT, e)
+			}
+
+			dirfh, e := v.Opendir(ctx, rootID, syscall.O_RDONLY)
+			require.Zero(t, e)
+			defer v.Releasedir(ctx, rootID, dirfh)
+			for _, plus := range []bool{false, true} {
+				entries, _, e := v.Readdir(ctx, rootID, 1024, 0, dirfh, plus)
+				require.Zero(t, e)
+				var names []string
+				for _, entry := range entries {
+					require.False(t, IsSpecialNode(entry.Inode), "listed internal entry %s", entry.Name)
+					names = append(names, string(entry.Name))
+				}
+				require.Contains(t, names, "no-internal")
+			}
+		})
 	}
 }
 

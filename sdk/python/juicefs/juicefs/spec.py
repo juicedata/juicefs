@@ -31,6 +31,8 @@ class JuiceFS(AbstractFileSystem):
     A JuiceFS file system.
     """
     protocol = "jfs", "juicefs"
+    root_marker = "/"
+
     def __init__(self, name, auto_mkdir=False, **kwargs):
         if self._cached:
             return

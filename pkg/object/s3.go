@@ -39,7 +39,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
-	"github.com/aws/smithy-go/encoding/httpbinding"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
@@ -81,7 +80,7 @@ func (s *s3client) Limits() Limits {
 }
 
 func (s *s3client) Create(ctx context.Context) error {
-	if _, _, _, err := s.List(ctx, "", "", "", "", 1, true); err == nil {
+	if _, _, _, err := s.List(WithUnorderedList(ctx), "", "", "", "", 1, true); err == nil {
 		return nil
 	}
 	_, err := s.s3.CreateBucket(ctx, &s3.CreateBucketInput{
@@ -195,18 +194,13 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return err
 }
 
-// copySource returns the URL-encoded x-amz-copy-source value, which the SDK sends as is.
-func (s *s3client) copySource(key string) string {
-	return httpbinding.EscapePath(s.bucket+"/"+key, false)
-}
-
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
 	t := s.getRuntimeTier(ctx)
 	sc := getOrDefaultScValue(t.Sc, string(types.StorageClassStandard))
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,
 		Key:          &dst,
-		CopySource:   aws.String(s.copySource(src)),
+		CopySource:   aws.String(encodeCopySource(s.bucket, src)),
 		StorageClass: types.StorageClass(sc),
 	}
 	if t.encodedTag != "" {
@@ -240,17 +234,35 @@ func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter
 	return err
 }
 
+// s3DirectoryBucketSuffix is the name suffix of S3 Express One Zone directory buckets
+// (<base>--<zone-id>--x-s3). See
+// https://docs.aws.amazon.com/AmazonS3/latest/userguide/directory-bucket-naming-rules.html
+const s3DirectoryBucketSuffix = "--x-s3"
+
 func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
+	}
+	// S3 Express directory buckets don't list keys in lexicographic order, reject
+	// a non-empty start-after and page only with ContinuationToken.
+	directoryBucket := strings.HasSuffix(s.bucket, s3DirectoryBucketSuffix)
+	if directoryBucket {
+		if !isUnorderedList(ctx) {
+			return nil, false, "", fmt.Errorf("directory bucket %s can't list keys in order", s.bucket)
+		}
+		if start != "" && token == "" {
+			return nil, false, "", fmt.Errorf("directory bucket %s can't list after %q", s.bucket, start)
+		}
 	}
 	param := s3.ListObjectsV2Input{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
 		MaxKeys:      aws.Int32(int32(limit)),
 		EncodingType: types.EncodingTypeUrl,
-		StartAfter:   aws.String(start),
 		Delimiter:    aws.String(delimiter),
+	}
+	if !directoryBucket {
+		param.StartAfter = aws.String(start)
 	}
 	if token != "" {
 		param.ContinuationToken = aws.String(token)
@@ -268,7 +280,10 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", rawKey)
 		}
-		if !strings.HasPrefix(oKey, prefix) || oKey < start {
+		// StartAfter is ignored on continued requests, and some servers (e.g. TOS with
+		// hierarchical namespace) don't list in lexicographic order, which is
+		// tolerated if the caller doesn't need the order.
+		if !strings.HasPrefix(oKey, prefix) || ((token == "" || !isUnorderedList(ctx)) && oKey < start) {
 			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, start)
 		}
 		objs[i] = &obj{
@@ -334,7 +349,7 @@ func (s *s3client) UploadPart(ctx context.Context, key string, uploadID string, 
 func (s *s3client) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.s3.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),
-		CopySource:      aws.String(s.copySource(srcKey)),
+		CopySource:      aws.String(encodeCopySource(s.bucket, srcKey)),
 		CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
 		Key:             aws.String(key),
 		PartNumber:      aws.Int32(int32(num)),

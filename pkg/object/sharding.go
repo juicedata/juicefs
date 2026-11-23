@@ -97,10 +97,15 @@ func (s *sharded) GetTier(ctx context.Context) Tier {
 	return Tier{}
 }
 
-const maxResults = 10000
+const (
+	maxResults     = 10000
+	maxListRetries = 3
+)
 
-// ListAll lists all keys that starts at marker from object storage.
-func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink, sort bool) (<-chan Object, error) {
+// ListAll lists all keys that starts at marker from object storage. The keys are
+// in order unless ctx is marked by WithUnorderedList.
+func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink bool) (<-chan Object, error) {
+	sort := !isUnorderedList(ctx)
 	if ch, err := store.ListAll(ctx, prefix, marker, followLink); err == nil {
 		return ch, nil
 	} else if !errors.Is(err, notSupported) {
@@ -144,8 +149,8 @@ func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, fo
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			var nextToken2 string
 			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
-			for err != nil {
-				if ctx.Err() != nil {
+			for retry := 0; err != nil; retry++ {
+				if ctx.Err() != nil || retry >= maxListRetries {
 					logger.Errorf("Stop listing %s at marker %q: %s", store, marker, err)
 					out <- nil
 					return
@@ -182,30 +187,55 @@ func (s *nextObjects) Pop() interface{} {
 }
 
 func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
-	heads := &nextObjects{make([]nextKey, 0)}
+	ctx, cancel := context.WithCancel(ctx)
+	heads := &nextObjects{make([]nextKey, 0, len(s.stores))}
+	// abort stops the remaining shard listings and drains their channels,
+	// so their producers do not block forever on a full channel.
+	abort := func() {
+		cancel()
+		for _, h := range heads.os {
+			go func(ch <-chan Object) {
+				for range ch {
+				}
+			}(h.ch)
+		}
+	}
 	for i := range s.stores {
-		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink, true)
+		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink)
 		if err != nil {
+			abort()
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
 		}
-		first := <-ch
-		if first != nil {
-			heads.Push(nextKey{first, ch})
+		first, ok := <-ch
+		if !ok {
+			continue
 		}
+		if first == nil {
+			abort()
+			return nil, fmt.Errorf("list %s: incomplete listing", s.stores[i])
+		}
+		heads.Push(nextKey{first, ch})
 	}
 	heap.Init(heads)
 
 	out := make(chan Object, 1000)
 	go func() {
+		defer close(out)
+		defer cancel()
 		for heads.Len() > 0 {
 			n := heap.Pop(heads).(nextKey)
 			out <- n.o
-			o := <-n.ch
-			if o != nil {
-				heap.Push(heads, nextKey{o, n.ch})
+			o, ok := <-n.ch
+			if !ok {
+				continue
 			}
+			if o == nil {
+				abort()
+				out <- nil
+				return
+			}
+			heap.Push(heads, nextKey{o, n.ch})
 		}
-		close(out)
 	}()
 	return out, nil
 }
@@ -233,10 +263,15 @@ func (s *sharded) Restore(ctx context.Context, key string, days int32) error {
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {
 	stores := make([]ObjectStorage, shards)
 	var err error
+	// only format the part before the query, whose values may be percent-encoded
+	base, query, hasQuery := strings.Cut(endpoint, "?")
 	for i := range stores {
-		ep := fmt.Sprintf(endpoint, i)
+		ep := fmt.Sprintf(base, i)
 		if strings.HasSuffix(ep, "%!(EXTRA int=0)") {
 			return nil, fmt.Errorf("can not generate different endpoint using %s", endpoint)
+		}
+		if hasQuery {
+			ep += "?" + query
 		}
 		stores[i], err = CreateStorage(name, ep, ak, sk, token)
 		if err != nil {

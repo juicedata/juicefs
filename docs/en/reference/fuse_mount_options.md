@@ -49,7 +49,7 @@ These options are used to specify the owner ID and owner group ID of the file sy
 
 Starting from JuiceFS v1.4, `ReadDirPlusAuto` is automatically enabled. This feature allows the FUSE kernel module to automatically decide whether to use the `ReadDirPlus` operation (which returns directory entries along with file attributes) instead of plain `ReadDir`. This reduces the number of subsequent `getattr` calls when listing directories, significantly improving performance for large directory listings.
 
-This is an internal optimization and does not require any user configuration.
+When stat-ing every entry of a large directory (e.g. `ls -l`, `find`, `rsync`), adaptive mode may cause many extra `lookup` requests, which is slow when metadata latency is high. Mount with `--no-readdirplus-auto` to always use `ReadDirPlus`, at the cost of fetching attributes that may not be needed (e.g. plain `ls`).
 
 ## debug
 

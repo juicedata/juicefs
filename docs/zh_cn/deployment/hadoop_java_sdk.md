@@ -215,6 +215,7 @@ make win
 | `juicefs.backup-meta`     | 3600         | 自动将 JuiceFS 元数据备份到对象存储间隔（单位：秒），设置为 0 关闭自动备份                                                                 |
 |`juicefs.backup-skip-trash`| `false`      | 备份元数据时忽略回收站中的文件和目录。                                                                                         |
 | `juicefs.heartbeat`       | 12           | 客户端和元数据引擎之间的心跳间隔（单位：秒），建议所有客户端都设置一样                                                                         |
+| `juicefs.session-timeout` | 0            | 客户端会话超过该时长未刷新即被视为失效，其他客户端会清理该会话并释放它持有的文件锁。实际生效值不小于 `juicefs.heartbeat` 的 5 倍，`0` 表示 `juicefs.heartbeat` 的 5 倍。参见 [`--session-timeout`](../reference/command_reference.mdx#mount-metadata-options) |
 | `juicefs.skip-dir-mtime`  | 100ms        | 修改父目录 mtime 间隔。                                                                                             |
 | `juicefs.subdir`          |              | 仅允许访问此目录的子路径。可以指定多个路径，使用逗号分隔。所有其他路径，包括根目录或同级目录，都将被拒绝访问。                                           |
 

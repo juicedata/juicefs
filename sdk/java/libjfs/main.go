@@ -49,6 +49,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -270,7 +271,7 @@ func (w *wrapper) isSuperuser(name string, groups []string) bool {
 	}
 	sg := w.getSuperGroup()
 	for _, g := range groups {
-		if g == sg {
+		if sg != "" && g == sg {
 			return true
 		}
 	}
@@ -285,7 +286,7 @@ func (w *wrapper) lookupUid(name string) uint32 {
 }
 
 func (w *wrapper) lookupGid(group string) uint32 {
-	if group == w.supergroup {
+	if group == w.conf.RootGroup {
 		return 0
 	}
 	return uint32(w.m.lookupGroup(group))
@@ -308,7 +309,7 @@ func (w *wrapper) uid2name(uid uint32) string {
 }
 
 func (w *wrapper) gid2name(gid uint32) string {
-	group := w.supergroup
+	group := w.conf.RootGroup
 	if gid > 0 {
 		group = w.m.lookupGroupID(gid)
 	}
@@ -352,6 +353,7 @@ type javaConf struct {
 	BackupMeta          string `json:"backupMeta"`
 	BackupSkipTrash     bool   `json:"backupSkipTrash"`
 	Heartbeat           string `json:"heartbeat"`
+	SessionTimeout      string `json:"sessionTimeout"`
 	CacheDir            string `json:"cacheDir"`
 	CacheSize           string `json:"cacheSize"`
 	CacheItems          int64  `json:"cacheItems"`
@@ -392,6 +394,7 @@ type javaConf struct {
 	PushRemoteWriteAuth string `json:"pushRemoteWriteAuth"`
 	GuidMask            string `json:"guidMask"`
 	Caller              int    `json:"caller"`
+	RootGroup           string `json:"rootGroup"` // Group name mapped to GID 0.
 	Subdir              string `json:"subdir"`
 
 	AuthMethod string `json:"authMethod,omitempty"`
@@ -404,6 +407,7 @@ func cleanConf(conf javaConf) javaConf {
 	conf.AuthMethod = ""
 	conf.RealUser = ""
 	conf.SuperFS = false
+	conf.RootGroup = ""
 	return conf
 }
 
@@ -430,6 +434,9 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 			return 0
 		}
 		logger.Infof("JuiceFileSystem created for user:%s groups:%s", user, groups)
+	}
+	if conf.RootGroup == "" {
+		conf.RootGroup = supergroup
 	}
 	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf}
 	if formats[name] != nil && formats[name].KerbConf != "" {
@@ -620,6 +627,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 		metaConf.NoBGJob = jConf.NoBGJob || jConf.NoSession
 		metaConf.OpenCache = utils.Duration(jConf.OpenCache)
 		metaConf.Heartbeat = utils.Duration(jConf.Heartbeat)
+		metaConf.SessionTimeout = utils.Duration(jConf.SessionTimeout)
 		m := meta.NewClient(jConf.MetaURL, metaConf)
 		format, err := m.Load(true)
 		if err != nil {
@@ -1648,9 +1656,7 @@ func setOwner(w *wrapper, ctx meta.Context, path string, owner, group string) in
 		return errno(err)
 	}
 	defer f.Close(ctx)
-	st, _ := f.Stat()
-	uid := uint32(st.(*fs.FileStat).Uid())
-	gid := uint32(st.(*fs.FileStat).Gid())
+	uid, gid := uint32(math.MaxUint32), uint32(math.MaxUint32)
 	if owner != "" {
 		uid = w.lookupUid(owner)
 	}
@@ -1777,7 +1783,7 @@ func jfs_listdir2(pid int64, h int64, cpath *C.char, plus bool, buf **byte, size
 }
 
 func toBuf(s uintptr, sz int32) []byte {
-	return (*[1 << 30]byte)(unsafe.Pointer(s))[:sz:sz]
+	return unsafe.Slice((*byte)(unsafe.Pointer(s)), sz)
 }
 
 //export jfs_concat

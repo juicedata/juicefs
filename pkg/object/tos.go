@@ -172,7 +172,7 @@ func (t *tosClient) List(ctx context.Context, prefix, start, token, delimiter st
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		if !strings.HasPrefix(o.Key, prefix) || o.Key <= start {
+		if !strings.HasPrefix(o.Key, prefix) || ((token == "" || !isUnorderedList(ctx)) && o.Key <= start) {
 			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", o.Key, prefix, start)
 		}
 		objs[i] = &obj{
