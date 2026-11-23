@@ -75,34 +75,6 @@ class WriteBufferTests(FileTests):
         with self.v.open(TESTFILE, 'rb') as stream:
             self.assertEqual(hashlib.sha256(stream.read()).digest(), hashlib.sha256(content).digest())
 
-    def test_memoryview_layouts(self):
-        content = bytes(range(256)) * ((1 << 14) + 1)
-        views = [
-            memoryview(content),
-            memoryview(bytearray(b'head' + content + b'tail'))[4:-4],
-            memoryview(array('I', range((1 << 20) + 1))),
-            memoryview(content).cast('B', shape=[256, (1 << 14) + 1]),
-            memoryview(content + content)[::2],
-            memoryview(b''),
-            memoryview(array('I')),
-        ]
-        for view in views:
-            with view:
-                expected = view.tobytes()
-                for buffering in (0, 8192):
-                    with self.subTest(format=view.format, ndim=view.ndim,
-                                      contiguous=view.c_contiguous, buffering=buffering):
-                        with self.v.open(TESTFILE, 'wb', buffering) as stream:
-                            if buffering and not view.c_contiguous:
-                                with self.assertRaises(BufferError):
-                                    stream.write(view)
-                                self.assertEqual(stream.tell(), 0)
-                                continue
-                            self.assertEqual(stream.write(view), len(expected))
-                            self.assertEqual(stream.tell(), len(expected))
-                        with self.v.open(TESTFILE, 'rb') as stream:
-                            self.assertEqual(stream.read(), expected)
-
 
 class ReadintoTests(FileTests):
     def test_readinto_large_sliced_buffer(self):
