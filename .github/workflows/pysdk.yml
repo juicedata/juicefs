@@ -154,7 +154,7 @@ jobs:
         timeout-minutes: 5
         run: |
           make -C sdk/python/ libjfs
-          sudo python3 sdk/python/juicefs/setup.py install
+          (cd sdk/python/juicefs && sudo python3 setup.py install)
           df -h
 
       - name: Run juicefs.py
