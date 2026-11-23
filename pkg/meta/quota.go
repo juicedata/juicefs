@@ -161,6 +161,9 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 }
 
 func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall.Errno) {
+	// an in-flight flush has taken the pending updates but not persisted them yet
+	m.dirStatsFlushLock.RLock()
+	defer m.dirStatsFlushLock.RUnlock()
 	stat, st = m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
 	if st != 0 {
 		return
