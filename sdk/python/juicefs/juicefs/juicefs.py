@@ -58,7 +58,7 @@ _LIBJFS_ERRNO_MAP = {
 
 def check_error(r, fn, args):
     if fn.__name__ == "jfs_init" and r == 0:
-        name = args[0].decode()
+        name = args[2].decode()
         e = OSError(f'JuiceFS initialized failed for {name}')
         e.errno = 1
         raise e
