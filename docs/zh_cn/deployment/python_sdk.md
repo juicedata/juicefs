@@ -113,6 +113,8 @@ jfs.listdir('/')
 
 可以使用 `readinto()` 直接填充已有的可写连续缓冲区，避免创建与读取数据等大的临时 Python `bytes` 对象。缓冲区可在多次调用之间复用。I/O 错误发生时，缓冲区可能已包含部分数据。
 
+`Client.status()` 返回卷状态；传入 `session=<会话 ID>` 可查询其 `Sessions` 列表中的指定会话。
+
 ### 使用 fsspec
 
 JuiceFS 的 Python SDK 还支持 `fsspec` 接口来操作 JuiceFS 文件系统。

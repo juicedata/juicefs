@@ -501,7 +501,7 @@ class Client(object):
     def status(self, trash=False, session=0):
         """Get the status of the volume and client sessions."""
         buf = c_void_p()
-        n = self.lib.jfs_status(c_int64(_tid()), c_int64(self.h), c_bool(trash), c_bool(session), byref(buf))
+        n = self.lib.jfs_status(c_int64(_tid()), c_int64(self.h), c_bool(trash), c_uint64(session), byref(buf))
         res = json.loads(str(string_at(buf, n), encoding='utf-8'))
         self.lib.free(buf)
         return res

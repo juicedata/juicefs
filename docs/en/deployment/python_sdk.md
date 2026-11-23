@@ -100,6 +100,8 @@ When the backend rejects initialization, `Client` raises `OSError` with the supp
 
 Use `readinto()` to fill an existing writable, contiguous buffer without creating a full-size temporary Python `bytes` object. The buffer can be reused between calls. An I/O error may leave partial data in the buffer.
 
+`Client.status()` returns the volume status; pass `session=<session ID>` to retrieve a specific session from its `Sessions` list.
+
 ### Using fsspec
 
 JuiceFS Python SDK also supports the `fsspec` interface to operate the JuiceFS file system.
