@@ -132,6 +132,8 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+启用 `auto_mkdir=True` 后，以写入、追加或独占创建模式打开文件时会自动创建缺失的父目录。`with jfs.transaction:` 会在本地暂存写入，并在正常退出时逐个发布文件；多个文件并非作为整体原子提交。
+
 ### 获取帮助信息
 
 可以使用 `help()` 函数获取类和方法的帮助信息。

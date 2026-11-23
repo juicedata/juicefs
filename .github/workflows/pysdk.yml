@@ -11,6 +11,8 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
+    - 'sdk/python/juicefs/juicefs/spec.py'
+    - 'sdk/python/juicefs/setup.py'
     - 'sdk/python/juicefs/tests/**'
     - '**/pysdk.yml'
   pull_request:
@@ -23,6 +25,8 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
+    - 'sdk/python/juicefs/juicefs/spec.py'
+    - 'sdk/python/juicefs/setup.py'
     - 'sdk/python/juicefs/tests/**'
     - '**/pysdk.yml'
   schedule:
@@ -159,6 +163,13 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo JFS_VOLUME=test-volume JFS_META=$meta_url python3 sdk/python/juicefs/juicefs/juicefs.py
           df -h
+
+      - name: Run fsspec regressions
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo python3 -m pip install pytest fsspec
+          sudo JUICEFS_META=$meta_url python3 -m pytest -q sdk/python/juicefs/tests/test_fsspec.py
 
       - name: Run pysdk_test.py
         run: |

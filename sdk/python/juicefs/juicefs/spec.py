@@ -14,7 +14,9 @@
 # limitations under the License.
 
 import datetime
+import errno
 import logging
+import shutil
 import uuid
 import os
 from stat import S_ISDIR, S_ISLNK, S_ISREG
@@ -50,7 +52,7 @@ class JuiceFS(AbstractFileSystem):
             raise FileExistsError(f"File exists: {path}")
         self.fs.makedirs(self._strip_protocol(path), mode, exist_ok=exist_ok)
 
-    def mkdir(self, path, create_parents=True, mode=0o511):
+    def mkdir(self, path, create_parents=True, mode=0o777):
         if self.exists(path):
             raise FileExistsError(f"File exists: {path}")
         if create_parents:
@@ -62,9 +64,16 @@ class JuiceFS(AbstractFileSystem):
         self.fs.rmdir(self._strip_protocol(path))
 
     def ls(self, path, detail=False, **kwargs):
-        infos = self.fs.listdir(self._strip_protocol(path), detail)
+        path = self._strip_protocol(path)
+        try:
+            infos = self.fs.listdir(path, detail)
+        except OSError as error:
+            if error.errno != errno.ENOTDIR:
+                raise
+            info = self.info(path)
+            return [info] if detail else [info["name"]]
         if not detail:
-            return infos
+            return [os.path.join(path, name) for name in infos]
         stats = []
         for name, st in infos:
             info = {
@@ -80,7 +89,7 @@ class JuiceFS(AbstractFileSystem):
                 "mtime": st.st_mtime,
             }
             if S_ISLNK(st.st_mode):
-                info.update(**self.info(f"{path}/{name}"))
+                info["destination"] = self.fs.readlink(f"{path}/{name}")
             stats.append(info)
         return stats
 
@@ -120,12 +129,30 @@ class JuiceFS(AbstractFileSystem):
             return False
 
     def cp_file(self, path1, path2, **kwargs):
+        path1 = self._strip_protocol(path1)
+        path2 = self._strip_protocol(path2)
         if self.isfile(path1):
             if self.auto_mkdir:
                 self.makedirs(self._parent(path2), exist_ok=True)
-            self.fs.clone(self._strip_protocol(path1), self._strip_protocol(path2))
-        else:
+            source_is_link = self.islink(path1)
+            if self.exists(path2) or source_is_link:
+                temporary = os.path.join(self._parent(path2), ".jfs-copy-" + uuid.uuid4().hex)
+                try:
+                    if source_is_link:
+                        with self.fs.open(path1, "rb") as source, self.fs.open(temporary, "wb") as destination:
+                            shutil.copyfileobj(source, destination, length=1024 * 1024)
+                    else:
+                        self.fs.clone(path1, temporary)
+                    self.fs.rename(temporary, path2)
+                finally:
+                    if self.exists(temporary):
+                        self.fs.remove(temporary)
+            else:
+                self.fs.clone(path1, path2)
+        elif self.isdir(path1):
             self.mkdirs(path2, exist_ok=True)
+        else:
+            raise FileNotFoundError(path1)
 
     def rm(self, path, recursive=False, maxdepth=None):
         if not isinstance(path, list):
@@ -161,7 +188,7 @@ class JuiceFS(AbstractFileSystem):
 
     def _open(self, path, mode="rb", block_size=None, autocommit=True, **kwargs):
         path = self._strip_protocol(path)
-        if self.auto_mkdir and "w" in mode:
+        if self.auto_mkdir and ("w" in mode or "a" in mode or "x" in mode):
             self.makedirs(self._parent(path), exist_ok=True)
         return JuiceFile(self, path, mode, block_size, autocommit, **kwargs)
 
@@ -180,7 +207,7 @@ class JuiceFS(AbstractFileSystem):
         path = cls._strip_protocol(path)
         if os.sep == "/":
             # posix native
-            return path.rsplit("/", 1)[0] or "/"
+            return path.rpartition("/")[0] or "/"
         else:
             # NT
             path_ = path.rsplit("/", 1)[0]
@@ -261,12 +288,26 @@ class JuiceFile(AbstractBufferedFile):
     def commit(self):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
-        self.fs.fs.rename(self.temp, self.path)
+        self.close()
+        temporary = os.path.join(os.path.dirname(self.path) or "/", ".fsspec-" + str(uuid.uuid4()))
+        try:
+            # Bypass this transaction while uploading, then publish by rename.
+            self.fs.put_file(self.temp, temporary, autocommit=True)
+            self.fs.fs.rename(temporary, self.path)
+        except Exception:
+            try:
+                self.fs.fs.remove(temporary)
+            except OSError as error:
+                if error.errno != errno.ENOENT:
+                    logger.warning("Failed to remove temporary file %s: %s", temporary, error)
+            raise
+        os.remove(self.temp)
 
     def discard(self):
         if self.autocommit:
             raise RuntimeError("Can only commit if not already set to autocommit")
-        self.fs.fs.remove(self.temp)
+        self.close()
+        os.remove(self.temp)
 
     def tell(self):
         return self.f.tell()
@@ -296,7 +337,8 @@ class JuiceFile(AbstractBufferedFile):
         return getattr(self.f, item)
 
     def __del__(self):
-        pass
+        if self.__dict__.get("f") is not None:
+            self.close()
 
 from fsspec.registry import register_implementation
 register_implementation("jfs", JuiceFS, True)
