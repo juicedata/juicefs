@@ -161,6 +161,13 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 }
 
 func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall.Errno) {
+	m.dirStatsLock.RLock()
+	generation, flushing := m.dirStatsGeneration, m.dirStatsFlushing
+	m.dirStatsLock.RUnlock()
+	// An in-flight flush has removed its increments from the pending map.
+	if flushing != 0 {
+		return m.calcDirStat(ctx, m.checkRoot(inode))
+	}
 	stat, st = m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
 	if st != 0 {
 		return
@@ -169,6 +176,11 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 		stat, st = m.calcDirStat(ctx, inode)
 	} else {
 		m.dirStatsLock.RLock()
+		// The persisted read may have crossed a flush while no increments were visible.
+		if generation != m.dirStatsGeneration || m.dirStatsFlushing != 0 {
+			m.dirStatsLock.RUnlock()
+			return m.calcDirStat(ctx, m.checkRoot(inode))
+		}
 		pending := m.dirStats[inode]
 		m.dirStatsLock.RUnlock()
 		stat.length += pending.length
@@ -247,7 +259,15 @@ func (m *baseMeta) doFlushDirStat() {
 	}
 	stats := m.dirStats
 	m.dirStats = make(map[Ino]dirStat)
+	m.dirStatsGeneration++
+	m.dirStatsFlushing++
 	m.dirStatsLock.Unlock()
+	defer func() {
+		m.dirStatsLock.Lock()
+		m.dirStatsGeneration++
+		m.dirStatsFlushing--
+		m.dirStatsLock.Unlock()
+	}()
 	err := m.en.doUpdateDirStat(Background(), stats)
 	if err != nil {
 		logger.Errorf("update dir stat failed: %v", err)
