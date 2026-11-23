@@ -54,6 +54,45 @@ func testKeysEqual(objs []object.Object, expectedKeys []string) error {
 }
 
 // copied from pkg/object/filesystem_test.go
+// testUnsafeKeys checks that keys escaping the root are rejected before touching the storage.
+func testUnsafeKeys(t *testing.T, s object.ObjectStorage) {
+	ctx := context.Background()
+	bad := "../unsafe"
+	unsafe := func(op string, err error) {
+		t.Helper()
+		if !errors.Is(err, utils.ErrUnsafeKey) {
+			t.Fatalf("%s: got %v, want ErrUnsafeKey", op, err)
+		}
+	}
+	optional := func(op string, err error) {
+		t.Helper()
+		if !errors.Is(err, utils.ErrNotSUP) {
+			unsafe(op, err)
+		}
+	}
+	_, err := s.Head(ctx, bad)
+	unsafe("Head", err)
+	_, err = s.Get(ctx, bad, 0, -1)
+	unsafe("Get", err)
+	unsafe("Put", s.Put(ctx, bad, bytes.NewReader(nil)))
+	unsafe("Put NUL", s.Put(ctx, "x/\x00", bytes.NewReader(nil)))
+	unsafe("Delete", s.Delete(ctx, bad))
+	_, _, _, err = s.List(ctx, "../", "", "", "/", 10, true)
+	unsafe("List", err)
+	optional("Copy", s.Copy(ctx, "copied", bad))
+	if fs, ok := s.(object.FileSystem); ok {
+		optional("Chmod", fs.Chmod(bad, 0755))
+		optional("Chown", fs.Chown(bad, "nobody", "nogroup"))
+		optional("Chtimes", fs.Chtimes(bad, time.Now()))
+	}
+	if ss, ok := s.(object.SupportSymlink); ok {
+		optional("Symlink", ss.Symlink("x/x.txt", bad))
+		_, err = ss.Readlink(bad)
+		optional("Readlink", err)
+	}
+}
+
+// copied from pkg/object/filesystem_test.go
 func testFileSystem(t *testing.T, s object.ObjectStorage) {
 	ctx := context.Background()
 	keys := []string{
@@ -76,6 +115,7 @@ func testFileSystem(t *testing.T, s object.ObjectStorage) {
 	} else if !f.IsDir() {
 		t.Fatalf("x/ should be a dir")
 	}
+	testUnsafeKeys(t, s)
 	// cleanup
 	defer func() {
 		// delete reversely, directory only can be deleted when it's empty

@@ -975,6 +975,7 @@ func TestWebDAV(t *testing.T) { //skip mutate
 	}
 	s, _ := newWebDAV(os.Getenv("WEBDAV_TEST_BUCKET"), "", "", "")
 	testStorage(t, s)
+	testUnsafeKeys(t, s)
 }
 
 func TestEncrypted(t *testing.T) {
