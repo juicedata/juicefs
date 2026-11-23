@@ -101,7 +101,7 @@ func (f *jFile) Close() error {
 }
 
 func (j *juiceFS) Get(rCtx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := object.CheckKey(key); err != nil {
 		return nil, err
 	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
@@ -126,7 +126,7 @@ var bufPool = sync.Pool{
 }
 
 func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ...object.AttrGetter) (err error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := object.CheckKey(key); err != nil {
 		return err
 	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
@@ -192,7 +192,7 @@ func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ..
 }
 
 func (j *juiceFS) Delete(rCtx context.Context, key string, getters ...object.AttrGetter) error {
-	if err := utils.CheckKey(key); err != nil {
+	if err := object.CheckKey(key); err != nil {
 		return err
 	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
@@ -230,7 +230,7 @@ func (o *jObj) StorageClass() string { return "" }
 func (o *jObj) Status() string       { return "" }
 
 func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := object.CheckKey(key); err != nil {
 		return nil, err
 	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
@@ -256,7 +256,7 @@ func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) 
 }
 
 func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
-	if err := utils.CheckKey(prefix); err != nil {
+	if err := object.CheckKey(prefix); err != nil {
 		return nil, false, "", err
 	}
 	if delimiter != "/" {
@@ -357,7 +357,7 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 }
 
 func (j *juiceFS) Chtimes(key string, mtime time.Time) error {
-	if err := utils.CheckKey(key); err != nil {
+	if err := object.CheckKey(key); err != nil {
 		return err
 	}
 	f, err := j.jfs.Lopen(ctx, j.path(key), 0)
@@ -385,7 +385,7 @@ func syscallMode(i os.FileMode) (o uint32) {
 }
 
 func (j *juiceFS) Chmod(key string, mode os.FileMode) error {
-	if err := utils.CheckKey(key); err != nil {
+	if err := object.CheckKey(key); err != nil {
 		return err
 	}
 	f, err := j.jfs.Open(ctx, j.path(key), 0)
@@ -397,7 +397,7 @@ func (j *juiceFS) Chmod(key string, mode os.FileMode) error {
 }
 
 func (j *juiceFS) Chown(key string, owner, group string) error {
-	if err := utils.CheckKey(key); err != nil {
+	if err := object.CheckKey(key); err != nil {
 		return err
 	}
 	uid := utils.LookupUser(owner)
@@ -414,7 +414,7 @@ func (j *juiceFS) Chown(key string, owner, group string) error {
 }
 
 func (j *juiceFS) Symlink(oldName, newName string) error {
-	if err := utils.CheckKey(newName); err != nil {
+	if err := object.CheckKey(newName); err != nil {
 		return err
 	}
 	p := j.path(newName)
@@ -429,7 +429,7 @@ func (j *juiceFS) Symlink(oldName, newName string) error {
 }
 
 func (j *juiceFS) Readlink(name string) (string, error) {
-	if err := utils.CheckKey(name); err != nil {
+	if err := object.CheckKey(name); err != nil {
 		return "", err
 	}
 	target, err := j.jfs.Readlink(ctx, j.path(name))
@@ -447,7 +447,7 @@ func (j *juiceFS) Limits() object.Limits {
 }
 
 func (j *juiceFS) CreateMultipartUpload(_ context.Context, key string) (*object.MultipartUpload, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := object.CheckKey(key); err != nil {
 		return nil, err
 	}
 	if vfs.IsSpecialName(key) {
@@ -469,7 +469,7 @@ func (j *juiceFS) partDir(key, uploadID string) string {
 }
 
 func (j *juiceFS) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*object.Part, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := object.CheckKey(key); err != nil {
 		return nil, err
 	}
 	err := j.Put(context.Background(), path.Join(j.partDir(key, uploadID), strconv.Itoa(num)), in)
@@ -483,7 +483,7 @@ func (j *juiceFS) UploadPart(ctx context.Context, key string, uploadID string, n
 }
 
 func (j *juiceFS) AbortUpload(rCtx context.Context, key string, uploadID string) {
-	if utils.CheckKey(key) != nil {
+	if object.CheckKey(key) != nil {
 		return
 	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
@@ -491,7 +491,7 @@ func (j *juiceFS) AbortUpload(rCtx context.Context, key string, uploadID string)
 }
 
 func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID string, parts []*object.Part) (err error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := object.CheckKey(key); err != nil {
 		return err
 	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})

@@ -30,7 +30,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/studio-b12/gowebdav"
 )
 
@@ -49,7 +48,7 @@ func (w *webdav) Create(ctx context.Context) error {
 }
 
 func (w *webdav) Head(ctx context.Context, key string) (Object, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := CheckKey(key); err != nil {
 		return nil, err
 	}
 	info, err := w.c.Stat(key)
@@ -70,7 +69,7 @@ func (w *webdav) Head(ctx context.Context, key string) (Object, error) {
 }
 
 func (w *webdav) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := CheckKey(key); err != nil {
 		return nil, err
 	}
 	if off == 0 && limit <= 0 {
@@ -80,7 +79,7 @@ func (w *webdav) Get(ctx context.Context, key string, off, limit int64, getters 
 }
 
 func (w *webdav) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	if err := utils.CheckKey(key); err != nil {
+	if err := CheckKey(key); err != nil {
 		return err
 	}
 	if key == "" {
@@ -93,7 +92,7 @@ func (w *webdav) Put(ctx context.Context, key string, in io.Reader, getters ...A
 }
 
 func (w *webdav) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	if err := utils.CheckKey(key); err != nil {
+	if err := CheckKey(key); err != nil {
 		return err
 	}
 	info, err := w.c.Stat(key)
@@ -119,10 +118,10 @@ func (w *webdav) Delete(ctx context.Context, key string, getters ...AttrGetter) 
 }
 
 func (w *webdav) Copy(ctx context.Context, dst, src string) error {
-	if err := utils.CheckKey(dst); err != nil {
+	if err := CheckKey(dst); err != nil {
 		return err
 	}
-	if err := utils.CheckKey(src); err != nil {
+	if err := CheckKey(src); err != nil {
 		return err
 	}
 	return w.c.Copy(src, dst, true)
@@ -141,7 +140,7 @@ func (w *webdav) List(ctx context.Context, prefix, marker, token, delimiter stri
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
-	if err := utils.CheckKey(prefix); err != nil {
+	if err := CheckKey(prefix); err != nil {
 		return nil, false, "", err
 	}
 

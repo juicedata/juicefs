@@ -157,7 +157,7 @@ func (f *sftpStore) String() string {
 
 // always preserve suffix `/` for directory key
 func (f *sftpStore) path(key string) (string, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := CheckKey(key); err != nil {
 		return "", err
 	}
 	return f.root + key, nil

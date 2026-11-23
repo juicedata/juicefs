@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -130,6 +131,22 @@ type FileSystem interface {
 }
 
 var notSupported = utils.ErrNotSUP
+
+// CheckKey returns an error wrapping utils.ErrUnsafeKey if key could escape the root of a storage that maps keys to paths.
+func CheckKey(key string) error {
+	if strings.IndexByte(key, 0) >= 0 {
+		return fmt.Errorf("%w: %q", utils.ErrUnsafeKey, key)
+	}
+	if !strings.Contains(key, "..") {
+		return nil
+	}
+	for _, e := range strings.FieldsFunc(key, func(r rune) bool { return r == '/' || runtime.GOOS == "windows" && r == '\\' }) {
+		if e == ".." {
+			return fmt.Errorf("%w: %q", utils.ErrUnsafeKey, key)
+		}
+	}
+	return nil
+}
 
 type DefaultObjectStorage struct{}
 

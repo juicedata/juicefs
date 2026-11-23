@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -84,6 +85,30 @@ func TestNFS2(t *testing.T) { //skip mutate
 		t.Fatal(err)
 	}
 	testFileSystem(t, b)
+}
+
+func TestCheckKey(t *testing.T) {
+	for key, unsafe := range map[string]bool{
+		"":         false,
+		"a/b":      false,
+		"a/":       false,
+		"a//b":     false,
+		"./a":      false,
+		"x..y":     false,
+		"..a/b..":  false,
+		"/abs":     false,
+		"..":       true,
+		"../a":     true,
+		"a/../b":   true,
+		"a/..":     true,
+		"a/b\x00c": true,
+		"..\\a":    runtime.GOOS == "windows",
+		"a\\..\\b": runtime.GOOS == "windows",
+	} {
+		if err := CheckKey(key); (err != nil) != unsafe {
+			t.Errorf("CheckKey(%q) = %v, want unsafe=%v", key, err, unsafe)
+		}
+	}
 }
 
 // testUnsafeKeys checks that keys escaping the root are rejected before touching the storage.

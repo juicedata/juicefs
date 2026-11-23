@@ -18,7 +18,6 @@ package utils
 
 import (
 	"context"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -177,29 +176,5 @@ func TestRemovePassword(t *testing.T) {
 	}
 	for _, tc := range testCase {
 		assertEqual(t, RemovePassword(tc.uri), tc.expected)
-	}
-}
-
-func TestCheckKey(t *testing.T) {
-	for key, unsafe := range map[string]bool{
-		"":         false,
-		"a/b":      false,
-		"a/":       false,
-		"a//b":     false,
-		"./a":      false,
-		"x..y":     false,
-		"..a/b..":  false,
-		"/abs":     false,
-		"..":       true,
-		"../a":     true,
-		"a/../b":   true,
-		"a/..":     true,
-		"a/b\x00c": true,
-		"..\\a":    runtime.GOOS == "windows",
-		"a\\..\\b": runtime.GOOS == "windows",
-	} {
-		if err := CheckKey(key); (err != nil) != unsafe {
-			t.Errorf("CheckKey(%q) = %v, want unsafe=%v", key, err, unsafe)
-		}
 	}
 }

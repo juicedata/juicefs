@@ -36,7 +36,6 @@ import (
 
 	"github.com/colinmarc/hdfs/v2"
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 var superuser = "hdfs"
@@ -58,7 +57,7 @@ func (h *hdfsclient) String() string {
 }
 
 func (h *hdfsclient) path(key string) (string, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := CheckKey(key); err != nil {
 		return "", err
 	}
 	return h.basePath + key, nil

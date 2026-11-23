@@ -88,7 +88,7 @@ func (n *nfsStore) String() string {
 }
 
 func (n *nfsStore) path(key string) (string, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := CheckKey(key); err != nil {
 		return "", err
 	}
 	if key == "" {
@@ -329,7 +329,7 @@ func (n *nfsStore) List(ctx context.Context, prefix, marker, token, delimiter st
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
-	if err := utils.CheckKey(prefix); err != nil {
+	if err := CheckKey(prefix); err != nil {
 		return nil, false, "", err
 	}
 	dir := prefix

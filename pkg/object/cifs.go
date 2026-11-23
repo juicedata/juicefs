@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/cloudsoda/go-smb2"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type cifsConn struct {
@@ -59,7 +58,7 @@ type cifsStore struct {
 
 // checkCifsKey also treats `\` as a separator, since SMB uses it regardless of the client OS.
 func checkCifsKey(key string) error {
-	return utils.CheckKey(strings.ReplaceAll(key, "\\", "/"))
+	return CheckKey(strings.ReplaceAll(key, "\\", "/"))
 }
 
 // Chmod changes the mode of the file to mode.

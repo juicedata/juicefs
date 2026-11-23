@@ -395,7 +395,7 @@ var bufPool = sync.Pool{
 }
 
 func shouldRetry(err error) bool {
-	if err == nil || errors.Is(err, utils.ErrSkipped) || errors.Is(err, utils.ErrExtlink) {
+	if err == nil || errors.Is(err, utils.ErrSkipped) || errors.Is(err, utils.ErrExtlink) || errors.Is(err, utils.ErrUnsafeKey) {
 		return false
 	}
 

@@ -75,7 +75,7 @@ func (d *filestore) String() string {
 }
 
 func (d *filestore) path(key string) (string, error) {
-	if err := utils.CheckKey(key); err != nil {
+	if err := CheckKey(key); err != nil {
 		return "", err
 	}
 	if strings.HasSuffix(d.root, dirSuffix) {
@@ -313,7 +313,7 @@ func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter s
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
-	if err := utils.CheckKey(prefix); err != nil {
+	if err := CheckKey(prefix); err != nil {
 		return nil, false, "", err
 	}
 	var dir string = d.root + prefix
