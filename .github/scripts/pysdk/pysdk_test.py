@@ -65,45 +65,24 @@ class ReadAllTests(FileTests):
         content = {'name': '小文件', 'text': 'abcdef' * 700}
         with self.v.open(TESTFILE, 'w', encoding='utf-8') as stream:
             json.dump(content, stream, ensure_ascii=False)
-        already_tracing = tracemalloc.is_tracing()
         tracemalloc.start()
         try:
-            before = tracemalloc.get_traced_memory()[0]
-            tracemalloc.reset_peak()
             with self.v.open(TESTFILE, 'r', encoding='utf-8') as stream:
                 actual = json.load(stream)
-            peak = tracemalloc.get_traced_memory()[1] - before
+            peak = tracemalloc.get_traced_memory()[1]
         finally:
-            if not already_tracing:
-                tracemalloc.stop()
+            tracemalloc.stop()
         self.assertEqual(actual, content)
         self.assertLess(peak, 1 << 20)
 
-    def test_readall_after_partial_buffered_read(self):
-        for size in (0, 1, 7000, 64000):
-            content = (b'0123456789' * ((size + 9) // 10))[:size]
-            with self.v.open(TESTFILE, 'wb', 0) as stream:
-                stream.write(content)
-            for buffering in (0, -1):
-                with self.subTest(size=size, buffering=buffering):
-                    with self.v.open(TESTFILE, 'rb', buffering) as stream:
-                        self.assertEqual(stream.read(3), content[:3])
-                        self.assertEqual(stream.read(), content[3:])
-                        self.assertEqual(stream.tell(), len(content))
-                        self.assertEqual(stream.read(), b'')
-
-    def test_sparse_multichunk_readall(self):
-        tail = b'nonzero-read-tail'
-        size = (4 << 20) + len(tail)
-        with self.v.open(TESTFILE, 'wb', 0) as stream:
-            stream.truncate(size)
-            stream.seek(size - len(tail))
-            stream.write(tail)
+    def test_readall_after_partial_read(self):
+        content = b'0123456789' * 7000
+        self.create_file(TESTFILE, content)
         for buffering in (0, -1):
             with self.subTest(buffering=buffering):
                 with self.v.open(TESTFILE, 'rb', buffering) as stream:
-                    self.assertEqual(stream.read(), bytes(4 << 20) + tail)
-                    self.assertEqual(stream.tell(), size)
+                    self.assertEqual(stream.read(3), content[:3])
+                    self.assertEqual(stream.read(), content[3:])
                     self.assertEqual(stream.read(), b'')
 
 

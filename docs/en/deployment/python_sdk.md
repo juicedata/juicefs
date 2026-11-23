@@ -96,8 +96,6 @@ jfs = Client(name='', meta='redis://192.168.1.8/0')
 jfs.listdir('/')
 ```
 
-Unbounded reads such as `f.read()` use the cached file length as a buffer-allocation hint, avoiding large temporary buffers for small files and EOF checks. Reads still continue until the native reader reports EOF; the hint does not limit the returned data.
-
 Use `readinto()` to fill an existing writable, contiguous buffer without creating a full-size temporary Python `bytes` object. The buffer can be reused between calls. An I/O error may leave partial data in the buffer.
 
 ### Using fsspec
