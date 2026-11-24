@@ -11,8 +11,19 @@ The API follows the Go standard library: a `Client` is a handle to one volume mo
 
 Use Go 1.25.10 or later, with cgo enabled and a C compiler installed. The SDK package is `github.com/juicedata/juicefs/sdk/go`, named `juicefs`.
 
+If you are starting a new project, run `go mod init example.com/myapp`. Set `JUICEFS_VERSION` to a tag or commit that contains the SDK. The following command prints the path to that version's `go.mod`.
+
 ```shell
-go get github.com/juicedata/juicefs@<version>
+JUICEFS_VERSION='your-tag-or-commit'
+go list -m -f '{{.GoMod}}' "github.com/juicedata/juicefs@${JUICEFS_VERSION}"
+```
+
+A standalone Go build applies the main module's `replace` directives. Copy the `replace` directives from that file into your project's `go.mod` to use the same dependency forks as JuiceFS. If your project already replaces any of those modules, resolve the conflicts before building.
+
+Save the example below as `main.go`, then use the same `JUICEFS_VERSION` to add the SDK dependency and build the example from your project directory.
+
+```shell
+go get "github.com/juicedata/juicefs/sdk/go@${JUICEFS_VERSION}"
 go build -tags nogspt ./...
 ```
 

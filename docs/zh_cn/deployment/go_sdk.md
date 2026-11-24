@@ -11,8 +11,19 @@ API 遵循 Go 标准库：`Client` 是绑定到一个文件系统的句柄，以
 
 使用 Go 1.25.10 及以上版本，启用 cgo 并安装 C 编译器。SDK 的包路径为 `github.com/juicedata/juicefs/sdk/go`，包名为 `juicefs`。
 
+新项目先运行 `go mod init example.com/myapp`。将 `JUICEFS_VERSION` 设为包含 Go SDK 的 JuiceFS 标签或提交。下面的命令会输出对应版本的 `go.mod` 路径。
+
 ```shell
-go get github.com/juicedata/juicefs@<version>
+JUICEFS_VERSION='your-tag-or-commit'
+go list -m -f '{{.GoMod}}' "github.com/juicedata/juicefs@${JUICEFS_VERSION}"
+```
+
+Go 构建独立模块时只应用主模块的 `replace` 指令。将该文件中的 `replace` 指令复制到项目自己的 `go.mod`，即可使用与 JuiceFS 一致的依赖 fork。如果项目已经替换了其中某个模块，请先处理冲突。
+
+将下方示例保存为 `main.go`，然后在项目目录下用同一个 `JUICEFS_VERSION` 添加 SDK 依赖并构建示例。
+
+```shell
+go get "github.com/juicedata/juicefs/sdk/go@${JUICEFS_VERSION}"
 go build -tags nogspt ./...
 ```
 
