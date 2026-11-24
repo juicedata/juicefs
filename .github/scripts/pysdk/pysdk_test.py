@@ -59,23 +59,6 @@ class FileTests(unittest.TestCase):
             self.assertEqual(fobj.read().splitlines(), [b"bacon"])
 
 
-class WriteBufferTests(FileTests):
-    def test_large_buffered_write_copy_is_bounded(self):
-        content = bytes(range(256)) * (1 << 17)
-        with self.v.open(TESTFILE, 'wb') as stream:
-            tracemalloc.start()
-            try:
-                self.assertEqual(stream.write(content), len(content))
-                stream.flush()
-                _, peak = tracemalloc.get_traced_memory()
-            finally:
-                tracemalloc.stop()
-            self.assertLess(peak, 12 << 20)
-            self.assertEqual(stream.tell(), len(content))
-        with self.v.open(TESTFILE, 'rb') as stream:
-            self.assertEqual(hashlib.sha256(stream.read()).digest(), hashlib.sha256(content).digest())
-
-
 class ReadintoTests(FileTests):
     def test_readinto_large_sliced_buffer(self):
         content = bytes(range(256)) * (1 << 15) + b'end'
@@ -626,6 +609,21 @@ class LargeWriteTests(FileTests):
                         self.assertEqual(stream.tell(), chunk)
                         self.assertEqual(f.length, chunk)
                     self.assertEqual(self.v.stat(TESTFILE).st_size, chunk)
+
+    def test_large_buffered_write_copy_is_bounded(self):
+        content = bytes(range(256)) * (1 << 17)
+        with self.v.open(TESTFILE, 'wb') as stream:
+            tracemalloc.start()
+            try:
+                self.assertEqual(stream.write(content), len(content))
+                stream.flush()
+                _, peak = tracemalloc.get_traced_memory()
+            finally:
+                tracemalloc.stop()
+            self.assertLess(peak, 12 << 20)
+            self.assertEqual(stream.tell(), len(content))
+        with self.v.open(TESTFILE, 'rb') as stream:
+            self.assertEqual(hashlib.sha256(stream.read()).digest(), hashlib.sha256(content).digest())
 
 
 class BenchTests(FileTests):
