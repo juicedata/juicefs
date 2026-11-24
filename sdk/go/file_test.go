@@ -770,14 +770,22 @@ func TestDirHandle(t *testing.T) {
 		}
 		return names, err
 	}
-	if got, err := names(1); !slices.Equal(got, []string{"a"}) || err != nil {
-		t.Fatalf("Readdirnames(1): %v %v", got, err)
+	gotNames, err := names(1)
+	if len(gotNames) != 1 || err != nil {
+		t.Fatalf("Readdirnames(1): %v %v", gotNames, err)
 	}
-	if entries, err := d.ReadDir(1); len(entries) != 1 || entries[0].Name() != "b" || err != nil {
-		t.Fatalf("ReadDir(1): %v %v", entries, err)
+	dirEntries, err := d.ReadDir(1)
+	if len(dirEntries) != 1 || err != nil {
+		t.Fatalf("ReadDir(1): %v %v", dirEntries, err)
 	}
-	if infos, err := d.Readdir(-1); len(infos) != 1 || infos[0].Name() != "c" || err != nil {
+	infos, err := d.Readdir(-1)
+	if len(infos) != 1 || err != nil {
 		t.Fatalf("Readdir(-1): %v %v", infos, err)
+	}
+	gotNames = append(gotNames, dirEntries[0].Name(), infos[0].Name())
+	slices.Sort(gotNames)
+	if !slices.Equal(gotNames, []string{"a", "b", "c"}) {
+		t.Fatalf("entries from the shared cursor: %v", gotNames)
 	}
 	if got, err := names(-1); len(got) != 0 || err != nil {
 		t.Fatalf("Readdirnames(-1) at end: %v %v", got, err)
@@ -796,19 +804,21 @@ func TestDirHandle(t *testing.T) {
 	if off, err := d.Seek(0, io.SeekStart); off != 0 || err != nil {
 		t.Fatalf("Seek(0): %d %v", off, err)
 	}
-	if got, err := names(-1); !slices.Equal(got, []string{"0", "a", "b", "c"}) || err != nil {
-		t.Fatalf("Readdirnames after rewind: %v %v", got, err)
+	gotNames, err = names(-1)
+	slices.Sort(gotNames)
+	if !slices.Equal(gotNames, []string{"0", "a", "b", "c"}) || err != nil {
+		t.Fatalf("Readdirnames after rewind: %v %v", gotNames, err)
 	}
 	if off, err := d.Seek(-2, io.SeekCurrent); off != 2 || err != nil {
 		t.Fatalf("Seek(-2, current): %d %v", off, err)
 	}
-	if got, err := names(-1); !slices.Equal(got, []string{"b", "c"}) || err != nil {
+	if got, err := names(-1); len(got) != 2 || err != nil {
 		t.Fatalf("Readdirnames after Seek(2): %v %v", got, err)
 	}
 	if off, err := d.Seek(-1, io.SeekEnd); off != 3 || err != nil {
 		t.Fatalf("Seek(-1, end): %d %v", off, err)
 	}
-	if got, err := names(-1); !slices.Equal(got, []string{"c"}) || err != nil {
+	if got, err := names(-1); len(got) != 1 || err != nil {
 		t.Fatalf("Readdirnames after Seek(-1, end): %v %v", got, err)
 	}
 	if off, err := d.Seek(10, io.SeekStart); off != 10 || err != nil {
@@ -829,12 +839,50 @@ func TestDirHandle(t *testing.T) {
 	if err != nil || len(fentries) != len(entries) {
 		t.Fatalf("ReadDir(-1): %v %v", fentries, err)
 	}
+	slices.SortFunc(fentries, func(a, b fs.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
 	for i, e := range fentries {
 		info, _ := e.Info()
 		want, _ := entries[i].Info()
 		if e.Name() != entries[i].Name() || e.Type() != entries[i].Type() || info.Sys().(*Stat).Inode != want.Sys().(*Stat).Inode {
 			t.Errorf("entry %d: %v, want %v", i, e, entries[i])
 		}
+	}
+}
+
+// listedDir lists names in a fixed order, as a backend not sorting them.
+type listedDir struct {
+	fileBackend
+	names []string
+}
+
+func (d *listedDir) readdir(off int64, n int) ([]*fileInfo, error) {
+	rest := d.names[min(off, int64(len(d.names))):]
+	if n > 0 {
+		rest = rest[:min(n, len(rest))]
+	}
+	infos := make([]*fileInfo, len(rest))
+	for i, name := range rest {
+		infos[i] = newFileInfo(name, &Stat{Mode: syscall.S_IFREG})
+	}
+	return infos, nil
+}
+
+func (d *listedDir) rewinddir() error { return nil }
+
+func TestDirHandleOrder(t *testing.T) {
+	order := []string{"c", "a", "b"}
+	d := &File{f: &listedDir{names: order}, name: "d", readable: true, isDir: true}
+	if got, err := d.Readdirnames(-1); !slices.Equal(got, order) || err != nil {
+		t.Fatalf("Readdirnames(-1): %v %v", got, err)
+	}
+	if _, err := d.Seek(0, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := d.Readdirnames(2); !slices.Equal(got, order[:2]) || err != nil {
+		t.Fatalf("Readdirnames(2): %v %v", got, err)
+	}
+	if got, err := d.Readdirnames(2); !slices.Equal(got, order[2:]) || err != nil {
+		t.Fatalf("Readdirnames(2) second batch: %v %v", got, err)
 	}
 }
 

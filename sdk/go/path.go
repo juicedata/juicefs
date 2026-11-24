@@ -20,6 +20,7 @@ import (
 	"io/fs"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -269,4 +270,8 @@ func (c *Client) ReadDir(name string) ([]fs.DirEntry, error) {
 		entries[i] = fs.FileInfoToDirEntry(fi)
 	}
 	return entries, nil
+}
+
+func sortByName(infos []*fileInfo) {
+	slices.SortFunc(infos, func(a, b *fileInfo) int { return strings.Compare(a.name, b.name) })
 }

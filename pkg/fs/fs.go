@@ -1554,12 +1554,16 @@ func (f *File) Utime2(ctx meta.Context, atimeSec, atimeNSec, mtimeSec, mtimeNsec
 	return
 }
 
-func (f *File) Seek(ctx meta.Context, offset int64, whence int) (int64, error) {
+func (f *File) Seek(ctx meta.Context, offset int64, whence int) (off int64, err error) {
 	defer trace.StartRegion(context.TODO(), "fs.Seek").End()
 	l := vfs.NewLogContext(ctx)
-	defer func() { f.fs.log(l, "Seek (%s,%d,%d): %d", f.path, offset, whence, f.offset) }()
+	defer func() { f.fs.log(l, "Seek (%s,%d,%d): %d", f.path, offset, whence, off) }()
 	f.Lock()
 	defer f.Unlock()
+	if f.info.IsDir() {
+		// Read the directory again after seek, like rewinddir.
+		f.dircache, f.entries = nil, nil
+	}
 	switch whence {
 	case io.SeekStart:
 		f.offset = offset
