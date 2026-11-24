@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -124,7 +125,7 @@ func fsck(ctx *cli.Context) error {
 	}
 	sliceCSpin.Done()
 
-	chunkConf := *getDefaultChunkConf(format)
+	chunkConf := *fs.DefaultChunkConf(format)
 	chunkConf.CacheDir = "memory"
 
 	blob, err := createStorage(*format)
