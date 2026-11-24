@@ -550,6 +550,8 @@ class _File(object):
         got = 0
         while size > 0 or size < 0:
             n = 4 << 20
+            if size < 0:
+                n = min(n, max(io.DEFAULT_BUFFER_SIZE, self.length - self.off - got))
             if size > 0 and size < n:
                 n = size
             buf = bytes(n)

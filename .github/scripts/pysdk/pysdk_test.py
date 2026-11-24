@@ -4,6 +4,8 @@ import fractions
 import grp
 import hashlib
 import io
+import json
+import tracemalloc
 import unittest
 from unittest.mock import patch
 import os
@@ -56,6 +58,32 @@ class FileTests(unittest.TestCase):
         fd.close()
         with self.v.open(TESTFILE, "rb") as fobj:
             self.assertEqual(fobj.read().splitlines(), [b"bacon"])
+
+
+class ReadAllTests(FileTests):
+    def test_small_json_readall_temporary_memory(self):
+        content = {'name': '小文件', 'text': 'abcdef' * 700}
+        with self.v.open(TESTFILE, 'w', encoding='utf-8') as stream:
+            json.dump(content, stream, ensure_ascii=False)
+        tracemalloc.start()
+        try:
+            with self.v.open(TESTFILE, 'r', encoding='utf-8') as stream:
+                actual = json.load(stream)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        self.assertEqual(actual, content)
+        self.assertLess(peak, 1 << 20)
+
+    def test_readall_after_partial_read(self):
+        content = b'0123456789' * 7000
+        self.create_file(TESTFILE, content)
+        for buffering in (0, -1):
+            with self.subTest(buffering=buffering):
+                with self.v.open(TESTFILE, 'rb', buffering) as stream:
+                    self.assertEqual(stream.read(3), content[:3])
+                    self.assertEqual(stream.read(), content[3:])
+                    self.assertEqual(stream.read(), b'')
 
 
 class ReadintoTests(FileTests):
