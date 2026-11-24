@@ -116,6 +116,13 @@ jobs:
           slave2-port: 7004
           slave3-port: 7005
 
+      - if: matrix.test == 'test.pkg'
+        name: Cache Hadoop
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/hadoop
+          key: hadoop-2.10.2
+
       - name: Prepare Database
         run: |
           TEST=${{matrix.test}} ./.github/scripts/prepare_db.sh
