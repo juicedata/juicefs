@@ -26,7 +26,7 @@ import (
 
 type storageHolder struct {
 	object.ObjectStorage
-	config object.VolumeStorageConfig
+	config object.VolumeConfig
 }
 
 func (h *storageHolder) Shutdown() {
@@ -39,7 +39,7 @@ func NewReloadableStorage(format *meta.Format, m meta.Meta, patch func(*meta.For
 	if patch != nil {
 		patch(format)
 	}
-	config, err := format.VolumeStorageConfig()
+	config, err := format.VolumeConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func NewReloadableStorage(format *meta.Format, m meta.Meta, patch func(*meta.For
 		if patch != nil {
 			patch(format)
 		}
-		config, err := format.VolumeStorageConfig()
+		config, err := format.VolumeConfig()
 		if err != nil {
 			return fmt.Errorf("object storage: %w", err)
 		}

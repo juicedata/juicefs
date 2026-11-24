@@ -59,7 +59,7 @@ func TestEncrypt(t *testing.T) {
 				t.Fatalf("invalid format: %+v", format)
 			}
 			encrypted := format
-			config, err := format.VolumeStorageConfig()
+			config, err := format.VolumeConfig()
 			if err != nil {
 				t.Fatal(err)
 			}

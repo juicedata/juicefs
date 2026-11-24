@@ -229,7 +229,7 @@ func fixObjectSize(s uint64) uint64 {
 }
 
 func createStorage(format meta.Format) (object.ObjectStorage, error) {
-	config, err := format.VolumeStorageConfig()
+	config, err := format.VolumeConfig()
 	if err != nil {
 		return nil, err
 	}

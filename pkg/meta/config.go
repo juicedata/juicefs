@@ -130,13 +130,13 @@ func (f *Format) Clone() *Format {
 	return &c
 }
 
-// VolumeStorageConfig returns the storage settings with decrypted credentials.
-func (f *Format) VolumeStorageConfig() (object.VolumeStorageConfig, error) {
+// VolumeConfig returns the storage settings with decrypted credentials.
+func (f *Format) VolumeConfig() (object.VolumeConfig, error) {
 	c := *f
 	if err := c.Decrypt(); err != nil {
-		return object.VolumeStorageConfig{}, fmt.Errorf("format decrypt: %s", err)
+		return object.VolumeConfig{}, fmt.Errorf("format decrypt: %s", err)
 	}
-	return object.VolumeStorageConfig{
+	return object.VolumeConfig{
 		Name:         c.Name,
 		Storage:      c.Storage,
 		Bucket:       c.Bucket,

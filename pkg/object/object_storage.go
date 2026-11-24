@@ -209,9 +209,9 @@ func CreateStorage(name, endpoint, accessKey, secretKey, token string) (ObjectSt
 	return nil, fmt.Errorf("invalid storage: %s", name)
 }
 
-// VolumeStorageConfig contains the settings used to create a volume's object
+// VolumeConfig contains the settings used to create a volume's object
 // storage. SecretKey, SessionToken and EncryptKey must already be decrypted.
-type VolumeStorageConfig struct {
+type VolumeConfig struct {
 	Name         string
 	Storage      string
 	Bucket       string
@@ -225,7 +225,7 @@ type VolumeStorageConfig struct {
 }
 
 // CreateVolumeStorage creates storage with the volume's prefix, tiers and encryption.
-func CreateVolumeStorage(config VolumeStorageConfig) (ObjectStorage, error) {
+func CreateVolumeStorage(config VolumeConfig) (ObjectStorage, error) {
 	UserAgent = "JuiceFS-" + version.Version()
 	var blob ObjectStorage
 	var err error
