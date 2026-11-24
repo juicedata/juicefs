@@ -202,6 +202,7 @@ type wrapper struct {
 	superuser  string
 	supergroup string
 	conf       javaConf
+	fixedIds   bool // set by jfs_set_ids; updateCtx keeps the identity
 }
 
 type logWriter struct {
@@ -394,6 +395,7 @@ type javaConf struct {
 	PushRemoteWriteAuth string `json:"pushRemoteWriteAuth"`
 	GuidMask            string `json:"guidMask"`
 	Caller              int    `json:"caller"`
+	UsageTag            string `json:"usageTag,omitempty"`
 	RootGroup           string `json:"rootGroup"` // Group name mapped to GID 0.
 	Subdir              string `json:"subdir"`
 
@@ -438,7 +440,7 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 	if conf.RootGroup == "" {
 		conf.RootGroup = supergroup
 	}
-	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf}
+	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf, false}
 	if formats[name] != nil && formats[name].KerbConf != "" {
 		if _, ok := superuserChangedCb[name]; !ok {
 			jfs.Meta().OnReload(func(format *meta.Format) error {
@@ -785,7 +787,11 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			go vfs.Backup(m, blob, conf.BackupMeta, conf.BackupSkipTrash)
 		}
 		if !jConf.NoUsageReport && !jConf.NoSession {
-			go usage.ReportUsage(m, "java-sdk "+version.Version())
+			tag := "java-sdk"
+			if jConf.UsageTag != "" {
+				tag = jConf.UsageTag
+			}
+			go usage.ReportUsage(m, tag+" "+version.Version())
 		}
 		jfs, err := fs.NewFileSystem(conf, m, store, registry)
 		if err != nil {
@@ -824,6 +830,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 				return nil
 			}
 		}
+		registries[jfs] = registry
 		return jfs
 	})
 }
@@ -900,6 +907,9 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 }
 
 func updateCtx(w *wrapper, groups []string) {
+	if w.fixedIds {
+		return
+	}
 	if w.isSuperuser(w.user, groups) {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
 	} else {
@@ -986,6 +996,7 @@ func jfs_term(pid int64, h int64, terminate C.int) int32 {
 					if terminate != 0 {
 						w.Close()
 						delete(activefs, k)
+						delete(registries, w.FileSystem)
 					}
 					// Otherwise, don't close the filesystem, so it can be re-used later
 				}

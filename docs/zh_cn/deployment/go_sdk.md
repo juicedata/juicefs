@@ -9,7 +9,7 @@ API 遵循 Go 标准库：`Client` 是绑定到一个文件系统的句柄，以
 
 ## 快速上手
 
-使用 Go 1.25.10 及以上版本，启用 cgo 并安装 C 编译器。SDK 的包路径为 `github.com/juicedata/juicefs/sdk/go`，包名为 `juicefs`。
+使用 Go 1.25.10 及以上版本，启用 cgo 并安装 C 编译器。SDK 的包路径为 `github.com/juicedata/juicefs/sdk/go`，包名为 `juicefs`。也可以不编译 JuiceFS 的代码，改用 libjfs 动态库，见 [libjfs 后端](#libjfs-backend)。
 
 ```shell
 go get github.com/juicedata/juicefs@<version>
@@ -187,7 +187,7 @@ http.Handle("/", http.FileServerFS(fsys))
 
 ### 监控指标
 
-每个 `Client` 有独立的 Prometheus registry。`Client.Gatherer()` 返回该 registry，程序可以将其与自身的指标一起暴露：
+每个 `Client` 有独立的 Prometheus registry（libjfs 后端的差异见[下文](#libjfs-backend)）。`Client.Gatherer()` 返回该 registry，程序可以将其与自身的指标一起暴露：
 
 ```go
 http.Handle("/metrics", promhttp.HandlerFor(
@@ -195,6 +195,28 @@ http.Handle("/metrics", promhttp.HandlerFor(
 ```
 
 也可以通过 `Config.PushGateway` 将指标推送到 Pushgateway。
+
+## libjfs 后端 {#libjfs-backend}
+
+加上 `libjfs` 构建标签后，SDK 不再编译 JuiceFS 的代码，而是通过 cgo 调用 libjfs 动态库（Python SDK 和 Hadoop SDK 使用的同一个库）。API 和语义与默认构建完全相同。只能获得 libjfs 动态库、不能获得源码时（例如企业版）使用这种方式。
+
+所用的 libjfs 需要包含 Go SDK 用到的导出函数，即与 SDK 相同或更新的版本。社区版可以从源码构建：
+
+```shell
+# 在 JuiceFS 仓库的根目录执行；macOS 上请把输出文件命名为 libjfs.dylib
+go build -tags nogspt -buildmode=c-shared -o /opt/juicefs/lib/libjfs.so ./sdk/java/libjfs
+```
+
+构建程序时通过 `CGO_LDFLAGS` 指定动态库所在的目录，此时不需要 `nogspt` 标签：
+
+```shell
+CGO_LDFLAGS="-L/opt/juicefs/lib" go build -tags libjfs ./...
+```
+
+运行时动态链接器需要能找到该库：
+
+- Linux：设置 `LD_LIBRARY_PATH`，或在构建时用 `CGO_LDFLAGS="-L/opt/juicefs/lib -Wl,-rpath,/opt/juicefs/lib"` 写入搜索路径。
+- macOS：系统会去掉 `go` 命令及其子进程的 `DYLD_*` 环境变量，因此 `go run` 和 `go test` 启动的程序找不到该库。可以先 `go build`，再用 `DYLD_LIBRARY_PATH=/opt/juicefs/lib` 运行生成的程序；也可以在构建 libjfs 时加上 `-ldflags=-extldflags=-Wl,-install_name,@rpath/libjfs.dylib`，再像 Linux 一样用 `-Wl,-rpath` 写入搜索路径，此时 `go run` 和 `go test` 也能直接使用。
 
 ## 基准测试
 

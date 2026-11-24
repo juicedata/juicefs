@@ -9,7 +9,7 @@ The API follows the Go standard library: a `Client` is a handle to one volume mo
 
 ## Quick start
 
-Use Go 1.25.10 or later, with cgo enabled and a C compiler installed. The SDK package is `github.com/juicedata/juicefs/sdk/go`, named `juicefs`.
+Use Go 1.25.10 or later, with cgo enabled and a C compiler installed. The SDK package is `github.com/juicedata/juicefs/sdk/go`, named `juicefs`. To use the libjfs shared library instead of compiling the code of JuiceFS, see [libjfs backend](#libjfs-backend).
 
 ```shell
 go get github.com/juicedata/juicefs@<version>
@@ -187,7 +187,7 @@ http.Handle("/", http.FileServerFS(fsys))
 
 ### Metrics
 
-Each `Client` has its own Prometheus registry. `Client.Gatherer()` returns it, so that it can be exposed by the program together with its own metrics:
+Each `Client` has its own Prometheus registry (see [below](#libjfs-backend) for the libjfs backend). `Client.Gatherer()` returns it, so that it can be exposed by the program together with its own metrics:
 
 ```go
 http.Handle("/metrics", promhttp.HandlerFor(
@@ -195,6 +195,28 @@ http.Handle("/metrics", promhttp.HandlerFor(
 ```
 
 Metrics can also be pushed to a Pushgateway with `Config.PushGateway`.
+
+## libjfs backend {#libjfs-backend}
+
+With the `libjfs` build tag, the SDK does not compile the code of JuiceFS. Instead, it calls the libjfs shared library through cgo, the same library used by the Python SDK and the Hadoop SDK. The API and its semantics are the same as in the default build. Use it when only the libjfs library is available without the source code, as in the Enterprise Edition.
+
+The libjfs used must contain the functions exported for the Go SDK, that is, be of the same version as the SDK or later. Build it from the source of the Community Edition:
+
+```shell
+# Run from the root of the JuiceFS repository; on macOS, name the output libjfs.dylib
+go build -tags nogspt -buildmode=c-shared -o /opt/juicefs/lib/libjfs.so ./sdk/java/libjfs
+```
+
+Pass the directory of the library with `CGO_LDFLAGS` to build the program. The `nogspt` tag is not needed in this case:
+
+```shell
+CGO_LDFLAGS="-L/opt/juicefs/lib" go build -tags libjfs ./...
+```
+
+At run time, the dynamic linker must be able to find the library:
+
+- Linux: set `LD_LIBRARY_PATH`, or record the path at build time with `CGO_LDFLAGS="-L/opt/juicefs/lib -Wl,-rpath,/opt/juicefs/lib"`.
+- macOS: the system removes the `DYLD_*` environment variables from the `go` command and its child processes, so programs started by `go run` and `go test` cannot find the library. Build the program with `go build` and run it with `DYLD_LIBRARY_PATH=/opt/juicefs/lib`. Alternatively, build libjfs with `-ldflags=-extldflags=-Wl,-install_name,@rpath/libjfs.dylib` and record the path with `-Wl,-rpath` as on Linux; then `go run` and `go test` work as well.
 
 ## Benchmarks
 
