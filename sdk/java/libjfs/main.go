@@ -64,7 +64,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/juicedata/juicefs/cmd"
 	"github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
@@ -681,7 +680,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			go metric.UpdateMetrics(registerer)
 		}
 
-		blob, err := cmd.NewReloadableStorage(format, m, func(f *meta.Format) {
+		blob, err := fs.NewReloadableStorage(format, m, func(f *meta.Format) {
 			if jConf.Bucket != "" {
 				f.Bucket = jConf.Bucket
 			}

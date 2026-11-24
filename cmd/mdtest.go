@@ -209,7 +209,7 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	}
 	registerer, registry := wrapRegister(c, mp, format.Name)
 
-	blob, err := NewReloadableStorage(format, m, updateFormat(c))
+	blob, err := fs.NewReloadableStorage(format, m, updateFormat(c))
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
