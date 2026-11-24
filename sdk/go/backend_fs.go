@@ -21,6 +21,8 @@ package juicefs
 import (
 	"errors"
 	"fmt"
+	"io"
+	"math"
 	"os"
 	"slices"
 	"syscall"
@@ -383,20 +385,25 @@ func (h *fsFile) truncate(size int64) error {
 	return errno(h.f.Truncate(h.b.ctx(), uint64(size)))
 }
 
-// readdir reads by inode from meta: fs.File.ReaddirPlus caches the entries
-// for the life of the handle.
-func (h *fsFile) readdir() ([]*fileInfo, error) {
-	var entries []*meta.Entry
-	if e := h.b.fs.Meta().Readdir(h.b.ctx(), h.f.Inode(), 1, &entries); e != 0 {
+// readdir uses the entries kept by fs.File until it seeks.
+func (h *fsFile) readdir(off int64, n int) ([]*fileInfo, error) {
+	entries, e := h.f.ReaddirPlus(h.b.ctx(), int(min(off, int64(math.MaxInt))))
+	if e != 0 {
 		return nil, e
 	}
-	infos := make([]*fileInfo, 0, len(entries))
-	for _, en := range entries {
-		if name := string(en.Name); name != "." && name != ".." {
-			infos = append(infos, newFileInfo(name, toStat(en.Inode, en.Attr)))
-		}
+	if n > 0 && len(entries) > n {
+		entries = entries[:n]
+	}
+	infos := make([]*fileInfo, len(entries))
+	for i, en := range entries {
+		infos[i] = newFileInfo(string(en.Name), toStat(en.Inode, en.Attr))
 	}
 	return infos, nil
+}
+
+func (h *fsFile) rewinddir() error {
+	_, err := h.f.Seek(h.b.ctx(), 0, io.SeekStart)
+	return err
 }
 
 func (h *fsFile) fsync() error {

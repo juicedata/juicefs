@@ -66,9 +66,12 @@ type fileBackend interface {
 	pread(b []byte, off int64) (int, error)
 	pwrite(b []byte, off int64) (int, error)
 	truncate(size int64) error
-	// readdir reads the whole directory again on each call, without "." and
-	// "..", unsorted.
-	readdir() ([]*fileInfo, error)
+	// readdir returns the entries from the off-th, at most n if n > 0,
+	// without "." and "..", in the order of the backend. The directory is
+	// read by the first call and kept by the backend until rewinddir.
+	readdir(off int64, n int) ([]*fileInfo, error)
+	// rewinddir drops the entries kept by readdir.
+	rewinddir() error
 	fsync() error
 	stat() (*Stat, error)
 	chmod(mode uint16) error

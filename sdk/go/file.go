@@ -22,15 +22,14 @@ import (
 	"io/fs"
 	"os"
 	"slices"
-	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 )
 
 // File is an open file or directory, like os.File. Its methods may be called
 // concurrently, but are not serialized: concurrent calls of Read, Write and
-// Seek share the offset without ordering, and Close does not wait for the
+// Seek share the offset without ordering, so do the directory reads, which
+// may return the same entries or skip some; Close does not wait for the
 // calls in progress. Callers that need ordering must synchronize them.
 type File struct {
 	c    *Client
@@ -39,11 +38,6 @@ type File struct {
 
 	off    atomic.Int64 // offset of a file, or entries returned of a directory
 	closed atomic.Bool
-
-	// dirMu guards dirents and the offset of a directory; it is not held
-	// while reading the directory.
-	dirMu   sync.Mutex
-	dirents []*fileInfo // listing of a directory, sorted; dropped by Seek
 
 	readable, writable, append, isDir bool
 }
@@ -300,7 +294,7 @@ func (f *File) checkWrite() error {
 // Seek sets the offset; io.SeekEnd is relative to the current length of the
 // file, including the writes of this client that are not flushed. On a
 // directory it restarts reading from the backend, and the offset counts
-// entries in the order of names.
+// entries in the order of the backend.
 func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
 	if f == nil {
 		return 0, fs.ErrInvalid
@@ -348,18 +342,18 @@ func seekOffset(off *atomic.Int64, offset int64, whence int, end int64) (int64, 
 
 // seekDir drops the listing, as os drops its directory state on any Seek.
 func (f *File) seekDir(offset int64, whence int) (int64, error) {
-	var infos []*fileInfo
-	var err error
-	if whence == io.SeekEnd {
-		infos, err = f.listDir()
-	}
-	f.dirMu.Lock()
-	defer f.dirMu.Unlock()
-	f.dirents = infos
-	if err != nil {
+	if err := f.f.rewinddir(); err != nil {
 		return 0, err
 	}
-	return seekOffset(&f.off, offset, whence, int64(len(infos)))
+	var end int64
+	if whence == io.SeekEnd {
+		infos, err := f.f.readdir(0, 0)
+		if err != nil {
+			return 0, err
+		}
+		end = int64(len(infos))
+	}
+	return seekOffset(&f.off, offset, whence, end)
 }
 
 // Stat returns the current attributes of the open file; Size includes the
@@ -450,8 +444,8 @@ func (f *File) Chown(uid, gid int) error {
 	return f.wrap("chown", err)
 }
 
-// ReadDir is os.File.ReadDir, with the entries in the order of names. Info of
-// an entry returns the attributes read with the directory.
+// ReadDir is os.File.ReadDir, with the entries in the order of the backend.
+// Info of an entry returns the attributes read with the directory.
 func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 	if f == nil {
 		return nil, fs.ErrInvalid
@@ -464,7 +458,7 @@ func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 	return entries, f.wrap("readdir", err)
 }
 
-// Readdir is os.File.Readdir, with the entries in the order of names.
+// Readdir is os.File.Readdir, with the entries in the order of the backend.
 func (f *File) Readdir(n int) ([]fs.FileInfo, error) {
 	if f == nil {
 		return nil, fs.ErrInvalid
@@ -477,7 +471,7 @@ func (f *File) Readdir(n int) ([]fs.FileInfo, error) {
 	return fis, f.wrap("readdir", err)
 }
 
-// Readdirnames is os.File.Readdirnames, in the order of names.
+// Readdirnames is os.File.Readdirnames, in the order of the backend.
 func (f *File) Readdirnames(n int) (names []string, err error) {
 	if f == nil {
 		return nil, fs.ErrInvalid
@@ -497,44 +491,13 @@ func (f *File) readdir(n int) ([]*fileInfo, error) {
 	if !f.isDir {
 		return nil, syscall.ENOTDIR
 	}
-	f.dirMu.Lock()
-	dirents := f.dirents
-	f.dirMu.Unlock()
-	if dirents == nil {
-		var err error
-		if dirents, err = f.listDir(); err != nil {
-			return nil, err
-		}
-	}
-	f.dirMu.Lock()
-	defer f.dirMu.Unlock()
-	if f.dirents == nil {
-		f.dirents = dirents
-	}
-	off := f.off.Load()
-	rest := f.dirents[min(off, int64(len(f.dirents))):]
-	if n > 0 {
-		if len(rest) == 0 {
-			return nil, io.EOF
-		}
-		rest = rest[:min(n, len(rest))]
-	}
-	f.off.Store(off + int64(len(rest)))
-	return rest, nil
-}
-
-func (f *File) listDir() ([]*fileInfo, error) {
-	infos, err := f.f.readdir()
+	infos, err := f.f.readdir(f.off.Load(), n)
 	if err != nil {
 		return nil, err
 	}
-	sortByName(infos)
-	if infos == nil {
-		infos = []*fileInfo{}
+	if n > 0 && len(infos) == 0 {
+		return nil, io.EOF
 	}
+	f.off.Add(int64(len(infos)))
 	return infos, nil
-}
-
-func sortByName(infos []*fileInfo) {
-	slices.SortFunc(infos, func(a, b *fileInfo) int { return strings.Compare(a.name, b.name) })
 }
