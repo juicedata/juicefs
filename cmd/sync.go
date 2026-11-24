@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/sync"
@@ -576,7 +577,9 @@ func doSync(c *cli.Context) error {
 		logger.Warnf("The include option needs to be used with the exclude option, otherwise the result of the current sync may not match your expectations")
 	}
 	config := sync.NewConfigFromCli(c)
-	cliCtx = c
+	object.Register("jfs", func(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+		return fs.NewJFS(endpoint, c.String("mountpoint"))
+	})
 	if config.Manager != "" {
 		logger.Debugf("worker process start")
 	}

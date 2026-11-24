@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package fs
 
 import (
 	"context"
@@ -34,19 +34,17 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/chunk"
-	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/urfave/cli/v2"
 )
 
 var (
 	dirSuffix     = "/"
-	cliCtx        *cli.Context
 	pid, uid, gid uint32
+	ctx           = meta.NewContext(1, uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 )
 
 func toError(eno syscall.Errno) error {
@@ -60,7 +58,7 @@ type juiceFS struct {
 	object.DefaultObjectStorage
 	name  string
 	umask uint16
-	jfs   *fs.FileSystem
+	jfs   *FileSystem
 }
 
 func (j *juiceFS) String() string {
@@ -72,7 +70,7 @@ func (j *juiceFS) path(key string) string {
 }
 
 type jFile struct {
-	f     *fs.File
+	f     *File
 	limit int64
 }
 
@@ -209,7 +207,7 @@ func (j *juiceFS) Delete(rCtx context.Context, key string, getters ...object.Att
 
 type jObj struct {
 	key       string
-	fi        *fs.FileStat
+	fi        *FileStat
 	isSymlink bool
 }
 
@@ -308,7 +306,7 @@ func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter str
 }
 
 type mEntry struct {
-	fi        *fs.FileStat
+	fi        *FileStat
 	name      string
 	isSymlink bool
 }
@@ -327,7 +325,7 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 	}
 	mEntries := make([]*mEntry, 0, len(entries))
 	for _, e := range entries {
-		fi := fs.AttrToFileInfo(e.Inode, e.Attr)
+		fi := AttrToFileInfo(e.Inode, e.Attr)
 		if fi.IsDir() {
 			mEntries = append(mEntries, &mEntry{fi, string(e.Name) + dirSuffix, false})
 		} else if fi.IsSymlink() && followLink {
@@ -524,7 +522,8 @@ func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID stri
 	return toError(eno)
 }
 
-func getDefaultChunkConf(format *meta.Format) *chunk.Config {
+// DefaultChunkConf returns the chunk config used by tools that access a volume without mounting it.
+func DefaultChunkConf(format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
 		BlockSize:     format.BlockSize * 1024,
 		Compress:      format.Compression,
@@ -546,11 +545,14 @@ func (j *juiceFS) Shutdown() {
 	_ = j.jfs.Meta().CloseSession()
 }
 
-func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+// NewJFS opens the volume at endpoint (a meta URL or the name of an env var holding it) as an object storage;
+// mountpoint is used to resolve absolute symlinks that point into the mounted volume.
+func NewJFS(endpoint, mountpoint string) (object.ObjectStorage, error) {
 	pid, uid, gid = uint32(os.Getpid()), uint32(utils.GetCurrentUID()), uint32(utils.GetCurrentGID())
 	if runtime.GOOS == "windows" && utils.IsWinAdminOrElevatedPrivilege() {
 		uid = 0
 		gid = 0
+		ctx = meta.NewContext(1, 0, []uint32{0})
 	}
 	metaUrl := os.Getenv(endpoint)
 	if metaUrl == "" {
@@ -564,13 +566,18 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	if err != nil {
 		return nil, fmt.Errorf("load setting: %s", err)
 	}
-	blob, err := fs.NewReloadableStorage(format, metaCli, nil)
+	blob, err := NewReloadableStorage(format, metaCli, nil)
 	if err != nil {
 		return nil, fmt.Errorf("object storage: %s", err)
 	}
-	chunkConf := getDefaultChunkConf(format)
+	chunkConf := DefaultChunkConf(format)
 	store := chunk.NewCachedStore(blob, *chunkConf, nil)
-	registerMetaMsg(metaCli, store, chunkConf)
+	metaCli.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
+		return store.Remove(args[0].(uint64), int(args[1].(uint32)))
+	})
+	metaCli.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
+		return vfs.Compact(*chunkConf, store, args[0].([]meta.Slice), args[1].(uint64), args[2].(uint8))
+	})
 	err = metaCli.NewSession(false)
 	if err != nil {
 		return nil, fmt.Errorf("new session: %s", err)
@@ -587,14 +594,14 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 		Chunk:           chunkConf,
 		AttrTimeout:     time.Second,
 		DirEntryTimeout: time.Second,
-		Mountpoint:      cliCtx.String("mountpoint"),
+		Mountpoint:      mountpoint,
 	}
 
 	vfsConf.Format.RemoveSecret()
 	d, _ := json.MarshalIndent(vfsConf, "  ", "")
 	logger.Debugf("Config: %s", string(d))
 
-	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store, nil)
+	jfs, err := NewFileSystem(vfsConf, metaCli, store, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Initialize: %s", err)
 	}
@@ -602,5 +609,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 }
 
 func init() {
-	object.Register("jfs", newJFS)
+	object.Register("jfs", func(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+		return NewJFS(endpoint, "")
+	})
 }

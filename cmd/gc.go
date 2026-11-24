@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
+	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -99,7 +100,7 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("create session: %v", err)
 	}
 
-	chunkConf := *getDefaultChunkConf(format)
+	chunkConf := *fs.DefaultChunkConf(format)
 	chunkConf.CacheDir = "memory"
 
 	blob, err := createStorage(*format)
