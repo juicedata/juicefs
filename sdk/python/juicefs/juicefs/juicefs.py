@@ -236,6 +236,9 @@ class Client(object):
 
     def open(self, path, mode='r', buffering=-1, encoding=None, errors=None):
         """Open a file, returns a filelike object."""
+        buffering = operator.index(buffering)
+        if errors is not None and not isinstance(errors, str):
+            raise TypeError('errors must be a string or None')
         if len(mode) != len(set(mode)):
             raise ValueError(f'invalid mode: {mode}')
         flag = 0
@@ -547,6 +550,8 @@ class _File(object):
         got = 0
         while size > 0 or size < 0:
             n = 4 << 20
+            if size < 0:
+                n = min(n, max(io.DEFAULT_BUFFER_SIZE, self.length - self.off - got))
             if size > 0 and size < n:
                 n = size
             buf = bytes(n)
@@ -595,9 +600,13 @@ class _File(object):
     def write(self, data):
         """Write the string data to the file."""
         self._check_closed()
+        chunk_size = 4 << 20
         if isinstance(data, memoryview):
-            data = data.tobytes()
-        if not isinstance(data, six.binary_type):
+            if data.c_contiguous and data.nbytes > chunk_size:
+                data = data.cast('B')
+            else:
+                data = data.tobytes()
+        elif not isinstance(data, six.binary_type):
             raise TypeError(f"a bytes-like object is required, not '{type(data).__name__}'")
         if not self.writable():
             raise io.UnsupportedOperation('not writable')
@@ -606,13 +615,18 @@ class _File(object):
             return 0
         if self.append:
             self.off = self.length
-        base = cast(c_char_p(data), c_void_p).value
+        base = cast(c_char_p(data), c_void_p).value if isinstance(data, six.binary_type) else None
         tid, fd = c_int64(_tid()), c_int32(self.fd)
         written = 0
         try:
             while written < len(data):
-                count = min(len(data) - written, 4 << 20)
-                n = self.lib.jfs_pwrite(tid, fd, c_void_p(base + written), c_int32(count), c_int64(self.off + written))
+                count = min(len(data) - written, chunk_size)
+                if base is None:
+                    chunk = data[written:written + count].tobytes()
+                    buffer = c_char_p(chunk)
+                else:
+                    buffer = c_void_p(base + written)
+                n = self.lib.jfs_pwrite(tid, fd, buffer, c_int32(count), c_int64(self.off + written))
                 if n == 0:
                     raise OSError(errno.EIO, f'jfs_pwrite wrote 0 of {count} bytes')
                 written += n

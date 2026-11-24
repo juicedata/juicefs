@@ -5652,7 +5652,7 @@ func testQuota(t *testing.T, m Meta) {
 			t.Fatalf("Mkdir qrmdir/d: %s", st)
 		}
 		for _, p := range []string{"/qrmdir", "/qrmdir/d"} {
-			if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 100}}, false, false, false); err != nil {
+			if err := m.HandleQuota(ctx, QuotaSet, p, DirQuotaType, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 100}}, true, false, false); err != nil {
 				t.Fatalf("HandleQuota set %s: %s", p, err)
 			}
 		}

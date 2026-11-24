@@ -58,6 +58,15 @@ func TestEncrypt(t *testing.T) {
 			if format.SecretKey == "testSecret" || format.SessionToken == "token" || format.EncryptKey == "testEncrypt" {
 				t.Fatalf("invalid format: %+v", format)
 			}
+			encrypted := format
+			config, err := format.VolumeConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, "testSecret", config.SecretKey)
+			assert.Equal(t, "token", config.SessionToken)
+			assert.Equal(t, "testEncrypt", config.EncryptKey)
+			assert.Equal(t, encrypted, format)
 			if err := format.Decrypt(); err != nil {
 				t.Fatalf("Format decrypt: %s", err)
 			}
