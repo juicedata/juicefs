@@ -104,6 +104,43 @@ juicefs format \
 
 新挂载的客户端会直接使用新的凭证，已经在运行的所有客户端也会在一分钟内更新自己的凭证。整个更新过程不会影响正在运行的业务。由于临时凭证过期时间较短，所以以上步骤需要**长期循环执行**才能保证 JuiceFS 服务可以正常访问到对象存储。
 
+## 进程内 STS 凭据 {#in-process-sts}
+
+JuiceFS 可以在 `juicefs` 进程内直接向云厂商 STS 申请对象存储临时凭据。该功能
+需要显式开启，目前支持 `s3` 和 `oss` 两种后端。
+
+开启后，客户端使用本地 seed AK（或实例角色 / OIDC 身份）调用
+`sts:AssumeRole`，并自动刷新临时凭据。STS 配置、角色和 seed 密钥都不会写入
+元数据服务。
+
+```bash
+export JFS_STS_ENABLE=1
+export JFS_STS_CLOUD=aliyun          # 或 aws
+export JFS_STS_ROLE_ARN=acs:ram::1234567890:role/juicefs
+export JFS_STS_SEED_FILE=/etc/juicefs/seed.ak
+export JFS_STS_FALLBACK=static       # 迁移期使用，切换完成后改为 none
+```
+
+seed 文件（权限 `0600`）中的 AK 只应拥有目标角色的 `sts:AssumeRole` 权限：
+
+```ini
+access_key_id = LTAI...
+access_key_secret = ...
+```
+
+角色权限应限制在卷实际使用的 bucket/prefix。没有配置 seed 文件时，JuiceFS
+会使用云 SDK 的默认凭据链（ECS 实例角色、OIDC/RRSA 等）。
+
+`JFS_STS_FALLBACK=static` 表示 STS 暂时不可用时，继续使用卷 format 里已有的
+AK/SK。该选项只用于迁移：先把客户端切换到 STS，再用
+`juicefs config ... --access-key "" --secret-key "" --session-token "" --force`
+从 format 中移除静态 AK。移除后建议在 IAM 中保留旧 AK 一段时间，确认稳定后再
+禁用。运行中的客户端不会自动读取新的环境变量，修改 `JFS_STS_*` 后需要重启
+mount。
+
+由于 `credentials-go` 不暴露真实过期时间，阿里云路径使用保守的 3 分钟租约，
+底层 SDK 会在真实过期前刷新；这不影响数据面。
+
 ## 内网和外网 Endpoint {#internal-and-public-endpoint}
 
 通常情况下，对象存储服务提供统一的 URL 进行访问，但云平台会同时提供内网和外网通信线路，比如满足条件的同平台云服务会自动解析通过内网线路访问对象存储，这样不但时延更低，而且内网通信产生的流量是免费的。

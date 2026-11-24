@@ -104,6 +104,49 @@ Since temporary credentials expire quickly, the key is how to update the tempora
 
 Newly mounted clients will use the new credentials directly, and all clients already running will also update their credentials within a minute. The entire update process will not affect the running business. Due to the short expiration time of the temporary credentials, the above steps need to **be executed in a long-term loop** to ensure that the JuiceFS service can access the object storage normally.
 
+## In-process STS credentials {#in-process-sts}
+
+JuiceFS can obtain temporary object storage credentials directly from the cloud
+STS service, inside the `juicefs` process. This is opt-in and currently supports
+the `s3` and `oss` backends.
+
+When enabled, the client uses a local seed access key (or an instance role /
+OIDC identity) to call `sts:AssumeRole`, and refreshes the resulting credentials
+automatically. No STS configuration or role/seed key is stored in the metadata
+service.
+
+```bash
+export JFS_STS_ENABLE=1
+export JFS_STS_CLOUD=aliyun          # or aws
+export JFS_STS_ROLE_ARN=acs:ram::1234567890:role/juicefs
+export JFS_STS_SEED_FILE=/etc/juicefs/seed.ak
+export JFS_STS_FALLBACK=static       # migration aid; use none after cutover
+```
+
+The seed file (mode `0600`) contains an access key that is only allowed to
+perform `sts:AssumeRole` on the target role:
+
+```ini
+access_key_id = LTAI...
+access_key_secret = ...
+```
+
+The role should be scoped to the bucket/prefix used by the volume. When no seed
+file is configured, JuiceFS uses the cloud SDK default credential chain (ECS RAM
+role, OIDC/RRSA, ...).
+
+`JFS_STS_FALLBACK=static` keeps using the AK/SK already stored in the volume
+format when STS is temporarily unavailable. This is intended for migration only:
+switch clients to STS first, then remove the static AK from the format with
+`juicefs config ... --access-key "" --secret-key "" --session-token "" --force`.
+Keep the old AK enabled in IAM for a grace period before disabling it. A running
+client cannot pick up changed environment variables; restart the mount to apply
+`JFS_STS_*`.
+
+The Aliyun client uses a conservative 3-minute credential lease because
+`credentials-go` does not expose the exact expiration; the SDK refreshes the
+underlying credentials before they expire. This does not affect the data path.
+
 ## Internal and public endpoint {#internal-and-public-endpoint}
 
 Typically, object storage services provide a unified URL for access, but the cloud platform usually provides both internal and external endpoints. For example, the platform cloud services that meet the criteria will automatically resolve requests to the internal endpoint of the object storage. This offers you a lower latency, and internal network traffic is free.
