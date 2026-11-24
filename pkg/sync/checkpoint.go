@@ -724,7 +724,8 @@ func (m *CheckpointManager) unfinishedObjects() (objs []object.Object, nFailed i
 	m.checkpoint.RLock()
 	defer m.checkpoint.RUnlock()
 	for prefix, state := range m.checkpoint.PrefixState {
-		// skip keys not tracked under this prefix in this run, MarkCompleted can't clear them
+		// Normally every pending/failed key is tracked under its own prefix. With --files-from,
+		// skip stale keys from an unrestored prefix and duplicates under overlapping prefixes.
 		tracked := func(key string) bool {
 			p, ok := m.keyPrefix.Load(key)
 			return ok && p.(string) == prefix
