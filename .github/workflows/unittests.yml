@@ -58,6 +58,7 @@ jobs:
       GLUSTER_VOLUME: jfstest/gv0
       DISPLAY_PROGRESSBAR: false
       HDFS_ADDR: localhost:8020
+      HADOOP_VERSION: "2.10.2"
       SFTP_HOST: localhost:2222:/home/testUser1/upload/
       SFTP_USER: testUser1
       SFTP_PASS: password
@@ -118,10 +119,10 @@ jobs:
 
       - if: matrix.test == 'test.pkg'
         name: Cache Hadoop
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/hadoop
-          key: hadoop-2.10.2
+          key: hadoop-${{ env.HADOOP_VERSION }}
 
       - name: Prepare Database
         run: |

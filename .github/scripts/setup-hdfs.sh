@@ -19,7 +19,7 @@ set -e
 sudo apt-get update
 sudo apt-get install openjdk-8-jdk -y
 
-HADOOP_VERSION="2.10.2"
+HADOOP_VERSION="${HADOOP_VERSION:-2.10.2}"
 HADOOP_TARBALL="${HOME}/.cache/hadoop/hadoop-${HADOOP_VERSION}.tar.gz"
 mkdir -p "${HOME}/.cache/hadoop"
 if [ ! -f "${HADOOP_TARBALL}" ]; then
@@ -27,7 +27,7 @@ if [ ! -f "${HADOOP_TARBALL}" ]; then
   for url in \
     "https://dlcdn.apache.org/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz" \
     "https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz"; do
-    if wget -nv --tries=3 --timeout=30 --waitretry=5 -O "${tmp_tarball}" "${url}"; then
+    if wget -nv --tries=3 --timeout=30 --waitretry=5 --retry-connrefused --retry-on-http-error=429,500,502,503,504 -O "${tmp_tarball}" "${url}"; then
       mv "${tmp_tarball}" "${HADOOP_TARBALL}"
       break
     fi
