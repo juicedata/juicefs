@@ -31,7 +31,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
-	"github.com/juicedata/juicefs/cmd"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	jfs "github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -85,7 +84,7 @@ func newBackend(name, metaURL string, conf *Config) (backend, error) {
 	vfs.InitMetrics(registerer)
 	metric.UpdateMetrics(registerer)
 
-	blob, err := cmd.NewReloadableStorage(format, m, func(f *meta.Format) {
+	blob, err := jfs.NewReloadableStorage(format, m, func(f *meta.Format) {
 		if conf.Bucket != "" {
 			f.Bucket = conf.Bucket
 		}
