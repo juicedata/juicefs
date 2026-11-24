@@ -2433,6 +2433,10 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 	wg.Wait()
 
+	if len(config.Workers) > 0 && checkpointMgr != nil && !config.Dry {
+		retryUnfinished(src, dst, config, checkpointMgr)
+	}
+
 	if checkpointMgr != nil {
 		checkpointMgr.Stop()
 	}

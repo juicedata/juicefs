@@ -237,6 +237,8 @@ juicefs sync --enable-checkpoint --checkpoint-interval 30s SRC DST
 
 The checkpoint file is stored in the destination storage as a hidden object with a name like `.juicefs-sync-checkpoint.<hash>.json`. JuiceFS deletes it after the sync job completes successfully. If the process is interrupted, restarted, or exits with failed objects, the checkpoint is retained for the next run.
 
+In [cluster mode](#distributed-sync), after all workers exit, the manager retries once, by itself, the objects that failed or were never acknowledged (for example, held by a lost worker). If these objects exceed half of the total, the retry is skipped and the checkpoint is kept for the next run.
+
 To ignore an existing checkpoint and start from scratch, use `--checkpoint-force-reset`:
 
 ```shell

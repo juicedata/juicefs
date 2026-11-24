@@ -718,6 +718,34 @@ func (m *CheckpointManager) RestorePrefix(prefix string) (objs []object.Object, 
 	return objs, listDone, listDepth, true
 }
 
+// unfinishedObjects returns the objects tracked in this run that are still pending or failed,
+// and how many of them are failed.
+func (m *CheckpointManager) unfinishedObjects() (objs []object.Object, nFailed int64) {
+	m.checkpoint.RLock()
+	defer m.checkpoint.RUnlock()
+	for prefix, state := range m.checkpoint.PrefixState {
+		// skip keys not tracked under this prefix in this run, MarkCompleted can't clear them
+		tracked := func(key string) bool {
+			p, ok := m.keyPrefix.Load(key)
+			return ok && p.(string) == prefix
+		}
+		state.RLock()
+		for key, obj := range state.PendingKeys {
+			if tracked(key) {
+				objs = append(objs, obj)
+			}
+		}
+		for key, obj := range state.FailedKeys {
+			if tracked(key) {
+				objs = append(objs, obj)
+				nFailed++
+			}
+		}
+		state.RUnlock()
+	}
+	return
+}
+
 // ListPrefixes returns a snapshot of all prefix keys currently tracked in checkpoint.
 func (m *CheckpointManager) ListPrefixes() []string {
 	if m == nil {

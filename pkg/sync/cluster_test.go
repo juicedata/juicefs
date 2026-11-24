@@ -124,6 +124,9 @@ func TestPrepareWorkerCommandRedactsSecretsInArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 	command := strings.Join(args, " ")
+	if !strings.HasPrefix(command, "-o ServerAliveInterval=15 -o ServerAliveCountMax=4 worker.example.com ") {
+		t.Fatalf("worker command should enable ssh keepalive: %s", command)
+	}
 	for _, secret := range []string{"test-secret-key", "env-secret-key", "env-session-token"} {
 		if strings.Contains(command, secret) {
 			t.Fatalf("worker command leaked %q: %s", secret, command)
@@ -241,4 +244,78 @@ func TestMarshal(t *testing.T) {
 	if objs2[3].Key() != "test3" || objs2[3].Size() != -1 || withoutSize(objs2[3]).Size() != 200 && objs2[3].IsSymlink() != true {
 		t.Fatalf("expect withFSize but got %s", objs2[3].Key())
 	}
+}
+
+func TestRetryUnfinished(t *testing.T) {
+	setup := func(name string, total int64) (src, dst object.ObjectStorage, mgr *CheckpointManager, config *Config) {
+		p := utils.NewProgress(true)
+		handled = p.AddCountBar("Scanned objects", 0)
+		copied = p.AddCountSpinner("Copied objects")
+		copiedBytes = p.AddByteSpinner("Copied bytes")
+		skipped = p.AddCountSpinner("Skipped objects")
+		skippedBytes = p.AddByteSpinner("Skipped bytes")
+		failed = p.AddCountSpinner("Failed objects")
+		checked, checkedBytes, deleted = nil, nil, nil
+		totalHandled.Store(0)
+		handled.SetTotal(total)
+
+		config = newTestConfig()
+		concurrent = make(chan int, config.Threads)
+		src, _ = object.CreateStorage("mem", name+"-src", "", "", "")
+		dst, _ = object.CreateStorage("mem", name+"-dst", "", "", "")
+		mgr = NewCheckpointManager(src, dst, config)
+		return
+	}
+	add := func(t *testing.T, src object.ObjectStorage, mgr *CheckpointManager, keys ...string) {
+		putObjects(t, src, keys...)
+		for _, key := range keys {
+			o, err := src.Head(ctx, key)
+			if err != nil {
+				t.Fatalf("head %s: %v", key, err)
+			}
+			mgr.AddPendingKey("", o)
+		}
+	}
+
+	t.Run("retry lost and failed keys", func(t *testing.T) {
+		src, dst, mgr, config := setup("retry-unfinished", 4)
+		add(t, src, mgr, "done", "done2", "lost", "fail")
+		mgr.MarkCompleted("done")
+		mgr.MarkCompleted("done2")
+		mgr.MarkFailed("fail")
+		handled.IncrInt64(3) // done, done2 and fail were handled
+		failed.Increment()
+
+		retryUnfinished(src, dst, config, mgr)
+
+		assertDstHasKeys(t, dst, "lost", "fail")
+		if objs, n := mgr.unfinishedObjects(); len(objs) != 0 || n != 0 {
+			t.Fatalf("expect no unfinished objects, got %d (%d failed)", len(objs), n)
+		}
+		if n := failed.Current(); n != 0 {
+			t.Fatalf("expect 0 failed, got %d", n)
+		}
+		incrHandled(0)
+		if handled.Current() != handled.GetTotal() {
+			t.Fatalf("handled %d != total %d", handled.Current(), handled.GetTotal())
+		}
+	})
+
+	t.Run("give up when more than half unfinished", func(t *testing.T) {
+		src, dst, mgr, config := setup("retry-unfinished-giveup", 3)
+		add(t, src, mgr, "done", "lost", "fail")
+		mgr.MarkCompleted("done")
+		mgr.MarkFailed("fail")
+
+		retryUnfinished(src, dst, config, mgr)
+
+		for _, key := range []string{"lost", "fail"} {
+			if _, err := dst.Head(ctx, key); err == nil {
+				t.Fatalf("%s should not be retried", key)
+			}
+		}
+		if objs, n := mgr.unfinishedObjects(); len(objs) != 2 || n != 1 {
+			t.Fatalf("expect 2 unfinished objects (1 failed), got %d (%d failed)", len(objs), n)
+		}
+	})
 }

@@ -352,6 +352,42 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 	return l.Addr().String(), nil
 }
 
+// retryUnfinished runs once all workers have exited. Pending keys left in the checkpoint
+// were dispatched but never acknowledged (e.g. the worker was lost), so retry them together
+// with the failed keys once, unless they exceed half of the total.
+func retryUnfinished(src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager) {
+	objs, nFailed := checkpointMgr.unfinishedObjects()
+	if len(objs) == 0 {
+		return
+	}
+	incrHandled(0)
+	total := handled.GetTotal()
+	if int64(len(objs))*2 > total {
+		logger.Warnf("Too many unfinished objects (%d of %d, %d failed) to retry, please run sync again", len(objs), total, nFailed)
+		return
+	}
+	logger.Infof("Retry %d unfinished objects (%d failed)", len(objs), nFailed)
+	// failed objects will be handled again
+	nFailed = min(nFailed, failed.Current())
+	failed.IncrInt64(-nFailed)
+	handled.IncrInt64(-nFailed)
+
+	tasks := make(chan object.Object, config.Threads)
+	go func() {
+		for _, o := range objs {
+			tasks <- o
+		}
+		close(tasks)
+	}()
+	var wg sync.WaitGroup
+	for range config.Threads {
+		wg.Go(func() {
+			worker(tasks, src, dst, config, checkpointMgr, checkpointMgr)
+		})
+	}
+	wg.Wait()
+}
+
 func findSelfPath() (string, error) {
 	program := os.Args[0]
 	if strings.Contains(program, "/") {
@@ -398,7 +434,7 @@ func prepareWorkerCommand(host, address, path string, config *Config) ([]string,
 		return nil, nil, fmt.Errorf("marshal worker config: %s", err)
 	}
 
-	args := []string{host, path}
+	args := []string{"-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", host, path}
 	args = append(args, workerArgs...)
 	args = append(args, "--manager", address)
 	if !config.Verbose && !config.Quiet {
