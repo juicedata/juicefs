@@ -78,13 +78,16 @@ type Config struct {
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
-	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Second * 10), gConf: gConf, nsMutex: minio.NewNSLock(false)}
+	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Second * 10), gConf: gConf, nsMutex: minio.NewNSLock(false), done: make(chan struct{})}
 	if gConf.MultiBucket && !gConf.ReadOnly {
 		if eno := jfs.MkdirAll(mctx, jfsObj.tpath(bucketTrashDir), 0777, gConf.Umask); eno != 0 {
 			return nil, fmt.Errorf("create bucket trash directory: %w", eno)
 		}
 	}
-	go jfsObj.cleanup()
+	if !gConf.ReadOnly {
+		jfsObj.wg.Add(1)
+		go jfsObj.cleanup()
+	}
 	return jfsObj, nil
 }
 
@@ -95,6 +98,9 @@ type jfsObjects struct {
 	nsMutex    *minio.NsLockMap
 	gConf      *Config
 	writeLocks objectLocks
+	done       chan struct{}
+	wg         sync.WaitGroup
+	closeOnce  sync.Once
 }
 
 type objectLocks struct {
@@ -148,6 +154,10 @@ func (n *jfsObjects) IsReady(_ context.Context) bool {
 }
 
 func (n *jfsObjects) Shutdown(ctx context.Context) error {
+	n.closeOnce.Do(func() {
+		close(n.done)
+		n.wg.Wait()
+	})
 	return n.fs.Close()
 }
 
@@ -609,22 +619,48 @@ func (n *jfsObjects) delObj(bucket string, object string) error {
 	if p == root {
 		return nil
 	}
+	var eno syscall.Errno
 	if strings.HasSuffix(object, sep) {
-		// reset atime
-		n.setFileAtime(p, time.Now().Unix())
+		var dir *fs.File
+		if dir, eno = n.fs.Lopen(mctx, p, 0); eno == 0 {
+			defer dir.Close(mctx)
+			fi, _ := dir.Stat()
+			explicit := fi.(*fs.FileStat).Atime() == 0
+			if !fi.IsDir() || (!explicit && !n.gConf.HeadDir) {
+				return nil
+			}
+			if eno = n.fs.Rmdir(mctx, p); fs.IsNotEmpty(eno) && explicit {
+				// Keep the children and clear only the explicit directory marker.
+				if e := dir.Utime(mctx, time.Now().UnixMilli(), -1); e != 0 {
+					return e
+				}
+			}
+		}
+	} else {
+		eno = n.fs.Unlink(mctx, p)
 	}
-	if eno := n.fs.Delete(mctx, p); eno != 0 {
-		if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) {
+	if eno != 0 {
+		if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) || eno == syscall.ENOTDIR || eno == syscall.EISDIR {
 			return nil
 		}
 		return eno
 	}
-	return n.pruneEmptyDirs(root, path.Dir(p))
+	// the object is already gone, so a leftover empty directory must not fail the delete
+	if err := n.pruneEmptyDirs(root, path.Dir(p)); err != nil {
+		logger.Warnf("prune empty dirs of %s: %s", p, err)
+	}
+	return nil
 }
 
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
 	objs = make([]minio.DeletedObject, len(objects))
 	errs = make([]error, len(objects))
+	// objs must be filled even on error: the minio handler maps each result
+	// back to its request index via the fields of objs[idx], so a zero-value
+	// entry makes the lookup miss and collapses every result onto index 0.
+	for idx, object := range objects {
+		objs[idx] = minio.DeletedObject{ObjectName: object.ObjectName, VersionID: object.VersionID}
+	}
 	if err := n.checkBucket(ctx, bucket); err != nil {
 		for idx := range objects {
 			errs[idx] = minio.BucketNotFound{Bucket: bucket}
@@ -633,6 +669,9 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 	}
 	delMap := make(map[string][]int)
 	for idx, o := range objects {
+		if strings.HasSuffix(o.ObjectName, sep) {
+			continue
+		}
 		p := path.Dir(path.Clean(n.path(bucket, o.ObjectName)))
 		delMap[p] = append(delMap[p], idx)
 	}
@@ -648,23 +687,28 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 		}
 		g.Go(func() error {
 			// will ignore dir
-			err := n.fs.BatchDeleteEntries(mctx, ppath, ps)
-			if err != 0 {
+			if eno := n.fs.BatchDeleteEntries(mctx, ppath, ps); eno != 0 {
+				// The batch may be partially committed or aborted by a single entry,
+				// so retry one by one to give each key its own result.
 				for _, idx := range idxs {
-					errs[idx] = jfsToObjectErr(ctx, err, bucket, objects[idx].ObjectName)
+					name := objects[idx].ObjectName
+					errs[idx] = jfsToObjectErr(ctx, n.delObj(bucket, name), bucket, name)
 				}
-				return err
+				return nil
 			}
-			if e := n.pruneEmptyDirs(root, ppath); e != nil {
-				for _, idx := range idxs {
-					errs[idx] = e
-				}
-				return err
+			if err := n.pruneEmptyDirs(root, ppath); err != nil {
+				logger.Warnf("prune empty dirs of %s: %s", ppath, err)
 			}
-			return err
+			return nil
 		})
 	}
 	_ = g.Wait()
+	// A directory emptied by the file batch needs no marker update.
+	for idx, o := range objects {
+		if strings.HasSuffix(o.ObjectName, sep) {
+			errs[idx] = jfsToObjectErr(ctx, n.delObj(bucket, o.ObjectName), bucket, o.ObjectName)
+		}
+	}
 	return
 }
 
@@ -1390,8 +1434,9 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	if err = g.Wait(); err != nil {
 		return objInfo, err
 	}
-	tmp := n.ppath(bucket, uploadID, "complete")
-	_ = n.fs.Delete(mctx, tmp)
+	// Gateways sharing a volume do not share writeLocks, so a retried Complete
+	// can run on two instances at once; each attempt merges into its own file.
+	tmp := n.ppath(bucket, uploadID, "complete-"+minio.MustGetUUID())
 	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
@@ -1400,6 +1445,9 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	}
 	defer func() {
 		_ = f.Close(mctx)
+		if err != nil {
+			_ = n.fs.Delete(mctx, tmp)
+		}
 	}()
 	var total uint64
 	for _, part := range parts {
@@ -1459,14 +1507,12 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	if eno == syscall.ENOENT {
 		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(name)); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(name), err)
-			_ = n.fs.Delete(mctx, tmp)
 			err = n.objectCommitErr(ctx, err, bucket, object, uploadID)
 			return
 		}
 		eno = n.fs.Rename(mctx, tmp, name, 0)
 	}
 	if eno != 0 {
-		_ = n.fs.Delete(mctx, tmp)
 		err = n.objectCommitErr(ctx, eno, bucket, object, uploadID)
 		logger.Errorf("Rename %s -> %s: %s", tmp, name, err)
 		return
@@ -1497,23 +1543,35 @@ func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 }
 
 func (n *jfsObjects) cleanup() {
-	for range time.Tick(24 * time.Hour) {
-		// default bucket tmp dirs
-		tmpDirs := []string{".sys/tmp/", ".sys/uploads/", path.Join(metaBucket, bucketTrashDir)}
-		if n.gConf.MultiBucket {
-			buckets, err := n.ListBuckets(context.Background())
-			if err != nil {
-				logger.Errorf("list buckets error: %v", err)
-				continue
-			}
-			for _, bucket := range buckets {
-				tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/tmp", bucket.Name))
-				tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/uploads", bucket.Name))
-			}
+	defer n.wg.Done()
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		n.cleanupOnce()
+		select {
+		case <-n.done:
+			return
+		case <-ticker.C:
 		}
-		for _, dir := range tmpDirs {
-			n.cleanupDir(dir)
+	}
+}
+
+func (n *jfsObjects) cleanupOnce() {
+	// default bucket tmp dirs
+	tmpDirs := []string{".sys/tmp/", ".sys/uploads/", path.Join(metaBucket, bucketTrashDir)}
+	if n.gConf.MultiBucket {
+		buckets, err := n.ListBuckets(context.Background())
+		if err != nil {
+			logger.Errorf("list buckets error: %v", err)
+			return
 		}
+		for _, bucket := range buckets {
+			tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/tmp", bucket.Name))
+			tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/uploads", bucket.Name))
+		}
+	}
+	for _, dir := range tmpDirs {
+		n.cleanupDir(dir)
 	}
 }
 
@@ -1527,6 +1585,11 @@ func (n *jfsObjects) cleanupDir(dir string) bool {
 	now := time.Now()
 	deleted := 0
 	for _, entry := range entries {
+		select {
+		case <-n.done:
+			return false
+		default:
+		}
 		dirPath := n.path(dir, string(entry.Name))
 		if entry.Attr.Typ == meta.TypeDirectory && len(entry.Name) == subDirPrefix {
 			if !n.cleanupDir(strings.TrimPrefix(dirPath, "/")) {

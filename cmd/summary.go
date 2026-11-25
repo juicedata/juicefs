@@ -169,14 +169,24 @@ func summary(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("summary: %s", err)
 	}
-	results := [][]string{{"PATH", "SIZE", "DIRS", "FILES", "COST"}}
-	renderTree(&results, &resp.Tree, csv)
+	results := renderSummaryTree(&resp.Tree, dpath, csv)
 	if csv {
 		printCSVResult(results)
 	} else {
 		printResult(results, 0, false)
 	}
 	return nil
+}
+
+func renderSummaryTree(tree *meta.TreeSummary, dpath string, csv bool) [][]string {
+	if tree != nil && tree.Path == "" && tree.Type != meta.TypeDirectory {
+		root := *tree
+		root.Path = filepath.Base(dpath)
+		tree = &root
+	}
+	results := [][]string{{"PATH", "SIZE", "DIRS", "FILES", "COST"}}
+	renderTree(&results, tree, csv)
+	return results
 }
 
 func printCSVResult(results [][]string) {

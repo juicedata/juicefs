@@ -211,6 +211,16 @@ By default, `juicefs sync` performs incremental synchronization. It only overwri
 
 For full synchronization (where all files are synchronized regardless of their presence on the destination path), use [`--force-update`](../reference/command_reference.mdx#sync).
 
+### Unordered object listings {#external-sort}
+
+For storages that do not list objects in lexicographic order, such as Ceph or TOS with hierarchical namespace enabled, use `--external-sort-dir` to sort the listings locally:
+
+```shell
+juicefs sync --external-sort-dir /data/juicefs-sync-sort SRC DST
+```
+
+This option is disabled by default. When enabled, it sorts both source and destination listings, using the specified local directory for temporary files when the listings exceed the in-memory sorting buffer. Ensure that the directory has enough free space. Each listing must finish before its sorted results can be processed, so synchronization may take longer to start.
+
 ### Resumable sync with checkpoint {#checkpoint}
 
 For long-running sync jobs, use `--enable-checkpoint` to save progress to the destination storage. This allows an interrupted job to resume from the latest checkpoint:

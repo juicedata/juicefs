@@ -19,6 +19,7 @@ import grp
 import io
 import json
 import locale
+import operator
 import os
 import pwd
 import sys
@@ -35,13 +36,34 @@ MODE_READ = 4
 XATTR_CREATE = 1
 XATTR_REPLACE = 2
 
+# Fixed libjfs error codes from sdk/java/libjfs/main.go.
+_LIBJFS_ERRNO_MAP = {
+    0x01: errno.EPERM,
+    0x02: errno.ENOENT,
+    0x04: errno.EINTR,
+    0x05: errno.EIO,
+    0x0d: errno.EACCES,
+    0x11: errno.EEXIST,
+    0x14: errno.ENOTDIR,
+    0x15: errno.EISDIR,
+    0x16: errno.EINVAL,
+    0x1c: errno.ENOSPC,
+    0x45: errno.EDQUOT,
+    0x1e: errno.EROFS,
+    0x27: errno.ENOTEMPTY,
+    0x3d: errno.ENODATA,
+    0x5f: errno.ENOTSUP,
+    0x28: errno.ELOOP,
+}
+
 def check_error(r, fn, args):
     if fn.__name__ == "jfs_init" and r == 0:
-        name = args[0].decode()
+        name = args[2].decode()
         e = OSError(f'JuiceFS initialized failed for {name}')
         e.errno = 1
         raise e
     elif r < 0:
+        code = _LIBJFS_ERRNO_MAP.get(-r, -r)
         formatted_args = []
         for arg in args[2:]:
             if isinstance(arg, (bytes, bytearray)) and len(arg) > 1024:
@@ -49,8 +71,8 @@ def check_error(r, fn, args):
             else:
                 formatted_args.append(repr(arg))
 
-        e = OSError(f'call {fn.__name__} failed: [Errno {-r}] {os.strerror(-r)}: {formatted_args}')
-        e.errno = -r
+        e = OSError(f'call {fn.__name__} failed: [Errno {code}] {os.strerror(code)}: {formatted_args}')
+        e.errno = code
         raise e
     return r
 
@@ -72,6 +94,16 @@ def _tid():
 
 def _bin(s):
     return six.ensure_binary(s)
+
+
+def _truncate_size(size):
+    size = operator.index(size)
+    if not -(1 << 63) <= size < (1 << 63):
+        raise OverflowError('truncate size does not fit in a signed 64-bit integer')
+    if size < 0:
+        raise OSError(errno.EINVAL, os.strerror(errno.EINVAL))
+    return size
+
 
 def unpack(fmt, buf):
     if not fmt.startswith("!"):
@@ -109,7 +141,7 @@ class Client(object):
                  download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
                  io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=False, attr_cache="1s",
                  entry_cache="0s", dir_entry_cache="1s", debug=False, no_usage_report=False, access_log="",
-                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", push_remote_write="", 
+                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", push_remote_write="",
                  push_remote_write_auth=""):
         self.lib = JuiceFSLib()
         kwargs = {}
@@ -178,7 +210,7 @@ class Client(object):
 
     def close(self, terminate=False):
         """Close the JuiceFS client.
-        
+
         Args:
             terminate: If True, fully close the filesystem and stop
                        background goroutines. If False (default), only
@@ -204,6 +236,9 @@ class Client(object):
 
     def open(self, path, mode='r', buffering=-1, encoding=None, errors=None):
         """Open a file, returns a filelike object."""
+        buffering = operator.index(buffering)
+        if errors is not None and not isinstance(errors, str):
+            raise TypeError('errors must be a string or None')
         if len(mode) != len(set(mode)):
             raise ValueError(f'invalid mode: {mode}')
         flag = 0
@@ -256,7 +291,7 @@ class Client(object):
 
     def truncate(self, path, size):
         """Truncate a file to a specified size."""
-        self.lib.jfs_truncate(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint64(size))
+        self.lib.jfs_truncate(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint64(_truncate_size(size)))
 
     def remove(self, path):
         """Remove a file."""
@@ -350,10 +385,13 @@ class Client(object):
 
     def getxattr(self, path, name):
         """Get an extended attribute on a file."""
-        size = 64 << 10 # XattrSizeMax
-        buf = bytes(size)
-        size = self.lib.jfs_getXattr(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(name), buf, c_int32(size))
-        return buf[:size]
+        size = 64 << 10
+        while True:
+            buf = bytes(size)
+            n = self.lib.jfs_getXattr(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(name), buf, c_int32(size))
+            if n < size:
+                return buf[:n]
+            size *= 2
 
     def listxattr(self, path):
         """List extended attributes on a file."""
@@ -466,7 +504,7 @@ class Client(object):
     def status(self, trash=False, session=0):
         """Get the status of the volume and client sessions."""
         buf = c_void_p()
-        n = self.lib.jfs_status(c_int64(_tid()), c_int64(self.h), c_bool(trash), c_bool(session), byref(buf))
+        n = self.lib.jfs_status(c_int64(_tid()), c_int64(self.h), c_bool(trash), c_uint64(session), byref(buf))
         res = json.loads(str(string_at(buf, n), encoding='utf-8'))
         self.lib.free(buf)
         return res
@@ -512,6 +550,8 @@ class _File(object):
         got = 0
         while size > 0 or size < 0:
             n = 4 << 20
+            if size < 0:
+                n = min(n, max(io.DEFAULT_BUFFER_SIZE, self.length - self.off - got))
             if size > 0 and size < n:
                 n = size
             buf = bytes(n)
@@ -538,16 +578,35 @@ class _File(object):
             if view.readonly:
                 raise TypeError('readinto() argument must be a writable bytes-like object')
             with view.cast('B') as byte_view:
-                data = self.read(len(byte_view))
-                byte_view[:len(data)] = data
-                return len(data)
+                if not self.readable():
+                    raise io.UnsupportedOperation('not readable')
+                size = len(byte_view)
+                if size == 0:
+                    return 0
+                # byte_view keeps the buffer exported, so its address stays valid.
+                head = c_char.from_buffer(byte_view)
+                base = addressof(head)
+                del head
+                got = 0
+                while got < size:
+                    count = min(size - got, 4 << 20)
+                    n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), c_void_p(base+got), c_int32(count), c_int64(self.off+got))
+                    if n == 0:
+                        break
+                    got += n
+                self.off += got
+                return got
 
     def write(self, data):
         """Write the string data to the file."""
         self._check_closed()
+        chunk_size = 4 << 20
         if isinstance(data, memoryview):
-            data = data.tobytes()
-        if not isinstance(data, six.binary_type):
+            if data.c_contiguous and data.nbytes > chunk_size:
+                data = data.cast('B')
+            else:
+                data = data.tobytes()
+        elif not isinstance(data, six.binary_type):
             raise TypeError(f"a bytes-like object is required, not '{type(data).__name__}'")
         if not self.writable():
             raise io.UnsupportedOperation('not writable')
@@ -556,25 +615,50 @@ class _File(object):
             return 0
         if self.append:
             self.off = self.length
-        n = self.lib.jfs_pwrite(c_int64(_tid()), c_int32(self.fd), data, c_int32(len(data)), c_int64(self.off))
-        self.off += n
-        if self.off > self.length:
-            self.length = self.off
-        return n
+        base = cast(c_char_p(data), c_void_p).value if isinstance(data, six.binary_type) else None
+        tid, fd = c_int64(_tid()), c_int32(self.fd)
+        written = 0
+        try:
+            while written < len(data):
+                count = min(len(data) - written, chunk_size)
+                if base is None:
+                    chunk = data[written:written + count].tobytes()
+                    buffer = c_char_p(chunk)
+                else:
+                    buffer = c_void_p(base + written)
+                n = self.lib.jfs_pwrite(tid, fd, buffer, c_int32(count), c_int64(self.off + written))
+                if n == 0:
+                    raise OSError(errno.EIO, f'jfs_pwrite wrote 0 of {count} bytes')
+                written += n
+        finally:
+            self.off += written
+            self.length = max(self.length, self.off)
+        return written
 
     def seek(self, offset, whence=0):
         """Set the stream position to the given byte offset.
         offset is interpreted relative to the position indicated by whence.
-        The default value for whence is SEEK_SET."""
+        The default value for whence is SEEK_SET. The resulting position must
+        be nonnegative and fit in a signed 64-bit integer. Invalid arguments
+        leave the current position unchanged."""
         self._check_closed()
+        offset = operator.index(offset)
+        whence = operator.index(whence)
         if whence not in (os.SEEK_SET, os.SEEK_CUR, os.SEEK_END):
             raise ValueError(f'invalid whence ({whence}, should be {os.SEEK_SET}, {os.SEEK_CUR} or {os.SEEK_END})')
+        if not -(1 << 63) <= offset < (1 << 63):
+            raise OverflowError('seek offset does not fit in a signed 64-bit integer')
         if whence == os.SEEK_SET:
-            self.off = offset
+            position = offset
         elif whence == os.SEEK_CUR:
-            self.off += offset
+            position = self.off + offset
         else:
-            self.off = self.length + offset
+            position = self.length + offset
+        if position < 0:
+            raise OSError(errno.EINVAL, os.strerror(errno.EINVAL))
+        if position >= (1 << 63):
+            raise OverflowError('seek position does not fit in a signed 64-bit integer')
+        self.off = position
         return self.off
 
     def tell(self):
@@ -590,6 +674,7 @@ class _File(object):
             raise io.UnsupportedOperation('File not open for writing')
         if size is None:
             size = self.tell()
+        size = _truncate_size(size)
         self.lib.jfs_ftruncate(c_int64(_tid()), c_int32(self.fd), c_uint64(size))
         self.length = size
         return size

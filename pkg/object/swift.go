@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -124,6 +125,55 @@ func (s *swiftOSS) Head(ctx context.Context, key string) (Object, error) {
 	}, err
 }
 
+// parseSwiftEndpoint returns the container and host of an endpoint in either
+// http://<container>.<host> or http://<host>/<container> form. Only the second
+// can name a container containing dots or "@".
+func parseSwiftEndpoint(uri *url.URL) (container, host string, err error) {
+	if c := strings.Trim(uri.Path, "/"); c != "" {
+		if strings.Contains(c, "/") {
+			return "", "", fmt.Errorf("Invalid container %q: must not contain '/'", c)
+		}
+		return c, uri.Host, nil
+	}
+	hostSlice := strings.SplitN(uri.Host, ".", 2)
+	if len(hostSlice) != 2 {
+		return "", "", fmt.Errorf("Invalid host: %s", uri.Host)
+	}
+	return hostSlice[0], hostSlice[1], nil
+}
+
+// setSwiftAuth configures authentication from the endpoint's query. Without
+// auth-url it is Swift V1 auth against <scheme>://<host>/auth/v1.0. With
+// auth-url it is Keystone, configured by auth-version, tenant, tenant-id,
+// domain, domain-id, tenant-domain, tenant-domain-id and region. The
+// environment is never consulted, so the settings stored with the volume are
+// the only ones used.
+func setSwiftAuth(conn *swift.Connection, uri *url.URL, host string) error {
+	q := uri.Query()
+	authUrl := q.Get("auth-url")
+	if authUrl == "" {
+		conn.AuthUrl = uri.Scheme + "://" + host + "/auth/v1.0"
+		conn.AuthVersion = 1
+		return nil
+	}
+	conn.AuthUrl = authUrl
+	if v := q.Get("auth-version"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 3 {
+			return fmt.Errorf("Invalid auth-version: %s", v)
+		}
+		conn.AuthVersion = n
+	}
+	conn.Tenant = q.Get("tenant")
+	conn.TenantId = q.Get("tenant-id")
+	conn.Domain = q.Get("domain")
+	conn.DomainId = q.Get("domain-id")
+	conn.TenantDomain = q.Get("tenant-domain")
+	conn.TenantDomainId = q.Get("tenant-domain-id")
+	conn.Region = q.Get("region")
+	return nil
+}
+
 func newSwiftOSS(endpoint, username, apiKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
@@ -136,23 +186,20 @@ func newSwiftOSS(endpoint, username, apiKey, token string) (ObjectStorage, error
 		return nil, fmt.Errorf("Invalid uri.Scheme: %s", uri.Scheme)
 	}
 
-	hostSlice := strings.SplitN(uri.Host, ".", 2)
-	if len(hostSlice) != 2 {
-		return nil, fmt.Errorf("Invalid host: %s", uri.Host)
+	container, host, err := parseSwiftEndpoint(uri)
+	if err != nil {
+		return nil, err
 	}
-	container := hostSlice[0]
-	host := hostSlice[1]
-
-	// current only support V1 authentication
-	authURL := uri.Scheme + "://" + host + "/auth/v1.0"
 
 	conn := swift.Connection{
 		UserName:  username,
 		ApiKey:    apiKey,
 		AuthToken: token,
-		AuthUrl:   authURL,
 		UserAgent: UserAgent,
 		Transport: httpClient.Transport.(*http.Transport),
+	}
+	if err = setSwiftAuth(&conn, uri, host); err != nil {
+		return nil, err
 	}
 	err = conn.Authenticate(context.Background())
 	if err != nil {

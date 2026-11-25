@@ -54,7 +54,7 @@ require (
 	github.com/juju/ratelimit v1.0.2
 	github.com/ks3sdklib/aws-sdk-go v1.6.0
 	github.com/l0wl3vel/bunny-storage-go-sdk v1.0.0
-	github.com/lanrat/extsort v1.4.2
+	github.com/lanrat/extsort v1.5.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/minio/cli v1.24.2
@@ -347,7 +347,7 @@ require (
 	xorm.io/builder v0.3.13 // indirect
 )
 
-replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20260915033819-47296b1b89b0
+replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20261116023327-7e740330b5f7
 
 replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => github.com/juicedata/go-fuse/v2 v2.1.1-0.20260819084346-22b3157c2d7f
 
@@ -379,4 +379,4 @@ replace github.com/cloudsoda/go-smb2 => github.com/juicedata/go-smb2 v0.0.0-2026
 
 replace github.com/hashicorp/golang-lru/v2 v2.0.7 => github.com/juicedata/golang-lru/v2 v2.0.8-0.20251126062551-1b321869f904
 
-replace github.com/lanrat/extsort => github.com/juicedata/extsort v1.0.2-0.20260716070150-94a8c0fbe780
+replace github.com/lanrat/extsort => github.com/juicedata/extsort v1.0.2-0.20261113021358-6168df653259

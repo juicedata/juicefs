@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -124,7 +125,7 @@ func fsck(ctx *cli.Context) error {
 	}
 	sliceCSpin.Done()
 
-	chunkConf := *getDefaultChunkConf(format)
+	chunkConf := *fs.DefaultChunkConf(format)
 	chunkConf.CacheDir = "memory"
 
 	blob, err := createStorage(*format)
@@ -138,7 +139,7 @@ func fsck(ctx *cli.Context) error {
 	blockDSpin := progress.AddDoubleSpinner("Found blocks")
 	var blocks = make(map[string]int64)
 	if path == "" {
-		objs, err := object.ListAll(ctx.Context, blob, "", "", true, false)
+		objs, err := object.ListAll(object.WithUnorderedList(ctx.Context), blob, "", "", true)
 		if err != nil {
 			logger.Fatalf("list all blocks: %s", err)
 		}

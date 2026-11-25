@@ -307,8 +307,9 @@ type baseMeta struct {
 	dSliceMu sync.Mutex
 	dSliceWG sync.WaitGroup
 
-	dirStatsLock sync.RWMutex
-	dirStats     map[Ino]dirStat
+	dirStatsLock      sync.RWMutex
+	dirStatsFlushLock sync.Mutex // prevent concurrent doFlushDirStat
+	dirStats          map[Ino]dirStat
 
 	fsStatsLock sync.Mutex
 	*fsStat
@@ -1418,7 +1419,9 @@ func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 	case "linux":
 		// same as ext
 		if cur.Typ != TypeDirectory {
-			if ctx.Uid() != 0 || (cur.Mode>>3)&1 != 0 {
+			// Only permission-checking contexts provide the full supplementary groups.
+			keepSGID := ctx.Uid() == 0 || (ctx.CheckPermission() && containsGid(ctx, cur.Gid))
+			if !keepSGID || (cur.Mode>>3)&1 != 0 {
 				// clear SUID and SGID
 				cur.Mode &= 01777
 				set.Mode &= 01777
@@ -2270,7 +2273,7 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 	var attr Attr
 	st := m.en.doWrite(ctx, inode, indx, off, slice, mtime, &numSlices, &delta, &attr)
 	if st == 0 {
-		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
+		m.updateParentStat(ctx, inode, attr.Parent, attr.Nlink, delta.length, delta.space)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
 		if numSlices%100 == 99 || numSlices > 350 {
 			if numSlices < maxSlices {
@@ -2297,7 +2300,7 @@ func (m *baseMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, 
 	var delta dirStat
 	st := m.en.doTruncate(ctx, inode, flags, length, &delta, attr, skipPermCheck)
 	if st == 0 {
-		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
+		m.updateParentStat(ctx, inode, attr.Parent, attr.Nlink, delta.length, delta.space)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
 	}
 	return st
@@ -2333,7 +2336,7 @@ func (m *baseMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		if flength != nil {
 			*flength = attr.Length
 		}
-		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
+		m.updateParentStat(ctx, inode, attr.Parent, attr.Nlink, delta.length, delta.space)
 		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
 	}
 	return st
@@ -2423,6 +2426,27 @@ func (m *baseMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
 	} else {
 		return m.en.doGetParents(ctx, inode)
 	}
+}
+
+func (m *baseMeta) IsUnderRoot(ctx Context, inode Ino) bool {
+	if m.root == RootInode || inode == RootInode || inode == m.root {
+		return true
+	}
+	if inode == 0 { // checkRoot maps 0 to the root of the volume
+		return false
+	}
+	for p := range m.GetParents(ctx, inode) {
+		for p > RootInode && p != m.root {
+			var st syscall.Errno
+			if p, st = m.getDirParent(ctx, p); st != 0 {
+				break
+			}
+		}
+		if p == m.root {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *baseMeta) GetPaths(ctx Context, inode Ino) []string {
@@ -3021,6 +3045,7 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 		logger.Errorf("get attr error [inode %v]: %v", inode, st)
 		return st
 	}
+	inode = m.checkRoot(inode)
 	var wg sync.WaitGroup
 	// compact
 	chunkChan := make(chan cchunk, 10000)
@@ -3465,6 +3490,8 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno {
 
 	parent = m.checkRoot(parent)
+	srcIno = m.checkRoot(srcIno)
+	srcParentIno = m.checkRoot(srcParentIno)
 	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
 	}
@@ -3691,12 +3718,14 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 			changed = true
 		}
 	}
-	if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-		if m.checkPermission(ctx) && ctx.Uid() != 0 {
+	if set&SetAttrUID != 0 {
+		if m.checkPermission(ctx) && ctx.Uid() != 0 && (ctx.Uid() != cur.Uid || attr.Uid != cur.Uid) {
 			return nil, syscall.EPERM
 		}
-		dirtyAttr.Uid = attr.Uid
-		changed = true
+		if cur.Uid != attr.Uid {
+			dirtyAttr.Uid = attr.Uid
+			changed = true
+		}
 	}
 	if set&SetAttrMode != 0 {
 		if m.checkPermission(ctx) && ctx.Uid() != 0 && (attr.Mode&02000) != 0 {

@@ -19,10 +19,13 @@ package fs
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -1052,6 +1055,52 @@ func TestRevalidateStaleCache(t *testing.T) {
 	}
 }
 
+func TestChownStaleAttr(t *testing.T) {
+	fs := createTestFS(t)
+	ctx := meta.NewContext(1, 0, []uint32{0})
+	f, err := fs.Create(ctx, "/chown", 0644, 022)
+	if err != 0 {
+		t.Fatalf("create: %s", err)
+	}
+	_ = f.Close(ctx)
+	check := func(name string, uid, gid uint32) {
+		var attr meta.Attr
+		if st := fs.m.GetAttr(ctx, f.inode, &attr); st != 0 || attr.Uid != uid || attr.Gid != gid {
+			t.Fatalf("%s: uid=%d gid=%d, want %d %d (%s)", name, attr.Uid, attr.Gid, uid, gid, st)
+		}
+	}
+
+	f, _ = fs.Open(ctx, "/chown", 0)
+	defer f.Close(ctx)
+	if e := f.Chown(ctx, 1000, 1000); e != 0 {
+		t.Fatalf("chown: %s", e)
+	}
+	if e := f.Chown(ctx, 0, 0); e != 0 {
+		t.Fatalf("chown back: %s", e)
+	}
+	check("same handle", 0, 0)
+
+	_, _ = fs.Stat(ctx, "/chown")
+	if st := fs.m.SetAttr(ctx, f.inode, meta.SetAttrUID|meta.SetAttrGID, 0, &meta.Attr{Uid: 2000, Gid: 2000}); st != 0 {
+		t.Fatalf("setattr: %s", st)
+	}
+	g, _ := fs.Open(ctx, "/chown", 0)
+	defer g.Close(ctx)
+	if e := g.Chown(ctx, 0, 0); e != 0 {
+		t.Fatalf("chown with stale attr: %s", e)
+	}
+	check("stale attr", 0, 0)
+
+	if e := g.Chown(ctx, math.MaxUint32, 7); e != 0 {
+		t.Fatalf("chown(-1, 7): %s", e)
+	}
+	check("chown(-1, 7)", 0, 7)
+	if e := g.Chown(ctx, math.MaxUint32, math.MaxUint32); e != 0 {
+		t.Fatalf("chown(-1, -1): %s", e)
+	}
+	check("chown(-1, -1)", 0, 7)
+}
+
 func createTestFS(t testing.TB) *FileSystem {
 	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
@@ -1084,4 +1133,44 @@ func createTestFS(t testing.TB) *FileSystem {
 	jfs.rotateAccessLog = 500
 	t.Cleanup(func() { _ = jfs.Close() })
 	return jfs
+}
+
+func TestCloseStopsGoroutines(t *testing.T) {
+	countBackground := func() int {
+		buf := make([]byte, 1<<20)
+		for {
+			n := runtime.Stack(buf, true)
+			if n < len(buf) {
+				buf = buf[:n]
+				break
+			}
+			buf = make([]byte, len(buf)*2)
+		}
+		var cnt int
+		for _, fn := range []string{"cleanupAttrCache(", "cleanupEntryCache(", "flushLog("} {
+			cnt += strings.Count(string(buf), fn)
+		}
+		return cnt
+	}
+	before := countBackground()
+	jfs := createTestFS(t)
+	jfs.rotateAccessLog = 1 << 30
+	ctx := meta.NewContext(1, 0, []uint32{0})
+	if _, e := jfs.Stat(ctx, "/"); e != 0 {
+		t.Fatalf("stat /: %s", e)
+	}
+	if err := jfs.Close(); err != nil {
+		t.Fatalf("close: %s", err)
+	}
+	if c := countBackground(); c != before {
+		t.Fatalf("%d background goroutines left after close", c-before)
+	}
+	data, err := os.ReadFile(jfs.conf.AccessLog)
+	if err != nil {
+		t.Fatalf("read access log: %s", err)
+	}
+	if !strings.Contains(string(data), "Stat (/)") {
+		t.Fatalf("access log is not flushed after close: %q", data)
+	}
+	_ = jfs.Close() // closing twice should be safe
 }

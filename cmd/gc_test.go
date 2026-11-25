@@ -205,8 +205,6 @@ func TestMergeGcSortedRecords(t *testing.T) {
 		keys = append(keys, key)
 	}
 	require.ElementsMatch(t, []string{"1_1_4", "9_0_4"}, keys)
-	require.NoError(t, metaSorter.Done())
-	require.NoError(t, objSorter.Done())
 }
 
 func TestScanGcChunkObjects(t *testing.T) {

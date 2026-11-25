@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package fs
 
 import (
 	"context"
@@ -34,19 +34,17 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/chunk"
-	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/urfave/cli/v2"
 )
 
 var (
 	dirSuffix     = "/"
-	cliCtx        *cli.Context
 	pid, uid, gid uint32
+	ctx           = meta.NewContext(1, uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 )
 
 func toError(eno syscall.Errno) error {
@@ -60,7 +58,7 @@ type juiceFS struct {
 	object.DefaultObjectStorage
 	name  string
 	umask uint16
-	jfs   *fs.FileSystem
+	jfs   *FileSystem
 }
 
 func (j *juiceFS) String() string {
@@ -72,7 +70,7 @@ func (j *juiceFS) path(key string) string {
 }
 
 type jFile struct {
-	f     *fs.File
+	f     *File
 	limit int64
 }
 
@@ -101,6 +99,9 @@ func (f *jFile) Close() error {
 }
 
 func (j *juiceFS) Get(rCtx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	if err := object.CheckKey(key); err != nil {
+		return nil, err
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	f, err := j.jfs.Open(ctx, j.path(key), vfs.MODE_MASK_R)
 	if err != 0 {
@@ -123,6 +124,9 @@ var bufPool = sync.Pool{
 }
 
 func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ...object.AttrGetter) (err error) {
+	if err := object.CheckKey(key); err != nil {
+		return err
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	if vfs.IsSpecialName(key) {
 		return fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
@@ -186,6 +190,9 @@ func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ..
 }
 
 func (j *juiceFS) Delete(rCtx context.Context, key string, getters ...object.AttrGetter) error {
+	if err := object.CheckKey(key); err != nil {
+		return err
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	if key == "" {
 		return nil
@@ -200,7 +207,7 @@ func (j *juiceFS) Delete(rCtx context.Context, key string, getters ...object.Att
 
 type jObj struct {
 	key       string
-	fi        *fs.FileStat
+	fi        *FileStat
 	isSymlink bool
 }
 
@@ -221,6 +228,9 @@ func (o *jObj) StorageClass() string { return "" }
 func (o *jObj) Status() string       { return "" }
 
 func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) {
+	if err := object.CheckKey(key); err != nil {
+		return nil, err
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	errConv := func(eno syscall.Errno) error {
 		if errors.Is(eno, syscall.ENOENT) {
@@ -244,6 +254,9 @@ func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) 
 }
 
 func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
+	if err := object.CheckKey(prefix); err != nil {
+		return nil, false, "", err
+	}
 	if delimiter != "/" {
 		return nil, false, "", utils.ErrNotSUP
 	}
@@ -293,7 +306,7 @@ func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter str
 }
 
 type mEntry struct {
-	fi        *fs.FileStat
+	fi        *FileStat
 	name      string
 	isSymlink bool
 }
@@ -312,7 +325,7 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 	}
 	mEntries := make([]*mEntry, 0, len(entries))
 	for _, e := range entries {
-		fi := fs.AttrToFileInfo(e.Inode, e.Attr)
+		fi := AttrToFileInfo(e.Inode, e.Attr)
 		if fi.IsDir() {
 			mEntries = append(mEntries, &mEntry{fi, string(e.Name) + dirSuffix, false})
 		} else if fi.IsSymlink() && followLink {
@@ -342,6 +355,9 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 }
 
 func (j *juiceFS) Chtimes(key string, mtime time.Time) error {
+	if err := object.CheckKey(key); err != nil {
+		return err
+	}
 	f, err := j.jfs.Lopen(ctx, j.path(key), 0)
 	if err != 0 {
 		return err
@@ -367,6 +383,9 @@ func syscallMode(i os.FileMode) (o uint32) {
 }
 
 func (j *juiceFS) Chmod(key string, mode os.FileMode) error {
+	if err := object.CheckKey(key); err != nil {
+		return err
+	}
 	f, err := j.jfs.Open(ctx, j.path(key), 0)
 	if err != 0 {
 		return err
@@ -376,6 +395,9 @@ func (j *juiceFS) Chmod(key string, mode os.FileMode) error {
 }
 
 func (j *juiceFS) Chown(key string, owner, group string) error {
+	if err := object.CheckKey(key); err != nil {
+		return err
+	}
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
 	if uid == -1 || gid == -1 {
@@ -390,6 +412,9 @@ func (j *juiceFS) Chown(key string, owner, group string) error {
 }
 
 func (j *juiceFS) Symlink(oldName, newName string) error {
+	if err := object.CheckKey(newName); err != nil {
+		return err
+	}
 	p := j.path(newName)
 	err := j.jfs.Symlink(ctx, oldName, p)
 	if err == syscall.ENOENT {
@@ -402,6 +427,9 @@ func (j *juiceFS) Symlink(oldName, newName string) error {
 }
 
 func (j *juiceFS) Readlink(name string) (string, error) {
+	if err := object.CheckKey(name); err != nil {
+		return "", err
+	}
 	target, err := j.jfs.Readlink(ctx, j.path(name))
 	return string(target), toError(err)
 }
@@ -417,6 +445,9 @@ func (j *juiceFS) Limits() object.Limits {
 }
 
 func (j *juiceFS) CreateMultipartUpload(_ context.Context, key string) (*object.MultipartUpload, error) {
+	if err := object.CheckKey(key); err != nil {
+		return nil, err
+	}
 	if vfs.IsSpecialName(key) {
 		return nil, fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
 	}
@@ -436,6 +467,9 @@ func (j *juiceFS) partDir(key, uploadID string) string {
 }
 
 func (j *juiceFS) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*object.Part, error) {
+	if err := object.CheckKey(key); err != nil {
+		return nil, err
+	}
 	err := j.Put(context.Background(), path.Join(j.partDir(key, uploadID), strconv.Itoa(num)), in)
 	return &object.Part{
 		Num: num,
@@ -447,11 +481,17 @@ func (j *juiceFS) UploadPart(ctx context.Context, key string, uploadID string, n
 }
 
 func (j *juiceFS) AbortUpload(rCtx context.Context, key string, uploadID string) {
+	if object.CheckKey(key) != nil {
+		return
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	_ = j.jfs.Rmr(ctx, j.path(j.partDir(key, uploadID)), true, meta.RmrDefaultThreads)
 }
 
 func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID string, parts []*object.Part) (err error) {
+	if err := object.CheckKey(key); err != nil {
+		return err
+	}
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	tmp := j.path(path.Join(j.partDir(key, uploadID), "complete"))
 	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
@@ -482,7 +522,8 @@ func (j *juiceFS) CompleteUpload(rCtx context.Context, key string, uploadID stri
 	return toError(eno)
 }
 
-func getDefaultChunkConf(format *meta.Format) *chunk.Config {
+// DefaultChunkConf returns the chunk config used by tools that access a volume without mounting it.
+func DefaultChunkConf(format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
 		BlockSize:     format.BlockSize * 1024,
 		Compress:      format.Compression,
@@ -504,11 +545,14 @@ func (j *juiceFS) Shutdown() {
 	_ = j.jfs.Meta().CloseSession()
 }
 
-func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+// NewJFS opens the volume at endpoint (a meta URL or the name of an env var holding it) as an object storage;
+// mountpoint is used to resolve absolute symlinks that point into the mounted volume.
+func NewJFS(endpoint, mountpoint string) (object.ObjectStorage, error) {
 	pid, uid, gid = uint32(os.Getpid()), uint32(utils.GetCurrentUID()), uint32(utils.GetCurrentGID())
 	if runtime.GOOS == "windows" && utils.IsWinAdminOrElevatedPrivilege() {
 		uid = 0
 		gid = 0
+		ctx = meta.NewContext(1, 0, []uint32{0})
 	}
 	metaUrl := os.Getenv(endpoint)
 	if metaUrl == "" {
@@ -526,9 +570,14 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	if err != nil {
 		return nil, fmt.Errorf("object storage: %s", err)
 	}
-	chunkConf := getDefaultChunkConf(format)
+	chunkConf := DefaultChunkConf(format)
 	store := chunk.NewCachedStore(blob, *chunkConf, nil)
-	registerMetaMsg(metaCli, store, chunkConf)
+	metaCli.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
+		return store.Remove(args[0].(uint64), int(args[1].(uint32)))
+	})
+	metaCli.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
+		return vfs.Compact(*chunkConf, store, args[0].([]meta.Slice), args[1].(uint64), args[2].(uint8))
+	})
 	err = metaCli.NewSession(false)
 	if err != nil {
 		return nil, fmt.Errorf("new session: %s", err)
@@ -545,14 +594,14 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 		Chunk:           chunkConf,
 		AttrTimeout:     time.Second,
 		DirEntryTimeout: time.Second,
-		Mountpoint:      cliCtx.String("mountpoint"),
+		Mountpoint:      mountpoint,
 	}
 
 	vfsConf.Format.RemoveSecret()
 	d, _ := json.MarshalIndent(vfsConf, "  ", "")
 	logger.Debugf("Config: %s", string(d))
 
-	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store, nil)
+	jfs, err := NewFileSystem(vfsConf, metaCli, store, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Initialize: %s", err)
 	}
@@ -560,5 +609,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 }
 
 func init() {
-	object.Register("jfs", newJFS)
+	object.Register("jfs", func(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+		return NewJFS(endpoint, "")
+	})
 }

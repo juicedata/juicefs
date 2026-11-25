@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"runtime/trace"
@@ -152,6 +153,9 @@ type FileSystem struct {
 	checkAccessFile time.Duration
 	rotateAccessLog int64
 	logBuffer       chan string
+	done            chan struct{}
+	wg              sync.WaitGroup
+	closeOnce       sync.Once
 
 	readSizeHistogram     prometheus.Histogram
 	writtenSizeHistogram  prometheus.Histogram
@@ -192,6 +196,7 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *
 		attrs:           make(map[meta.Ino]*attrCache),
 		checkAccessFile: time.Minute,
 		rotateAccessLog: 300 << 20, // 300 MiB
+		done:            make(chan struct{}),
 
 		readSizeHistogram: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "sdk_read_size_bytes",
@@ -223,7 +228,9 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *
 		}
 	}
 
-	go fs.cleanupCache()
+	fs.wg.Add(2)
+	go fs.cleanupAttrCache()
+	go fs.cleanupEntryCache()
 	if conf.AccessLog != "" {
 		f, err := os.OpenFile(conf.AccessLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
@@ -231,6 +238,7 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *
 		} else {
 			_ = os.Chmod(conf.AccessLog, 0666)
 			fs.logBuffer = make(chan string, 1024)
+			fs.wg.Add(1)
 			go fs.flushLog(f, fs.logBuffer, conf.AccessLog)
 		}
 	}
@@ -246,26 +254,43 @@ func (fs *FileSystem) InitMetrics(reg prometheus.Registerer) {
 	}
 }
 
-func (fs *FileSystem) cleanupCache() {
+func (fs *FileSystem) cleanupAttrCache() {
+	defer fs.wg.Done()
 	for {
-		fs.cacheM.Lock()
 		now := time.Now()
-		var cnt int
+		var cnt, del int
+		fs.cacheM.Lock()
 		for inode, it := range fs.attrs {
 			if now.After(it.expire) {
 				delete(fs.attrs, inode)
+				del++
 			}
 			cnt++
 			if cnt > 1000 {
 				break
 			}
 		}
-		cnt = 0
+		fs.cacheM.Unlock()
+		select {
+		case <-fs.done:
+			return
+		case <-time.After(time.Millisecond * time.Duration(1000*(cnt+1-del*2)/(cnt+1))):
+		}
+	}
+}
+
+func (fs *FileSystem) cleanupEntryCache() {
+	defer fs.wg.Done()
+	for {
+		now := time.Now()
+		var cnt, del int
+		fs.cacheM.Lock()
 	OUTER:
 		for inode, es := range fs.entries {
 			for n, e := range es {
 				if now.After(e.expire) {
 					delete(es, n)
+					del++
 					if len(es) == 0 {
 						delete(fs.entries, inode)
 					}
@@ -277,7 +302,11 @@ func (fs *FileSystem) cleanupCache() {
 			}
 		}
 		fs.cacheM.Unlock()
-		time.Sleep(time.Second)
+		select {
+		case <-fs.done:
+			return
+		case <-time.After(time.Millisecond * time.Duration(1000*(cnt+1-del*2)/(cnt+1))):
+		}
 	}
 }
 
@@ -318,6 +347,7 @@ func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
 }
 
 func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
+	defer fs.wg.Done()
 	buf := make([]byte, 0, 128<<10)
 	var lastcheck = time.Now()
 	defer func() {
@@ -1295,6 +1325,10 @@ func (fs *FileSystem) Close() error {
 		fs.logBuffer = nil
 		close(buffer)
 	}
+	fs.closeOnce.Do(func() {
+		close(fs.done)
+		fs.wg.Wait()
+	})
 	return fs.Meta().CloseSession()
 }
 
@@ -1441,16 +1475,20 @@ func (f *File) Chmod(ctx meta.Context, mode uint16) (err syscall.Errno) {
 	return
 }
 
+// Chown changes ownership, leaving IDs set to math.MaxUint32 unchanged.
 func (f *File) Chown(ctx meta.Context, uid uint32, gid uint32) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Chown").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chown (%s,%d,%d): %s", f.path, uid, gid, errstr(err)) }()
 	var flag uint16
-	if uid != uint32(f.info.Uid()) {
+	if uid != math.MaxUint32 {
 		flag |= meta.SetAttrUID
 	}
-	if gid != uint32(f.info.Gid()) {
+	if gid != math.MaxUint32 {
 		flag |= meta.SetAttrGID
+	}
+	if flag == 0 {
+		return 0
 	}
 	var attr = Attr{Uid: uid, Gid: gid}
 	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)

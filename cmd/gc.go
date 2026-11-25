@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
+	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -99,7 +100,7 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("create session: %v", err)
 	}
 
-	chunkConf := *getDefaultChunkConf(format)
+	chunkConf := *fs.DefaultChunkConf(format)
 	chunkConf.CacheDir = "memory"
 
 	blob, err := createStorage(*format)
@@ -484,6 +485,8 @@ const gcObjectListBatch = 10000
 
 func scanGcChunkObjects(ctx context.Context, blob object.ObjectStorage, threads int, hashPrefix bool, prefixSpin *utils.Bar, handle func(object.Object) error) error {
 	defer prefixSpin.Done()
+	// Each object is checked on its own, so keys may come in any order.
+	ctx = object.WithUnorderedList(ctx)
 	prefixes := make(chan string, threads)
 	eg, scanCtx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
@@ -580,7 +583,7 @@ func walkGcChunkObjectPrefixes(ctx context.Context, blob object.ObjectStorage, p
 }
 
 func scanGcChunkObjectsPrefix(ctx context.Context, blob object.ObjectStorage, prefix string, handle func(object.Object) error) error {
-	objs, err := object.ListAll(ctx, blob, prefix, "", true, false)
+	objs, err := object.ListAll(object.WithUnorderedList(ctx), blob, prefix, "", true)
 	if err != nil {
 		return errors.Errorf("list chunk prefix %s: %s", prefix, err)
 	}

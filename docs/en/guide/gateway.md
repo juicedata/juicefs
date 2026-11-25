@@ -205,6 +205,10 @@ The distributed nature of JuiceFS allows multiple JuiceFS S3 gateway instances t
 - The IAM refresh time between nodes can vary, but it must be ensured that this interval is not too short to prevent excessive load on JuiceFS.
 - Each instance's listening address and port can be freely configured. If multiple instances are started on the same machine, ensure that there is no conflict in port numbers.
 
+Object writes are not uniformly serialized across gateway instances. We recommend consistent hashing by bucket name and object name to route requests for the same object, including retries, to the same instance. Exclude query parameters such as `uploadId`, `partNumber`, and signatures from the routing key. Round-robin routing, DNS round-robin, and client IP affinity do not guarantee this across clients.
+
+Object-based routing does not provide distributed locking, and scaling or failover can change the routing.
+
 ### Run as a daemon service
 
 JuiceFS S3 Gateway can be configured as a systemd unit.

@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/sync"
@@ -272,6 +273,10 @@ func syncStorageFlags() []cli.Flag {
 			Value: 1,
 			Usage: "list the top N level of directories in parallel",
 		},
+		&cli.StringFlag{
+			Name:  "external-sort-dir",
+			Usage: "directory for external sorting of unordered object listings",
+		},
 		&cli.BoolFlag{
 			Name:  "no-https",
 			Usage: "donot use HTTPS",
@@ -355,6 +360,17 @@ func isFilePath(uri string) bool {
 	return !strings.Contains(uri, ":")
 }
 
+// hasTrailingSlash reports whether the path of a sync URL ends with "/",
+// ignoring any query such as swift's path-style=true or Keystone settings.
+func hasTrailingSlash(uri string) bool {
+	if strings.Contains(uri, "://") {
+		if u, err := url.Parse(uri); err == nil && u.RawQuery != "" {
+			return strings.HasSuffix(u.Path, "/")
+		}
+	}
+	return strings.HasSuffix(uri, "/")
+}
+
 func extractToken(uri string) (string, string) {
 	if submatch := regexp.MustCompile(`^.*:.*:.*(:.*)@.*$`).FindStringSubmatch(uri); len(submatch) == 2 {
 		return strings.ReplaceAll(uri, submatch[1], ""), strings.TrimLeft(submatch[1], ":")
@@ -435,6 +451,24 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		// bucket name is part of path
 		endpoint += u.Path
 	}
+	// swift://<container>.<host>/prefix, or swift://<host>/<container>/prefix?path-style=true
+	// for a container whose name contains dots or "@". Keystone settings
+	// (auth-url, ...) are passed through in the query.
+	if name == "swift" {
+		q := u.Query()
+		if pathStyle, _ := strconv.ParseBool(q.Get("path-style")); pathStyle {
+			container, prefix, _ := strings.Cut(strings.TrimPrefix(u.Path, "/"), "/")
+			if container == "" {
+				return nil, fmt.Errorf("path-style swift URL %s has no container", utils.RemovePassword(uri))
+			}
+			endpoint += "/" + url.PathEscape(container)
+			u.Path = "/" + prefix
+		}
+		q.Del("path-style")
+		if len(q) > 0 {
+			endpoint += "?" + q.Encode()
+		}
+	}
 
 	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token)
 	if name == "nfs" && err != nil {
@@ -482,7 +516,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			store = object.WithPrefix(store, u.Path[1:])
 		}
 	}
-	initStorageTiers(store, object.NewTiers(""))
+	object.InitStorageTiers(store, object.NewTiers(""))
 	return store, nil
 }
 
@@ -543,7 +577,9 @@ func doSync(c *cli.Context) error {
 		logger.Warnf("The include option needs to be used with the exclude option, otherwise the result of the current sync may not match your expectations")
 	}
 	config := sync.NewConfigFromCli(c)
-	cliCtx = c
+	object.Register("jfs", func(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+		return fs.NewJFS(endpoint, c.String("mountpoint"))
+	})
 	if config.Manager != "" {
 		logger.Debugf("worker process start")
 	}
@@ -563,7 +599,7 @@ func doSync(c *cli.Context) error {
 			dstURL = strings.ReplaceAll(dstURL, "\\", "/")
 		}
 	}
-	if strings.HasSuffix(srcURL, "/") != strings.HasSuffix(dstURL, "/") {
+	if hasTrailingSlash(srcURL) != hasTrailingSlash(dstURL) {
 		logger.Fatalf("SRC and DST should both end with path separator or not!")
 	}
 	src, err := createSyncStorage(srcURL, config)
@@ -579,7 +615,7 @@ func doSync(c *cli.Context) error {
 		object.Shutdown(dst)
 	}()
 	if config.StorageClass != "" {
-		initStorageTiers(dst, object.NewTiers(config.StorageClass))
+		object.InitStorageTiers(dst, object.NewTiers(config.StorageClass))
 	}
 	src, err = wrapSyncEncryptedStore(src, c.String("decrypt-rsa-key"), "JFS_DECRYPT_RSA_PASSPHRASE", "decrypt", c.String("decrypt-algo"))
 	if err != nil {

@@ -185,7 +185,7 @@ func objbench(ctx *cli.Context) error {
 	blob := object.WithPrefix(blobOrigin, prefix)
 	storageClass := ctx.String("storage-class")
 	if storageClass != "" {
-		initStorageTiers(blob, object.NewTiers(storageClass))
+		object.InitStorageTiers(blob, object.NewTiers(storageClass))
 	}
 	defer func() {
 		_ = blobOrigin.Delete(ctx.Context, prefix)
@@ -669,7 +669,7 @@ func (bm *benchMarkObj) chtimes(ctx context.Context, key string, startKey int) e
 }
 
 func listAll(ctx context.Context, s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
-	ch, err := object.ListAll(ctx, s, prefix, marker, true, true)
+	ch, err := object.ListAll(ctx, s, prefix, marker, true)
 	if err == nil {
 		objs := make([]object.Object, 0)
 		for obj := range ch {

@@ -75,7 +75,7 @@ func TestBackup(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 
 	blob = object.WithPrefix(blob, "meta/")
-	kc, _ := object.ListAll(context.TODO(), blob, "", "", true, false)
+	kc, _ := object.ListAll(object.WithUnorderedList(context.TODO()), blob, "", "", true)
 	var keys []string
 	for obj := range kc {
 		keys = append(keys, obj.Key())

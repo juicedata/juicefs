@@ -41,7 +41,7 @@ endif
 
 # libjfs is located in the sdk/java/libjfs
 libjfs:
-	go build -buildmode c-shared -ldflags="$(LDFLAGS)" -o $(LIBJFS) ../java/libjfs
+	go build -tags nogspt -buildmode c-shared -ldflags="$(LDFLAGS)" -o $(LIBJFS) ../java/libjfs
 
 libjfs.so: libjfs
 

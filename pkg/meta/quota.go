@@ -195,24 +195,31 @@ func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int
 	}
 }
 
-func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, space int64) {
+func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, nlink uint32, length, space int64) {
 	if length == 0 && space == 0 {
 		return
 	}
 	m.en.updateStats(space, 0)
-	if !m.getFormat().DirStats {
+	// an open file without links belongs to no directory until Link charges its full length
+	if !m.getFormat().DirStats || nlink == 0 {
 		return
 	}
 	if parent > 0 {
 		m.updateDirStat(ctx, parent, length, space, 0)
 		m.updateDirQuota(ctx, parent, space, 0)
+		return
+	}
+	update := func() {
+		for p, v := range m.en.doGetParents(ctx, inode) {
+			m.updateDirStat(ctx, p, length*int64(v), space*int64(v), 0)
+			m.updateDirQuota(ctx, p, space*int64(v), 0)
+		}
+	}
+	// Replay must apply the update before the next entry, e.g. a DIRSTAT resync.
+	if m.replay.Load() != nil {
+		update()
 	} else {
-		go func() {
-			for p, v := range m.en.doGetParents(ctx, inode) {
-				m.updateDirStat(ctx, p, length*int64(v), space*int64(v), 0)
-				m.updateDirQuota(ctx, p, space*int64(v), 0)
-			}
-		}()
+		go update()
 	}
 }
 
@@ -239,6 +246,21 @@ func (m *baseMeta) doFlushDirStat() {
 	if !m.getFormat().DirStats {
 		return
 	}
+	m.dirStatsFlushLock.Lock()
+	defer m.dirStatsFlushLock.Unlock()
+	m.flushDirStatLocked()
+}
+
+// syncDirStat flushes pending updates before recalculating the stat of ino,
+// so that they are not added again on top of the recalculated value.
+func (m *baseMeta) syncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
+	m.dirStatsFlushLock.Lock()
+	defer m.dirStatsFlushLock.Unlock()
+	m.flushDirStatLocked()
+	return m.en.doSyncDirStat(ctx, ino)
+}
+
+func (m *baseMeta) flushDirStatLocked() {
 	m.dirStatsLock.Lock()
 	if len(m.dirStats) == 0 {
 		m.dirStatsLock.Unlock()
@@ -278,7 +300,7 @@ func (m *baseMeta) syncVolumeStat(ctx Context, used, inodes int64) error {
 }
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, uid, gid uint32, parents ...Ino) syscall.Errno {
-	if space <= 0 && inodes <= 0 {
+	if m.replay.Load() != nil || (space <= 0 && inodes <= 0) {
 		return 0
 	}
 	if m.checkUserQuota(ctx, uint64(uid), space, inodes) {
@@ -391,7 +413,7 @@ func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) (Ino, *Quota) {
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
-	if !m.getFormat().DirStats {
+	if m.replay.Load() != nil || !m.getFormat().DirStats {
 		return false
 	}
 	var q *Quota
@@ -416,7 +438,7 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 }
 
 func (m *baseMeta) checkUserQuota(ctx Context, uid uint64, space, inodes int64) bool {
-	if !m.getFormat().UserGroupQuota {
+	if m.replay.Load() != nil || !m.getFormat().UserGroupQuota {
 		return false
 	}
 
@@ -432,7 +454,7 @@ func (m *baseMeta) checkUserQuota(ctx Context, uid uint64, space, inodes int64) 
 }
 
 func (m *baseMeta) checkGroupQuota(ctx Context, gid uint64, space, inodes int64) bool {
-	if !m.getFormat().UserGroupQuota {
+	if m.replay.Load() != nil || !m.getFormat().UserGroupQuota {
 		return false
 	}
 

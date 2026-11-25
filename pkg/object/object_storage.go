@@ -19,6 +19,9 @@ package object
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -26,6 +29,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,12 +38,13 @@ import (
 
 	"github.com/aws/smithy-go/encoding/httpbinding"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 )
 
 var ctx = context.Background()
 var logger = utils.GetLogger("juicefs")
 
-var UserAgent = "JuiceFS"
+var UserAgent = "JuiceFS-" + version.Version()
 
 func setUserAgent(req *http.Request) {
 	req.Header.Set("User-Agent", UserAgent)
@@ -131,6 +136,22 @@ type FileSystem interface {
 
 var notSupported = utils.ErrNotSUP
 
+// CheckKey returns an error wrapping utils.ErrUnsafeKey if key could escape the root of a storage that maps keys to paths.
+func CheckKey(key string) error {
+	if strings.IndexByte(key, 0) >= 0 {
+		return fmt.Errorf("%w: %q", utils.ErrUnsafeKey, key)
+	}
+	if !strings.Contains(key, "..") {
+		return nil
+	}
+	for _, e := range strings.FieldsFunc(key, func(r rune) bool { return r == '/' || runtime.GOOS == "windows" && r == '\\' }) {
+		if e == ".." {
+			return fmt.Errorf("%w: %q", utils.ErrUnsafeKey, key)
+		}
+	}
+	return nil
+}
+
 type DefaultObjectStorage struct{}
 
 func (s DefaultObjectStorage) Create(ctx context.Context) error {
@@ -203,6 +224,90 @@ func CreateStorage(name, endpoint, accessKey, secretKey, token string) (ObjectSt
 		return f(endpoint, accessKey, secretKey, token)
 	}
 	return nil, fmt.Errorf("invalid storage: %s", name)
+}
+
+// VolumeConfig contains the settings used to create a volume's object
+// storage. SecretKey, SessionToken and EncryptKey must already be decrypted.
+type VolumeConfig struct {
+	Name         string
+	Storage      string
+	Bucket       string
+	AccessKey    string
+	SecretKey    string
+	SessionToken string
+	Shards       int
+	Tiers        Tiers
+	EncryptKey   string
+	EncryptAlgo  string
+}
+
+// CreateVolumeStorage creates storage with the volume's prefix, tiers and encryption.
+func CreateVolumeStorage(config VolumeConfig) (ObjectStorage, error) {
+	var blob ObjectStorage
+	var err error
+	if u, err := url.Parse(config.Bucket); err == nil {
+		values := u.Query()
+		if values.Get("tls-insecure-skip-verify") != "" {
+			var tlsSkipVerify bool
+			if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
+				return nil, err
+			}
+			GetHttpClient().Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = tlsSkipVerify
+			values.Del("tls-insecure-skip-verify")
+			u.RawQuery = values.Encode()
+			config.Bucket = u.String()
+		}
+
+		// Configure client TLS when params are provided
+		if values.Get("ca-certs") != "" && values.Get("ssl-cert") != "" && values.Get("ssl-key") != "" {
+
+			clientTLSCert, err := tls.LoadX509KeyPair(values.Get("ssl-cert"), values.Get("ssl-key"))
+			if err != nil {
+				return nil, fmt.Errorf("error loading certificate and key file: %s", err.Error())
+			}
+
+			certPool := x509.NewCertPool()
+			caCertPEM, err := os.ReadFile(values.Get("ca-certs"))
+			if err != nil {
+				return nil, fmt.Errorf("error loading CA cert file: %s", err.Error())
+			}
+
+			if certAdded := certPool.AppendCertsFromPEM(caCertPEM); !certAdded {
+				return nil, fmt.Errorf("error appending CA cert to pool")
+			}
+
+			GetHttpClient().Transport.(*http.Transport).TLSClientConfig.RootCAs = certPool
+			GetHttpClient().Transport.(*http.Transport).TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
+		}
+	}
+
+	if config.Shards > 1 {
+		blob, err = NewSharded(strings.ToLower(config.Storage), config.Bucket, config.AccessKey, config.SecretKey, config.SessionToken, config.Shards)
+	} else {
+		blob, err = CreateStorage(strings.ToLower(config.Storage), config.Bucket, config.AccessKey, config.SecretKey, config.SessionToken)
+	}
+	if err != nil {
+		return nil, err
+	}
+	blob = WithPrefix(blob, config.Name+"/")
+	InitStorageTiers(blob, config.Tiers)
+	if config.EncryptKey != "" {
+		privKey, err := ParsePrivateKeyFromPem([]byte(config.EncryptKey), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
+		if err != nil {
+			Shutdown(blob)
+			if errors.Is(err, ErrKeyNeedPasswd) {
+				return nil, fmt.Errorf("%w: please set the 'JFS_RSA_PASSPHRASE' environment variable", err)
+			}
+			return nil, fmt.Errorf("parse private key: %s", err)
+		}
+		encryptor, err := NewDataEncryptor(NewKeyEncryptor(privKey), config.EncryptAlgo)
+		if err != nil {
+			Shutdown(blob)
+			return nil, err
+		}
+		blob = NewEncrypted(blob, encryptor)
+	}
+	return blob, nil
 }
 
 var bufPool = sync.Pool{
@@ -383,6 +488,24 @@ const DefaultRestoreDays = 3
 type SupportTier interface {
 	InitTiers(init Tiers) error
 	GetTier(ctx context.Context) Tier
+}
+
+// InitStorageTiers applies tiers and warns if explicitly configured tiers cannot be set.
+func InitStorageTiers(storage ObjectStorage, tiers Tiers) {
+	if tierStorage, ok := storage.(SupportTier); ok {
+		if err := tierStorage.InitTiers(tiers); err != nil && hasConfiguredTiers(tiers) {
+			logger.Warnf("Set storage tier: %s", err)
+		}
+	}
+}
+
+func hasConfiguredTiers(tiers Tiers) bool {
+	for id, tier := range tiers {
+		if id != 0 || tier.Sc != "" || tier.Tag != "" {
+			return true
+		}
+	}
+	return false
 }
 
 type runtimeTier struct {

@@ -23,6 +23,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -140,4 +142,113 @@ func Test_s3client_copy_source_encoding(t *testing.T) {
 			assert.Equal(t, tt.want, <-got, "UploadPartCopy")
 		})
 	}
+}
+
+const s3NotSupportedListXML = `<Error><Code>NotSupported</Code><Message>This bucket does not support start-after query parameter for ListObjectsV2 API.</Message></Error>`
+
+func writeS3ListPage(w http.ResponseWriter, key string, truncated bool, token string) {
+	w.Header().Set("Content-Type", "application/xml")
+	next := ""
+	trunc := "false"
+	if truncated {
+		trunc = "true"
+		next = "<NextContinuationToken>" + token + "</NextContinuationToken>"
+	}
+	_, _ = w.Write([]byte(`<ListBucketResult><IsTruncated>` + trunc + `</IsTruncated>` + next +
+		`<Contents><Key>` + key + `</Key><Size>1</Size></Contents></ListBucketResult>`))
+}
+
+func TestS3DirectoryBucketList(t *testing.T) {
+	var dirLists, badStartAfter atomic.Int32
+	var generalStartAfter string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		// Directory-bucket clients take a session before ListObjectsV2.
+		if _, ok := q["session"]; ok {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<CreateSessionResult><Credentials><AccessKeyId>ak</AccessKeyId><SecretAccessKey>sk</SecretAccessKey><SessionToken>token</SessionToken><Expiration>2099-01-01T00:00:00Z</Expiration></Credentials></CreateSessionResult>`))
+			return
+		}
+		if q.Get("list-type") != "2" {
+			http.Error(w, "expected ListObjectsV2", http.StatusBadRequest)
+			return
+		}
+		bucket := strings.Trim(r.URL.Path, "/")
+		startAfter := q.Get("start-after")
+		if bucket == "general" {
+			generalStartAfter = startAfter
+			if startAfter == "" {
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(http.StatusNotImplemented)
+				_, _ = w.Write([]byte(s3NotSupportedListXML))
+				return
+			}
+			writeS3ListPage(w, "chunks/z", false, "")
+			return
+		}
+		dirLists.Add(1)
+		if startAfter != "" {
+			badStartAfter.Add(1)
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusNotImplemented)
+			_, _ = w.Write([]byte(s3NotSupportedListXML))
+			return
+		}
+		if q.Get("continuation-token") == "t2" {
+			writeS3ListPage(w, "chunks/a", false, "")
+			return
+		}
+		writeS3ListPage(w, "chunks/m", true, "t2")
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	stor, err := newS3(srv.URL+"/vol--use1-az4--x-s3", "ak", "sk", "")
+	require.NoError(t, err)
+
+	stor2, err := newS3(srv.URL+"/vol2--use1-az4--x-s3", "ak", "sk", "")
+	require.NoError(t, err)
+	shards := WithPrefix(&sharded{stores: []ObjectStorage{stor, stor2}}, "chunks/")
+
+	// Directory buckets don't list keys in order, so ordered listings fail before any request.
+	_, err = ListAll(ctx, WithPrefix(stor, "chunks/"), "", "", true)
+	require.ErrorContains(t, err, "can't list keys in order")
+	_, err = ListAll(ctx, shards, "", "", true)
+	require.ErrorContains(t, err, "can't list keys in order")
+	_, _, _, err = stor.List(ctx, "chunks/", "chunks/m", "t2", "", 1000, true)
+	require.ErrorContains(t, err, "can't list keys in order")
+	assert.Zero(t, dirLists.Load())
+
+	listAll := func(store ObjectStorage) []string {
+		ch, err := ListAll(WithUnorderedList(ctx), store, "", "", true)
+		require.NoError(t, err)
+		var keys []string
+		for o := range ch {
+			require.NotNil(t, o)
+			keys = append(keys, o.Key())
+		}
+		return keys
+	}
+	assert.Equal(t, []string{"m", "a"}, listAll(WithPrefix(stor, "chunks/")))
+	// Merging unordered shards keeps every key, though not in order.
+	assert.ElementsMatch(t, []string{"m", "a", "m", "a"}, listAll(shards))
+
+	objs, _, _, err := stor.List(WithUnorderedList(ctx), "chunks/", "chunks/m", "t2", "", 1000, true)
+	require.NoError(t, err)
+	require.Len(t, objs, 1)
+	assert.Equal(t, "chunks/a", objs[0].Key())
+
+	// A listing can't start after a key, so it fails instead of listing from the beginning.
+	_, _, _, err = stor.List(WithUnorderedList(ctx), "chunks/", "chunks/z", "", "", 1000, true)
+	require.ErrorContains(t, err, "can't list after")
+	assert.Zero(t, badStartAfter.Load())
+
+	general, err := newS3(srv.URL+"/general", "ak", "sk", "")
+	require.NoError(t, err)
+	objs, _, _, err = general.List(ctx, "chunks/", "chunks/m", "", "", 1000, true)
+	require.NoError(t, err)
+	require.Len(t, objs, 1)
+	assert.Equal(t, "chunks/z", objs[0].Key())
+	assert.Equal(t, "chunks/m", generalStartAfter)
+	assert.Zero(t, badStartAfter.Load())
 }

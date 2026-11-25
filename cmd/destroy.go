@@ -158,7 +158,7 @@ func destroy(ctx *cli.Context) error {
 		}
 	}
 
-	objs, err := object.ListAll(ctx.Context, blob, "", "", true, false)
+	objs, err := object.ListAll(object.WithUnorderedList(ctx.Context), blob, "", "", true)
 	if err != nil && strings.Contains(err.Error(), "NoSuchBucket") {
 		if !ctx.Bool("force") {
 			logger.Fatalf("data storage %s does not exist (error: %v); retry with \"--force\" to skip object deletion", blob, err)

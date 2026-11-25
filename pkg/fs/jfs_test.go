@@ -13,26 +13,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package cmd
+package fs
 
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/chunk"
-	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
+
+func listAll(ctx context.Context, s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
+	ch, err := object.ListAll(ctx, s, prefix, marker, true)
+	if err != nil {
+		return nil, err
+	}
+	objs := make([]object.Object, 0)
+	for obj := range ch {
+		if len(objs) < int(limit) {
+			objs = append(objs, obj)
+		}
+	}
+	return objs, nil
+}
 
 func testKeysEqual(objs []object.Object, expectedKeys []string) error {
 	gottenKeys := make([]string, len(objs))
@@ -51,6 +66,45 @@ func testKeysEqual(objs []object.Object, expectedKeys []string) error {
 		}
 	}
 	return nil
+}
+
+// copied from pkg/object/filesystem_test.go
+// testUnsafeKeys checks that keys escaping the root are rejected before touching the storage.
+func testUnsafeKeys(t *testing.T, s object.ObjectStorage) {
+	ctx := context.Background()
+	bad := "../unsafe"
+	unsafe := func(op string, err error) {
+		t.Helper()
+		if !errors.Is(err, utils.ErrUnsafeKey) {
+			t.Fatalf("%s: got %v, want ErrUnsafeKey", op, err)
+		}
+	}
+	optional := func(op string, err error) {
+		t.Helper()
+		if !errors.Is(err, utils.ErrNotSUP) {
+			unsafe(op, err)
+		}
+	}
+	_, err := s.Head(ctx, bad)
+	unsafe("Head", err)
+	_, err = s.Get(ctx, bad, 0, -1)
+	unsafe("Get", err)
+	unsafe("Put", s.Put(ctx, bad, bytes.NewReader(nil)))
+	unsafe("Put NUL", s.Put(ctx, "x/\x00", bytes.NewReader(nil)))
+	unsafe("Delete", s.Delete(ctx, bad))
+	_, _, _, err = s.List(ctx, "../", "", "", "/", 10, true)
+	unsafe("List", err)
+	optional("Copy", s.Copy(ctx, "copied", bad))
+	if fs, ok := s.(object.FileSystem); ok {
+		optional("Chmod", fs.Chmod(bad, 0755))
+		optional("Chown", fs.Chown(bad, "nobody", "nogroup"))
+		optional("Chtimes", fs.Chtimes(bad, time.Now()))
+	}
+	if ss, ok := s.(object.SupportSymlink); ok {
+		optional("Symlink", ss.Symlink("x/x.txt", bad))
+		_, err = ss.Readlink(bad)
+		optional("Readlink", err)
+	}
 }
 
 // copied from pkg/object/filesystem_test.go
@@ -76,6 +130,7 @@ func testFileSystem(t *testing.T, s object.ObjectStorage) {
 	} else if !f.IsDir() {
 		t.Fatalf("x/ should be a dir")
 	}
+	testUnsafeKeys(t, s)
 	// cleanup
 	defer func() {
 		// delete reversely, directory only can be deleted when it's empty
@@ -226,12 +281,41 @@ func TestJFS(t *testing.T) {
 	}
 	objStore, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
-	jfs, err := fs.NewFileSystem(&conf, m, store, nil)
+	jfs, err := NewFileSystem(&conf, m, store, nil)
 	if err != nil {
 		t.Fatalf("initialize  failed: %s", err)
 	}
 
+	pid, uid, gid = uint32(os.Getpid()), uint32(utils.GetCurrentUID()), uint32(utils.GetCurrentGID())
 	jstore := &juiceFS{object.DefaultObjectStorage{}, "test", uint16(utils.GetUmask()), jfs}
 	testFileSystem(t, jstore)
 	testFileSystem(t, object.WithPrefix(jstore, "unittest/"))
+
+	// the jfs storage must be registered by pkg/fs itself, which is all the Java SDK imports
+	metaURL := "sqlite3://" + filepath.Join(t.TempDir(), "jfs.db")
+	m = meta.NewClient(metaURL, nil)
+	if err = m.Init(&meta.Format{Name: "jfs-test", UUID: uuid.New().String(), Storage: "mem", BlockSize: 4096}, false); err != nil {
+		t.Fatalf("format: %s", err)
+	}
+	_ = m.Shutdown()
+	vol, err := object.CreateStorage("jfs", metaURL, "", "", "")
+	if err != nil {
+		t.Fatalf("create jfs storage: %s", err)
+	}
+	defer object.Shutdown(vol)
+	if vol.String() != "jfs://jfs-test/" {
+		t.Fatalf("jfs storage: %s", vol)
+	}
+	ctx := context.Background()
+	if err = vol.Put(ctx, "d/f", bytes.NewReader([]byte("hello"))); err != nil {
+		t.Fatalf("put: %s", err)
+	}
+	r, err := vol.Get(ctx, "d/f", 0, -1)
+	if err != nil {
+		t.Fatalf("get: %s", err)
+	}
+	defer r.Close()
+	if data, err := io.ReadAll(r); err != nil || string(data) != "hello" {
+		t.Fatalf("read %q: %v", data, err)
+	}
 }

@@ -2,7 +2,10 @@ import errno
 from array import array
 import fractions
 import grp
+import hashlib
 import io
+import json
+import tracemalloc
 import unittest
 from unittest.mock import patch
 import os
@@ -11,6 +14,8 @@ import stat
 from os.path import dirname
 import sys
 import time
+import tracemalloc
+import types
 sys.path.append('.')
 from sdk.python.juicefs.juicefs import juicefs
 from bench import seq_write, random_write, seq_read, random_read
@@ -56,7 +61,75 @@ class FileTests(unittest.TestCase):
             self.assertEqual(fobj.read().splitlines(), [b"bacon"])
 
 
+class ReadAllTests(FileTests):
+    def test_small_json_readall_temporary_memory(self):
+        content = {'name': '小文件', 'text': 'abcdef' * 700}
+        with self.v.open(TESTFILE, 'w', encoding='utf-8') as stream:
+            json.dump(content, stream, ensure_ascii=False)
+        tracemalloc.start()
+        try:
+            with self.v.open(TESTFILE, 'r', encoding='utf-8') as stream:
+                actual = json.load(stream)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        self.assertEqual(actual, content)
+        self.assertLess(peak, 1 << 20)
+
+    def test_readall_after_partial_read(self):
+        content = b'0123456789' * 7000
+        self.create_file(TESTFILE, content)
+        for buffering in (0, -1):
+            with self.subTest(buffering=buffering):
+                with self.v.open(TESTFILE, 'rb', buffering) as stream:
+                    self.assertEqual(stream.read(3), content[:3])
+                    self.assertEqual(stream.read(), content[3:])
+                    self.assertEqual(stream.read(), b'')
+
+
 class ReadintoTests(FileTests):
+    def test_readinto_large_sliced_buffer(self):
+        content = bytes(range(256)) * (1 << 15) + b'end'
+        self.create_file(TESTFILE, content)
+        expected = hashlib.sha256(content).digest()
+        for buffering in (0, 8192):
+            with self.subTest(buffering=buffering):
+                storage = bytearray(b'x' * (len(content) + 11))
+                with memoryview(storage) as view, view[3:-8] as target:
+                    with self.v.open(TESTFILE, 'rb', buffering) as stream:
+                        self.assertEqual(stream.readinto(target), len(content))
+                        self.assertEqual(stream.tell(), len(content))
+                        self.assertEqual(stream.readinto(target), 0)
+                    self.assertEqual(hashlib.sha256(target).digest(), expected)
+                self.assertEqual(storage[:3], b'xxx')
+                self.assertEqual(storage[-8:], b'xxxxxxxx')
+                storage.extend(b'!')
+
+    def test_readinto_releases_buffer_after_error(self):
+        self.create_file(TESTFILE, b'abcdefgh')
+        for buffering in (0, 8192):
+            # ok_calls=1 fails after a partial native read.
+            for ok_calls in (0, 1):
+                with self.subTest(buffering=buffering, ok_calls=ok_calls):
+                    data = bytearray(16)
+                    with self.v.open(TESTFILE, 'rb', buffering) as stream:
+                        lib = stream._file.lib
+                        native_read = lib.jfs_pread
+                        calls = [0]
+
+                        def flaky_read(*args):
+                            if calls[0] >= ok_calls:
+                                raise OSError(errno.EIO, 'read failure')
+                            calls[0] += 1
+                            return native_read(*args)
+
+                        with patch.object(lib, 'jfs_pread', side_effect=flaky_read):
+                            with self.assertRaises(OSError) as caught:
+                                stream.readinto(data)
+                        self.assertEqual(caught.exception.errno, errno.EIO)
+                        self.assertEqual(stream.tell(), 0)
+                    data.extend(b'x')
+
     def test_readinto_writable_buffers(self):
         content = b"abcdefghijk"
         self.create_file(TESTFILE, content)
@@ -92,6 +165,103 @@ class ReadintoTests(FileTests):
                             stream.readinto(buffer)
                         self.assertEqual(stream.tell(), position)
                         self.assertEqual(stream.read(), content[position:])
+
+
+class SeekTests(FileTests):
+    def test_seek_invalid_position_preserves_stream(self):
+        content = b'abcdef'
+        self.create_file(TESTFILE, content)
+        for buffering in (0, 8):
+            for offset, whence in ((-1, os.SEEK_SET), (-3, os.SEEK_CUR), (-7, os.SEEK_END)):
+                with self.subTest(buffering=buffering, offset=offset, whence=whence):
+                    with self.v.open(TESTFILE, 'r+b', buffering) as stream:
+                        stream.seek(2)
+                        with self.assertRaises(OSError):
+                            stream.seek(offset, whence)
+                        self.assertEqual(stream.tell(), 2)
+                        self.assertEqual(stream.read(1), b'c')
+
+    def test_seek_overflow_does_not_wrap_native_offset(self):
+        self.create_file(TESTFILE, b'abcdef')
+        with self.v.open(TESTFILE, 'r+b', 0) as stream:
+            stream.seek(2)
+            for offset, whence in (((1 << 64), os.SEEK_SET),
+                                   ((1 << 63), os.SEEK_SET),
+                                   (-(1 << 63) - 1, os.SEEK_SET),
+                                   ((1 << 63) - 1, os.SEEK_CUR),
+                                   ((1 << 63) - 1, os.SEEK_END)):
+                with self.subTest(offset=offset, whence=whence):
+                    with self.assertRaises(OverflowError):
+                        stream.seek(offset, whence)
+                    self.assertEqual(stream.tell(), 2)
+            stream.write(b'Z')
+            stream.seek(0)
+            self.assertEqual(stream.read(), b'abZdef')
+
+    def test_seek_requires_integer_arguments(self):
+        class Index:
+            def __index__(self):
+                return 1
+
+        self.create_file(TESTFILE, b'abcdef')
+        with self.v.open(TESTFILE, 'rb', 0) as stream:
+            stream.seek(2)
+            for offset, whence in ((1.5, 0), (1, 0.0), (1, 3)):
+                with self.subTest(offset=offset, whence=whence):
+                    with self.assertRaises((TypeError, ValueError)):
+                        stream.seek(offset, whence)
+                    self.assertEqual(stream.tell(), 2)
+            self.assertEqual(stream.seek(Index(), Index()), 3)
+            self.assertEqual(stream.read(1), b'd')
+            self.assertEqual(stream.seek(-1, os.SEEK_END), 5)
+            self.assertEqual(stream.read(), b'f')
+
+
+class TruncateTests(FileTests):
+    def test_truncate_invalid_size_preserves_data(self):
+        content = b'abcdef'
+        cases = ((-1, OSError), (1 << 63, OverflowError),
+                 (1 << 64, OverflowError), ((1 << 64) + 3, OverflowError),
+                 (-(1 << 64) + 3, OverflowError), (1.5, TypeError), ('3', TypeError))
+        for buffering in (None, 0, 8):
+            for index, (size, error) in enumerate(cases):
+                with self.subTest(buffering=buffering, size=size):
+                    path = f'{TESTFILE}-{buffering}-{index}'
+                    self.create_file(path, content)
+                    if buffering is None:
+                        with self.assertRaises(error) as raised:
+                            self.v.truncate(path, size)
+                    else:
+                        with self.v.open(path, 'r+b', buffering) as stream:
+                            stream.seek(2)
+                            with self.assertRaises(error) as raised:
+                                stream.truncate(size)
+                            self.assertEqual(stream.tell(), 2)
+                    if size == -1:
+                        self.assertEqual(raised.exception.errno, errno.EINVAL)
+                    with self.v.open(path, 'rb', 0) as stream:
+                        self.assertEqual(stream.read(), content)
+
+    def test_truncate_valid_sizes(self):
+        class Index:
+            def __index__(self):
+                return 3
+
+        for buffering in (0, 8):
+            with self.subTest(buffering=buffering):
+                path = f'{TESTFILE}-{buffering}'
+                self.create_file(path, b'abcdef')
+                with self.v.open(path, 'r+b', buffering) as stream:
+                    stream.seek(2)
+                    self.assertEqual(stream.truncate(Index()), 3)
+                    self.assertEqual(stream.tell(), 2)
+                    self.assertEqual(stream.truncate(), 2)
+                    self.assertEqual(stream.tell(), 2)
+                self.v.truncate(path, Index())
+                with self.v.open(path, 'rb', 0) as stream:
+                    self.assertEqual(stream.read(), b'ab\x00')
+                self.v.truncate(path, False)
+                self.assertEqual(self.v.stat(path).st_size, 0)
 
 
 class UtimeTests(FileTests):
@@ -227,7 +397,7 @@ class SummaryTests(FileTests):
 
     def test_summary(self):
         res = self.v.summary(TESTFILE, depth=258, entries=2)
-        self.assertTrue(normalize(res)==normalize({"Path": "file", "Type": 2, "Files":1, "Dirs":0, "Size":4096}))
+        self.assertTrue(normalize(res)==normalize({"Path": "file", "Type": 1, "Files":1, "Dirs":0, "Size":4096}))
         res = self.v.summary(TESTFN)
         self.assertTrue(normalize(res)==normalize({"Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480}))
         res = self.v.summary(TESTFN, depth=257, entries=1)
@@ -425,6 +595,65 @@ class ExtendedAttributeTests(FileTests):
         self._check_xattrs(getxattr, setxattr, removexattr, listxattr)
 
 
+class LargeWriteTests(FileTests):
+    def test_write_splits_into_chunks(self):
+        chunk = 4 << 20
+        data = os.urandom(2 * chunk + 1)
+        for buffering in (0, 8):
+            with self.subTest(buffering=buffering):
+                counts = []
+                with self.v.open(TESTFILE, 'wb', buffering) as stream:
+                    f = stream._file
+                    lib = f.lib
+                    def pwrite(tid, fd, buf, count, off):
+                        counts.append(count.value)
+                        return lib.jfs_pwrite(tid, fd, buf, count, off)
+                    with patch.object(f, 'lib', types.SimpleNamespace(jfs_pwrite=pwrite)):
+                        self.assertEqual(stream.write(data), len(data))
+                    self.assertEqual(stream.tell(), len(data))
+                self.assertEqual(sum(counts), len(data))
+                self.assertLessEqual(max(counts), chunk)
+                with self.v.open(TESTFILE, 'rb') as stream:
+                    self.assertEqual(stream.read(), data)
+
+    def test_write_chunk_failure_keeps_position(self):
+        chunk = 4 << 20
+        def raise_eio():
+            raise OSError(errno.EIO, 'injected')
+        for make_buffer in (bytes, memoryview):
+            for name, fail in (('error', raise_eio), ('zero', lambda: 0)):
+                with self.subTest(failure=name, buffer=make_buffer.__name__):
+                    with self.v.open(TESTFILE, 'wb', 0) as stream:
+                        f = stream._file
+                        lib = f.lib
+                        def pwrite(tid, fd, buf, count, off):
+                            if off.value >= chunk:
+                                return fail()
+                            return lib.jfs_pwrite(tid, fd, buf, count, off)
+                        with patch.object(f, 'lib', types.SimpleNamespace(jfs_pwrite=pwrite)):
+                            with self.assertRaises(OSError) as cm:
+                                stream.write(make_buffer(bytes(2 * chunk + 1)))
+                        self.assertEqual(cm.exception.errno, errno.EIO)
+                        self.assertEqual(stream.tell(), chunk)
+                        self.assertEqual(f.length, chunk)
+                    self.assertEqual(self.v.stat(TESTFILE).st_size, chunk)
+
+    def test_large_buffered_write_copy_is_bounded(self):
+        content = bytes(range(256)) * (1 << 17)
+        with self.v.open(TESTFILE, 'wb') as stream:
+            tracemalloc.start()
+            try:
+                self.assertEqual(stream.write(content), len(content))
+                stream.flush()
+                _, peak = tracemalloc.get_traced_memory()
+            finally:
+                tracemalloc.stop()
+            self.assertLess(peak, 12 << 20)
+            self.assertEqual(stream.tell(), len(content))
+        with self.v.open(TESTFILE, 'rb') as stream:
+            self.assertEqual(hashlib.sha256(stream.read()).digest(), hashlib.sha256(content).digest())
+
+
 class BenchTests(FileTests):
     test_file = TESTFILE + '_bench'
     block_size = 128 * 1024  # 128KB
@@ -497,6 +726,29 @@ class BenchTests(FileTests):
 
 class ClientParamsTests(FileTests):
     testfile = TESTFN + '/testfile'
+
+    def test_failed_initialization_reports_volume_name(self):
+        name = "failed-init-volume"
+        with self.assertRaises(OSError) as caught:
+            juicefs.Client(name, meta=meta_url, push_labels="invalid-label",
+                           no_usage_report=True)
+        self.assertIs(type(caught.exception), OSError)
+        self.assertEqual(caught.exception.errno, errno.EPERM)
+        self.assertEqual(str(caught.exception), f"JuiceFS initialized failed for {name}")
+
+    def test_status_session_id(self):
+        before = {s['Sid'] for s in self.v.status()['Sessions']}
+        other = juicefs.Client("test-volume-status", meta=meta_url)
+        try:
+            after = {s['Sid'] for s in self.v.status()['Sessions']}
+            created = after - before
+            self.assertEqual(len(created), 1)
+            session = created.pop()
+            self.assertGreater(session, 1)
+            self.assertEqual(self.v.status(session=session)['Sid'], session)
+            self.assertIn('Sessions', self.v.status(session=0))
+        finally:
+            other.close(terminate=True)
 
     def test_readonly_param(self):
         v = juicefs.Client(

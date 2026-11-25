@@ -116,6 +116,23 @@ recreate_aws_bucket_once()
     echo "aws bucket is ready: $AWS_BUCKET"
 }
 
+delete_aws_bucket()
+{
+    local rc=$?
+    if [[ "${KEEP_AWS_BUCKET:-false}" == "true" ]]; then
+        echo "keep aws bucket: $AWS_BUCKET"
+        return $rc
+    fi
+    # Unmount first so a still-running mount cannot write into the bucket while it is removed.
+    ( cleanup_test_mounts ) >/dev/null 2>&1 || true
+    echo "delete aws bucket: $AWS_BUCKET"
+    aws s3 rb "s3://$AWS_BUCKET" --force --endpoint-url "$AWS_ENDPOINT_URL" >/tmp/aws.rb.log 2>&1 || {
+        echo "<WARN>: failed to delete aws bucket $AWS_BUCKET"
+        cat /tmp/aws.rb.log || true
+    }
+    return $rc
+}
+
 init_aws_bucket()
 {
     ensure_aws_cli
@@ -664,6 +681,26 @@ assert_info_no_empty_object_name()
     # print raw info for diagnostics when tier set fails after all retries
     echo "=== diagnostic: juicefs info --raw ==="
     ./juicefs info --raw "$path" || true
+}
+
+test_tier_delete_bucket_after_cleanup_exit()
+{
+    local expected status output
+    for expected in 0 7; do
+        status=0
+        output=$(
+            KEEP_AWS_BUCKET=false
+            cleanup_test_mounts() { exit 1; }
+            aws() { echo "aws-delete-called" >&3; }
+            exec 3>&1
+            trap delete_aws_bucket EXIT
+            exit "$expected"
+        ) || status=$?
+        if [[ "$status" != "$expected" || "$output" != *"aws-delete-called"* ]]; then
+            echo "<FATAL>: cleanup exit interrupted bucket deletion: expected=$expected status=$status output=$output"
+            exit 1
+        fi
+    done
 }
 
 test_tier_list_and_file_set_conversion()
@@ -1876,5 +1913,7 @@ test_tier_reload_no_churn_after_remount()
     assert_no_storage_reload_churn "$remount_log" 15 2
 }
 
+# The bucket name is unique per run, so nothing reuses it: delete it on exit, pass or fail.
+trap delete_aws_bucket EXIT
 init_aws_bucket
 source .github/scripts/common/run_test.sh && run_test "$@"

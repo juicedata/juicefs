@@ -49,6 +49,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -63,7 +64,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/juicedata/juicefs/cmd"
 	"github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
@@ -680,7 +680,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			go metric.UpdateMetrics(registerer)
 		}
 
-		blob, err := cmd.NewReloadableStorage(format, m, func(f *meta.Format) {
+		blob, err := fs.NewReloadableStorage(format, m, func(f *meta.Format) {
 			if jConf.Bucket != "" {
 				f.Bucket = jConf.Bucket
 			}
@@ -1655,9 +1655,7 @@ func setOwner(w *wrapper, ctx meta.Context, path string, owner, group string) in
 		return errno(err)
 	}
 	defer f.Close(ctx)
-	st, _ := f.Stat()
-	uid := uint32(st.(*fs.FileStat).Uid())
-	gid := uint32(st.(*fs.FileStat).Gid())
+	uid, gid := uint32(math.MaxUint32), uint32(math.MaxUint32)
 	if owner != "" {
 		uid = w.lookupUid(owner)
 	}
@@ -1784,7 +1782,7 @@ func jfs_listdir2(pid int64, h int64, cpath *C.char, plus bool, buf **byte, size
 }
 
 func toBuf(s uintptr, sz int32) []byte {
-	return (*[1 << 30]byte)(unsafe.Pointer(s))[:sz:sz]
+	return unsafe.Slice((*byte)(unsafe.Pointer(s)), sz)
 }
 
 //export jfs_concat

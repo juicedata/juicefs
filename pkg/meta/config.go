@@ -130,6 +130,26 @@ func (f *Format) Clone() *Format {
 	return &c
 }
 
+// VolumeConfig returns the storage settings with decrypted credentials.
+func (f *Format) VolumeConfig() (object.VolumeConfig, error) {
+	c := *f
+	if err := c.Decrypt(); err != nil {
+		return object.VolumeConfig{}, fmt.Errorf("format decrypt: %s", err)
+	}
+	return object.VolumeConfig{
+		Name:         c.Name,
+		Storage:      c.Storage,
+		Bucket:       c.Bucket,
+		AccessKey:    c.AccessKey,
+		SecretKey:    c.SecretKey,
+		SessionToken: c.SessionToken,
+		Shards:       c.Shards,
+		Tiers:        c.Tiers,
+		EncryptKey:   c.EncryptKey,
+		EncryptAlgo:  c.EncryptAlgo,
+	}, nil
+}
+
 func (f *Format) update(old *Format, force bool) error {
 	if force {
 		logger.Warnf("Existing volume will be overwrited: %s", old)
