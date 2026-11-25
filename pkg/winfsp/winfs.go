@@ -87,6 +87,8 @@ type juice struct {
 	logBuffer chan string
 
 	attrCacheTimeout time.Duration
+
+	tunnel nameTunnel // see crtime.go
 }
 
 // Init is called when the file system is created.
@@ -214,6 +216,7 @@ func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 	e = errorconv(errno)
 	if e == 0 {
 		j.fs.InvalidateEntry(parent.Inode(), path.Base(p))
+		j.restoreName(ctx, p)
 	}
 	return
 }
@@ -228,6 +231,9 @@ func (j *juice) Mkdir(path string, mode uint32) (e int) {
 	ctx := j.newContext()
 	defer func() { j.log(ctx, "Mkdir (%s, %d): %d", path, mode, e) }()
 	e = errorconv(j.fs.Mkdir(ctx, path, uint16(mode), 0))
+	if e == 0 {
+		j.restoreName(ctx, path)
+	}
 	return
 }
 
@@ -235,7 +241,11 @@ func (j *juice) Mkdir(path string, mode uint32) (e int) {
 func (j *juice) Unlink(path string) (e int) {
 	ctx := j.newContext()
 	defer func() { j.log(ctx, "Unlink (%s): %d", path, e) }()
+	sec, nsec, ok := j.getCrtime(ctx, path)
 	e = errorconv(j.fs.Delete(ctx, path))
+	if e == 0 && ok {
+		j.tunnel.put(path, sec, nsec)
+	}
 	return
 }
 
@@ -283,7 +293,26 @@ func (j *juice) Readlink(path string) (e int, target string) {
 func (j *juice) Rename(oldpath string, newpath string) (e int) {
 	ctx := j.newContext()
 	defer func() { j.log(ctx, "Rename (%s, %s): %d", oldpath, newpath, e) }()
+	oldSec, oldNsec, oldOk := j.getCrtime(ctx, oldpath)
+	dstSec, dstNsec, dstOk := j.getCrtime(ctx, newpath)
 	e = errorconv(j.fs.Rename(ctx, oldpath, newpath, 0))
+	if e != 0 {
+		return
+	}
+	if tunnelKey(oldpath) != tunnelKey(newpath) {
+		if oldOk {
+			j.tunnel.put(oldpath, oldSec, oldNsec)
+		}
+		if dstOk {
+			// replaced an existing file: keep its creation time
+			j.tunnel.take(newpath)
+			if e2 := j.setCrtime(ctx, newpath, dstSec, dstNsec); e2 != 0 {
+				logger.Debugf("keep creation time of %s: %d", newpath, e2)
+			}
+		} else {
+			j.restoreName(ctx, newpath)
+		}
+	}
 	return
 }
 
@@ -320,7 +349,8 @@ func (j *juice) Chown(path string, uid uint32, gid uint32) (e int) {
 	return
 }
 
-// Utimens changes the access and modification times of a file.
+// Utimens changes the modification time of a file; the access time is kept
+// because it stores the creation time on Windows.
 func (j *juice) Utimens(path string, tmsp []fuse.Timespec) (e int) {
 	ctx := j.newContext()
 	defer func() { j.log(ctx, "Utimens (%s, %v): %d", path, tmsp, e) }()
@@ -328,8 +358,13 @@ func (j *juice) Utimens(path string, tmsp []fuse.Timespec) (e int) {
 	if err != 0 {
 		e = errorconv(err)
 	} else {
-		e = errorconv(f.Utime2(ctx, tmsp[0].Sec, tmsp[0].Nsec, tmsp[1].Sec, tmsp[1].Nsec))
+		// atime holds the Windows creation time (see crtime.go), only mtime is changed here
+		e = errorconv(f.Utime2(ctx, -1, -1, tmsp[1].Sec, tmsp[1].Nsec))
 		if e == 0 {
+			// data written through an open handle may still be buffered; without this
+			// its flush on close would reset mtime to now (e.g. CopyFile sets the
+			// source's LastWriteTime before closing the destination)
+			j.vfs.UpdateMtime(f.Inode(), time.Unix(tmsp[1].Sec, tmsp[1].Nsec))
 			j.invalidateAttrCache(f.Inode())
 		}
 	}
@@ -361,6 +396,7 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 	e = errorconv(errno)
 	if e == 0 {
 		j.fs.InvalidateEntry(parent.Inode(), path.Base(p))
+		j.restoreName(ctx, p)
 	}
 	return
 }
@@ -446,8 +482,9 @@ func (j *juice) attrToStat(inode Ino, attr *meta.Attr, stat *fuse.Stat_t) {
 
 	stat.Birthtim.Sec = attr.Atime
 	stat.Birthtim.Nsec = int64(attr.Atimensec)
-	stat.Atim.Sec = attr.Atime
-	stat.Atim.Nsec = int64(attr.Atimensec)
+	// atime stores the creation time, report LastAccessTime as the modification time
+	stat.Atim.Sec = attr.Mtime
+	stat.Atim.Nsec = int64(attr.Mtimensec)
 	stat.Mtim.Sec = attr.Mtime
 	stat.Mtim.Nsec = int64(attr.Mtimensec)
 	stat.Ctim.Sec = attr.Ctime
