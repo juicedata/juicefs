@@ -194,10 +194,21 @@ func TestWithRetry(t *testing.T) {
 		if _, ok := s.(SupportTier); !ok {
 			t.Fatalf("SupportTier should be kept")
 		}
+		s = WithRetry(WithPrefix(mem, "p/"))
+		if IsFileSystem(s) {
+			t.Fatalf("prefixed mem should not be a file system")
+		}
+		if _, ok := s.(SupportSymlink); ok {
+			t.Fatalf("prefixed mem should not support symlink")
+		}
 		file, _ := CreateStorage("file", t.TempDir()+"/", "", "", "")
 		s = WithRetry(file)
 		if _, ok := s.(SupportSymlink); !ok || !IsFileSystem(s) {
 			t.Fatalf("FileSystem and SupportSymlink should be kept")
+		}
+		s = WithRetry(WithPrefix(file, "p/"))
+		if _, ok := s.(SupportSymlink); !ok || !IsFileSystem(s) {
+			t.Fatalf("prefixed file should keep FileSystem and SupportSymlink")
 		}
 		if _, ok := unwrapRetry(s); !ok {
 			t.Fatalf("file store should be retried")

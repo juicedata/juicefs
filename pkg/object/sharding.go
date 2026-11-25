@@ -97,10 +97,7 @@ func (s *sharded) GetTier(ctx context.Context) Tier {
 	return Tier{}
 }
 
-const (
-	maxResults     = 10000
-	maxListRetries = 3
-)
+const maxResults = 10000
 
 // ListAll lists all keys that starts at marker from object storage. The keys are
 // in order unless ctx is marked by WithUnorderedList.
@@ -149,16 +146,10 @@ func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, fo
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			var nextToken2 string
 			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
-			for retry := 0; err != nil; retry++ {
-				if ctx.Err() != nil || retry >= maxListRetries {
-					logger.Errorf("Stop listing %s at marker %q: %s", store, marker, err)
-					out <- nil
-					return
-				}
-				logger.Warnf("Fail to list: %s, retry again", err.Error())
-				// slow down
-				time.Sleep(time.Millisecond * 100)
-				objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
+			if err != nil {
+				logger.Errorf("Stop listing %s at marker %q: %s", store, marker, err)
+				out <- nil
+				return
 			}
 			nextToken = nextToken2
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
@@ -201,7 +192,7 @@ func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink
 		}
 	}
 	for i := range s.stores {
-		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink)
+		ch, err := ListAll(ctx, WithRetry(s.stores[i]), prefix, marker, followLink)
 		if err != nil {
 			abort()
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)

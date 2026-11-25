@@ -66,11 +66,18 @@ type withRetryFSSymlink struct {
 // WithRetry returns an object storage that retries requests failed with transient errors.
 // FileSystem and SupportSymlink of o are kept, their methods are not retried.
 func WithRetry(o ObjectStorage) ObjectStorage {
+	if _, ok := unwrapRetry(o); ok {
+		return o
+	}
 	r := &withRetry{o}
-	if fs, ok := o.(FileSystem); ok {
-		rfs := &withRetryFS{r, fs}
-		if symlink, ok := o.(SupportSymlink); ok {
-			return &withRetryFSSymlink{rfs, symlink}
+	inner := o
+	for p, ok := inner.(*withPrefix); ok; p, ok = inner.(*withPrefix) {
+		inner = p.os
+	}
+	if _, ok := inner.(FileSystem); ok {
+		rfs := &withRetryFS{r, o.(FileSystem)}
+		if _, ok := inner.(SupportSymlink); ok {
+			return &withRetryFSSymlink{rfs, o.(SupportSymlink)}
 		}
 		return rfs
 	}
