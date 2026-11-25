@@ -430,8 +430,9 @@ func (fs *FileSystem) Lopen(ctx meta.Context, path string, flags uint32) (f *Fil
 	return fs.open(ctx, path, flags, false)
 }
 
-func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (*File, syscall.Errno) {
-	return fs.open(ctx, path, flags, true)
+// Open uses a VFS access mask. A zero mask only resolves the path.
+func (fs *FileSystem) Open(ctx meta.Context, path string, mask uint32) (*File, syscall.Errno) {
+	return fs.open(ctx, path, mask, true)
 }
 
 func (fs *FileSystem) open(ctx meta.Context, path string, flags uint32, followLink bool) (f *File, err syscall.Errno) {
@@ -449,6 +450,10 @@ func (fs *FileSystem) open(ctx meta.Context, path string, flags uint32, followLi
 		return
 	}
 
+	return fs.openResolved(ctx, path, flags, fi)
+}
+
+func (fs *FileSystem) openResolved(ctx meta.Context, path string, flags uint32, fi *FileStat) (f *File, err syscall.Errno) {
 	if flags != 0 && !fi.IsDir() {
 		var oflags uint32 = syscall.O_RDONLY
 		if flags == vfs.MODE_MASK_W {
@@ -479,6 +484,64 @@ func (fs *FileSystem) open(ctx meta.Context, path string, flags uint32, followLi
 		f.info.attr.Length = uint64(len(f.data))
 	}
 	return
+}
+
+// OpenFile accepts an os access mode and the optional O_CREATE and O_EXCL flags.
+// Zero flags mean O_RDONLY. It reports whether this call created the file.
+// Callers handle truncation and append.
+func (fs *FileSystem) OpenFile(ctx meta.Context, p string, flags int, mode, umask uint16) (f *File, created bool, err syscall.Errno) {
+	l := vfs.NewLogContext(ctx)
+	defer func() { fs.log(l, "OpenFile (%s,%d): %s", p, flags, errstr(err)) }()
+	const accessModeMask = int(vfs.O_ACCMODE)
+	if flags&^(accessModeMask|os.O_CREATE|os.O_EXCL) != 0 {
+		return nil, false, syscall.EINVAL
+	}
+	var mask uint32
+	switch flags & accessModeMask {
+	case os.O_RDONLY:
+		mask = vfs.MODE_MASK_R
+	case os.O_WRONLY:
+		mask = vfs.MODE_MASK_W
+	case os.O_RDWR:
+		mask = vfs.MODE_MASK_R | vfs.MODE_MASK_W
+	default:
+		return nil, false, syscall.EINVAL
+	}
+
+	create := flags&os.O_CREATE != 0
+	excl := create && flags&os.O_EXCL != 0
+	for reval := false; ; reval = true {
+		var missing createName
+		var createTarget *createName
+		if create {
+			createTarget = &missing
+		}
+		fi, err := fs.doResolve(ctx, p, !excl, reval, createTarget)
+		if err == 0 {
+			if excl {
+				return nil, false, syscall.EEXIST
+			}
+			if fi.IsDir() && (create || mask&vfs.MODE_MASK_W != 0) {
+				return nil, false, syscall.EISDIR
+			}
+			f, err := fs.openResolved(ctx, p, mask, fi)
+			return f, false, err
+		}
+		if err == syscall.ENOENT && missing.parent != 0 {
+			f, err = fs.createAt(ctx, p, missing.parent, missing.name, mode, umask)
+			if err == 0 {
+				f.flags = mask
+				return f, true, 0
+			}
+			// A concurrent create can install either a file or a symlink.
+			if !reval && ((!excl && err == syscall.EEXIST) || err == syscall.ENOENT) {
+				continue
+			}
+		}
+		if reval || !fs.mayBeStale(err) {
+			return nil, false, err
+		}
+	}
 }
 
 func (fs *FileSystem) Access(ctx meta.Context, path string, flags int) (err syscall.Errno) {
@@ -1031,9 +1094,9 @@ func (fs *FileSystem) lookup(ctx meta.Context, parent Ino, name string, inode *I
 }
 
 func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
-	fi, err = fs.doResolve(ctx, p, followLastSymlink, false)
+	fi, err = fs.doResolve(ctx, p, followLastSymlink, false, nil)
 	if fs.mayBeStale(err) {
-		fi, err = fs.doResolve(ctx, p, followLastSymlink, true)
+		fi, err = fs.doResolve(ctx, p, followLastSymlink, true, nil)
 	}
 	return
 }
@@ -1092,7 +1155,7 @@ func (fs *FileSystem) resolveParent(ctx meta.Context, p string) (nd nameData, er
 	}
 	dir := parentDir(trimmed)
 	for _, reval := range []bool{false, true} {
-		if nd.dir, err = fs.doResolve(ctx, dir, true, reval); err == 0 {
+		if nd.dir, err = fs.doResolve(ctx, dir, true, reval, nil); err == 0 {
 			if !nd.dir.IsDir() {
 				err = syscall.ENOTDIR
 			} else {
@@ -1129,15 +1192,21 @@ func (fs *FileSystem) allowedSubdir(p string, allowAncestor bool) bool {
 	return false
 }
 
+type createName struct {
+	parent Ino
+	name   string
+}
+
 // doResolve resolves p. With reval, cached entries are dropped before lookup.
-func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink, reval bool) (fi *FileStat, err syscall.Errno) {
+// For O_CREATE it records the parent and name when only the final entry is missing.
+func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink, reval bool, missing *createName) (fi *FileStat, err syscall.Errno) {
 	if p == "" {
 		return nil, syscall.ENOENT
 	}
 	var inode Ino
 	var attr = &Attr{}
 
-	if fs.conf.FastResolve && len(fs.subdirPrefixes) == 0 && strings.HasPrefix(p, "/") && path.Clean(p) == p {
+	if missing == nil && fs.conf.FastResolve && len(fs.subdirPrefixes) == 0 && strings.HasPrefix(p, "/") && path.Clean(p) == p {
 		err = fs.m.Resolve(ctx, 1, p, &inode, attr, false)
 		if err == 0 {
 			fi = AttrToFileInfo(inode, attr)
@@ -1175,16 +1244,16 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink, r
 		if len(name) == 0 {
 			continue
 		}
+		if missing != nil || parent > 1 {
+			if err := fs.m.Access(ctx, parent, meta.MODE_MASK_X, attr); err != 0 {
+				return nil, err
+			}
+		}
 		if parent == meta.RootInode && isLastComponent && vfs.IsSpecialName(name) {
 			inode, pattr := vfs.GetInternalNodeByName(name)
 			parent, *attr = inode, *pattr
 			resolvedPath = "/" + name
 			break
-		}
-		if parent > 1 {
-			if err := fs.m.Access(ctx, parent, meta.MODE_MASK_X, attr); err != 0 {
-				return nil, err
-			}
 		}
 		if name == "." {
 			continue
@@ -1202,12 +1271,21 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink, r
 		if !fs.allowedSubdir(nextPath, true) {
 			return nil, syscall.EACCES
 		}
+		if missing != nil && !isLastComponent && !slices.ContainsFunc(ss[i+1:], func(s string) bool { return s != "" }) {
+			return nil, syscall.EISDIR
+		}
 		parentAttr := *attr
 		if reval {
 			fs.InvalidateEntry(parent, name)
 		}
 		err = fs.lookup(ctx, parent, name, &inode, attr)
 		if err != 0 {
+			if err == syscall.ENOENT && missing != nil && isLastComponent {
+				if !fs.allowedSubdir(resolvedPath, false) {
+					return nil, syscall.EACCES
+				}
+				*missing = createName{parent: parent, name: name}
+			}
 			return
 		}
 		if (!isLastComponent || followLastSymlink) && attr.Typ == meta.TypeSymlink {
@@ -1278,9 +1356,7 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 	if nd.slash {
 		return nil, syscall.EISDIR
 	}
-	var inode Ino
-	var attr = &Attr{}
-	err = fs.m.Create(ctx, nd.dir.inode, nd.name, mode&07777, umask, syscall.O_EXCL, &inode, attr)
+	f, err = fs.createAt(ctx, p, nd.dir.inode, nd.name, mode, umask)
 	if err == syscall.ENOENT && nd.dir.inode != 1 {
 		// dir be moved into trash, try again
 		if fs.conf.DirEntryTimeout > 0 {
@@ -1292,21 +1368,23 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
 			return nil, e
 		} else if fi2.inode != nd.dir.inode {
-			err = fs.m.Create(ctx, fi2.inode, nd.name, mode&07777, umask, syscall.O_EXCL, &inode, attr)
+			return fs.createAt(ctx, p, fi2.inode, nd.name, mode, umask)
 		}
 	}
-	if err == 0 {
-		fi := AttrToFileInfo(inode, attr)
-		fi.name = nd.name
-		f = &File{}
-		f.flags = vfs.MODE_MASK_W
-		f.path = p
-		f.inode = fi.inode
-		f.info = fi
-		f.fs = fs
-	}
-	fs.InvalidateEntry(nd.dir.inode, nd.name)
 	return
+}
+
+func (fs *FileSystem) createAt(ctx meta.Context, p string, parent Ino, name string, mode, umask uint16) (*File, syscall.Errno) {
+	var inode Ino
+	attr := &Attr{}
+	err := fs.m.Create(ctx, parent, name, mode&07777, umask, syscall.O_EXCL, &inode, attr)
+	fs.InvalidateEntry(parent, name)
+	if err != 0 {
+		return nil, err
+	}
+	fi := AttrToFileInfo(inode, attr)
+	fi.name = path.Base(p)
+	return &File{path: p, inode: inode, info: fi, fs: fs, flags: vfs.MODE_MASK_W}, 0
 }
 
 func (fs *FileSystem) Flush() error {

@@ -448,6 +448,156 @@ func TestResolveRelativeSymlinkAfterRedirection(t *testing.T) {
 	}
 }
 
+func TestOpenFileCreateThroughSymlink(t *testing.T) {
+	fs := createTestFS(t)
+	ctx := meta.Background()
+	user := meta.NewContext(1, 1001, []uint32{1001})
+	if err := fs.Mkdir(ctx, "/links", 0555, 0); err != 0 {
+		t.Fatal(err)
+	}
+	if err := fs.Mkdir(ctx, "/data", 0777, 0); err != 0 {
+		t.Fatal(err)
+	}
+	if err := fs.Symlink(ctx, "../data/file", "/links/link"); err != 0 {
+		t.Fatal(err)
+	}
+	if f, _, err := fs.OpenFile(user, "/links/link", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0200, 0); err != syscall.EEXIST {
+		if f != nil {
+			_ = f.Close(user)
+		}
+		t.Fatalf("exclusive open through dangling link: %v, want EEXIST", err)
+	}
+	f, created, err := fs.OpenFile(user, "/links/link", os.O_WRONLY|os.O_CREATE, 0200, 0)
+	if err != 0 || !created {
+		t.Fatalf("create through link: created=%v, err=%v", created, err)
+	}
+	if err := f.Close(user); err != 0 {
+		t.Fatal(err)
+	}
+	target, err := fs.Stat(ctx, "/data/file")
+	if err != 0 || target.Inode() != f.Inode() {
+		t.Fatalf("target: %v, err=%v", target, err)
+	}
+	if link, err := fs.Lstat(ctx, "/links/link"); err != 0 || !link.IsSymlink() {
+		t.Fatalf("link: %v, err=%v", link, err)
+	}
+
+	if err := fs.Meta().SetAttr(ctx, target.attr.Parent, meta.SetAttrMode, 0, &Attr{Mode: 0555}); err != 0 {
+		t.Fatal(err)
+	}
+	lookup, err := fs.Open(user, "/data/file", 0)
+	if err != 0 {
+		t.Fatalf("Open with zero mask: %v", err)
+	}
+	if err := lookup.Close(user); err != 0 {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path  string
+		flags int
+		want  syscall.Errno
+	}{
+		{"/data/file", 0, syscall.EACCES},
+		{"/data/file", os.O_WRONLY | os.O_CREATE, 0},
+		{"/data/file", os.O_RDONLY | os.O_CREATE, syscall.EACCES},
+		{"/data/file", os.O_WRONLY | os.O_CREATE | os.O_EXCL, syscall.EEXIST},
+		{"/data/file", os.O_WRONLY | os.O_EXCL, 0},
+		{"/data/file", os.O_WRONLY | os.O_RDWR, syscall.EINVAL},
+		{"/data/file", os.O_WRONLY | os.O_TRUNC, syscall.EINVAL},
+		{"/data/new", os.O_WRONLY, syscall.ENOENT},
+		{"/data/new", os.O_WRONLY | os.O_CREATE, syscall.EACCES},
+		{"/links/link", os.O_WRONLY | os.O_CREATE | os.O_EXCL, syscall.EEXIST},
+		{"/missing/child", os.O_WRONLY | os.O_CREATE, syscall.ENOENT},
+	} {
+		f, created, err := fs.OpenFile(user, tc.path, tc.flags, 0666, 0)
+		if err != tc.want || created {
+			t.Errorf("OpenFile(%q, %#x): created=%v, err=%v, want %v", tc.path, tc.flags, created, err, tc.want)
+		}
+		if f != nil {
+			_ = f.Close(user)
+		}
+	}
+
+	t.Run("root without search permission", func(t *testing.T) {
+		if err := fs.Mkdir(ctx, "/writable", 0777, 0); err != 0 {
+			t.Fatal(err)
+		}
+		if err := fs.Symlink(ctx, "writable/file", "/link"); err != 0 {
+			t.Fatal(err)
+		}
+		if err := fs.Meta().SetAttr(ctx, meta.RootInode, meta.SetAttrMode, 0, &Attr{Mode: 0666}); err != 0 {
+			t.Fatal(err)
+		}
+		for _, flags := range []int{os.O_WRONLY | os.O_CREATE | os.O_EXCL, os.O_WRONLY | os.O_CREATE} {
+			f, created, err := fs.OpenFile(user, "/link", flags, 0666, 0)
+			if f != nil {
+				_ = f.Close(user)
+			}
+			if err != syscall.EACCES || created || f != nil {
+				t.Errorf("OpenFile(/link, %#x): opened=%v, created=%v, err=%v, want EACCES", flags, f != nil, created, err)
+			}
+		}
+		if _, err := fs.Stat(ctx, "/writable/file"); err != syscall.ENOENT {
+			t.Errorf("stat target: %v, want ENOENT", err)
+		}
+	})
+
+	t.Run("relative target after parent path is replaced", func(t *testing.T) {
+		fs := createTestFS(t)
+		for _, dir := range []string{"/a", "/b"} {
+			if err := fs.Mkdir(ctx, dir, 0777, 0); err != 0 {
+				t.Fatal(err)
+			}
+		}
+		for link, target := range map[string]string{
+			"/current": "a", "/next": "b", "/a/link": "x", "/b/link": "y",
+		} {
+			if err := fs.Symlink(ctx, target, link); err != 0 {
+				t.Fatal(err)
+			}
+		}
+		link, err := fs.Lstat(ctx, "/a/link")
+		if err != 0 {
+			t.Fatal(err)
+		}
+		fs.m = &readLinkHookMeta{Meta: fs.m, afterRead: func(ino Ino) {
+			if ino == link.Inode() {
+				if err := fs.Rename(ctx, "/next", "/current", 0); err != 0 {
+					t.Fatal(err)
+				}
+			}
+		}}
+		f, created, err := fs.OpenFile(ctx, "/current/link", os.O_WRONLY|os.O_CREATE, 0666, 0)
+		if err != 0 || !created {
+			t.Fatalf("create through link: created=%v, err=%v", created, err)
+		}
+		if err := f.Close(ctx); err != 0 {
+			t.Fatal(err)
+		}
+		if target, err := fs.Stat(ctx, "/a/x"); err != 0 || target.Inode() != f.Inode() {
+			t.Fatalf("original target: %v, err=%v", target, err)
+		}
+		for _, p := range []string{"/b/x", "/b/y"} {
+			if _, err := fs.Stat(ctx, p); err != syscall.ENOENT {
+				t.Errorf("Stat(%q): %v, want ENOENT", p, err)
+			}
+		}
+	})
+}
+
+type readLinkHookMeta struct {
+	meta.Meta
+	afterRead func(Ino)
+}
+
+func (m *readLinkHookMeta) ReadLink(ctx meta.Context, inode Ino, target *[]byte) syscall.Errno {
+	err := m.Meta.ReadLink(ctx, inode, target)
+	if err == 0 {
+		m.afterRead(inode)
+	}
+	return err
+}
+
 func TestResolveDotDot(t *testing.T) {
 	fs := createTestFS(t)
 	ctx := meta.Background()
