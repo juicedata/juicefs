@@ -516,6 +516,7 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 	if st := m.GetAttr(ctx, root.Inode, &attr); st != 0 {
 		return st
 	}
+	root.Type = attr.Typ
 	if updateProgress != nil {
 		updateProgress(1, uint64(align4K(0)))
 	}

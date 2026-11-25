@@ -397,7 +397,7 @@ class SummaryTests(FileTests):
 
     def test_summary(self):
         res = self.v.summary(TESTFILE, depth=258, entries=2)
-        self.assertTrue(normalize(res)==normalize({"Path": "file", "Type": 2, "Files":1, "Dirs":0, "Size":4096}))
+        self.assertTrue(normalize(res)==normalize({"Path": "file", "Type": 1, "Files":1, "Dirs":0, "Size":4096}))
         res = self.v.summary(TESTFN)
         self.assertTrue(normalize(res)==normalize({"Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480}))
         res = self.v.summary(TESTFN, depth=257, entries=1)
