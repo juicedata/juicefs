@@ -54,6 +54,9 @@ func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 // If s already represents a directory (String() ends with "/"), it is returned unchanged.
 // For file-like storages, returns a new storage rooted at the parent directory.
 func DirStorage(s ObjectStorage) ObjectStorage {
+	if r, ok := unwrapRetry(s); ok {
+		return WithRetry(DirStorage(r.ObjectStorage))
+	}
 	switch t := s.(type) {
 	case *encrypted:
 		return &encrypted{ObjectStorage: DirStorage(t.ObjectStorage), enc: t.enc}

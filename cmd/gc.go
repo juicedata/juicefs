@@ -107,6 +107,7 @@ func gc(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
+	blob = object.WithRetry(blob)
 	logger.Infof("Data use %s", blob)
 	store := chunk.NewCachedStore(blob, chunkConf, nil)
 

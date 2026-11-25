@@ -123,6 +123,10 @@ type Shutdownable interface {
 }
 
 func Shutdown(o ObjectStorage) {
+	if r, ok := unwrapRetry(o); ok {
+		Shutdown(r.ObjectStorage)
+		return
+	}
 	switch o := o.(type) {
 	case *encrypted:
 		Shutdown(o.ObjectStorage)
