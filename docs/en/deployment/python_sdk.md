@@ -119,7 +119,7 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
-With `auto_mkdir=True`, opening a file for writing, appending or exclusive creation creates missing parent directories. `with jfs.transaction:` stages writes locally and publishes each file on successful exit; the group of files is not committed atomically.
+With `auto_mkdir=True`, when a file is opened in write, append, or exclusive-create mode, missing parent directories are created automatically. `with jfs.transaction:` stages writes locally and publishes files individually on successful exit. However, the files are not committed as a single atomic operation.
 
 ### Getting Help Information
 
