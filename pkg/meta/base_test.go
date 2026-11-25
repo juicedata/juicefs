@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"slices"
@@ -8033,69 +8032,5 @@ func testIsUnderRoot(t *testing.T, m Meta) {
 	}
 	if st := m.Rmdir(ctx, RootInode, "a"); st != 0 {
 		t.Fatalf("rmdir a: %s", st)
-	}
-}
-
-type blockingDirStatFlushEngine struct {
-	engine
-	entered, release chan struct{}
-}
-
-func (e *blockingDirStatFlushEngine) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
-	close(e.entered)
-	<-e.release
-	return e.engine.doUpdateDirStat(ctx, batch)
-}
-
-func TestGetDirStatDuringFlush(t *testing.T) {
-	meta, err := newSQLMeta("sqlite3", filepath.Join(t.TempDir(), "meta.db"), testConfig())
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
-	defer meta.Shutdown()
-	if err = meta.Init(testFormat(), true); err != nil {
-		t.Fatalf("init: %s", err)
-	}
-	m := meta.getBase()
-	ctx := Background()
-	var parent, child Ino
-	if st := m.Mkdir(ctx, RootInode, "parent", 0755, 0, 0, &parent, nil); st != 0 {
-		t.Fatalf("mkdir parent: %s", st)
-	}
-	m.doFlushDirStat()
-	if st := m.Mkdir(ctx, parent, "child", 0755, 0, 0, &child, nil); st != 0 {
-		t.Fatalf("mkdir child: %s", st)
-	}
-
-	blocking := &blockingDirStatFlushEngine{engine: m.en, entered: make(chan struct{}), release: make(chan struct{})}
-	m.en = blocking
-	flushed := make(chan struct{})
-	go func() { m.doFlushDirStat(); close(flushed) }()
-	<-blocking.entered
-
-	type result struct {
-		stat *dirStat
-		st   syscall.Errno
-	}
-	got := make(chan result, 1)
-	go func() {
-		stat, st := m.GetDirStat(ctx, parent)
-		got <- result{stat, st}
-	}()
-	var r result
-	select {
-	case r = <-got: // read did not wait for the in-flight flush
-	case <-time.After(100 * time.Millisecond):
-		close(blocking.release)
-		r = <-got
-	}
-	select {
-	case <-blocking.release:
-	default:
-		close(blocking.release)
-	}
-	<-flushed
-	if err := checkResult(dirStat{0, align4K(0), 1}, r.stat, r.st); err != nil {
-		t.Fatalf("get dir stat during flush: %s", err)
 	}
 }

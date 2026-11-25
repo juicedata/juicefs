@@ -308,7 +308,7 @@ type baseMeta struct {
 	dSliceWG sync.WaitGroup
 
 	dirStatsLock      sync.RWMutex
-	dirStatsFlushLock sync.RWMutex // flushes hold it exclusively; readers wait for in-flight flushes
+	dirStatsFlushLock sync.Mutex // prevent concurrent doFlushDirStat
 	dirStats          map[Ino]dirStat
 
 	fsStatsLock sync.Mutex
