@@ -727,6 +727,29 @@ class BenchTests(FileTests):
 class ClientParamsTests(FileTests):
     testfile = TESTFN + '/testfile'
 
+    def test_failed_initialization_reports_volume_name(self):
+        name = "failed-init-volume"
+        with self.assertRaises(OSError) as caught:
+            juicefs.Client(name, meta=meta_url, push_labels="invalid-label",
+                           no_usage_report=True)
+        self.assertIs(type(caught.exception), OSError)
+        self.assertEqual(caught.exception.errno, errno.EPERM)
+        self.assertEqual(str(caught.exception), f"JuiceFS initialized failed for {name}")
+
+    def test_status_session_id(self):
+        before = {s['Sid'] for s in self.v.status()['Sessions']}
+        other = juicefs.Client("test-volume-status", meta=meta_url)
+        try:
+            after = {s['Sid'] for s in self.v.status()['Sessions']}
+            created = after - before
+            self.assertEqual(len(created), 1)
+            session = created.pop()
+            self.assertGreater(session, 1)
+            self.assertEqual(self.v.status(session=session)['Sid'], session)
+            self.assertIn('Sessions', self.v.status(session=0))
+        finally:
+            other.close(terminate=True)
+
     def test_readonly_param(self):
         v = juicefs.Client(
             "test-volume-ro",
