@@ -19,6 +19,7 @@ package sync
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -238,7 +239,7 @@ func sendStats(addr string, multipartUploads *workerMultipartUploads) {
 	}
 }
 
-func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *CheckpointManager) (string, error) {
+func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *CheckpointManager) (string, func(), error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []object.Object
@@ -319,21 +320,21 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 	var addr string
 	u, err := url.Parse("ssh://" + config.Workers[0])
 	if err != nil {
-		return "", fmt.Errorf("invalid worker address %s: %s", config.Workers[0], err)
+		return "", nil, fmt.Errorf("invalid worker address %s: %s", config.Workers[0], err)
 	}
 	if config.ManagerAddr != "" {
 		addr = config.ManagerAddr
 		if strings.HasPrefix(addr, ":") || strings.Contains(addr, "0.0.0.0") {
 			ip, err := utils.GetLocalIp(net.JoinHostPort(u.Host, "22"))
 			if err != nil {
-				return "", fmt.Errorf("get local ip: %s", err)
+				return "", nil, fmt.Errorf("get local ip: %s", err)
 			}
 			addr = ip + addr
 		}
 	} else {
 		ip, err := utils.GetLocalIp(net.JoinHostPort(u.Host, "22"))
 		if err != nil {
-			return "", fmt.Errorf("not found local ip: %s", err)
+			return "", nil, fmt.Errorf("not found local ip: %s", err)
 		}
 		logger.Debugf("Use local ip %s", ip)
 		addr = ip
@@ -345,23 +346,38 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		return "", fmt.Errorf("listen: %s", err)
+		return "", nil, fmt.Errorf("listen: %s", err)
 	}
 	logger.Infof("Listen at %s", l.Addr())
-	go func() { _ = http.Serve(l, mux) }()
-	return l.Addr().String(), nil
+	srv := &http.Server{Handler: mux}
+	go func() { _ = srv.Serve(l) }()
+	stop := func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			_ = srv.Close()
+		}
+	}
+	return l.Addr().String(), stop, nil
 }
 
 // retryUnfinished runs once all workers have exited. Pending keys left in the checkpoint
 // were dispatched but never acknowledged (e.g. the worker was lost), so retry them together
-// with the failed keys once, unless they exceed half of the total.
-func retryUnfinished(src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager) {
+// with the failed keys once, unless they exceed half of the objects in this run.
+// resumed is the number of objects handled by previous runs.
+func retryUnfinished(src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager, resumed int64) {
 	objs, nFailed := checkpointMgr.unfinishedObjects()
 	if len(objs) == 0 {
 		return
 	}
+	// A lost worker may still be copying the same objects. Writing in place (--inplace or a backend
+	// that writes in place), it could leave a partial object after the retry succeeded.
+	if config.Inplace || dst.Limits().PutInplace {
+		logger.Warnf("Skip retrying %d unfinished objects (%d failed) when writing in place, please run sync again", len(objs), nFailed)
+		return
+	}
 	incrHandled(0)
-	total := handled.GetTotal()
+	total := handled.GetTotal() - resumed
 	if int64(len(objs))*2 > total {
 		logger.Warnf("Too many unfinished objects (%d of %d, %d failed) to retry, please run sync again", len(objs), total, nFailed)
 		return

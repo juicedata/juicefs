@@ -2254,7 +2254,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		deleted = progress.AddCountSpinner("Deleted objects")
 	}
 
+	var resumedHandled int64
 	if checkpoint != nil {
+		resumedHandled = checkpoint.Stats.Handled
 		copied.SetCurrent(checkpoint.Stats.Copied)
 		copiedBytes.SetCurrent(checkpoint.Stats.CopiedBytes)
 		if checked != nil {
@@ -2393,12 +2395,14 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		config.rules = parseIncludeRules(os.Args)
 	}
 
+	var stopManager func()
 	if config.Manager == "" {
 		if len(config.Workers) > 0 {
-			addr, err := startManager(config, tasks, checkpointMgr)
+			addr, stop, err := startManager(config, tasks, checkpointMgr)
 			if err != nil {
 				return err
 			}
+			stopManager = stop
 			launchWorker(addr, config, &wg)
 		}
 		logger.Infof("Syncing from %q to %q", src, dst)
@@ -2433,8 +2437,11 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 	wg.Wait()
 
+	if stopManager != nil {
+		stopManager()
+	}
 	if len(config.Workers) > 0 && checkpointMgr != nil && !config.Dry {
-		retryUnfinished(src, dst, config, checkpointMgr)
+		retryUnfinished(src, dst, config, checkpointMgr, resumedHandled)
 	}
 
 	if checkpointMgr != nil {

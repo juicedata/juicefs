@@ -21,6 +21,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	gosync "sync"
 	"testing"
@@ -206,6 +207,50 @@ func TestCheckpointManagerPrefixStateLifecycle(t *testing.T) {
 	manager.MarkListDone("prefix/")
 	if _, ok := manager.checkpoint.PrefixState["prefix/"]; ok {
 		t.Fatalf("empty completed prefix state should be removed")
+	}
+}
+
+func TestCheckpointManagerUnfinishedObjects(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "unfinished-src", "", "", "")
+	dst, _ := object.CreateStorage("mem", "unfinished-dst", "", "", "")
+	putObjects(t, src, "a/x", "a/y", "stale/z", "d/s/k")
+	head := func(key string) object.Object {
+		o, err := src.Head(ctx, key)
+		if err != nil {
+			t.Fatalf("head %s: %v", key, err)
+		}
+		return o
+	}
+	keys := func(ks ...string) map[string]object.Object {
+		m := make(map[string]object.Object)
+		for _, k := range ks {
+			m[k] = head(k)
+		}
+		return m
+	}
+
+	mgr := NewCheckpointManager(src, dst, nil)
+	mgr.checkpoint = &Checkpoint{PrefixState: map[string]*PrefixState{
+		"a/": {PendingKeys: keys("a/x"), FailedKeys: keys("a/y")},
+		// loaded from the checkpoint but not restored in this run (not in --files-from anymore)
+		"stale/": {PendingKeys: keys("stale/z"), FailedKeys: keys()},
+		// overlapping prefixes in --files-from
+		"d/":   {PendingKeys: keys("d/s/k"), FailedKeys: keys()},
+		"d/s/": {PendingKeys: keys("d/s/k"), FailedKeys: keys()},
+	}}
+	mgr.TrackKey("a/x", "a/")
+	mgr.TrackKey("a/y", "a/")
+	mgr.TrackKey("d/s/k", "d/")
+	mgr.TrackKey("d/s/k", "d/s/")
+
+	objs, nFailed := mgr.unfinishedObjects()
+	var got []string
+	for _, o := range objs {
+		got = append(got, o.Key())
+	}
+	slices.Sort(got)
+	if want := []string{"a/x", "a/y", "d/s/k"}; !slices.Equal(got, want) || nFailed != 1 {
+		t.Fatalf("expect %v (1 failed), got %v (%d failed)", want, got, nFailed)
 	}
 }
 

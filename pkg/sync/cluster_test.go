@@ -17,12 +17,15 @@ package sync
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/user"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -67,7 +70,7 @@ func TestCluster(t *testing.T) {
 	todo := make(chan object.Object, 100)
 	var conf Config
 	conf.Workers = []string{workerAddr}
-	addr, err := startManager(&conf, todo, nil)
+	addr, stop, err := startManager(&conf, todo, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +101,14 @@ func TestCluster(t *testing.T) {
 	}
 	if _, ok := <-mytodo; ok {
 		t.Fatalf("should end")
+	}
+
+	// a lost worker that comes back after the manager stops must not be able to report stats
+	stop()
+	// drop the keep-alive connection closed by the manager, then ECONNREFUSED makes the worker exit (see sendStats)
+	http.DefaultClient.CloseIdleConnections()
+	if _, err := httpRequest("http://"+addr+"/stats", nil); !errors.Is(err, syscall.ECONNREFUSED) {
+		t.Fatalf("manager should refuse stats after stopped, got %v", err)
 	}
 }
 
@@ -246,8 +257,19 @@ func TestMarshal(t *testing.T) {
 	}
 }
 
+type failPutStore struct{ object.ObjectStorage }
+
+func (s failPutStore) Put(ctx context.Context, key string, in io.Reader, getters ...object.AttrGetter) error {
+	return errors.New("put failed")
+}
+
+type inplaceStore struct{ object.ObjectStorage }
+
+func (s inplaceStore) Limits() object.Limits { return object.Limits{PutInplace: true} }
+
 func TestRetryUnfinished(t *testing.T) {
-	setup := func(name string, total int64) (src, dst object.ObjectStorage, mgr *CheckpointManager, config *Config) {
+	// resumed objects were handled by previous runs and restored from the checkpoint
+	setup := func(name string, total, resumed int64) (src, dst object.ObjectStorage, mgr *CheckpointManager, config *Config) {
 		p := utils.NewProgress(true)
 		handled = p.AddCountBar("Scanned objects", 0)
 		copied = p.AddCountSpinner("Copied objects")
@@ -255,9 +277,11 @@ func TestRetryUnfinished(t *testing.T) {
 		skipped = p.AddCountSpinner("Skipped objects")
 		skippedBytes = p.AddByteSpinner("Skipped bytes")
 		failed = p.AddCountSpinner("Failed objects")
-		checked, checkedBytes, deleted = nil, nil, nil
+		deleted = p.AddCountSpinner("Deleted objects")
+		checked, checkedBytes = nil, nil
 		totalHandled.Store(0)
-		handled.SetTotal(total)
+		handled.SetTotal(resumed + total)
+		handled.SetCurrent(resumed)
 
 		config = newTestConfig()
 		concurrent = make(chan int, config.Threads)
@@ -278,7 +302,7 @@ func TestRetryUnfinished(t *testing.T) {
 	}
 
 	t.Run("retry lost and failed keys", func(t *testing.T) {
-		src, dst, mgr, config := setup("retry-unfinished", 4)
+		src, dst, mgr, config := setup("retry-unfinished", 4, 0)
 		add(t, src, mgr, "done", "done2", "lost", "fail")
 		mgr.MarkCompleted("done")
 		mgr.MarkCompleted("done2")
@@ -286,7 +310,7 @@ func TestRetryUnfinished(t *testing.T) {
 		handled.IncrInt64(3) // done, done2 and fail were handled
 		failed.Increment()
 
-		retryUnfinished(src, dst, config, mgr)
+		retryUnfinished(src, dst, config, mgr, 0)
 
 		assertDstHasKeys(t, dst, "lost", "fail")
 		if objs, n := mgr.unfinishedObjects(); len(objs) != 0 || n != 0 {
@@ -302,12 +326,12 @@ func TestRetryUnfinished(t *testing.T) {
 	})
 
 	t.Run("give up when more than half unfinished", func(t *testing.T) {
-		src, dst, mgr, config := setup("retry-unfinished-giveup", 3)
+		src, dst, mgr, config := setup("retry-unfinished-giveup", 3, 0)
 		add(t, src, mgr, "done", "lost", "fail")
 		mgr.MarkCompleted("done")
 		mgr.MarkFailed("fail")
 
-		retryUnfinished(src, dst, config, mgr)
+		retryUnfinished(src, dst, config, mgr, 0)
 
 		for _, key := range []string{"lost", "fail"} {
 			if _, err := dst.Head(ctx, key); err == nil {
@@ -316,6 +340,79 @@ func TestRetryUnfinished(t *testing.T) {
 		}
 		if objs, n := mgr.unfinishedObjects(); len(objs) != 2 || n != 1 {
 			t.Fatalf("expect 2 unfinished objects (1 failed), got %d (%d failed)", len(objs), n)
+		}
+	})
+
+	t.Run("failed again", func(t *testing.T) {
+		src, dst, mgr, config := setup("retry-unfinished-again", 4, 0)
+		add(t, src, mgr, "done", "done2", "lost", "fail")
+		mgr.MarkCompleted("done")
+		mgr.MarkCompleted("done2")
+		mgr.MarkFailed("fail")
+		handled.IncrInt64(3)
+		failed.Increment()
+
+		retryUnfinished(src, failPutStore{dst}, config, mgr, 0)
+
+		if n := failed.Current(); n != 2 {
+			t.Fatalf("expect 2 failed, got %d", n)
+		}
+		incrHandled(0)
+		if handled.Current() != handled.GetTotal() {
+			t.Fatalf("handled %d != total %d", handled.Current(), handled.GetTotal())
+		}
+		state := mgr.GetOrCreatePrefixState("")
+		if len(state.PendingKeys) != 0 || len(state.FailedKeys) != 2 || state.FailedKeys["lost"] == nil || state.FailedKeys["fail"] == nil {
+			t.Fatalf("expect lost and fail in failed keys, got pending %v, failed %v", state.PendingKeys, state.FailedKeys)
+		}
+	})
+
+	t.Run("give up based on objects in this run when resumed", func(t *testing.T) {
+		src, dst, mgr, config := setup("retry-unfinished-resumed", 4, 6)
+		add(t, src, mgr, "done", "lost", "lost2", "fail")
+		mgr.MarkCompleted("done")
+		mgr.MarkFailed("fail")
+		handled.IncrInt64(2)
+		failed.Increment()
+
+		retryUnfinished(src, dst, config, mgr, 6)
+
+		if _, err := dst.Head(ctx, "lost"); err == nil {
+			t.Fatalf("lost should not be retried")
+		}
+	})
+
+	t.Run("skip when writing in place", func(t *testing.T) {
+		for name, inplace := range map[string]bool{"inplace": true, "backend": false} {
+			src, dst, mgr, config := setup("retry-unfinished-skip-"+name, 2, 0)
+			config.Inplace = inplace
+			if name == "backend" {
+				dst = object.WithPrefix(inplaceStore{dst}, "sub/")
+			}
+			add(t, src, mgr, "done", "lost")
+			mgr.MarkCompleted("done")
+			handled.IncrInt64(1)
+
+			retryUnfinished(src, dst, config, mgr, 0)
+
+			if _, err := dst.Head(ctx, "lost"); err == nil {
+				t.Fatalf("lost should not be retried with %s", name)
+			}
+		}
+	})
+
+	t.Run("retry with delete-src-after", func(t *testing.T) {
+		src, dst, mgr, config := setup("retry-unfinished-delete-src-after", 2, 0)
+		config.DeleteSrcAfter = true
+		add(t, src, mgr, "done", "lost")
+		mgr.MarkCompleted("done")
+		handled.IncrInt64(1)
+
+		retryUnfinished(src, dst, config, mgr, 0)
+
+		assertDstHasKeys(t, dst, "lost")
+		if _, err := src.Head(ctx, "lost"); err == nil {
+			t.Fatalf("lost should be deleted from src")
 		}
 	})
 }

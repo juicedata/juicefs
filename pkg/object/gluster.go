@@ -49,6 +49,12 @@ func (g *gluster) String() string {
 	return fmt.Sprintf("gluster://%s/", g.name)
 }
 
+func (g *gluster) Limits() Limits {
+	l := g.DefaultObjectStorage.Limits()
+	l.PutInplace = true
+	return l
+}
+
 func (g *gluster) vol() *gfapi.Volume {
 	if len(g.vols) == 1 {
 		return g.vols[0]
