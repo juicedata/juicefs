@@ -1,0 +1,19 @@
+name: 'Cache TiUP'
+description: 'Cache TiUP binary and pinned playground/PD/TiKV/TiDB components'
+inputs:
+  meta:
+    description: 'Metadata engine name (tikv or tidb)'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache TiUP components
+      if: runner.os == 'Linux' && (inputs.meta == 'tikv' || inputs.meta == 'tidb')
+      uses: actions/cache@v5
+      with:
+        path: |
+          ~/.tiup/bin
+          ~/.tiup/components
+          ~/.tiup/manifests
+          ~/.tiup/tiup.toml
+        key: tiup-${{ runner.os }}-${{ runner.arch }}-${{ inputs.meta }}-v1.17.1-v8.5.7

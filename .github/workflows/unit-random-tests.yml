@@ -56,6 +56,12 @@ jobs:
         timeout-minutes: 10
         uses: ./.github/actions/build
 
+      - name: Cache TiUP
+        if: matrix.meta == 'tikv' || matrix.meta == 'tidb'
+        uses: ./.github/actions/cache-tiup
+        with:
+          meta: ${{ matrix.meta }}
+
       - name: Prepare meta db
         run: | 
           chmod +x .github/scripts/start_meta_engine.sh

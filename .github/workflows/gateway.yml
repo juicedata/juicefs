@@ -92,6 +92,12 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
+      - name: Cache TiUP
+        if: matrix.meta == 'tikv' || matrix.meta == 'tidb'
+        uses: ./.github/actions/cache-tiup
+        with:
+          meta: ${{ matrix.meta }}
+
             
       - name: Start meta
         run: | 
