@@ -88,7 +88,6 @@ dump_playground_diagnostics() {
     return 0
 }
 
-# Keep these versions in sync with .github/actions/cache-tiup/action.yml.
 TIUP_PLAYGROUND_VERSION="v1.17.1"
 TIUP_CLUSTER_VERSION="v8.5.7"
 
