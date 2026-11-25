@@ -96,11 +96,7 @@ jfs = Client(name='', meta='redis://192.168.1.8/0')
 jfs.listdir('/')
 ```
 
-When the backend rejects initialization, `Client` raises `OSError` with the supplied name.
-
 Use `readinto()` to fill an existing writable, contiguous buffer without creating a full-size temporary Python `bytes` object. The buffer can be reused between calls. An I/O error may leave partial data in the buffer.
-
-`Client.status()` returns the volume status. You can pass `session=<session ID>` to retrieve a specific session from its `Sessions` list.
 
 ### Using fsspec
 
