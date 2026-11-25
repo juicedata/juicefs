@@ -36,7 +36,7 @@ type Context interface {
 }
 
 func Background() Context {
-	return WrapContext(context.Background())
+	return WrapWithCancel(context.Background(), 0, 0, []uint32{0})
 }
 
 type wrapContext struct {
@@ -52,6 +52,9 @@ func (c *wrapContext) Uid() uint32 {
 }
 
 func (c *wrapContext) Gid() uint32 {
+	if len(c.gids) == 0 {
+		return 0
+	}
 	return c.gids[0]
 }
 
@@ -85,10 +88,6 @@ func (c *wrapContext) CheckPermission() bool {
 
 func NewContext(pid, uid uint32, gids []uint32) Context {
 	return WrapWithCancel(context.Background(), pid, uid, gids)
-}
-
-func WrapContext(ctx context.Context) Context {
-	return WrapWithCancel(ctx, 0, 0, []uint32{0})
 }
 
 func WrapWithCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {

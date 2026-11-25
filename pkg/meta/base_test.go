@@ -1861,6 +1861,39 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Remove(ctx, 1, "d", false, RmrDefaultThreads, nil); st != 0 {
 		t.Fatalf("rmr d: %s", st)
 	}
+
+	// A failed rmr must not cancel the caller's context.
+	var rmfail, sub, locked Ino
+	if st := m.Mkdir(ctx, 1, "rmfail", 0755, 0, 0, &rmfail, attr); st != 0 {
+		t.Fatalf("mkdir rmfail: %s", st)
+	}
+	if st := m.Mkdir(ctx, rmfail, "a", 0755, 0, 0, &sub, attr); st != 0 {
+		t.Fatalf("mkdir rmfail/a: %s", st)
+	}
+	if st := m.Mkdir(ctx, sub, "locked", 0755, 0, 0, &locked, attr); st != 0 {
+		t.Fatalf("mkdir rmfail/a/locked: %s", st)
+	}
+	if st := m.Create(ctx, locked, "f", 0644, 0, 0, &inode, attr); st != 0 {
+		t.Fatalf("create rmfail/a/locked/f: %s", st)
+	}
+	attr.Flags = FlagImmutable
+	if st := m.SetAttr(ctx, locked, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr rmfail/a/locked: %s", st)
+	}
+	// With one thread, "locked" is emptied synchronously inside the worker of "a".
+	if st := m.Remove(ctx, 1, "rmfail", true, 1, nil); st != syscall.EPERM {
+		t.Fatalf("rmr rmfail: %s", st)
+	}
+	if ctx.Canceled() {
+		t.Fatal("failed rmr canceled the caller's context")
+	}
+	attr.Flags = 0
+	if st := m.SetAttr(ctx, locked, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr rmfail/a/locked: %s", st)
+	}
+	if st := m.Remove(ctx, 1, "rmfail", true, 1, nil); st != 0 {
+		t.Fatalf("rmr rmfail: %s", st)
+	}
 }
 
 func testCaseIncensi(t *testing.T, m Meta) {
@@ -3169,6 +3202,52 @@ func testTrash(t *testing.T, m Meta) {
 	m.getBase().doCleanupTrash(Background(), format.TrashDays, true, nil)
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
+	}
+
+	// A subtrash that cannot be emptied is skipped instead of blocking the later ones.
+	base := m.getBase()
+	newSubTrash := func(name string) Ino {
+		var sub, f Ino
+		a := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
+		if st := base.en.doMknod(ctx, TrashInode, name, TypeDirectory, 0555, 0, "", &sub, &a); st != 0 {
+			t.Fatalf("create subtrash %s: %s", name, st)
+		}
+		base.en.updateStats(align4K(0), 1)
+		f, err := base.nextInode()
+		if err != nil {
+			t.Fatalf("next inode: %s", err)
+		}
+		a = Attr{Typ: TypeFile, Nlink: 1, Parent: sub, Full: true}
+		if st := base.en.doMknod(ctx, sub, "f", TypeFile, 0644, 0, "", &f, &a); st != 0 {
+			t.Fatalf("create %s/f: %s", name, st)
+		}
+		base.en.updateStats(align4K(0), 1)
+		return sub
+	}
+	stuck := newSubTrash("2000-01-01-00")
+	newSubTrash("2000-01-01-01")
+	attr.Flags = FlagImmutable
+	if st := m.SetAttr(ctx, stuck, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr subtrash: %s", st)
+	}
+	cctx := WrapWithTimeout(ctx, 5*time.Second)
+	st := m.CleanupTrashBefore(cctx, time.Now(), nil, nil)
+	cctx.Cancel()
+	if st != syscall.EPERM {
+		t.Fatalf("cleanup trash with a stuck subtrash: %s", st)
+	}
+	if st := m.Lookup(ctx, TrashInode, "2000-01-01-01", &inode, attr, false); st != syscall.ENOENT {
+		t.Fatalf("subtrash after the stuck one should be cleaned: %s", st)
+	}
+	attr.Flags = 0
+	if st := m.SetAttr(ctx, stuck, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr subtrash: %s", st)
+	}
+	if st := m.CleanupTrashBefore(ctx, time.Now(), nil, nil); st != 0 {
+		t.Fatalf("cleanup trash: %s", st)
+	}
+	if st := m.Lookup(ctx, TrashInode, "2000-01-01-00", &inode, attr, false); st != syscall.ENOENT {
+		t.Fatalf("stuck subtrash should be cleaned: %s", st)
 	}
 }
 

@@ -3329,6 +3329,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 	}
 
 	concurrent := make(chan int, backgroundDeleteThreads)
+	var failed syscall.Errno
 	for len(entries) > 0 {
 		if ctx.Canceled() {
 			return errno(ctx.Err())
@@ -3343,18 +3344,23 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 		if !ts.Before(edge) {
 			break
 		}
-		if st = m.emptyDir(ctx, e.Inode, true, &count, concurrent); st != 0 {
+		entries = entries[1:]
+		// emptyDir cancels ctx on failure; keep that within this subTrash.
+		sCtx := WrapWithCancel(ctx, ctx.Pid(), ctx.Uid(), ctx.Gids())
+		st = m.emptyDir(sCtx, e.Inode, true, &count, concurrent)
+		sCtx.Cancel()
+		if st != 0 {
 			if st != syscall.ETIMEDOUT && st != syscall.EINTR {
 				logger.Warnf("empty subTrash %d/%s: %s", e.Inode, e.Name, st)
 			}
-		} else {
-			entries = entries[1:]
-			if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil, nil); st != 0 {
-				logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
+			if failed == 0 {
+				failed = st
 			}
+		} else if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil, nil); st != 0 {
+			logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
 		}
 	}
-	return 0
+	return failed
 }
 
 func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {

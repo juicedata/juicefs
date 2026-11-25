@@ -141,7 +141,8 @@ func gc(ctx *cli.Context) error {
 		})
 	}
 
-	c := meta.WrapContext(ctx.Context)
+	c := meta.WrapWithCancel(ctx.Context, 0, 0, []uint32{0})
+	defer c.Cancel()
 	delayedFileSpin := progress.AddDoubleSpinnerTwo("Pending deleted files", "Pending deleted data")
 	cleanedFileSpin := progress.AddDoubleSpinnerTwo("Cleaned pending files", "Cleaned pending data")
 	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)

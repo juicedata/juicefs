@@ -401,6 +401,9 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, 
 		numThreads = 255
 	}
 	logger.Debugf("Start emptyEntry with %d concurrent threads .", numThreads)
+	// emptyDir cancels ctx on failure; keep that within this removal.
+	ctx = WrapWithCancel(ctx, ctx.Pid(), ctx.Uid(), ctx.Gids())
+	defer ctx.Cancel()
 	concurrent := make(chan int, numThreads)
 	return m.emptyEntry(ctx, parent, name, inode, skipTrash, count, concurrent)
 }
