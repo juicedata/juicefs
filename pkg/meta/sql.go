@@ -4519,6 +4519,9 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 }
 
 func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
+	if value == nil {
+		value = []byte{} // SQL drivers bind nil byte slices as NULL.
+	}
 	return errno(m.txn(func(s *xorm.Session) error {
 		if err := m.getNodesForUpdate(s, &node{Inode: inode}); err != nil {
 			return err
