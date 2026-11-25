@@ -629,6 +629,11 @@ func (r *Replayer) move(ctx Context, e *ChangeEntry) error {
 	state.Trash = trash
 	state.Opened = map[Ino]bool{overwritten: opened}
 	state.Parents = map[Ino]bool{parentSrc: updateSrc, parentDst: updateDst}
+	if parentSrc != parentDst {
+		// Moving across quotas charges the summary of a directory; flush first so
+		// that it does not miss updates taken by an in-flight background flush.
+		r.dst.getBase().doFlushDirStat()
+	}
 	var inode Ino
 	if err := changelogCall(e, r.dst.Rename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, &inode, nil)); err != nil {
 		return err

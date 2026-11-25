@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 )
 
 func newTestReplayer(t *testing.T) (*Replayer, *baseMeta) {
@@ -91,5 +93,57 @@ func TestReplayDirStatWithPendingUpdates(t *testing.T) {
 		if st, eno := dst.en.doGetDirStat(Background(), ino, false); eno != 0 || *st != (dirStat{4096, 4096, 1}) {
 			t.Fatalf("dir stat of %d: %+v, %s", ino, st, eno)
 		}
+	}
+}
+
+type blockingDirStatFlushEngine struct {
+	engine
+	once             sync.Once
+	entered, release chan struct{}
+}
+
+func (e *blockingDirStatFlushEngine) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
+	e.once.Do(func() { close(e.entered); <-e.release })
+	return e.engine.doUpdateDirStat(ctx, batch)
+}
+
+func TestReplayMoveDuringDirStatFlush(t *testing.T) {
+	r, dst := newTestReplayer(t)
+	ctx := Background()
+	var q, a, b Ino
+	var attr Attr
+	if st := dst.Mkdir(ctx, RootInode, "q", 0755, 0, 0, &q, &attr); st != 0 {
+		t.Fatalf("mkdir q: %s", st)
+	}
+	if st := dst.Mkdir(ctx, RootInode, "a", 0755, 0, 0, &a, &attr); st != 0 {
+		t.Fatalf("mkdir a: %s", st)
+	}
+	if st := dst.Mkdir(ctx, a, "b", 0755, 0, 0, &b, &attr); st != 0 {
+		t.Fatalf("mkdir b: %s", st)
+	}
+	if _, err := dst.en.doSetQuota(ctx, DirQuotaType, uint64(q), &Quota{MaxSpace: -1, MaxInodes: -1, UsedSpace: 0, UsedInodes: 0}); err != nil {
+		t.Fatalf("set quota: %s", err)
+	}
+	dst.loadQuotas()
+	dst.doFlushDirStat()
+
+	blocking := &blockingDirStatFlushEngine{engine: dst.en, entered: make(chan struct{}), release: make(chan struct{})}
+	dst.en = blocking
+	replayEntry(t, r, fmt.Sprintf("CREATE(%d,f,0,0,1,420,18,,Keep,true,0,420):5000", b))
+	flushed := make(chan struct{})
+	go func() { dst.doFlushDirStat(); close(flushed) }() // a background flush takes the pending update of b
+	<-blocking.entered
+	go func() { time.Sleep(100 * time.Millisecond); close(blocking.release) }()
+	replayEntry(t, r, fmt.Sprintf("MOVE(1,a,%d,a,0,0,0,false,true,true):%d", q, a))
+	<-flushed
+	dst.doFlushQuotas()
+
+	quotas, _, _, err := dst.en.doLoadQuotas(ctx)
+	if err != nil {
+		t.Fatalf("load quotas: %s", err)
+	}
+	// a, b and f
+	if got := quotas[uint64(q)]; got.UsedSpace != 3*align4K(0) || got.UsedInodes != 3 {
+		t.Fatalf("quota usage of q: %+v", got)
 	}
 }
