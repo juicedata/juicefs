@@ -279,7 +279,7 @@ func (m *baseMeta) syncVolumeStat(ctx Context, used, inodes int64) error {
 }
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, uid, gid uint32, parents ...Ino) syscall.Errno {
-	if space <= 0 && inodes <= 0 {
+	if m.replay.Load() != nil || (space <= 0 && inodes <= 0) {
 		return 0
 	}
 	if m.checkUserQuota(ctx, uint64(uid), space, inodes) {
@@ -392,7 +392,7 @@ func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) (Ino, *Quota) {
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
-	if !m.getFormat().DirStats {
+	if m.replay.Load() != nil || !m.getFormat().DirStats {
 		return false
 	}
 	var q *Quota
@@ -417,7 +417,7 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 }
 
 func (m *baseMeta) checkUserQuota(ctx Context, uid uint64, space, inodes int64) bool {
-	if !m.getFormat().UserGroupQuota {
+	if m.replay.Load() != nil || !m.getFormat().UserGroupQuota {
 		return false
 	}
 
@@ -433,7 +433,7 @@ func (m *baseMeta) checkUserQuota(ctx Context, uid uint64, space, inodes int64) 
 }
 
 func (m *baseMeta) checkGroupQuota(ctx Context, gid uint64, space, inodes int64) bool {
-	if !m.getFormat().UserGroupQuota {
+	if m.replay.Load() != nil || !m.getFormat().UserGroupQuota {
 		return false
 	}
 
