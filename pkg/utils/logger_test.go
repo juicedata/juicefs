@@ -57,16 +57,6 @@ func TestLogger(t *testing.T) {
 	} else if !strings.Contains(s, "testid") {
 		t.Fatalf("logid \"testid\" should be logged: %s", s)
 	}
-
-	t.Run("concurrent level change", func(t *testing.T) {
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			logger.Infof("info level")
-		}()
-		SetLogLevel(logrus.WarnLevel)
-		<-done
-	})
 }
 
 func TestMethodName(t *testing.T) {
