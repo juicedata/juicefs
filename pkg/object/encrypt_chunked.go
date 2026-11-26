@@ -54,13 +54,6 @@ func NewChunkedEncrypted(o ObjectStorage, enc *dataEncryptor) ObjectStorage {
 	}
 	ce.plainPool = sync.Pool{New: func() any { buf := make([]byte, plainChunkSize); return &buf }}
 	ce.encChunkPool = sync.Pool{New: func() any { buf := make([]byte, encChunkSize); return &buf }}
-	if fs, ok := o.(FileSystem); ok {
-		cefs := &chunkedEncryptedFS{chunkedEncrypted: ce, FileSystem: fs}
-		if symlink, ok := o.(SupportSymlink); ok {
-			return &chunkedEncryptedFSSymlink{chunkedEncryptedFS: cefs, SupportSymlink: symlink}
-		}
-		return cefs
-	}
 	return ce
 }
 
@@ -339,36 +332,12 @@ func (e *chunkedEncrypted) UploadPartCopy(ctx context.Context, key string, uploa
 	return nil, notSupported
 }
 
-func (e *chunkedEncrypted) InitTiers(init Tiers) error {
-	if o, ok := e.ObjectStorage.(SupportTier); ok {
-		if err := o.InitTiers(init); err != nil {
-			return err
-		}
-	}
-	return nil
+func (e *chunkedEncrypted) unwrapLayer(key string) (ObjectStorage, string, invariant) {
+	return e.ObjectStorage, key, invNamespace
 }
 
-func (e *chunkedEncrypted) GetTier(ctx context.Context) Tier {
-	if o, ok := e.ObjectStorage.(SupportTier); ok {
-		return o.GetTier(ctx)
-	}
-	return Tier{}
+func (e *chunkedEncrypted) dirStorage() ObjectStorage {
+	return NewChunkedEncrypted(DirStorage(e.ObjectStorage), e.enc)
 }
 
 var _ ObjectStorage = (*chunkedEncrypted)(nil)
-
-type chunkedEncryptedFS struct {
-	*chunkedEncrypted
-	FileSystem
-}
-
-var _ FileSystem = (*chunkedEncryptedFS)(nil)
-
-type chunkedEncryptedFSSymlink struct {
-	*chunkedEncryptedFS
-	SupportSymlink
-}
-
-var _ SupportSymlink = (*chunkedEncryptedFSSymlink)(nil)
-
-var _ SupportTier = (*chunkedEncryptedFSSymlink)(nil)

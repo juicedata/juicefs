@@ -107,12 +107,10 @@ func listAll(ctx context.Context, s ObjectStorage, prefix, marker string, limit 
 
 func setStorageClass(o ObjectStorage) string {
 	sc := getScStr(o)
-	if os, ok := o.(SupportTier); ok {
-		tiers := NewTiers(sc)
-		tiers[1] = Tier{ID: 1, Sc: sc}
-		if err := os.InitTiers(tiers); err != nil {
-			logger.Warnf("Set storage tier: %s", err)
-		}
+	tiers := NewTiers(sc)
+	tiers[1] = Tier{ID: 1, Sc: sc}
+	if err := NewStorageController(o).InitTiers(tiers); err != nil && !errors.Is(err, notSupported) {
+		logger.Warnf("Set storage tier: %s", err)
 	}
 	return sc
 }

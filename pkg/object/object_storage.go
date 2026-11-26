@@ -493,10 +493,8 @@ type SupportTier interface {
 
 // InitStorageTiers applies tiers and warns if explicitly configured tiers cannot be set.
 func InitStorageTiers(storage ObjectStorage, tiers Tiers) {
-	if tierStorage, ok := storage.(SupportTier); ok {
-		if err := tierStorage.InitTiers(tiers); err != nil && hasConfiguredTiers(tiers) {
-			logger.Warnf("Set storage tier: %s", err)
-		}
+	if err := NewStorageController(storage).InitTiers(tiers); err != nil && hasConfiguredTiers(tiers) {
+		logger.Warnf("Set storage tier: %s", err)
 	}
 }
 

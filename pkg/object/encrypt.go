@@ -356,21 +356,12 @@ func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters .
 	return e.ObjectStorage.Put(ctx, key, bytes.NewReader(ciphertext), getters...)
 }
 
-func (e *encrypted) InitTiers(init Tiers) error {
-	if o, ok := e.ObjectStorage.(SupportTier); ok {
-		if err := o.InitTiers(init); err != nil {
-			return err
-		}
-	}
-	return nil
+func (e *encrypted) unwrapLayer(key string) (ObjectStorage, string, invariant) {
+	return e.ObjectStorage, key, invNone
 }
 
-func (e *encrypted) GetTier(ctx context.Context) Tier {
-	if o, ok := e.ObjectStorage.(SupportTier); ok {
-		return o.GetTier(ctx)
-	}
-	return Tier{}
+func (e *encrypted) dirStorage() ObjectStorage {
+	return NewEncrypted(DirStorage(e.ObjectStorage), e.enc)
 }
 
 var _ ObjectStorage = (*encrypted)(nil)
-var _ SupportTier = (*encrypted)(nil)

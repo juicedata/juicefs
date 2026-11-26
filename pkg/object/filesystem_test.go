@@ -140,14 +140,15 @@ func testUnsafeKeys(t *testing.T, s ObjectStorage) {
 	_, _, _, err = s.List(ctx, "../", "", "", "/", 10, true)
 	unsafe("List", err)
 	optional("Copy", s.Copy(ctx, "copied", bad))
-	if fs, ok := s.(FileSystem); ok {
-		optional("Chmod", fs.Chmod(bad, 0755))
-		optional("Chown", fs.Chown(bad, "nobody", "nogroup"))
-		optional("Chtimes", fs.Chtimes(bad, time.Now()))
+	sc := NewStorageController(s)
+	if sc.IsFileSystem() {
+		optional("Chmod", sc.Chmod(bad, 0755))
+		optional("Chown", sc.Chown(bad, "nobody", "nogroup"))
+		optional("Chtimes", sc.Chtimes(bad, time.Now()))
 	}
-	if ss, ok := s.(SupportSymlink); ok {
-		optional("Symlink", ss.Symlink("x/x.txt", bad))
-		_, err = ss.Readlink(bad)
+	if sc.SupportSymlink() {
+		optional("Symlink", sc.Symlink("x/x.txt", bad))
+		_, err = sc.Readlink(bad)
 		optional("Readlink", err)
 	}
 }
@@ -246,10 +247,11 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	if ss, ok := s.(FileSystem); ok {
+	sc := NewStorageController(s)
+	if sc.IsFileSystem() {
 		for _, mode := range []uint32{0022, 0122, 0422} {
 			t.Logf("test mode %o", os.FileMode(mode))
-			err := ss.Chmod("x/", os.FileMode(mode))
+			err := sc.Chmod("x/", os.FileMode(mode))
 			if err != nil {
 				t.Fatalf("chmod %ofailed: %s", mode, err)
 			}
@@ -259,10 +261,10 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 				t.Fatalf("list failed: %s mode %o", err, mode)
 			}
 			expectedKeys = []string{"x/", "xy.txt", "xyz/", "xyz/xyz.txt"}
-			if _, ok := ss.(*nfsStore); ok {
+			if _, ok := s.(*nfsStore); ok {
 				expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
 			}
-			if _, ok := ss.(*cifsStore); ok {
+			if _, ok := s.(*cifsStore); ok {
 				expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
 			}
 			if mode == 0422 {
@@ -273,7 +275,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			if err = testKeysEqual(objs, expectedKeys); err != nil {
 				t.Fatalf("testKeysEqual fail: %s mode %o", err, mode)
 			}
-			err = ss.Chmod("x/", os.FileMode(0777))
+			err = sc.Chmod("x/", os.FileMode(0777))
 			if err != nil {
 				t.Fatalf("chmod %o failed: %s", mode, err)
 			}
@@ -289,7 +291,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	if ss, ok := s.(SupportSymlink); ok {
+	if sc.SupportSymlink() {
 		// a< a- < a/ < a0    <    b< b- < b/ < b0
 		_ = s.Put(ctx, "a-", bytes.NewReader([]byte{}))
 		_ = s.Put(ctx, "a0", bytes.NewReader([]byte{}))
@@ -297,11 +299,11 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		_ = s.Put(ctx, "b0", bytes.NewReader(make([]byte, 10)))
 		_ = s.Put(ctx, "xyz/ol1/p.txt", bytes.NewReader([]byte{}))
 
-		err = ss.Symlink("../b0", "bb/b1")
+		err = sc.Symlink("../b0", "bb/b1")
 		if err != nil {
 			t.Fatalf("symlink: %s", err)
 		}
-		if target, err := ss.Readlink("bb/b1"); err != nil {
+		if target, err := sc.Readlink("bb/b1"); err != nil {
 			t.Fatalf("readlink: %s", err)
 		} else if target != "../b0" {
 			t.Fatalf("target should be ../b0, but got %s", target)
@@ -309,7 +311,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		if fi, err := s.Head(ctx, "bb/b1"); err != nil || !fi.IsSymlink() || fi.Size() != 10 {
 			t.Fatalf("haed of symlink: err=%s, size=%d isSymlink=%v", err, fi.Size(), fi.IsSymlink())
 		}
-		err = ss.Symlink("../notExist", "bb/brokenLink")
+		err = sc.Symlink("../notExist", "bb/brokenLink")
 		if err != nil {
 			t.Fatalf("symlink: %s", err)
 		}
@@ -317,10 +319,10 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			t.Fatalf("head broken symlink: err=%s, should be os.ErrNotExist", err)
 		}
 		_ = s.Delete(ctx, "bb/brokenLink")
-		if err = ss.Symlink("xyz/ol1/", "a"); err != nil {
+		if err = sc.Symlink("xyz/ol1/", "a"); err != nil {
 			t.Fatalf("symlink: a: %s", err)
 		}
-		_ = ss.Symlink("xyz/notExist/", "b")
+		_ = sc.Symlink("xyz/notExist/", "b")
 
 		objs, err = listAll(ctx, s, "", "", 100, true)
 		if err != nil {

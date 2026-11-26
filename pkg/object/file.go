@@ -74,6 +74,14 @@ func (d *filestore) String() string {
 	return "file://" + d.root
 }
 
+func (d *filestore) dirStorage() ObjectStorage {
+	if strings.HasSuffix(d.String(), "/") {
+		return d
+	}
+	dir := path.Clean(path.Dir(d.root))
+	return &filestore{root: dir + "/"}
+}
+
 func (d *filestore) path(key string) (string, error) {
 	if err := CheckKey(key); err != nil {
 		return "", err

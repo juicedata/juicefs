@@ -657,15 +657,15 @@ func (bm *benchMarkObj) list(ctx context.Context, key string, startKey int) erro
 }
 
 func (bm *benchMarkObj) chown(ctx context.Context, key string, startKey int) error {
-	return bm.blob.(object.FileSystem).Chown(key, "nobody", groupName)
+	return object.NewStorageController(bm.blob).Chown(key, "nobody", groupName)
 }
 
 func (bm *benchMarkObj) chmod(ctx context.Context, key string, startKey int) error {
-	return bm.blob.(object.FileSystem).Chmod(key, 0755)
+	return object.NewStorageController(bm.blob).Chmod(key, 0755)
 }
 
 func (bm *benchMarkObj) chtimes(ctx context.Context, key string, startKey int) error {
-	return bm.blob.(object.FileSystem).Chtimes(key, time.Now())
+	return object.NewStorageController(bm.blob).Chtimes(key, time.Now())
 }
 
 func listAll(ctx context.Context, s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
@@ -720,13 +720,8 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 
 		*result = append(*result, []string{category, title, r})
 	}
-	isFileSystem := true
-	fi, ok := blob.(object.FileSystem)
-	if ok {
-		if err := fi.Chmod("not_exists_file", 0755); err == utils.ErrNotSUP {
-			isFileSystem = false
-		}
-	}
+	sc := object.NewStorageController(blob)
+	isFileSystem := sc.IsFileSystem()
 
 	get := func(s object.ObjectStorage, k string, off, limit int64) (string, error) {
 		r, err := s.Get(ctx, k, off, limit)
@@ -1095,7 +1090,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 		if (strings.HasPrefix(blob.String(), "file://") || strings.HasPrefix(blob.String(), "jfs://")) && os.Getuid() != 0 {
 			return errors.New("root required")
 		}
-		if err := fi.Chown(key, "nobody", groupName); err != nil {
+		if err := sc.Chown(key, "nobody", groupName); err != nil {
 			return fmt.Errorf("failed to chown object %s", err)
 		}
 		if objInfo, err := blob.Head(ctx, key); err != nil {
@@ -1112,7 +1107,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 	})
 
 	funFSCase("change permission", func() error {
-		if err := fi.Chmod(key, 0777); err != nil {
+		if err := sc.Chmod(key, 0777); err != nil {
 			return err
 		}
 		if objInfo, err := blob.Head(ctx, key); err != nil {
@@ -1127,7 +1122,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 
 	funFSCase("change mtime", func() error {
 		mtime := time.Now().Add(-10 * time.Minute)
-		if err := fi.Chtimes(key, mtime); err != nil {
+		if err := sc.Chtimes(key, mtime); err != nil {
 			return fmt.Errorf("failed to chtimes %s", err)
 		}
 		if objInfo, err := blob.Head(ctx, key); err != nil {
