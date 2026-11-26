@@ -289,6 +289,10 @@ func metaFlags() []cli.Flag {
 			Usage: "mount a sub-directory as root (will be created if absent, unless read-only)",
 		},
 		&cli.StringFlag{
+			Name:  "lower-dir",
+			Usage: "colon-separated read-only base sub-directories for overlay mount (used with --subdir)",
+		},
+		&cli.StringFlag{
 			Name:  "backup-meta",
 			Value: "1h",
 			Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",

@@ -346,6 +346,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.SessionTimeout = utils.Duration(c.String("session-timeout"))
 	conf.MountPoint = mp
 	conf.Subdir = c.String("subdir")
+	conf.LowerDir = c.String("lower-dir")
 	conf.SkipDirMtime = utils.Duration(c.String("skip-dir-mtime"))
 	conf.Sid, _ = strconv.ParseUint(os.Getenv("_JFS_META_SID"), 10, 64)
 	conf.SortDir = c.Bool("sort-dir")
@@ -569,6 +570,12 @@ func mount(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
+		if stage == 0 && metaConf.LowerDir != "" {
+			if err = meta.ValidateOverlayConfig(meta.Background(), metaCli, metaConf.Subdir, strings.Split(metaConf.LowerDir, ":"), metaConf.ReadOnly); err != nil {
+				_ = metaCli.Shutdown()
+				return fmt.Errorf("init overlay mount (subdir=%q, lower-dir=%q): %s", metaConf.Subdir, metaConf.LowerDir, err)
+			}
+		}
 	}
 
 	chunkConf := getChunkConf(c, format)
@@ -629,7 +636,13 @@ func mount(c *cli.Context) error {
 		vfsConf.StatePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
 
-	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir, false); st != 0 {
+	if metaConf.LowerDir != "" {
+		lowerDirs := strings.Split(metaConf.LowerDir, ":")
+		metaCli, err = meta.NewOverlayMeta(meta.Background(), metaCli, metaConf.Subdir, lowerDirs, metaConf.ReadOnly)
+		if err != nil {
+			return fmt.Errorf("init overlay mount (subdir=%q, lower-dir=%q): %s", metaConf.Subdir, metaConf.LowerDir, err)
+		}
+	} else if st := metaCli.Chroot(meta.Background(), metaConf.Subdir, false); st != 0 {
 		return fmt.Errorf("chroot to %q: %s", metaConf.Subdir, st)
 	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards

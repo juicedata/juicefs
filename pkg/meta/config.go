@@ -49,6 +49,7 @@ type Config struct {
 	SessionTimeout     time.Duration
 	MountPoint         string
 	Subdir             string
+	LowerDir           string
 	AtimeMode          string
 	DirStatFlushPeriod time.Duration
 	SkipDirMtime       time.Duration
