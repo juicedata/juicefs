@@ -246,10 +246,11 @@ done
 ## Known limitations
 
 - **Concurrent use of a `File`**: concurrent `Read`, `Write` and `Seek` calls share the offset without ordering. Synchronize them in the application, or use `ReadAt` and `WriteAt` for explicit offsets. Reads and writes on the same handle are serialized inside JuiceFS. `Close` does not wait for operations in progress.
-- **Length of an open file**: the end of a file for `Read` and `Seek(0, io.SeekEnd)` is the length at open, updated by writes and truncation through the same handle. Data appended by other handles or clients is not visible until the file is opened again.
+- **Length of an open file.** `Read` and `ReadAt` use the length recorded when the handle was opened and updated by writes and truncation through that handle. A path-based `Client.Truncate` can leave existing handles with a stale read limit, even on the same client. For example, after shrinking a file from 6 bytes to 2 bytes, `ReadAt` at offset 3 on an existing handle may return bytes past the new EOF, even if `File.Stat` and `Seek(0, io.SeekEnd)` already report 2. Close and reopen the file to read using the new length or to see data appended by other handles or clients.
 - **Append and truncation**: `O_APPEND` uses the end of the file known by the handle; appends from multiple handles are not atomic. `O_TRUNC` truncates after opening, in a separate operation.
 - **Attribute cache**: with the default `AttrCache` and `DirEntryCache`, `Stat` of a directory may return the old modification time and link count for up to one second after its entries change. Set them to 0 if this matters.
 - **Large directories**: `ReadDir` and `File.ReadDir` load the whole directory into memory.
 - **Symbolic links**: `Symlink` with an absolute target stores it as a path relative to the link, and `Readlink` returns the stored path.
+- **Creating a missing symbolic link target.** If the final path component is a symbolic link whose target file is missing, `Client.OpenFile` with `O_CREATE` and without `O_EXCL` returns `ENOENT` even when the target's parent directory exists and permits creation. In the same case, `os.OpenFile` on a Linux JuiceFS mount follows the link and creates the target file.
 - **Lifecycle**: `Close` does not stop all background goroutines, so avoid creating and closing clients repeatedly in a long-running process. Initialization may exit the process when the metadata engine is not available, as `juicefs mount` does.
 - **Terminal output**: `Status(true)` draws a progress bar when the standard output is a terminal.
