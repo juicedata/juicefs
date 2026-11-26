@@ -151,8 +151,23 @@ func TestFileSystem(t *testing.T) {
 	} else if fi.Mode() != 0640 || fi.Uid() != 1 || fi.Gid() != 2 || fi.Atime() != 1 || fi.Mtime() != 2 {
 		t.Fatalf("stat /hello: %+v", fi)
 	}
+	f, err = fs.Open(ctx, "/hello", meta.MODE_MASK_W)
+	if err != 0 {
+		t.Fatalf("open /hello: %s", err)
+	}
+	if _, e := f.Pwrite(ctx, []byte("!"), 5); e != 0 {
+		t.Fatalf("pwrite /hello: %s", e)
+	}
 	if e := fs.Truncate(ctx, "/hello", 2); e != 0 {
-		t.Fatalf("truncate : %s", e)
+		t.Fatalf("truncate /hello: %s", e)
+	}
+	if e := f.Close(ctx); e != 0 {
+		t.Fatalf("close /hello after truncate: %s", e)
+	}
+	if fi, e := fs.Stat(ctx, "/hello"); e != 0 {
+		t.Fatalf("stat /hello: %s", e)
+	} else if fi.Size() != 2 {
+		t.Fatalf("size after truncate and close: got %d, want 2", fi.Size())
 	}
 	if n, e := fs.CopyFileRange(ctx, "/hello", 0, "/hello", 5, 5); e != 0 || n != 2 {
 		t.Fatalf("copyfilerange: %s %d", e, n)
