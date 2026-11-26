@@ -3,13 +3,13 @@ title: Go SDK
 sidebar_position: 6
 ---
 
-The Go SDK lets a Go program access a JuiceFS volume directly through the metadata engine and the object storage, without a FUSE mount. It suits containerized environments where FUSE is not available, and Go services that want to read and write JuiceFS in process.
+The Go SDK lets Go programs access a JuiceFS volume directly through the metadata engine and object storage, without a FUSE mount. It suits containerized environments where FUSE is not available, and Go services that want to read and write JuiceFS in process.
 
 The API follows the Go standard library: a `Client` is a handle to one volume modeled on [`os.Root`](https://pkg.go.dev/os#Root), a `File` mirrors [`os.File`](https://pkg.go.dev/os#File), and `Client.FS()` returns an [`io/fs`](https://pkg.go.dev/io/fs) file system. The supported operations and differences from the standard library are described below.
 
 ## Quick start
 
-Use Go 1.25.10 or later, with cgo enabled and a C compiler installed. The SDK package is `github.com/juicedata/juicefs/sdk/go`, named `juicefs`.
+Use Go 1.25.10 or later, with cgo enabled and a C compiler installed. The SDK's import path is `github.com/juicedata/juicefs/sdk/go`, and its package name is `juicefs`.
 
 If you are starting a new project, run `go mod init example.com/myapp`. Set `JUICEFS_VERSION` to a tag or commit that contains the SDK. The following command prints the path to that version's `go.mod`.
 
@@ -20,7 +20,7 @@ go list -m -f '{{.GoMod}}' "github.com/juicedata/juicefs@${JUICEFS_VERSION}"
 
 A standalone Go build applies the main module's `replace` directives. Copy the `replace` directives from that file into your project's `go.mod` to use the same dependency forks as JuiceFS. If your project already replaces any of those modules, resolve the conflicts before building.
 
-Save the example below as `main.go`, then use the same `JUICEFS_VERSION` to add the SDK dependency and build the example from your project directory.
+Save the example below as `main.go`, and then use the same `JUICEFS_VERSION` to add the SDK dependency and build the example from your project directory.
 
 ```shell
 go get "github.com/juicedata/juicefs/sdk/go@${JUICEFS_VERSION}"
@@ -68,7 +68,7 @@ func main() {
 }
 ```
 
-All methods of a `Client` are safe for concurrent use; create one `Client` per volume and share it. Paths are relative to the root of the volume, with or without a leading `/`. `Close` closes the files left open, flushes buffered writes and ends the session. Finish ongoing operations before closing the client, and check the returned error.
+All methods of a `Client` are safe for concurrent use; create one `Client` per volume and share it. Paths are relative to the root of the volume, with or without a leading `/`. `Close` closes files that remain open, flushes buffered writes, and ends the session. Finish ongoing operations before closing the client, and check the returned error.
 
 More runnable programs, including an HTTP file server built on `Client.FS()`, are in [`sdk/go/examples`](https://github.com/juicedata/juicefs/tree/main/sdk/go/examples).
 
@@ -79,9 +79,9 @@ func New(name, metaURL string, conf *Config) (*Client, error)
 func DefaultConfig() *Config
 ```
 
-- `name` is only used in metric labels and logs. It is compared with the volume name; a mismatch logs a warning but does not prevent connecting.
-- `metaURL` is the URL of the metadata engine, the same as for [`juicefs mount`](../reference/command_reference.mdx#mount).
-- A `nil` `conf` means `DefaultConfig()`. To change options, start from `DefaultConfig()`: a zero field of `Config` means zero, not the default.
+- `name` is used only in metric labels and logs. The SDK compares it with the actual volume name. If they do not match, it logs a warning but still connects.
+- `metaURL` specifies the metadata engine URL, using the same format as [`juicefs mount`](../reference/command_reference.mdx#mount).
+- If `conf` is `nil`, `DefaultConfig()` is used. To change options, start with `DefaultConfig()`: zero-valued fields in `Config` are treated as zero, not as their default values.
 
 ```go
 conf := juicefs.DefaultConfig()
@@ -95,35 +95,35 @@ The table lists the defaults returned by `DefaultConfig()`. Sizes are in bytes a
 
 | Field | Default | Description |
 | --- | --- | --- |
-| `Bucket` | `""` | Endpoint of the object storage, overriding the one of the volume |
+| `Bucket` | `""` | Endpoint of the object storage, overriding the endpoint configured for the volume |
 | `StorageClass` | `""` | Storage class of the data written by this client |
 | `ReadOnly` | `false` | Allow only read operations |
-| `NoSession` | `false` | Do not register a session in the metadata engine; implies `NoBGJob`, and disables the metadata backup and the usage report |
+| `NoSession` | `false` | Do not register a session in the metadata engine; implies `NoBGJob` and disables the metadata backup and the usage report |
 | `NoBGJob` | `true` | Disable background jobs such as cleanup and metadata backup |
-| `OpenCache` | `0` | How long the attributes of an opened file are reused when it is opened again; 0 disables it |
-| `BackupMeta` | `1h` | Interval of the automatic metadata backup to the object storage; 0 disables it. It also needs `NoBGJob` to be `false` |
+| `OpenCache` | `0` | How long to reuse cached attributes when a file is reopened; `0` disables this cache |
+| `BackupMeta` | `1h` | Interval between automatic metadata backups to object storage; `0` disables backups. Requires `NoBGJob` to be false |
 | `BackupSkipTrash` | `false` | Skip the files in the trash when backing up the metadata |
-| `Heartbeat` | `12s` | Interval of the heartbeat to the metadata engine |
+| `Heartbeat` | `12s` | Heartbeat interval for the metadata engine |
 | `CacheDir` | `"memory"` | Local cache directories separated by colons; `"memory"` caches in memory |
 | `CacheSize` | 100 MiB | Size of the read cache |
-| `FreeSpaceRatio` | `0.1` | Minimum ratio of free space on the cache disk |
-| `CachePartialOnly` | `false` | Only cache the data of random and small reads |
-| `VerifyCacheChecksum` | `"extend"` | Checksum level of cached data: `none`, `full`, `shrink` or `extend` |
-| `CacheEviction` | `"2-random"` | Eviction policy of the cache: `none`, `2-random` or `lru` |
+| `FreeSpaceRatio` | `0.1` | Minimum free-space ratio for the cache disk |
+| `CachePartialOnly` | `false` | Cache data only for random and small reads |
+| `VerifyCacheChecksum` | `"extend"` | Checksum verification level for cached data: `none`, `full`, `shrink`, or `extend` |
+| `CacheEviction` | `"2-random"` | Eviction policy of the cache: `none`, `2-random`, or `lru` |
 | `CacheScanInterval` | `1h` | Interval to scan the cache directories and rebuild the index |
-| `CacheExpire` | `0` | Evict the cached blocks not accessed for this long; 0 never expires them |
+| `CacheExpire` | `0` | Evict cached blocks that have not been accessed within this period; `0` means they never expire |
 | `Writeback` | `false` | Upload the blocks in the background after writing them to the cache disk; no effect with `CacheDir="memory"` |
 | `BufferSize` | 300 MiB | Total size of the read and write buffers |
 | `Prefetch` | `1` | Number of blocks prefetched concurrently |
-| `MaxReadahead` | `0` | Maximum readahead of each reading session; 0 disables readahead, see below |
-| `UploadLimit` | `0` | Upload bandwidth limit in Mbps; 0 uses the limit of the volume |
-| `DownloadLimit` | `0` | Download bandwidth limit in Mbps; 0 uses the limit of the volume |
+| `MaxReadahead` | `0` | Maximum amount of data to read ahead per read session; `0` disables readahead. See below |
+| `UploadLimit` | `0` | Upload bandwidth limit in Mbps; `0` uses the limit of the volume |
+| `DownloadLimit` | `0` | Download bandwidth limit in Mbps; `0` uses the limit of the volume |
 | `MaxUploads` | `20` | Number of concurrent uploads |
 | `MaxDeletes` | `10` | Number of concurrent deletions of objects, also used by `RemoveAll` |
-| `SkipDirNlink` | `20` | Skip updating the nlink of directories after this many retries of conflicting transactions (TKV engines only); 0 never skips |
+| `SkipDirNlink` | `20` | Number of retries for conflicting transactions before directory nlink updates are skipped (TKV engines only); `0` means updates are never skipped |
 | `SkipDirMtime` | `100ms` | Do not update the mtime of a directory if it changes less than this |
 | `IORetries` | `10` | Number of retries after a network failure |
-| `GetTimeout` | `5s` | Timeout to download an object |
+| `GetTimeout` | `5s` | Timeout for downloading an object |
 | `PutTimeout` | `60s` | Timeout to upload an object |
 | `FastResolve` | `false` | Resolve a whole path in one request (Redis only) |
 | `AttrCache` | `1s` | How long the attributes of files are cached |
@@ -131,23 +131,23 @@ The table lists the defaults returned by `DefaultConfig()`. Sizes are in bytes a
 | `DirEntryCache` | `1s` | How long the entries of directories are cached |
 | `Debug` | `false` | Enable debug logs |
 | `NoUsageReport` | `false` | Do not report anonymous usage data such as the version |
-| `AccessLog` | `""` | Path of the access log; empty disables it |
+| `AccessLog` | `""` | Path of the access log; an empty value disables logging |
 | `PushGateway` | `""` | Address of a Prometheus Pushgateway, `<host>:<port>` |
-| `PushInterval` | `10s` | Interval to push metrics |
-| `PushAuth` | `""` | Basic auth of the Pushgateway, `<username>:<password>` |
+| `PushInterval` | `10s` | Interval between metric pushes |
+| `PushAuth` | `""` | Pushgateway basic authentication credentials, in the `<username>:<password>` format |
 | `PushLabels` | `""` | Extra labels of the pushed metrics, `key1:value1;key2:value2` |
 
 ### Readahead
 
-Readahead is disabled by default (`MaxReadahead` is 0). For sequential reads of large files, set `MaxReadahead`, for example to 8 times the block size of the volume (32 MiB for the default 4 MiB block). The readahead also needs room in `BufferSize`, of which it uses at most 80%.
+Readahead is disabled by default (`MaxReadahead` is `0`). For sequential reads of large files, set `MaxReadahead` to an appropriate value, such as eight times the volume's block size (32 MiB for the default 4 MiB block size). Readahead also requires space in `BufferSize` and uses at most 80% of it.
 
 ### Identity and umask
 
-Operations use the effective user and groups captured when `New` is called, and permissions are checked as in POSIX; root (euid 0) is the superuser. `New` reads the umask of the process once and applies it to new files and directories.
+Operations run under the effective user and group identities captured when `New` is called, and permissions are checked according to POSIX rules. The root user (euid 0) is the superuser. `New` reads the umask of the process once and applies it to new files and directories.
 
 ### Logs
 
-Logs of JuiceFS are global to the process and shared by all clients. The level is debug if `Config.Debug` is set or the environment variable `JUICEFS_DEBUG` is not empty, otherwise the value of `JUICEFS_LOGLEVEL`, and warning by default.
+Logs of JuiceFS are global to the process and shared by all clients. The log level is `debug` if `Config.Debug` is set or the environment variable `JUICEFS_DEBUG` is not empty. Otherwise, it is determined by `JUICEFS_LOGLEVEL`, which defaults to `warning`.
 
 ## API
 
