@@ -148,7 +148,7 @@ func SetLogLevel(lvl logrus.Level) {
 	mu.Lock()
 	defer mu.Unlock()
 	for _, logger := range loggers {
-		logger.Level = lvl
+		logger.SetLevel(lvl)
 	}
 }
 
