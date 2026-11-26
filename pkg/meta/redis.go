@@ -2922,7 +2922,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 	}, m.inodeKey(parent), m.entryKey(parent), m.inodeKey(inode)))
 }
 
-func (m *redisMeta) fillAttr(ctx context.Context, es []*Entry) error {
+func (m *redisMeta) fillAttr(ctx Context, es []*Entry) error {
 	if len(es) == 0 {
 		return nil
 	}
@@ -2981,23 +2981,30 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 		if nEntries <= batchSize {
 			err = m.fillAttr(ctx, *entries)
 		} else {
-			group, batchCtx := errgroup.WithContext(ctx)
-			group.SetLimit(2)
-			for i := 0; i < nEntries; i += batchSize {
-				if err = batchCtx.Err(); err != nil {
-					break
-				}
-				batch := (*entries)[i:min(i+batchSize, nEntries)]
-				group.Go(func() error {
-					if err := batchCtx.Err(); err != nil {
-						return err
+			indexCh := make(chan []*Entry, 10)
+			var wg sync.WaitGroup
+			for i := 0; i < 2; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for es := range indexCh {
+						e := m.fillAttr(ctx, es)
+						if e != nil {
+							err = e
+							break
+						}
 					}
-					return m.fillAttr(batchCtx, batch)
-				})
+				}()
 			}
-			if batchErr := group.Wait(); batchErr != nil {
-				err = batchErr
+			for i := 0; i < nEntries; i += batchSize {
+				if i+batchSize > nEntries {
+					indexCh <- (*entries)[i:]
+				} else {
+					indexCh <- (*entries)[i : i+batchSize]
+				}
 			}
+			close(indexCh)
+			wg.Wait()
 		}
 		if err != nil {
 			return errno(err)
