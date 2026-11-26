@@ -466,11 +466,11 @@ func (j *juiceFS) partDir(key, uploadID string) string {
 	return fmt.Sprintf("%s/.jfs.part-%s-%s/", path.Dir(key), name, uploadID)
 }
 
-func (j *juiceFS) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*object.Part, error) {
+func (j *juiceFS) UploadPartStream(ctx context.Context, key string, uploadID string, num int, in io.Reader) (*object.Part, error) {
 	if err := object.CheckKey(key); err != nil {
 		return nil, err
 	}
-	err := j.Put(context.Background(), path.Join(j.partDir(key, uploadID), strconv.Itoa(num)), in)
+	err := j.Put(ctx, path.Join(j.partDir(key, uploadID), strconv.Itoa(num)), in)
 	return &object.Part{
 		Num: num,
 	}, err

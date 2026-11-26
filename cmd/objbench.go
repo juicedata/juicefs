@@ -650,7 +650,7 @@ func (bm *benchMarkObj) head(ctx context.Context, key string, startKey int) erro
 }
 
 func (bm *benchMarkObj) list(ctx context.Context, key string, startKey int) error {
-	result, err := osync.ListAll(bm.blob, "", "0", "999", true)
+	result, err := osync.ListAll(ctx, bm.blob, "", "0", "999", true)
 	for range result {
 	}
 	return err

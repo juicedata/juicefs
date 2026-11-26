@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -24,11 +25,13 @@ import (
 	_ "net/http/pprof"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/metric"
@@ -650,5 +653,35 @@ func doSync(c *cli.Context) error {
 			metric.RegisterToConsul(c.String("consul"), metricsAddr, metadata)
 		}
 	}
-	return sync.Sync(src, dst, config)
+	baseCtx := c.Context
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	ctx, cancel := context.WithCancel(baseCtx)
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	done := make(chan struct{})
+	defer func() {
+		signal.Stop(sigCh)
+		close(done)
+	}()
+	go func() {
+		select {
+		case sig := <-sigCh:
+			logger.Infof("Received signal %s, cancelling sync...", sig)
+			cancel()
+		case <-done:
+			return
+		}
+		select {
+		case sig := <-sigCh:
+			logger.Warnf("Received signal %s again, exiting immediately", sig)
+			os.Exit(1)
+		case <-done:
+		}
+	}()
+
+	return sync.Sync(ctx, src, dst, config)
 }

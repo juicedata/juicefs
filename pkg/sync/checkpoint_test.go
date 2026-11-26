@@ -70,7 +70,7 @@ func TestCheckpointManagerSaveAndLoad(t *testing.T) {
 	}
 
 	beforeSave := time.Now()
-	if err := manager.Save(ckpt); err != nil {
+	if err := manager.Save(ctx, ckpt); err != nil {
 		t.Fatalf("save checkpoint: %v", err)
 	}
 	if ckpt.UpdatedAt.Before(beforeSave) {
@@ -78,7 +78,7 @@ func TestCheckpointManagerSaveAndLoad(t *testing.T) {
 	}
 
 	loader := NewCheckpointManager(srcStore, store, nil)
-	loaded, err := loader.Load()
+	loaded, err := loader.Load(ctx)
 	if err != nil {
 		t.Fatalf("load checkpoint: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestCheckpointManagerSaveDelayDeletes(t *testing.T) {
 	})
 
 	manager := NewCheckpointManager(srcStore, store, nil)
-	if err := manager.Save(manager.checkpoint); err != nil {
+	if err := manager.Save(ctx, manager.checkpoint); err != nil {
 		t.Fatalf("save initial checkpoint: %v", err)
 	}
 
@@ -137,11 +137,11 @@ func TestCheckpointManagerSaveDelayDeletes(t *testing.T) {
 	dstDelayDelMu.Lock()
 	dstDelayDel = append(dstDelayDel, "dst-dir-b")
 	dstDelayDelMu.Unlock()
-	if err := manager.Save(manager.checkpoint); err != nil {
+	if err := manager.Save(ctx, manager.checkpoint); err != nil {
 		t.Fatalf("save final checkpoint: %v", err)
 	}
 
-	loaded, err := NewCheckpointManager(srcStore, store, nil).Load()
+	loaded, err := NewCheckpointManager(srcStore, store, nil).Load(ctx)
 	if err != nil {
 		t.Fatalf("load checkpoint: %v", err)
 	}
@@ -359,7 +359,7 @@ func seedCheckpoint(t *testing.T, src, dst object.ObjectStorage, config *Config)
 		},
 		Config: config,
 	}
-	if err := mgr.Save(ckpt); err != nil {
+	if err := mgr.Save(ctx, ckpt); err != nil {
 		t.Fatalf("save checkpoint: %v", err)
 	}
 }
@@ -402,7 +402,7 @@ func TestRestoreFromCheckpointChildPrefixKeys(t *testing.T) {
 	config := newTestConfig()
 	seedCheckpoint(t, src, dst, config)
 
-	if err := Sync(src, dst, config); err != nil {
+	if err := Sync(ctx, src, dst, config); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 
@@ -434,7 +434,7 @@ func TestProduceFromListChildPrefixKeys(t *testing.T) {
 	config.FilesFrom = tmpFile.Name()
 	seedCheckpoint(t, src, dst, config)
 
-	if err := Sync(src, dst, config); err != nil {
+	if err := Sync(ctx, src, dst, config); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 
@@ -473,7 +473,7 @@ func TestRestorePrefixDedup(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			restorePrefixFromCheckpoint(tasks, src, dst, "p/", config, mgr)
+			restorePrefixFromCheckpoint(ctx, tasks, src, dst, "p/", config, mgr)
 		}()
 	}
 	wg.Wait()
@@ -514,11 +514,11 @@ func TestRestoreListDonePrefix(t *testing.T) {
 		},
 		Config: config,
 	}
-	if err := mgr.Save(ckpt); err != nil {
+	if err := mgr.Save(ctx, ckpt); err != nil {
 		t.Fatalf("save checkpoint: %v", err)
 	}
 
-	Sync(src, dst, config)
+	Sync(ctx, src, dst, config)
 
 	// Only the pending key should be synced
 	assertDstHasKeys(t, dst, "dir/sub/pending")
@@ -560,13 +560,13 @@ func TestSyncCheckpointForceResetStartsFresh(t *testing.T) {
 		},
 		Config: seedConfig,
 	}
-	if err := mgr.Save(ckpt); err != nil {
+	if err := mgr.Save(ctx, ckpt); err != nil {
 		t.Fatalf("save checkpoint: %v", err)
 	}
 
 	config := newTestConfig()
 	config.CheckpointForceReset = true
-	if err := Sync(src, dst, config); err != nil {
+	if err := Sync(ctx, src, dst, config); err != nil {
 		t.Fatalf("Sync with checkpoint force reset: %v", err)
 	}
 
@@ -598,7 +598,7 @@ func TestProduceFromListOverlappingPrefixes(t *testing.T) {
 	config.FilesFrom = tmpFile.Name()
 	seedCheckpoint(t, src, dst, config)
 
-	if err := Sync(src, dst, config); err != nil {
+	if err := Sync(ctx, src, dst, config); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 
@@ -620,12 +620,12 @@ func TestCheckpointPlacedAtParentForFileDst(t *testing.T) {
 	}
 
 	ckpt := &Checkpoint{PrefixState: make(map[string]*PrefixState)}
-	if err := mgr.Save(ckpt); err != nil {
+	if err := mgr.Save(ctx, ckpt); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 
 	loader := NewCheckpointManager(src, fileDst, nil)
-	if _, err := loader.Load(); err != nil {
+	if _, err := loader.Load(ctx); err != nil {
 		t.Errorf("Load via file-like dst should succeed: %v", err)
 	}
 

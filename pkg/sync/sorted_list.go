@@ -109,7 +109,11 @@ func listCommonPrefixWithExternalSort(ctx context.Context, store object.ObjectSt
 				if onChildPrefix != nil {
 					onChildPrefix(d.Key())
 				}
-				cp <- d
+				select {
+				case cp <- d:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 		for o := range sorted {

@@ -18,6 +18,7 @@ package sync
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/json"
 	"errors"
@@ -25,12 +26,10 @@ import (
 	"io"
 	"maps"
 	"os"
-	"os/signal"
 	"path"
 	"slices"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -216,14 +215,17 @@ func checkpointTmpPrefix(key string) string {
 	return path.Join(dir, prefix)
 }
 
-func (m *CheckpointManager) cleanupCheckpointTmp() {
+func (m *CheckpointManager) cleanupCheckpointTmp(ctx context.Context) {
 	tmpPrefix := checkpointTmpPrefix(m.checkpointKey)
-	objs, err := ListAll(m.dst, tmpPrefix, "", "", true)
+	objs, err := ListAll(ctx, m.dst, tmpPrefix, "", "", true)
 	if err != nil {
 		logger.Warnf("Failed to list checkpoint tmp files with prefix %q: %v", tmpPrefix, err)
 		return
 	}
 	for obj := range objs {
+		if ctx.Err() != nil {
+			return
+		}
 		if obj == nil {
 			logger.Warnf("Listing checkpoint tmp files with prefix %q failed", tmpPrefix)
 			return
@@ -235,8 +237,8 @@ func (m *CheckpointManager) cleanupCheckpointTmp() {
 }
 
 // Load loads checkpoint from object storage
-func (m *CheckpointManager) Load() (*Checkpoint, error) {
-	go m.cleanupCheckpointTmp()
+func (m *CheckpointManager) Load(ctx context.Context) (*Checkpoint, error) {
+	go m.cleanupCheckpointTmp(ctx)
 	obj, err := m.dst.Get(ctx, m.checkpointKey, 0, -1)
 	if err != nil {
 		// head to wrap 404 as os.ErrNotExist
@@ -266,7 +268,7 @@ func (m *CheckpointManager) Load() (*Checkpoint, error) {
 }
 
 // Save saves checkpoint to object storage
-func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
+func (m *CheckpointManager) Save(ctx context.Context, ckpt *Checkpoint) error {
 	if ckpt.Config != nil && ckpt.Config.Dry {
 		return nil
 	}
@@ -753,7 +755,7 @@ func (m *CheckpointManager) Stop() {
 }
 
 // DeleteCheckpoint removes the checkpoint file from storage.
-func (m *CheckpointManager) DeleteCheckpoint() error {
+func (m *CheckpointManager) DeleteCheckpoint(ctx context.Context) error {
 	m.saveMu.Lock()
 	defer m.saveMu.Unlock()
 	return m.dst.Delete(ctx, m.checkpointKey)
@@ -766,7 +768,7 @@ func (m *CheckpointManager) Reset(config *Config) {
 	m.multipartUploadStore.reset(checkpoint.MultipartUploads)
 }
 
-func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
+func (m *CheckpointManager) StartPeriodicSave(ctx context.Context, interval time.Duration) {
 	done := make(chan struct{})
 	m.periodicDone = done
 	go func() {
@@ -777,11 +779,16 @@ func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
 		for {
 			select {
 			case <-ticker.C:
-				if err := m.Save(m.checkpoint); err != nil {
+				if err := m.Save(ctx, m.checkpoint); err != nil {
+					if ctx.Err() != nil {
+						return
+					}
 					logger.Errorf("Failed to save checkpoint: %v", err)
 				} else {
 					logger.Debugf("Checkpoint saved at %s", time.Now().Format(time.RFC3339))
 				}
+			case <-ctx.Done():
+				return
 			case <-m.stopChan:
 				return
 			}
@@ -789,28 +796,11 @@ func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
 	}()
 }
 
-func (m *CheckpointManager) SaveOnSignal() {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		logger.Infof("Received signal, saving checkpoint...")
-		m.Stop()
-
-		if err := m.Save(m.checkpoint); err != nil {
-			logger.Errorf("Failed to save checkpoint on signal: %v", err)
-		} else {
-			logger.Infof("Checkpoint saved successfully")
-		}
-
-		// TODO: use context cancel.
-		os.Exit(0)
-	}()
-}
-
 func trackCheckpointCompletion(key string, err error, mgr *CheckpointManager, config *Config) {
 	if !config.EnableCheckpoint {
+		return
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return
 	}
 	failed := err != nil

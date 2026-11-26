@@ -132,7 +132,7 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 	if err != nil {
 		return "", err
 	}
-	_, err = osync.CopyData(disk, blob, fpath, size, true)
+	_, err = osync.CopyData(context.Background(), disk, blob, fpath, size, true)
 	return blob.String() + fpath, err
 }
 

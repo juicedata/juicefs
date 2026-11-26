@@ -156,10 +156,10 @@ func TestDownload(t *testing.T) {
 		content := make([]byte, c.config.fsize)
 		utils.RandRead(content)
 		_ = a.Put(ctx, key, bytes.NewReader(content))
-		c.tfunc(t, newParallelDownloader(a, key, c.config.fsize, downloadBufSize, make(chan int, c.concurrent)), content)
+		c.tfunc(t, newParallelDownloader(ctx, a, key, c.config.fsize, downloadBufSize, make(chan int, c.concurrent)), content)
 	}
 
-	downloader := newParallelDownloader(a, "notExist", 10*downloadBufSize, downloadBufSize, make(chan int, 5))
+	downloader := newParallelDownloader(ctx, a, "notExist", 10*downloadBufSize, downloadBufSize, make(chan int, 5))
 	res := make([]byte, 1)
 	n, err := downloader.Read(res)
 	if !os.IsNotExist(err) || n != 0 {

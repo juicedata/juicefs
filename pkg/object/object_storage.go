@@ -62,7 +62,7 @@ type SupportSymlink interface {
 }
 
 type SupportUploadPartStream interface {
-	UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error)
+	UploadPartStream(ctx context.Context, key string, uploadID string, num int, in io.Reader) (*Part, error)
 }
 
 type File interface {

@@ -17,6 +17,7 @@ package sync
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -36,8 +37,11 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
 )
+
+var ctx = context.Background()
 
 func collectAll(c <-chan object.Object) []string {
 	r := make([]string, 0)
@@ -55,7 +59,7 @@ func TestIterator(t *testing.T) {
 	m.Put(ctx, "aa", bytes.NewReader([]byte("a")))
 	m.Put(ctx, "c", bytes.NewReader([]byte("a")))
 
-	ch, _ := ListAll(m, "", "a", "b", true)
+	ch, _ := ListAll(ctx, m, "", "a", "b", true)
 	keys := collectAll(ch)
 	if len(keys) != 3 {
 		t.Fatalf("length should be 3, but got %d", len(keys))
@@ -67,7 +71,7 @@ func TestIterator(t *testing.T) {
 	// Single object
 	s, _ := object.CreateStorage("mem", "", "", "", "")
 	s.Put(ctx, "a", bytes.NewReader([]byte("a")))
-	ch, _ = ListAll(s, "", "", "", true)
+	ch, _ = ListAll(ctx, s, "", "", "", true)
 	keys = collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{"a"}) {
 		t.Fatalf("result wrong: %s", keys)
@@ -86,7 +90,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 
 	// Simulate command line prefix in SRC or DST
 	s = object.WithPrefix(s, "abc")
-	ch, _ := ListAll(s, "", "", "", true)
+	ch, _ := ListAll(ctx, s, "", "", "", true)
 	keys := collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{""}) {
 		t.Fatalf("result wrong: %s", keys)
@@ -132,14 +136,14 @@ func TestSync(t *testing.T) {
 	b.Put(ctx, "ba", bytes.NewReader([]byte("a1")))
 
 	// Copy a2
-	if err := Sync(a, b, config); err != nil {
+	if err := Sync(ctx, a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
 	if c := copied.Current(); c != 1 {
 		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 
-	if err := Sync(a, b, config); err != nil {
+	if err := Sync(ctx, a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
 	// No copy occurred
@@ -152,15 +156,15 @@ func TestSync(t *testing.T) {
 	os.Args = []string{}
 	config.Exclude = nil
 	config.rules = nil
-	if err := Sync(b, a, config); err != nil {
+	if err := Sync(ctx, b, a, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
 	if c := copied.Current(); c != 1 {
 		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 	// Now a: {"a1", "a2", "abc", "ba", "c1", "c2"}, b: {"a1", "a2", "ba"}
-	aRes, _ := ListAll(a, "", "", "", true)
-	bRes, _ := ListAll(b, "", "", "", true)
+	aRes, _ := ListAll(ctx, a, "", "", "", true)
+	bRes, _ := ListAll(ctx, b, "", "", "", true)
 
 	var aObjs, bObjs []object.Object
 	for obj := range aRes {
@@ -180,7 +184,7 @@ func TestSync(t *testing.T) {
 	// Test --force-update option
 	config.ForceUpdate = true
 	// Forcibly copy {"a1", "a2", "abc","c1","c2","ba"} from a to b.
-	if err := Sync(a, b, config); err != nil {
+	if err := Sync(ctx, a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
 }
@@ -216,7 +220,7 @@ func TestSyncForceUpdateDeleteDst(t *testing.T) {
 				t.Fatalf("put dst dst-only/file: %s", err)
 			}
 
-			if err := Sync(src, dst, &Config{
+			if err := Sync(ctx, src, dst, &Config{
 				Threads:     4,
 				ListThreads: testCase.listThreads,
 				ListDepth:   testCase.listDepth,
@@ -278,7 +282,7 @@ func TestSyncDirsWithStartAndListThreads(t *testing.T) {
 				MaxSize:     math.MaxInt64,
 				Quiet:       true,
 			}
-			if err := Sync(src, dst, config); err != nil {
+			if err := Sync(ctx, src, dst, config); err != nil {
 				t.Fatalf("sync: %s", err)
 			}
 			if fi, err := os.Stat(tmpDst + "p"); err != nil || !fi.IsDir() {
@@ -364,11 +368,11 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 		for _, k := range testCase.srcKey {
 			a.Put(ctx, k, bytes.NewReader([]byte(k)))
 		}
-		if err := Sync(a, b, config); err != nil {
+		if err := Sync(ctx, a, b, config); err != nil {
 			t.Fatalf("sync: %s", err)
 		}
 
-		bRes, _ := ListAll(b, "", "", "", true)
+		bRes, _ := ListAll(ctx, b, "", "", "", true)
 		var bKeys []string
 		for obj := range bRes {
 			bKeys = append(bKeys, obj.Key())
@@ -439,7 +443,7 @@ func TestSyncLink(t *testing.T) {
 	bs := b.(object.SupportSymlink)
 	bs.Symlink(tmpB+"a1", "l1")
 
-	if err := Sync(a, b, &Config{
+	if err := Sync(ctx, a, b, &Config{
 		Threads:     50,
 		Update:      true,
 		Perms:       true,
@@ -502,7 +506,7 @@ func TestSyncFilesFromSymlinkDirWithLinks(t *testing.T) {
 			}
 
 			dst, _ := object.CreateStorage("file", dstDir+"/", "", "", "")
-			if err := Sync(src, dst, &Config{
+			if err := Sync(ctx, src, dst, &Config{
 				Threads:     2,
 				ListThreads: 1,
 				Links:       true,
@@ -540,7 +544,7 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 
 	b, _ := object.CreateStorage("file", tmpB, "", "", "")
 
-	if err := Sync(a, b, &Config{
+	if err := Sync(ctx, a, b, &Config{
 		Threads:     50,
 		ListThreads: 1,
 		Update:      true,
@@ -576,7 +580,7 @@ func TestSingleLink(t *testing.T) {
 	_ = os.Symlink(tmpTarget, tmpA)
 	a, _ := object.CreateStorage("file", tmpA, "", "", "")
 	b, _ := object.CreateStorage("file", tmpB, "", "", "")
-	if err := Sync(a, b, &Config{
+	if err := Sync(ctx, a, b, &Config{
 		Threads:     50,
 		ListThreads: 1,
 		Update:      true,
@@ -613,7 +617,7 @@ func TestSyncCheckAllLink(t *testing.T) {
 	bs := b.(object.SupportSymlink)
 	bs.Symlink(tmpB+"a1", "l1")
 
-	if err := Sync(a, b, &Config{
+	if err := Sync(ctx, a, b, &Config{
 		Threads:     50,
 		Perms:       true,
 		Links:       true,
@@ -651,7 +655,7 @@ func TestSyncCheckNewLink(t *testing.T) {
 	b, _ := object.CreateStorage("file", tmpB, "", "", "")
 	bs := b.(object.SupportSymlink)
 
-	if err := Sync(a, b, &Config{
+	if err := Sync(ctx, a, b, &Config{
 		Threads:     50,
 		Perms:       true,
 		Links:       true,
@@ -720,11 +724,11 @@ func TestLimits(t *testing.T) {
 
 	for _, tcase := range testCases {
 		setConfig(config, tcase)
-		if err := Sync(a, tcase.dst, config); err != nil {
+		if err := Sync(ctx, a, tcase.dst, config); err != nil {
 			t.Fatalf("sync: %s", err)
 		}
 
-		all, err := ListAll(tcase.dst, "", "", "", true)
+		all, err := ListAll(ctx, tcase.dst, "", "", "", true)
 		if err != nil {
 			t.Fatalf("list all b: %s", err)
 		}
@@ -767,11 +771,11 @@ func TestSyncLimitDeleteDstBoundary(t *testing.T) {
 		DeleteDst:   true,
 		Limit:       2,
 	}
-	if err := Sync(src, dst, config); err != nil {
+	if err := Sync(ctx, src, dst, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
 
-	all, err := ListAll(dst, "", "", "", true)
+	all, err := ListAll(ctx, dst, "", "", "", true)
 	if err != nil {
 		t.Fatalf("list all dst: %s", err)
 	}
@@ -809,11 +813,11 @@ func TestSyncLimitDeleteDstDefersNonEmptyDir(t *testing.T) {
 		MaxSize:     math.MaxInt64,
 		Quiet:       true,
 	}
-	if err := Sync(src, dst, config); err != nil {
+	if err := Sync(ctx, src, dst, config); err != nil {
 		t.Fatalf("sync with exhausted limit: %s", err)
 	}
 
-	all, err := ListAll(dst, "", "", "", true)
+	all, err := ListAll(ctx, dst, "", "", "", true)
 	if err != nil {
 		t.Fatalf("list all dst: %s", err)
 	}
@@ -859,11 +863,11 @@ func TestSyncLimitDeleteDstIgnoreExisting(t *testing.T) {
 		IgnoreExisting: true,
 		Limit:          2,
 	}
-	if err := Sync(src, dst, config); err != nil {
+	if err := Sync(ctx, src, dst, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
 
-	all, err := ListAll(dst, "", "", "", true)
+	all, err := ListAll(ctx, dst, "", "", "", true)
 	if err != nil {
 		t.Fatalf("list all dst: %s", err)
 	}
@@ -920,11 +924,11 @@ func TestSyncLimitDeleteDstLeftoverIgnoreExisting(t *testing.T) {
 		IgnoreExisting: true,
 		Limit:          3,
 	}
-	if err := Sync(src, dst, config); err != nil {
+	if err := Sync(ctx, src, dst, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
 
-	all, err := ListAll(dst, "", "", "", true)
+	all, err := ListAll(ctx, dst, "", "", "", true)
 	if err != nil {
 		t.Fatalf("list all dst: %s", err)
 	}
@@ -1178,7 +1182,7 @@ func TestSyncEncrypt(t *testing.T) {
 	}
 
 	encDst := object.NewChunkedEncrypted(dst, enc)
-	if err := Sync(src, encDst, &Config{
+	if err := Sync(ctx, src, encDst, &Config{
 		Threads:     10,
 		ListThreads: 1,
 		Update:      true,
@@ -1204,7 +1208,7 @@ func TestSyncEncrypt(t *testing.T) {
 	// sync encrypted src -> plaintext dst (decrypt)
 	dst2, _ := object.CreateStorage("mem", "", "", "", "")
 	encSrc := object.NewChunkedEncrypted(dst, enc)
-	if err := Sync(encSrc, dst2, &Config{
+	if err := Sync(ctx, encSrc, dst2, &Config{
 		Threads:     10,
 		ListThreads: 1,
 		Update:      true,
@@ -1233,7 +1237,7 @@ func TestSyncEncrypt(t *testing.T) {
 	enc2, _ := object.NewDataEncryptor(kc2, object.AES256GCM_RSA)
 	wrongSrc := object.NewChunkedEncrypted(dst, enc2)
 	dst3, _ := object.CreateStorage("mem", "", "", "", "")
-	err = Sync(wrongSrc, dst3, &Config{
+	err = Sync(ctx, wrongSrc, dst3, &Config{
 		Threads:     10,
 		ListThreads: 1,
 		Update:      true,
@@ -1242,7 +1246,7 @@ func TestSyncEncrypt(t *testing.T) {
 		Quiet:       true,
 	})
 	// Sync should complete but with failures (wrong key can't decrypt)
-	ch, _ := ListAll(dst3, "", "", "", true)
+	ch, _ := ListAll(ctx, dst3, "", "", "", true)
 	var count int
 	for range ch {
 		count++
@@ -1275,7 +1279,7 @@ func TestSyncEncryptLargeFile(t *testing.T) {
 	src.Put(ctx, "large.bin", bytes.NewReader(largeData))
 
 	encDst := object.NewChunkedEncrypted(dst, enc)
-	if err := Sync(src, encDst, &Config{
+	if err := Sync(ctx, src, encDst, &Config{
 		Threads:     10,
 		ListThreads: 1,
 		Update:      true,
@@ -1299,7 +1303,7 @@ func TestSyncEncryptLargeFile(t *testing.T) {
 	// Decrypt back
 	dst2, _ := object.CreateStorage("mem", "", "", "", "")
 	encSrc := object.NewChunkedEncrypted(dst, enc)
-	if err := Sync(encSrc, dst2, &Config{
+	if err := Sync(ctx, encSrc, dst2, &Config{
 		Threads:     10,
 		ListThreads: 1,
 		Update:      true,
@@ -1335,7 +1339,7 @@ func TestWithProgressLimitsActualBytes(t *testing.T) {
 	source := bytes.NewReader(data)
 	readErr := errors.New("source read failed")
 	wantTokens := int64(2*readSize - len(data))
-	r := newProgressReader(progressReaderFunc(func(b []byte) (int, error) {
+	r := newProgressReader(ctx, progressReaderFunc(func(b []byte) (int, error) {
 		if got := local.Available(); got != wantTokens {
 			t.Fatalf("tokens before source read: got %d, want %d", got, wantTokens)
 		}
@@ -1391,7 +1395,7 @@ func TestCopyLimitsSmallObject(t *testing.T) {
 			if err := src.Put(ctx, "key", strings.NewReader(c.body)); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := doCopySingle0(src, dst, "key", c.size, false); err != nil {
+			if _, err := doCopySingle0(ctx, src, dst, "key", c.size, false); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1448,7 +1452,7 @@ func TestMixedLimiterFailover(t *testing.T) {
 	l := &mixedLimiter{global: gLimit, local: local}
 
 	// while healthy, the global service should be used
-	l.Wait(1024)
+	l.Wait(ctx, 1024)
 	if granted.Load() == 0 {
 		t.Fatalf("expected global service to be used while healthy")
 	}
@@ -1459,12 +1463,12 @@ func TestMixedLimiterFailover(t *testing.T) {
 	// take the service down: the next Wait should mark it unhealthy and fall back
 	up.Store(false)
 	before := granted.Load()
-	l.Wait(1 << 20) // exhausts remaining balance and triggers a failing request
+	l.Wait(ctx, 1<<20) // exhausts remaining balance and triggers a failing request
 	if gLimit.healthy.Load() {
 		t.Fatalf("expected global limit to become unhealthy after failure")
 	}
 	// subsequent waits must not increase granted (global is skipped)
-	l.Wait(1024)
+	l.Wait(ctx, 1024)
 	if granted.Load() != before {
 		t.Fatalf("expected global service to be skipped while unhealthy")
 	}
@@ -1472,7 +1476,7 @@ func TestMixedLimiterFailover(t *testing.T) {
 	// bring the service back and probe for recovery
 	up.Store(true)
 	gLimit.lastProbe = time.Time{} // allow immediate probe
-	gLimit.checkBalance()
+	gLimit.checkBalance(ctx)
 	if !gLimit.healthy.Load() {
 		t.Fatalf("expected global limit to recover after service is back")
 	}
@@ -1510,7 +1514,7 @@ func TestGlobalLimitDrainWaitersOnFailure(t *testing.T) {
 	const n = 5
 	results := make(chan bool, n)
 	for i := 0; i < n; i++ {
-		go func() { results <- g.wait(1 << 20) }()
+		go func() { results <- g.wait(ctx, 1<<20) }()
 	}
 
 	// wait until all goroutines are queued: the head is hung in request() while
@@ -1574,7 +1578,7 @@ func TestCopyDataWithoutProgress(t *testing.T) {
 
 	const cycles = 50
 	for i := 0; i < cycles; i++ {
-		chksum, err := CopyData(src, dst, "backup", int64(len(data)), true)
+		chksum, err := CopyData(ctx, src, dst, "backup", int64(len(data)), true)
 		if err != nil {
 			t.Fatalf("CopyData: %s", err)
 		}
@@ -1586,5 +1590,252 @@ func TestCopyDataWithoutProgress(t *testing.T) {
 	settleGoroutines()
 	if leaked := runtime.NumGoroutine() - base; leaked > cycles/10 {
 		t.Fatalf("leaked %d goroutines after %d CopyData calls", leaked, cycles)
+	}
+}
+
+type cancelAwarePutStore struct {
+	object.ObjectStorage
+	onPut     func(ctx context.Context, key string)
+	putCtxErr atomic.Bool
+}
+
+func (s *cancelAwarePutStore) Put(ctx context.Context, key string, in io.Reader, getters ...object.AttrGetter) error {
+	if s.onPut != nil {
+		s.onPut(ctx, key)
+	}
+	if ctx.Err() != nil {
+		s.putCtxErr.Store(true)
+		return ctx.Err()
+	}
+	return s.ObjectStorage.Put(ctx, key, in, getters...)
+}
+
+type mockMultipartCancelStore struct {
+	object.ObjectStorage
+	inFlight    atomic.Int32
+	partStarted chan struct{}
+	abortCalled atomic.Bool
+	abortHadErr atomic.Bool
+	abortActive atomic.Int32
+}
+
+func (s *mockMultipartCancelStore) Limits() object.Limits {
+	return object.Limits{
+		IsSupportMultipartUpload: true,
+		MinPartSize:              defaultPartSize,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
+func (s *mockMultipartCancelStore) CreateMultipartUpload(ctx context.Context, key string) (*object.MultipartUpload, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return &object.MultipartUpload{
+		MinPartSize: defaultPartSize,
+		MaxCount:    10000,
+		UploadID:    "test-upload-id",
+	}, nil
+}
+
+func (s *mockMultipartCancelStore) UploadPartStream(ctx context.Context, key, uploadID string, num int, in io.Reader) (*object.Part, error) {
+	s.inFlight.Add(1)
+	defer s.inFlight.Add(-1)
+	select {
+	case s.partStarted <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (s *mockMultipartCancelStore) AbortUpload(ctx context.Context, key, uploadID string) {
+	s.abortActive.Store(s.inFlight.Load())
+	if ctx.Err() != nil {
+		s.abortHadErr.Store(true)
+	}
+	s.abortCalled.Store(true)
+}
+
+func TestSyncContextCancel(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "", "", "", "")
+	dstBase, _ := object.CreateStorage("mem", "", "", "", "")
+	for i := 0; i < 20; i++ {
+		key := fmt.Sprintf("file-%02d", i)
+		if err := src.Put(ctx, key, bytes.NewReader([]byte("data"))); err != nil {
+			t.Fatalf("put %s: %v", key, err)
+		}
+	}
+
+	syncCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var puts atomic.Int32
+	dst := &cancelAwarePutStore{
+		ObjectStorage: dstBase,
+		onPut: func(callCtx context.Context, key string) {
+			if puts.Add(1) == 1 {
+				cancel()
+			}
+		},
+	}
+
+	cfg := &Config{
+		Threads:     1,
+		ListThreads: 1,
+		MaxSize:     math.MaxInt64,
+		Limit:       -1,
+		Quiet:       true,
+	}
+	err := Sync(syncCtx, src, dst, cfg)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if !dst.putCtxErr.Load() {
+		t.Fatalf("expected Put to receive cancelled context")
+	}
+}
+
+func TestSyncContextCancelMultipartAbort(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "", "", "", "")
+	dstBase, _ := object.CreateStorage("mem", "", "", "", "")
+	size := int64(defaultPartSize * 3)
+	if err := src.Put(ctx, "big", bytes.NewReader(make([]byte, size))); err != nil {
+		t.Fatalf("put big: %v", err)
+	}
+
+	dst := &mockMultipartCancelStore{
+		ObjectStorage: dstBase,
+		partStarted:   make(chan struct{}, 1),
+	}
+	syncCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		<-dst.partStarted
+		cancel()
+	}()
+
+	cfg := &Config{
+		Threads:     4,
+		ListThreads: 1,
+		MaxSize:     math.MaxInt64,
+		Limit:       -1,
+		Quiet:       true,
+	}
+	err := Sync(syncCtx, src, dst, cfg)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if !dst.abortCalled.Load() {
+		t.Fatalf("expected AbortUpload to be called on cancel")
+	}
+	if dst.abortHadErr.Load() {
+		t.Fatalf("expected AbortUpload to receive an active cleanup context")
+	}
+	if active := dst.abortActive.Load(); active != 0 {
+		t.Fatalf("expected all part uploads to exit before AbortUpload, got %d in-flight", active)
+	}
+}
+
+func TestSyncContextCancelSavesCheckpoint(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "", "", "", "")
+	dstBase, _ := object.CreateStorage("mem", "", "", "", "")
+	for i := 0; i < 10; i++ {
+		key := fmt.Sprintf("f-%02d", i)
+		if err := src.Put(ctx, key, bytes.NewReader([]byte("hello"))); err != nil {
+			t.Fatalf("put %s: %v", key, err)
+		}
+	}
+
+	syncCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var puts atomic.Int32
+	dst := &cancelAwarePutStore{
+		ObjectStorage: dstBase,
+		onPut: func(callCtx context.Context, key string) {
+			if strings.HasPrefix(key, checkpointPrefix) {
+				return
+			}
+			if puts.Add(1) == 1 {
+				cancel()
+			}
+		},
+	}
+
+	cfg := &Config{
+		Threads:            1,
+		ListThreads:        1,
+		MaxSize:            math.MaxInt64,
+		Limit:              -1,
+		Quiet:              true,
+		EnableCheckpoint:   true,
+		CheckpointInterval: time.Hour,
+	}
+	err := Sync(syncCtx, src, dst, cfg)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+
+	ckptKey := generateCheckpointKey(src.String(), dst.String(), cfg)
+	if _, err := dstBase.Head(ctx, ckptKey); err != nil {
+		t.Fatalf("expected checkpoint %q to be saved on cancel, got err: %v", ckptKey, err)
+	}
+}
+
+type failDelimiterListStore struct {
+	object.ObjectStorage
+	listErr error
+}
+
+func (s *failDelimiterListStore) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
+	if delimiter != "" {
+		return nil, false, "", s.listErr
+	}
+	return s.ObjectStorage.List(ctx, prefix, startAfter, token, delimiter, limit, followLink)
+}
+
+func TestStartProducerDstErrorNoPanic(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "", "", "", "")
+	for i := 0; i < 1200; i++ {
+		key := fmt.Sprintf("d%04d/file", i)
+		if err := src.Put(ctx, key, bytes.NewReader([]byte("x"))); err != nil {
+			t.Fatalf("put %s: %v", key, err)
+		}
+	}
+
+	dstBase, _ := object.CreateStorage("mem", "", "", "", "")
+	dstErr := errors.New("boom")
+	dst := &failDelimiterListStore{ObjectStorage: dstBase, listErr: dstErr}
+
+	cfg := &Config{
+		Threads:     2,
+		ListThreads: 2,
+		ListDepth:   2,
+		MaxSize:     math.MaxInt64,
+		Limit:       -1,
+		Quiet:       true,
+	}
+	if err := Sync(ctx, src, dst, cfg); !errors.Is(err, dstErr) {
+		t.Fatalf("expected %v, got %v", dstErr, err)
+	}
+}
+
+func TestSendStatsReturnsFalseOnContextDone(t *testing.T) {
+	doneCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	progress := utils.NewProgress(true)
+	skipped = progress.AddCountSpinner("Skipped objects")
+	skippedBytes = progress.AddByteSpinner("Skipped bytes")
+	copied = progress.AddCountSpinner("Copied objects")
+	copiedBytes = progress.AddByteSpinner("Copied bytes")
+	checked, checkedBytes, deleted, failed = nil, nil, nil, nil
+	defer progress.Done()
+
+	if ok := sendStats(doneCtx, "127.0.0.1:1", nil); ok {
+		t.Fatalf("expected sendStats to return false on cancelled context")
 	}
 }

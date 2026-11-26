@@ -19,6 +19,7 @@ package sync
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -88,12 +89,12 @@ func updateStats(r *Stat) {
 	handled.IncrInt64(r.Copied + r.Deleted + r.Skipped + r.Failed)
 }
 
-func httpRequest(url string, body []byte) (ans []byte, err error) {
+func httpRequest(ctx context.Context, url string, body []byte) (ans []byte, err error) {
 	method := "GET"
 	if body != nil {
 		method = "POST"
 	}
-	req, err := http.NewRequest(method, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +176,7 @@ func clearSentMultipartParts(workerUploads *workerMultipartUploads, uploads map[
 	}
 }
 
-func sendStats(addr string, multipartUploads *workerMultipartUploads) {
+func sendStats(ctx context.Context, addr string, multipartUploads *workerMultipartUploads) bool {
 	sendStatMu.Lock()
 	defer sendStatMu.Unlock()
 	var r Stat
@@ -205,7 +206,7 @@ func sendStats(addr string, multipartUploads *workerMultipartUploads) {
 	}
 	r.MultipartUploads = getMultipartUploads(multipartUploads)
 	d, _ := json.Marshal(r)
-	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
+	ans, err := httpRequest(ctx, fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
 		srcDelayDelMu.Lock()
 		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
@@ -216,7 +217,13 @@ func sendStats(addr string, multipartUploads *workerMultipartUploads) {
 		completionMu.Unlock()
 		if errors.Is(err, syscall.ECONNREFUSED) {
 			logger.Errorf("the management process has been stopped, so the worker process now exits")
-			os.Exit(1)
+			return false
+		}
+		if ctx.Err() != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				logger.Errorf("update stats timed out: %s", err)
+			}
+			return false
 		}
 		logger.Errorf("update stats: %s %s", string(ans), err)
 	} else {
@@ -236,16 +243,26 @@ func sendStats(addr string, multipartUploads *workerMultipartUploads) {
 		}
 		clearSentMultipartParts(multipartUploads, r.MultipartUploads)
 	}
+	return true
 }
 
-func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *CheckpointManager) (string, error) {
+func startManager(ctx context.Context, config *Config, tasks <-chan object.Object, checkpointMgr *CheckpointManager) (string, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []object.Object
 		var total int64
-		obj, ok := <-tasks
-		if !ok {
+		var obj object.Object
+		var ok bool
+		select {
+		case obj, ok = <-tasks:
+			if !ok {
+				_, _ = w.Write([]byte("[]"))
+				return
+			}
+		case <-ctx.Done():
 			_, _ = w.Write([]byte("[]"))
+			return
+		case <-req.Context().Done():
 			return
 		}
 		objs = append(objs, obj)
@@ -259,6 +276,8 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 				}
 				objs = append(objs, obj)
 				total += obj.Size()
+			case <-ctx.Done():
+				break LOOP
 			default:
 				break LOOP
 			}
@@ -348,7 +367,14 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 		return "", fmt.Errorf("listen: %s", err)
 	}
 	logger.Infof("Listen at %s", l.Addr())
-	go func() { _ = http.Serve(l, mux) }()
+	srv := &http.Server{Handler: mux}
+	go func() {
+		<-ctx.Done()
+		shutCtx, cancel := cleanupCtx(ctx)
+		defer cancel()
+		_ = srv.Shutdown(shutCtx)
+	}()
+	go func() { _ = srv.Serve(l) }()
 	return l.Addr().String(), nil
 }
 
@@ -426,7 +452,7 @@ func ReadClusterWorkerConfig(r io.Reader) (string, string, map[string]string, er
 	return config.Source, config.Destination, config.Env, nil
 }
 
-func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
+func launchWorker(ctx context.Context, address string, config *Config, wg *sync.WaitGroup) {
 	workers := strings.Split(strings.Join(config.Workers, ","), ",")
 	for _, host := range workers {
 		wg.Add(1)
@@ -439,12 +465,15 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				return
 			}
 			rpath := filepath.Join("/tmp", filepath.Base(path))
-			cmd := exec.Command("rsync", "-a", "-e", "ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no", path, host+":"+rpath)
+			cmd := exec.CommandContext(ctx, "rsync", "-a", "-e", "ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no", path, host+":"+rpath)
 			output, err := cmd.CombinedOutput()
 			logger.Debugf("exec: %q,err: %s", cmd.String(), string(output))
 			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
 				// fallback to scp
-				cmd = exec.Command("scp", "-o", "StrictHostKeyChecking=no", "-o", "PasswordAuthentication=no", path, host+":"+rpath)
+				cmd = exec.CommandContext(ctx, "scp", "-o", "StrictHostKeyChecking=no", "-o", "PasswordAuthentication=no", path, host+":"+rpath)
 				output, err = cmd.CombinedOutput()
 				logger.Debugf("exec: %q,err: %s", cmd.String(), string(output))
 			}
@@ -460,7 +489,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 			defer clear(payload)
 			logger.Debugf("launch worker command args: [ssh, %q]", strings.Join(args, ", "))
-			cmd = exec.Command("ssh", args...)
+			cmd = exec.CommandContext(ctx, "ssh", args...)
 			cmd.Stdin = bytes.NewReader(payload)
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
@@ -559,20 +588,39 @@ func unmarshalObjects(d []byte) ([]object.Object, error) {
 	return objs, nil
 }
 
-func fetchJobs(tasks chan<- object.Object, config *Config, uploads multipartUploads) {
+func fetchJobs(ctx context.Context, tasks chan<- object.Object, config *Config, uploads multipartUploads) {
+	defer close(tasks)
 	for {
+		if ctx.Err() != nil {
+			return
+		}
 		url := fmt.Sprintf("http://%s/fetch", config.Manager)
-		ans, err := httpRequest(url, nil)
+		ans, err := httpRequest(ctx, url, nil)
 		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
 			logger.Errorf("fetch jobs: %s", err)
-			time.Sleep(time.Second)
+			timer := time.NewTimer(time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
 			continue
 		}
 		var jobs []object.Object
 		jobs, err = unmarshalObjects(ans)
 		if err != nil {
 			logger.Errorf("Unmarshal %s: %s", string(ans), err)
-			time.Sleep(time.Second)
+			timer := time.NewTimer(time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
 			continue
 		}
 		logger.Debugf("got %d jobs", len(jobs))
@@ -587,8 +635,11 @@ func fetchJobs(tasks chan<- object.Object, config *Config, uploads multipartUplo
 				}
 				obj = withoutMultipart(obj)
 			}
-			tasks <- obj
+			select {
+			case tasks <- obj:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}
-	close(tasks)
 }

@@ -27,6 +27,9 @@ import (
 
 type parallelDownloader struct {
 	sync.Mutex
+	ctx        context.Context
+	cancel     context.CancelFunc
+	stopWatch  func() bool
 	notify     *sync.Cond
 	src        object.ObjectStorage
 	key        string
@@ -41,13 +44,15 @@ type parallelDownloader struct {
 func (r *parallelDownloader) hasErr() bool {
 	r.Lock()
 	defer r.Unlock()
-	return r.err != nil
+	return r.err != nil || r.ctx.Err() != nil
 }
 
 func (r *parallelDownloader) setErr(err error) {
 	r.Lock()
 	defer r.Unlock()
-	r.err = err
+	if r.err == nil {
+		r.err = err
+	}
 }
 
 const downloadBufSize = 10 << 20
@@ -61,7 +66,13 @@ var downloadBufPool = sync.Pool{
 
 func (r *parallelDownloader) download() {
 	for off := int64(0); off < r.fsize; off += r.blockSize {
-		r.concurrent <- 1
+		select {
+		case <-r.ctx.Done():
+			r.setErr(r.ctx.Err())
+			r.notify.Broadcast()
+			return
+		case r.concurrent <- 1:
+		}
 		go func(off int64) {
 			var size = r.blockSize
 			if off+r.blockSize > r.fsize {
@@ -69,15 +80,18 @@ func (r *parallelDownloader) download() {
 			}
 			var saved bool
 			if !r.hasErr() {
+				var e error
 				if limiter != nil {
-					limiter.Wait(size)
+					e = limiter.Wait(r.ctx, size)
 				}
 				var in io.ReadCloser
-				e := try(3, func() error {
-					var err error
-					in, err = r.src.Get(context.Background(), r.key, off, size)
-					return err
-				})
+				if e == nil {
+					e = try(r.ctx, 3, func() error {
+						var err error
+						in, err = r.src.Get(r.ctx, r.key, off, size)
+						return err
+					})
+				}
 				if e != nil {
 					r.setErr(e)
 				} else { //nolint:typecheck
@@ -112,18 +126,25 @@ func (r *parallelDownloader) Read(b []byte) (int, error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
 	if r.off >= r.fsize {
 		return 0, io.EOF
 	}
 	off := r.off / r.blockSize * r.blockSize
 	r.Lock()
-	for r.err == nil && r.buffers[off] == nil {
+	for r.err == nil && r.ctx.Err() == nil && r.buffers[off] == nil {
 		r.notify.Wait()
 	}
 	p := r.buffers[off]
+	err := r.err
+	if err == nil {
+		err = r.ctx.Err()
+	}
 	r.Unlock()
 	if p == nil {
-		return 0, r.err
+		return 0, err
 	}
 	n := copy(b, (*p)[r.off-off:])
 	r.off += int64(n)
@@ -141,6 +162,10 @@ func (r *parallelDownloader) Read(b []byte) (int, error) {
 }
 
 func (r *parallelDownloader) Close() {
+	r.cancel()
+	if r.stopWatch != nil {
+		r.stopWatch()
+	}
 	r.Lock()
 	defer r.Unlock()
 	for _, p := range r.buffers {
@@ -150,13 +175,17 @@ func (r *parallelDownloader) Close() {
 	if r.err == nil {
 		r.err = errors.New("closed")
 	}
+	r.notify.Broadcast()
 }
 
-func newParallelDownloader(store object.ObjectStorage, key string, size int64, bSize int64, concurrent chan int) *parallelDownloader {
+func newParallelDownloader(ctx context.Context, store object.ObjectStorage, key string, size int64, bSize int64, concurrent chan int) *parallelDownloader {
 	if bSize < 1 {
 		panic("concurrent and blockSize must be positive integer")
 	}
+	dlCtx, cancel := context.WithCancel(ctx)
 	down := &parallelDownloader{
+		ctx:        dlCtx,
+		cancel:     cancel,
 		src:        store,
 		key:        key,
 		fsize:      size,
@@ -165,6 +194,14 @@ func newParallelDownloader(store object.ObjectStorage, key string, size int64, b
 		buffers:    make(map[int64]*[]byte),
 	}
 	down.notify = sync.NewCond(down)
+	down.stopWatch = context.AfterFunc(dlCtx, func() {
+		down.Lock()
+		if down.err == nil {
+			down.err = dlCtx.Err()
+		}
+		down.notify.Broadcast()
+		down.Unlock()
+	})
 	go down.download()
 	return down
 }

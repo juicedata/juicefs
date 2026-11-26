@@ -88,9 +88,9 @@ func (s *withPrefix) Symlink(oldName, newName string) error {
 	return notSupported
 }
 
-func (s *withPrefix) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+func (s *withPrefix) UploadPartStream(ctx context.Context, key string, uploadID string, num int, in io.Reader) (*Part, error) {
 	if w, ok := s.os.(SupportUploadPartStream); ok {
-		return w.UploadPartStream(s.prefix+key, uploadID, num, in)
+		return w.UploadPartStream(ctx, s.prefix+key, uploadID, num, in)
 	}
 	return nil, notSupported
 }

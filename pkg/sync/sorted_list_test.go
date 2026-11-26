@@ -136,7 +136,7 @@ func TestSyncExternalSort(t *testing.T) {
 		for _, k := range []string{"foo/05", "foo/zz-stale", "stale", "a/x/stale"} {
 			_ = dst.Put(ctx, k, bytes.NewReader([]byte("old")))
 		}
-		err := Sync(src, dst, &Config{
+		err := Sync(ctx, src, dst, &Config{
 			Threads:         4,
 			ListThreads:     listThreads,
 			ListDepth:       listDepth,
@@ -147,7 +147,7 @@ func TestSyncExternalSort(t *testing.T) {
 			Limit:           -1,
 			MaxSize:         math.MaxInt64,
 		})
-		ch, _ := ListAll(dst, "", "", "", true)
+		ch, _ := ListAll(ctx, dst, "", "", "", true)
 		keys := collectAll(ch)
 		updated := true
 		for _, k := range keys {

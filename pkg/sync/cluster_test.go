@@ -67,7 +67,7 @@ func TestCluster(t *testing.T) {
 	todo := make(chan object.Object, 100)
 	var conf Config
 	conf.Workers = []string{workerAddr}
-	addr, err := startManager(&conf, todo, nil)
+	addr, err := startManager(ctx, &conf, todo, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestCluster(t *testing.T) {
 	// worker
 	conf.Manager = addr
 	mytodo := make(chan object.Object, 100)
-	go fetchJobs(mytodo, &conf, nil)
+	go fetchJobs(ctx, mytodo, &conf, nil)
 
 	todo <- &obj{key: "test"}
 	close(todo)
