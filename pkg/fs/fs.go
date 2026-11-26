@@ -898,10 +898,21 @@ func (fs *FileSystem) CopyFileRange(ctx meta.Context, src string, soff uint64, d
 	return
 }
 
+const (
+	xattrMaxName = 255
+	xattrMaxSize = 65536
+)
+
 func (fs *FileSystem) SetXattr(ctx meta.Context, p string, name string, value []byte, flags uint32) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.SetXattr").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "SetXAttr (%s,%s,%d,%d): %s", p, name, len(value), flags, errstr(err)) }()
+	if name == "" || len(name) > xattrMaxName {
+		return syscall.ERANGE
+	}
+	if len(value) > xattrMaxSize {
+		return syscall.E2BIG
+	}
 	fi, err := fs.resolve(ctx, p, true)
 	if err != 0 {
 		return
@@ -914,6 +925,9 @@ func (fs *FileSystem) GetXattr(ctx meta.Context, p string, name string) (result 
 	defer trace.StartRegion(context.TODO(), "fs.GetXattr").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "GetXattr (%s,%s): (%d,%s)", p, name, len(result), errstr(err)) }()
+	if name == "" || len(name) > xattrMaxName {
+		return nil, syscall.ERANGE
+	}
 	fi, err := fs.resolve(ctx, p, true)
 	if err != 0 {
 		return
@@ -938,6 +952,9 @@ func (fs *FileSystem) RemoveXattr(ctx meta.Context, p string, name string) (err 
 	defer trace.StartRegion(context.TODO(), "fs.RemoveXattr").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "RemoveXattr (%s,%s): %s", p, name, errstr(err)) }()
+	if name == "" {
+		return syscall.ERANGE
+	}
 	fi, err := fs.resolve(ctx, p, true)
 	if err != 0 {
 		return
