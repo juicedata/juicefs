@@ -408,9 +408,23 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, 
 	return m.emptyEntry(ctx, parent, name, inode, skipTrash, count, concurrent)
 }
 
+// summaryScanError distinguishes a scan failure from a caller's cancellation cause.
+type summaryScanError struct{ syscall.Errno }
+
 func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno {
+	scanCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	ctx = &cancelCauseContext{Context: ctx, ctx: scanCtx, cancel: cancel}
+	if ctx.Canceled() {
+		return syscall.EINTR
+	}
+
 	var attr Attr
-	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+	st := m.GetAttr(ctx, inode, &attr)
+	if ctx.Canceled() {
+		return syscall.EINTR
+	}
+	if st != 0 {
 		return st
 	}
 	if attr.Typ != TypeDirectory {
@@ -425,10 +439,21 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 	summary.Size += uint64(align4K(0))
 	concurrent := make(chan struct{}, 50)
 	inode = m.checkRoot(inode)
-	return m.getDirSummary(ctx, inode, summary, recursive, strict, concurrent, nil)
+	st = m.getDirSummary(ctx, inode, summary, recursive, strict, concurrent, nil, cancel)
+	if cause, ok := context.Cause(scanCtx).(summaryScanError); ok {
+		return cause.Errno
+	}
+	if ctx.Canceled() {
+		return syscall.EINTR
+	}
+	return st
 }
 
-func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{}, updateProgress func(count uint64, bytes uint64)) syscall.Errno {
+func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{},
+	updateProgress func(count uint64, bytes uint64), cancelOnError context.CancelCauseFunc) syscall.Errno {
+	if cancelOnError != nil && ctx.Canceled() {
+		return syscall.EINTR
+	}
 	var entries []*Entry
 	var err syscall.Errno
 	format := m.getFormat()
@@ -440,6 +465,9 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 		if err != 0 {
 			return err
 		}
+		if cancelOnError != nil && ctx.Canceled() {
+			return syscall.EINTR
+		}
 		atomic.AddUint64(&summary.Size, uint64(st.space))
 		atomic.AddUint64(&summary.Length, uint64(st.length))
 		if updateProgress != nil {
@@ -448,6 +476,9 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 		var attr Attr
 		err = m.en.doGetAttr(ctx, inode, &attr)
 		if err == 0 {
+			if cancelOnError != nil && ctx.Canceled() {
+				return syscall.EINTR
+			}
 			if attr.Nlink > 2 {
 				err = m.en.doReaddir(ctx, inode, 0, &entries, -1)
 			} else {
@@ -461,8 +492,25 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
-	var errCh = make(chan syscall.Errno, 1)
+	var errCh chan syscall.Errno
+	if cancelOnError == nil {
+		// GetTreeSummary collects errors within each directory.
+		errCh = make(chan syscall.Errno, 1)
+	}
+	scanChild := func(inode Ino) syscall.Errno {
+		st := m.getDirSummary(ctx, inode, summary, recursive, strict, concurrent, updateProgress, cancelOnError)
+		if st == syscall.ENOENT {
+			return 0
+		}
+		if st != 0 && cancelOnError != nil {
+			cancelOnError(summaryScanError{st})
+		}
+		return st
+	}
 	for _, e := range entries {
+		if cancelOnError != nil && ctx.Canceled() {
+			return syscall.EINTR
+		}
 		if e.Attr.Typ == TypeDirectory {
 			atomic.AddUint64(&summary.Dirs, 1)
 		} else {
@@ -484,15 +532,14 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 		case <-ctx.Done():
 			return syscall.EINTR
 		case err := <-errCh:
-			// TODO: cancel others
 			return err
 		case concurrent <- struct{}{}:
 			wg.Add(1)
 			go func(e *Entry) {
 				defer wg.Done()
-				err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress)
+				err := scanChild(e.Inode)
 				<-concurrent
-				if err != 0 && err != syscall.ENOENT {
+				if err != 0 && errCh != nil {
 					select {
 					case errCh <- err:
 					default:
@@ -500,7 +547,7 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 				}
 			}(e)
 		default:
-			if err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress); err != 0 && err != syscall.ENOENT {
+			if err := scanChild(e.Inode); err != 0 {
 				return err
 			}
 		}
@@ -545,7 +592,7 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 	}()
 	if depth <= 0 {
 		var summary Summary
-		err := m.getDirSummary(ctx, tree.Inode, &summary, true, strict, concurrent, updateProgress)
+		err := m.getDirSummary(ctx, tree.Inode, &summary, true, strict, concurrent, updateProgress, nil)
 		if err == 0 {
 			tree.Dirs += summary.Dirs
 			tree.Files += summary.Files

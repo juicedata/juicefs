@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -26,6 +27,167 @@ func createSummaryTestTree(t *testing.T, m Meta, parent Ino, dirs, filesPerDir i
 			if st := m.Create(ctx, inode, fname, 0644, 0, 0, &fileInode, &attr); st != 0 && st != syscall.EEXIST {
 				t.Fatalf("create %s/%s: %s", name, fname, st)
 			}
+		}
+	}
+}
+
+type summaryTestEngine struct {
+	engine
+	readdir func(Context, Ino, *[]*Entry) syscall.Errno
+}
+
+func (e summaryTestEngine) doGetAttr(_ Context, _ Ino, attr *Attr) syscall.Errno {
+	attr.Typ = TypeDirectory
+	return 0
+}
+
+func (e summaryTestEngine) doReaddir(ctx Context, ino Ino, _ uint8, entries *[]*Entry, _ int) syscall.Errno {
+	return e.readdir(ctx, ino, entries)
+}
+
+func TestGetSummaryChildCancellation(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		childErr     syscall.Errno
+		cancelCaller bool
+		want         syscall.Errno
+	}{
+		{name: "child error", childErr: syscall.EIO, want: syscall.EIO},
+		{name: "caller cancellation", childErr: syscall.EIO, cancelCaller: true, want: syscall.EINTR},
+		{name: "missing child", childErr: syscall.ENOENT},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newBaseMeta("", testConfig())
+			defer m.of.close()
+			m.setFormat(testFormat())
+			synctest.Test(t, func(t *testing.T) {
+				caller, cancel := context.WithCancelCause(context.Background())
+				defer cancel(nil)
+				ctx := WrapWithCancel(caller, 0, 0, []uint32{0})
+				siblingStarted := make(chan struct{})
+				finishSibling := make(chan struct{})
+				var siblingCanceled bool
+				m.en = summaryTestEngine{readdir: func(ctx Context, ino Ino, entries *[]*Entry) syscall.Errno {
+					switch ino {
+					case RootInode:
+						*entries = []*Entry{{Inode: 2, Attr: &Attr{Typ: TypeDirectory}}, {Inode: 3, Attr: &Attr{Typ: TypeDirectory}}}
+					case 2:
+						*entries = []*Entry{{Inode: 4, Attr: &Attr{Typ: TypeDirectory}}}
+					case 3:
+						close(siblingStarted)
+						select {
+						case <-ctx.Done():
+							siblingCanceled = true
+							<-finishSibling
+							return syscall.EINTR
+						case <-finishSibling:
+						}
+					case 4:
+						<-siblingStarted
+						if tc.cancelCaller {
+							<-ctx.Done()
+						}
+						return tc.childErr
+					}
+					return 0
+				}}
+
+				result := make(chan syscall.Errno, 1)
+				go func() { result <- m.GetSummary(ctx, RootInode, &Summary{}, true, true) }()
+				synctest.Wait()
+				if tc.cancelCaller {
+					cancel(syscall.EPERM)
+					synctest.Wait()
+				}
+				if want := tc.want != 0; siblingCanceled != want {
+					t.Errorf("sibling canceled = %t, want %t", siblingCanceled, want)
+				}
+				select {
+				case st := <-result:
+					close(finishSibling)
+					t.Fatalf("GetSummary returned %v before sibling exited", st)
+				default:
+				}
+				close(finishSibling)
+				if st := <-result; st != tc.want {
+					t.Errorf("GetSummary returned %v, want %v", st, tc.want)
+				}
+				if ctx.Canceled() != tc.cancelCaller {
+					t.Errorf("caller canceled = %t, want %t", ctx.Canceled(), tc.cancelCaller)
+				}
+			})
+		})
+	}
+}
+
+type summaryPollingContext struct {
+	Context
+	interrupted chan struct{}
+}
+
+func (ctx summaryPollingContext) Err() error { return syscall.EINTR }
+
+func (ctx summaryPollingContext) Canceled() bool {
+	select {
+	case <-ctx.interrupted:
+		return true
+	default:
+		return false
+	}
+}
+
+func TestGetSummaryPollingCancellation(t *testing.T) {
+	m := newBaseMeta("", testConfig())
+	defer m.of.close()
+	m.setFormat(testFormat())
+	key := CtxKey("summary-test")
+	caller := summaryPollingContext{
+		Context:     newFuseDefaultCtx(100, 200).WithValue(key, true),
+		interrupted: make(chan struct{}),
+	}
+	m.en = summaryTestEngine{readdir: func(ctx Context, _ Ino, _ *[]*Entry) syscall.Errno {
+		if ctx.Uid() != caller.Uid() || ctx.Gid() != caller.Gid() || ctx.CheckPermission() || ctx.Value(key) != true {
+			t.Error("scan context lost caller identity, permissions, or value")
+		}
+		if ctx.Canceled() || ctx.Err() != nil {
+			t.Error("scan context canceled before caller interruption")
+		}
+		close(caller.interrupted)
+		if !ctx.Canceled() {
+			t.Error("scan context missed caller interruption")
+		}
+		return 0
+	}}
+	if st := m.GetSummary(caller, RootInode, &Summary{}, true, true); st != syscall.EINTR {
+		t.Fatalf("GetSummary returned %v after caller interruption, want EINTR", st)
+	}
+}
+
+func TestGetSummaryModes(t *testing.T) {
+	m, err := newKVMeta("memkv", "jfs-summary-modes", testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Shutdown()
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatal(err)
+	}
+	createSummaryTestTree(t, m, RootInode, 2, 3)
+	m.FlushSession()
+
+	for _, strict := range []bool{true, false} {
+		for _, recursive := range []bool{true, false} {
+			t.Run(fmt.Sprintf("strict=%t/recursive=%t", strict, recursive), func(t *testing.T) {
+				want := Summary{Dirs: 3, Size: 3 * 4096}
+				if recursive {
+					want.Files = 6
+					want.Size += 6 * 4096
+				}
+				var got Summary
+				if st := m.GetSummary(Background(), RootInode, &got, recursive, strict); st != 0 || got != want {
+					t.Fatalf("GetSummary returned %+v (%v), want %+v", got, st, want)
+				}
+			})
 		}
 	}
 }
