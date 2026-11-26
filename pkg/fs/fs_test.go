@@ -1023,6 +1023,55 @@ func TestClone(t *testing.T) {
 	}
 }
 
+func TestStatDirChanged(t *testing.T) {
+	fs := createTestFS(t)
+	fs.conf.DirEntryTimeout, fs.conf.AttrTimeout = time.Hour, time.Hour
+	ctx := meta.Background()
+	for _, dir := range []string{"/src", "/dst"} {
+		if err := fs.Mkdir(ctx, dir, 0755, 0); err != 0 {
+			t.Fatalf("mkdir %s: %s", dir, err)
+		}
+	}
+	stat := func(dir string, nlink uint32) *FileStat {
+		t.Helper()
+		fi, err := fs.Stat(ctx, dir)
+		if err != 0 {
+			t.Fatalf("stat %s: %s", dir, err)
+		}
+		if fi.attr.Nlink != nlink {
+			t.Fatalf("stat %s: nlink = %d, want %d", dir, fi.attr.Nlink, nlink)
+		}
+		return fi
+	}
+	src := stat("/src", 2)
+	stat("/dst", 2)
+	if err := fs.Mkdir(ctx, "/src/sub", 0755, 0); err != 0 {
+		t.Fatalf("mkdir child: %s", err)
+	}
+	if fi := stat("/src", 3); !fi.ModTime().After(src.ModTime()) {
+		t.Fatalf("mkdir did not refresh parent mtime: %v -> %v", src.ModTime(), fi.ModTime())
+	}
+	if err := fs.Rename(ctx, "/src/sub", "/dst/sub", 0); err != 0 {
+		t.Fatalf("rename child: %s", err)
+	}
+	stat("/src", 2)
+	stat("/dst", 3)
+	if err := fs.Delete(ctx, "/dst/sub"); err != 0 {
+		t.Fatalf("delete child: %s", err)
+	}
+	dst := stat("/dst", 2)
+	f, err := fs.Create(ctx, "/dst/file", 0644, 0)
+	if err != 0 {
+		t.Fatalf("create file: %s", err)
+	}
+	if err := f.Close(ctx); err != 0 {
+		t.Fatalf("close file: %s", err)
+	}
+	if fi := stat("/dst", 2); !fi.ModTime().After(dst.ModTime()) {
+		t.Fatalf("create did not refresh parent mtime: %v -> %v", dst.ModTime(), fi.ModTime())
+	}
+}
+
 // Changes made by other clients are simulated by the metadata engine directly.
 func TestRevalidateStaleCache(t *testing.T) {
 	fs := createTestFS(t)
