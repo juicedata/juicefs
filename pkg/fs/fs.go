@@ -51,6 +51,8 @@ type Ino = meta.Ino
 type Attr = meta.Attr
 type LogContext = vfs.LogContext
 
+const maxFileSize = meta.ChunkSize << 31
+
 func IsExist(err error) bool {
 	return err == syscall.EEXIST || err == syscall.EACCES || err == syscall.EPERM
 }
@@ -1682,6 +1684,13 @@ func (f *File) Pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 }
 
 func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err syscall.Errno) {
+	size := len(b)
+	if offset < 0 {
+		return 0, syscall.EINVAL
+	}
+	if offset >= maxFileSize || int64(size) >= maxFileSize-offset {
+		return 0, syscall.EFBIG
+	}
 	if f.wdata == nil {
 		f.wdata = f.fs.writer.Open(f.inode, uint64(f.info.Size()), f.info.attr.Tier)
 	}
@@ -1691,11 +1700,11 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 		f.wdata = nil
 		return
 	}
-	if offset+int64(len(b)) > int64(f.info.attr.Length) {
-		f.info.attr.Length = uint64(offset + int64(len(b)))
+	if end := offset + int64(size); end > int64(f.info.attr.Length) {
+		f.info.attr.Length = uint64(end)
 	}
-	f.fs.writtenSizeHistogram.Observe(float64(len(b)))
-	return len(b), 0
+	f.fs.writtenSizeHistogram.Observe(float64(size))
+	return size, 0
 }
 
 func (f *File) Truncate(ctx meta.Context, length uint64) (err syscall.Errno) {

@@ -99,6 +99,15 @@ func TestFileSystem(t *testing.T) {
 	if fi, err := f.Stat(); err != nil || fi.Mode() != 0644 {
 		t.Fatalf("stat: %s %+v", err, fi)
 	}
+	if n, err := f.Pwrite(ctx, []byte("x"), -1); n != 0 || err != syscall.EINVAL {
+		t.Fatalf("pwrite at -1: got (%d, %s), want (0, EINVAL)", n, err)
+	}
+	const limit = int64(meta.ChunkSize) << 31
+	for _, off := range []int64{limit - 1, limit} {
+		if n, err := f.Pwrite(ctx, []byte("x"), off); n != 0 || err != syscall.EFBIG {
+			t.Fatalf("pwrite at %d: got (%d, %s), want (0, EFBIG)", off, n, err)
+		}
+	}
 	if n, err := f.Write(ctx, []byte("world")); err != 0 || n != 5 {
 		t.Fatalf("write 5 bytes: %d %s", n, err)
 	}

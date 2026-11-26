@@ -376,10 +376,7 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 	indx := uint32(off / meta.ChunkSize)
 	pos := uint32(off % meta.ChunkSize)
 	for len(data) > 0 {
-		n := uint32(len(data))
-		if pos+n > meta.ChunkSize {
-			n = meta.ChunkSize - pos
-		}
+		n := uint32(min(len(data), int(meta.ChunkSize-pos)))
 		if st := f.writeChunk(ctx, indx, pos, data[:n]); st != 0 {
 			return st
 		}

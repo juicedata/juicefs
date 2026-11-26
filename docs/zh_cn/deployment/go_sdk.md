@@ -164,6 +164,8 @@ JuiceFS 的日志是进程全局的，所有 `Client` 共用。设置了 `Config
 
 `*File` 提供 `*os.File` 的常用操作，包括 `Read`、`ReadAt`、`Write`、`WriteAt`、`Seek`、`Stat`、`Sync`、`Truncate`、`Chmod`、`Chown`、`ReadDir`、`Readdir`、`Readdirnames` 和 `Close`，并实现了 `io.Reader`、`io.Writer`、`io.Seeker`、`io.ReaderAt`、`io.WriterAt` 和 `fs.ReadDirFile`。`OpenFile` 支持 `O_RDONLY`、`O_WRONLY`、`O_RDWR`、`O_CREATE`、`O_EXCL`、`O_TRUNC` 和 `O_APPEND`，其他 flag 返回 `EINVAL`。
 
+非空写入的结束偏移达到或超过 128 PiB 时，返回 `EFBIG`。
+
 `Stat`、`Lstat` 和 `File.Stat` 返回的 `fs.FileInfo` 的 `Sys` 方法返回 `*juicefs.Stat`，其中包含 inode、属主、链接数和各时间戳。
 
 文件系统错误通常为包装了 `syscall.Errno` 的 `*fs.PathError` 或 `*os.LinkError`；不针对单个路径的 `ListQuota`、`Warmup`、`Status` 和 `SessionInfo` 返回 `*os.SyscallError`。请用 `errors.Is` 判断，例如 `errors.Is(err, fs.ErrNotExist)`、`errors.Is(err, syscall.ENOTDIR)`。`Client.Close` 之后，文件系统操作通常返回包装了 `fs.ErrClosed` 的错误。`Name`、`FS` 和 `Gatherer` 仍可调用；重复调用 `Client.Close` 以及调用 `RemoveAll("")` 返回 nil。
