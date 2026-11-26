@@ -104,6 +104,37 @@ func WrapWithoutCancel(ctx context.Context, pid, uid uint32, gids []uint32) Cont
 	return &wrapContext{ctx, nil, pid, uid, gids}
 }
 
+type cancelCauseContext struct {
+	Context
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+}
+
+func (c *cancelCauseContext) Done() <-chan struct{} { return c.ctx.Done() }
+func (c *cancelCauseContext) Err() error            { return c.ctx.Err() }
+func (c *cancelCauseContext) Value(key interface{}) interface{} {
+	return c.ctx.Value(key)
+}
+func (c *cancelCauseContext) Cancel() { c.cancel(nil) }
+
+func (c *cancelCauseContext) Canceled() bool {
+	if c.Err() != nil {
+		return true
+	}
+	// FUSE contexts can signal cancellation through Canceled alone.
+	if c.Context.Canceled() {
+		c.Cancel()
+		return true
+	}
+	return false
+}
+
+func (c *cancelCauseContext) WithValue(k, v interface{}) Context {
+	child := *c
+	child.ctx = context.WithValue(c.ctx, k, v)
+	return &child
+}
+
 func containsGid(ctx Context, gid uint32) bool {
 	for _, g := range ctx.Gids() {
 		if g == gid {

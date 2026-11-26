@@ -428,7 +428,28 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 	return m.getDirSummary(ctx, inode, summary, recursive, strict, concurrent, nil)
 }
 
+// summaryScanError distinguishes a scan failure from a caller's cancellation cause.
+type summaryScanError struct{ syscall.Errno }
+
 func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{}, updateProgress func(count uint64, bytes uint64)) syscall.Errno {
+	scanCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	ctx = &cancelCauseContext{Context: ctx, ctx: scanCtx, cancel: cancel}
+	st := m.doGetDirSummary(ctx, inode, summary, recursive, strict, concurrent, updateProgress, cancel)
+	if cause, ok := context.Cause(scanCtx).(summaryScanError); ok {
+		return cause.Errno
+	}
+	if ctx.Canceled() {
+		return errno(ctx.Err())
+	}
+	return st
+}
+
+func (m *baseMeta) doGetDirSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{},
+	updateProgress func(count uint64, bytes uint64), cancel context.CancelCauseFunc) syscall.Errno {
+	if ctx.Canceled() {
+		return syscall.EINTR
+	}
 	var entries []*Entry
 	var err syscall.Errno
 	format := m.getFormat()
@@ -445,10 +466,16 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 		if updateProgress != nil {
 			updateProgress(uint64(st.inodes), uint64(st.space))
 		}
+		if ctx.Canceled() {
+			return syscall.EINTR
+		}
 		var attr Attr
 		err = m.en.doGetAttr(ctx, inode, &attr)
 		if err == 0 {
 			if attr.Nlink > 2 {
+				if ctx.Canceled() {
+					return syscall.EINTR
+				}
 				err = m.en.doReaddir(ctx, inode, 0, &entries, -1)
 			} else {
 				atomic.AddUint64(&summary.Files, uint64(st.inodes))
@@ -461,7 +488,13 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
-	var errCh = make(chan syscall.Errno, 1)
+	scanChild := func(inode Ino) syscall.Errno {
+		if st := m.doGetDirSummary(ctx, inode, summary, recursive, strict, concurrent, updateProgress, cancel); st != 0 && st != syscall.ENOENT {
+			cancel(summaryScanError{st})
+			return st
+		}
+		return 0
+	}
 	for _, e := range entries {
 		if e.Attr.Typ == TypeDirectory {
 			atomic.AddUint64(&summary.Dirs, 1)
@@ -480,37 +513,24 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 		if e.Attr.Typ != TypeDirectory || !recursive {
 			continue
 		}
-		select {
-		case <-ctx.Done():
+		if ctx.Canceled() {
 			return syscall.EINTR
-		case err := <-errCh:
-			// TODO: cancel others
-			return err
+		}
+		select {
 		case concurrent <- struct{}{}:
 			wg.Add(1)
 			go func(e *Entry) {
 				defer wg.Done()
-				err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress)
-				<-concurrent
-				if err != 0 && err != syscall.ENOENT {
-					select {
-					case errCh <- err:
-					default:
-					}
-				}
+				defer func() { <-concurrent }()
+				_ = scanChild(e.Inode)
 			}(e)
 		default:
-			if err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress); err != 0 && err != syscall.ENOENT {
-				return err
+			if st := scanChild(e.Inode); st != 0 {
+				return st
 			}
 		}
 	}
-	wg.Wait()
-	select {
-	case err = <-errCh:
-	default:
-	}
-	return err
+	return 0
 }
 
 func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, sortBy TreeSort,

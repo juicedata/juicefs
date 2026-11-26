@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -27,6 +28,160 @@ func createSummaryTestTree(t *testing.T, m Meta, parent Ino, dirs, filesPerDir i
 				t.Fatalf("create %s/%s: %s", name, fname, st)
 			}
 		}
+	}
+}
+
+type summaryTestEngine struct {
+	engine
+	readdir func(Context, Ino, *[]*Entry) syscall.Errno
+}
+
+func (e summaryTestEngine) doGetAttr(_ Context, _ Ino, attr *Attr) syscall.Errno {
+	attr.Typ = TypeDirectory
+	return 0
+}
+
+func (e summaryTestEngine) doReaddir(ctx Context, ino Ino, _ uint8, entries *[]*Entry, _ int) syscall.Errno {
+	return e.readdir(ctx, ino, entries)
+}
+
+func newSummaryTestMeta(t *testing.T, readdir func(Context, Ino, *[]*Entry) syscall.Errno) *baseMeta {
+	t.Helper()
+	m := newBaseMeta("", testConfig())
+	t.Cleanup(m.of.close)
+	m.setFormat(testFormat())
+	m.en = summaryTestEngine{readdir: readdir}
+	return m
+}
+
+func TestGetSummaryChildCancellation(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		childErr, want syscall.Errno
+	}{
+		{"child error", syscall.EACCES, syscall.EACCES},
+		{"missing child", syscall.ENOENT, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				const branch, sibling, failing = Ino(2), Ino(3), Ino(4)
+				caller := Background()
+				defer caller.Cancel()
+				started := make(chan struct{})
+				release := make(chan struct{})
+				var siblingCanceled bool
+				m := newSummaryTestMeta(t, func(ctx Context, ino Ino, entries *[]*Entry) syscall.Errno {
+					switch ino {
+					case RootInode:
+						*entries = []*Entry{{Inode: branch, Attr: &Attr{Typ: TypeDirectory}}, {Inode: sibling, Attr: &Attr{Typ: TypeDirectory}}}
+					case branch:
+						*entries = []*Entry{{Inode: failing, Attr: &Attr{Typ: TypeDirectory}}}
+					case failing:
+						<-started
+						return tc.childErr
+					case sibling:
+						close(started)
+						select {
+						case <-ctx.Done():
+							siblingCanceled = true
+							<-release
+							return syscall.EINTR
+						case <-release:
+						}
+					}
+					return 0
+				})
+
+				result := make(chan syscall.Errno, 1)
+				go func() { result <- m.GetSummary(caller, RootInode, &Summary{}, true, true) }()
+				synctest.Wait()
+				if siblingCanceled != (tc.want != 0) {
+					t.Errorf("sibling canceled = %t, want %t", siblingCanceled, tc.want != 0)
+				}
+				select {
+				case st := <-result:
+					close(release)
+					t.Fatalf("GetSummary returned %v before sibling exited", st)
+				default:
+				}
+				close(release)
+				if st := <-result; st != tc.want {
+					t.Errorf("GetSummary returned %v, want %v", st, tc.want)
+				}
+				if caller.Canceled() {
+					t.Error("GetSummary canceled caller context")
+				}
+			})
+		})
+	}
+}
+
+func TestGetSummaryCallerCancellation(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		newContext func() (context.Context, context.CancelFunc)
+		want       syscall.Errno
+	}{
+		{"cancel", func() (context.Context, context.CancelFunc) {
+			ctx, cancel := context.WithCancelCause(context.Background())
+			return ctx, func() { cancel(syscall.EPERM) }
+		}, syscall.EINTR},
+		{"timeout", func() (context.Context, context.CancelFunc) {
+			return context.WithTimeout(context.Background(), time.Second)
+		}, syscall.ETIMEDOUT},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				parent, cancel := tc.newContext()
+				defer cancel()
+				caller := WrapWithCancel(parent, 0, 0, []uint32{0})
+				defer caller.Cancel()
+				m := newSummaryTestMeta(t, func(ctx Context, ino Ino, entries *[]*Entry) syscall.Errno {
+					if ino == RootInode {
+						*entries = []*Entry{{Inode: 2, Attr: &Attr{Typ: TypeDirectory}}}
+						return 0
+					}
+					if tc.want == syscall.EINTR {
+						cancel()
+					}
+					<-ctx.Done()
+					return syscall.EACCES
+				})
+				if st := m.GetSummary(caller, RootInode, &Summary{}, true, true); st != tc.want {
+					t.Errorf("GetSummary returned %v, want %v", st, tc.want)
+				}
+			})
+		})
+	}
+}
+
+type summaryPollingContext struct {
+	Context
+	interrupted bool
+}
+
+func (ctx *summaryPollingContext) Err() error     { return syscall.EINTR }
+func (ctx *summaryPollingContext) Canceled() bool { return ctx.interrupted }
+
+func TestGetSummaryPollingCancellation(t *testing.T) {
+	caller := &summaryPollingContext{Context: newFuseDefaultCtx(100, 200)}
+	m := newSummaryTestMeta(t, func(ctx Context, _ Ino, _ *[]*Entry) syscall.Errno {
+		if ctx.Canceled() || ctx.Err() != nil {
+			t.Error("scan context canceled before caller interruption")
+		}
+		caller.interrupted = true
+		if !ctx.Canceled() {
+			t.Error("scan context missed caller interruption")
+		}
+		select {
+		case <-ctx.Done():
+		default:
+			t.Error("scan context Done is still open")
+		}
+		return 0
+	})
+	if st := m.GetSummary(caller, RootInode, &Summary{}, true, true); st != syscall.EINTR {
+		t.Fatalf("GetSummary returned %v after caller interruption, want EINTR", st)
 	}
 }
 
