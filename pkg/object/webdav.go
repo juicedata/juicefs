@@ -43,6 +43,12 @@ func (w *webdav) String() string {
 	return fmt.Sprintf("webdav://%s/", w.endpoint.Host)
 }
 
+func (w *webdav) Limits() Limits {
+	l := w.DefaultObjectStorage.Limits()
+	l.PutInplace = true
+	return l
+}
+
 func (w *webdav) Create(ctx context.Context) error {
 	return nil
 }

@@ -48,6 +48,12 @@ func (c *ceph) String() string {
 	return fmt.Sprintf("ceph://%s/", c.name)
 }
 
+func (c *ceph) Limits() Limits {
+	l := c.DefaultObjectStorage.Limits()
+	l.PutInplace = true
+	return l
+}
+
 func (c *ceph) Shutdown() {
 	c.conn.Shutdown()
 }
