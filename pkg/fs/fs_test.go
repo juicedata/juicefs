@@ -233,6 +233,15 @@ func TestFileSystem(t *testing.T) {
 	if e := fs.Rename(ctx, "/hello", "/d/f", 0); e != 0 {
 		t.Fatalf("rename: %s", e)
 	}
+	if _, err := d.Seek(ctx, 0, io.SeekStart); err != nil {
+		t.Fatalf("seek /: %s", err)
+	}
+	if fis, e := d.Readdir(ctx, 0); e != 0 || len(fis) != 1 || fis[0].Name() != "d" {
+		t.Fatalf("readdir after seek: %s, %+v", e, fis)
+	}
+	if es, e := d.ReaddirPlus(ctx, 0); e != 0 || len(es) != 1 || string(es[0].Name) != "d" {
+		t.Fatalf("readdirplus after seek: %s, %+v", e, es)
+	}
 	if e := fs.Symlink(ctx, "d", "/sd"); e != 0 {
 		t.Fatalf("symlink: %s", e)
 	}

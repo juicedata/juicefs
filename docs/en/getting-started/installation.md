@@ -233,7 +233,7 @@ For details, see [Using JuiceFS on WSL](../tutorials/juicefs_on_wsl.md).
 
 ### macOS {#macos}
 
-Since macOS does not support the FUSE interface by default, you need to install [macFUSE](https://osxfuse.github.io) to enable FUSE mounting. If FUSE mounting is not your primary use case, installing macFUSE is not required. You can also conveniently read and write data using JuiceFS through [WebDAV](../deployment/webdav.md), [Gateway](../guide/gateway.md), or the [Python SDK](../deployment/python_sdk.md).
+Since macOS does not support the FUSE interface by default, you need to install [macFUSE](https://osxfuse.github.io) to enable FUSE mounting. If FUSE mounting is not your primary use case, installing macFUSE is not required. You can also conveniently read and write data using JuiceFS through [WebDAV](../deployment/webdav.md), [Gateway](../guide/gateway.md), the [Python SDK](../deployment/python_sdk.md), or the [Go SDK](../deployment/go_sdk.md).
 
 :::tip
 [macFUSE](https://github.com/osxfuse/osxfuse) is an open source file system enhancement tool that allows macOS to mount third-party file systems. It enables JuiceFS clients to mount file systems on macOS systems.

@@ -246,7 +246,7 @@ scoop install juicefs
 
 ### macOS 系统 {#macos}
 
-由于 macOS 默认不支持 FUSE 接口，需要安装 [macFUSE](https://osxfuse.github.io) 才能实现 FUSE 挂载。如果 FUSE 挂载不是你的主要使用场景，则无需安装 macFUSE。通过使用 JuiceFS 的 [WebDAV](../deployment/webdav.md)、[Gateway](../guide/gateway.md)、[Python SDK](../deployment/python_sdk.md) 等访问方式也能方便地读写数据。
+由于 macOS 默认不支持 FUSE 接口，需要安装 [macFUSE](https://osxfuse.github.io) 才能实现 FUSE 挂载。如果 FUSE 挂载不是你的主要使用场景，则无需安装 macFUSE。通过使用 JuiceFS 的 [WebDAV](../deployment/webdav.md)、[Gateway](../guide/gateway.md)、[Python SDK](../deployment/python_sdk.md)、[Go SDK](../deployment/go_sdk.md) 等访问方式也能方便地读写数据。
 
 :::tip 提示
 [macFUSE](https://github.com/osxfuse/osxfuse) 是一个开源的文件系统增强工具，它让 macOS 可以挂载第三方的文件系统，使得 JuiceFS 客户端可以将文件系统挂载到 macOS 系统中使用。
