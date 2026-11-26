@@ -115,7 +115,9 @@ func changelog(ctx *cli.Context) error {
 	}
 
 	opt := &meta.ChangelogScanOption{From: ctx.Int64("from"), Follow: ctx.Bool("follow")}
-	return m.ScanChangelog(meta.WrapContext(ctx.Context), opt, func(ver int64, entry string) error {
+	scanCtx := meta.WrapWithCancel(ctx.Context, 0, 0, []uint32{0})
+	defer scanCtx.Cancel()
+	return m.ScanChangelog(scanCtx, opt, func(ver int64, entry string) error {
 		fmt.Printf("%d: %s\n", ver, entry)
 		return nil
 	})
@@ -141,7 +143,7 @@ func changelogReplay(ctx *cli.Context) (err error) {
 	dryRun := ctx.Bool("dry-run")
 	signalCtx, stop := signal.NotifyContext(ctx.Context, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	scanCtx := meta.WrapContext(signalCtx)
+	scanCtx := meta.WrapWithCancel(signalCtx, 0, 0, []uint32{0})
 	defer scanCtx.Cancel()
 	var replayer *meta.Replayer
 	var progress *meta.ReplayProgress
@@ -212,7 +214,7 @@ func changelogReplay(ctx *cli.Context) (err error) {
 
 	logger.Infof("Start changelog replay: from=%d follow=%t dry-run=%t", opt.From, opt.Follow, dryRun)
 	lastVersion := opt.From
-	replayCtx := meta.WrapContext(context.WithoutCancel(signalCtx))
+	replayCtx := meta.WrapWithCancel(context.WithoutCancel(signalCtx), 0, 0, []uint32{0})
 	defer replayCtx.Cancel()
 	err = src.ScanChangelog(scanCtx, opt, func(ver int64, entry string) error {
 		if err := scanCtx.Err(); err != nil {

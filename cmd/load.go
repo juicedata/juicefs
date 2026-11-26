@@ -237,7 +237,9 @@ func load(ctx *cli.Context) error {
 				bars[name].IncrBy(cnt)
 			},
 		}
-		if err := m.LoadMetaV2(meta.WrapContext(ctx.Context), r, opt); err != nil {
+		loadCtx := meta.WrapWithCancel(ctx.Context, 0, 0, []uint32{0})
+		defer loadCtx.Cancel()
+		if err := m.LoadMetaV2(loadCtx, r, opt); err != nil {
 			return err
 		}
 		progress.Done()

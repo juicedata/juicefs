@@ -6017,7 +6017,9 @@ func (m *dbMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		return errno(err)
 	}
 	rmConcurrent := make(chan int, backgroundDeleteThreads)
-	if eno := m.emptyDir(withIgnoredAttrFlags(ctx), ino, true, nil, rmConcurrent); eno != 0 {
+	rmCtx := WrapWithCancel(ctx, ctx.Pid(), ctx.Uid(), ctx.Gids()) // emptyDir cancels it on failure
+	defer rmCtx.Cancel()
+	if eno := m.emptyDir(withIgnoredAttrFlags(rmCtx), ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}
 	m.updateStats(-align4K(0), -1)

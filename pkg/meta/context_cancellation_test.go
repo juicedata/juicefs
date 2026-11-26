@@ -192,3 +192,18 @@ func TestBadgerKVTxnReturnsEINTRWhenContextAlreadyCanceled(t *testing.T) {
 		t.Fatalf("expected EINTR, got %v", err)
 	}
 }
+
+func TestWrapContextEmptyGids(t *testing.T) {
+	for name, ctx := range map[string]Context{
+		"NewContext nil":          NewContext(1, 100, nil),
+		"WrapWithCancel empty":    WrapWithCancel(context.Background(), 1, 100, []uint32{}),
+		"WrapWithoutCancel empty": WrapWithoutCancel(context.Background(), 1, 100, nil),
+	} {
+		t.Run(name, func(t *testing.T) {
+			defer ctx.Cancel()
+			if got := ctx.Gid(); got != 0 {
+				t.Fatalf("Gid() = %d, want 0", got)
+			}
+		})
+	}
+}
