@@ -29,8 +29,9 @@ import (
 )
 
 const (
-	whiteoutPrefix = ".wh."
-	opaqueMarker   = ".wh..wh..opq"
+	whiteoutPrefix  = ".wh."
+	opaqueMarker    = ".wh..wh..opq"
+	maxDirCacheSize = 8192
 )
 
 func isWhiteoutName(name string) bool {
@@ -76,7 +77,8 @@ type overlayMeta struct {
 	mu         sync.Mutex
 	copyUpMap  map[Ino]Ino // lowerIno -> upperIno (only for nodes copied-up/renamed during this mount)
 	revCopyUp  map[Ino]Ino // upperIno -> lowerIno (preserves exposed st_ino after copy-up/rename)
-	copyUpLock sync.Mutex  // serializes copy-up / ensureUpperDir mutations
+	dirCache   map[Ino]*ovDir
+	copyUpLock sync.Mutex // serializes copy-up / ensureUpperDir mutations
 }
 
 var _ Meta = (*overlayMeta)(nil)
@@ -170,6 +172,7 @@ func NewOverlayMeta(ctx Context, base Meta, upperSubdir string, lowerDirs []stri
 		lowerRootSet:  lowerRootSet,
 		copyUpMap:     make(map[Ino]Ino),
 		revCopyUp:     make(map[Ino]Ino),
+		dirCache:      make(map[Ino]*ovDir),
 	}
 	return om, nil
 }
@@ -264,6 +267,22 @@ func (m *overlayMeta) unbindCopyUpLocked(exposedIno Ino) {
 	}
 }
 
+func (m *overlayMeta) putDirCacheLocked(ino Ino, d *ovDir) {
+	if len(m.dirCache) >= maxDirCacheSize {
+		m.dirCache = make(map[Ino]*ovDir)
+	}
+	cp := *d
+	m.dirCache[ino] = &cp
+}
+
+func (m *overlayMeta) invalidateDirSubtreeLocked(relPrefix string) {
+	for k, d := range m.dirCache {
+		if k != RootInode && (relPrefix == "" || d.relPath == relPrefix || strings.HasPrefix(d.relPath, relPrefix+"/")) {
+			delete(m.dirCache, k)
+		}
+	}
+}
+
 func (m *overlayMeta) lookupRaw(ctx Context, parent Ino, name string) (Ino, Attr, bool, syscall.Errno) {
 	var ino Ino
 	var attr Attr
@@ -341,6 +360,14 @@ func (m *overlayMeta) extractRelPath(volPath string) (rel string, isUpper bool, 
 
 // getDir resolves an exposed directory inode to its merged upper/lower *ovDir view.
 func (m *overlayMeta) getDir(ctx Context, dirIno Ino) (*ovDir, syscall.Errno) {
+	m.mu.Lock()
+	if d, ok := m.dirCache[dirIno]; ok {
+		cp := *d
+		m.mu.Unlock()
+		return &cp, 0
+	}
+	m.mu.Unlock()
+
 	if dirIno == RootInode {
 		rootOpaque := false
 		if m.upperRootIno != 0 {
@@ -348,13 +375,17 @@ func (m *overlayMeta) getDir(ctx Context, dirIno Ino) (*ovDir, syscall.Errno) {
 				rootOpaque = true
 			}
 		}
-		return &ovDir{
+		d := &ovDir{
 			ino:       RootInode,
 			relPath:   "",
 			upperIno:  m.upperRootIno,
 			lowerInos: m.lowerRootInos,
 			opaque:    rootOpaque,
-		}, 0
+		}
+		m.mu.Lock()
+		m.putDirCacheLocked(RootInode, d)
+		m.mu.Unlock()
+		return d, 0
 	}
 
 	active := m.resolveActiveIno(dirIno)
@@ -430,13 +461,17 @@ func (m *overlayMeta) buildDirByRelPath(ctx Context, exposedIno Ino, relPath str
 		opaque = nextOpaque
 	}
 
-	return &ovDir{
+	d := &ovDir{
 		ino:       exposedIno,
 		relPath:   relPath,
 		upperIno:  curUpper,
 		lowerInos: curLowers,
 		opaque:    opaque,
-	}, 0
+	}
+	m.mu.Lock()
+	m.putDirCacheLocked(exposedIno, d)
+	m.mu.Unlock()
+	return d, 0
 }
 
 func (m *overlayMeta) ensureUpperDirByPath(ctx Context, relPath string) (Ino, syscall.Errno) {
@@ -491,6 +526,8 @@ func (m *overlayMeta) ensureUpperDirByPath(ctx Context, relPath string) (Ino, sy
 				if _, hasRev := m.revCopyUp[ino]; !hasRev {
 					m.bindCopyUpLocked(nextLowers[0], ino)
 				}
+				delete(m.dirCache, nextLowers[0])
+				delete(m.dirCache, ino)
 				m.mu.Unlock()
 			}
 		}
@@ -523,6 +560,9 @@ func (m *overlayMeta) ensureUpperDir(ctx Context, dir *ovDir) (Ino, syscall.Errn
 	}
 	m.mu.Lock()
 	m.bindCopyUpLocked(dir.ino, upperIno)
+	updated := *dir
+	updated.upperIno = upperIno
+	m.putDirCacheLocked(dir.ino, &updated)
 	m.mu.Unlock()
 	return upperIno, 0
 }
@@ -1159,6 +1199,7 @@ func (m *overlayMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash
 	}
 
 	m.mu.Lock()
+	delete(m.dirCache, childIno)
 	m.unbindCopyUpLocked(childIno)
 	m.mu.Unlock()
 	return 0
@@ -1257,12 +1298,17 @@ func (m *overlayMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		}
 	}
 
-	if srcAttr.Typ == TypeDirectory && !srcDir.opaque && !dstParent.opaque && len(dstParent.lowerInos) > 0 {
-		if _, _, la, ok, err := m.lookupInLowers(ctx, dstParent.lowerInos, nameDst); err == 0 && ok && la.Typ == TypeDirectory {
-			if st = m.createOpaque(realIno); st != 0 {
-				return st
+	if srcAttr.Typ == TypeDirectory {
+		if !srcDir.opaque && !dstParent.opaque && len(dstParent.lowerInos) > 0 {
+			if _, _, la, ok, err := m.lookupInLowers(ctx, dstParent.lowerInos, nameDst); err == 0 && ok && la.Typ == TypeDirectory {
+				if st = m.createOpaque(realIno); st != 0 {
+					return st
+				}
 			}
 		}
+		m.mu.Lock()
+		m.invalidateDirSubtreeLocked(srcDir.relPath)
+		m.mu.Unlock()
 	}
 
 	if inode != nil {
@@ -1373,6 +1419,7 @@ func (m *overlayMeta) renameLowerDir(
 	// Keep srcDir.ino mapped to dstDirIno: FUSE rename does not return a new inode number,
 	// so the kernel continues referencing the renamed directory via srcDir.ino.
 	m.mu.Lock()
+	m.invalidateDirSubtreeLocked(srcDir.relPath)
 	m.bindCopyUpLocked(srcDir.ino, dstDirIno)
 	m.mu.Unlock()
 
