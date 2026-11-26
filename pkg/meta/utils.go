@@ -522,7 +522,7 @@ func (m *baseMeta) doGetDirSummary(ctx Context, inode Ino, summary *Summary, rec
 			go func(e *Entry) {
 				defer wg.Done()
 				defer func() { <-concurrent }()
-				scanChild(e.Inode)
+				_ = scanChild(e.Inode)
 			}(e)
 		default:
 			if st := scanChild(e.Inode); st != 0 {
