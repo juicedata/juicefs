@@ -302,12 +302,13 @@ func TestRetryUnfinished(t *testing.T) {
 	}
 
 	t.Run("retry lost and failed keys", func(t *testing.T) {
-		src, dst, mgr, config := setup("retry-unfinished", 4, 0)
+		// 2 of 10 unfinished, at the 20% limit
+		src, dst, mgr, config := setup("retry-unfinished", 10, 0)
 		add(t, src, mgr, "done", "done2", "lost", "fail")
 		mgr.MarkCompleted("done")
 		mgr.MarkCompleted("done2")
 		mgr.MarkFailed("fail")
-		handled.IncrInt64(3) // done, done2 and fail were handled
+		handled.IncrInt64(9) // all but lost were handled
 		failed.Increment()
 
 		retryUnfinished(src, dst, config, mgr, 0)
@@ -325,8 +326,9 @@ func TestRetryUnfinished(t *testing.T) {
 		}
 	})
 
-	t.Run("give up when more than half unfinished", func(t *testing.T) {
-		src, dst, mgr, config := setup("retry-unfinished-giveup", 3, 0)
+	t.Run("give up when more than 20% unfinished", func(t *testing.T) {
+		// 2 of 9 unfinished
+		src, dst, mgr, config := setup("retry-unfinished-giveup", 9, 0)
 		add(t, src, mgr, "done", "lost", "fail")
 		mgr.MarkCompleted("done")
 		mgr.MarkFailed("fail")
@@ -344,12 +346,12 @@ func TestRetryUnfinished(t *testing.T) {
 	})
 
 	t.Run("failed again", func(t *testing.T) {
-		src, dst, mgr, config := setup("retry-unfinished-again", 4, 0)
+		src, dst, mgr, config := setup("retry-unfinished-again", 10, 0)
 		add(t, src, mgr, "done", "done2", "lost", "fail")
 		mgr.MarkCompleted("done")
 		mgr.MarkCompleted("done2")
 		mgr.MarkFailed("fail")
-		handled.IncrInt64(3)
+		handled.IncrInt64(9)
 		failed.Increment()
 
 		retryUnfinished(src, failPutStore{dst}, config, mgr, 0)
@@ -368,11 +370,12 @@ func TestRetryUnfinished(t *testing.T) {
 	})
 
 	t.Run("give up based on objects in this run when resumed", func(t *testing.T) {
-		src, dst, mgr, config := setup("retry-unfinished-resumed", 4, 6)
-		add(t, src, mgr, "done", "lost", "lost2", "fail")
+		// 2 of 5 unfinished in this run, but only 2 of 11 including the resumed ones
+		src, dst, mgr, config := setup("retry-unfinished-resumed", 5, 6)
+		add(t, src, mgr, "done", "lost", "fail")
 		mgr.MarkCompleted("done")
 		mgr.MarkFailed("fail")
-		handled.IncrInt64(2)
+		handled.IncrInt64(4)
 		failed.Increment()
 
 		retryUnfinished(src, dst, config, mgr, 6)
@@ -384,14 +387,14 @@ func TestRetryUnfinished(t *testing.T) {
 
 	t.Run("skip when writing in place", func(t *testing.T) {
 		for name, inplace := range map[string]bool{"inplace": true, "backend": false} {
-			src, dst, mgr, config := setup("retry-unfinished-skip-"+name, 2, 0)
+			src, dst, mgr, config := setup("retry-unfinished-skip-"+name, 5, 0)
 			config.Inplace = inplace
 			if name == "backend" {
 				dst = object.WithPrefix(inplaceStore{dst}, "sub/")
 			}
 			add(t, src, mgr, "done", "lost")
 			mgr.MarkCompleted("done")
-			handled.IncrInt64(1)
+			handled.IncrInt64(4)
 
 			retryUnfinished(src, dst, config, mgr, 0)
 
@@ -402,11 +405,11 @@ func TestRetryUnfinished(t *testing.T) {
 	})
 
 	t.Run("retry with delete-src-after", func(t *testing.T) {
-		src, dst, mgr, config := setup("retry-unfinished-delete-src-after", 2, 0)
+		src, dst, mgr, config := setup("retry-unfinished-delete-src-after", 5, 0)
 		config.DeleteSrcAfter = true
 		add(t, src, mgr, "done", "lost")
 		mgr.MarkCompleted("done")
-		handled.IncrInt64(1)
+		handled.IncrInt64(4)
 
 		retryUnfinished(src, dst, config, mgr, 0)
 

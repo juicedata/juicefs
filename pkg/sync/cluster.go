@@ -363,7 +363,7 @@ func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *Che
 
 // retryUnfinished runs once all workers have exited. Pending keys left in the checkpoint
 // were dispatched but never acknowledged (e.g. the worker was lost), so retry them together
-// with the failed keys once, unless they exceed half of the objects in this run.
+// with the failed keys once, unless they exceed 20% of the objects in this run.
 // resumed is the number of objects handled by previous runs.
 func retryUnfinished(src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager, resumed int64) {
 	objs, nFailed := checkpointMgr.unfinishedObjects()
@@ -378,7 +378,7 @@ func retryUnfinished(src, dst object.ObjectStorage, config *Config, checkpointMg
 	}
 	incrHandled(0)
 	total := handled.GetTotal() - resumed
-	if int64(len(objs))*2 > total {
+	if int64(len(objs))*5 > total {
 		logger.Warnf("Too many unfinished objects (%d of %d, %d failed) to retry, please run sync again", len(objs), total, nFailed)
 		return
 	}

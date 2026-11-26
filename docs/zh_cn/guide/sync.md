@@ -255,7 +255,7 @@ juicefs sync --enable-checkpoint --checkpoint-interval 30s SRC DST
 
 checkpoint 文件会以 `.juicefs-sync-checkpoint.<hash>.json` 这样的隐藏对象保存在目标存储中。同步任务成功结束后，JuiceFS 会自动删除该文件；如果进程中断、重启或存在同步失败的对象，checkpoint 会保留下来供下次运行继续使用。
 
-在[分布式同步](#distributed-sync)模式下，所有 worker 退出后，manager 会自行将失败的对象和未被确认完成的对象（例如失联 worker 手中的对象）重试一次。如果这些对象超过本次运行对象数的一半，或者目标端是直接写入（使用了 `--inplace`，或者目标是直接写入的后端，如 GlusterFS、Ceph、WebDAV），则跳过重试，保留 checkpoint 供下次运行继续。后者是因为失联的 worker 可能仍在复制同样的对象，可能在重试成功后又留下不完整的对象。
+在[分布式同步](#distributed-sync)模式下，所有 worker 退出后，manager 会自行将失败的对象和未被确认完成的对象（例如失联 worker 手中的对象）重试一次。如果这些对象超过本次运行对象数的 20%，或者目标端是直接写入（使用了 `--inplace`，或者目标是直接写入的后端，如 GlusterFS、Ceph、WebDAV），则跳过重试，保留 checkpoint 供下次运行继续。后者是因为失联的 worker 可能仍在复制同样的对象，可能在重试成功后又留下不完整的对象。
 
 如果需要忽略已有 checkpoint，从头开始同步，可以使用 `--checkpoint-force-reset`：
 
