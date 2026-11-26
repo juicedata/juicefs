@@ -4209,6 +4209,21 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("test dir usage rename dst: %v", err)
 	}
 
+	for _, strict := range []bool{true, false} {
+		for _, tc := range []struct {
+			recursive bool
+			want      Summary
+		}{
+			{false, Summary{Dirs: 2, Files: 1, Length: 4097, Size: 4 * 4096}},
+			{true, Summary{Dirs: 2, Files: 2, Length: 2 * 4097, Size: 6 * 4096}},
+		} {
+			var got Summary
+			if st := m.GetSummary(Background(), testInode, &got, tc.recursive, strict); st != 0 || got != tc.want {
+				t.Fatalf("GetSummary(recursive=%t, strict=%t) returned %+v (%v), want %+v", tc.recursive, strict, got, st, tc.want)
+			}
+		}
+	}
+
 	// test unlink
 	if st := m.Unlink(Background(), testInode, "file"); st != 0 {
 		t.Fatalf("unlink: %s", st)
