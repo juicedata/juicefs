@@ -33,12 +33,21 @@ func createSummaryTestTree(t *testing.T, m Meta, parent Ino, dirs, filesPerDir i
 
 type summaryTestEngine struct {
 	engine
-	readdir func(Context, Ino, *[]*Entry) syscall.Errno
+	readdir    func(Context, Ino, *[]*Entry) syscall.Errno
+	getDirStat func(Context, Ino) (*dirStat, syscall.Errno)
 }
 
 func (e summaryTestEngine) doGetAttr(_ Context, _ Ino, attr *Attr) syscall.Errno {
 	attr.Typ = TypeDirectory
+	attr.Nlink = 3
 	return 0
+}
+
+func (e summaryTestEngine) doGetDirStat(ctx Context, ino Ino, _ bool) (*dirStat, syscall.Errno) {
+	if e.getDirStat != nil {
+		return e.getDirStat(ctx, ino)
+	}
+	return &dirStat{}, 0
 }
 
 func (e summaryTestEngine) doReaddir(ctx Context, ino Ino, _ uint8, entries *[]*Entry, _ int) syscall.Errno {
@@ -47,56 +56,98 @@ func (e summaryTestEngine) doReaddir(ctx Context, ino Ino, _ uint8, entries *[]*
 
 func TestGetSummaryChildCancellation(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		childErr     syscall.Errno
-		cancelCaller bool
-		want         syscall.Errno
+		name          string
+		strict        bool
+		childErr      syscall.Errno
+		cancelCaller  bool
+		timeoutCaller bool
+		want          syscall.Errno
 	}{
-		{name: "child error", childErr: syscall.EIO, want: syscall.EIO},
-		{name: "caller cancellation", childErr: syscall.EIO, cancelCaller: true, want: syscall.EINTR},
-		{name: "missing child", childErr: syscall.ENOENT},
+		{name: "child error strict", strict: true, childErr: syscall.EIO, want: syscall.EIO},
+		{name: "child error dir stats", strict: false, childErr: syscall.EIO, want: syscall.EIO},
+		{name: "caller cancellation", strict: true, childErr: syscall.EIO, cancelCaller: true, want: syscall.EINTR},
+		{name: "caller timeout", strict: true, childErr: syscall.EIO, timeoutCaller: true, want: syscall.ETIMEDOUT},
+		{name: "missing child", strict: true, childErr: syscall.ENOENT},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := newBaseMeta("", testConfig())
 			defer m.of.close()
 			m.setFormat(testFormat())
 			synctest.Test(t, func(t *testing.T) {
-				caller, cancel := context.WithCancelCause(context.Background())
-				defer cancel(nil)
+				var caller context.Context
+				var cancelCause context.CancelCauseFunc
+				if tc.timeoutCaller {
+					var cancel context.CancelFunc
+					caller, cancel = context.WithTimeout(context.Background(), time.Second)
+					defer cancel()
+				} else {
+					caller, cancelCause = context.WithCancelCause(context.Background())
+					defer cancelCause(nil)
+				}
 				ctx := WrapWithCancel(caller, 0, 0, []uint32{0})
 				siblingStarted := make(chan struct{})
 				finishSibling := make(chan struct{})
 				var siblingCanceled bool
-				m.en = summaryTestEngine{readdir: func(ctx Context, ino Ino, entries *[]*Entry) syscall.Errno {
+				handleNode := func(ctx Context, ino Ino) (bool, syscall.Errno) {
 					switch ino {
-					case RootInode:
-						*entries = []*Entry{{Inode: 2, Attr: &Attr{Typ: TypeDirectory}}, {Inode: 3, Attr: &Attr{Typ: TypeDirectory}}}
-					case 2:
-						*entries = []*Entry{{Inode: 4, Attr: &Attr{Typ: TypeDirectory}}}
 					case 3:
 						close(siblingStarted)
 						select {
 						case <-ctx.Done():
 							siblingCanceled = true
 							<-finishSibling
-							return syscall.EINTR
+							return true, syscall.EINTR
 						case <-finishSibling:
+							return true, 0
 						}
 					case 4:
 						<-siblingStarted
-						if tc.cancelCaller {
+						if tc.cancelCaller || tc.timeoutCaller {
 							<-ctx.Done()
 						}
-						return tc.childErr
+						return true, tc.childErr
+					default:
+						return false, 0
 					}
-					return 0
-				}}
+				}
+				m.en = summaryTestEngine{
+					getDirStat: func(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
+						if !tc.strict {
+							if handled, st := handleNode(ctx, ino); handled {
+								if st != 0 {
+									return nil, st
+								}
+								return &dirStat{}, 0
+							}
+						}
+						return &dirStat{}, 0
+					},
+					readdir: func(ctx Context, ino Ino, entries *[]*Entry) syscall.Errno {
+						switch ino {
+						case RootInode:
+							*entries = []*Entry{{Inode: 2, Attr: &Attr{Typ: TypeDirectory}}, {Inode: 3, Attr: &Attr{Typ: TypeDirectory}}}
+							return 0
+						case 2:
+							*entries = []*Entry{{Inode: 4, Attr: &Attr{Typ: TypeDirectory}}}
+							return 0
+						}
+						if tc.strict {
+							if handled, st := handleNode(ctx, ino); handled {
+								return st
+							}
+						}
+						return 0
+					},
+				}
 
 				result := make(chan syscall.Errno, 1)
-				go func() { result <- m.GetSummary(ctx, RootInode, &Summary{}, true, true) }()
+				go func() { result <- m.GetSummary(ctx, RootInode, &Summary{}, true, tc.strict) }()
 				synctest.Wait()
 				if tc.cancelCaller {
-					cancel(syscall.EPERM)
+					cancelCause(syscall.EPERM)
+					synctest.Wait()
+				} else if tc.timeoutCaller {
+					time.Sleep(time.Second)
 					synctest.Wait()
 				}
 				if want := tc.want != 0; siblingCanceled != want {
@@ -112,8 +163,9 @@ func TestGetSummaryChildCancellation(t *testing.T) {
 				if st := <-result; st != tc.want {
 					t.Errorf("GetSummary returned %v, want %v", st, tc.want)
 				}
-				if ctx.Canceled() != tc.cancelCaller {
-					t.Errorf("caller canceled = %t, want %t", ctx.Canceled(), tc.cancelCaller)
+				wantCallerCanceled := tc.cancelCaller || tc.timeoutCaller
+				if ctx.Canceled() != wantCallerCanceled {
+					t.Errorf("caller canceled = %t, want %t", ctx.Canceled(), wantCallerCanceled)
 				}
 			})
 		})

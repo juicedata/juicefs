@@ -112,8 +112,10 @@ type cancelCauseContext struct {
 
 func (c *cancelCauseContext) Done() <-chan struct{} { return c.ctx.Done() }
 func (c *cancelCauseContext) Err() error            { return c.ctx.Err() }
-func (c *cancelCauseContext) Value(key any) any     { return c.ctx.Value(key) }
-func (c *cancelCauseContext) Cancel()               { c.cancel(nil) }
+func (c *cancelCauseContext) Value(key interface{}) interface{} {
+	return c.ctx.Value(key)
+}
+func (c *cancelCauseContext) Cancel() { c.cancel(nil) }
 
 func (c *cancelCauseContext) Canceled() bool {
 	if c.Err() != nil {
@@ -127,7 +129,7 @@ func (c *cancelCauseContext) Canceled() bool {
 	return false
 }
 
-func (c *cancelCauseContext) WithValue(k, v any) Context {
+func (c *cancelCauseContext) WithValue(k, v interface{}) Context {
 	child := *c
 	child.ctx = context.WithValue(c.ctx, k, v)
 	return &child
