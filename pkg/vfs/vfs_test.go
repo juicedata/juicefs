@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -195,6 +196,36 @@ func TestVFSBasic(t *testing.T) {
 		t.Fatalf("rename long name")
 	}
 
+}
+
+type recordingChunkWriter struct {
+	chunk.Writer
+	size int
+}
+
+func (w *recordingChunkWriter) WriteAt(data []byte, _ int64) (int, error) {
+	w.size = len(data)
+	return 0, syscall.EIO
+}
+
+func TestWriteChunkSize(t *testing.T) {
+	if strconv.IntSize < 64 {
+		t.Skip("a 4 GiB slice requires a 64-bit process")
+	}
+	// Reserve an address range. The stub only inspects the first slice's length.
+	size := int64(1) << 32
+	data, err := unix.Mmap(-1, 0, int(size), unix.PROT_NONE, unix.MAP_PRIVATE|unix.MAP_ANON)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, unix.Munmap(data)) })
+
+	const pos = 1
+	sink := &recordingChunkWriter{}
+	f := &fileWriter{w: &dataWriter{store: &blockingChunkStore{}, blockSize: meta.ChunkSize, bufferSize: 1 << 30}}
+	c := &chunkWriter{file: f}
+	c.slices = []*sliceWriter{{chunk: c, off: pos, writer: sink}}
+	f.chunks = map[uint32]*chunkWriter{0: c}
+	require.Equal(t, syscall.EIO, f.Write(meta.Background(), pos, data))
+	require.Equal(t, meta.ChunkSize-pos, sink.size)
 }
 
 func TestVFSIO(t *testing.T) {
