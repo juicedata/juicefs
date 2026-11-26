@@ -952,7 +952,7 @@ func (fs *FileSystem) RemoveXattr(ctx meta.Context, p string, name string) (err 
 	defer trace.StartRegion(context.TODO(), "fs.RemoveXattr").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "RemoveXattr (%s,%s): %s", p, name, errstr(err)) }()
-	if name == "" || len(name) > xattrMaxName {
+	if name == "" {
 		return syscall.ERANGE
 	}
 	fi, err := fs.resolve(ctx, p, true)
