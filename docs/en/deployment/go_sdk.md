@@ -164,8 +164,6 @@ Logs of JuiceFS are global to the process and shared by all clients. The log lev
 
 `*File` provides common `*os.File` operations, including `Read`, `ReadAt`, `Write`, `WriteAt`, `Seek`, `Stat`, `Sync`, `Truncate`, `Chmod`, `Chown`, `ReadDir`, `Readdir`, `Readdirnames` and `Close`, and implements `io.Reader`, `io.Writer`, `io.Seeker`, `io.ReaderAt`, `io.WriterAt` and `fs.ReadDirFile`. `OpenFile` supports the flags `O_RDONLY`, `O_WRONLY`, `O_RDWR`, `O_CREATE`, `O_EXCL`, `O_TRUNC` and `O_APPEND`; other flags give `EINVAL`.
 
-Non-empty writes return `EFBIG` if the write end reaches or exceeds 128 PiB.
-
 The `Sys` method of the `fs.FileInfo` returned by `Stat`, `Lstat` and `File.Stat` returns a `*juicefs.Stat` with the inode, the owner, the link count and the timestamps.
 
 File system errors are generally `*fs.PathError` or `*os.LinkError` wrapping a `syscall.Errno`; `ListQuota`, `Warmup`, `Status` and `SessionInfo`, which take no single name, return `*os.SyscallError`. Check them with `errors.Is`, for example `errors.Is(err, fs.ErrNotExist)` or `errors.Is(err, syscall.ENOTDIR)`. After `Client.Close`, file system operations generally return errors wrapping `fs.ErrClosed`. `Name`, `FS` and `Gatherer` remain callable; repeated `Client.Close` and `RemoveAll("")` return nil.
