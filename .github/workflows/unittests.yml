@@ -124,6 +124,12 @@ jobs:
           path: ~/.cache/hadoop
           key: hadoop-${{ env.HADOOP_VERSION }}
 
+      - name: Cache TiUP
+        if: matrix.test == 'test.meta.core' || matrix.test == 'test.pkg'
+        uses: ./.github/actions/cache-tiup
+        with:
+          meta: tikv
+
       - name: Prepare Database
         run: |
           TEST=${{matrix.test}} ./.github/scripts/prepare_db.sh

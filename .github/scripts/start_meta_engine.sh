@@ -88,6 +88,38 @@ dump_playground_diagnostics() {
     return 0
 }
 
+TIUP_PLAYGROUND_VERSION="v1.17.1"
+TIUP_CLUSTER_VERSION="v8.5.7"
+
+# Resolve a shared TIUP_HOME so both runner and sudo/root steps reuse the
+# GitHub Actions cache at /home/runner/.tiup.
+resolve_tiup_home() {
+    local user
+    user=$(whoami)
+    if [[ -n "${TIUP_HOME:-}" ]]; then
+        echo "$TIUP_HOME"
+    elif [[ -d /home/runner ]]; then
+        echo "/home/runner/.tiup"
+    elif [[ "$user" == "root" ]]; then
+        echo "/root/.tiup"
+    else
+        echo "Unknown user $user" >&2
+        return 1
+    fi
+}
+
+fix_tiup_cache_ownership() {
+    local tiup_home=$1
+    if [[ "$(whoami)" == "root" && "$tiup_home" == "/home/runner/.tiup" ]]; then
+        chown runner:runner "$tiup_home" 2>/dev/null || true
+        chown -R runner:runner \
+            "$tiup_home/bin" \
+            "$tiup_home/components" \
+            "$tiup_home/manifests" \
+            "$tiup_home/tiup.toml" 2>/dev/null || true
+    fi
+}
+
 install_tikv(){
     [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
     make -C tcli && sudo cp tcli/bin/tcli /usr/local/bin
@@ -99,33 +131,37 @@ install_tikv(){
     fi
     user=$(whoami)
     echo user is $user
-    if [[ "$user" == "root" ]]; then
-        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sudo sh
-        export PATH=/root/.tiup/bin:$PATH
-        tiup=/root/.tiup/bin/tiup
-        tiup_home=/root/.tiup
-    elif [[ "$user" == "runner" ]]; then
-        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-        export PATH=/home/runner/.tiup/bin:$PATH
-        tiup=/home/runner/.tiup/bin/tiup
-        tiup_home=/home/runner/.tiup
-    else
-        echo "Unknown user $user"
-        exit 1
+    tiup_home=$(resolve_tiup_home)
+    export TIUP_HOME="$tiup_home"
+    export PATH="$tiup_home/bin:$PATH"
+    tiup="$tiup_home/bin/tiup"
+    if [[ ! -x "$tiup" ]]; then
+        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | TIUP_HOME="$tiup_home" sh
     fi
     echo tiup is $tiup
     echo $(whoami) $(pwd)
     # Reap orphaned pd-server/tikv-server left behind by a previous retry
     # attempt so a fresh cluster can bootstrap cleanly, see tiup#2057.
     kill_tiup_playground "$tiup" 2379 2380 20160 20180
-    # Drop stale manifest pointers so tiup re-resolves the current component
-    # manifest version instead of a pruned one, see https://github.com/pingcap/tiup/issues/2057
-    rm -f "$tiup_home/manifests/snapshot.json" "$tiup_home/manifests/timestamp.json"
-    # Pin 8.5.7: the tiup mirror currently serves tikv/pd tarballs for 8.5.3-8.5.6
-    # that no longer match their (republished) manifest checksums, so playground
-    # aborts with "sha256 checksum mismatch". 8.5.7 is consistent.
-    # Pin playground to skip the background update check racing with root manifest updates.
-    $tiup playground:v1.17.1 8.5.7 --mode tikv-slim > tikv.log 2>&1  &
+    playground_bin="$tiup_home/components/playground/$TIUP_PLAYGROUND_VERSION/tiup-playground"
+    pd_bin="$tiup_home/components/pd/$TIUP_CLUSTER_VERSION/pd-server"
+    tikv_bin="$tiup_home/components/tikv/$TIUP_CLUSTER_VERSION/tikv-server"
+    if [[ -x "$playground_bin" && -x "$pd_bin" && -x "$tikv_bin" ]]; then
+        echo "Using cached TiUP components from $tiup_home"
+        "$tiup" "playground:$TIUP_PLAYGROUND_VERSION" "$TIUP_CLUSTER_VERSION" \
+            --mode tikv-slim --without-monitor \
+            --pd.binpath "$pd_bin" --kv.binpath "$tikv_bin" > tikv.log 2>&1 &
+    else
+        # Drop stale manifest pointers so tiup re-resolves the current component
+        # manifest version instead of a pruned one, see https://github.com/pingcap/tiup/issues/2057
+        rm -f "$tiup_home/manifests/snapshot.json" "$tiup_home/manifests/timestamp.json"
+        # Pin v8.5.7: the tiup mirror currently serves tikv/pd tarballs for 8.5.3-8.5.6
+        # that no longer match their (republished) manifest checksums, so playground
+        # aborts with "sha256 checksum mismatch". v8.5.7 is consistent.
+        # Pin playground to skip the background update check racing with root manifest updates.
+        "$tiup" "playground:$TIUP_PLAYGROUND_VERSION" "$TIUP_CLUSTER_VERSION" \
+            --mode tikv-slim --without-monitor > tikv.log 2>&1 &
+    fi
     pid=$!
     timeout=60
     count=0
@@ -143,6 +179,7 @@ install_tikv(){
         # would hang and mask the timeout below (never dumping tikv.log).
         lsof -i:2379 && pgrep pd-server && timeout 10 tcli -pd 127.0.0.1:2379 < /tmp/head.txt && exit_code=0 || exit_code=$?
         if [ $exit_code -eq 0 ]; then
+            fix_tiup_cache_ownership "$tiup_home"
             echo "TiKV is running."
             exit 0
         fi
@@ -168,34 +205,42 @@ install_tidb(){
     fi
     user=$(whoami)
     echo user is $user
-    if [[ "$user" == "root" ]]; then
-        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sudo sh
-        tiup=/root/.tiup/bin/tiup
-        tiup_home=/root/.tiup
-    elif [[ "$user" == "runner" ]]; then
-        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-        tiup=/home/runner/.tiup/bin/tiup
-        tiup_home=/home/runner/.tiup
-    else
-        echo "Unknown user $user"
-        exit 1
+    tiup_home=$(resolve_tiup_home)
+    export TIUP_HOME="$tiup_home"
+    export PATH="$tiup_home/bin:$PATH"
+    tiup="$tiup_home/bin/tiup"
+    if [[ ! -x "$tiup" ]]; then
+        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | TIUP_HOME="$tiup_home" sh
     fi
     echo tiup is $tiup
     
     # Reap orphaned pd-server/tikv-server/tidb-server left behind by a previous
     # retry attempt so a fresh cluster can bootstrap cleanly, see tiup#2057.
     kill_tiup_playground "$tiup" 4000 10080 2379 2380 20160 20180
-    # Drop stale manifest pointers so tiup re-resolves the current component
-    # manifest version instead of a pruned one, see https://github.com/pingcap/tiup/issues/2057
-    rm -f "$tiup_home/manifests/snapshot.json" "$tiup_home/manifests/timestamp.json"
-    # Pin 8.5.7, see the note in install_tikv (mirror checksum mismatch on 8.5.3-8.5.6).
-    $tiup playground:v1.17.1 8.5.7 > tidb.log 2>&1  &
+    playground_bin="$tiup_home/components/playground/$TIUP_PLAYGROUND_VERSION/tiup-playground"
+    pd_bin="$tiup_home/components/pd/$TIUP_CLUSTER_VERSION/pd-server"
+    tikv_bin="$tiup_home/components/tikv/$TIUP_CLUSTER_VERSION/tikv-server"
+    tidb_bin="$tiup_home/components/tidb/$TIUP_CLUSTER_VERSION/tidb-server"
+    if [[ -x "$playground_bin" && -x "$pd_bin" && -x "$tikv_bin" && -x "$tidb_bin" ]]; then
+        echo "Using cached TiUP components from $tiup_home"
+        "$tiup" "playground:$TIUP_PLAYGROUND_VERSION" "$TIUP_CLUSTER_VERSION" \
+            --tiflash 0 --without-monitor \
+            --pd.binpath "$pd_bin" --kv.binpath "$tikv_bin" --db.binpath "$tidb_bin" > tidb.log 2>&1 &
+    else
+        # Drop stale manifest pointers so tiup re-resolves the current component
+        # manifest version instead of a pruned one, see https://github.com/pingcap/tiup/issues/2057
+        rm -f "$tiup_home/manifests/snapshot.json" "$tiup_home/manifests/timestamp.json"
+        # Pin v8.5.7, see the note in install_tikv (mirror checksum mismatch on 8.5.3-8.5.6).
+        "$tiup" "playground:$TIUP_PLAYGROUND_VERSION" "$TIUP_CLUSTER_VERSION" \
+            --tiflash 0 --without-monitor > tidb.log 2>&1 &
+    fi
     pid=$!
     timeout=60
     count=0
     while true; do
         lsof -i:4000 && pgrep pd-server && timeout 10 mysql -h127.0.0.1 -P4000 -uroot -e "select version();" && exit_code=0 || exit_code=$?
         if [ $exit_code -eq 0 ]; then
+            fix_tiup_cache_ownership "$tiup_home"
             echo "TiDB is running."
             exit 0
         fi

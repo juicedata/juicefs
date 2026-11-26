@@ -82,6 +82,12 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
+      - name: Cache TiUP
+        if: matrix.meta1 == 'tikv' || matrix.meta2 == 'tikv' || matrix.meta1 == 'tidb' || matrix.meta2 == 'tidb'
+        uses: ./.github/actions/cache-tiup
+        with:
+          meta: ${{ (matrix.meta1 == 'tidb' || matrix.meta2 == 'tidb') && 'tidb' || 'tikv' }}
+
       - name: Test Load & Dump with Json Fast Mode
         timeout-minutes: 30
         run: |

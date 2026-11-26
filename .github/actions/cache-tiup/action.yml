@@ -1,0 +1,32 @@
+name: 'Cache TiUP'
+description: 'Cache TiUP binary and pinned playground/PD/TiKV/TiDB components'
+inputs:
+  meta:
+    description: 'Metadata engine name (tikv or tidb)'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve TiUP versions
+      id: versions
+      if: runner.os == 'Linux' && (inputs.meta == 'tikv' || inputs.meta == 'tidb')
+      shell: bash
+      run: |
+        source .github/scripts/start_meta_engine.sh
+        if [[ -z "$TIUP_PLAYGROUND_VERSION" || -z "$TIUP_CLUSTER_VERSION" ]]; then
+          echo "::error::Failed to resolve TiUP versions from .github/scripts/start_meta_engine.sh"
+          exit 1
+        fi
+        echo "playground=$TIUP_PLAYGROUND_VERSION" >> "$GITHUB_OUTPUT"
+        echo "cluster=$TIUP_CLUSTER_VERSION" >> "$GITHUB_OUTPUT"
+
+    - name: Cache TiUP components
+      if: runner.os == 'Linux' && (inputs.meta == 'tikv' || inputs.meta == 'tidb')
+      uses: actions/cache@v5
+      with:
+        path: |
+          ~/.tiup/bin
+          ~/.tiup/components
+          ~/.tiup/manifests
+          ~/.tiup/tiup.toml
+        key: tiup-${{ runner.os }}-${{ runner.arch }}-${{ inputs.meta }}-${{ steps.versions.outputs.playground }}-${{ steps.versions.outputs.cluster }}
