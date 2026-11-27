@@ -472,6 +472,7 @@ func (j *juice) attrToStat(inode Ino, attr *meta.Attr, stat *fuse.Stat_t) {
 	stat.Size = int64(size)
 	stat.Blocks = int64(blocks)
 	stat.Rdev = uint64(rdev)
+	stat.Flags = 0
 	if attr.Flags&meta.FlagImmutable != 0 {
 		stat.Flags |= fuse.UF_READONLY
 	}
