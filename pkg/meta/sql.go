@@ -274,9 +274,10 @@ type changeLog struct {
 
 type dbMeta struct {
 	*baseMeta
-	db    *xorm.Engine
-	spool *sync.Pool
-	snap  *dbSnap
+	db     *xorm.Engine
+	spool  *sync.Pool
+	snap   *dbSnap
+	initMu sync.Mutex
 
 	noReadOnlyTxn atomic.Bool
 	statement     map[string]string
@@ -645,119 +646,85 @@ func (m *dbMeta) syncAllTables() error {
 }
 
 func (m *dbMeta) doInit(format *Format, force bool) error {
+	// Xorm schema synchronization mutates shared dialect metadata. This only
+	// serializes one engine; the transaction still protects independent clients.
+	m.initMu.Lock()
+	defer m.initMu.Unlock()
 	if err := m.syncAllTables(); err != nil {
 		return err
 	}
-	var s = setting{Name: "format"}
-	var ok bool
-	err := m.simpleTxn(Background(), func(ses *xorm.Session) (err error) {
-		ok, err = ses.Get(&s)
-		return err
-	})
-	if err != nil {
-		return err
-	}
-
-	if ok {
-		var old Format
-		err = json.Unmarshal([]byte(s.Value), &old)
+	requested := format.Clone()
+	var committed *formatUpdate
+	err := m.txn(func(s *xorm.Session) error {
+		stored := setting{Name: "format"}
+		ok, err := s.ForUpdate().Get(&stored)
 		if err != nil {
-			return fmt.Errorf("json: %s", err)
+			return err
 		}
-		if !old.DirStats && format.DirStats {
-			// remove dir stats as they are outdated
-			err = m.txn(func(s *xorm.Session) error {
-				_, err := s.Where("TRUE").Delete(new(dirStats))
-				if err != nil {
+		var body []byte
+		if ok {
+			body = []byte(stored.Value)
+		}
+		u, err := requested.prepareUpdate(body, force)
+		if err != nil {
+			return err
+		}
+		if old := u.previous; old != nil {
+			if !old.DirStats && u.next.DirStats {
+				if _, err = s.Where("TRUE").Delete(new(dirStats)); err != nil {
 					return err
 				}
-				if format.ChangeLog {
+				if u.next.ChangeLog {
 					m.doGenLog(Background(), s, time.Now().UnixNano(), "INIT_ENABLE_DIRSTATS()")
 				}
-				return nil
-			})
-			if err != nil {
-				return errors.Wrap(err, "drop table dirStats")
 			}
-		}
-		if !old.UserGroupQuota && format.UserGroupQuota {
-			// remove user group quota as they are outdated
-			err = m.txn(func(s *xorm.Session) error {
-				_, err := s.Where("TRUE").Delete(new(userGroupQuota))
-				if err != nil {
+			if !old.UserGroupQuota && u.next.UserGroupQuota {
+				if _, err = s.Where("TRUE").Delete(new(userGroupQuota)); err != nil {
 					return err
 				}
-				if format.ChangeLog {
+				if u.next.ChangeLog {
 					m.doGenLog(Background(), s, time.Now().UnixNano(), "INIT_ENABLE_USERGROUPQUOTA()")
 				}
-				return nil
-			})
-			if err != nil {
-				return errors.Wrap(err, "drop table userGroupQuota")
 			}
 		}
-		if err = format.update(&old, force); err != nil {
-			return errors.Wrap(err, "update format")
-		}
-	}
-
-	data, err := json.MarshalIndent(format, "", "")
-	if err != nil {
-		return fmt.Errorf("json: %s", err)
-	}
-
-	n := &node{
-		Type:   TypeDirectory,
-		Nlink:  2,
-		Length: 4 << 10,
-		Parent: RootInode,
-	}
-	now := time.Now().UnixNano()
-	n.setAtime(now)
-	n.setMtime(now)
-	n.setCtime(now)
-	err = m.txn(func(s *xorm.Session) error {
-		if format.TrashDays > 0 {
+		n := &node{Type: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: RootInode}
+		now := time.Now().UnixNano()
+		n.setAtime(now)
+		n.setMtime(now)
+		n.setCtime(now)
+		if u.next.TrashDays > 0 {
 			ok2, err := s.ForUpdate().Get(&node{Inode: TrashInode})
 			if err != nil {
 				return err
 			}
 			if !ok2 {
-				n.Inode = TrashInode
-				n.Mode = 0555
+				n.Inode, n.Mode = TrashInode, 0555
 				if err = mustInsert(s, n); err != nil {
 					return err
 				}
 			}
 		}
 		if ok {
-			_, err = s.Update(&setting{"format", string(data)}, &setting{Name: "format"})
-			return err
+			_, err = s.Update(&setting{"format", string(u.data)}, &setting{Name: "format"})
+		} else if rows, insertErr := s.Insert(&setting{"format", string(u.data)}); insertErr != nil {
+			err = insertErr
+		} else if rows == 0 {
+			err = fmt.Errorf("format is not inserted")
 		} else {
-			var set = &setting{"format", string(data)}
-			if n, err := s.Insert(set); err != nil {
-				return err
-			} else if n == 0 {
-				return fmt.Errorf("format is not inserted")
-			}
+			n.Inode, n.Mode = RootInode, 0777
+			cs := []counter{{"nextInode", 2}, {"nextChunk", 1}, {"nextSession", 0},
+				{"usedSpace", 0}, {"totalInodes", 0}, {"nextCleanupSlices", 0}}
+			err = mustInsert(s, n, &cs)
 		}
-
-		n.Inode = RootInode
-		n.Mode = 0777
-		var cs = []counter{
-			{"nextInode", 2}, // 1 is root
-			{"nextChunk", 1},
-			{"nextSession", 0},
-			{"usedSpace", 0},
-			{"totalInodes", 0},
-			{"nextCleanupSlices", 0},
+		if err == nil {
+			committed = u
 		}
-		return mustInsert(s, n, &cs)
+		return err
 	})
 	if err != nil {
 		return err
 	}
-	m.setFormat(format)
+	m.publishFormatUpdate(format, committed)
 	return nil
 }
 

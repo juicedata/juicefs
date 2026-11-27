@@ -205,6 +205,8 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 Change config of a volume. Note that after updating some settings, the client may not take effect immediately, and it needs to wait for a certain period of time. The specific waiting time can be controlled by the [`--heartbeat`](#mount-metadata-options) option.
 
+If another client changes the stored configuration after this command reads it, including while waiting for confirmation, the update fails with `volume configuration changed since it was loaded; reload and retry`. Run the command again to load the current settings and review the changes. `config --force` does not bypass this conflict check. Use updated clients for configuration changes; older binaries do not gain conflict detection.
+
 #### Synopsis
 
 ```shell

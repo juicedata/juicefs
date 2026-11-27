@@ -39,7 +39,12 @@ func testSubdirOperations(t *testing.T, m Meta) {
 		format := originalFormat.Clone()
 		format.EnableACL = true
 		require.NoError(t, m.Init(format, false))
-		defer func() { require.NoError(t, m.Init(&originalFormat, false)) }()
+		defer func() {
+			current, err := m.Load(false)
+			require.NoError(t, err)
+			current.EnableACL = originalFormat.EnableACL
+			require.NoError(t, m.Init(current, false))
+		}()
 		require.NoError(t, m.NewSession(true))
 		defer m.CloseSession()
 		const file = "subdir-file"

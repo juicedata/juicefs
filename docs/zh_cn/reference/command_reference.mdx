@@ -202,6 +202,8 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 修改指定文件系统的配置项。注意更新某些设置以后，客户端未必能立刻生效，需要等待一定时间，具体的等待时间可以通过 [`--heartbeat`](#mount) 选项控制。
 
+如果其他客户端在本命令读取配置后修改了存储的配置（包括等待用户确认期间），本次更新会报错 `volume configuration changed since it was loaded; reload and retry`。请重新运行命令，读取当前配置并检查修改内容。`config --force` 不会跳过此冲突检查。请使用更新后的客户端修改配置；旧版程序不会因此获得冲突检测能力。
+
 #### 概览
 
 ```shell
