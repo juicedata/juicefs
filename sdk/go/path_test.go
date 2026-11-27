@@ -589,7 +589,7 @@ func TestMkdir(t *testing.T) {
 		want syscall.Errno
 	}{
 		{"a/b/c", 0}, {"a/b/c", 0}, {"a/b", 0}, {"/", 0}, {"ln", 0}, {"ln/n", 0}, {"a/b/../d/", 0},
-		{"f", syscall.ENOTDIR}, {"f/x", syscall.ENOTDIR}, {"f/x/y", syscall.ENOTDIR},
+		{"f", syscall.ENOTDIR}, {"f/", syscall.ENOTDIR}, {"f/x", syscall.ENOTDIR}, {"f/x/y", syscall.ENOTDIR},
 	} {
 		err := c.MkdirAll(x.name, 0750)
 		if errnoOf(err) != x.want {
