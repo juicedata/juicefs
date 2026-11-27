@@ -7798,6 +7798,9 @@ func TestRedisCleanupLeakedInodes(t *testing.T) {
 	defer m.CloseSession()
 
 	ctx := Background()
+	if err := m.rdb.Set(ctx, m.counterKey("nextInode"), uint64(1)<<32, 0).Err(); err != nil {
+		t.Fatalf("set inode counter: %s", err)
+	}
 	var inode Ino
 	if st := m.Mknod(ctx, RootInode, "held", TypeFile, 0644, 022, 0, "", &inode, nil); st != 0 {
 		t.Fatalf("create file: %s", st)
@@ -7809,8 +7812,12 @@ func TestRedisCleanupLeakedInodes(t *testing.T) {
 	if st := m.Unlink(ctx, RootInode, "held", true); st != 0 {
 		t.Fatalf("unlink held: %s", st)
 	}
-	if held, err := m.rdb.SIsMember(ctx, m.sustained(m.sid), inode.String()).Result(); err != nil || !held {
+	sessionKey := m.sustained(m.sid)
+	if held, err := m.rdb.SIsMember(ctx, sessionKey, inode.String()).Result(); err != nil || !held {
 		t.Fatalf("sustained inode: held=%t, err=%v", held, err)
+	}
+	if session, err := m.GetSession(m.sid, true); err != nil || !slices.Contains(session.Sustained, inode) {
+		t.Fatalf("session does not contain inode %d: %+v, err=%v", inode, session, err)
 	}
 
 	var leaked Ino
@@ -7833,6 +7840,20 @@ func TestRedisCleanupLeakedInodes(t *testing.T) {
 		}
 	}
 
+	if err := m.rdb.SAdd(ctx, sessionKey, "invalid").Err(); err != nil {
+		t.Fatalf("add invalid sustained member: %s", err)
+	}
+	m.cleanupLeakedInodes(true)
+	if exists, err := m.rdb.Exists(ctx, m.inodeKey(leaked)).Result(); err != nil || exists != 1 {
+		t.Fatalf("cleanup proceeded with an invalid sustained member: exists=%d, err=%v", exists, err)
+	}
+	if _, err := m.GetSession(m.sid, true); err == nil {
+		t.Fatal("expected an error reading the invalid sustained member")
+	}
+	if err := m.rdb.SRem(ctx, sessionKey, "invalid").Err(); err != nil {
+		t.Fatalf("remove invalid sustained member: %s", err)
+	}
+
 	m.cleanupLeakedInodes(true)
 	if exists, err := m.rdb.Exists(ctx, m.inodeKey(inode)).Result(); err != nil || exists != 1 {
 		t.Fatalf("sustained inode was deleted: exists=%d, err=%v", exists, err)
@@ -7842,6 +7863,9 @@ func TestRedisCleanupLeakedInodes(t *testing.T) {
 	}
 	if st := m.Close(ctx, inode); st != 0 {
 		t.Fatalf("close file: %s", st)
+	}
+	if members, err := m.rdb.SMembers(ctx, sessionKey).Result(); err != nil || len(members) != 0 {
+		t.Fatalf("sustained members after close: %v, err=%v", members, err)
 	}
 }
 

@@ -574,14 +574,18 @@ func (m *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 	}
 	s.Sid, _ = strconv.ParseUint(sid, 10, 64)
 	if detail {
-		inodes, err := m.rdb.SMembers(ctx, m.sustained(s.Sid)).Result()
+		key := m.sustained(s.Sid)
+		inodes, err := m.rdb.SMembers(ctx, key).Result()
 		if err != nil {
 			return nil, fmt.Errorf("SMembers %s: %s", sid, err)
 		}
 		s.Sustained = make([]Ino, 0, len(inodes))
 		for _, sinode := range inodes {
-			inode, _ := strconv.ParseUint(sinode, 10, 64)
-			s.Sustained = append(s.Sustained, Ino(inode))
+			inode, err := parseSustainedInode(key, sinode)
+			if err != nil {
+				return nil, err
+			}
+			s.Sustained = append(s.Sustained, inode)
 		}
 
 		locks, err := m.rdb.SMembers(ctx, m.lockedKey(s.Sid)).Result()
@@ -675,6 +679,14 @@ func (m *redisMeta) ListSessions() ([]*Session, error) {
 
 func (m *redisMeta) sustained(sid uint64) string {
 	return m.prefix + "session" + strconv.FormatUint(sid, 10)
+}
+
+func parseSustainedInode(key, member string) (Ino, error) {
+	inode, err := strconv.ParseUint(member, 10, 64)
+	if err != nil || inode == 0 {
+		return 0, fmt.Errorf("invalid sustained inode %q in %s", member, key)
+	}
+	return Ino(inode), nil
 }
 
 func (m *redisMeta) lockedKey(sid uint64) string {
@@ -892,12 +904,11 @@ func (m *redisMeta) doScanSustainedInodes(ctx Context, fn func(uid, gid uint32, 
 				continue
 			}
 			for _, sinode := range inodes {
-				ino, err := strconv.ParseInt(sinode, 10, 64)
+				ino, err := parseSustainedInode(key, sinode)
 				if err != nil {
-					logger.Warnf("invalid sustained: %s->%s", key, sinode)
-					continue
+					return err
 				}
-				inoKeys = append(inoKeys, m.inodeKey(Ino(ino)))
+				inoKeys = append(inoKeys, m.inodeKey(ino))
 			}
 		}
 		return nil
@@ -1928,7 +1939,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 				case TypeFile:
 					if opened {
 						pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
-						pipe.SAdd(ctx, m.sustained(m.sessionID()), strconv.Itoa(int(inode)))
+						pipe.SAdd(ctx, m.sustained(m.sessionID()), inode.String())
 					} else {
 						pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(now.Unix()), Member: m.toDelete(inode, attr.Length)})
 						pipe.Del(ctx, m.inodeKey(inode))
@@ -2225,7 +2236,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 									inodes = make(map[Ino]*Attr)
 								}
 								inodes[info.inode] = info.attr
-								sustained = append(sustained, strconv.Itoa(int(info.inode)))
+								sustained = append(sustained, info.inode.String())
 							} else {
 								delfiles = append(delfiles, redis.Z{
 									Score:  float64(nowUnix),
@@ -2769,7 +2780,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						if dtyp == TypeFile {
 							if opened {
 								pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
-								pipe.SAdd(ctx, m.sustained(m.sessionID()), strconv.Itoa(int(dino)))
+								pipe.SAdd(ctx, m.sustained(m.sessionID()), dino.String())
 							} else {
 								pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(now.Unix()), Member: m.toDelete(dino, tattr.Length)})
 								pipe.Del(ctx, m.inodeKey(dino))
@@ -2905,7 +2916,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 			}
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&iattr), 0)
 			if unlinked {
-				pipe.SRem(ctx, m.sustained(m.sessionID()), strconv.Itoa(int(inode)))
+				pipe.SRem(ctx, m.sustained(m.sessionID()), inode.String())
 			} else {
 				if oldParent > 0 {
 					pipe.HIncrBy(ctx, m.parentKey(inode), oldParent.String(), 1)
@@ -3048,8 +3059,13 @@ func (m *redisMeta) doCleanStaleSession(sid uint64) error {
 	key = m.sustained(sid)
 	if inodes, err := m.rdb.SMembers(ctx, key).Result(); err == nil {
 		for _, sinode := range inodes {
-			inode, _ := strconv.ParseUint(sinode, 10, 64)
-			if err = m.doDeleteSustainedInode(ctx, sid, Ino(inode)); err != nil {
+			inode, err := parseSustainedInode(key, sinode)
+			if err != nil {
+				logger.Warnf("%s", err)
+				fail = true
+				continue
+			}
+			if err := m.doDeleteSustainedInode(ctx, sid, inode); err != nil {
 				logger.Warnf("Delete sustained inode %d of sid %d: %s", inode, sid, err)
 				fail = true
 			}
@@ -3135,6 +3151,7 @@ func (m *redisMeta) doRefreshSession() error {
 func (m *redisMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) error {
 	var attr Attr
 	var newSpace int64
+	member := inode.String()
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
@@ -3148,12 +3165,12 @@ func (m *redisMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) e
 		// linked again since the unlink (O_TMPFILE and linkat): keep the node, drop the hold.
 		// sid 0 holds nothing; it comes from cleanupLeakedInodes, which deletes an unreachable inode anyway.
 		if attr.Nlink > 0 && sid > 0 {
-			held, err := tx.SIsMember(ctx, m.sustained(sid), strconv.Itoa(int(inode))).Result()
+			held, err := tx.SIsMember(ctx, m.sustained(sid), member).Result()
 			if err != nil || !held {
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
+				pipe.SRem(ctx, m.sustained(sid), member)
 				m.genLog(ctx, pipe, m.now(), "DELSUSTAINED(%d,%d)", sid, inode)
 				return nil
 			})
@@ -3166,7 +3183,7 @@ func (m *redisMeta) doDeleteSustainedInode(ctx Context, sid uint64, inode Ino) e
 			pipe.Del(ctx, m.xattrKey(inode))
 			pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 			pipe.Decr(ctx, m.totalInodesKey())
-			pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
+			pipe.SRem(ctx, m.sustained(sid), member)
 			m.genLog(ctx, pipe, m.now(), "DELSUSTAINED(%d,%d)", sid, inode)
 			return nil
 		})
@@ -3992,7 +4009,10 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 
 	if err := m.scan(ctx, "d[0-9]*", func(keys []string) error {
 		for _, key := range keys {
-			ino, _ := strconv.Atoi(key[prefix+1:])
+			ino, err := strconv.ParseUint(key[prefix+1:], 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid directory key %q: %w", key, err)
+			}
 			var entries []*Entry
 			eno := m.doReaddir(ctx, Ino(ino), 0, &entries, 0)
 			if eno != syscall.ENOENT && eno != 0 {
@@ -4016,8 +4036,11 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 				return err
 			}
 			for _, s := range inodes {
-				ino, _ := strconv.Atoi(s)
-				foundInodes[Ino(ino)] = struct{}{}
+				ino, err := parseSustainedInode(key, s)
+				if err != nil {
+					return err
+				}
+				foundInodes[ino] = struct{}{}
 			}
 		}
 		return nil
@@ -4025,7 +4048,7 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 		logger.Warnf("Skip cleaning up leaked inodes: scan sustained inodes: %s", err)
 		return
 	}
-	_ = m.scan(ctx, "i*", func(keys []string) error {
+	_ = m.scan(ctx, "i[0-9]*", func(keys []string) error {
 		values, err := m.rdb.MGet(ctx, keys...).Result()
 		if err != nil {
 			logger.Warnf("mget inodes: %s", err)
@@ -4035,9 +4058,13 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 			if v == nil {
 				continue
 			}
+			ino, err := strconv.ParseUint(keys[i][prefix+1:], 10, 64)
+			if err != nil {
+				logger.Warnf("invalid inode key %q: %s", keys[i], err)
+				continue
+			}
 			var attr Attr
 			m.parseAttr([]byte(v.(string)), &attr)
-			ino, _ := strconv.Atoi(keys[i][prefix+1:])
 			if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
 				logger.Infof("found dangling inode: %s %+v", keys[i], attr)
 				if delete {
@@ -5156,16 +5183,19 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	sessions := make([]*DumpedSustained, 0, len(keys))
 	for _, k := range keys {
 		sid, _ := strconv.ParseUint(k, 10, 64)
-		var ss []string
-		ss, err = m.rdb.SMembers(ctx, m.sustained(sid)).Result()
+		key := m.sustained(sid)
+		ss, err := m.rdb.SMembers(ctx, key).Result()
 		if err != nil {
 			return err
 		}
 		if len(ss) > 0 {
 			inodes := make([]Ino, 0, len(ss))
 			for _, s := range ss {
-				inode, _ := strconv.ParseUint(s, 10, 64)
-				inodes = append(inodes, Ino(inode))
+				inode, err := parseSustainedInode(key, s)
+				if err != nil {
+					return err
+				}
+				inodes = append(inodes, inode)
 			}
 			sessions = append(sessions, &DumpedSustained{sid, inodes})
 		}

@@ -228,16 +228,19 @@ func (m *redisMeta) dumpSustained(ctx Context, opt *DumpOption, ch chan<- *dumpe
 	sustained := make([]*pb.Sustained, 0, len(keys))
 	for _, k := range keys {
 		sid, _ := strconv.ParseUint(k, 10, 64)
-		var ss []string
-		ss, err = m.rdb.SMembers(ctx, m.sustained(sid)).Result()
+		key := m.sustained(sid)
+		ss, err := m.rdb.SMembers(ctx, key).Result()
 		if err != nil {
 			return err
 		}
 		if len(ss) > 0 {
 			inodes := make([]uint64, 0, len(ss))
 			for _, s := range ss {
-				inode, _ := strconv.ParseUint(s, 10, 64)
-				inodes = append(inodes, inode)
+				inode, err := parseSustainedInode(key, s)
+				if err != nil {
+					return err
+				}
+				inodes = append(inodes, uint64(inode))
 			}
 			sustained = append(sustained, &pb.Sustained{Sid: sid, Inodes: inodes})
 		}
