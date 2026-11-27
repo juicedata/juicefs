@@ -17,8 +17,14 @@
 package vfs
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
 	"reflect"
+	"runtime"
+	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 
@@ -233,6 +239,78 @@ func collectSliceIDs(iter *sliceIterator) []uint64 {
 		}
 	}
 	return ids
+}
+
+func TestSliceIteratorHandlerErrors(t *testing.T) {
+	want := errors.New("cache operation failed")
+	for _, capacity := range []int{0, 4} {
+		t.Run(fmt.Sprintf("concurrent_%d", capacity), func(t *testing.T) {
+			for _, fail := range []bool{false, true} {
+				slices := make([]meta.Slice, 64)
+				for i := range slices {
+					slices[i] = meta.Slice{Id: uint64(i + 1), Size: 1, Len: 1}
+				}
+				iter := newSliceIterator(meta.Background(), &fakeSliceMeta{
+					slicesByChunk: map[uint32][]meta.Slice{0: slices},
+				}, 1, 64, &CacheResponse{}, nil)
+				var calls atomic.Int32
+				err := iter.Iterate(func(s meta.Slice, _ []chunk.Range) error {
+					calls.Add(1)
+					runtime.Gosched()
+					if fail && (capacity > 0 || s.Id == 1) {
+						return want
+					}
+					return nil
+				}, make(chan token, capacity))
+				if fail && !errors.Is(err, want) {
+					t.Fatalf("handler error lost: %v", err)
+				}
+				if !fail && err != nil {
+					t.Fatalf("successful handler: %v", err)
+				}
+				if calls.Load() != 64 || iter.stat.SliceCount != 64 || iter.stat.TotalBytes != 64 {
+					t.Fatalf("iteration did not finish: calls=%d, stats=%+v", calls.Load(), iter.stat)
+				}
+			}
+		})
+	}
+}
+
+type failingSliceMeta struct {
+	fakeSliceMeta
+}
+
+func (f *failingSliceMeta) Read(ctx meta.Context, ino Ino, index uint32, slices *[]meta.Slice) syscall.Errno {
+	if index == 1 {
+		return syscall.EIO
+	}
+	return f.fakeSliceMeta.Read(ctx, ino, index, slices)
+}
+
+func TestSliceIteratorErrors(t *testing.T) {
+	t.Run("metadata", func(t *testing.T) {
+		iter := newSliceIterator(meta.Background(), &failingSliceMeta{fakeSliceMeta{
+			slicesByChunk: map[uint32][]meta.Slice{0: {{Id: 1, Size: 1, Len: 1}}},
+		}}, 1, meta.ChunkSize+1, &CacheResponse{}, nil)
+		err := iter.Iterate(func(meta.Slice, []chunk.Range) error {
+			return errors.New("handler failed")
+		}, make(chan token, 1))
+		if err == nil || !strings.Contains(err.Error(), "get slices of inode 1 index 1 error") {
+			t.Fatalf("metadata error lost: %v", err)
+		}
+	})
+	t.Run("cancelled", func(t *testing.T) {
+		ctx := meta.Background()
+		ctx.Cancel()
+		iter := newSliceIterator(ctx, &fakeSliceMeta{}, 1, 1, &CacheResponse{}, nil)
+		err := iter.Iterate(func(meta.Slice, []chunk.Range) error {
+			t.Error("cancelled iterator called handler")
+			return nil
+		}, make(chan token, 1))
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancellation lost: %v", err)
+		}
+	})
 }
 
 // collectParts returns, for each slice that has work to do, its id and the
