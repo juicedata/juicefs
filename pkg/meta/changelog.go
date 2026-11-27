@@ -357,21 +357,26 @@ func (e *ChangeEntry) AttrFields(i int) (*Attr, error) {
 	if n := len(e.Args) - i; n != attrLogFields {
 		return nil, fmt.Errorf("%s: attribute tail at %d has %d of %d fields", e.Op, i, n, attrLogFields)
 	}
-	var v [attrLogFields]int64
-	for j := range v {
-		var err error
-		if v[j], err = e.Int64(i + j); err != nil {
+	var a Attr
+	var errs [attrLogFields]error
+	a.Uid, errs[0] = e.Uint32(i)
+	a.Gid, errs[1] = e.Uint32(i + 1)
+	a.Mode, errs[2] = e.Uint16(i + 2)
+	a.Flags, errs[3] = e.Uint8(i + 3)
+	a.Atime, errs[4] = e.Int64(i + 4)
+	a.Mtime, errs[5] = e.Int64(i + 5)
+	a.Atimensec, errs[6] = e.Uint32(i + 6)
+	a.Mtimensec, errs[7] = e.Uint32(i + 7)
+	a.Ctime, errs[8] = e.Int64(i + 8)
+	a.Ctimensec, errs[9] = e.Uint32(i + 9)
+	a.AccessACL, errs[10] = e.Uint32(i + 10)
+	a.Tier, errs[11] = e.Uint8(i + 11)
+	for _, err := range errs {
+		if err != nil {
 			return nil, err
 		}
 	}
-	return &Attr{
-		Uid: uint32(v[0]), Gid: uint32(v[1]),
-		Mode: uint16(v[2]), Flags: uint8(v[3]),
-		Atime: v[4], Mtime: v[5],
-		Atimensec: uint32(v[6]), Mtimensec: uint32(v[7]),
-		Ctime: v[8], Ctimensec: uint32(v[9]),
-		AccessACL: uint32(v[10]), Tier: uint8(v[11]),
-	}, nil
+	return &a, nil
 }
 
 func (e *ChangeEntry) Bool(i int) (bool, error) {
