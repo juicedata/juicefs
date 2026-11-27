@@ -450,6 +450,12 @@ func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 	}
 }
 
+// UpdateMtime makes buffered (not yet flushed) writes of inode commit with the
+// given mtime, so an explicit mtime set before close is not overwritten.
+func (v *VFS) UpdateMtime(inode Ino, mtime time.Time) {
+	v.writer.UpdateMtime(inode, mtime)
+}
+
 func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, readAt time.Time, err syscall.Errno) {
 	defer func() { logit(ctx, "readdir", err, "(%d,%d,%d,%t): (%d)", ino, size, off, plus, len(entries)) }()
 	h := v.findHandle(ino, fh)
