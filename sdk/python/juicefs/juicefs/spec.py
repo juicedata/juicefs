@@ -128,13 +128,27 @@ class JuiceFS(AbstractFileSystem):
             self.mkdirs(path2, exist_ok=True)
 
     def rm(self, path, recursive=False, maxdepth=None):
+        if maxdepth is not None and maxdepth < 1:
+            raise ValueError("maxdepth must be at least 1")
         if not isinstance(path, list):
             path = [path]
         for p in path:
-            if recursive:
-                self.fs.rmr(self._strip_protocol(p))
+            p = self._strip_protocol(p)
+            if recursive and maxdepth is not None and S_ISDIR(self.fs.lstat(p).st_mode):
+                for name, st in self.fs.listdir(p, detail=True):
+                    child = p.rstrip("/") + "/" + name
+                    if S_ISDIR(st.st_mode):
+                        if maxdepth > 1:
+                            self.rm(child, recursive=True, maxdepth=maxdepth - 1)
+                        else:
+                            self.fs.rmdir(child)
+                    else:
+                        self.fs.remove(child)
+                self.fs.rmdir(p)
+            elif recursive:
+                self.fs.rmr(p)
             else:
-                self.fs.remove(self._strip_protocol(p))
+                self.fs.remove(p)
 
     def _rm(self, path):
         self.fs.remove(self._strip_protocol(path))

@@ -119,6 +119,12 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+`jfs.rm(path, recursive=True, maxdepth=N)` only removes entries within the
+specified depth. If deeper contents remain, it raises a directory-not-empty
+error; entries already removed are not restored. Omitting `maxdepth` keeps
+unlimited recursive deletion. Directory symlinks are removed without deleting
+their targets.
+
 ### Getting Help Information
 
 You can use the `help()` function to get help information for classes and methods.
