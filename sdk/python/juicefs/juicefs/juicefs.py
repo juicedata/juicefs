@@ -302,7 +302,11 @@ class Client(object):
         self.lib.jfs_mkdir(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint16(mode&0o777), c_uint16(self.umask))
 
     def makedirs(self, path, mode=0o777, exist_ok=False):
-        """Create a directory and all its parent components if they do not exist."""
+        """Create a directory and all its parent components if they do not exist.
+
+        With exist_ok=True, an existing directory is accepted. A path that
+        resolves to a non-directory raises OSError with errno.ENOTDIR.
+        """
         self.lib.jfs_mkdirAll(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint16(mode&0o777), c_uint16(self.umask), c_bool(exist_ok))
 
     def rmdir(self, path):

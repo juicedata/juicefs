@@ -748,7 +748,9 @@ func TestLastComponent(t *testing.T) {
 		}
 		_ = f.Close(owner)
 	}
-	for link, target := range map[string]string{"/lnd": "d", "/dang": "missing"} {
+	for link, target := range map[string]string{
+		"/lnd": "d", "/lnf": "f", "/dang": "missing", "/lnlocked": "nox/sub",
+	} {
 		if err := fs.Symlink(owner, target, link); err != 0 {
 			t.Fatal(err)
 		}
@@ -833,6 +835,15 @@ func TestLastComponent(t *testing.T) {
 		{`Rename(/, g)`, rename("/", "/g", 0), syscall.EBUSY},
 		{`Rename(f, /)`, rename("/f", "/", 0), syscall.EBUSY},
 		{`Clone(/, g)`, clone("/", "/g"), syscall.EINVAL},
+		// existing target
+		{`MkdirAll(d)`, mkdirAll("/d"), 0},
+		{`MkdirAll(lnd)`, mkdirAll("/lnd"), 0},
+		{`MkdirAll(f)`, mkdirAll("/f"), syscall.ENOTDIR},
+		{`MkdirAll(lnf)`, mkdirAll("/lnf"), syscall.ENOTDIR},
+		{`MkdirAll(dang)`, mkdirAll("/dang"), syscall.EEXIST},
+		{`MkdirAll0(f, existOK=false)`, func(ctx meta.Context) syscall.Errno {
+			return fs.MkdirAll0(ctx, "/f", 0777, 0, false)
+		}, syscall.EEXIST},
 		// "." and ".."
 		{`Rmr(d/.)`, rmr("/d/."), syscall.EINVAL},
 		{`Rmr(d/sub/..)`, rmr("/d/sub/.."), syscall.ENOTEMPTY},
@@ -857,12 +868,15 @@ func TestLastComponent(t *testing.T) {
 		{`Rmdir(f/..)`, rmdir("/f/.."), syscall.ENOTDIR},
 		{`Mkdir(f/.)`, mkdir("/f/."), syscall.ENOTDIR},
 		{`Mkdir(f/..)`, mkdir("/f/.."), syscall.ENOTDIR},
+		{`MkdirAll(f/x)`, mkdirAll("/f/x"), syscall.ENOTDIR},
 		{`Link(f, f/.)`, link("/f", "/f/."), syscall.ENOTDIR},
 		{`Symlink(x, f/.)`, symlink("/f/."), syscall.ENOTDIR},
 		{`Create(f/x/)`, create("/f/x/"), syscall.ENOTDIR},
 		{`Rename(f, f/x)`, rename("/f", "/f/x", 0), syscall.ENOTDIR},
 		{`Rename(f/.., g)`, rename("/f/..", "/g", 0), syscall.ENOTDIR},
 		// trailing slash
+		{`MkdirAll(f/)`, mkdirAll("/f/"), syscall.ENOTDIR},
+		{`MkdirAll(lnd/)`, mkdirAll("/lnd/"), 0},
 		{`Rmr(f/)`, rmr("/f/"), syscall.ENOTDIR},
 		{`Rmr(lnd/)`, rmr("/lnd/"), syscall.ENOTDIR},
 		{`Rename(f/, g)`, rename("/f/", "/g", 0), syscall.ENOTDIR},
@@ -924,6 +938,7 @@ func TestLastComponent(t *testing.T) {
 		{`Mkdir(now/.)`, mkdir("/now/."), syscall.EEXIST},
 		{`Rmdir(now/.)`, rmdir("/now/."), syscall.EINVAL},
 		{`Mkdir(now/new)`, mkdir("/now/new"), syscall.EACCES},
+		{`MkdirAll(lnlocked)`, mkdirAll("/lnlocked"), syscall.EACCES},
 		{`Rmr(f/x)`, rmr("/f/x"), syscall.ENOTDIR},
 		{`Rmr(f/..)`, rmr("/f/.."), syscall.ENOTDIR},
 	} {
