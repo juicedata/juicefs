@@ -210,6 +210,8 @@ Then, you can run `juicefs gc` again to check if the purge was successful.
 
 The `juicefs fsck` tool performs block-by-block comparison with metadata, mainly to fix various problems that may occur and can be fixed within the file system. It can help you find cases where records exist in the metadata engine but there is no corresponding data block in the object storage. It can also check if the file attribute information exists.
 
+If an object-storage request fails for a reason other than a missing block (for example, a permission error), `fsck` continues checking the remaining blocks, then returns a non-zero exit status if any blocks could not be verified. These request failures do not establish that data is lost; resolve the storage access problem and run the check again.
+
 ```shell {5}
 $ juicefs fsck sqlite3://myjfs2.db
 

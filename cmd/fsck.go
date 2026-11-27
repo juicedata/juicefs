@@ -177,6 +177,7 @@ func fsck(ctx *cli.Context) error {
 	sliceBSpin := progress.AddByteSpinner("Scanned slices")
 	lostDSpin := progress.AddDoubleSpinner("Lost blocks")
 	brokens := make(map[meta.Ino]string)
+	var uncheckedBlocks int
 	for inode, ss := range slices {
 		if delfiles[inode] {
 			delfilesSpin.Increment()
@@ -210,6 +211,7 @@ func fsck(ctx *cli.Context) error {
 						}
 						if !errors.Is(err, os.ErrNotExist) {
 							logger.Warnf("check block %s for file %s in object storage: %s", objKey, filePath, err)
+							uncheckedBlocks++
 							continue
 						}
 						brokens[inode] = filePath
@@ -240,6 +242,9 @@ func fsck(ctx *cli.Context) error {
 		sort.Strings(fileList)
 		msg += strings.Join(fileList, "\n")
 		logger.Fatal(msg)
+	}
+	if uncheckedBlocks > 0 {
+		return fmt.Errorf("could not verify %d blocks in object storage", uncheckedBlocks)
 	}
 
 	return nil
