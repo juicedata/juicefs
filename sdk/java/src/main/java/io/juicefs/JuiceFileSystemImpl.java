@@ -2342,8 +2342,10 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public AuthCredential buildAuthCredential(String spn) throws IOException {
+    UserGroupInformation currentUser = UserGroupInformation.getCurrentUser();
     // auth use kerberos, only when the server principal is configured
-    if (spn != null && !spn.isEmpty() && UserGroupInformation.getLoginUser().hasKerberosCredentials()) {
+    if (spn != null && !spn.isEmpty()
+        && currentUser.getRealAuthenticationMethod() == UserGroupInformation.AuthenticationMethod.KERBEROS) {
       dtEnabled = true;
       byte[] cred;
       try {
@@ -2355,7 +2357,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
 
     // auth use delegation token
-    for (Token<? extends TokenIdentifier> token : ugi.getCredentials().getAllTokens()) {
+    for (Token<? extends TokenIdentifier> token : currentUser.getCredentials().getAllTokens()) {
       if (token.getKind().equals(JuiceFSDelegationTokenIdentifier.TOKEN_KIND) &&
           buildServiceName().equals(token.getService().toString())) {
         dtEnabled = true;
