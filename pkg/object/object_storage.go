@@ -44,7 +44,7 @@ import (
 var ctx = context.Background()
 var logger = utils.GetLogger("juicefs")
 
-var UserAgent = "JuiceFS"
+var UserAgent = "JuiceFS-" + version.Version()
 
 func setUserAgent(req *http.Request) {
 	req.Header.Set("User-Agent", UserAgent)
@@ -243,7 +243,6 @@ type VolumeConfig struct {
 
 // CreateVolumeStorage creates storage with the volume's prefix, tiers and encryption.
 func CreateVolumeStorage(config VolumeConfig) (ObjectStorage, error) {
-	UserAgent = "JuiceFS-" + version.Version()
 	var blob ObjectStorage
 	var err error
 	if u, err := url.Parse(config.Bucket); err == nil {
