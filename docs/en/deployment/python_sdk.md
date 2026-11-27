@@ -119,6 +119,11 @@ jfs = fsspec.filesystem('jfs', name='', meta='redis://192.168.1.8/0')
 jfs.ls('/')
 ```
 
+`jfs.du(path)` recursively sums the logical sizes of files under a directory,
+not its own metadata size or the physical space used in object storage.
+Use `maxdepth=1` to count only immediate files, `total=False` for per-path sizes,
+or `withdirs=True` to also include directories' own sizes.
+
 ### Getting Help Information
 
 You can use the `help()` function to get help information for classes and methods.
