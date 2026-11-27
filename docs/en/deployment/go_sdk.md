@@ -167,7 +167,7 @@ Logs of JuiceFS are global to the process and shared by all clients. The log lev
 
 The `Sys` method of the `fs.FileInfo` returned by `Stat`, `Lstat` and `File.Stat` returns a `*juicefs.Stat` containing the inode, the owner, the link count, and the timestamps.
 
-File system errors are generally `*fs.PathError` or `*os.LinkError` wrapping a `syscall.Errno`; Methods such as `ListQuota`, `Warmup`, `Status`, and `SessionInfo`, which do not operate on a single path, return `*os.SyscallError`. Use `errors.Is` to check these errors, for example, `errors.Is(err, fs.ErrNotExist)` or `errors.Is(err, syscall.ENOTDIR)`. After `Client.Close`, file system operations generally return errors wrapping `fs.ErrClosed`. `Name`, `FS` and `Gatherer` remain callable; repeated `Client.Close` and `RemoveAll("")` return nil.
+File system errors are generally `*fs.PathError` or `*os.LinkError` wrapping a `syscall.Errno`. Methods such as `ListQuota`, `Warmup`, `Status`, and `SessionInfo`, which do not operate on a single path, return `*os.SyscallError`. Use `errors.Is` to check these errors, for example, `errors.Is(err, fs.ErrNotExist)` or `errors.Is(err, syscall.ENOTDIR)`. After `Client.Close`, file system operations generally return errors wrapping `fs.ErrClosed`. `Name`, `FS` and `Gatherer` remain callable; repeated `Client.Close` and `RemoveAll("")` return nil.
 
 ### io/fs
 
