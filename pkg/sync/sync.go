@@ -459,11 +459,12 @@ func copyPerms(dst object.ObjectStorage, obj object.Object, config *Config) {
 	key := obj.Key()
 	fi := obj.(object.File)
 	if !fi.IsSymlink() || !config.Links {
+		sc := object.NewStorageController(dst)
 		// chmod needs to be executed after chown, because chown will change setuid setgid to be invalid.
-		if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
+		if err := sc.Chown(key, fi.Owner(), fi.Group()); err != nil {
 			logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
 		}
-		if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
+		if err := sc.Chmod(key, fi.Mode()); err != nil {
 			logger.Warnf("Chmod %s to %o: %s", key, fi.Mode(), err)
 		}
 	}
@@ -624,12 +625,12 @@ func doCheckSum(src, dst object.ObjectStorage, key string, srcChksumPtr *uint32,
 	if obj.IsSymlink() && config.Links && (config.CheckAll || config.CheckNew) {
 		var srcLink, dstLink string
 		var err error
-		if s, ok := src.(object.SupportSymlink); ok {
+		if s := object.NewStorageController(src); s.SupportSymlink() {
 			if srcLink, err = s.Readlink(key); err != nil {
 				return err
 			}
 		}
-		if s, ok := dst.(object.SupportSymlink); ok {
+		if s := object.NewStorageController(dst); s.SupportSymlink() {
 			if dstLink, err = s.Readlink(key); err != nil {
 				return err
 			}
@@ -826,10 +827,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		defer in.Close()
 		r := &chksumReader{in, 0, calChksum}
 		pr := newProgressReader(r, size)
-		err = utils.ErrNotSUP
-		if obj, ok := dst.(object.SupportUploadPartStream); ok {
-			part, err = obj.UploadPartStream(key, uploadID, num+1, pr)
-		}
+		part, err = object.NewStorageController(dst).UploadPartStream(key, uploadID, num+1, pr)
 
 		if errors.Is(err, utils.ErrNotSUP) {
 			data := dynAlloc(int(size))
@@ -1211,10 +1209,8 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 				}
 			}
 			if err == nil {
-				if mc, ok := dst.(object.MtimeChanger); ok {
-					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ErrNotSUP) {
-						logger.Warnf("Update mtime of %s: %s", key, err)
-					}
+				if err = object.NewStorageController(dst).Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ErrNotSUP) {
+					logger.Warnf("Update mtime of %s: %s", key, err)
 				}
 				if config.Perms {
 					copyPerms(dst, obj, config)
@@ -1278,16 +1274,17 @@ func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, c
 }
 
 func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) error {
-	var p string
-	var err error
-	if p, err = src.(object.SupportSymlink).Readlink(key); err != nil {
+	srcCtrl := object.NewStorageController(src)
+	dstCtrl := object.NewStorageController(dst)
+	p, err := srcCtrl.Readlink(key)
+	if err != nil {
 		return err
 	}
 	return try(3, func() (err error) {
 		// TODO: use relative path based on option
-		if err := dst.(object.SupportSymlink).Symlink(p, key); err != nil {
+		if err := dstCtrl.Symlink(p, key); err != nil {
 			if info, err := dst.Head(ctx, key); err == nil && info.IsSymlink() {
-				if cPath, err2 := dst.(object.SupportSymlink).Readlink(key); err2 == nil && p == cPath {
+				if cPath, err2 := dstCtrl.Readlink(key); err2 == nil && p == cPath {
 					return nil
 				}
 			}
@@ -1295,7 +1292,7 @@ func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) er
 				logger.Errorf("delete %s from %s failed: %s", key, dst, err)
 				return err
 			}
-			if err := dst.(object.SupportSymlink).Symlink(p, key); err != nil {
+			if err := dstCtrl.Symlink(p, key); err != nil {
 				logger.Warnf("symlink %s to %s error %s", p, key, err)
 				return err
 			}
@@ -1958,7 +1955,7 @@ func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStora
 	obj, err := src.Head(ctx, key)
 	if err != nil {
 		if config.Links && (errors.Is(err, utils.ErrExtlink) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, os.ErrNotExist)) {
-			if sl, ok := src.(object.SupportSymlink); ok {
+			if sl := object.NewStorageController(src); sl.SupportSymlink() {
 				if target, e := sl.Readlink(key); e == nil {
 					obj, err = object.NewSymlink(key, target), nil
 				} else {

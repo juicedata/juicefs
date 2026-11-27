@@ -68,6 +68,22 @@ func TestDirStorage(t *testing.T) {
 			},
 			wantStr: "file:///tmp/",
 		},
+		{
+			name: "encrypted_withPrefix_file",
+			storage: func() ObjectStorage {
+				dc, _ := NewDataEncryptor(NewRSAEncryptor(rsaKey), AES256GCM_RSA)
+				return NewEncrypted(WithPrefix(base, "subdir/file"), dc)
+			},
+			wantStr: base.String() + "subdir/(encrypted)",
+		},
+		{
+			name: "chunkedEncrypted_filestore_file",
+			storage: func() ObjectStorage {
+				dc, _ := NewDataEncryptor(NewRSAEncryptor(rsaKey), AES256GCM_RSA)
+				return NewChunkedEncrypted(&filestore{root: "/tmp/target"}, dc)
+			},
+			wantStr: "file:///tmp/(encrypted-chunked)",
+		},
 	}
 
 	for _, tc := range tests {

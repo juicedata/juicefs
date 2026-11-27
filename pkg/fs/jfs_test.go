@@ -95,14 +95,15 @@ func testUnsafeKeys(t *testing.T, s object.ObjectStorage) {
 	_, _, _, err = s.List(ctx, "../", "", "", "/", 10, true)
 	unsafe("List", err)
 	optional("Copy", s.Copy(ctx, "copied", bad))
-	if fs, ok := s.(object.FileSystem); ok {
-		optional("Chmod", fs.Chmod(bad, 0755))
-		optional("Chown", fs.Chown(bad, "nobody", "nogroup"))
-		optional("Chtimes", fs.Chtimes(bad, time.Now()))
+	sc := object.NewStorageController(s)
+	if sc.IsFileSystem() {
+		optional("Chmod", sc.Chmod(bad, 0755))
+		optional("Chown", sc.Chown(bad, "nobody", "nogroup"))
+		optional("Chtimes", sc.Chtimes(bad, time.Now()))
 	}
-	if ss, ok := s.(object.SupportSymlink); ok {
-		optional("Symlink", ss.Symlink("x/x.txt", bad))
-		_, err = ss.Readlink(bad)
+	if sc.SupportSymlink() {
+		optional("Symlink", sc.Symlink("x/x.txt", bad))
+		_, err = sc.Readlink(bad)
 		optional("Readlink", err)
 	}
 }
@@ -211,30 +212,30 @@ func testFileSystem(t *testing.T, s object.ObjectStorage) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	if ss, ok := s.(object.SupportSymlink); ok {
+	if sc := object.NewStorageController(s); sc.SupportSymlink() {
 		// a< a- < a/ < a0    <    b< b- < b/ < b0
 		_ = s.Put(ctx, "a-", bytes.NewReader([]byte{}))
 		_ = s.Put(ctx, "a0", bytes.NewReader([]byte{}))
 		_ = s.Put(ctx, "b-", bytes.NewReader([]byte{}))
 		_ = s.Put(ctx, "b0", bytes.NewReader([]byte{}))
 		_ = s.Put(ctx, "xyz/ol1/p.txt", bytes.NewReader([]byte{}))
-		if err = ss.Symlink("./xyz/ol1/", "a"); err != nil {
+		if err = sc.Symlink("./xyz/ol1/", "a"); err != nil {
 			t.Fatalf("symlink a %s", err)
 		}
-		if target, err := ss.Readlink("a"); err != nil || target != "./xyz/ol1/" {
+		if target, err := sc.Readlink("a"); err != nil || target != "./xyz/ol1/" {
 			t.Fatalf("readlink a %s %s", target, err)
 		}
-		if err = ss.Symlink("/xyz/notExist/", "b"); err != nil {
+		if err = sc.Symlink("/xyz/notExist/", "b"); err != nil {
 			t.Fatalf("symlink b %s", err)
 		}
-		if target, err := ss.Readlink("b"); err != nil || target != "/xyz/notExist/" {
+		if target, err := sc.Readlink("b"); err != nil || target != "/xyz/notExist/" {
 			t.Fatalf("readlink b %s %s", target, err)
 		}
 		head, err := s.Head(ctx, "a")
 		if err != nil || !head.IsSymlink() {
 			t.Fatalf("head a %s %s", head, err)
 		}
-		ss.Symlink("notExit", "brokenLink")
+		sc.Symlink("notExit", "brokenLink")
 		_, err = s.Head(ctx, "brokenLink")
 		if !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("head b %s %s", head, err)

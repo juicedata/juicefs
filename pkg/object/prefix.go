@@ -20,10 +20,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"path"
 	"strings"
-	"time"
 )
 
 type withPrefix struct {
@@ -31,18 +29,8 @@ type withPrefix struct {
 	prefix string
 }
 
-func (s *withPrefix) InitTiers(init Tiers) error {
-	if o, ok := s.os.(SupportTier); ok {
-		return o.InitTiers(init)
-	}
-	return notSupported
-}
-
-func (s *withPrefix) GetTier(ctx context.Context) Tier {
-	if o, ok := s.os.(SupportTier); ok {
-		return o.GetTier(ctx)
-	}
-	return Tier{}
+type dirStorager interface {
+	dirStorage() ObjectStorage
 }
 
 // WithPrefix return an object storage that add a prefix to keys.
@@ -54,52 +42,25 @@ func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 // If s already represents a directory (String() ends with "/"), it is returned unchanged.
 // For file-like storages, returns a new storage rooted at the parent directory.
 func DirStorage(s ObjectStorage) ObjectStorage {
-	switch t := s.(type) {
-	case *encrypted:
-		return &encrypted{ObjectStorage: DirStorage(t.ObjectStorage), enc: t.enc}
-	case *chunkedEncrypted:
-		return NewChunkedEncrypted(DirStorage(t.ObjectStorage), t.enc)
-	case *chunkedEncryptedFS:
-		return NewChunkedEncrypted(DirStorage(t.chunkedEncrypted.ObjectStorage), t.enc)
-	case *chunkedEncryptedFSSymlink:
-		return NewChunkedEncrypted(DirStorage(t.chunkedEncryptedFS.chunkedEncrypted.ObjectStorage), t.enc)
-	}
-	if strings.HasSuffix(s.String(), "/") {
-		return s
-	}
-	switch t := s.(type) {
-	case *withPrefix:
-		dir := path.Clean(path.Dir(t.prefix))
-		if dir == "." {
-			return t.os
-		}
-		return &withPrefix{os: t.os, prefix: dir + "/"}
-	case *filestore:
-		dir := path.Clean(path.Dir(t.root))
-		return &filestore{root: dir + "/"}
+	if d, ok := s.(dirStorager); ok {
+		return d.dirStorage()
 	}
 	return s
 }
 
-func (s *withPrefix) Symlink(oldName, newName string) error {
-	if w, ok := s.os.(SupportSymlink); ok {
-		return w.Symlink(oldName, s.prefix+newName)
-	}
-	return notSupported
+func (p *withPrefix) unwrapLayer(key string) (ObjectStorage, string, invariant) {
+	return p.os, p.prefix + key, invNamespace | invPayload
 }
 
-func (s *withPrefix) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
-	if w, ok := s.os.(SupportUploadPartStream); ok {
-		return w.UploadPartStream(s.prefix+key, uploadID, num, in)
+func (p *withPrefix) dirStorage() ObjectStorage {
+	if strings.HasSuffix(p.String(), "/") {
+		return p
 	}
-	return nil, notSupported
-}
-
-func (s *withPrefix) Readlink(name string) (string, error) {
-	if w, ok := s.os.(SupportSymlink); ok {
-		return w.Readlink(s.prefix + name)
+	dir := path.Clean(path.Dir(p.prefix))
+	if dir == "." {
+		return DirStorage(p.os)
 	}
-	return "", notSupported
+	return &withPrefix{os: p.os, prefix: dir + "/"}
 }
 
 func (p *withPrefix) String() string {
@@ -217,27 +178,6 @@ func (p *withPrefix) ListAll(ctx context.Context, prefix, marker string, followL
 	return r2, nil
 }
 
-func (p *withPrefix) Chmod(path string, mode os.FileMode) error {
-	if fs, ok := p.os.(FileSystem); ok {
-		return fs.Chmod(p.prefix+path, mode)
-	}
-	return notSupported
-}
-
-func (p *withPrefix) Chown(path string, owner, group string) error {
-	if fs, ok := p.os.(FileSystem); ok {
-		return fs.Chown(p.prefix+path, owner, group)
-	}
-	return notSupported
-}
-
-func (p *withPrefix) Chtimes(key string, mtime time.Time) error {
-	if fs, ok := p.os.(FileSystem); ok {
-		return fs.Chtimes(p.prefix+key, mtime)
-	}
-	return notSupported
-}
-
 func (p *withPrefix) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	return p.os.CreateMultipartUpload(ctx, p.prefix+key)
 }
@@ -271,12 +211,7 @@ func (p *withPrefix) Restore(ctx context.Context, key string, days int32) error 
 }
 
 var _ ObjectStorage = (*withPrefix)(nil)
-var _ SupportTier = (*withPrefix)(nil)
 
 func IsFileSystem(object ObjectStorage) bool {
-	if o, ok := object.(*withPrefix); ok {
-		object = o.os
-	}
-	_, ok := object.(FileSystem)
-	return ok
+	return NewStorageController(object).IsFileSystem()
 }

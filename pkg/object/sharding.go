@@ -78,11 +78,17 @@ func (s *sharded) Delete(ctx context.Context, key string, getters ...AttrGetter)
 	return s.pick(key).Delete(ctx, key, getters...)
 }
 
+func (s *sharded) Shutdown() {
+	for _, st := range s.stores {
+		Shutdown(st)
+	}
+}
+
 func (s *sharded) InitTiers(init Tiers) error {
 	var err = notSupported
 	for _, o := range s.stores {
-		if o, ok := o.(SupportTier); ok {
-			err = o.InitTiers(init)
+		if t, _, ok := resolve[SupportTier](o, "", invNone); ok {
+			err = t.InitTiers(init)
 		}
 	}
 	return err
@@ -90,8 +96,8 @@ func (s *sharded) InitTiers(init Tiers) error {
 
 func (s *sharded) GetTier(ctx context.Context) Tier {
 	for _, o := range s.stores {
-		if o, ok := o.(SupportTier); ok {
-			return o.GetTier(ctx)
+		if t, _, ok := resolve[SupportTier](o, "", invNone); ok {
+			return t.GetTier(ctx)
 		}
 	}
 	return Tier{}

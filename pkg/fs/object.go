@@ -29,8 +29,8 @@ type storageHolder struct {
 	config object.VolumeConfig
 }
 
-func (h *storageHolder) Shutdown() {
-	object.Shutdown(h.ObjectStorage)
+func (h *storageHolder) Unwrap() object.ObjectStorage {
+	return h.ObjectStorage
 }
 
 // NewReloadableStorage creates object storage and recreates it when storage settings change on reload.

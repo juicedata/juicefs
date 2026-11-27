@@ -29,13 +29,22 @@ type reloadTestMeta struct {
 	reload func(*meta.Format) error
 }
 
+type shutdownTestStore struct {
+	object.ObjectStorage
+	shutdowns *int
+}
+
+func (s *shutdownTestStore) Shutdown() {
+	*s.shutdowns++
+}
+
 func (m *reloadTestMeta) OnReload(fn func(*meta.Format) error) {
 	m.reload = fn
 }
 
 func TestReloadableStorage(t *testing.T) {
 	const storage = "reload-test"
-	var created int
+	var created, shutdowns int
 	var createErr error
 	object.Register(storage, func(bucket, accessKey, secretKey, token string) (object.ObjectStorage, error) {
 		if secretKey != "test-secret" {
@@ -45,7 +54,11 @@ func TestReloadableStorage(t *testing.T) {
 		if createErr != nil {
 			return nil, createErr
 		}
-		return object.CreateStorage("mem", bucket, accessKey, secretKey, token)
+		s, err := object.CreateStorage("mem", bucket, accessKey, secretKey, token)
+		if err != nil {
+			return nil, err
+		}
+		return &shutdownTestStore{ObjectStorage: s, shutdowns: &shutdowns}, nil
 	})
 	plain := meta.Format{Name: "vol", Storage: storage, Bucket: "original", SecretKey: "test-secret"}
 	format := plain
@@ -85,5 +98,9 @@ func TestReloadableStorage(t *testing.T) {
 	}
 	if updated.UploadLimit != 42 || !updated.KeyEncrypted {
 		t.Fatalf("reload callback did not preserve patched limits and encrypted credentials")
+	}
+	object.Shutdown(blob)
+	if shutdowns != 1 {
+		t.Fatalf("expected 1 shutdown on active reloaded storage, got %d", shutdowns)
 	}
 }
