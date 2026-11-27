@@ -573,10 +573,21 @@ func (fs *FileSystem) MkdirAll0(ctx meta.Context, p string, mode uint16, umask u
 			err = fs.Mkdir(ctx, p, mode, umask)
 		}
 	}
-	if existOK && err == syscall.EEXIST {
-		err = 0
+	if !existOK || err != syscall.EEXIST {
+		return err
 	}
-	return err
+	fi, statErr := fs.Stat(ctx, p)
+	if statErr != 0 {
+		if statErr == syscall.ENOENT {
+			// A dangling symlink still occupies the destination.
+			return err
+		}
+		return statErr
+	}
+	if !fi.IsDir() {
+		return syscall.ENOTDIR
+	}
+	return 0
 }
 
 func (fs *FileSystem) Unlink(ctx meta.Context, p string) (err syscall.Errno) {
