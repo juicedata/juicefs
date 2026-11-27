@@ -174,7 +174,8 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 
 		parse, err := url.Parse(uri)
 		if err != nil {
-			return nil, fmt.Errorf("parse url %s failed: %s", uri, err)
+			reason, _, _ := strings.Cut(err.(*url.Error).Err.Error(), `"`)
+			return nil, fmt.Errorf("parse postgres address: %s", strings.TrimSpace(reason))
 		}
 		searchPath = parse.Query().Get("search_path")
 		if searchPath != "" {
@@ -185,7 +186,7 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	}
 	engine, err := xorm.NewEngine(driver, uri)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %s", uri, err)
+		return nil, fmt.Errorf("open %s: %s", driver, err)
 	}
 	switch logger.Level { // make xorm less verbose
 	case logrus.TraceLevel:
