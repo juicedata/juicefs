@@ -18,6 +18,7 @@ package fs
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"net/http"
@@ -25,6 +26,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -91,6 +93,49 @@ func TestWebdav(t *testing.T) {
 	}
 	if err = aFile.Close(); err != nil {
 		t.Fatalf("webdavFS close file failed: %s", err)
+	}
+}
+
+func TestWebdavPermissions(t *testing.T) {
+	jfs := createTestFS(t)
+	owner := meta.NewContext(1, 2000, []uint32{2000})
+	user := meta.NewContext(1, 1000, []uint32{1000})
+	dav := &webdavFS{ctx: user, fs: jfs}
+
+	for _, tc := range []struct {
+		name string
+		mode uint16
+		flag int
+		want error
+	}{
+		{"private", 0600, os.O_RDONLY, syscall.EACCES},
+		{"readable", 0644, os.O_RDONLY, nil},
+		{"write-only-read", 0622, os.O_RDONLY, syscall.EACCES},
+		{"write-only-write", 0622, os.O_WRONLY, nil},
+		{"read-only-write", 0644, os.O_WRONLY, syscall.EACCES},
+		{"read-only-readwrite", 0644, os.O_RDWR, syscall.EACCES},
+		{"readwrite", 0666, os.O_RDWR, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			name := "/" + tc.name
+			f, err := jfs.Create(owner, name, tc.mode, 0)
+			if err != 0 {
+				t.Fatal(err)
+			}
+			if err := f.Close(owner); err != 0 {
+				t.Fatal(err)
+			}
+
+			file, openErr := dav.OpenFile(context.Background(), name, tc.flag, 0)
+			if openErr == nil {
+				if err := file.Close(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if !errors.Is(openErr, tc.want) {
+				t.Fatalf("OpenFile(%s, %d): got %v, want %v", name, tc.flag, openErr, tc.want)
+			}
+		})
 	}
 }
 

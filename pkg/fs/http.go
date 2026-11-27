@@ -97,10 +97,15 @@ func (hfs *webdavFS) Mkdir(ctx context.Context, name string, perm os.FileMode) e
 
 func (hfs *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
 	var mode int
-	if flag&(os.O_RDONLY|os.O_RDWR) != 0 {
-		mode |= vfs.MODE_MASK_R
+	switch flag & (os.O_RDONLY | os.O_WRONLY | os.O_RDWR) {
+	case os.O_RDONLY:
+		mode = vfs.MODE_MASK_R
+	case os.O_WRONLY:
+		mode = vfs.MODE_MASK_W
+	default: // O_RDWR, and the invalid mode 3 so that it is still checked
+		mode = vfs.MODE_MASK_R | vfs.MODE_MASK_W
 	}
-	if flag&(os.O_APPEND|os.O_RDWR|os.O_WRONLY) != 0 {
+	if flag&os.O_APPEND != 0 {
 		mode |= vfs.MODE_MASK_W
 	}
 	if flag&(os.O_EXCL) != 0 {
