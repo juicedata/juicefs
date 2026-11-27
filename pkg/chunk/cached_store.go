@@ -18,6 +18,7 @@ package chunk
 
 import (
 	"bytes"
+	"container/heap"
 	"context"
 	"errors"
 	"fmt"
@@ -50,6 +51,57 @@ type pendingItem struct {
 	fpath     string    // full path of local file corresponding to the key
 	ts        time.Time // timestamp when this item is added
 	uploading atomic.Bool
+}
+
+type pendingHeap []*pendingItem
+
+func (h pendingHeap) Len() int           { return len(h) }
+func (h pendingHeap) Less(i, j int) bool { return h[i].ts.Before(h[j].ts) }
+func (h pendingHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *pendingHeap) Push(x any)        { *h = append(*h, x.(*pendingItem)) }
+func (h *pendingHeap) Pop() any {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	old[n-1] = nil
+	*h = old[:n-1]
+	return item
+}
+
+// pendingQueue hands staged blocks to the uploaders, oldest first.
+type pendingQueue struct {
+	mu    sync.Mutex
+	cond  *sync.Cond
+	items pendingHeap
+}
+
+func newPendingQueue() *pendingQueue {
+	q := &pendingQueue{}
+	q.cond = sync.NewCond(&q.mu)
+	return q
+}
+
+func (q *pendingQueue) push(item *pendingItem) {
+	q.mu.Lock()
+	heap.Push(&q.items, item)
+	q.mu.Unlock()
+	q.cond.Signal()
+}
+
+// pop blocks until there is an item, then returns the one staged earliest.
+func (q *pendingQueue) pop() *pendingItem {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for len(q.items) == 0 {
+		q.cond.Wait()
+	}
+	return heap.Pop(&q.items).(*pendingItem)
+}
+
+func (q *pendingQueue) len() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return len(q.items)
 }
 
 // slice for read and remove
@@ -438,7 +490,8 @@ func (s *wSlice) upload(indx int) {
 				}
 			} else {
 				s.errors <- nil
-				if s.store.conf.UploadDelay == 0 && s.store.canUpload() {
+				// blocks that are already waiting go first
+				if s.store.conf.UploadDelay == 0 && s.store.canUpload() && s.store.pendingQ.len() == 0 {
 					select {
 					case s.store.currentUpload <- struct{}{}:
 						defer func() { <-s.store.currentUpload }()
@@ -668,7 +721,7 @@ type cachedStore struct {
 	group           *Controller
 	currentUpload   chan struct{}
 	currentDownload chan struct{}
-	pendingCh       chan *pendingItem
+	pendingQ        *pendingQueue
 	pendingKeys     map[string]*pendingItem
 	pendingMutex    sync.Mutex
 	startHour       int
@@ -852,7 +905,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		currentDownload: make(chan struct{}, config.MaxDownload),
 		compressor:      compressor,
 		seekable:        compressor.CompressBound(0) == 0,
-		pendingCh:       make(chan *pendingItem, 100*config.MaxUpload),
+		pendingQ:        newPendingQueue(),
 		pendingKeys:     make(map[string]*pendingItem),
 		group:           NewController(),
 	}
@@ -1117,15 +1170,9 @@ func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.
 	store.pendingMutex.Unlock()
 	if force || store.canUpload() && time.Since(added) > store.conf.UploadDelay {
 		if item.uploading.CompareAndSwap(false, true) {
-			select {
-			case store.pendingCh <- item:
-				return true
-			default:
-				item.uploading.Store(false)
-			}
-		} else {
-			return true
+			store.pendingQ.push(item)
 		}
+		return true
 	}
 	return false
 }
@@ -1151,16 +1198,15 @@ func (store *cachedStore) scanDelayedStaging() {
 	store.pendingMutex.Lock()
 	defer store.pendingMutex.Unlock()
 	for _, item := range store.pendingKeys {
-		store.pendingMutex.Unlock()
 		if item.ts.Before(cutoff) && item.uploading.CompareAndSwap(false, true) {
-			store.pendingCh <- item
+			store.pendingQ.push(item)
 		}
-		store.pendingMutex.Lock()
 	}
 }
 
 func (store *cachedStore) uploader() {
-	for it := range store.pendingCh {
+	for {
+		it := store.pendingQ.pop()
 		store.uploadStagingFile(it.key, it.fpath)
 	}
 }
