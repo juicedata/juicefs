@@ -1,6 +1,7 @@
 ---
 title: Go SDK
 sidebar_position: 6
+description: Learn how to use the JuiceFS Go SDK to access files directly from Go applications without FUSE, configure the client, run benchmarks, and understand API behavior and limitations.
 ---
 
 The Go SDK lets Go programs access a JuiceFS volume directly through the metadata engine and object storage, without a FUSE mount. It suits containerized environments where FUSE is not available, and Go services that want to read and write JuiceFS in process.
@@ -162,15 +163,15 @@ Logs of JuiceFS are global to the process and shared by all clients. The log lev
 | Names | `Rename`, `Link`, `Symlink`, `Readlink` |
 | Attributes | `Stat`, `Lstat`, `Chmod`, `Chown`, `Lchown`, `Chtimes` |
 
-`*File` provides common `*os.File` operations, including `Read`, `ReadAt`, `Write`, `WriteAt`, `Seek`, `Stat`, `Sync`, `Truncate`, `Chmod`, `Chown`, `ReadDir`, `Readdir`, `Readdirnames` and `Close`, and implements `io.Reader`, `io.Writer`, `io.Seeker`, `io.ReaderAt`, `io.WriterAt` and `fs.ReadDirFile`. `OpenFile` supports the flags `O_RDONLY`, `O_WRONLY`, `O_RDWR`, `O_CREATE`, `O_EXCL`, `O_TRUNC` and `O_APPEND`; other flags give `EINVAL`.
+`*File` provides common `*os.File` operations, including `Read`, `ReadAt`, `Write`, `WriteAt`, `Seek`, `Stat`, `Sync`, `Truncate`, `Chmod`, `Chown`, `ReadDir`, `Readdir`, `Readdirnames` and `Close`, and implements `io.Reader`, `io.Writer`, `io.Seeker`, `io.ReaderAt`, `io.WriterAt` and `fs.ReadDirFile`. `OpenFile` supports the flags `O_RDONLY`, `O_WRONLY`, `O_RDWR`, `O_CREATE`, `O_EXCL`, `O_TRUNC` and `O_APPEND`; other flags return `EINVAL`.
 
-The `Sys` method of the `fs.FileInfo` returned by `Stat`, `Lstat` and `File.Stat` returns a `*juicefs.Stat` with the inode, the owner, the link count and the timestamps.
+The `Sys` method of the `fs.FileInfo` returned by `Stat`, `Lstat` and `File.Stat` returns a `*juicefs.Stat` containing the inode, the owner, the link count, and the timestamps.
 
-File system errors are generally `*fs.PathError` or `*os.LinkError` wrapping a `syscall.Errno`; `ListQuota`, `Warmup`, `Status` and `SessionInfo`, which take no single name, return `*os.SyscallError`. Check them with `errors.Is`, for example `errors.Is(err, fs.ErrNotExist)` or `errors.Is(err, syscall.ENOTDIR)`. After `Client.Close`, file system operations generally return errors wrapping `fs.ErrClosed`. `Name`, `FS` and `Gatherer` remain callable; repeated `Client.Close` and `RemoveAll("")` return nil.
+File system errors are generally `*fs.PathError` or `*os.LinkError` wrapping a `syscall.Errno`. Methods such as `ListQuota`, `Warmup`, `Status`, and `SessionInfo`, which do not operate on a single path, return `*os.SyscallError`. Use `errors.Is` to check these errors, for example, `errors.Is(err, fs.ErrNotExist)` or `errors.Is(err, syscall.ENOTDIR)`. After `Client.Close`, file system operations generally return errors wrapping `fs.ErrClosed`. `Name`, `FS` and `Gatherer` remain callable; repeated `Client.Close` and `RemoveAll("")` return nil.
 
 ### io/fs
 
-`Client.FS()` returns an `fs.FS` view of the volume. It opens files for reading, but does not enforce read-only access through all methods of the underlying `*File`; use `Config.ReadOnly` for a read-only client. It also implements `fs.StatFS`, `fs.ReadDirFS`, `fs.ReadFileFS` and `fs.ReadLinkFS`. Its names follow `fs.ValidPath`: no leading `/`, and `"."` is the root of the volume.
+`Client.FS()` returns an `fs.FS` view of the volume. It opens files in read-only mode, but this does not prevent all modification operations through the underlying `*File`. Set `Config.ReadOnly` to create a read-only client. It also implements `fs.StatFS`, `fs.ReadDirFS`, `fs.ReadFileFS` and `fs.ReadLinkFS`. Paths passed to this file system must satisfy `fs.ValidPath`: they must not start with `/`, and `"."` represents the root of the volume.
 
 ```go
 fsys := c.FS()
@@ -189,16 +190,16 @@ http.Handle("/", http.FileServerFS(fsys))
 
 | Methods | Description |
 | --- | --- |
-| `Getxattr`, `Listxattr`, `Setxattr`, `Removexattr` | Extended attributes, following symbolic links. `Setxattr` takes `0`, `juicefs.XattrCreate` or `juicefs.XattrReplace`. A missing attribute gives `syscall.ENODATA` on Linux and `syscall.ENOATTR` on macOS |
-| `Clone` | Clone a file or a directory by copying its metadata, as [`juicefs clone`](../reference/command_reference.mdx#clone) |
-| `Info`, `Summary` | Usage of a file or a directory tree, as [`juicefs info`](../reference/command_reference.mdx#info) and [`juicefs summary`](../reference/command_reference.mdx#summary) |
-| `SetQuota`, `GetQuota`, `DelQuota`, `ListQuota`, `CheckQuota` | [Quotas](../guide/quota.md) of directories (by path) and of users and groups (`uid:<uid>` and `gid:<gid>`). They run as root, without permission checks |
-| `Warmup` | Warm up, check or evict the cache of files, as [`juicefs warmup`](../reference/command_reference.mdx#warmup) |
-| `Status`, `SessionInfo` | Setting, statistics and sessions of the volume, as [`juicefs status`](../reference/command_reference.mdx#status); the setting leaves out credentials |
+| `Getxattr`, `Listxattr`, `Setxattr`, `Removexattr` | Extended attributes that follow symbolic links. `Setxattr` takes `0`, `juicefs.XattrCreate` or `juicefs.XattrReplace`. If an attribute does not exist, the operation returns `syscall.ENODATA` on Linux and `syscall.ENOATTR` on macOS. |
+| `Clone` | Clone a file or a directory by copying its metadata, the same as [`juicefs clone`](../reference/command_reference.mdx#clone). |
+| `Info`, `Summary` | Report usage for a file or directory tree, the same as [`juicefs info`](../reference/command_reference.mdx#info) and [`juicefs summary`](../reference/command_reference.mdx#summary). |
+| `SetQuota`, `GetQuota`, `DelQuota`, `ListQuota`, `CheckQuota` | Manage [quotas](../guide/quota.md) of directories (specified by path), users, and groups (`uid:<uid>` and `gid:<gid>`). They run as root, without permission checks. |
+| `Warmup` | Warm up, check, or evict the cache of files, the same as [`juicefs warmup`](../reference/command_reference.mdx#warmup). |
+| `Status`, `SessionInfo` | Volume configuration, statistics, and session information, the same as [`juicefs status`](../reference/command_reference.mdx#status). The returned configuration excludes credentials. |
 
 ### Metrics
 
-Each `Client` has its own Prometheus registry. `Client.Gatherer()` returns it, so that it can be exposed by the program together with its own metrics:
+Each `Client` has its own Prometheus registry. `Client.Gatherer()` returns it, allowing the application to expose JuiceFS metrics alongside its own:
 
 ```go
 http.Handle("/metrics", promhttp.HandlerFor(
@@ -215,25 +216,25 @@ Run from the repository root, without `-race` when measuring performance:
 go test -tags nogspt -run '^$' -bench '^BenchmarkClient' -benchmem -benchtime=1s ./sdk/go
 ```
 
-The benchmarks use temporary SQLite metadata and local file storage. No FUSE mount or external services are needed. Setup, fixture validation and cleanup are excluded from timing. All workloads are single-threaded (queue depth 1).
+The benchmarks use a temporary SQLite metadata store and local file storage. No FUSE mount or external services are required. Setup, fixture validation, and cleanup are excluded from the measurements. All workloads are single-threaded (queue depth 1).
 
 | Benchmark | Workload and timing | Metrics |
 | --- | --- | --- |
-| `ClientMetadata/CreateEmpty` | Create and close a new, uniquely named empty file per operation; deletion is excluded | files/s, average µs/op |
-| `ClientMetadata/Mkdir` | Create a different empty directory per operation; prepare names before timing, exclude deletion | op/s, average µs/op |
-| `ClientMetadata/RemoveDir` | Pre-create one empty directory per operation; only delete directories during timing | op/s, average µs/op |
-| `ClientMetadata/RemoveFile/Empty` | Pre-create and close a batch of empty files; remove one file per operation during timing | files/s, average µs/op |
-| `ClientMetadata/RemoveFile/4KiB` | Pre-create and close/flush a batch of 4 KiB files; remove one file per operation during timing | files/s, average µs/op |
-| `ClientMetadata/OpenClose` | Sequentially traverse 1,024 pre-created empty files, opening and closing one file per operation; restart after each traversal | files/s, average µs/op |
-| `ClientMetadata/Stat` | Sequentially traverse 1,024 pre-created empty files, querying one file's attributes per operation; restart after each traversal | ops/s, average µs/op |
-| `ClientSmallFiles/Create4KiB` | Create a new 4 KiB file per operation, including close/flush | files/s, average µs/op |
-| `ClientSmallFiles/Read4KiBWarm` | Rotate through 256 pre-created, warmed 4 KiB files; each operation includes open/read/close | files/s, average µs/op |
-| `ClientSequential/Write256MiB` | Write a 256 MiB file sequentially in 1 MiB requests, then `Sync`; rewind and overwrite on subsequent passes | MB/s |
-| `ClientSequential/Read256MiB` | Read a pre-created 256 MiB file sequentially in 1 MiB requests; rewind on each pass | MB/s |
-| `ClientRandom/Read4KiB` | Read aligned 4 KiB blocks in a fixed random permutation across a 256 MiB file | IOPS, average µs/op |
-| `ClientRandom/Write4KiBSync` | Write aligned 4 KiB blocks in the same random order, including `Sync` after every write | IOPS, average µs/op |
+| `ClientMetadata/CreateEmpty` | Create and close a new, uniquely named empty file per operation; deletion is excluded. | files/s, average µs/op |
+| `ClientMetadata/Mkdir` | Create a different empty directory for each operation. Directory names are prepared before timing, and deletion is excluded. | op/s, average µs/op |
+| `ClientMetadata/RemoveDir` | Create one empty directory for each operation before timing. Only delete directories during timing. | op/s, average µs/op |
+| `ClientMetadata/RemoveFile/Empty` | Create and close a batch of empty files before timing. Remove one file per operation during timing. | files/s, average µs/op |
+| `ClientMetadata/RemoveFile/4KiB` | Create and close/flush a batch of 4 KiB files before timing. Remove one file per operation during timing. | files/s, average µs/op |
+| `ClientMetadata/OpenClose` | Open and close each of 1,024 pre-created empty files in sequence, one file per operation. Repeat from the beginning after each full pass. | files/s, average µs/op |
+| `ClientMetadata/Stat` | Query the attributes of each of 1,024 pre-created empty files in sequence, one file per operation. Repeat from the beginning after each full pass. | ops/s, average µs/op |
+| `ClientSmallFiles/Create4KiB` | Create a new 4 KiB file per operation, including closing/flushing the file. | files/s, average µs/op |
+| `ClientSmallFiles/Read4KiBWarm` | Rotate through 256 pre-created, warmed 4 KiB files. Each operation opens, reads, and closes one file. | files/s, average µs/op |
+| `ClientSequential/Write256MiB` | Sequentially write a 256 MiB file using 1 MiB requests. Each iteration includes a `Sync`, and subsequent iterations overwrite the file from the beginning. | MB/s |
+| `ClientSequential/Read256MiB` | Sequentially read a pre-created 256 MiB file using 1 MiB requests. Each iteration starts reading from the beginning of the file. | MB/s |
+| `ClientRandom/Read4KiB` | Read aligned 4 KiB blocks in a fixed random permutation across a 256 MiB file. | IOPS, average µs/op |
+| `ClientRandom/Write4KiBSync` | Write aligned 4 KiB blocks in the same random order. Each write includes a `Sync`. | IOPS, average µs/op |
 
-Benchmark names have the `Benchmark` prefix. All cases report allocations; `avg-us/op` is the arithmetic mean, not a latency percentile. MB/s uses decimal megabytes. File creation includes generating a unique filename but excludes deletion. `RemoveFile` excludes filename generation, file preparation and post-deletion verification; it measures time until `Remove` returns without an additional wait for background data reclamation. For `OpenClose` and `Stat`, batch creation and filename generation are excluded from timing; the default metadata cache settings are retained.
+Benchmark names have the `Benchmark` prefix. All cases report allocations; `avg-us/op` is the arithmetic mean latency, not a latency percentile. MB/s uses decimal megabytes. File creation includes generating a unique filename but excludes deletion. `RemoveFile` excludes filename generation, file preparation and post-deletion verification; it measures time until `Remove` returns without an additional wait for background data reclamation. For `OpenClose` and `Stat`, batch creation and filename generation are excluded from timing; the default metadata cache settings are retained.
 
 Large-file cases keep one handle open during timing and disable the SDK chunk cache; internal read buffers and the OS page cache remain enabled. Read fixtures are fully read and verified before timing, so reads can hit warm caches. The random offset sequence is prepared outside timing. `Sync` waits for upload and metadata commit, but the local file storage backend does not call `fsync`, so these results are not physical-disk durability or cold-storage measurements. For comparisons, keep the workload, cache state and flush policy consistent. Run individual cases in separate processes for repeated samples, for example:
 
@@ -245,10 +246,10 @@ done
 
 ## Known limitations
 
-- **Concurrent use of a `File`**: concurrent `Read`, `Write` and `Seek` calls share the offset without ordering. Synchronize them in the application, or use `ReadAt` and `WriteAt` for explicit offsets. Reads and writes on the same handle are serialized inside JuiceFS. `Close` does not wait for operations in progress.
+- **Concurrent use of a `File`**: Concurrent `Read`, `Write`, and `Seek` calls share the offset without ordering. Synchronize them in the application, or use `ReadAt` and `WriteAt` for explicit offsets. Reads and writes on the same handle are serialized inside JuiceFS. `Close` does not wait for operations in progress.
 - **Length of an open file.** `Read` and `ReadAt` use the length recorded when the handle was opened and updated by writes and truncation through that handle. A path-based `Client.Truncate` can leave existing handles with a stale read limit, even on the same client. For example, after shrinking a file from 6 bytes to 2 bytes, `ReadAt` at offset 3 on an existing handle may return bytes past the new EOF, even if `File.Stat` and `Seek(0, io.SeekEnd)` already report 2. Close and reopen the file to read using the new length or to see data appended by other handles or clients.
 - **Append and truncation**: `O_APPEND` uses the end of the file known by the handle; appends from multiple handles are not atomic. `O_TRUNC` truncates after opening, in a separate operation.
-- **Attribute cache**: with the default `AttrCache` and `DirEntryCache`, `Stat` of a directory may return the old modification time and link count for up to one second after its entries change. Set them to 0 if this matters.
+- **Attribute cache**: With the default `AttrCache` and `DirEntryCache`, `Stat` of a directory may return the old modification time and link count for up to one second after its entries change. Set them to `0` if this matters.
 - **Large directories**: `ReadDir` and `File.ReadDir` load the whole directory into memory.
 - **Symbolic links**: `Symlink` with an absolute target stores it as a path relative to the link, and `Readlink` returns the stored path.
 - **Creating a missing symbolic link target.** If the final path component is a symbolic link whose target file is missing, `Client.OpenFile` with `O_CREATE` and without `O_EXCL` returns `ENOENT` even when the target's parent directory exists and permits creation. In the same case, `os.OpenFile` on a Linux JuiceFS mount follows the link and creates the target file.
