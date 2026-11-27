@@ -542,8 +542,9 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 		return err
 	}
 	var inode Ino
-	err = fs.m.Mkdir(ctx, nd.dir.inode, nd.name, mode, umask, 0, &inode, nil)
-	if err == syscall.ENOENT && nd.dir.inode != 1 {
+	parentIno := nd.dir.inode
+	err = fs.m.Mkdir(ctx, parentIno, nd.name, mode, umask, 0, &inode, nil)
+	if err == syscall.ENOENT && parentIno != 1 {
 		// parent be moved into trash, try again
 		if fs.conf.DirEntryTimeout > 0 {
 			parent := parentDir(p)
@@ -553,11 +554,15 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 		}
 		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
 			return e
-		} else if fi2.inode != nd.dir.inode {
-			err = fs.m.Mkdir(ctx, fi2.inode, nd.name, mode, umask, 0, &inode, nil)
+		} else if fi2.inode != parentIno {
+			parentIno = fi2.inode
+			err = fs.m.Mkdir(ctx, parentIno, nd.name, mode, umask, 0, &inode, nil)
 		}
 	}
 	fs.InvalidateEntry(nd.dir.inode, nd.name)
+	if err == 0 {
+		fs.InvalidateAttr(parentIno)
+	}
 	return
 }
 
@@ -624,6 +629,8 @@ func (fs *FileSystem) BatchDeleteEntries(ctx meta.Context, parent string, ps []s
 	for _, p := range ps {
 		fs.InvalidateEntry(parentInfo.inode, path.Base(p))
 	}
+	// Earlier batches can commit even if a later batch fails.
+	fs.InvalidateAttr(parentInfo.inode)
 	return eno
 }
 
@@ -652,6 +659,9 @@ func (fs *FileSystem) Delete0(ctx meta.Context, p string, callByUnlink bool) (er
 		err = fs.m.Unlink(ctx, nd.dir.inode, nd.name)
 	}
 	fs.InvalidateEntry(nd.dir.inode, nd.name)
+	if err == 0 {
+		fs.InvalidateAttr(nd.dir.inode)
+	}
 	return
 }
 
@@ -668,6 +678,9 @@ func (fs *FileSystem) Rmdir(ctx meta.Context, p string) (err syscall.Errno) {
 	}
 	err = fs.m.Rmdir(ctx, nd.dir.inode, nd.name)
 	fs.InvalidateEntry(nd.dir.inode, nd.name)
+	if err == 0 {
+		fs.InvalidateAttr(nd.dir.inode)
+	}
 	return
 }
 
@@ -695,6 +708,9 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string, skipTrash bool, numthreads
 	}
 	err = fs.m.Remove(ctx, nd.dir.inode, nd.name, skipTrash, numthreads, nil)
 	fs.InvalidateEntry(nd.dir.inode, nd.name)
+	if err == 0 {
+		fs.InvalidateAttr(nd.dir.inode)
+	}
 	return
 }
 
@@ -747,6 +763,12 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 	err = fs.m.Rename(ctx, src.dir.inode, src.name, dst.dir.inode, dst.name, flags, nil, nil)
 	fs.InvalidateEntry(src.dir.inode, src.name)
 	fs.InvalidateEntry(dst.dir.inode, dst.name)
+	if err == 0 {
+		fs.InvalidateAttr(src.dir.inode)
+		if src.dir.inode != dst.dir.inode {
+			fs.InvalidateAttr(dst.dir.inode)
+		}
+	}
 	return
 }
 
@@ -824,6 +846,9 @@ func (fs *FileSystem) Link(ctx meta.Context, src string, dst string) (err syscal
 	}
 	err = fs.m.Link(ctx, fi.inode, nd.dir.inode, nd.name, nil)
 	fs.InvalidateEntry(nd.dir.inode, nd.name)
+	if err == 0 {
+		fs.InvalidateAttr(nd.dir.inode)
+	}
 	return
 }
 
@@ -843,6 +868,9 @@ func (fs *FileSystem) Symlink(ctx meta.Context, target string, link string) (err
 	}
 	err = fs.m.Symlink(ctx, nd.dir.inode, nd.name, target, nil, nil)
 	fs.InvalidateEntry(nd.dir.inode, nd.name)
+	if err == 0 {
+		fs.InvalidateAttr(nd.dir.inode)
+	}
 	return
 }
 
@@ -1315,8 +1343,9 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 	}
 	var inode Ino
 	var attr = &Attr{}
-	err = fs.m.Create(ctx, nd.dir.inode, nd.name, mode&07777, umask, syscall.O_EXCL, &inode, attr)
-	if err == syscall.ENOENT && nd.dir.inode != 1 {
+	parentIno := nd.dir.inode
+	err = fs.m.Create(ctx, parentIno, nd.name, mode&07777, umask, syscall.O_EXCL, &inode, attr)
+	if err == syscall.ENOENT && parentIno != 1 {
 		// dir be moved into trash, try again
 		if fs.conf.DirEntryTimeout > 0 {
 			parent := parentDir(p)
@@ -1326,11 +1355,13 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 		}
 		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
 			return nil, e
-		} else if fi2.inode != nd.dir.inode {
-			err = fs.m.Create(ctx, fi2.inode, nd.name, mode&07777, umask, syscall.O_EXCL, &inode, attr)
+		} else if fi2.inode != parentIno {
+			parentIno = fi2.inode
+			err = fs.m.Create(ctx, parentIno, nd.name, mode&07777, umask, syscall.O_EXCL, &inode, attr)
 		}
 	}
 	if err == 0 {
+		fs.InvalidateAttr(parentIno)
 		fi := AttrToFileInfo(inode, attr)
 		fi.name = nd.name
 		f = &File{}
