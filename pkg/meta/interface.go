@@ -438,6 +438,8 @@ type Meta interface {
 	ListSessions() ([]*Session, error)
 	// ScanDeletedObject scan deleted objects by customized scanner.
 	ScanDeletedObject(Context, trashSliceScan, pendingSliceScan, trashFileScan, pendingFileScan) error
+	// CleanupOrphanXattrs reports xattrs without an inode and removes them only when delete is true.
+	CleanupOrphanXattrs(ctx Context, delete bool, progress func(int)) error
 	// ListLocks returns all locks of a inode.
 	ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error)
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
