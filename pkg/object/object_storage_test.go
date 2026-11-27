@@ -1526,6 +1526,14 @@ func TestPG(t *testing.T) { //skip mutate
 	testStorage(t, s)
 
 }
+
+func TestPGInvalidAddress(t *testing.T) {
+	_, err := newSQLStore("postgres", "localhost:invalid/test", "", "")
+	if err == nil || err.Error() != "invalid PostgreSQL object storage address" {
+		t.Fatalf("expected a fixed address error, got %v", err)
+	}
+}
+
 func TestPGWithSearchPath(t *testing.T) { //skip mutate
 	_, err := newSQLStore("postgres", "127.0.0.1:5432/test?sslmode=disable&search_path=juicefs,public", "", "")
 	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {

@@ -174,8 +174,7 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 
 		parse, err := url.Parse(uri)
 		if err != nil {
-			reason, _, _ := strings.Cut(err.(*url.Error).Err.Error(), `"`)
-			return nil, fmt.Errorf("parse postgres address: %s", strings.TrimSpace(reason))
+			return nil, errors.New("invalid PostgreSQL object storage address")
 		}
 		searchPath = parse.Query().Get("search_path")
 		if searchPath != "" {
