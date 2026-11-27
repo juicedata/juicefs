@@ -79,13 +79,15 @@ type diskCache struct {
 	pages         map[string]*Page
 	m             *cacheManagerMetrics
 
-	used      int64
-	keys      KeyIndex
-	scanned   bool
-	stageFull bool
-	rawFull   bool
-	checksum  string // checksum level
-	uploader  func(key, path string, force bool) bool
+	used int64
+	// cachedBlocks counts the same blocks as used, excluding staging ones.
+	cachedBlocks int64
+	keys         KeyIndex
+	scanned      bool
+	stageFull    bool
+	rawFull      bool
+	checksum     string // checksum level
+	uploader     func(key, path string, force bool) bool
 
 	opTs map[time.Duration]func() error
 	opMu sync.Mutex
@@ -238,7 +240,7 @@ func (c *diskCache) enabled() bool {
 }
 
 func (c *diskCache) full() bool {
-	return c.used > c.capacity || (c.maxItems != 0 && int64(c.keys.len()) > c.maxItems)
+	return c.used > c.capacity || (c.maxItems != 0 && c.cachedBlocks > c.maxItems)
 }
 
 func (cache *diskCache) checkErr(f func() error) error {
@@ -331,7 +333,7 @@ func (cache *diskCache) usedMemory() int64 {
 func (cache *diskCache) stats() (int64, int64) {
 	cache.Lock()
 	defer cache.Unlock()
-	return int64(len(cache.pages) + cache.keys.len()), cache.used + cache.usedMemory()
+	return int64(len(cache.pages)) + cache.cachedBlocks, cache.used + cache.usedMemory()
 }
 
 func (cache *diskCache) isFull(usage DiskFreeRatio, stage bool) bool {
@@ -386,13 +388,14 @@ func (cache *diskCache) cleanupExpire() {
 					deleted++
 					freed += int64(v.size + 4096)
 					cache.used -= int64(v.size + 4096)
+					cache.cachedBlocks--
 					todel = append(todel, k)
 					cache.m.cacheEvicts.Add(1)
 				}
 			}
 		}
 		if len(todel) > 0 {
-			logger.Debugf("cleanup expired cache (%s): %d blocks (%s), expired %d blocks (%s)", cache.dir, cache.keys.len(), humanize.IBytes(uint64(cache.used)), len(todel), humanize.IBytes(uint64(freed)))
+			logger.Debugf("cleanup expired cache (%s): %d blocks (%s), expired %d blocks (%s)", cache.dir, cache.cachedBlocks, humanize.IBytes(uint64(cache.used)), len(todel), humanize.IBytes(uint64(freed)))
 		}
 		cache.Unlock()
 		for _, k := range todel {
@@ -638,6 +641,7 @@ func (cache *diskCache) remove(key string, staging bool) {
 	if it := cache.keys.remove(k, staging); it != nil {
 		if it.size > 0 {
 			cache.used -= int64(it.size + 4096)
+			cache.cachedBlocks--
 		}
 	} else if cache.scanned || !staging {
 		path = "" // not existed or staging block
@@ -682,6 +686,7 @@ func (cache *diskCache) load(key string) (ReadCloser, error) {
 	if err != nil {
 		if it := cache.keys.remove(k, false); it != nil {
 			cache.used -= int64(it.size + 4096)
+			cache.cachedBlocks--
 		}
 	}
 	return f, err
@@ -712,6 +717,7 @@ func (cache *diskCache) exist(key string) (bool, error) {
 		return true, nil
 	} else if it := cache.keys.remove(k, false); it != nil {
 		cache.used -= int64(it.size + 4096)
+		cache.cachedBlocks--
 	}
 	return false, err
 }
@@ -758,15 +764,17 @@ func (cache *diskCache) add(key string, size int32, atime uint32) {
 	} else {
 		if iter.size > 0 {
 			cache.used -= int64(iter.size + 4096)
+			cache.cachedBlocks--
 		}
 		iter.size = size
 	}
 	cache.keys.add(k, *iter) // add or update
 	if size > 0 {
 		cache.used += int64(size + 4096)
+		cache.cachedBlocks++
 	}
 	if cache.full() && cache.keys.name() != EvictionNone {
-		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%s)", cache.dir, cache.keys.len(), humanize.IBytes(uint64(cache.used)))
+		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%s)", cache.dir, cache.cachedBlocks, humanize.IBytes(uint64(cache.used)))
 		cache.cleanupFull()
 	}
 }
@@ -824,7 +832,7 @@ func (cache *diskCache) cleanupFull() {
 	}
 
 	goal := cache.capacity * 95 / 100
-	num := int64(cache.keys.len()) * 99 / 100
+	num := cache.cachedBlocks * 99 / 100
 	if cache.maxItems != 0 && num > cache.maxItems*99/100 {
 		num = cache.maxItems * 99 / 100
 	}
@@ -840,13 +848,13 @@ func (cache *diskCache) cleanupFull() {
 		}
 	}
 	if toFree := cache.inodesToFree(usage); toFree > 0 {
-		if toFree > int64(cache.keys.len()) {
+		if toFree > cache.cachedBlocks {
 			num = 0
 		} else {
-			num = (int64(cache.keys.len()) - toFree) * 99 / 100
+			num = (cache.cachedBlocks - toFree) * 99 / 100
 		}
 	}
-	if int64(cache.keys.len()) <= num && cache.used <= goal {
+	if cache.cachedBlocks <= num && cache.used <= goal {
 		return // some other thread has done the cleanup
 	}
 
@@ -857,17 +865,18 @@ func (cache *diskCache) cleanupFull() {
 	for k, item := range cache.keys.evictionIter() {
 		freed += int64(item.size + 4096)
 		cache.used -= int64(item.size + 4096)
+		cache.cachedBlocks--
 		todel = append(todel, k)
 
 		logger.Debugf("remove %s from cache, age: %ds", k, now-item.atime)
 		cache.m.cacheEvicts.Add(1)
 
-		if int64(cache.keys.len()) <= num && cache.used <= goal {
+		if cache.cachedBlocks <= num && cache.used <= goal {
 			break
 		}
 	}
 	if len(todel) > 0 {
-		logger.Debugf("cleanup cache (%s) using %s eviction: %d blocks (%s), freed %d blocks (%s)", cache.dir, cache.keys.name(), cache.keys.len(), humanize.IBytes(uint64(cache.used)), len(todel), humanize.IBytes(uint64(freed)))
+		logger.Debugf("cleanup cache (%s) using %s eviction: %d blocks (%s), freed %d blocks (%s)", cache.dir, cache.keys.name(), cache.cachedBlocks, humanize.IBytes(uint64(cache.used)), len(todel), humanize.IBytes(uint64(freed)))
 	}
 	cache.Unlock()
 	for _, k := range todel {
@@ -940,6 +949,7 @@ func (cache *diskCache) uploadStaging() {
 func (cache *diskCache) scanCached(fast bool) {
 	cache.Lock()
 	cache.used = 0
+	cache.cachedBlocks = 0
 	// atime in memory is more accurate than on disk, inherit it for the next round
 	lastSnap := cache.keys.reset()
 	cache.scanned = false
@@ -998,7 +1008,7 @@ func (cache *diskCache) scanCached(fast bool) {
 	})
 	cache.Lock()
 	cache.scanned = true
-	logger.Debugf("Found %s cached blocks (%s) in %s with %s", humanize.Comma(int64(cache.keys.len())), humanize.IBytes(uint64(cache.used)), cache.dir, time.Since(start))
+	logger.Debugf("Found %s cached blocks (%s) in %s with %s", humanize.Comma(cache.cachedBlocks), humanize.IBytes(uint64(cache.used)), cache.dir, time.Since(start))
 	cache.Unlock()
 }
 
