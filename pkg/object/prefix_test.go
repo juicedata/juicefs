@@ -68,6 +68,13 @@ func TestDirStorage(t *testing.T) {
 			},
 			wantStr: "file:///tmp/",
 		},
+		{
+			name: "withRetry_filestore_file",
+			storage: func() ObjectStorage {
+				return WithRetry(&filestore{root: "/tmp/target"})
+			},
+			wantStr: "file:///tmp/",
+		},
 	}
 
 	for _, tc := range tests {

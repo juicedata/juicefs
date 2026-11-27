@@ -128,6 +128,7 @@ func destroy(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("create object storage: %s", err)
 	}
+	blob = object.WithRetry(blob)
 
 	if !ctx.Bool("force") {
 		m.CleanStaleSessions(meta.Background())

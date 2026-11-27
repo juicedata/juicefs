@@ -521,7 +521,7 @@ func format(c *cli.Context) error {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
 		if create {
-			if objs, err := object.ListAll(object.WithUnorderedList(c.Context), blob, "", "", true); err == nil {
+			if objs, err := object.ListAll(object.WithUnorderedList(c.Context), object.WithRetry(blob), "", "", true); err == nil {
 				for o := range objs {
 					if o == nil {
 						logger.Warnf("List storage %s failed", blob)

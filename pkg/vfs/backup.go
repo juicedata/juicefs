@@ -45,6 +45,7 @@ var (
 
 // Backup metadata periodically in the object storage
 func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skipTrash bool) {
+	blob = object.WithRetry(blob)
 	ctx := meta.Background()
 	key := "lastBackup"
 	for {

@@ -1104,11 +1104,11 @@ func TestListAllRetryLimit(t *testing.T) {
 		want     []string
 		failed   bool
 	}{
-		{maxListRetries, keys, false},
-		{maxListRetries + 1, keys[:2], true},
+		{maxRetries, keys, false},
+		{maxRetries + 1, keys[:2], true},
 	} {
 		t.Run(fmt.Sprintf("failures=%d", c.failures), func(t *testing.T) {
-			ch, err := ListAll(context.Background(), &tokenPagedStore{ObjectStorage: mem, keys: keys, failures: c.failures}, "", "", false)
+			ch, err := ListAll(context.Background(), WithRetry(&tokenPagedStore{ObjectStorage: mem, keys: keys, failures: c.failures}), "", "", false)
 			if err != nil {
 				t.Fatalf("list all: %s", err)
 			}

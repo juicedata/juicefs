@@ -167,6 +167,7 @@ func setTier(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
+	blob = object.WithRetry(blob)
 
 	metaFunc := func(ino meta.Ino) error {
 		if eno := m.SetAttr(meta.Background(), ino, meta.SetAttrTier, 0, &meta.Attr{Tier: newTier.ID}); eno != 0 {
@@ -241,6 +242,7 @@ func objRestore(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
+	blob = object.WithRetry(blob)
 
 	objectFunc := func(key string) error {
 		return blob.Restore(context.Background(), key, int32(days))

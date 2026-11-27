@@ -409,7 +409,11 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 				user = parts[0]
 				pass = parts[1]
 			}
-			return object.CreateStorage("sftp", uri, user, pass, "")
+			store, err := object.CreateStorage("sftp", uri, user, pass, "")
+			if err != nil {
+				return nil, err
+			}
+			return object.WithRetry(store), nil
 		}
 	}
 	uri, token := extractToken(uri)
@@ -483,6 +487,10 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	}
 	if err != nil {
 		return nil, fmt.Errorf("create %s %s: %s", name, endpoint, err)
+	}
+	// jfs retries in its own chunk store, and wrapping it would hide SupportUploadPartStream
+	if name != "jfs" {
+		store = object.WithRetry(store)
 	}
 
 	if conf.Links {
@@ -641,6 +649,7 @@ func doSync(c *cli.Context) error {
 			prometheus.WrapRegistererWith(prometheus.Labels{"cmd": "sync", "pid": strconv.Itoa(os.Getpid())}, registry))
 		config.Registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		config.Registerer.MustRegister(collectors.NewGoCollector())
+		object.InitMetrics(config.Registerer)
 		metricsAddr := exposeMetrics(c, config.Registerer, registry)
 		if c.IsSet("consul") {
 			metadata := make(map[string]string)

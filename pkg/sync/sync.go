@@ -355,15 +355,6 @@ func listAll(ctx context.Context, store object.ObjectStorage, prefix, start, end
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			var nextToken2 string
 			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
-			count := 0
-			for err != nil && count < 3 {
-				logger.Warnf("Fail to list: %s, retry again", err.Error())
-				// slow down
-				time.Sleep(time.Millisecond * 100)
-
-				objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
-				count++
-			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 			if err != nil {
 				// Telling that the listing has failed
@@ -434,7 +425,7 @@ func deleteObjWithLimit(storage object.ObjectStorage, key string, dry bool, limi
 		return nil
 	}
 	start := time.Now()
-	if err := try(3, func() error { return storage.Delete(ctx, key) }); err == nil {
+	if err := storage.Delete(ctx, key); err == nil {
 		deleted.Increment()
 		logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
 		return nil
@@ -879,12 +870,7 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 	}
 
 	tmpkey := fmt.Sprintf("%s.part%d", key, num)
-	var up *object.MultipartUpload
-	var err error
-	err = try(3, func() error {
-		up, err = dst.CreateMultipartUpload(ctx, tmpkey)
-		return err
-	})
+	up, err := dst.CreateMultipartUpload(ctx, tmpkey)
 	if err != nil {
 		return nil, 0, fmt.Errorf("range(%d,%d): %s", off, size, err)
 	}
@@ -923,16 +909,12 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 		}
 	}
 
-	err = try(3, func() error { return dst.CompleteUpload(ctx, tmpkey, up.UploadID, parts) })
+	err = dst.CompleteUpload(ctx, tmpkey, up.UploadID, parts)
 	if err != nil {
 		dst.AbortUpload(ctx, tmpkey, up.UploadID)
 		return nil, 0, fmt.Errorf("multipart: %s", err)
 	}
-	var part *object.Part
-	err = try(3, func() error {
-		part, err = dst.UploadPartCopy(ctx, key, upload.UploadID, num+1, tmpkey, 0, size)
-		return err
-	})
+	part, err := dst.UploadPartCopy(ctx, key, upload.UploadID, num+1, tmpkey, 0, size)
 	_ = dst.Delete(ctx, tmpkey)
 	return part, tmpChksum, err
 }
@@ -992,7 +974,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, mtime
 		}
 	}
 	if err == nil {
-		err = try(3, func() error { return dst.CompleteUpload(ctx, key, upload.UploadID, parts) })
+		err = dst.CompleteUpload(ctx, key, upload.UploadID, parts)
 	}
 	if err != nil {
 		if uploads == nil {
@@ -1054,13 +1036,6 @@ func copyData(src, dst object.ObjectStorage, key string, size int64, mtime time.
 					srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
 					return
 				})
-			} else { // other error retry
-				if err = try(2, func() error {
-					upload, err = dst.CreateMultipartUpload(ctx, key)
-					return err
-				}); err == nil {
-					srcChksum, err = doCopyMultiple(src, dst, key, size, mtime, upload, calChksum, uploads)
-				}
 			}
 		}
 	}
