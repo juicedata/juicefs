@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -340,6 +341,45 @@ func TestChangeEntryAttrFields(t *testing.T) {
 	}
 	if _, err := e.AttrFields(4); err == nil {
 		t.Fatal("a truncated attribute tail should fail")
+	}
+
+	maxAttr := &Attr{
+		Uid: math.MaxUint32, Gid: math.MaxUint32, Mode: math.MaxUint16, Flags: math.MaxUint8,
+		Atime: -1, Mtime: math.MinInt64, Atimensec: math.MaxUint32, Mtimensec: math.MaxUint32,
+		Ctime: math.MaxInt64, Ctimensec: math.MaxUint32, AccessACL: math.MaxUint32, Tier: math.MaxUint8,
+	}
+	if e, err = ParseChangeEntry(1, fmt.Sprintf("1.0|REPAIRDIR(5,%s)|(3,88)", maxAttr.logFields())); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = e.AttrFields(1); err != nil {
+		t.Fatal(err)
+	}
+	if *got != *maxAttr {
+		t.Fatalf("AttrFields(1) = %+v, want %+v", got, maxAttr)
+	}
+	fields := strings.Split(attr.logFields(), ",")
+	for j, bad := range map[int][]string{
+		0:  {"-1", "4294967296"},
+		1:  {"-1", "4294967296"},
+		2:  {"-1", "65536"},
+		3:  {"-1", "256"},
+		6:  {"-1", "4294967296"},
+		7:  {"-1", "4294967296"},
+		9:  {"-1", "4294967296"},
+		10: {"-1", "4294967296"},
+		11: {"-1", "256"},
+	} {
+		for _, v := range bad {
+			f := append([]string(nil), fields...)
+			f[j] = v
+			e, err := ParseChangeEntry(1, fmt.Sprintf("1.0|REPAIRDIR(5,%s)|(3,88)", strings.Join(f, ",")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, err := e.AttrFields(1); err == nil {
+				t.Fatalf("AttrFields with field %d = %s should fail, got %+v", j, v, got)
+			}
+		}
 	}
 }
 
