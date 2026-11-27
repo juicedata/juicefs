@@ -75,6 +75,8 @@ func (c *Client) MkdirAll(name string, perm fs.FileMode) error {
 			return nil
 		}
 		return pathError("mkdir", name, syscall.ENOTDIR)
+	} else if err == syscall.ENOTDIR {
+		return pathError("mkdir", name, err)
 	}
 	err := c.backend.mkdirAll(name, syscallMode(perm), c.umask)
 	if err != nil {
